@@ -555,8 +555,8 @@ struct JarvisChatScreen: View {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                     Image(systemName: "wrench.and.screwdriver")
                     Text(copy(.toolActivity))
-                    Text("\(tools.count)")
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .accessibilityHidden(true)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -644,7 +644,6 @@ struct JarvisChatScreen: View {
                 Text(model.isReconnecting ? copy(.thinkingReconnecting) :
                         (model.liveTools.contains(where: { $0.outcome == nil }) ? copy(.turnWorking) :
                             (!model.streamingText.isEmpty ? copy(.turnWriting) : copy(.turnThinking))))
-                if !model.liveTools.isEmpty { Text("\(model.liveTools.count)") }
                 Image(systemName: liveToolsExpanded ? "chevron.down" : "chevron.right")
                     .accessibilityHidden(true)
             }

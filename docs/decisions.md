@@ -16,6 +16,17 @@ Build 112 findings: visuals in voice did not work, Jarvis did not know it could 
 Not fixed, stated plainly: the cause of the `show_in_chat` failure row could not be established. A PI turn runs the tool correctly through the real door for a forecast, a two-panel chart, a list and a table (new test), and its refusals name the field. The `call-tool` action type has no executor on the web or the phone; it still reads as unavailable. Browser sessions and the web app are unchanged.
 
 
+## 17 November 2026 — Tool activity: icon from the tool identifier, state from real events only (#1941, P15-204)
+
+- **Icon by tool type.** `ChatToolKind` maps the stable tool identifier (exact names first, then whole words such as `deployment`, `browser`, `write`) to document, pencil, terminal, globe, gear, cloud or, when nothing fits, the generic tools glyph. It never reads the localized label, and an unknown tool keeps the generic glyph rather than borrowing another tool's icon. The same icon is used in every state.
+- **State from events.** Started with no outcome is running; `ok` is success; `error` is failure; `refused` is refusal. A final reply never turns a running call into a success. A group is running while any child runs, then failed, then refused, and succeeded only when every child succeeded.
+- **Colour.** Success uses the primary accent (orange). Failure is red and refusal is grey, so neither looks like success, and each also says "Failed" or "Not allowed" in text so colour is not the only cue. Running and success carry no visible text; VoiceOver gets "tool, status" from the existing localized strings.
+- **Motion.** Running draws a short bright arc sweeping around the icon outline and a brighter band across the action text, both on a 1.4 s loop driven from the clock (`TimelineView`), so a state change ends them in the same frame and no animation state can get stuck. The icon never scales, pulses or glows. Reduce Motion shows a static row with a trailing ellipsis on the running label.
+- **Queued is not built.** The backend sends `tool-call-started` and `tool-call-finished` only; showing "queued" would be invented. If a queued event is ever added, it gets a white static icon with no motion.
+- **Cancellation.** There is no cancelled outcome today; `refused` is the only non-failure stop and keeps its own grey state.
+- **Scope.** The counts in the "Working" and "Tool activity" headers and the "×N" and status summary in groups are removed as the handover requires. Expansion rules, identifiers and the transcript scroll follow code are unchanged.
+- **Not verified.** The 1.4 s timing and the trace at native icon size need a device look, as the handover says.
+
 ## 17 November 2026 — Graph selection pill is SwiftUI text; link lines get stronger (#1940, P15-201)
 
 - Decision: the selected note's name over the 3D graph is a SwiftUI view laid over the `Canvas`, not canvas text. Canvas text cannot wrap inside a measured border, which is why build 112 showed long titles wider than the pill. The pill wraps at up to 280 pt (less on a narrow scene) onto at most two lines, and its placement (above the note, clamped inside the scene, below the note at the top edge) is a pure function in `JarvisCore`, tested on Linux.
@@ -13359,6 +13370,18 @@ backend or database change is needed. No new strings or tests were added.
 Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait. Drop short gaps rather than ending voice on the first overflow; end with connection guidance after sustained lack of progress. Serialize accepted phone-side socket writes and ignore late or duplicate packets. Pipeline phone-to-Watch playback with bounded in-flight events and ordering barriers for completion and interruption; give playback priority over nonterminal voice updates. Negotiate the window and fall back to one message for older paired apps. Log aggregate latency, in-flight counts and drops, never audio. Preserve dictation's separate capture policy. Paired-device behavior remains unverified.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
+
+## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
+
+The owner heard nothing from the Watch: dictation reported a timeout and live voice never heard him. Backend logs (Log Analytics, 14:49Z) for two 10 s dictations: `audio_received` at 0.7 s and 2.6 s with 489,082 bytes / 10,189 ms (real 24 kHz audio, so capture and upload worked), the speech token acquired at the same moment, then no `recognizer_started`, `session_started`, speech or error row for 6.5 to 9.4 s until the Watch disconnected. The SDK reports start only after its Speech connection opens, so that connection never opened. The Watch transcriber was the only Speech caller using a fixed `speechRecognitionLanguage` on the universal v2 endpoint; the live partial recognizer, probed live on 6 October (L111), uses language identification there.
+
+Decisions:
+- The Watch transcriber uses language identification for Danish and English (the same call as the live recognizer). This also lets Danish dictation work. Not yet proven live: it is the most probable cause, and the next device test decides.
+- Bound the recognizer start to 6 s. A start that does not finish returns 503 with the logged stage `recognizer_start_timeout` instead of holding the request until the client gives up. New stages `recognizer_starting`, `recognizer_start_failed`, `service_connected` and `service_disconnected` show where a hang stops (numeric and fixed labels only; the log allow-list carries them).
+- The Watch's direct window with a reachable phone is 10 s plus the clip length (up to the server's 22 s ceiling) and the overall wait is 30 s plus the clip length (up to 120 s). A fixed 10 s window cannot succeed for a 10 s recording. This refines the 14 November 10 s rule; the server's 20 s deadline is unchanged.
+- Measure the captured PCM16 peak on the Watch (`WatchCaptureLevel`, tested). Dictation with no audio or only digital silence is not uploaded; the Watch says the microphone captured no sound. Live voice ends with the same message after 10 s of unmuted silence rather than showing a listening session that cannot hear. The converter follows each buffer's actual format. The peak is logged (`WatchVoice` category).
+
+Open: live voice shows no Watch voice socket in the backend logs (only dictation credential renewals), so the cause of "cannot hear me" in live voice is not explained; the capture-level check and the `WatchVoice` logs are the next evidence. Nothing here is verified on a Watch.
 
 ## Notes deletion and swipe thresholds — 13 November 2026
 

@@ -65,11 +65,22 @@ describe('Fastify backend', () => {
     expect(records.join('')).not.toContain('private provider details');
     expect((await call({ audio: Buffer.alloc(2_880_000).toString('base64') })).statusCode).toBe(200);
     expect((await call({ audio: 'A'.repeat(3_850_000) })).statusCode).toBe(413);
+  });
+
+  // Each fixture boots a full app (about 0.5 s of CPU on a fast machine, 1 s or more on a CI runner), so the
+  // checks below get their own tests instead of stacking four boots inside one 5 s limit.
+  it('refuses non-owner principals and reports an unconfigured transcriber', async () => {
+    const transcribe = vi.fn<WatchTranscriber>(async () => 'private transcript');
+    const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
     const agent = fixture({ auth: async () => ({ kind: 'jarvis-agent', objectId: 'agent', tenantId: 'tenant' }), watchTranscriber: transcribe });
     expect((await agent.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(403);
     const unavailable = fixture();
     expect((await unavailable.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(503);
+    expect(transcribe).not.toHaveBeenCalled();
+  });
 
+  it('limits concurrent watch transcriptions before reading a large body', async () => {
+    const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
     let release!: () => void;
     let bothStarted!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });

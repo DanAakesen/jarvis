@@ -4,6 +4,16 @@ The panel has a header row of its own that the content never uses: close and, wh
 
 The orb steps back when content arrives and returns when it goes, with one eased spring (`JarvisDesignTokens.voicePanelMotion`, smooth, 0.55 s) in both directions and for expanding and collapsing. It is not linear, it keeps its velocity when interrupted by a new arrival or a close, and Reduce Motion removes it. Code views show line numbers with matched lines marked by a bold chevron and a faint surface; a knowledge-graph view is one line of search, one line of count and an Open Notes button. Chat blocks: the ellipsis opens View data and Copy data on a forecast or chart and Copy data on other blocks; an open data table stays open while scrolling. Not yet seen on a device.
 
+## Tool activity in Chat (17 November 2026, #1941, P15-204; owner approved, motion proposed)
+
+[Compact tree](docs/ui/tool-activity/selected-compact-tree.png), implemented as in the handover: each row has a tool icon, the action label and, for a group, a chevron right after the label (right when closed, down when open). Icons come from the tool type: document, pencil, terminal, globe, gear, cloud, with the tools glyph as fallback, and stay the same in every state. No counts, Done or Queued text.
+
+- **Running:** white icon with a short bright arc travelling around its outline (about 1.4 s per loop) and a white shimmer across the action text only. No pulse, scale, glow, spinner, checkmark or empty circle. The label ends in an ellipsis, which also marks the state under Reduce Motion.
+- **Success:** the icon turns orange and is still. **Failure:** red icon with "Failed". **Refused:** grey icon with "Not allowed". Neither is ever orange.
+- **Groups** show the worst child state (running, then failed, then refused); children show their own. Header rows ("Working", "Tool activity") have no count.
+- **Accessibility:** each row reads "tool, status"; the group button also reads Expanded or Collapsed. Reduce Motion removes the trace and the shimmer.
+- **Not verified:** the motion at native size, the 1.4 s timing and VoiceOver on a device. A queued state is not drawn because the app receives no queued event.
+
 ## Voice bottom panel (17 November 2026, #1925; owner approved, Voice only)
 
 Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. Header: close and, when the content needs room, expand at the top left, then one title from the content (all `JarvisIconButton`; see the header and motion section above). Body: the existing generated-view renderers in a scroll area that takes the content's height up to the panel's cap. The orb stays visible (it shrinks to its minimum before the panel is capped), captions stay above the panel, the four controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion uses the fade only. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.

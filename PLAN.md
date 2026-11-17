@@ -16,6 +16,21 @@
 
 Open: the build 112 "Show in chat tool failed" row. If it returns after this, `tool.invalid_arguments` and `pi.stream_failed` in the backend logs name the cause.
 
+## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-204)
+
+**Status: built and checked on Linux (JarvisCore tests, Swift syntax parse); the SwiftUI views compile only in the macOS CI job and have not been run on a device. No build cut.** Implements [docs/ui/tool-activity/HANDOFF.md](docs/ui/tool-activity/HANDOFF.md).
+
+| Step | State |
+| --- | --- |
+| Tool kind from the tool identifier (`ChatToolKind`: read, edit, command, web, configuration, deployment, generic) and real status (`ChatToolStatus`) in JarvisCore, with Linux tests | Done, tests pass |
+| Compact tree rows with the chevron right after the label, tool icon kept across states, no counts, no Done or Queued text (`JarvisToolActivityRow.swift`, `JarvisChatToolActivityList.swift`) | Done in code |
+| Running: highlight tracing the icon outline (1.4 s loop) and shimmer on the action text only; success turns orange; failure red with "Failed"; refusal grey with "Not allowed" | Done in code |
+| Reduce Motion: static rows, running shown by a trailing ellipsis; VoiceOver says "name, status" | Done in code; not heard on a device |
+| Header rows ("Working", "Tool activity") lose their counts and use right-closed, down-open chevrons | Done in code |
+| Automatic expansion while active, collapse on the final reply, manual reopening of history, identifiers and scroll following | Unchanged code paths |
+| Queued state | **Not built:** the event stream has only started and finished, so no call is ever queued |
+| Owner checks on a device: motion at native size and the 1.4 s timing, long names, a mixed group, a state change mid-animation, scroll position while following, VoiceOver, Reduce Motion | **Open** |
+
 ## Graph polish from build 112 — 17 November 2026 (#1940, P15-201)
 
 **Status: built and unit-tested on Linux; waiting for CI (macOS compile, simulator captures) and the owner's TestFlight check. No build cut.** Two fixes from the owner's build 112 test. (1) The selected note's name pill over the graph is now real SwiftUI text instead of canvas text: a long title wraps to two lines (then truncates) and the pill's border grows with it; it stays above the note, inside the scene, and drops below the note when there is no room above. The preview row above the dock wraps its title the same way. (2) Link lines are clearer: a link's resting opacity went from 0.30 to 0.50 and its width from 1.0 to 1.2 pt, similarity lines from 0.13 to 0.20 and 0.6 to 0.7 pt, emphasised links (selection or search) reach the 0.8 ceiling at 1.7 pt, dimmed links sit at 0.3 of resting. Links stay under a note's full strength so two close notes still read as two dots. The numbers live in `JarvisGraphLinkStyle` and the pill placement in `JarvisGraphPillPlacement` (`JarvisCore/Graph3D`, 3 new tests). Reduce Motion, the Background motion switch and the cheap path are unchanged: the still pose is drawn once and includes the pill and the stronger links.
@@ -5266,6 +5281,10 @@ Pipeline bounded, sequenced microphone and playback traffic; tolerate transient 
 ## Watch dictation and voice first press — 15 November 2026 (P15-160 / #1856)
 
 Implemented the backend stage logging and speech-token cache, a 10 s direct window with phone fallback, voice start and reconnection recovery, and stale phone-state replacement. Decisions and findings are in docs/decisions.md. Next: native Watch and phone builds in CI, then a paired-Watch check of first-press voice, dictation latency from a cold backend, and a short phone-out-of-range gap during voice; read the new `watch_transcription.stage` events to confirm where direct dictation lost its result.
+
+## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
+
+Owner report on build 112: live voice no longer fails but cannot hear him, and dictation ends in "transcription timed out". Backend logs for two 10 s dictation attempts (14:49Z) show the clip arrived intact (489,082 bytes, 10,189 ms) and the speech token was acquired, but the Speech recognizer never started and nothing was logged until the Watch gave up, so dictation is a backend Speech-connection problem, not a capture failure. The Watch transcriber now uses the language identification that the live partial recognizer proved on this endpoint (L111) instead of a fixed `en-GB`, bounds the recognizer start to 6 s and logs where it stops; the Watch's direct window and overall wait grow with the clip; capture is measured so silent audio is reported instead of uploaded. Live voice: the logs show no Watch voice socket at all, which is not explained yet. Next: deploy, test a 10 s dictation on the Watch and read the `watch_transcription.stage` rows (`service_connected`, `recognizer_started`, `recognizer_start_timeout`); trace a Watch live-voice start on a paired phone.
 
 ## Notes swipe and deletion — 13 November 2026 (#1819)
 
