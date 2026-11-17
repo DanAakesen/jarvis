@@ -53,7 +53,10 @@ final class WatchModel: ObservableObject {
             if ProcessInfo.processInfo.arguments.contains("--watch-chat-long") {
                 messages = [.init(user: false, text: "Hello Dan, nice to be talking with you."), .init(user: true, text: "What is next today?"),
                             .init(user: false, text: "Your next meeting starts at 10:30. You have time to review the notes before you leave."),
-                            .init(user: false, text: "I can help you prepare."), .init(user: false, text: "Would you like me to summarise them?")]
+                            .init(user: false, text: "I can help you prepare."), .init(user: false, text: "Would you like me to summarise them?"),
+                            .init(user: true, text: "Yes, please."),
+                            .init(user: false, text: "Two items need a decision before noon: the budget review and the venue. Nothing else is due today."),
+                            .init(user: false, text: "I will remind you at 10:00.")]
             }
         }
         #endif
