@@ -108,6 +108,14 @@ final class WorkspaceRuntime: ObservableObject {
         connectionStatus = workspaceClient == nil ? .unavailable : .connecting
     }
 
+#if DEBUG && targetEnvironment(simulator)
+    /// Simulator captures only: shows synthetic content without a backend command.
+    func presentFixture(viewId: String, view: GeneratedView) {
+        knownViews[viewId] = view
+        presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
+    }
+#endif
+
     func consumeRequestedDestination() -> JarvisDestination? {
         defer { requestedDestination = nil }
         return requestedDestination

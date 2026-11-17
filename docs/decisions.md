@@ -1,3 +1,15 @@
+## 17 November 2026 — Voice bottom panel: one presented view, shown where the owner is (#1925, P15-191)
+
+| Choice | Why |
+| --- | --- |
+| The content Jarvis opens (`workspace_command` create/update/show, saved items) is still one `presentedView` in `WorkspaceRuntime`; on the Voice page it renders as a bottom panel, on every other page the existing sheet | The owner approved the panel for Voice only and no sheet for typed Chat blocks (which are now inline). The Workspaces page and background results still open as a sheet, because that is an explicit "open this" and has no message to live in. One content model, two presenters chosen by page, no second pipeline |
+| Leaving the Voice page dismisses the panel without forgetting the view | Otherwise the content would reappear as a sheet over Chat. Jarvis can `show` it again |
+| Close dismisses the panel only; the session, orb, status and the four controls stay. A connection recovery replaces the controls and hides the panel until it ends | Reference behaviour; recovery actions must stay reachable |
+| Expand and collapse are shown only when the content needs more room, and use the same button to return | The reference's open-detail affordance is kept only where it does something; the return path is the same control |
+| The panel is capped (about a third of the height, up to what remains after the controls, captions on screen and a small orb); the orb area follows the panel's measured height | The orb and status stay visible, the controls stay usable, and long content scrolls inside the panel. The drag-to-minimise gesture ignores drags that start in the panel |
+| The status line already shows the real session state (`statusText`); the reference's "Connecting" is not copied | Production must display actual state |
+| Source status shows in the panel: running (progress), partial and unavailable (reason) | No fabricated success; unsupported renderers keep their existing card |
+
 ## 17 November 2026 — Conversational blocks are typed data inside the assistant message (#1925, P15-190)
 
 Dan's design principle for #1925: model-driven and free-form wherever possible, deterministic only where exact results are needed; no restrictions, gates, fallbacks or old-plus-new code paths; never execute model-produced code.

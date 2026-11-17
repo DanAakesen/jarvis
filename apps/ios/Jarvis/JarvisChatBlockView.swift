@@ -148,14 +148,8 @@ struct JarvisChatBlockView: View {
     }
 
     private func perform(_ action: GeneratedViewAction) {
-        switch action {
-        case .openRoute(let route):
-            if runtime?.openRoute(route) != true { notice = text(.blockUnsupported) }
-        case .openLink(let value, _):
-            if let url = URL(string: value) { openURL(url) } else { notice = text(.blockUnsupported) }
-        case .callTool, .window:
-            notice = text(.blockUnsupported)
-        }
+        guard let runtime else { return }
+        notice = performGeneratedViewAction(action, runtime: runtime, language: language, openURL: openURL)
     }
 
     private func text(_ key: JarvisChatLocalizationKey) -> String {

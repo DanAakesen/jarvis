@@ -1,3 +1,10 @@
+## Voice bottom panel (17 November 2026, #1925, P15-191)
+
+- No backend change. The workspace command path is unchanged (`workspace_command` → SSE → `WorkspaceRuntime.presentedView`).
+- Presenters: `ContentView` shows the sheet only when the current page is not Voice; `VoiceScreenView` hosts `VoiceContentSlot` (observes the runtime) and `VoiceContentPanel`. `prepareNavigation` dismisses the panel when the owner leaves Voice.
+- `performGeneratedViewAction` is the single place that runs an action from generated content (sheet, panel and chat blocks).
+- Layout: the slot reports the panel's height and frame to `VoiceScreenView`, which adds the height to `voiceBottomReservation` (orb sizing) and excludes the frame from the minimise drag.
+
 ## Conversational blocks (17 November 2026, #1925, P15-190)
 
 ```mermaid
