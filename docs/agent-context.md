@@ -1,3 +1,9 @@
+## Voice visuals and chat blocks — 17 November 2026 (#1939, P15-205)
+
+- Checks: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run` (`src/pi/show-in-chat-route.test.ts` runs `show_in_chat` through the real PI door); `cd packages/contracts && node --test`; `cd apps/ios/Packages/JarvisCore && swift test` (a Swift 6.2 Linux toolchain works). The SwiftUI compiles only in the macOS `watch` job.
+- Instruction text changed (`agents/pi/instructions.md`, `voiceChannelNote`, `workspace_command` description, `capability-instructions.ts`): deploy the PI agent for it to take effect, and run `measure_pi` to see the voice smoke still passes.
+- The backend log lines for a failing tool are `tool.invalid_arguments` (the refused field) and `pi.stream_failed` (the provider code).
+
 ## Voice bottom panel — 17 November 2026 (#1925, P15-191)
 
 - iOS only. `swift test` in `apps/ios/Packages/JarvisCore` (strings for the panel are in `JarvisWorkspaces.strings`). The SwiftUI (`VoiceContentPanel.swift`, `VoiceScreen.swift`) compiles only in the macOS `watch` job, which captures `polish-voice-panel.png` (`--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel`, simulator and debug only; the content is synthetic).
@@ -7704,8 +7710,8 @@ The list renders table, list, detail, text, timeline, chart, task-card, status,
 image and HTML-app views. HTML artifacts are validated and run in a nonpersistent
 WKWebView with a restrictive CSP, no file scheme, and no native message bridge.
 The web-only `window.jarvis` ask/pin/link actions remain unavailable on iOS;
-knowledge-graph and code remain unsupported cards. `JARVIS_WEB_APP_URL` is
-optional and accepts only an HTTPS origin; it does not identify a workspace item.
+knowledge-graph and code views have native renderers (P15-205) and the app has no
+link to the web app (`JARVIS_WEB_APP_URL` was removed).
 The app uses the existing Keychain session and configured `JARVIS_API_BASE_URL`;
 no iOS-specific backend route is added. Active-client choice and command replay
 after reconnect remain unverified.
