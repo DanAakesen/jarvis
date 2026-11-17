@@ -60,10 +60,10 @@ jobs:
           xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=actions
           sleep 2
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/menu.png"
-          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat --watch-chat-long
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat --watch-chat-long --watch-chat-metrics
           sleep 2
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/chat-ready.png"
-          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat --watch-chat-long --watch-chat-reading
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat --watch-chat-long --watch-chat-reading --watch-chat-metrics
           sleep 3
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/chat-reading.png"
           for state in listening speaking muted; do
