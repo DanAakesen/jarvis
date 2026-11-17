@@ -363,6 +363,40 @@ class SmokeReportTest(unittest.TestCase):
         return {"firstTextMs": first, "lastTextMs": first + 500, "totalMs": first + 800, "deltas": 9, "toolCalls": 0, "characters": 40,
                 "text": "ok", "usage": {"inputTokens": 11000, "cachedTokens": cached, "outputTokens": 20}, "costDkk": 0.0731, "aborted": False}
 
+    def test_main_runs_the_three_parts_as_separate_requests_and_merges_what_they_observed(self):
+        import io
+        import pathlib
+        import tempfile
+        parts = []
+        turn = self.turn(1000)
+        answers = {
+            "core": {"baseline": turn, "cold": turn, "warm": [turn], "tools": dict(turn, toolCalls=1, toolResults=[]),
+                     "cancel": {"abortToCloseMs": 1, "partialCharacters": 1, "followUpOk": True}, "totalCostDkk": 0.5,
+                     "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True}},
+            "voice": {"voice": {"plain": turn, "tools": turn}, "totalCostDkk": 0.25,
+                      "checks": {"voice_spoken_shape": True, "voice_tools_over_mcp": True}},
+            "reach": {"listed": [{"server": "azure", "tools": 17, "failed": False}], "reach": [], "choices": [], "totalCostDkk": 0.25,
+                      "checks": {"mcp_listing": True}},
+        }
+
+        class Opener:
+            def open(self, request, timeout):
+                part = json.loads(request.data)["part"]
+                parts.append((part, timeout))
+                return io.BytesIO(json.dumps(dict(answers[part], part=part)).encode())
+
+        summary = pathlib.Path(tempfile.mkdtemp()) / "summary.md"
+        with mock.patch.object(report.subprocess, "run", return_value=mock.Mock(stdout="token\n")), \
+                mock.patch.object(report.urllib.request, "build_opener", return_value=Opener()):
+            status = report.main(["--backend-fqdn", "backend.example", "--summary", str(summary)])
+        self.assertEqual(status, 0)
+        self.assertEqual([part for part, _ in parts], ["core", "voice", "reach"])
+        self.assertTrue(all(timeout < 240 for _, timeout in parts))
+        text = summary.read_text(encoding="utf-8")
+        self.assertIn("Smoke cost: 1.0000 DKK", text)
+        self.assertIn("azure: 17 tools", text)
+        self.assertIn("voice-channel replies read as speech", text)
+
     def test_render_shows_bars_tokens_cost_and_each_check(self):
         data = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000), self.turn(1800, 10000)],
                 "tools": dict(self.turn(2500), toolCalls=2, text="worked", toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),

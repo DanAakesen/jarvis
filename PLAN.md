@@ -1,3 +1,27 @@
+## PI smoke in three requests (#1910, P15-209)
+
+**Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
+
+| Step | State |
+| --- | --- |
+| `POST /pi/smoke` takes `{ part: core | voice | reach }`; the checks are unchanged and each part reports its own | Done |
+| The workflow script calls the three parts one after another and merges them into the same summary | Done |
+| Confirm with a `measure_pi` Deploy | **Open** |
+
+## Azure MCP cold start (#1910, P15-208)
+
+**Status: built; backend (tests, typecheck, lint) and workflow scripts pass locally. Not yet confirmed by a `measure_pi` Deploy.** From two failed `measure_pi` runs on main (the Azure listing failed, then the smoke hit the ingress's 240 s limit) and the owner's "Jarvis is still not able to reach Azure".
+
+| Step | State |
+| --- | --- |
+| The backend wakes the Azure MCP server as it starts (and `/pi/warm` does the same), so the first search no longer finds it asleep | Done |
+| The catalogue refresh is no longer cancelled at 90 s (now 200 s, inside the ingress's 240 s hold); a failed first list is not cached, the next search retries | Done |
+| A search says when a server is still loading or could not be reached, so PI no longer reports Azure as "not attached" | Done; PI instructions updated |
+| The smoke lists both servers at once and prints why a listing failed; the Deploy wakes the server first and prints the cold-start time | Done |
+| Confirm with a `measure_pi` Deploy; read the printed cold-start time and listing reason | **Open** |
+
+Cause not proven: no Azure log access from the build environment (see decisions).
+
 ## Voice visuals and chat-block reliability — 17 November 2026 (#1939, P15-205)
 
 **Status: built; backend (typecheck, lint, 602 tests), contracts and JarvisCore (`swift test`, 180 tests) pass locally. The SwiftUI compiles only in the macOS `watch` job and none of it has been seen on a device. No build cut.** From the owner's build 112 testing.

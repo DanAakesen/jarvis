@@ -13,8 +13,12 @@ const listTtlMs = 30 * 60_000;
 const maxPages = 10;
 /** A search of the local tools never waits long for a remote catalogue... */
 const searchWaitMs = 8_000;
-/** ...but the refresh itself may take this long, so a container that scales from zero can finish starting in the background. */
-const refreshTimeoutMs = 90_000;
+/**
+ * ...but the refresh itself may take this long, so a container that scales from zero can finish starting in the background.
+ * The Container Apps ingress holds a request for a stopped app for up to 240 s; giving up before that cancels a start that is
+ * about to finish.
+ */
+const refreshTimeoutMs = 200_000;
 const callTimeoutMs = 120_000;
 
 interface RemoteTool { readonly name: string; readonly description?: string; readonly inputSchema?: Record<string, unknown> }
@@ -25,9 +29,22 @@ export interface GithubCallResult {
   readonly result: unknown;
 }
 
+export type RemoteMcpStatus =
+  | { readonly state: 'ready' }
+  /** The first list is still loading, for example because the server scales from zero. */
+  | { readonly state: 'starting' }
+  /** The last attempt failed and there is no list to use. `reason` names the failure and never repeats server text. */
+  | { readonly state: 'unreachable'; readonly reason: string };
+
 export interface RemoteMcpBridge {
   /** `gh_` or `az_`: the start of every tool name this bridge offers. */
   readonly prefix: string;
+  /** Names the server for the model and the owner, for example `Azure`. */
+  readonly label: string;
+  /** Whether the catalogue is loaded, still loading, or could not be loaded; a search tells the model so. */
+  status(): RemoteMcpStatus;
+  /** Starts loading the catalogue without waiting for it, so a server that scales from zero wakes before anyone asks. */
+  warm(): void;
   /** The remote server's tools as catalogue entries named `<prefix><tool>`; empty when it cannot be reached. */
   tools(signal: AbortSignal, waitMs?: number): Promise<readonly RegisteredTool[]>;
   call(name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<GithubCallResult>;
@@ -73,6 +90,25 @@ export function createRemoteMcpBridge(options: {
   let counter = 0;
   let listed: { readonly at: number; readonly tools: readonly RegisteredTool[] } | undefined;
   let refreshing: Promise<void> | undefined;
+  let failure: string | undefined;
+
+  const describeFailure = (error: unknown): string => {
+    if (error instanceof Error && error.name === 'TimeoutError') return `no answer within ${refreshTimeoutMs / 1000} seconds`;
+    const status = /^github_mcp_http_(\d{3})$/u.exec(error instanceof Error ? error.message : '');
+    return status ? `the server answered HTTP ${status[1]}` : 'the connection failed';
+  };
+
+  /** One refresh at a time, shared by every search that arrives meanwhile. */
+  function refresh(): Promise<void> {
+    refreshing ??= fetchTools(AbortSignal.timeout(refreshTimeoutMs))
+      .then((tools) => { listed = { at: now(), tools }; failure = undefined; }, (error: unknown) => {
+        failure = describeFailure(error);
+        // With a list in hand, ask again in a minute. With none, the next search asks at once.
+        if (listed) listed = { at: now() - listTtlMs + 60_000, tools: listed.tools };
+      })
+      .finally(() => { refreshing = undefined; });
+    return refreshing;
+  }
 
   const headers = async (signal: AbortSignal): Promise<Record<string, string>> => ({
     authorization: `Bearer ${await options.token(signal)}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream',
@@ -133,17 +169,18 @@ export function createRemoteMcpBridge(options: {
 
   return {
     prefix: options.prefix,
+    label: options.label,
+    status() {
+      if (listed) return { state: 'ready' };
+      return failure !== undefined && !refreshing ? { state: 'unreachable', reason: failure } : { state: 'starting' };
+    },
+    warm() { if (!listed || now() - listed.at >= listTtlMs) void refresh(); },
     async tools(signal, waitMs = searchWaitMs) {
       if (listed && now() - listed.at < listTtlMs) return listed.tools;
-      // One refresh at a time, shared by every search that arrives meanwhile, and bounded: a slow GitHub costs a search a few
-      // seconds once, then the last list (or none) is used for a minute.
-      refreshing ??= fetchTools(AbortSignal.timeout(refreshTimeoutMs))
-        .then((tools) => { listed = { at: now(), tools }; }, () => {
-          listed = { at: now() - listTtlMs + 60_000, tools: listed?.tools ?? [] };
-        })
-        .finally(() => { refreshing = undefined; });
+      // Bounded: a slow server costs a search a few seconds, then the last list (or none) is used.
+      const loading = refresh();
       const wait = AbortSignal.any([signal, AbortSignal.timeout(waitMs)]);
-      await Promise.race([refreshing, new Promise<void>((resolve, reject) => {
+      await Promise.race([loading, new Promise<void>((resolve, reject) => {
         const stop = () => (signal.aborted ? reject(signal.reason) : resolve());
         if (wait.aborted) stop(); else wait.addEventListener('abort', stop, { once: true });
       })]);

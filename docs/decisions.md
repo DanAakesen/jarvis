@@ -1,3 +1,35 @@
+## 17 November 2026 — The PI smoke runs as three requests, not one (#1910, P15-209)
+
+After the Azure MCP wake-up fix, `measure_pi` still failed with HTTP 504. The backend log showed the Azure read inside the smoke completing in 7.3 s, so Azure reach worked; the whole smoke (cold turn, warm turns, tool and voice turns, GitHub, Azure and four tool-choice turns, each one to fifteen seconds) now takes about four minutes, and the Container Apps ingress ends one request at 240 s.
+
+| Choice | Why |
+| --- | --- |
+| `POST /pi/smoke` requires `part`: `core` (baseline, cold, warm, tool and cancelled turns), `voice` (the PI leg of a voice turn) or `reach` (GitHub, Azure, tool choice). Each part has its own scratch conversation and reports its own checks and cost | No request approaches 240 s, and the checks and what they measure are unchanged. The voice turns now start a fresh conversation instead of following the warm turns; the voice checks do not depend on that |
+| The workflow script calls the parts one after another and merges checks and cost into the one summary | One summary, one pass or fail, as before. A failing part names itself in the error. There is no unsplit path |
+| Each part is cut off at 220 s inside the backend and 235 s in the script | A part that is slow fails visibly under 240 s instead of as a 504 with no detail |
+
+
+## 17 November 2026 — The Azure MCP server's cold start must not look like "Azure is not attached" (#1910, P15-208)
+
+Two `measure_pi` Deploys on main failed after the voice-visuals merge: the first on `reach_azure` and `mcp_listing` (GitHub and the other checks passed), the second as "HTTP 504, no detail". The agent was v15 with Azure and GitHub attached, and an earlier run had listed 17 Azure tools and read 22 resources.
+
+**What the Deploy logs show.** In the first run the model answered "the Azure tools aren't attached" and the smoke recorded "azure: FAILED to list" while GitHub listed 118 tools. The second run's PI step ran from 21:01:47 to 21:05:49, 242 s: the smoke is one request and the Container Apps ingress ends a request at 240 s. In the earlier passing run the Azure turn took 50 s, so a cold start was already tens of seconds.
+
+**Cause, from the code (the build environment has no Azure access; the container logs below were read by the owner's session).** The Azure MCP server scales to zero (0.25 CPU, 0.5 GiB). The backend loaded its tool list only when a search asked: that search waited 8 s and returned nothing, so PI said Azure was not attached. The background refresh was cancelled after 90 s, before a slow cold start could finish, and the failure was then cached for 60 s with an empty list, so a search or the smoke in that minute saw "no tools" without trying again. The smoke then waited up to 100 s per server one after the other, which can push it past 240 s. No change in #1933, #1934, #1936 or #1953 touches this path; what changed is that the earlier run found the server already awake.
+
+| Choice | Why |
+| --- | --- |
+| The backend starts loading each remote catalogue when it starts (`bridge.warm()`), and `/pi/warm` calls the same | The wake happens at deploy and when the app opens PI, not inside the owner's first question. The list is kept 30 minutes, so Azure questions after that do not need the server awake |
+| The refresh may run 200 s, not 90 s | The ingress holds a request for a stopped app up to 240 s; cancelling earlier killed a start that was about to finish |
+| A failed first list is not cached; the next search retries (single-flight). With a list in hand, a failed refresh keeps it and retries in a minute | The 60 s empty cache turned one slow start into a minute of "no tools" |
+| `find_tools` adds a note when a server is still loading or unreachable (with a reason that never repeats server text); the PI instructions say what to do with it | A server PI has not heard from yet is not "not attached". This is information for the model, not a gate: nothing is blocked or routed elsewhere |
+| The smoke lists both servers at once and reports the failure reason; the Deploy sends one request to the Azure MCP server first and prints the HTTP code and time | Keeps the smoke inside the ingress limit and turns the next run into evidence: the printed time is the cold start, the reason says timeout, HTTP status or connection |
+
+**Container log evidence (added after the owner's session read `ContainerAppConsoleLogs_CL`, 17 November).** In the first failing run the Azure MCP container started at 20:54:36Z and listened on :8080 two seconds later; its first MCP request arrived at 20:54:45Z and finished as HTTP 499 after 5.6 s, which means the client closed the request. There was no server error, crash or out-of-memory line. So the server is ready within seconds and the failure is a client that gave up on the first, slow call (the first request on a fresh .NET process). Which client timeout fired was not identified from the logs; waking the server at backend start, a refresh that is retried at the next search instead of cached as empty, and the model being told the server is still loading cover it whichever it was.
+
+To confirm: run `measure_pi`. If Azure still fails to list, the smoke line now says why, and `ContainerAppConsoleLogs_CL` for `ca-jarvis-azmcp-*` is the next place to look (an out-of-memory restart at 0.5 GiB would show there and would call for more memory, not a longer wait).
+
+
 ## 17 November 2026 — Voice visuals reach the phone through `workspace_command`; the panel belongs to the session; one eased orb (#1939, P15-205)
 
 Build 112 findings: visuals in voice did not work, Jarvis did not know it could show them, a card was on screen when voice started, the orb moved without an easing, `show_in_chat` failed, Show data and some buttons did not work, and the owner feared a route to the web workspace.
