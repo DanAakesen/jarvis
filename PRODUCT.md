@@ -1,3 +1,9 @@
+## Generated content in Chat and Voice — 16 November 2026 (#1925; approved direction, not implemented here)
+
+In typed Chat, Jarvis can present generated UI such as a weather forecast or a chart as an element within its reply. These elements scroll with the thread and remain available when the owner revisits the conversation; they are not temporary pop-up sheets. Preserve the original dated result and its source/freshness context so historical forecasts are not presented as current weather. The chat composer remains accessible. The approved layout is Conversational blocks: a forecast in one reply and a generated chart in a follow-up reply, with both retained in history. The implementation handover is `docs/ui/approved-handover-2026-11-16.md`.
+
+In Voice, use the approved bottom-panel direction: content sits below the lattice orb and status, above the existing microphone, plus, CC and hang-up controls. This records the owner's required experience, not verified persistence or a delivered renderer.
+
 ## App polish from build 111 — 16 November 2026 (#1923, P15-185)
 
 - Graph search: the clear (X) sits inside the search field with no background of its own, and the matching notes sit directly above the dock, as far from it as

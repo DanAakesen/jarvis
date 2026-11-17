@@ -1,3 +1,7 @@
+## Approved graph and generated-content designs — 16 November 2026 (#1924, #1925)
+
+Design selection and handover are complete: Graph 2 (Folder clusters), Voice option 1 (Bottom panel, Voice side only), and Chat Conversational blocks. References and acceptance checks: `docs/ui/approved-handover-2026-11-16.md`. Next implementation step: inspect the existing graph/renderer/history contracts, then implement the approved surfaces and verify native interaction and durable Chat blocks. No implementation, persistence or device acceptance is claimed by this design handover.
+
 ## App polish batch from build 111 — 16 November 2026 (#1923, P15-185)
 
 **Status: built, waiting for CI and the owner's TestFlight check. No build cut.** One pull request covers the seven items: graph search clear button and
