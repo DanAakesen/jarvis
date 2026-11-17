@@ -9,6 +9,13 @@
 - **Scope.** The counts in the "Working" and "Tool activity" headers and the "×N" and status summary in groups are removed as the handover requires. Expansion rules, identifiers and the transcript scroll follow code are unchanged.
 - **Not verified.** The 1.4 s timing and the trace at native icon size need a device look, as the handover says.
 
+## 17 November 2026 — Graph selection pill is SwiftUI text; link lines get stronger (#1940, P15-201)
+
+- Decision: the selected note's name over the 3D graph is a SwiftUI view laid over the `Canvas`, not canvas text. Canvas text cannot wrap inside a measured border, which is why build 112 showed long titles wider than the pill. The pill wraps at up to 280 pt (less on a narrow scene) onto at most two lines, and its placement (above the note, clamped inside the scene, below the note at the top edge) is a pure function in `JarvisCore`, tested on Linux.
+- Decision: link lines are drawn at 0.50 opacity and 1.2 pt (was 0.30 and 1.0 pt); similarity lines 0.20 and 0.7 pt. Emphasised links keep the 0.8 ceiling. The ceiling stays below a note's full strength on purpose: the owner liked how the graph "looks and feels good and alive", so lines are raised, not turned into a web. One more step up or down is a one-constant change in `JarvisGraphLinkStyle`.
+- Unchanged: Reduce Motion and Background motion off still give one still pose; no extra timeline runs for the pill.
+- Evidence: the owner's build 112 comment on #1940; Linux unit tests for link ordering and pill placement. Real-vault strength is not yet seen and awaits the TestFlight check.
+
 ## 17 November 2026 — PI reaches `show_in_chat` through the door, not as its own tool (#1925, P15-190)
 
 Deploy run 44030138506 (`measure_pi`) failed in the PI smoke with "PI asked for an approval or client tool the gateway does not answer" (HTTP 502). The gateway raises that when the stream carries a `function_call` or `mcp_approval_request` item. The only change to PI between the last passing measure run and this one was one instruction line that said "I call `show_in_chat`" and "I call `weather`" as if they were tools of PI's own. PI's only MCP tools are `find_tools` and `call_tool`; naming another tool as directly callable invites a call the harness reports as a client function call. The line now says these are Jarvis tools reached through `find_tools` then `call_tool`, and that voice turns use none of it. **Cause inferred from the code and the diff, not proven from the provider stream; confirm with the next `measure_pi` run.** No gate or fallback was added; the definition (`requireApproval: never`) is unchanged.
