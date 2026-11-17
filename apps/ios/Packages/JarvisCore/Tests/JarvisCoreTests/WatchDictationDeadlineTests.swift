@@ -42,6 +42,17 @@ final class WatchDictationDeadlineTests: XCTestCase {
         XCTAssertEqual(timeouts, 1)
     }
 
+    func testWindowsGrowWithTheRecordingButStayBounded() {
+        XCTAssertEqual(WatchDictationDeadline.clipSeconds(bytes: 489_082), 489_082.0 / 48_000)
+        XCTAssertEqual(WatchDictationDeadline.duration(clipSeconds: 0), .seconds(30))
+        XCTAssertEqual(WatchDictationDeadline.duration(clipSeconds: 10), .seconds(40))
+        XCTAssertEqual(WatchDictationDeadline.duration(clipSeconds: 600), .seconds(120))
+        // A 10 s clip is not abandoned after the old fixed 10 s, and a long one never outlasts the server's deadline.
+        XCTAssertEqual(WatchDictationDeadline.directWindow(clipSeconds: 10, phoneFallback: true), .seconds(20))
+        XCTAssertEqual(WatchDictationDeadline.directWindow(clipSeconds: 60, phoneFallback: true), .seconds(22))
+        XCTAssertEqual(WatchDictationDeadline.directWindow(clipSeconds: 1, phoneFallback: false), .seconds(22))
+    }
+
     func testCancelledOrReplacedDeadlineCannotTimeoutNewDictation() async {
         let sleeper = Sleeper()
         let deadline = WatchDictationDeadline(sleep: { await sleeper.sleep($0) })

@@ -3,7 +3,8 @@ import { createAzureSpeechConfig, createAzureSpeechEndpoint, SPEECH_AUTH_SCOPE }
 
 export type WatchTranscriptionStage = 'token_requested' | 'token_acquired' | 'recognizer_started' | 'audio_written' |
   'session_started' | 'speech_start_detected' | 'speech_end_detected' | 'first_recognizing' |
-  'first_recognized' | 'recognizer_stopped' | 'recognizer_cancelled' | 'cleanup_started' | 'cleanup_finished';
+  'first_recognized' | 'recognizer_stopped' | 'recognizer_cancelled' | 'cleanup_started' | 'cleanup_finished' |
+  'recognizer_starting' | 'recognizer_start_failed' | 'recognizer_start_timeout' | 'service_connected' | 'service_disconnected';
 export type WatchTranscriptionReason = 'end_of_stream' | 'provider_cancelled' | 'stop_awaiting_cancellation' |
   'early_stop' | 'stop_grace_elapsed' | 'stop_without_result';
 // Numeric SDK codes only; never provider text, which can echo request details.
@@ -15,6 +16,9 @@ export type WatchTranscriber = (audio: Buffer, signal: AbortSignal, stage?: Watc
 
 // The SDK normally follows a stopped session with an end-of-stream cancellation within milliseconds.
 const STOP_GRACE_MS = 2_000;
+// A healthy start takes about a second. Without this bound a Speech connection that never opens holds the
+// request until the client gives up, and nothing says where it stopped (17 Nov: no stage after audio_received).
+const RECOGNIZER_START_MS = 6_000;
 
 export function createAzureWatchTranscriber(
   runtimeEndpoint: string,
@@ -47,7 +51,6 @@ export function createAzureWatchTranscriber(
     let audioConfig: SpeechSDK.AudioConfig | undefined;
     let recognizer: SpeechSDK.SpeechRecognizer | undefined;
     try {
-      config.speechRecognitionLanguage = 'en-GB';
       config.setProperty(SpeechSDK.PropertyId.Recognizer_StopTimeoutMs, '2000');
       // SDK 1.52.0 throttles buffered audio after 5s by default. Its internal,
       // intentionally misspelled property covers the bounded 60s clip; live service latency is unverified.
@@ -57,7 +60,10 @@ export function createAzureWatchTranscriber(
       );
       const inputStream = stream;
       audioConfig = SpeechSDK.AudioConfig.fromStreamInput(stream);
-      recognizer = new SpeechSDK.SpeechRecognizer(config, audioConfig);
+      // The universal v2 endpoint is only proven with language identification (the live partial recognizer, L111);
+      // a fixed language never produced a session. Danish and English match the voice languages.
+      const autoDetect = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(['da-DK', 'en-GB']);
+      recognizer = SpeechSDK.SpeechRecognizer.FromConfig(config, autoDetect, audioConfig);
       const activeRecognizer = recognizer;
       return await new Promise<string>((resolve, reject) => {
         const segments: string[] = [];
@@ -65,16 +71,23 @@ export function createAzureWatchTranscriber(
         let audioWritten = false;
         let firstRecognizing = false;
         let stopGrace: ReturnType<typeof setTimeout> | undefined;
+        let startTimer: ReturnType<typeof setTimeout> | undefined;
         const finish = (error?: Error) => {
           if (settled) return;
           settled = true;
           clearTimeout(stopGrace);
+          clearTimeout(startTimer);
           signal.removeEventListener('abort', abort);
           if (error) reject(error);
           else resolve(segments.join(' '));
         };
         const abort = () => finish(new Error('Speech recognition cancelled'));
         signal.addEventListener('abort', abort, { once: true });
+        try {
+          const connection = SpeechSDK.Connection.fromRecognizer(activeRecognizer);
+          connection.connected = () => { if (!settled) stage('service_connected'); };
+          connection.disconnected = () => { if (!settled) stage('service_disconnected'); };
+        } catch { /* Connection events are diagnostics only. */ }
         activeRecognizer.sessionStarted = () => { if (!settled) stage('session_started'); };
         activeRecognizer.speechStartDetected = () => { if (!settled) stage('speech_start_detected'); };
         activeRecognizer.speechEndDetected = () => { if (!settled) stage('speech_end_detected'); };
@@ -125,8 +138,15 @@ export function createAzureWatchTranscriber(
           return;
         }
         try {
+          stage('recognizer_starting');
+          startTimer = setTimeout(() => {
+            if (settled) return;
+            stage('recognizer_start_timeout');
+            finish(new Error('Speech recognition could not start'));
+          }, RECOGNIZER_START_MS);
           activeRecognizer.startContinuousRecognitionAsync(() => {
             if (settled) return;
+            clearTimeout(startTimer);
             stage('recognizer_started');
             try {
               inputStream.write(Uint8Array.from(audio).buffer);
@@ -136,7 +156,10 @@ export function createAzureWatchTranscriber(
             } catch {
               finish(new Error('Speech audio input failed'));
             }
-          }, () => finish(new Error('Speech recognition could not start')));
+          }, () => {
+            stage('recognizer_start_failed');
+            finish(new Error('Speech recognition could not start'));
+          });
         } catch {
           finish(new Error('Speech recognition could not start'));
         }
