@@ -83,6 +83,41 @@ final class JarvisClientTransportTests: XCTestCase {
         XCTAssertEqual(requests.count, 1)
     }
 
+    func testFolderOrderIsReadAndReplacedPerParentThroughTheBackend() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 200, body: ["orders": [
+                ["parent": "", "folders": ["Work", "Personal"]], ["parent": "Work", "folders": ["Work/Projects"]],
+            ]])),
+            .response(jsonResponse(status: 200, body: ["parent": "", "folders": ["Personal", "Work"]])),
+            .response(jsonResponse(status: 200, body: ["orders": [["parent": "", "folders": ["Work", "Work"]]]])),
+        ])
+        let client = JarvisNotesClient(client: try makeClient(transport: transport))
+        let order = try await client.folderOrder()
+        XCTAssertEqual(order.byParent, ["": ["Work", "Personal"], "Work": ["Work/Projects"]])
+        try await client.setFolderOrder(parent: "", folders: ["Personal", "Work"])
+        do {
+            _ = try await client.folderOrder()
+            XCTFail("Expected an invalid response")
+        } catch {
+            XCTAssertEqual(error as? JarvisNotesClientError, .invalidResponse)
+        }
+        do {
+            try await client.setFolderOrder(parent: "Work", folders: ["Personal"])
+            XCTFail("Expected an invalid request")
+        } catch {
+            XCTAssertEqual(error as? JarvisNotesClientError, .invalidRequest)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 3)
+        XCTAssertEqual(requests[0].method, .get)
+        XCTAssertEqual(requests[0].url.path, "/api/notes/folder-order")
+        XCTAssertEqual(requests[1].method, .put)
+        XCTAssertEqual(requests[1].url.path, "/api/notes/folder-order")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests[1].body)) as? [String: Any])
+        XCTAssertEqual(body["parent"] as? String, "")
+        XCTAssertEqual(body["folders"] as? [String], ["Personal", "Work"])
+    }
+
     func testSessionLifecycleUsesBearerTokensAndPersistsSessionToken() async throws {
         let transport = FakeHTTPTransport([
             .response(jsonResponse(status: 201, body: sessionJSON)),

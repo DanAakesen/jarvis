@@ -1,3 +1,12 @@
+## Manual folder order in Notes — 16 November 2026 (#1920, P15-183)
+
+The owner can put his vault folders in his own order, for example Work, Personal, General first. Choose Manual in the Notes header
+menu's Sort by, or Reorder folders to drag the folders of the open folder (the top level, or the subfolders inside one). The order is
+display metadata: no file is renamed, moved or given a number prefix. It is stored by the backend for the owner, so it is the same
+on every device. A folder that was deleted, renamed or never ordered does not break it: unlisted folders follow the ordered ones,
+alphabetically, and a new folder appears at the end. Notes inside a folder keep Updated or Title (Manual lists them by title);
+pinned notes keep their own order from Reorder pins. Apple Watch is not part of this.
+
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180)
 
 The Notes area opens on a quiet page with pinned notes, folders and notes, a bottom Notes/Tasks/Graph switch, a fixed Search

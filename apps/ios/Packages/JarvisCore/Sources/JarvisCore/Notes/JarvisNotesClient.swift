@@ -475,6 +475,37 @@ public final class JarvisNotesClient: Sendable {
         }
     }
 
+    /// The owner's manual folder order. Display metadata stored by the backend; no vault file is touched.
+    public func folderOrder() async throws -> JarvisFolderOrder {
+        let response = try await request(method: .get, path: ["notes", "folder-order"], idempotent: true)
+        guard response.body.count <= 512 * 1024,
+              let decoded = try? JSONDecoder().decode(JarvisFolderOrderResponse.self, from: response.body),
+              decoded.orders.count <= 10_000 else {
+            throw JarvisNotesClientError.invalidResponse
+        }
+        var order = JarvisFolderOrder()
+        for entry in decoded.orders {
+            guard order.byParent[entry.parent] == nil, JarvisFolderOrder.isValid(entry.folders, in: entry.parent) else {
+                throw JarvisNotesClientError.invalidResponse
+            }
+            order.set(entry.folders, in: entry.parent)
+        }
+        return order
+    }
+
+    /// Replaces the order of one parent's child folders. `folders` must be all the children the owner now sees.
+    public func setFolderOrder(parent: String, folders: [String]) async throws {
+        guard JarvisFolderOrder.isValid(folders, in: parent) else { throw JarvisNotesClientError.invalidRequest }
+        let response = try await request(
+            method: .put, path: ["notes", "folder-order"],
+            body: try JSONEncoder().encode(JarvisFolderOrderRequest(parent: parent, folders: folders)), idempotent: true
+        )
+        guard let saved = try? JSONDecoder().decode(JarvisFolderOrderResponse.Entry.self, from: response.body),
+              saved.parent == parent, saved.folders == folders else {
+            throw JarvisNotesClientError.invalidResponse
+        }
+    }
+
     public func tasks(query: String? = nil, state: VaultTaskState = .open) async throws -> VaultTaskList {
         guard (query?.utf16.count ?? 0) <= 200 else { throw JarvisNotesClientError.invalidRequest }
         var items = [URLQueryItem(name: "state", value: state.rawValue)]

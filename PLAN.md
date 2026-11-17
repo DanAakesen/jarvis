@@ -1,3 +1,10 @@
+## Manual folder order in Notes — 16 November 2026 (#1920, P15-183)
+
+**Status: built and tested; waiting for CI (macOS compile and captures) and review.** Backend: migration `0089`, owner-only
+`/notes/folder-order`, tests (route and real SQL Server). iOS: Manual sort, Reorder folders sheet with drag handles and Move up/down,
+folder order loaded and saved through the backend, two simulator captures. Not in scope: the folder chooser's order, Apple Watch,
+moving pins to the backend. No TestFlight build.
+
 ## Build 111 bugs — 16 November 2026 (#1922, P15-184)
 
 Owner's approach, binding: model-driven nudging in instructions and tool descriptions, no restrictions, no gates, no fallbacks; the default chat engine is not changed (cutover draft #1910).

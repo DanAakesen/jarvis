@@ -192,7 +192,7 @@ jobs:
           }
           xcrun simctl ui "$PHONE_ID" appearance dark
           xcrun simctl ui "$PHONE_ID" content_size large || true
-          for state in notes folder tasks graph search reader new-note new-task new-folder folder-scope graph-list pins task-detail; do
+          for state in notes folder tasks graph search reader new-note new-task new-folder folder-scope graph-list pins folders-manual folders-reorder task-detail; do
             capture "$state" --screenshot-notes-state="$state"
           done
           # Recovery states: a save that finds a newer version, and a save that fails.

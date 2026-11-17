@@ -17,6 +17,7 @@ enum JarvisNotesSheet: Identifiable {
     case task(VaultTask)
     case folderScope
     case reorderPins
+    case reorderFolders
     case graphList
 
     var id: String {
@@ -27,6 +28,7 @@ enum JarvisNotesSheet: Identifiable {
         case let .task(task): "task-\(task.id)"
         case .folderScope: "folderScope"
         case .reorderPins: "reorderPins"
+        case .reorderFolders: "reorderFolders"
         case .graphList: "graphList"
         }
     }
@@ -45,7 +47,7 @@ enum JarvisNotesPendingDeletion: Identifiable {
 }
 
 enum JarvisNotesReadSection: CaseIterable, Hashable, Sendable {
-    case graph, tasks, tree, directory
+    case graph, tasks, tree, directory, folderOrder
 }
 
 /// Notes, Tasks and Graph: one simple, fast page structure like Apple Notes and Reminders. A page title with its
@@ -60,11 +62,17 @@ struct JarvisNotesArea: View {
     @State var selectedFolder = ""
     @State var searchText = ""
     @State var searchScope: JarvisNotesSearchScope = .all
-    @State var noteSort: JarvisNoteSort = .updated
+    @AppStorage("jarvis.notes.sort") var noteSort: JarvisNoteSort = .updated
     @State var taskSort: JarvisTaskSort = .due
     @State var taskScope: JarvisTaskScopeFilter = .all
     @State var refreshVersion = 0
     @State var tree: VaultNoteTree?
+    @State var folderOrder = JarvisFolderOrder()
+    @State var folderOrderSave: Task<Void, Never>?
+    @State var folderOrderRevision = 0
+    @State var pendingFolderOrderSaves = 0
+    @State var folderOrderSaveFailed = false
+    @State var folderOrderStale = false
     @State var pinnedPaths: [String] = []
     @State var pinnedTaskIDs: [String] = []
     @State var directoryNotes: [String: [VaultNoteSummary]] = [:]
@@ -224,12 +232,18 @@ struct JarvisNotesArea: View {
                     navigateToFolder(folder)
                 }
             case .reorderPins:
-                JarvisReorderPinsSheet(
-                    copy: copy, items: pinnedItems,
+                JarvisReorderSheet(
+                    title: copy[.reorderPins], identifierPrefix: "pins", copy: copy, items: pinnedItems,
                     onChanged: { order in
                         pinnedPaths = order
                         Task { await JarvisAppCache.shared.setPinnedNotePaths(order) }
                     },
+                    onClose: { sheet = nil }
+                )
+            case .reorderFolders:
+                JarvisReorderSheet(
+                    title: copy[.reorderFolders], identifierPrefix: "folders", copy: copy, items: folderItems,
+                    onChanged: { saveFolderOrder($0) },
                     onClose: { sheet = nil }
                 )
             case .graphList:
@@ -320,7 +334,7 @@ struct JarvisNotesArea: View {
         signInUnavailable = false
         let sections: [JarvisNotesReadSection]
         switch tab {
-        case .notes: sections = [.graph, .tree, .directory]
+        case .notes: sections = [.graph, .tree, .directory, .folderOrder]
         case .tasks: sections = [.tasks]
         case .graph: sections = [.graph]
         }
@@ -357,6 +371,8 @@ struct JarvisNotesArea: View {
                 if let error = resolved.error { throw error }
             case .directory:
                 await loadDirectory(selectedFolder, offset: 0, force: force)
+            case .folderOrder:
+                try await readFolderOrder(client)
             case .tasks:
                 let repository: JarvisRepository<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
                     try await client.fetchOpenTasks(validator: $0)
@@ -400,6 +416,60 @@ struct JarvisNotesArea: View {
         if !selectedFolder.isEmpty,
            !nextTree.directories.contains(where: { $0 == selectedFolder || $0.hasPrefix(selectedFolder + "/") }) {
             selectedFolder = ""
+        }
+    }
+
+    /// A read never overwrites a move made while it was in flight: it is dropped and read again once the saves are done.
+    @MainActor
+    func readFolderOrder(_ client: JarvisNotesClient) async throws {
+        let revision = folderOrderRevision
+        let loaded = try await client.folderOrder()
+        if folderOrderRevision == revision && pendingFolderOrderSaves == 0 {
+            folderOrder = loaded
+        } else if pendingFolderOrderSaves > 0 {
+            folderOrderStale = true
+        } else {
+            try await readFolderOrder(client)
+        }
+    }
+
+    /// Shows the new order at once and stores it on the backend, one save after another so the last move wins. When
+    /// a save fails, the saves queued behind it are skipped, and once the queue is empty the stored order is read back,
+    /// shown, and the failure is reported.
+    func saveFolderOrder(_ paths: [String]) {
+        guard let client else { return }
+        let parent = selectedFolder
+        folderOrder.set(paths, in: parent)
+        noteSort = .manual
+        folderOrderRevision += 1
+        pendingFolderOrderSaves += 1
+        let previous = folderOrderSave
+        folderOrderSave = Task {
+            await previous?.value
+            if !folderOrderSaveFailed {
+                do {
+                    try await client.setFolderOrder(parent: parent, folders: paths)
+                } catch {
+                    folderOrderSaveFailed = true
+                }
+            }
+            pendingFolderOrderSaves -= 1
+            guard pendingFolderOrderSaves == 0 else { return }
+            let failed = folderOrderSaveFailed
+            folderOrderSaveFailed = false
+            guard failed || folderOrderStale else { return }
+            folderOrderStale = false
+            var report: String? = failed ? copy[.folderOrderFailed] : nil
+            do {
+                try await readFolderOrder(client)
+            } catch {
+                report = message(for: error)
+            }
+            if failed { sheet = nil }
+            if let report {
+                notice = report
+                noticePresented = true
+            }
         }
     }
 

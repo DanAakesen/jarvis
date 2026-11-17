@@ -1,3 +1,19 @@
+## Manual folder order (16 November 2026, #1920, P15-183)
+
+- Pins are device-local, so the folder order is not stored like them. It is owner data that must follow the owner to the Windows
+  app, so the backend keeps it in `dbo.notes_folder_order` (migration `0089`; `owner_object_id`, `parent_path`, `folder_path`,
+  `position`), one ordered list per parent folder (`""` is the vault root). It is display metadata only: nothing in the vault is
+  renamed, moved or prefixed, and a folder deleted in the vault just stops matching.
+- Routes (owner only, `vault/folder-order.ts`): `GET /notes/folder-order` returns `{ orders: [{ parent, folders }] }`;
+  `PUT /notes/folder-order` with `{ parent, folders }` replaces that parent's whole list in one serialised transaction. The body is
+  refused (400) unless every folder is a unique, safe, direct child of `parent` (at most 500). A store failure is a 503, never a
+  silent success.
+- iOS: `JarvisFolderOrder` (JarvisCore) ranks folders (listed ones first in stored order, the rest after them in their default order);
+  `JarvisNotesClient.folderOrder()` and `setFolderOrder(parent:folders:)`; `JarvisNotesArea` loads it with the folder tree and saves
+  each move in turn so the last move wins. `JarvisReorderSheet` serves both Reorder pins and Reorder folders. The chosen sort
+  (`noteSort`) is a device preference in `@AppStorage`.
+- Tests: `src/vault/folder-order.test.ts`, the SQL contract in `database.integration.test.ts` (loopback SQL Server), and the JarvisCore tests.
+
 ## Tool choice and voice start (#1922, P15-184)
 
 Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description in `apps/backend/src/pi/mcp.ts`, and the PC and browser tool descriptions (`pc-bridge/bridge.ts`, `core/browser-agent.ts`). The old engine reads the same idea from `core/capability-instructions.ts`. The Deploy smoke (`pi/smoke.ts`) reports the tools reached for on four natural prompts. In the iOS voice start path, `URLSessionWebSocketTransport.connect` reads from the first moment and gives up after 15 s; the chat model keeps the failed turn's text so the error can offer Retry.
