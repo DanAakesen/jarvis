@@ -7,8 +7,10 @@ struct WatchChatView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var editingDraft = false
-    @State private var composerOpen = true
-    @State private var awayFromLatest = false
+    /// The reader reopened the composer while browsing history; any new scroll away from the end clears it.
+    @State private var reopened = false
+    @State private var distanceFromEnd: CGFloat = 0
+    @State private var reading = false
     @AccessibilityFocusState private var messageFocused: Bool
     @ScaledMetric(relativeTo: .body) private var clearance: CGFloat = 56
     var dictate: () -> Void
@@ -21,7 +23,7 @@ struct WatchChatView: View {
     private var composerBusy: Bool {
         !model.draft.isEmpty || model.voiceID != nil || model.startingVoice || model.dictationState != .idle
     }
-    private var expanded: Bool { composerOpen || composerBusy }
+    private var expanded: Bool { !reading || reopened || composerBusy }
     private var hasStatusRow: Bool { model.startingVoice || model.dictationState != .idle || model.voiceID != nil }
     private var composerDisabled: Bool {
         model.busy || model.startingVoice || model.voiceID != nil || model.dictationState != .idle
@@ -33,6 +35,13 @@ struct WatchChatView: View {
             composerLayer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--watch-chat-metrics") {
+                Text("end \(Int(distanceFromEnd)) \(reading ? "reading" : "ready")").font(.system(size: 9)).foregroundStyle(.green)
+            }
+            #endif
+        }
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $editingDraft) {
             NavigationStack { WatchTextEditor(title: "Message", text: $model.draft) }
@@ -92,40 +101,39 @@ struct WatchChatView: View {
             // A fixed end margin keeps the last message clear of the controls and means the composer changing shape never moves the text.
             .contentMargins(.bottom, clearance + (hasStatusRow ? 34 : 0), for: .scrollContent)
             .ignoresSafeArea(.container, edges: .bottom)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                let end = geometry.contentSize.height + geometry.contentInsets.bottom
-                    - geometry.containerSize.height - geometry.contentOffset.y
-                return end > Self.readingDistance
-            } action: { _, away in
-                awayFromLatest = away
-                setComposer(open: !away)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                max(0, geometry.contentSize.height - geometry.visibleRect.maxY)
+            } action: { _, distance in
+                distanceFromEnd = distance
+                // Hysteresis keeps the composer from flickering around the threshold.
+                let next = reading ? distance > Self.readingDistance / 3 : distance > Self.readingDistance
+                guard next != reading else { return }
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) {
+                    reading = next
+                    if !next { reopened = false }
+                }
             }
             .onScrollPhaseChange { _, phase in
                 // A new scroll while reading history collapses a composer the reader had reopened.
-                if phase.isScrolling, awayFromLatest { setComposer(open: false) }
+                if phase.isScrolling, reading, reopened {
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { reopened = false }
+                }
             }
             .onChange(of: model.messages.last?.text) { _, _ in
-                guard !awayFromLatest else { return }
+                guard !reading else { return }
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { proxy.scrollTo("latest", anchor: .bottom) }
             }
             .onChange(of: model.messages.last?.id) { _, _ in
                 // Sending always returns to the conversation's end; incoming text never moves a reader.
                 guard model.messages.last?.user == true else { return }
-                composerOpen = true
+                reopened = true
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { proxy.scrollTo("latest", anchor: .bottom) }
             }
         }
     }
 
-    private func setComposer(open: Bool) {
-        guard open != composerOpen else { return }
-        if open || !composerBusy {
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { composerOpen = open }
-        }
-    }
-
     private func reopenComposer() {
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { composerOpen = true }
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { reopened = true }
         Task { await Task.yield(); messageFocused = true }
     }
 
