@@ -69,7 +69,7 @@ struct JarvisTaskRowContent: View {
     private var overdue: Bool { task.dueDate.map { $0 < today } ?? false }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 4) {
+        HStack(alignment: .center, spacing: 4) {
             JarvisTaskRing(
                 title: task.done ? copy.completed : copy.complete, isDone: task.done, isBusy: isBusy,
                 identifier: "notes.task.ring.\(task.id)", action: task.done ? nil : onComplete
@@ -98,7 +98,7 @@ struct JarvisTaskRowContent: View {
             }
             .padding(.vertical, 10)
             if isPinned {
-                Image(systemName: "pin.fill").foregroundStyle(.secondary).padding(.top, 14).accessibilityHidden(true)
+                Image(systemName: "pin.fill").foregroundStyle(.secondary).accessibilityHidden(true)
             }
         }
         .padding(.leading, 4)

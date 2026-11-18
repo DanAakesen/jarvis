@@ -13,6 +13,11 @@ export function isCurrentAssistantTool(name: string): boolean {
   return !legacyConfirmationTools.has(name) && !isBrainOnlyTool(name);
 }
 
+/** A background wake sees everything chat does, plus the brain's own tools. */
+export function isWakeTool(name: string): boolean {
+  return !legacyConfirmationTools.has(name);
+}
+
 export interface JarvisTool {
   readonly name: string;
   readonly description: string;

@@ -95,13 +95,14 @@ struct JarvisSettingsArea: View {
     var body: some View {
         NavigationStack(path: $path) {
             settingsList
+            .jarvisSwipeBack()
             .jarvisPageHeader { header }
             .environment(\.locale, language.locale)
             .tint(JarvisDesignTokens.settingsAccent)
             .jarvisPageFooter {
                 bottomBar
             }
-            .jarvisAmbientBackground()
+            .jarvisPageBackground()
             .task {
                 if response == nil { await reload() }
             }

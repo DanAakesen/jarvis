@@ -179,7 +179,7 @@ struct JarvisFactoryArea: View {
                 bottomDock
             }
         }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
         .scrollEdgeEffectHidden(true, for: .bottom)
         .task {

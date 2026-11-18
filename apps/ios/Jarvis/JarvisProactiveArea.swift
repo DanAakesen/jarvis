@@ -122,7 +122,7 @@ struct JarvisProactiveArea: View {
                 ) { editorRequest = EditorRequest(focus: .top) }
             }
         }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .task(id: PollKey(active: scenePhase == .active, token: reloadToken)) { await poll() }
         .task(id: tab) { await loadEarlierIfNeeded() }

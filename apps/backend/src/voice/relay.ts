@@ -398,7 +398,7 @@ function registerVoiceRoute(
     // PI is the default engine; `current` selects the old voice path explicitly (test switch, removed with the old path).
     const piVoiceRequested = requestedEngine !== 'current';
     const piAgent = piVoiceRequested ? app.piAgent as PiVoiceAgent | null : null;
-    // The test switch asks for PI and nothing else: an unset or unreachable PI ends the session with its own message.
+    // An unset or unreachable PI ends the session with its own message, even when selected by default.
     if (piVoiceRequested && (!piAgent || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase())) {
       diagnostics.summary('relay', 1011);
       browser.close(piAgent ? 1008 : 1011, piAgent ? 'Forbidden' : 'PI is not set up on this backend yet. No other engine was used.');

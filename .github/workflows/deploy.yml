@@ -47,6 +47,13 @@ on:
         default: false
         required: false
 
+      pi_experiment:
+        description: Measurement only. Define the PI agent with one thing switched off, then run measure_pi. The next Deploy without it restores the full agent
+        type: choice
+        options: [none, builtins_off, skills_off]
+        default: none
+        required: false
+
       probe_pi_wake:
         description: Probe whether a Foundry routine can invoke a harness agent on a throwaway agent; about 5 minutes
         type: boolean
@@ -590,14 +597,15 @@ jobs:
       - name: Define the PI agent, skills and MCP connections, and give the backend its name and MCP secret
         id: provision
         env:
-          # The owner's fine-grained, read-only GitHub token. Absent: the GitHub server is left out and the summary says so.
-          PI_GITHUB_READ_TOKEN: ${{ secrets.PI_GITHUB_READ_TOKEN }}
+          # The owner's fine-grained GitHub token, handed to the backend. Absent: GitHub is not attached and the summary says so.
+          PI_GITHUB_TOKEN: ${{ secrets.PI_GITHUB_TOKEN }}
+          PI_EXPERIMENT: ${{ inputs.pi_experiment || 'none' }}
         run: |
           python .github/scripts/provision_pi_agent.py --project-endpoint "$FOUNDRY_ADMIN" --backend-fqdn "$BACKEND_FQDN" \
             --foundry-account "$FOUNDRY_ACCOUNT" --foundry-project "$FOUNDRY_PROJECT" \
             --backend-app "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
             --azure-mcp-url "$AZURE_MCP_URL" --azure-mcp-client-id "${JARVIS_AZURE_MCP_CLIENT_ID:-}" \
-            --output "$RUNNER_TEMP/pi-agent.json" || status=$?
+            --experiment "$PI_EXPERIMENT" --output "$RUNNER_TEMP/pi-agent.json" || status=$?
           # A reach server whose connection failed fails this step, but only after the agent is defined and written down here.
           [[ -s "$RUNNER_TEMP/pi-agent.json" ]] || exit "${status:-1}"
           {
@@ -607,6 +615,7 @@ jobs:
             echo "- MCP connection: \`$(jq -r .connection "$RUNNER_TEMP/pi-agent.json")\` (written this run: $(jq -r .connectionWritten "$RUNNER_TEMP/pi-agent.json"))"
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Reach: $(jq -r '.reach | to_entries | map("\(.key): \(.value)") | join("; ")' "$RUNNER_TEMP/pi-agent.json")"
+            echo "- Experiment: $(jq -r .experiment "$RUNNER_TEMP/pi-agent.json") (anything but none is a measurement variant: Deploy again without it to restore the full agent)"
             echo "- Selected only when the iOS test switch is set to PI; the default chat path is unchanged."
           } >>"$GITHUB_STEP_SUMMARY"
           exit "${status:-0}"
@@ -619,6 +628,18 @@ jobs:
           done
           echo "::error::Backend /health did not return 200."
           exit 1
+      - name: Wake the Azure MCP server (manual only)
+        if: ${{ inputs.measure_pi == true && env.AZURE_MCP_URL != '' }}
+        run: |
+          # The server scales to zero. A request wakes it and the ingress holds the request until it answers, so the time printed
+          # here is the cold start. Any HTTP answer means it is up (without a token it answers 401); the backend does the real listing.
+          for attempt in 1 2 3; do
+            result=$(curl --silent --output /dev/null --max-time 230 --write-out '%{http_code} after %{time_total}s' -X POST \
+              -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+              --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' "$AZURE_MCP_URL" || true)
+            echo "Azure MCP server, attempt $attempt: ${result:-no answer}"
+            case "$result" in 000*|"") ;; *) break ;; esac
+          done
       - name: PI live smoke (manual only; spends model tokens)
         if: ${{ inputs.measure_pi == true }}
         run: |

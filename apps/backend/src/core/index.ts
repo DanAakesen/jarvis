@@ -1,6 +1,7 @@
 import { backendLogAuthorizationSchema } from '../operations/backend-log-authorization.js';
 import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
+import { isPiDispatch } from './pi-authority.js';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { isCurrentAssistantTool, ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -24,7 +25,6 @@ import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
-import { brainMayRun } from '../pi/brain/policy.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 const smokeTools = new Set(['get_system_health', 'github_read', 'list_jobs', 'workspace_command']);
@@ -203,12 +203,13 @@ export const coreModule: BackendModule = {
         if (smoke && (!request.agentPrincipal || !smokeToolAllowed(tool.name, request.body))) {
           return reply.code(403).send({ error: 'Tool is unavailable to the read-only smoke role' });
         }
-        // A PI brain wake has no owner message. Only the agent principal may say so, and only its read-only tools and its
-        // own message, note and trail tools run; those prove the wake themselves.
+        // A PI brain wake has no owner message. Only the agent principal may say so; the brain's own tools prove the wake themselves.
         const brain = typeof request.headers['x-jarvis-brain'] === 'string';
-        if (brain && (!request.agentPrincipal || !brainMayRun(tool, request.body))) {
+        const piHeader = request.headers['x-jarvis-pi'];
+        if ((brain || piHeader !== undefined) && !isPiDispatch(request)) {
           return reply.code(403).send({ error: 'Tool is unavailable to a background wake' });
         }
+        if (piHeader === 'turn' || piHeader === 'wake') request.jarvisPi = piHeader;
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];
         const phoneSessionHeader = request.headers['x-jarvis-phone-session-id'];

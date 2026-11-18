@@ -104,7 +104,7 @@ struct JarvisTodayScreen: View {
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .toolbar(.hidden, for: .navigationBar)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .jarvisSuccessFeedback($successConfirmation)
         .alert(JarvisNotesCopy(language: language).tasks, isPresented: $taskCompletionFailed) {
             Button(JarvisNotesCopy(language: language).ok, role: .cancel) {}
@@ -272,8 +272,7 @@ struct JarvisTodayScreen: View {
                     case .entry(let entry):
                         calendarRow(entry)
                             .jarvisListRow(separator: index < expansion.visible - 1)
-                            .background(.regularMaterial, in: shape)
-                            .clipShape(shape)
+                            .jarvisRowSurface(shape)
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .listRowInsets(agendaInsets)

@@ -41,7 +41,7 @@ struct ContentView: View {
     /// `onColdStartData` is passed only on a cold start: Home then loads fresh data once and reports when it has
     /// settled, so the opening screen can end. It is never called by a timer.
     init(
-        client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0,
+        client: JarvisClient? = nil, sessionEpoch: Int = 0,
         onColdStartData: (@MainActor () -> Void)? = nil
     ) {
         self.sessionEpoch = sessionEpoch
@@ -115,10 +115,7 @@ struct ContentView: View {
         chatClient = resolvedClient
         startupError = resolvedStartupError
         _workspaceRuntime = StateObject(
-            wrappedValue: WorkspaceRuntime(
-                client: resolvedClient,
-                webAppURL: webAppURL ?? JarvisComposition.makeWebAppURL()
-            )
+            wrappedValue: WorkspaceRuntime(client: resolvedClient)
         )
         let todayNotesClient = Self.makeNotesClient(fixtureMode: fixtureMode)
         _notesClient = State(initialValue: todayNotesClient)
@@ -210,6 +207,7 @@ struct ContentView: View {
                                 .id(sessionEpoch)
                         }
                     }
+                    .jarvisSwipeBack()
                 }
                 .tint(JarvisDesignTokens.primaryAccent)
                 .environment(\.jarvisCarryOver, carryOver)
@@ -223,21 +221,36 @@ struct ContentView: View {
                         if navigation.currentDestination == .voice { await voiceModel.start() }
                     }
                     guard !Task.isCancelled else { return }
+#if DEBUG && targetEnvironment(simulator)
+                    if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-panel"),
+                       let view = Self.voicePanelFixture() {
+                        workspaceRuntime.presentFixture(viewId: "fixture-panel", view: view)
+                    }
+#endif
                     await workspaceRuntime.run()
                 }
                 .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in
                     returnToChatAfterVoiceIfNeeded()
                 }
-                .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
-                    guard destination != nil,
-                          let destination = workspaceRuntime.consumeRequestedDestination() else {
-                        return
+                .onChange(of: workspaceRuntime.requestedNavigation) { _, request in
+                    guard request != nil, let request = workspaceRuntime.consumeRequestedNavigation() else { return }
+                    // Following a native link leaves the content that offered it, or its sheet would keep covering the destination.
+                    // On Voice the panel stays: a page change from there already dismisses it.
+                    if navigation.currentDestination != .voice { workspaceRuntime.userDismissedView() }
+                    switch request {
+                    case .destination(let destination):
+                        navigate(to: destination)
+                    case .notesGraph:
+                        notesSelectedTab = .graph
+                        navigate(to: .notes)
+                    case .factoryTask(let id):
+                        navigation.openFactoryTask(id)
                     }
-                    navigate(to: destination)
                 }
                 .sheet(
                     item: Binding(
-                        get: { workspaceRuntime.presentedView },
+                        // On the Voice page the same content is a panel above the controls, never a sheet.
+                        get: { navigation.currentDestination == .voice ? nil : workspaceRuntime.presentedView },
                         set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
                     )
                 ) { presented in
@@ -268,6 +281,7 @@ struct ContentView: View {
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)
+            .environment(\.jarvisWorkspaceRuntime, workspaceRuntime)
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     returnToChatAfterVoiceIfNeeded()
@@ -441,6 +455,15 @@ struct ContentView: View {
         }
     }
 
+#if DEBUG && targetEnvironment(simulator)
+    private static func voicePanelFixture() -> GeneratedView? {
+        let json = """
+        {"version":1,"title":"Synthetic plan","renderer":"list","source":{"id":"now","status":"complete"},        "data":{"items":[{"title":"Confirm the date","description":"Synthetic item"},{"title":"Book transport","description":"Synthetic item"},{"title":"Update the address","description":"Synthetic item"}]}}
+        """
+        return try? JSONDecoder().decode(GeneratedView.self, from: Data(json.utf8))
+    }
+#endif
+
     private func navigate(to destination: JarvisDestination) {
         navigation.navigate(to: destination)
     }
@@ -454,9 +477,14 @@ struct ContentView: View {
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
         if previous == .notes && destination != .notes { notesSelectedTab = .notes }
         if destination == .voice {
+            // Content Jarvis presented while a session was minimised carries over into the panel; a new session
+            // drops stale content when it starts (VoiceScreenView).
+            workspaceRuntime.reportActive()
             voiceModel.restore()
-        } else if previous == .voice && voiceModel.isSessionActive {
-            voiceModel.minimize()
+        } else if previous == .voice {
+            // The panel belongs to the Voice page; leaving it must not turn the content into a sheet.
+            workspaceRuntime.userDismissedView()
+            if voiceModel.isSessionActive { voiceModel.minimize() }
         }
         if navigationFixtureMode {
             switch destination {
@@ -648,7 +676,7 @@ private struct JarvisPlaceholderView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
     }
 }

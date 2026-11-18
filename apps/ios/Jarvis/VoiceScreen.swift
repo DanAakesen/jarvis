@@ -7,6 +7,7 @@ struct VoiceScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.jarvisWorkspaceRuntime) private var workspaceRuntime
     @ObservedObject var model: VoiceScreenModel
     let language: JarvisAppLanguage
     var fixtureMode = false
@@ -22,6 +23,9 @@ struct VoiceScreenView: View {
     @State private var captionFrame: CGRect = .zero
     @State private var captionFollow = ChatFollowState()
     @State private var orbFrame: CGRect = .zero
+    @State private var panelHeight: CGFloat = 0
+    @State private var panelFrame: CGRect = .zero
+    @State private var isPanelExpanded = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -75,6 +79,17 @@ struct VoiceScreenView: View {
                                 .multilineTextAlignment(.center)
                                 .accessibilityAddTraits(.updatesFrequently)
                         }
+                        if let workspaceRuntime {
+                            VoiceContentSlot(
+                                runtime: workspaceRuntime,
+                                language: language,
+                                compactMaximumHeight: panelMaximumHeight(in: geometry.size, expanded: false),
+                                expandedMaximumHeight: panelMaximumHeight(in: geometry.size, expanded: true),
+                                isExpanded: $isPanelExpanded,
+                                height: $panelHeight,
+                                frame: $panelFrame
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
@@ -102,6 +117,8 @@ struct VoiceScreenView: View {
                 }
             }
             .coordinateSpace(name: "voiceScreen")
+            // One eased, interruptible curve moves the orb back when content arrives and returns it when it goes.
+            .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: panelHeight)
             .onPreferenceChange(VoiceCaptionFrameKey.self) { captionFrame = $0 }
             .contentShape(Rectangle())
             .simultaneousGesture(minimizeGesture(in: geometry.size))
@@ -112,6 +129,9 @@ struct VoiceScreenView: View {
                 #if targetEnvironment(simulator)
                 if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-activity-fixture") { return }
                 #endif
+                // The panel shows what Jarvis presents during this session, never what was open before it.
+                workspaceRuntime?.userDismissedView()
+                workspaceRuntime?.reportActive()
                 await model.start()
             }
         }
@@ -215,15 +235,43 @@ struct VoiceScreenView: View {
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
     }
 
+    /// The panel's height while it is on screen; a connection recovery replaces it with its own actions.
+    private var visiblePanelHeight: CGFloat {
+        model.showsConnectionRecovery ? 0 : panelHeight
+    }
+
     private var voiceBottomReservation: CGFloat {
-        let captionReservation = dynamicTypeSize.isAccessibilitySize && model.isCaptionsEnabled && hasCaptions
+        let showsCaptions = model.isCaptionsEnabled && hasCaptions
+        let captionReservation = dynamicTypeSize.isAccessibilitySize && showsCaptions
             ? captionMaximumHeight
             : JarvisDesignTokens.voiceCaptionMaximumHeight
-        return captionReservation +
+        let panel = visiblePanelHeight
+        // With the panel open, space for captions is reserved only while captions are on screen.
+        let reservedCaptions = panel > 0 && !showsCaptions ? 0 : captionReservation
+        return reservedCaptions +
+            (panel > 0 ? panel + JarvisDesignTokens.voiceContentSpacing : 0) +
             JarvisDesignTokens.voiceControlDiameter +
             JarvisDesignTokens.voiceControlBottomInset +
             JarvisDesignTokens.voiceScreenShareBarHeight +
             JarvisDesignTokens.voiceContentSpacing * 2
+    }
+
+    /// The most room the panel may take: what is left once the controls, the captions on screen and a small
+    /// orb with its status keep their place.
+    private func panelMaximumHeight(in size: CGSize, expanded: Bool) -> CGFloat {
+        let captions = model.isCaptionsEnabled && hasCaptions
+            ? captionMaximumHeight + JarvisDesignTokens.voiceContentSpacing : 0
+        let controls = JarvisDesignTokens.voiceControlDiameter +
+            JarvisDesignTokens.voiceControlBottomInset +
+            JarvisDesignTokens.voiceScreenShareBarHeight +
+            JarvisDesignTokens.voiceContentSpacing * 2
+        let smallOrbRegion = 100 + JarvisDesignTokens.voiceOrbHaloInset * 2 +
+            JarvisDesignTokens.voiceStatusFontSize * 2 +
+            JarvisDesignTokens.voiceContentSpacing * 2 +
+            JarvisDesignTokens.voiceControlBottomInset
+        let room = max(140, size.height - controls - captions - smallOrbRegion - JarvisDesignTokens.voiceContentSpacing)
+        if expanded { return room }
+        return min(room, size.height * (dynamicTypeSize.isAccessibilitySize ? 0.45 : 0.34))
     }
 
     private var captionMaximumHeight: CGFloat {
@@ -562,6 +610,7 @@ struct VoiceScreenView: View {
                     + (model.isScreenSharing ? JarvisDesignTokens.voiceScreenShareBarHeight + JarvisDesignTokens.voiceContentSpacing : 0)
                 guard value.startLocation.y < size.height - bottomControlsHeight else { return }
                 if captionFrame.contains(value.startLocation) { return }
+                if panelFrame.contains(value.startLocation) { return }
                 if model.isCameraEnabled && cameraFrame(in: size).contains(value.startLocation) { return }
                 minimizeVoice()
             }

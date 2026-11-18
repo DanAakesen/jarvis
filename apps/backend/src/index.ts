@@ -112,9 +112,11 @@ import { createInboxRoutes } from './inbox/routes.js';
 import { createInboxMcpRoutes } from './inbox/mcp.js';
 import { createPiAuth } from './auth/pi-credential.js';
 import { createPiStore } from './database/pi-store.js';
-import { buildPiContext } from './pi/context.js';
+import { buildPiContext, buildPiEnvironment } from './pi/context.js';
 import { createPiGateway } from './pi/gateway.js';
 import { createPiRoutes } from './pi/routes.js';
+import { azureToolPrefix, createRemoteMcpBridge, githubToolPrefix } from './pi/remote-mcp.js';
+import { PI_GITHUB_MCP_URL } from './pi/definition.js';
 import { createPiTurnRegistry } from './pi/turns.js';
 import { createPiArea } from './pi/area.js';
 import { createBrain, type Brain } from './pi/brain/runner.js';
@@ -169,6 +171,8 @@ import { createWorkspacesModule } from './core/workspaces.js';
 import { WorkspaceItemsStore } from './database/workspace-items-store.js';
 import { createWorkspacePinsModule } from './core/workspace-pins.js';
 import { WorkspacePinStore } from './database/workspace-pin-store.js';
+import { createNotesFolderOrderModule } from './vault/folder-order.js';
+import { createNotesFolderOrderStore } from './database/notes-folder-order-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { assessVaultIndex, createSystemStatusReader } from './system-status.js';
 import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
@@ -567,8 +571,10 @@ try {
   const piAuth = createPiAuth(config.auth.tenantId, config.pi?.mcpSecret);
   const piRegistry = createPiTurnRegistry();
   const piStore = database ? createPiStore(database.pool) : undefined;
+  const piEnvironment = buildPiEnvironment(process.env);
   const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore
     ? createPiGateway({
+      environment: piEnvironment,
       projectEndpoint: config.foundryProjectEndpoint, agentName: config.pi.agentName, owner: config.auth.ownerObjectId,
       monthlyCapDkk: config.pi.monthlyCapDkk, timeZone: config.googleTimeZone ?? 'Europe/Copenhagen',
       store: piStore, registry: piRegistry,
@@ -580,6 +586,7 @@ try {
       context: async () => buildPiContext(
         await readSettings(settingsStore, await modelCatalogue.read()),
         await awayModeStore?.read() ?? defaultAwayModeState,
+        piEnvironment,
       ),
       recordUsage: usageStore?.recordFoundryUsage
         ? (usage) => usageStore.recordFoundryUsage!({ role: 'chat', ...usage }) : undefined,
@@ -1044,6 +1051,9 @@ try {
     ? createWorkspacesModule(workspaceItemsStore, workspaceHtmlArtifactStore, workspaceArtifacts)
     : undefined;
   const workspacePinsModule = workspacePinStore ? createWorkspacePinsModule(workspacePinStore) : undefined;
+  const notesFolderOrderModule = database
+    ? createNotesFolderOrderModule(createNotesFolderOrderStore(database.pool))
+    : undefined;
   let visionWatch: VisionWatchService | undefined;
   let screenVision: ScreenVisionService | undefined;
   let screenVisionModule: BackendModule | undefined;
@@ -1141,6 +1151,20 @@ try {
     ],
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
+      bridges: [
+        ...(config.pi?.githubToken ? [createRemoteMcpBridge({
+          url: PI_GITHUB_MCP_URL, prefix: githubToolPrefix, label: 'GitHub', token: async () => config.pi!.githubToken!,
+        })] : []),
+        // Azure: the backend's own managed identity calls the guarded server; its token is renewed by the credential.
+        ...(config.pi?.azureMcp && credential ? [createRemoteMcpBridge({
+          url: config.pi.azureMcp.url, prefix: azureToolPrefix, label: 'Azure',
+          token: async (signal) => {
+            const token = await credential.getToken(`api://${config.pi!.azureMcp!.clientId}/.default`, { abortSignal: signal });
+            if (!token) throw new Error('Azure MCP token unavailable');
+            return token.token;
+          },
+        })] : []),
+      ],
     }),
   };
   const modules: BackendModule[] = createProductionModules({
@@ -1173,6 +1197,7 @@ try {
     weather: weatherModule,
     workspaces: workspacesModule,
     workspacePins: workspacePinsModule,
+    notesFolderOrder: notesFolderOrderModule,
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,

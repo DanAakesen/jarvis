@@ -53,7 +53,7 @@ function setup() {
   return { run, chat, wake, vault, watches };
 }
 
-describe('watch tools: chat is the authority to open and change, a wake can only look and stop', () => {
+describe('watch tools: chat quotes Dan, a wake acts on its own', () => {
   it('opens a watch from Dan\'s stored message, quoting his words, and lists and changes it', async () => {
     const t = setup();
     const grant = t.chat();
@@ -77,19 +77,20 @@ describe('watch tools: chat is the authority to open and change, a wake can only
     expect([...t.vault.files.keys()]).toEqual([]);
   });
 
-  it('lets a wake record a look and stop a watch, but never open or change one', async () => {
+  it('lets a wake open, change, look at and stop a watch on its own', async () => {
     const t = setup();
     await t.watches.create({ title: 'Price', text: 'Watch the price.', nextLook: new Date('2026-11-16T10:30:00Z') }, live());
     const grant = t.wake();
-    expect((await t.run(grant, 'watch_create', { title: 'Injected', text: 'x' })).outcome).toBe('refused');
-    expect((await t.run(grant, 'watch_update', { name: 'Price', change: 'x' })).outcome).toBe('refused');
+    expect((await t.run(grant, 'watch_create', { title: 'Own idea', text: 'Watch the Friday deploy.' })).outcome).toBe('ok');
+    expect((await t.run(grant, 'watch_update', { name: 'Price', change: 'every hour' })).outcome).toBe('ok');
     const look = await t.run(grant, 'watch_look', { name: 'Price', result: 'unchanged at 99', nextLook: '2026-11-16T14:00:00Z' });
     expect(look).toMatchObject({ outcome: 'ok', result: { recorded: true, nextLook: '2026-11-16T14:00:00.000Z' } });
     expect(grant.brain!.looked).toEqual(['Price']);
     expect((await t.run(grant, 'watch_look', { name: 'Price', result: 'x', nextLook: 'soon' })).outcome).toBe('refused');
     expect((await t.run(grant, 'watch_stop', { name: 'Price', reason: 'stop condition met' })).outcome).toBe('ok');
     expect(grant.brain!.wrote).toEqual(['PI/Watches/Closed/Price.md']);
-    expect([...t.vault.files.keys()].sort()).toEqual(['PI/Watches/Closed/Price.md']);
+    expect([...t.vault.files.keys()].sort()).toEqual(['PI/Watches/Closed/Price.md', 'PI/Watches/Own idea.md']);
+    expect(t.vault.files.get('PI/Watches/Own idea.md')).not.toContain('> Dan,');
   });
 
   it('hides watch_look from chat and refuses it there', async () => {

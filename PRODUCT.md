@@ -1,3 +1,28 @@
+## Generated content in Chat and Voice — 16 November 2026 (#1925; approved direction, not implemented here)
+
+In typed Chat, Jarvis can present generated UI such as a weather forecast or a chart as an element within its reply. These elements scroll with the thread and remain available when the owner revisits the conversation; they are not temporary pop-up sheets. Preserve the original dated result and its source/freshness context so historical forecasts are not presented as current weather. The chat composer remains accessible. The approved layout is Conversational blocks: a forecast in one reply and a generated chart in a follow-up reply, with both retained in history. The implementation handover is `docs/ui/approved-handover-2026-11-16.md`. Typed Chat blocks are implemented (P15-190): the model chooses a forecast, a chart or an existing generated view, and the block is saved with the reply. The web chat shows reply text only. The Voice bottom panel is implemented (P15-191): content Jarvis opens during a voice session appears below the orb and status, above the controls; close dismisses it without ending the session.
+
+In Voice, Jarvis decides by its own judgement when something is easier to see than to hear and puts it on the phone's screen; nothing is shown when a session starts, and the owner is never sent to the web workspace from the iPhone. Use the approved bottom-panel direction: content sits below the lattice orb and status, above the existing microphone, plus, CC and hang-up controls. This records the owner's required experience, not verified persistence or a delivered renderer.
+
+## App polish from build 111 — 16 November 2026 (#1923, P15-185)
+
+- Graph search: the clear (X) sits inside the search field with no background of its own, and the matching notes sit directly above the dock, as far from it as
+  the dock's two rows are from each other.
+- A swipe on a pinned note or task unpins it, however far it goes; it never opens the delete confirmation. Delete stays in the reader, the task sheet and the named accessibility action.
+- The task circle is vertically centred on its row.
+- A swipe from the left edge goes back, like the top-left back button: out of a note, a Factory task or a Settings detail, and one folder up in Notes.
+- The orb is behind every page, not only Chat. Every list row uses the same glass as the glass buttons.
+- Opening the keyboard in Chat scrolls so the latest message stays above it.
+
+## Manual folder order in Notes — 16 November 2026 (#1920, P15-183)
+
+The owner can put his vault folders in his own order, for example Work, Personal, General first. Choose Manual in the Notes header
+menu's Sort by, or Reorder folders to drag the folders of the open folder (the top level, or the subfolders inside one). The order is
+display metadata: no file is renamed, moved or given a number prefix. It is stored by the backend for the owner, so it is the same
+on every device. A folder that was deleted, renamed or never ordered does not break it: unlisted folders follow the ordered ones,
+alphabetically, and a new folder appears at the end. Notes inside a folder keep Updated or Title (Manual lists them by title);
+pinned notes keep their own order from Reorder pins. Apple Watch is not part of this.
+
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180)
 
 The Notes area opens on a quiet page with pinned notes, folders and notes, a bottom Notes/Tasks/Graph switch, a fixed Search
@@ -146,6 +171,10 @@ sanitized failure information instead of describing every failure as interruptio
 A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
+
+## PI default for chat and voice (#1887, #1910; approved 18 November 2026, not live)
+
+PI is the approved default for normal chat and voice when no engine is named. iPhone starts on PI unless the owner has saved another choice; **Current engine** remains selectable for both chat and voice. Isolated runtime tests keep their own selected runtime. Watch and web follow the server default; PI web voice does not support camera or screen sharing. A PI failure does not switch engines. This approval does not cover removal of the old harness or changes to proactive behaviour.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 

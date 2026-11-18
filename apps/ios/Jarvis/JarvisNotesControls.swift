@@ -279,8 +279,9 @@ struct JarvisTaskRing: View {
     }
 }
 
-/// A row with the approved swipe: short left swipe pins, long left swipe deletes. Pin and Delete are also named
-/// accessibility actions, so nothing depends on the gesture. The owner confirms deletion; this row only asks.
+/// A row with the approved swipe: short left swipe pins, long left swipe deletes. On a pinned row (`isPinned`) the
+/// swipe only unpins, however far it goes. Pin and Delete are also named accessibility actions, so nothing depends
+/// on the gesture. The owner confirms deletion; this row only asks.
 struct JarvisPinDeleteSwipeRow<Content: View>: View {
     let title: String
     var accessibilityValue = ""
@@ -288,6 +289,7 @@ struct JarvisPinDeleteSwipeRow<Content: View>: View {
     let pinTitle: String
     let pinImage: String
     let deleteTitle: String
+    var isPinned = false
     var isDisabled = false
     var extraActionTitle: String?
     var onExtra: (() -> Void)?
@@ -300,7 +302,7 @@ struct JarvisPinDeleteSwipeRow<Content: View>: View {
     private let pinWidth = CGFloat(JarvisNotesLogic.pinSwipeDistance)
     private let deleteWidth = CGFloat(JarvisNotesLogic.deleteSwipeDistance)
 
-    private var isDeleting: Bool { -offset >= deleteWidth }
+    private var isDeleting: Bool { !isPinned && -offset >= deleteWidth }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -341,11 +343,11 @@ struct JarvisPinDeleteSwipeRow<Content: View>: View {
                         state = 0
                         return
                     }
-                    state = min(0, max(-deleteWidth, value.translation.width))
+                    state = min(0, max(isPinned ? -pinWidth : -deleteWidth, value.translation.width))
                 }
                 .onEnded { value in
                     guard !isDisabled, abs(value.translation.width) > abs(value.translation.height) else { return }
-                    switch JarvisNotesLogic.swipeAction(distance: Double(-value.translation.width)) {
+                    switch JarvisNotesLogic.swipeAction(distance: Double(-value.translation.width), allowsDelete: !isPinned) {
                     case .delete: onDelete()
                     case .pin: onPin()
                     case .none: break

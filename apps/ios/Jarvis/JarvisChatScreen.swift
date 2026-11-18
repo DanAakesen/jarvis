@@ -73,6 +73,7 @@ struct JarvisChatScreen: View {
     @State private var expandedTools = Set<String>()
     @State private var selectedTimestampID: String?
     @State private var sendRevision = 0
+    @State private var keyboardRevision = 0
     @State private var liveToolsExpanded = true
 
     private var reduceMotion: Bool {
@@ -212,6 +213,13 @@ struct JarvisChatScreen: View {
             if let initialActivitySheet {
                 presentedSheet = .activity(initialActivitySheet)
             }
+#if targetEnvironment(simulator)
+            // Simulator captures only: `--screenshot-chat-keyboard` opens the keyboard to show the latest message above it.
+            if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-keyboard") {
+                try? await Task.sleep(for: .seconds(2))
+                composerFocused = true
+            }
+#endif
             await model.watchActivity()
         }
     }
@@ -450,10 +458,14 @@ struct JarvisChatScreen: View {
                         errors: [model.historyError, model.actionError]
                     ),
                     sendRevision: sendRevision,
+                    keyboardRevision: keyboardRevision,
                     jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage)
                 ))
                 .onChange(of: model.isSending) { _, sending in
                     if sending { liveToolsExpanded = true }
+                }
+                .onChange(of: composerFocused) { _, focused in
+                    if focused { keyboardRevision += 1 }
                 }
             }
         }
@@ -483,6 +495,24 @@ struct JarvisChatScreen: View {
                 .accessibilityAction(named: copy(.turnShowTime)) { toggleTimestamp(row.id) }
             }
             if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
+            if !row.message.blocks.isEmpty {
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    ForEach(row.message.blocks) { block in
+                        JarvisChatBlockView(
+                            block: block,
+                            language: appLanguage,
+                            showsData: Binding(
+                                get: { model.expandedBlockDataIDs.contains(block.id) },
+                                set: { isOpen in
+                                    if isOpen { model.expandedBlockDataIDs.insert(block.id) }
+                                    else { model.expandedBlockDataIDs.remove(block.id) }
+                                }
+                            )
+                        )
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             if !row.message.attachments.isEmpty {
                 VStack(alignment: row.message.role == .dan ? .trailing : .leading,
                        spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -525,8 +555,8 @@ struct JarvisChatScreen: View {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                     Image(systemName: "wrench.and.screwdriver")
                     Text(copy(.toolActivity))
-                    Text("\(tools.count)")
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .accessibilityHidden(true)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -614,7 +644,6 @@ struct JarvisChatScreen: View {
                 Text(model.isReconnecting ? copy(.thinkingReconnecting) :
                         (model.liveTools.contains(where: { $0.outcome == nil }) ? copy(.turnWorking) :
                             (!model.streamingText.isEmpty ? copy(.turnWriting) : copy(.turnThinking))))
-                if !model.liveTools.isEmpty { Text("\(model.liveTools.count)") }
                 Image(systemName: liveToolsExpanded ? "chevron.down" : "chevron.right")
                     .accessibilityHidden(true)
             }
@@ -641,6 +670,13 @@ struct JarvisChatScreen: View {
                         .foregroundStyle(.red)
                         .accessibilityAddTraits(.isStaticText)
                     Spacer(minLength: 0)
+                    if model.failedTurn != nil {
+                        JarvisLabelledButton(
+                            title: "Retry",
+                            isDisabled: model.isSending,
+                            accessibilityTitle: "Retry the message that failed"
+                        ) { model.retryFailedTurn() }
+                    }
                     JarvisLabelledButton(
                         title: "Dismiss",
                         isDisabled: model.isSending,

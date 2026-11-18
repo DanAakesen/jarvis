@@ -12,6 +12,8 @@ struct JarvisChatRow: Identifiable, Equatable {
     var interrupted: Bool
     var toolCalls: [ChatHistoryToolCall]
     let attachments: [ChatHistoryAttachment]
+    /// Generated content that belongs to this reply; it is saved with the reply and never refetched.
+    var blocks: [ChatBlock] = []
 
     init(_ message: ChatHistoryMessage) {
         id = message.id
@@ -23,6 +25,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         interrupted = message.interrupted
         toolCalls = message.toolCalls
         attachments = message.attachments.filter { !Self.isLiveFrame($0) }
+        blocks = message.blocks
     }
 
     /// Frames from older live sessions were stored as attachments; they are never shown in the history.
@@ -52,6 +55,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         interrupted = false
         toolCalls = []
         self.attachments = attachments
+        blocks = message.blocks
     }
 }
 
@@ -97,10 +101,21 @@ final class JarvisChatModel: ObservableObject {
     private var thinkingPhrase = ""
     @Published var isCancelling = false
     @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
+    /// Blocks whose data table is open. Held here, not in the block view, so it survives the list recycling the
+    /// view when it scrolls away and the reply being replaced by its stored copy.
+    @Published var expandedBlockDataIDs = Set<String>()
     @Published var dismissingActivityIDs = Set<String>()
     @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
+    /// The last turn that failed, as it was sent, so the error can offer Retry without touching the composer.
+    @Published private(set) var failedTurn: FailedTurn?
+
+    struct FailedTurn {
+        let text: String
+        let attachments: [PendingChatAttachment]
+        let visualFrame: PendingVisualFrame?
+    }
     @Published var statusLine: String?
     @Published var streamingText = ""
     @Published private(set) var acknowledgment: String?
@@ -334,19 +349,34 @@ final class JarvisChatModel: ObservableObject {
             steer()
             return
         }
+        let text = composerDraft.consume()
+        startTurn(text: text, attachments: pendingAttachments, visualFrame: visualFrame, fromComposer: true)
+    }
+
+    /// Sends the turn that failed again, as a new turn, with its own attachments; the composer keeps any draft.
+    func retryFailedTurn() {
+        guard let turn = failedTurn, !isSending else { return }
+        startTurn(text: turn.text, attachments: turn.attachments, visualFrame: turn.visualFrame, fromComposer: false)
+    }
+
+    private func startTurn(
+        text: String,
+        attachments: [PendingChatAttachment],
+        visualFrame: PendingVisualFrame?,
+        fromComposer: Bool
+    ) {
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
         turnStartedAt = Date()
         progressUpdates = []
         isCancelling = false
         actionError = nil
+        failedTurn = nil
         streamingText = ""
         acknowledgment = nil
         isReconnecting = false
         toolActivities = []
         turnMessageIDs = []
-        let text = composerDraft.consume()
-        let attachments = pendingAttachments
         sentTurnAttachments = []
         thinkingPhrase = ChatThinkingPhrase.phrase(
             forRequest: text,
@@ -362,7 +392,9 @@ final class JarvisChatModel: ObservableObject {
             text: text,
             at: ISO8601DateFormatter().string(from: Date())
         ))
-        sendTask = Task { await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame) }
+        sendTask = Task {
+            await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame, fromComposer: fromComposer)
+        }
     }
 
     /// The composer stays active while Jarvis answers: a follow-up joins the running turn instead of waiting for it.
@@ -638,7 +670,8 @@ final class JarvisChatModel: ObservableObject {
     private func sendTurn(
         text: String,
         attachments: [PendingChatAttachment],
-        visualFrame: PendingVisualFrame?
+        visualFrame: PendingVisualFrame?,
+        fromComposer: Bool = true
     ) async {
         defer { sentTurnAttachments = [] }
         guard let client else {
@@ -685,8 +718,10 @@ final class JarvisChatModel: ObservableObject {
                 visualContext: visualContext,
                 engine: fixtureMode ? nil : ChatEngineSelection.load()
             )
-            pendingAttachments = []
-            uploadedAttachmentIDs = [:]
+            if fromComposer {
+                pendingAttachments = []
+                uploadedAttachmentIDs = [:]
+            }
             try await consume(events)
             discardOptimisticMessage()
             discardSteeringPlaceholders()
@@ -703,7 +738,10 @@ final class JarvisChatModel: ObservableObject {
             activeMessageID = nil
             statusLine = nil
             discardOptimisticMessage()
-            if !Task.isCancelled { actionError = message(for: error) }
+            if !Task.isCancelled {
+                actionError = message(for: error)
+                failedTurn = FailedTurn(text: text, attachments: attachments, visualFrame: visualFrame)
+            }
             // Keep any partial reply readable beside the failure; it is not a completed response.
         }
         sendTask = nil
@@ -877,10 +915,10 @@ final class JarvisChatModel: ObservableObject {
     }
 
     private func message(for error: any Error) -> String {
-        // PI failures carry an honest server message; show it instead of the generic turn text.
+        // A failed turn carries the server's own plain message (what failed, and that an action may have completed); show it instead of the generic turn text.
         if let error = error as? JarvisChatClientError,
            case .serverEvent(let code, let text) = error,
-           let code, code.hasPrefix("pi_"),
+           code != nil,
            let text, !text.isEmpty {
             return text
         }

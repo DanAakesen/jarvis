@@ -1,7 +1,8 @@
 """Run the PI live smoke on the deployed backend and turn its measurements into a job summary.
 
-The backend does the work (POST /pi/smoke, deployment identity only): a scratch conversation, a cold turn, warm turns, a
-tool turn through the Jarvis MCP server, and a cancelled turn. This script only calls it and shows what it observed.
+The backend does the work (POST /pi/smoke, deployment identity only), in three parts so that no request nears the ingress limit:
+core (cold, warm, tool and cancelled turns), voice, and reach (GitHub, Azure and tool choice). This script calls the parts one
+after another, merges what they observed and shows it.
 """
 from __future__ import annotations
 
@@ -13,17 +14,19 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# The backend runs the smoke in these parts, one request each (see runPiSmoke).
+PARTS = ("core", "voice", "reach")
 CHECKS = {
     "streaming": "text streams in several pieces, not one chunk",
     "tools_over_mcp": "a Jarvis tool ran through the MCP server and its own result was ok",
     "cancellation": "a cancelled turn stopped quickly and the conversation still works",
     "warm_faster_than_cold": "a warm turn starts faster than the cold one",
 }
-# Present only for a reach server the harness listed tools for: a server that is not attached has no turn and no check.
+# Present only for a reach server whose tools were listed (GitHub and Azure through the Jarvis door): a server that is not attached has no turn and no check.
 REACH_CHECKS = {
-    "reach_github": "the read-only GitHub server answered a read and the harness reported no error",
-    "reach_azure": "the read-only Azure server answered a read and the harness reported no error",
-    "mcp_listing": "every MCP server the harness reported returned its tools",
+    "reach_github": "a GitHub tool answered a read through the Jarvis door",
+    "reach_azure": "an Azure tool answered a read through the Jarvis door",
+    "mcp_listing": "every remote server (GitHub, Azure) listed its tools",
 }
 
 
@@ -46,7 +49,8 @@ def bar(value: float | None, scale: float, width: int = 40) -> str:
 
 
 def render(report: dict) -> str:
-    turns = [("cold, new conversation", report["cold"])] + [
+    turns = [("fixed prompt, new conversation", report["baseline"])] if report.get("baseline") else []
+    turns += [("cold, new conversation", report["cold"])] + [
         (f"warm turn {index + 2}", turn) for index, turn in enumerate(report["warm"])
     ] + [("tool turn (MCP)", report["tools"])] + [
         (f"voice: {label}", turn) for label, turn in (("plain", report.get("voice", {}).get("plain")), ("with a tool", report.get("voice", {}).get("tools"))) if turn
@@ -55,7 +59,7 @@ def render(report: dict) -> str:
     ]
     scale = max([turn["firstTextMs"] or 0 for _, turn in turns] + [1000])
     lines = ["### PI live smoke", "", "First text, observed through the gateway (one block is the same width for every row):", "", "```text"]
-    lines += [f"{label:<26}|{bar(turn['firstTextMs'], scale)}" for label, turn in turns]
+    lines += [f"{label:<31}|{bar(turn['firstTextMs'], scale)}" for label, turn in turns]
     lines += ["```", "", "| Turn | First text | Total | Pieces | Input | Cached | Output | DKK |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for label, turn in turns:
         usage = turn["usage"]
@@ -70,11 +74,15 @@ def render(report: dict) -> str:
                   f"{results or 'none'}, reply: {report['tools']['text']!r}",
               f"Smoke cost: {report['totalCostDkk']:.4f} DKK (list price, cached discount ignored).", ""]
     listed = report.get("listed", [])
-    servers = ", ".join(f"{item['server'] or 'unknown'}: {'FAILED to list' if item['failed'] else str(item['tools']) + ' tools'}" for item in listed)
-    lines += [f"MCP servers the harness listed tools for: {servers or 'none reported'}.", ""]
+    servers = ", ".join(f"{item['server'] or 'unknown'}: {('FAILED to list' + (' (' + item['reason'] + ')' if item.get('reason') else '')) if item['failed'] else str(item['tools']) + ' tools'}" for item in listed)
+    lines += [f"Remote servers whose tools were listed: {servers or 'none reported'}.", ""]
     for entry in report.get("reach", []):
         calls = ", ".join(f"{call['name'] or 'call'}={'failed' if call['failed'] else 'ok'}" for call in entry["turn"].get("reachCalls", []))
         lines.append(f"Reach {entry['server']}: {calls or 'no call'}; reply: {entry['turn']['text']!r}")
+    choices = report.get("choices", [])
+    if choices:
+        lines += ["", "Tool choice (natural prompts, no tool named; the smoke role refuses everything except its reads, so nothing acts):", ""]
+        lines += [f"- {entry['label']}: called {', '.join(entry['called']) or 'no Jarvis, GitHub or Azure tool'}; reply: {entry['turn']['text']!r}" for entry in choices]
     voice = report.get("voice")
     if voice:
         lines += ["", f"Voice (PI leg only): plain reply {voice['plain']['text']!r}; tool turn reply {voice['tools']['text']!r}, "
@@ -97,26 +105,34 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         print("::error::The deployment identity returned no token for the PI smoke.", file=sys.stderr)
         return 1
-    request = urllib.request.Request(
-        f"https://{args.backend_fqdn}/pi/smoke", data=b"{}", method="POST",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.build_opener(NoRedirect).open(request, timeout=295) as response:
-            report = json.loads(response.read(1_048_576))
-    except urllib.error.HTTPError as error:
-        body = error.read(4096).decode("utf-8", "replace")
+    # The whole smoke takes about four minutes, longer than the 240 s the ingress allows one request, so it runs as three requests.
+    report: dict = {"checks": {}, "totalCostDkk": 0.0}
+    for part in PARTS:
+        request = urllib.request.Request(
+            f"https://{args.backend_fqdn}/pi/smoke", data=json.dumps({"part": part}).encode(), method="POST",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
         try:
-            detail = json.loads(body)
-        except ValueError:
-            detail = {}
-        message = detail.get("error", "no detail") if isinstance(detail, dict) else "no detail"
-        print(f"::error::The PI smoke failed with HTTP {error.code}: {message}", file=sys.stderr)
-        args.summary.write_text(f"### PI live smoke\n\nFailed with HTTP {error.code}: {message}\n", encoding="utf-8")
-        return 1
-    except (urllib.error.URLError, TimeoutError, ValueError):
-        print("::error::The PI smoke did not return a report.", file=sys.stderr)
-        return 1
+            with urllib.request.build_opener(NoRedirect).open(request, timeout=235) as response:
+                answer = json.loads(response.read(1_048_576))
+        except urllib.error.HTTPError as error:
+            body = error.read(4096).decode("utf-8", "replace")
+            try:
+                detail = json.loads(body)
+            except ValueError:
+                detail = {}
+            message = detail.get("error", "no detail") if isinstance(detail, dict) else "no detail"
+            if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
+                message += f" (provider code: {detail['detail']})"
+            print(f"::error::The PI smoke ({part}) failed with HTTP {error.code}: {message}", file=sys.stderr)
+            args.summary.write_text(f"### PI live smoke\n\nThe {part} part failed with HTTP {error.code}: {message}\n", encoding="utf-8")
+            return 1
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            print(f"::error::The PI smoke ({part}) did not return a report.", file=sys.stderr)
+            return 1
+        report["checks"].update(answer.pop("checks", {}))
+        report["totalCostDkk"] = round(report["totalCostDkk"] + answer.pop("totalCostDkk", 0), 4)
+        report.update(answer)
     rendered = render(report)
     args.summary.write_text(rendered, encoding="utf-8")
     # The step summary needs a sign-in to read; the log shows the same numbers to anyone who can open the run.

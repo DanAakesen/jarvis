@@ -2,11 +2,25 @@
   "agentName": "jarvis-pi",
   "model": "gpt-6.1-terra",
   "reasoningEffort": "low",
-  "mcp": { "serverLabel": "jarvis", "path": "/pi/mcp", "requireApproval": "never", "connection": "jarvis-pi-mcp" },
-  "reach": [
-    { "kind": "github", "serverLabel": "github", "connection": "jarvis-pi-github", "url": "https://api.githubcopilot.com/mcp/readonly", "tokenEnv": "PI_GITHUB_READ_TOKEN" },
-    { "kind": "azure", "serverLabel": "azure", "connection": "jarvis-pi-azure" }
+  "mcp": {
+    "serverLabel": "jarvis",
+    "path": "/pi/mcp",
+    "requireApproval": "never",
+    "connection": "jarvis-pi-mcp"
+  },
+  "github": {
+    "url": "https://api.githubcopilot.com/mcp/x/all",
+    "tokenEnv": "PI_GITHUB_TOKEN",
+    "legacyConnection": "jarvis-pi-github"
+  },
+  "builtinTools": "enabled",
+  "skills": [
+    "jarvis-inbox-triage",
+    "jarvis-workers",
+    "jarvis-brain",
+    "jarvis-watches"
   ],
-  "builtinTools": "disabled",
-  "skills": ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches"]
+  "azure": {
+    "legacyConnection": "jarvis-pi-azure"
+  }
 }

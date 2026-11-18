@@ -112,8 +112,7 @@ struct JarvisTaskListRow: View {
         }
         .accessibilityLabel(JarvisTaskTitle.plain(task.text))
         .accessibilityValue([scope, priority, due].compactMap { $0 }.joined(separator: ", "))
-        .background(.regularMaterial, in: shape)
-        .clipShape(shape)
+        .jarvisRowSurface(shape)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("\(accessibilityPrefix).row.\(task.id)")
     }

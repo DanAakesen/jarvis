@@ -37,9 +37,8 @@ function translate(error: unknown): never {
 }
 
 /**
- * The few things a background wake may do besides read: speak to Dan, keep notes in PI's own corner of the vault, and add a
- * line to an inbox item's trail. Each proves it runs inside a live wake; none can be used from chat or voice, where Dan's own
- * words are the authority.
+ * The tools that exist only for a background wake: speak to Dan, keep notes in PI's own corner of the vault, and add a line to
+ * an inbox item's trail. Each proves it runs inside a live wake; none can be used from chat or voice.
  */
 export function createBrainTools(options: {
   readonly registry: PiTurnRegistry;
@@ -114,7 +113,7 @@ export function createBrainTools(options: {
     tools.push({
       name: 'inbox_trail',
       description: [
-        "Add one dated line to an inbox item's trail, for example that I nudged Dan about it or what changed since. Only for a background wake. Closing, rewording or capturing an item stays with Dan's own words in chat.",
+        "Add one dated line to an inbox item's trail, for example that I nudged Dan about it or what changed since. Only for a background wake.",
         'id is the inbox id from inbox_items. The line is free text in Dan\'s language, at most 300 characters.',
       ].join(' '),
       execution: { defaultEffect: 'action' },

@@ -1,6 +1,150 @@
-## PI phase 7: cutover prepared, not done — 16 November 2026 (#1887, P15-176, part 2)
+## PI smoke in three requests (#1910, P15-209)
 
-Owner, 16 November 2026: "Just dont delete the old harness." Prepared: `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, an approval record) and the flip itself as a separate draft pull request that merges only on the owner's written word. **Nothing is deleted and no default changed.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
+**Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
+
+| Step | State |
+| --- | --- |
+| `POST /pi/smoke` takes `{ part: core | voice | reach }`; the checks are unchanged and each part reports its own | Done |
+| The workflow script calls the three parts one after another and merges them into the same summary | Done |
+| Confirm with a `measure_pi` Deploy | **Open** |
+
+## Azure MCP cold start (#1910, P15-208)
+
+**Status: built; backend (tests, typecheck, lint) and workflow scripts pass locally. Not yet confirmed by a `measure_pi` Deploy.** From two failed `measure_pi` runs on main (the Azure listing failed, then the smoke hit the ingress's 240 s limit) and the owner's "Jarvis is still not able to reach Azure".
+
+| Step | State |
+| --- | --- |
+| The backend wakes the Azure MCP server as it starts (and `/pi/warm` does the same), so the first search no longer finds it asleep | Done |
+| The catalogue refresh is no longer cancelled at 90 s (now 200 s, inside the ingress's 240 s hold); a failed first list is not cached, the next search retries | Done |
+| A search says when a server is still loading or could not be reached, so PI no longer reports Azure as "not attached" | Done; PI instructions updated |
+| The smoke lists both servers at once and prints why a listing failed; the Deploy wakes the server first and prints the cold-start time | Done |
+| Confirm with a `measure_pi` Deploy; read the printed cold-start time and listing reason | **Open** |
+
+Cause not proven: no Azure log access from the build environment (see decisions).
+
+## Voice visuals and chat-block reliability — 17 November 2026 (#1939, P15-205)
+
+**Status: built; backend (typecheck, lint, 602 tests), contracts and JarvisCore (`swift test`, 180 tests) pass locally. The SwiftUI compiles only in the macOS `watch` job and none of it has been seen on a device. No build cut.** From the owner's build 112 testing.
+
+| Step | State |
+| --- | --- |
+| Jarvis knows it can show visuals in voice: the per-turn voice note, the PI Voice instructions, the `workspace_command` description and the realtime voice instructions now say so (no gate, no approval step) | Done; `show_in_chat` in a spoken turn is refused with a pointer to the screen |
+| The phone reports itself as the active device when Voice opens, so `target: active` reaches the phone and not a browser tab | Done in code; not seen on a device |
+| Voice panel: nothing from before the session is shown at start; header row of its own (close and expand top left, title from the content); the knowledge-graph and code views draw natively | Done in code |
+| Orb retreat and return: one eased, interruptible spring in both directions; Reduce Motion has no animation | Done in code; not seen in motion |
+| `show_in_chat`: root cause not provable from here (no backend log access); the tool, route and PI door pass an end-to-end test for forecast, chart, list and table blocks | See decisions; the open question is below |
+| Show data on forecasts and Copy on every block; open state survives scrolling | Done in code |
+| Actions: every contract route opens its native screen (task routes open that task), `knowledge` opens the Notes graph, window moves, places and arranges bring the view forward, close-all and minimise-all hide it | Done; `call-tool` actions still have no executor on any client |
+| No path to the web app: the "Open web app" link, `JARVIS_WEB_APP_URL` and its plumbing are removed | Done |
+| Owner checks on a device: a voice visual from a spoken request, the panel's header and both buttons, the orb in motion (open, close, interrupt), Show data after scrolling, a task route button | **Open** |
+
+Open: the build 112 "Show in chat tool failed" row. If it returns after this, `tool.invalid_arguments` and `pi.stream_failed` in the backend logs name the cause.
+
+## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-204)
+
+**Status: built and checked on Linux (JarvisCore tests, Swift syntax parse); the SwiftUI views compile only in the macOS CI job and have not been run on a device. No build cut.** Implements [docs/ui/tool-activity/HANDOFF.md](docs/ui/tool-activity/HANDOFF.md).
+
+| Step | State |
+| --- | --- |
+| Tool kind from the tool identifier (`ChatToolKind`: read, edit, command, web, configuration, deployment, generic) and real status (`ChatToolStatus`) in JarvisCore, with Linux tests | Done, tests pass |
+| Compact tree rows with the chevron right after the label, tool icon kept across states, no counts, no Done or Queued text (`JarvisToolActivityRow.swift`, `JarvisChatToolActivityList.swift`) | Done in code |
+| Running: highlight tracing the icon outline (1.4 s loop) and shimmer on the action text only; success turns orange; failure red with "Failed"; refusal grey with "Not allowed" | Done in code |
+| Reduce Motion: static rows, running shown by a trailing ellipsis; VoiceOver says "name, status" | Done in code; not heard on a device |
+| Header rows ("Working", "Tool activity") lose their counts and use right-closed, down-open chevrons | Done in code |
+| Automatic expansion while active, collapse on the final reply, manual reopening of history, identifiers and scroll following | Unchanged code paths |
+| Queued state | **Not built:** the event stream has only started and finished, so no call is ever queued |
+| Owner checks on a device: motion at native size and the 1.4 s timing, long names, a mixed group, a state change mid-animation, scroll position while following, VoiceOver, Reduce Motion | **Open** |
+
+## Graph polish from build 112 — 17 November 2026 (#1940, P15-201)
+
+**Status: built and unit-tested on Linux; waiting for CI (macOS compile, simulator captures) and the owner's TestFlight check. No build cut.** Two fixes from the owner's build 112 test. (1) The selected note's name pill over the graph is now real SwiftUI text instead of canvas text: a long title wraps to two lines (then truncates) and the pill's border grows with it; it stays above the note, inside the scene, and drops below the note when there is no room above. The preview row above the dock wraps its title the same way. (2) Link lines are clearer: a link's resting opacity went from 0.30 to 0.50 and its width from 1.0 to 1.2 pt, similarity lines from 0.13 to 0.20 and 0.6 to 0.7 pt, emphasised links (selection or search) reach the 0.8 ceiling at 1.7 pt, dimmed links sit at 0.3 of resting. Links stay under a note's full strength so two close notes still read as two dots. The numbers live in `JarvisGraphLinkStyle` and the pill placement in `JarvisGraphPillPlacement` (`JarvisCore/Graph3D`, 3 new tests). Reduce Motion, the Background motion switch and the cheap path are unchanged: the still pose is drawn once and includes the pill and the stronger links.
+
+Not verified: the line strength was set from the painter's maths and the previous build's values, not yet seen on a real vault in light and dark; the owner's check decides whether 0.50 is right or needs one more step. Apple Watch untouched.
+
+## Map and route card: design brief — 17 November 2026 (#1944, P15-200)
+
+**Status: design brief written; docs only, no app code, portal change or build.** `docs/ui/map-route-card/brief.md` records what exists (block contract from #1933/#1934, no MapKit use, no Maps entitlement, the Maps portal capability is the routing-app kind and not needed to show a map, no Apple Maps link built in code), what is feasible (snapshot or live map, route line, ETA, travel mode), the proposed `route` block, the exact portal and secret steps per option, Chat and Voice placement, history snapshot rules, location privacy, states, accessibility, three options and a recommendation (Option 3, a backend route tool with the route stored in the block), and nine open questions. **Next: the owner picks an option and makes the designs; Option 3 needs a Maps identifier and key created in the Apple Developer portal first.**
+
+## Voice bottom panel — 17 November 2026 (#1925, P15-191; stacked on P15-190)
+
+**Status: built; waiting for CI (macOS compile, simulator capture `polish-voice-panel`) and the owner's TestFlight check. No build cut.** Part 2 of #1925.
+
+| Step | State |
+| --- | --- |
+| Content Jarvis opens during a voice session shows as a panel below the orb and status, above the microphone, plus, CC and hang-up controls (`VoiceContentPanel.swift`) | Done in code; compiles only in the macOS `watch` job |
+| Close dismisses the panel and keeps the session; expand and collapse only when the content needs more room | Done in code |
+| The page keeps a small orb, the status and the four controls in view: the panel's height is capped and the orb area follows its measured height | Done in code |
+| Leaving the Voice page dismisses the panel (it never turns into a sheet); other pages keep the existing sheet | Done in code |
+| Loading, partial, unavailable and unsupported content, long content (scrolls inside the panel), Reduce Motion, larger text, VoiceOver announcement | Done in code; not seen on a device |
+| Simulator capture from synthetic content (`--screenshot-voice-panel`) | Added to the `watch` job; not run yet |
+| Owner checks on a device: opening and closing while listening, thinking and speaking, long content, CC, microphone and hang-up, interrupted animation | **Open** |
+
+## Conversational blocks in Chat — 17 November 2026 (#1925, P15-190)
+
+**Status: built and checked locally; waiting for CI (macOS compile, simulator capture `polish-chat-blocks`) and the owner's TestFlight check. No build cut.** Part 1 of #1925 (Chat); part 2 (Voice bottom panel, P15-191) is a separate stacked pull request.
+
+| Step | State |
+| --- | --- |
+| Typed block contract (`forecast`, `chart`, `view`) in `@jarvis/contracts`, with tests | Done |
+| Model tool `show_in_chat`; blocks are saved inside the assistant message (`dbo.messages.metadata`, no migration) and returned by `done` and history | Done; backend tests and the SQL contract (full migrations on a loopback SQL Server) pass |
+| `weather` can return values only (`report` false) and hourly temperature and rain probability (`hourly` true) | Done; unit tests with a fake provider |
+| iOS: `ChatBlock` models, lossy history decoding, inline renderers (forecast, multi-panel chart with selection and data table, existing generated views), unsupported fallback | Done; `swift test` (Linux) passes; the SwiftUI compiles only in the macOS `watch` job |
+| Simulator capture of the two approved replies from synthetic history (`--ui-test-chat-blocks`) | Added to the `watch` job; not run yet |
+| Owner checks on a device: scrolling, restart, larger text, VoiceOver, Reduce Motion and Transparency | **Open** |
+
+Not in scope here: the web chat does not render blocks (it shows the reply text only); the Voice panel; Apple Watch.
+
+## Approved graph and generated-content designs — 16 November 2026 (#1924, #1925)
+
+Design selection and handover are complete: Graph 2 (Folder clusters), Voice option 1 (Bottom panel, Voice side only), and Chat Conversational blocks. References and acceptance checks: `docs/ui/approved-handover-2026-11-16.md`. Next implementation step: inspect the existing graph/renderer/history contracts, then implement the approved surfaces and verify native interaction and durable Chat blocks. No implementation, persistence or device acceptance is claimed by this design handover.
+
+## 3D vault graph, Folder clusters — 17 November 2026 (#1924, P15-190)
+
+**Status: built; unit-tested on Linux, and the full iPhone app compiled in the macOS CI job with simulator captures of the three-note fixture. Gestures, a realistic vault and device performance are not yet checked: they wait for the owner's TestFlight check. No build cut.** The Graph tab is now a perspective 3D scene of the vault's real notes and links, grouped in space by top-level folder (Work amber, Personal green, General muted violet, any other folder neutral, every cluster labelled by name). Two fingers turn and tilt it (a twist also turns it), a pinch zooms about the fingers, one finger pans, a tap selects, tapping the same spot again walks through notes hidden behind, a long press frames a note and its neighbours. The selected note shows a compact preview above the dock (title, vault path, open task count or "Task count unavailable") that opens the existing reader. Life: slow drift, slow brightness breathing, at most two quiet pulses at a time along real links with a short afterglow, one pulse per neighbour on selection; Reduce Motion and the Background motion switch draw one still pose with no inertia and no flights, Low Power Mode and the Simulator use fewer, slower frames and no glow. No auto-rotation. Search lights the matches, labels up to six and eases the camera to frame them; clearing search returns to the previous view. The selected note's preview floats over the bottom of the scene, so showing it never resizes the scene or moves a note. VoiceOver reads one element ("Graph, N notes, 3D view") with actions for List, Recenter, rotate, tilt and zoom; individual notes are not separate VoiceOver elements, as the brief specifies, so the existing list sheet (every note with its real path and Open note) is the accessible way to reach a note.
+
+| Part | State |
+| --- | --- |
+| Layout, camera, projection, hit testing, drift and pulse schedule (`JarvisCore/Graph3D`, 23 tests) | **Built and tested.** Same vault gives the same layout; 2,000 notes (the backend cap) lay out in about 0.5 s in a debug test build and project in well under 100 ms per frame |
+| Canvas painter, gesture layer, preview, accessibility actions (`JarvisNotesGraphView`, `JarvisNotesGraphScene`, `JarvisNotesGraphGestures`) | **Compiled in the macOS CI job; rendered in simulator captures of a three-note fixture. Gestures, a realistic vault and accessibility are not exercised.** Needs a simulator or device pass |
+| Device performance (iPhone 11 class, 500 to 1,000 notes, thermal state, energy), gesture feel, inertia and pulse strength | **Not measured.** The brief's spike numbers still apply; Metal remains the fallback if Canvas misses the budget |
+| Open vs brief | Alive state (rate rises while Jarvis works) is dropped: the Notes page cannot read Jarvis's activity today. Task nodes, folder hubs and similarity pulses are not built |
+
+Next: CI build and captures, the owner's phone test (feel of turn, tilt, inertia and drift; legibility of the violet and neutral clusters), then the device performance check.
+
+## App polish batch from build 111 — 16 November 2026 (#1923, P15-185)
+
+**Status: built, waiting for CI and the owner's TestFlight check. No build cut.** One pull request covers the seven items: graph search clear button and
+result spacing, swipe to unpin, centred task circle, edge-swipe back, the orb on every page, one glass row surface, and the chat keyboard following the
+latest message. Simulator captures run in the `watch` job (`polish-*`). Open: the owner confirms the pinned-row swipe reading and the glass rows on a device.
+
+## Manual folder order in Notes — 16 November 2026 (#1920, P15-183)
+
+**Status: built and tested; waiting for CI (macOS compile and captures) and review.** Backend: migration `0089`, owner-only
+`/notes/folder-order`, tests (route and real SQL Server). iOS: Manual sort, Reorder folders sheet with drag handles and Move up/down,
+folder order loaded and saved through the backend, two simulator captures. Not in scope: the folder chooser's order, Apple Watch,
+moving pins to the backend. No TestFlight build.
+
+## Build 111 bugs — 16 November 2026 (#1922, P15-184)
+
+Owner's approach, binding: model-driven nudging in instructions and tool descriptions, no restrictions, no gates, no fallbacks; the default chat engine is not changed (cutover draft #1910).
+
+| Item | State |
+| --- | --- |
+| Smart tool choice (PC only when asked) | **Built, not measured live.** Guidance in `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description, the PC and browser tool descriptions and the old engine's instructions. The Deploy smoke (`measure_pi`) now runs four natural prompts (Azure, GitHub, notes, "open Spotify on my PC") and reports which tools PI reached for. The smoke role refuses everything but its reads, so nothing acts. Measure by running Deploy with `measure_pi` |
+| Azure not used, PC browser opened | The backend log showed plain voice sessions and old-engine chat: Azure tools are attached to PI only, so on the old engine the model had nothing to answer with and reached for the PC. The fix for that is the PI cutover (#1910), not a patch; the old engine now tells the model to say so instead of opening a site on the PC |
+| Voice stuck on "Connecting" | **Cause not proven.** Backend side is clean: logs of both sessions show ready in under 0.5 s and the greeting spoken, but no speech from the phone. The app shows "Connecting" only before the socket handshake returns, or while no microphone frame has arrived. The handshake waited for a pong with no read outstanding and no timeout; it now starts reading with the handshake and fails visibly after 15 s. Needs the owner's phone test |
+| Follow-up error (`model_response_incomplete`) | The provider ended the stream with a failed or incomplete event; our code dropped the provider code. It is now logged (closed list of content-free codes), the app shows the server's own message, and the error offers Retry |
+| Crash when closing a voice session (new from the owner) | **Fixed in code, needs the owner's phone test.** The TestFlight crash log (build 111) shows `CheckedContinuation.resume` trapping twice in `URLSessionWebSocketTransport.connect`: the ping completion handler fires again when the socket closes. The continuation is now resumed through `ResumeOnce` (unit-tested). This also removes the doubled handshake callback that can leave voice on "Connecting" |
+
+## 3D Notes graph: design brief — 16 November 2026 (#1924, P15-186)
+
+**Status: step 1 (design brief) written; superseded by the approved design and the build in "3D vault graph, Folder clusters" above.** `docs/ui/graph-3d/brief.md` covers what the graph shows, the interactions, the motion language tied to the neural background, a performance budget, the rendering options with a recommendation (projected 3D in `Canvas`, gated by a measured device spike, Metal if it misses the budget; nothing measured yet), and 12 open questions.
+
+## PI phase 7: default flip approved, not live — 18 November 2026 (#1887, P15-176)
+
+The owner approved only the chat and voice default in [writing on #1887](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174). The change is in standalone draft [#1910](https://github.com/DanAakesen/jarvis/pull/1910), not merged or deployed. Exact-revision CI, native checks and live verification are still needed; the three-part smoke on the earlier release exercises PI, not the new default or device audio. [The cutover checklist](docs/pi/cutover.md#2-the-flip-phase-7-as-one-small-separate-change) records scope and rollback.
+
+Owner, 16 November 2026: "Just dont delete the old harness." The original cutover prep produced `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, and an approval record). **No deletion is authorised.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
 
 ## PI phase 6: voice on the PI agent — 16 November 2026 (#1887, P15-176, part 1)
 
@@ -19,6 +163,10 @@ Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so
 
 Next: Deploy with `measure_pi`, the owner's phone test of voice on PI, then the cutover pull requests (checklist and deletion inventory in `docs/pi/cutover.md`).
 
+## PI voice measured, and the prompt grew — 16 November 2026 (#1887, P15-176)
+
+First `measure_pi` after voice (Deploy run 43831735508): the PI leg of a voice turn is 1.6 s to first text (plain) and 1.4 s (with a tool, after a spoken sentence from PI); the voice checks pass. Warm turns now carry about 17.7k input tokens (was about 7.5k), 99 percent cached, which is about 0.12 DKK per warm turn at list price (0.007 at the assumed cached rate). Details, what the repository says about the cause, the options (none implemented) and the new "fixed prompt" smoke row that separates the base prompt from conversation growth: `docs/harness-trial/spike-results.md`, "PI voice leg and prompt size".
+
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
 
 Status: implemented on the branch; waiting for CI (macOS compile) and review. Done: design pack committed, backend task delete,
@@ -28,14 +176,14 @@ select, manual sort, undo, Danish catalog. No TestFlight build is part of this w
 
 ## Single vault layout, cut over with the vault clean-up — 15 November 2026 (#1895, P15-181)
 
-**Status: built and tested; waiting for review and the cutover.** Jarvis moves to the new vault paths only: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/` (`gym-log` type kept). No old paths, detection or fallbacks remain. The vault mirror excludes `_agent-activity` and keeps `_agent-log` until vault PR #5 has merged.
+**Status: built and tested; waiting for review and the cutover.** Jarvis moves to the new vault paths only: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/` (`gym-log` type kept). No old paths, detection or fallbacks remain. The vault mirror excludes `_agent-activity` only; the `_agent-log` rule was removed after vault PR #5 merged.
 
 | Part | State |
 | --- | --- |
 | Backend (task create, proactive todos, gym log writer, lift delete), iOS gym store and preview fixtures on the new paths; tests and docs updated | Done |
 | Vault mirror excludes `_agent-activity`; `test/policy.test.ts` | Done |
 | Cutover: merge this, deploy the backend, then merge vault PRs #4 and #5 | **Open**; a short inconsistent window is accepted |
-| Remove the `_agent-log` mirror rule after vault PR #5 has merged | **Open** |
+| Remove the `_agent-log` mirror rule after vault PR #5 has merged | Done (single `_agent-activity` exclusion; archive folder stays tracked) |
 
 ## PI phases 3 to 5: reach, the brain loop and standing watches — 16 November 2026 (#1886, P15-175)
 
@@ -43,15 +191,23 @@ Delivered as three stacked pull requests in the order of the issue. Owner rules 
 
 | Part | Pull request | State |
 | --- | --- | --- |
-| 1 Reach: read-only GitHub MCP, read-only Azure MCP (Reader, scales to zero), Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
+| 1 Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scales to zero), no read-only restriction, Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
 | 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy |
 | 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in `docs/harness-trial/spike-results.md`); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
 
 **Brain, what was built and observed.** The brain reads the event queue, wakes the PI agent in a scratch conversation under exact guards (owner switch, pause, 10 minutes between wakes, 12 wakes a day, the 100 DKK proactive budget stop with notices at 80 percent and at the stop), lets it read, tell Dan (a chat message that always pushes; at most 8 a day, no repeats), keep notes under `PI/` and add inbox trail lines, and writes every decision to `PI/Log/<day>.md`. Replay of 38 real Actions results (15 to 16 November) through the real producers, queue, loop, tools and log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages (the 3 failed Deploys of main); backend suite and the SQL contract on SQL Server 2022 pass. **Not proven:** the model's judgement (the owner judges it behind the test switch), real cost per wake, the iOS rows (Apple CI only), and the push on a real device. Until the owner turns the switch on, nothing is claimed and nothing is spent.
 
-**Watches, what was built and observed.** A watch is a free-text note in `PI/Watches` with one exact field, the next look; Dan opens, changes and stops them in chat or voice, a wake looks and may stop a watch (its own stop condition) but cannot open or change one. Our ticker wakes the brain when a look is due; one wake covers every due watch and every queued event. Limits: 10 open, 8 looks a day each, 5 minutes apart, and a limit moves the next look so it cannot loop. Replay of a simulated week (a daily topic, an hourly price capped at 8 looks a day, an events-only build) through the real loop, with a scripted model: 84 wakes (12 a day, the daily cap), about 7.5 DKK on the shared proactive ledger of which the hourly watch is about 4.8, one message. Cost per watch is an estimate (a wake is split evenly over what woke it) and is shown by `watch_list`. **Not proven:** a real model's cadence choices and reporting judgement, and Foundry routines as a waker (the reminder tool is rejected on a harness prompt agent; routines untested).
+**Watches, what was built and observed.** A watch is a free-text note in `PI/Watches` with one exact field, the next look; Dan opens, changes and stops them in chat or voice, a wake can open, change, look at and stop watches on its own. Our ticker wakes the brain when a look is due; one wake covers every due watch and every queued event. No per-watch limits (spend is bounded by the wake guards and the budget; a due watch with no look moves an hour ahead so it cannot loop). Replay of a simulated week (a daily topic, an hourly price, an events-only build) through the real loop, with a scripted model: 84 wakes (12 a day, the daily cap), about 7.5 DKK on the shared proactive ledger of which the hourly watch is about 4.8, one message. Cost per watch is an estimate (a wake is split evenly over what woke it) and is shown by `watch_list`. **Not proven:** a real model's cadence choices and reporting judgement, and Foundry routines as a waker (the reminder tool is rejected on a harness prompt agent; routines untested).
 
-**Reach, what the owner must provide.** (a) A GitHub **fine-grained** personal access token limited to the repositories PI may read, with read-only repository permissions (Contents, Issues, Pull requests, Actions, Metadata), stored as the repository secret `PI_GITHUB_READ_TOKEN`. Classic tokens are refused. (b) Run `infra/setup-azure-mcp.ps1` once from a PC signed in to Azure CLI and GitHub CLI: it creates the Entra app that guards the Azure MCP server, lets only the Foundry project call it, and sets the variable `JARVIS_AZURE_MCP_CLIENT_ID`. The first Deploy after merge outputs the project identity the script reads, so the order is: merge, Deploy, run the script, Deploy. Until then the summary of the Deploy `pi-agent` job says which server is "not attached" and why; PI says so too instead of pretending.
+**Reach, what the owner must provide.** (a) A GitHub **fine-grained** personal access token (resource owner `DanAakesen`, chosen repositories, Read and write on Contents, Issues, Pull requests and Actions, Metadata read, no Administration, no Secrets, expiry up to one year), stored as the repository secret `PI_GITHUB_TOKEN`. Classic tokens are refused. (b) Run `infra/setup-azure-mcp.ps1` once from a PC signed in to Azure CLI and GitHub CLI: it creates the Entra app that guards the Azure MCP server, lets only the Foundry project call it, and sets the variable `JARVIS_AZURE_MCP_CLIENT_ID`. The first Deploy after merge outputs the project identity the script reads, so the order is: merge, Deploy, run the script, Deploy. Until then the summary of the Deploy `pi-agent` job says which server is "not attached" and why; PI says so too instead of pretending.
+
+**No restrictions on PI (16 November 2026, owner direction; follow-up pull request).** A wake has every chat tool plus its own and acts on its own (Workers, mail, tasks, watches); PI calls need no Dan message or approval step; watch limits are gone; the harness built-ins (shell, filesystem, web, sub-agents) are on. Open: the `measure_pi` numbers (first text and input tokens against the baseline) after the next Deploy; built-ins go back off only if first text is more than twice as slow. Remaining wake guards (10 minutes apart, 12 a day, 8 messages a day) and the 100 DKK budget stay until the owner says otherwise.
+
+**Azure through the Jarvis door (16 November 2026).** Azure attached as a harness tool failed the first turn (Deploy 43924888427); like GitHub it now reaches PI as `az_` tools through `find_tools` and `call_tool`, called by the backend with its own managed identity. Owner step after merge: re-run `infra/setup-azure-mcp.ps1` (grants the backend identity the app role); then Deploy with `measure_pi`.
+
+**GitHub through the Jarvis door (16 November 2026).** The first Deploy with the full GitHub server attached to the harness made turns slow (31k input tokens, first text 2.4 to 5.7 s). GitHub's tools now reach PI through `find_tools` and `call_tool` as `gh_` tools, the backend holds the token. To measure: Deploy with `measure_pi`; target warm first text under about 1.5 s with GitHub fully usable. If it is slower, the built-ins are the next suspect.
+
+**Reach, unrestricted (16 November 2026, owner direction).** The owner does not want PI limited to reading, so the read-only locks are removed: GitHub uses the full remote server (`/mcp/x/all`, secret `PI_GITHUB_TOKEN`), the Azure MCP server runs without `--read-only` and its identity has Contributor on the Jarvis resource group (widening beyond it is the owner's call), and PI's instructions and skills carry no approval rules. Next step: the owner creates `PI_GITHUB_TOKEN`; after merge, a Deploy with `measure_pi` shows the tool count and cost of the full server. The earlier `--read-only` proof above is the 3.0.0 image's start-up behaviour, kept as history.
 
 Proven so far (16 November, Linux): the Azure MCP Server 3.0.0 image starts with `--transport http --read-only --outgoing-auth-strategy UseHostingEnvironmentIdentity` and answers `401` with a bearer challenge to an unauthenticated call; the Bicep builds (0.49); the backend suite (472 tests) and the Python suite (38 tests) pass and lint is clean, with new tests for the definition, the connections, "left out and visible", the smoke, the stream parsing and the Worker producer. **Unproven until the first live run:** that Foundry accepts a `ProjectManagedIdentity` connection (category `RemoteTool`) for a prompt-agent MCP tool, that the harness lists both servers' tools, and the cold start of a scaled-to-zero Azure MCP container when a conversation starts. The smoke now lists the servers the harness reports and runs one read per attached server, and its numbers are printed in the job log as well as the summary (the summary needs a sign-in).
 
@@ -94,7 +250,7 @@ Next: owner review of the captures and a TestFlight build.
 
 | Part | State |
 | --- | --- |
-| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, built-ins off, Jarvis MCP server, skills from the repository | Written; **Deploy has not run it yet** |
+| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, harness built-ins on, Jarvis MCP server, skills from the repository | Written; **Deploy has not run it yet** |
 | Jarvis MCP server (`/pi/mcp`: `find_tools`, `call_tool`) with per-turn authority and the in-process dispatch through the normal tool route | Built; 9 offline tests including forged, closed and smoke grants |
 | Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (100 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
 | Test selector: turn field `engine: "pi"`, Settings switch in iOS, `GET /pi/status`, `POST /pi/warm` | Built; backend route tests pass; iOS compiled only by CI |
@@ -5151,6 +5307,18 @@ Pipeline bounded, sequenced microphone and playback traffic; tolerate transient 
 ## Watch dictation and voice first press — 15 November 2026 (P15-160 / #1856)
 
 Implemented the backend stage logging and speech-token cache, a 10 s direct window with phone fallback, voice start and reconnection recovery, and stale phone-state replacement. Decisions and findings are in docs/decisions.md. Next: native Watch and phone builds in CI, then a paired-Watch check of first-press voice, dictation latency from a cold backend, and a short phone-out-of-range gap during voice; read the new `watch_transcription.stage` events to confirm where direct dictation lost its result.
+
+## Watch focused voice view — 17 November 2026 (P15-206 / #1945)
+
+Implemented the approved focused view on top of the adaptive composer (stacked on #1951). Next: read `voice-*.png` from the watch job, then a paired Watch pass: states against real session events, mute while speaking, End and Back/re-entry, long transcript, large text, VoiceOver, Reduce Motion.
+
+## Watch Chat adaptive composer — 17 November 2026 (P15-203 / #1942)
+
+Implemented the owner-approved handover: one Chat row, bottom-right menu button, a single conversation scroll behind the system navigation bar, and a ready/reading composer with shared Watch glass components. Next: read the watch job's `menu.png`, `chat-ready.png` and `chat-reading.png`, then a paired Watch pass for large text, smallest case, VoiceOver, Crown scrolling, Reduce Motion/Transparency and the reading-mode threshold.
+
+## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
+
+Owner report on build 112: live voice no longer fails but cannot hear him, and dictation ends in "transcription timed out". Backend logs for two 10 s dictation attempts (14:49Z) show the clip arrived intact (489,082 bytes, 10,189 ms) and the speech token was acquired, but the Speech recognizer never started and nothing was logged until the Watch gave up, so dictation is a backend Speech-connection problem, not a capture failure. The Watch transcriber now uses the language identification that the live partial recognizer proved on this endpoint (L111) instead of a fixed `en-GB`, bounds the recognizer start to 6 s and logs where it stops; the Watch's direct window and overall wait grow with the clip; capture is measured so silent audio is reported instead of uploaded. Live voice: the logs show no Watch voice socket at all, which is not explained yet. Next: deploy, test a 10 s dictation on the Watch and read the `watch_transcription.stage` rows (`service_connected`, `recognizer_started`, `recognizer_start_timeout`); trace a Watch live-voice start on a paired phone.
 
 ## Notes swipe and deletion — 13 November 2026 (#1819)
 

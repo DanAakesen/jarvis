@@ -198,8 +198,10 @@ public enum JarvisNotesLogic {
     public static let pinSwipeDistance = 72.0
     public static let deleteSwipeDistance = 160.0
 
-    public static func swipeAction(distance: Double) -> SwipeAction {
-        if distance >= deleteSwipeDistance { return .delete }
+    /// A pinned row has one swipe action, unpin, at any length past the short detent: overshooting it must never
+    /// ask to delete the note (`allowsDelete` is false there).
+    public static func swipeAction(distance: Double, allowsDelete: Bool = true) -> SwipeAction {
+        if allowsDelete, distance >= deleteSwipeDistance { return .delete }
         if distance >= pinSwipeDistance { return .pin }
         return .none
     }
@@ -472,6 +474,37 @@ public final class JarvisNotesClient: Sendable {
             throw JarvisNotesClientError.writeOutcomeUnknown
         } catch JarvisClientError.responseDecodingFailure {
             throw JarvisNotesClientError.writeOutcomeUnknown
+        }
+    }
+
+    /// The owner's manual folder order. Display metadata stored by the backend; no vault file is touched.
+    public func folderOrder() async throws -> JarvisFolderOrder {
+        let response = try await request(method: .get, path: ["notes", "folder-order"], idempotent: true)
+        guard response.body.count <= 512 * 1024,
+              let decoded = try? JSONDecoder().decode(JarvisFolderOrderResponse.self, from: response.body),
+              decoded.orders.count <= 10_000 else {
+            throw JarvisNotesClientError.invalidResponse
+        }
+        var order = JarvisFolderOrder()
+        for entry in decoded.orders {
+            guard order.byParent[entry.parent] == nil, JarvisFolderOrder.isValid(entry.folders, in: entry.parent) else {
+                throw JarvisNotesClientError.invalidResponse
+            }
+            order.set(entry.folders, in: entry.parent)
+        }
+        return order
+    }
+
+    /// Replaces the order of one parent's child folders. `folders` must be all the children the owner now sees.
+    public func setFolderOrder(parent: String, folders: [String]) async throws {
+        guard JarvisFolderOrder.isValid(folders, in: parent) else { throw JarvisNotesClientError.invalidRequest }
+        let response = try await request(
+            method: .put, path: ["notes", "folder-order"],
+            body: try JSONEncoder().encode(JarvisFolderOrderRequest(parent: parent, folders: folders)), idempotent: true
+        )
+        guard let saved = try? JSONDecoder().decode(JarvisFolderOrderResponse.Entry.self, from: response.body),
+              saved.parent == parent, saved.folders == folders else {
+            throw JarvisNotesClientError.invalidResponse
         }
     }
 

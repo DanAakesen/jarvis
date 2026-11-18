@@ -159,10 +159,10 @@ describe('voice relay on the PI engine', () => {
     expect(responses()[1]!.response.instructions).toContain('No other engine was used.');
   });
 
-  it('refuses typed requests and camera frames that would reach Voice Live around PI', async () => {
+  it('refuses typed requests and screen context on the default PI voice path', async () => {
     const agent: PiVoiceAgent = { async *stream() { yield 'x' as ConversationAgentChunk; } };
     const { connect, responses } = await harness(agent);
-    const session = connect('?engine=pi');
+    const session = connect('');
     await until(() => responses().length === 1, 'the greeting');
     session.browser.send(JSON.stringify({ type: 'jarvis.screen.context', itemId: 'frame_1', description: 'a page' }));
     await until(() => session.received.some(event => event.type === 'jarvis.screen.context.unavailable'), 'the notice');
@@ -190,13 +190,18 @@ describe('voice relay on the PI engine', () => {
     expect(update.session!.tool_choice).toBe('auto');
   });
 
-  it('runs a voice session without an engine on PI', async () => {
-    const { connect, responses, upstreamEvents } = await harness(undefined);
-    const session = connect('');
-    await until(() => session.closed() !== undefined, 'the close');
-    expect(session.closed()).toMatchObject({ code: 1011 });
-    expect(upstreamEvents).toEqual([]);
-    expect(responses()).toEqual([]);
+  it('routes an unnamed voice session to PI', async () => {
+    const { connect, responses, speak, upstreamEvents } = await harness({
+      async *stream() { yield 'Answer from PI.'; },
+    });
+    connect('');
+    await until(() => responses().length === 1, 'the greeting');
+    const update = upstreamEvents.find(event => event.type === 'session.update')!;
+    expect(update.session?.instructions).toContain('You are only the voice of Jarvis');
+    expect(update.session?.tools).toBeUndefined();
+    speak('Hello');
+    await until(() => responses().length === 2, 'the PI reply');
+    expect(responses()[1]!.response.instructions).toContain('Answer from PI.');
   });
 
   it('refuses an unknown engine', async () => {

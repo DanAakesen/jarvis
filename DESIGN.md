@@ -1,3 +1,58 @@
+## Voice panel header and orb motion (17 November 2026, #1939, P15-205; from owner feedback on build 112)
+
+The panel has a header row of its own that the content never uses: close and, when the content needs room, expand at the top left (both `JarvisIconButton`), then one title, which comes from the content. The content scrolls below the row. Nothing is shown when a new voice session starts; the panel appears only for what Jarvis presents during the session (content presented while it was minimised carries over).
+
+The orb steps back when content arrives and returns when it goes, with one eased spring (`JarvisDesignTokens.voicePanelMotion`, smooth, 0.55 s) in both directions and for expanding and collapsing. It is not linear, it keeps its velocity when interrupted by a new arrival or a close, and Reduce Motion removes it. Code views show line numbers with matched lines marked by a bold chevron and a faint surface; a knowledge-graph view is one line of search, one line of count and an Open Notes button. Chat blocks: the ellipsis opens View data and Copy data on a forecast or chart and Copy data on other blocks; an open data table stays open while scrolling. Not yet seen on a device.
+
+## Tool activity in Chat (17 November 2026, #1941, P15-204; owner approved, motion proposed)
+
+[Compact tree](docs/ui/tool-activity/selected-compact-tree.png), implemented as in the handover: each row has a tool icon, the action label and, for a group, a chevron right after the label (right when closed, down when open). Icons come from the tool type: document, pencil, terminal, globe, gear, cloud, with the tools glyph as fallback, and stay the same in every state. No counts, Done or Queued text.
+
+- **Running:** white icon with a short bright arc travelling around its outline (about 1.4 s per loop) and a white shimmer across the action text only. No pulse, scale, glow, spinner, checkmark or empty circle. The label ends in an ellipsis, which also marks the state under Reduce Motion.
+- **Success:** the icon turns orange and is still. **Failure:** red icon with "Failed". **Refused:** grey icon with "Not allowed". Neither is ever orange.
+- **Groups** show the worst child state (running, then failed, then refused); children show their own. Header rows ("Working", "Tool activity") have no count.
+- **Accessibility:** each row reads "tool, status"; the group button also reads Expanded or Collapsed. Reduce Motion removes the trace and the shimmer.
+- **Not verified:** the motion at native size, the 1.4 s timing and VoiceOver on a device. A queued state is not drawn because the app receives no queued event.
+
+## Voice bottom panel (17 November 2026, #1925; owner approved, Voice only)
+
+Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. Header: close and, when the content needs room, expand at the top left, then one title from the content (all `JarvisIconButton`; see the header and motion section above). Body: the existing generated-view renderers in a scroll area that takes the content's height up to the panel's cap. The orb stays visible (it shrinks to its minimum before the panel is capped), captions stay above the panel, the four controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion uses the fade only. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.
+
+## Conversational blocks in Chat (17 November 2026, #1925; owner approved)
+
+Generated content is part of the assistant message: it scrolls with the thread, has no sheet handle, close button or dimming, and keeps its own date, place, units, source and issue time. Prose stays unboxed; a block is one neutral glass surface (`jarvisGlassSurface`) with one heading and body text. A forecast heading comes from its own place and date. A chart stacks one panel per unit, each with its own scale, shared time axis label, selected-point readout, series markers beyond colour, and a data table behind the ellipsis menu. Missing values are gaps and read "missing", never zero. Reduce Transparency uses the shared solid fallback; there is no animation to reduce. Larger text drops always-on point labels and raises the plot height. Unsupported content shows its title and text alternative with a note.
+
+## 3D graph: Folder clusters (16 November 2026; owner approved; #1924)
+
+Dan approved Graph 2, **Folder clusters**: spatial groups of connected note nodes, scope colours, depth through perspective and fading, task rings on notes, and a selected-note preview above the existing Notes/Tasks/Graph and Search/+ dock. The approved visual reference is [Folder clusters](docs/ui/graph-3d/approved-folder-clusters.png). This is visual approval, not implemented or device-verified animation, rendering performance, or accessibility.
+
+**Implementation (17 November 2026, P15-190; not yet device-verified).** The Graph tab draws the vault's real notes and links in perspective with projected 3D in a SwiftUI `Canvas` (the brief's option A). Clusters are one per top-level folder, each with a faint haze and a text label: Work `primaryAccent` amber, Personal `notesFolderPersonal` green, General `notesFolderGeneral` muted violet, any other folder (People, root) neutral secondary. Depth is perspective size plus fading to 38 percent at the back; lines are quiet (explicit links 30 percent, similarity 13 percent and thinner, faded with depth, dimmed to a third when something is selected or searched). Notes with open tasks carry the existing `notesTaskRing` orange ring. The selected note gets an amber ring and a small title tag; the preview above the dock is one shared row surface (`JarvisRowButton`, `jarvisRowSurface`) with title, vault path and the real task count, and it opens the reader. The Notes / Tasks / Graph switch, Search field, + button and header menu are unchanged. Two fingers turn and tilt (a twist turns too), a pinch zooms about the fingers (0.65x to 4x), one finger pans, a tap selects and tapping the same spot again steps to the next overlapping note, a long press frames a note and its neighbours with a light haptic. The leading 24 pt is left to the edge swipe back. Motion is small: about 3 percent drift, slow breathing, at most two pulses on real links; Reduce Motion, the Background motion switch and Low Power Mode reduce it as described in `PLAN.md`; the camera never rotates by itself.
+
+For #1925, Dan approved option 1, **Bottom panel**, for Voice only. Use the right-hand Voice composition in [the reference board](docs/ui/jarvis-window-sheet/voice-bottom-panel-reference.png): the lattice orb and status remain above the content panel, with microphone, plus, CC and hang-up controls accessible below it. The left-hand Chat composition is not approved.
+
+Chat uses the approved **Conversational blocks** design: generative UI embedded in Jarvis's replies instead of a sheet. A forecast can appear in one reply and an on-demand chart in a later reply. Both scroll with the conversation and remain available in its history. Keep the existing composer. The [approved reference](docs/ui/chat-generative/approved-conversational-blocks.png) is identified by name: Dan called it "number 2 conversation blocks", while the image heading says 3. Date the forecast and its issue time so historic content is distinguishable from current information. The selected visual direction and history requirement are not implemented or runtime-verified by these design images. See the [combined handover](docs/ui/approved-handover-2026-11-16.md).
+
+## App polish from build 111 (16 November 2026; owner testing; #1923)
+
+- **Rows.** One row surface for every list: the clear glass of the glass buttons (`jarvisRowSurface`, built on `jarvisGlassSurface`), in the row's own
+  corner pattern. Native lists use `JarvisGlassRowBackground`. Cards, banners, fields and hero panels keep the material; they are not list rows. Reduce
+  Transparency still gives the solid fallback. HIG prefers regular glass for text-heavy surfaces; the owner asked for the button look, so rows keep the
+  same light fill (`glassFill`) that the buttons carry and the captures are checked for legibility.
+- **Orb on every page.** `jarvisPageBackground()` puts the shared orb and the calm neural network behind each page (the page chrome owns it; sheets and forms
+  keep `jarvisAmbientBackground()` without an orb). Chat keeps the full effects. Reduce Motion, the Background motion switch and Low Power Mode (half the orb frames) apply.
+- **Search field.** The clear control is a bare glyph inside the field, not a second glass button.
+- **Swipe back.** The system edge swipe for pushed pages (kept alive although pages hide the navigation bar) and the same edge swipe for Notes folders. The back button stays
+  (HIG: supplement standard gestures, do not replace them). The sidebar opens by a swipe in the other direction.
+
+## Reorder folders (16 November 2026, #1920)
+
+Manual is a third choice in the Notes header menu's Sort by; Reorder folders sits beside Reorder pins. Both open the same
+sheet: a glass list in edit mode with the system drag handles, a Done button, and Move up / Move down VoiceOver actions on
+every row (each row also reads "n of m"). VoiceOver focus stays on the row that was moved. Reordering turns Manual on, so the
+result is visible at once. If a save fails, the sheet closes, the stored order is shown and an alert says so. Nothing new is
+drawn: the sheet, rows and buttons are the shared Jarvis components. Simulator captures: `notes-folders-manual.png` and
+`notes-folders-reorder.png` in the `watch-build-logs` artifact.
+
 ## Notes, Tasks and Graph: Vault Folders (15 November 2026; owner approved; #1894)
 
 Dan selected **Vault Folders** and approved its subpages (`docs/ui/notes-subpages-2026-11-15/`, HANDOFF.md is the
@@ -30,9 +85,9 @@ switch while a query is present; clearing the query restores the previous folder
 - Sheets can stack where the design returns to the same draft (editor to folder chooser, Edit task to Date & time);
   apple-hig prefers one sheet at a time. This is a known, deliberate deviation.
 
-## PI cutover flip (draft, not in effect) — #1887, P15-176
+## PI cutover flip (approved, not live) — #1887, P15-176
 
-If the flip merges, the "Engine test switch" in Settings opens on "PI engine" for a fresh install or an unset choice, its explanation says PI is the default and the current engine is the old path kept until it is deleted, and the Chat header's "PI test" pill shows by default. Nothing else on screen changes.
+Once the flip is released, the "Engine test switch" in Settings opens on "PI engine" when no choice is saved, and the Chat header's "PI test" pill shows by default. The explanation notes that "Current engine" remains selectable, that a new voice session reads the choice, and that PI voice has no camera or screen sharing or automatic fallback. Saved choices and the existing layout stay unchanged.
 
 ## PI voice — 16 November 2026 (#1887, P15-176)
 
@@ -60,6 +115,14 @@ A temporary, clearly marked test control, deleted at cutover. Settings, General,
 ## Event-driven proactive outreach — 15 November 2026 (#1858)
 
 No new screens. A low-tier outreach is one row in the existing Now feed list (alert group) with the model's title and body; it links to the finding on the existing Proactive page, which keeps its useful and wrong buttons as the thumbs. Medium and high use the existing insight push. Thumbs on the push itself, and any iOS rendering of the new card, are not designed or verified here.
+
+## Watch focused voice view — 17 November 2026 (#1945)
+
+Implements the owner-approved option 2 ([handover](docs/ui/watch-voice/HANDOFF.md)). While a live session exists, Chat shows one view instead of the conversation and composer: the shared orb, one state label (Listening, Speaking, Thinking, Connecting, Reconnecting, and Muted, which wins over the others), the latest message text in a scroll area, and Mute/Unmute and End in neutral glass (amber microphone, red End). The Message field, dictation button and start-voice orb are absent, so there is no second start control. Back keeps the session as before; the menu row then reads Resume voice and reopens this view. Simulator captures `voice-listening.png`, `voice-speaking.png` and `voice-muted.png` use synthetic text. No device, VoiceOver, large-text or small-watch check yet.
+
+## Watch Chat adaptive composer — 17 November 2026 (#1942)
+
+Implements the owner-approved option 3 ([handover](docs/ui/watch-chat/HANDOFF.md)). The menu page has one Chat row and Factory under a compact Jarvis title, with the menu button at the bottom right and the top right left to the system time. Chat is one continuous scroll view that passes beneath the native navigation bar (small back control, no title) and the floating controls. The composer has two shapes: ready (Message, microphone and the shared orb in one neutral glass capsule) and reading (a single Reply bubble at the bottom right). Scrolling away from the newest message shrinks it to the bubble only when nothing would be interrupted: a draft, dictation or voice keeps the full composer. Tapping Reply restores it without moving the text, because the end margin is fixed. Glass is the shared `watchGlass` modifier (solid with Reduce Transparency), transitions are interruptible and become a plain fade with Reduce Motion. Icon names are Back (system), Menu, Reply, Dictate and Start voice. Simulator captures come from the watch job (`menu.png`, `chat-ready.png`, `chat-reading.png`, synthetic messages); no device, VoiceOver, large-text or smallest-watch check has been made.
 
 ## Watch complications and home exploration — 10 November 2026
 
@@ -1097,7 +1160,7 @@ motion. The full one-page layout is design-led (#1085) and follows once a design
 exists.
 
 The map shows only the note categories (People, Work, Personal, General). Notes in
-the vault root or in system folders such as `_agent-log` and `Templates` are left
+the vault root or in system folders such as `_agent-activity` and `Templates` are left
 off the map altogether (stars, links, search matches and legend), so no grey stars
 remain. The legend lists the same categories. It includes a default-on **Tasks** toggle and the number of notes with
 open tasks on the map. Its accessible name gives that count as notes with open

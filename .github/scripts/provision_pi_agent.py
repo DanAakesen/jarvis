@@ -6,9 +6,13 @@ that carries the instructions, the Jarvis MCP server (by connection) and the ski
 that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
 
-Reach: the read-only GitHub MCP server (a fine-grained token the owner creates) and the Azure MCP server (Reader, scale to
-zero) are attached when their inputs exist. A server whose input is missing is left out and reported as not attached; a
-server whose connection cannot be written is left out and fails the job after the agent is defined, so nothing is hidden.
+Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scale to zero) are
+attached when their inputs exist. Neither is a harness tool: listing every tool of every server in each turn cost seconds and
+tokens (GitHub's alone about 13k tokens), and a server that is slow to start or to authenticate failed the whole turn. The
+backend holds what it needs (the owner's fine-grained GitHub token as a Container App secret, the Azure server's URL and Entra
+client ID as settings; it calls Azure with its own managed identity) and offers their tools through the Jarvis MCP door
+(find_tools and call_tool), where they are searched like every other tool. A server whose input is missing is reported as not
+attached.
 """
 from __future__ import annotations
 
@@ -32,6 +36,9 @@ SKILL_FEATURES = "Skills=V1Preview"
 # Values that must never reach a log, even when Foundry echoes part of the request back in its error message.
 REDACT: list[str] = []
 SECRET_NAME = "pi-mcp-secret"
+GITHUB_SECRET_NAME = "pi-github-token"
+# Settings the backend only has while the owner has provided the input behind them.
+MANAGED_OPTIONAL_ENV = ("JARVIS_PI_GITHUB_TOKEN", "JARVIS_PI_GITHUB_FP", "JARVIS_PI_AZURE_MCP_URL", "JARVIS_PI_AZURE_MCP_CLIENT_ID")
 ARM = "https://management.azure.com"
 CONNECTIONS_API = "2025-04-01-preview"
 FINGERPRINT_KEY = "jarvis_pi_fingerprint"
@@ -61,8 +68,9 @@ def load_spec() -> dict:
     require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", spec["agentName"]) is not None, "agent_name_invalid")
     require(spec["reasoningEffort"] in {"none", "low", "medium", "high"}, "reasoning_effort_invalid")
     require(spec["mcp"]["requireApproval"] == "never", "approval_policy_unsupported")
-    labels = [spec["mcp"]["serverLabel"]] + [server["serverLabel"] for server in spec.get("reach", [])]
-    require(len(labels) == len(set(labels)) and all(re.fullmatch(r"[a-z][a-z0-9_]{0,31}", label) for label in labels), "reach_label_invalid")
+    require(spec["builtinTools"] in {"enabled", "disabled"}, "builtin_tools_invalid")
+    require(spec["github"]["url"].startswith("https://") and re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", spec["github"]["tokenEnv"]) is not None, "github_spec_invalid")
+    require(re.fullmatch(r"[a-z][a-z0-9_]{0,31}", spec["mcp"]["serverLabel"]) is not None, "mcp_label_invalid")
     return spec
 
 
@@ -88,32 +96,44 @@ def parse_skill(name: str) -> dict:
             "sha256": sha256(raw)}
 
 
-def build_definition(spec: dict, instructions: str, server_url: str, skills: list[dict], reach: list[dict] | None = None) -> dict:
+EXPERIMENTS = ("none", "builtins_off", "skills_off")
+
+
+def apply_experiment(spec: dict, skills: list[dict], experiment: str) -> tuple[dict, list[dict]]:
+    """A measurement variant of the agent: one thing switched off, to see what it costs per turn. Never the default.
+
+    The next Deploy without an experiment defines the full agent again (the fingerprint differs, so a new version is made).
+    """
+    require(experiment in EXPERIMENTS, "experiment_unknown")
+    if experiment == "builtins_off":
+        return {**spec, "builtinTools": "disabled"}, skills
+    if experiment == "skills_off":
+        return spec, []
+    return spec, skills
+
+
+def build_definition(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> dict:
     return {
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
         "model": spec["model"], "reasoning": {"effort": spec["reasoningEffort"]},
         "instructions": instructions,
         "tools": [
-            # Built-in shell, files and web stay off: everything goes through Jarvis tools and its guards.
-            {"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": False}},
+            # The harness built-ins (shell, filesystem read and write, web, sub-agents) follow the spec; "enabled" turns them all on.
+            {"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": spec["builtinTools"] == "enabled"}},
             {"type": "mcp", "server_label": spec["mcp"]["serverLabel"], "server_url": server_url,
              "require_approval": spec["mcp"]["requireApproval"],
              # The secret lives in this project connection and is injected as a header; the tool carries no headers.
              "project_connection_id": spec["mcp"]["connection"]},
-            # Reach servers are read-only by construction (a read-only URL and token for GitHub, the Reader role and the
-            # server's own read-only mode for Azure), so the harness is not asked to approve their calls.
-            *[{"type": "mcp", "server_label": server["serverLabel"], "server_url": server["url"], "require_approval": "never",
-               "project_connection_id": server["connection"]} for server in reach or []],
+            # GitHub and Azure are not harness tools: the backend offers their tools through this one door (find_tools, call_tool).
         ],
         "skills": [{"type": "skill_reference", "name": skill["name"], "version": skill["version"]} for skill in skills],
     }
 
 
-def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dict], reach: list[dict] | None = None) -> str:
+def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> str:
     """Everything that makes a new agent version necessary, hashed; skill versions are not part of it, their content is."""
     return sha256(canonical({
         "spec": spec, "instructions": instructions, "server_url": server_url,
-        "reach": [[server["serverLabel"], server["url"], server["connection"]] for server in reach or []],
         "skills": [[skill["name"], skill["sha256"]] for skill in skills],
     }))
 
@@ -224,8 +244,11 @@ def backend_secret(app: str, group: str, subscription: str) -> str | None:
     return None
 
 
-def configure_backend(app: str, group: str, subscription: str, agent_name: str) -> str:
+def configure_backend(app: str, group: str, subscription: str, agent_name: str, github_token: str | None = None,
+                      azure: tuple[str, str] | None = None) -> str:
     """Return the MCP secret, creating it once. The backend gets it as a Container App secret, never as plain text.
+
+    The owner's GitHub token goes the same way, as a second secret, and is removed again when the owner withdraws it.
 
     The value is never printed: az output and errors are not echoed anywhere in this script.
     """
@@ -241,12 +264,33 @@ def configure_backend(app: str, group: str, subscription: str, agent_name: str) 
     if created:
         shell("az", "containerapp", "secret", "set", "--name", app, "--resource-group", group, "--subscription", subscription,
               "--secrets", f"{SECRET_NAME}={secret}", "--only-show-errors", "--output", "none")
-    wanted = {"JARVIS_PI_AGENT_NAME": agent_name, "JARVIS_PI_MCP_SECRET": SECRET_NAME}
-    if created or any(current.get(key) != value for key, value in wanted.items()):
-        shell("az", "containerapp", "update", "--name", app, "--resource-group", group, "--subscription", subscription,
-              "--set-env-vars", f"JARVIS_PI_AGENT_NAME={agent_name}", f"JARVIS_PI_MCP_SECRET=secretref:{SECRET_NAME}",
-              "--only-show-errors", "--output", "none")
+    # A fingerprint of the token (not the token) tells whether the backend already has this one.
+    github_fp = sha256(github_token)[:16] if github_token else ""
+    github_changed = current.get("JARVIS_PI_GITHUB_FP", "") != github_fp
+    if github_changed and github_token:
+        shell("az", "containerapp", "secret", "set", "--name", app, "--resource-group", group, "--subscription", subscription,
+              "--secrets", f"{GITHUB_SECRET_NAME}={github_token}", "--only-show-errors", "--output", "none")
+    # The settings this script owns; anything of these the owner has withdrawn is removed again.
+    set_vars = {"JARVIS_PI_AGENT_NAME": agent_name, "JARVIS_PI_MCP_SECRET": f"secretref:{SECRET_NAME}"}
+    if github_token:
+        set_vars.update({"JARVIS_PI_GITHUB_TOKEN": f"secretref:{GITHUB_SECRET_NAME}", "JARVIS_PI_GITHUB_FP": github_fp})
+    if azure:
+        set_vars.update({"JARVIS_PI_AZURE_MCP_URL": azure[0], "JARVIS_PI_AZURE_MCP_CLIENT_ID": azure[1]})
+    withdrawn = [key for key in MANAGED_OPTIONAL_ENV if key in current and key not in set_vars]
+    current_plain = {key: (f"secretref:{value}" if key in ("JARVIS_PI_MCP_SECRET", "JARVIS_PI_GITHUB_TOKEN") and value else value) for key, value in current.items()}
+    if created or github_changed or withdrawn or any(current_plain.get(key) != value for key, value in set_vars.items()):
+        command = ["az", "containerapp", "update", "--name", app, "--resource-group", group, "--subscription", subscription,
+                   "--set-env-vars", *[f"{key}={value}" for key, value in set_vars.items()]]
+        if withdrawn:
+            command += ["--remove-env-vars", *withdrawn]
+        shell(*command, "--only-show-errors", "--output", "none")
         wait_ready(app, group, subscription)
+        if not github_token and github_changed:
+            listing = json.loads(shell("az", "containerapp", "secret", "list", "--name", app, "--resource-group", group, "--subscription",
+                                       subscription, "--only-show-errors", "--output", "json"))
+            if any(item.get("name") == GITHUB_SECRET_NAME for item in listing):
+                shell("az", "containerapp", "secret", "remove", "--name", app, "--resource-group", group, "--subscription", subscription,
+                      "--secret-names", GITHUB_SECRET_NAME, "--only-show-errors", "--output", "none")
     return secret
 
 
@@ -334,48 +378,38 @@ def ensure_connection(project_id: str, spec: dict, server_url: str, secret: str)
         {"jarvis_secret_sha256": sha256(secret), "jarvis_purpose": "pi-mcp"}, ["target"])
 
 
-def resolve_reach(spec: dict, args: argparse.Namespace) -> tuple[list[dict], dict[str, str]]:
-    """The reach servers whose inputs exist, and a plain-words status for every declared one."""
-    attached: list[dict] = []
-    status: dict[str, str] = {}
-    for server in spec.get("reach", []):
-        label = server["serverLabel"]
-        if server["kind"] == "github":
-            token = os.environ.get(server["tokenEnv"], "").strip()
-            if not token:
-                status[label] = f"not attached: the owner has not provided the {server['tokenEnv']} secret"
-                continue
-            # Only a fine-grained token can be limited to chosen repositories and to read permissions.
-            require(GITHUB_TOKEN_PATTERN.fullmatch(token) is not None, "github_token_not_fine_grained")
-            REDACT.append(token)
-            attached.append({**server, "secret": token})
-        elif server["kind"] == "azure":
-            url = (getattr(args, "azure_mcp_url", "") or "").strip()
-            client = (getattr(args, "azure_mcp_client_id", "") or "").strip()
-            if not url or not client:
-                status[label] = "not attached: the Azure MCP container is not deployed (needs the JARVIS_AZURE_MCP_CLIENT_ID variable and a deploy)"
-                continue
-            require(url.startswith("https://") and UUID_PATTERN.fullmatch(client) is not None, "azure_mcp_input_invalid")
-            attached.append({**server, "url": url, "audience": f"api://{client}"})
-        else:
-            raise Blocked("reach_kind_unknown")
-    return attached, status
+def resolve_azure(args: argparse.Namespace) -> tuple[tuple[str, str] | None, str]:
+    """The Azure MCP server's URL and Entra client ID, or None, with a plain-words status."""
+    url = (getattr(args, "azure_mcp_url", "") or "").strip()
+    client = (getattr(args, "azure_mcp_client_id", "") or "").strip()
+    if not url or not client:
+        return None, "not attached: the Azure MCP container is not deployed (needs the JARVIS_AZURE_MCP_CLIENT_ID variable and a deploy)"
+    require(url.startswith("https://") and UUID_PATTERN.fullmatch(client) is not None, "azure_mcp_input_invalid")
+    return (url.rstrip("/"), client), "attached"
 
 
-def connect_reach(project_id: str, server: dict) -> bool:
-    """Write the connection one reach server needs. GitHub gets a read-only token header; Azure uses the project's identity."""
-    if server["kind"] == "github":
-        return upsert_connection(project_id, server["connection"], {
-            "category": "CustomKeys", "authType": "CustomKeys", "target": server["url"], "isSharedToAll": False,
-            "credentials": {"keys": {"Authorization": f"Bearer {server['secret']}"}}},
-            {"jarvis_secret_sha256": sha256(server["secret"]), "jarvis_purpose": "pi-github-mcp"}, ["target"])
-    return upsert_connection(project_id, server["connection"], {
-        "category": "RemoteTool", "authType": "ProjectManagedIdentity", "target": server["url"],
-        "audience": server["audience"], "isSharedToAll": False},
-        {"jarvis_audience": server["audience"], "jarvis_purpose": "pi-azure-mcp"}, ["target", "audience"])
+def resolve_github(spec: dict) -> tuple[str | None, str]:
+    """The owner's GitHub token, or None, with a plain-words status."""
+    env = spec["github"]["tokenEnv"]
+    token = os.environ.get(env, "").strip()
+    if not token:
+        return None, f"not attached: the owner has not provided the {env} secret"
+    # Only a fine-grained token can be limited to chosen repositories and permissions; a classic token reaches everything.
+    require(GITHUB_TOKEN_PATTERN.fullmatch(token) is not None, "github_token_not_fine_grained")
+    REDACT.append(token)
+    return token, "attached"
 
 
-def verify(readback: dict, spec: dict, expected: str, reach: list[dict] | None = None) -> None:
+def remove_connection(project_id: str, name: str) -> None:
+    """Delete a project connection that no longer has a purpose (its key was readable by project members). Absent is fine."""
+    try:
+        arm_request("DELETE", f"{project_id}/connections/{name}")
+    except Blocked as error:
+        if ":not_found" not in str(error):
+            raise
+
+
+def verify(readback: dict, spec: dict, expected: str) -> None:
     definition = readback.get("definition") or {}
     require(definition.get("harness") == {"type": "microsoft_copilot_preview"}, "readback_harness_mismatch")
     require(definition.get("model") == spec["model"], "readback_model_mismatch")
@@ -383,9 +417,9 @@ def verify(readback: dict, spec: dict, expected: str, reach: list[dict] | None =
     require(definition.get("instructions") == expected, "readback_instructions_mismatch")
     tools = definition.get("tools") or []
     toolset = [tool for tool in tools if tool.get("type") == "microsoft_copilot_toolset_preview"]
-    require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is False, "readback_builtins_enabled")
+    require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is (spec["builtinTools"] == "enabled"), "readback_builtins_mismatch")
     mcp = {tool.get("server_label"): tool for tool in tools if tool.get("type") == "mcp"}
-    wanted = {spec["mcp"]["serverLabel"]: spec["mcp"]["connection"], **{s["serverLabel"]: s["connection"] for s in reach or []}}
+    wanted = {spec["mcp"]["serverLabel"]: spec["mcp"]["connection"]}
     require(len([tool for tool in tools if tool.get("type") == "mcp"]) == len(wanted) and set(mcp) == set(wanted), "readback_mcp_mismatch")
     for label, connection in wanted.items():
         require(mcp[label].get("require_approval") == "never", "readback_mcp_mismatch")
@@ -397,40 +431,37 @@ def provision(args: argparse.Namespace) -> dict:
     name = spec["agentName"]
     instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
-    candidates, reach_status = resolve_reach(spec, args)
-    azure = Az(args.project_endpoint)
-    state = current_state(azure, name)
-    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name)
+    experiment = getattr(args, "experiment", "none") or "none"
+    spec, skills = apply_experiment(spec, skills, experiment)
+    azure_mcp, azure_status = resolve_azure(args)
+    github_token, github_status = resolve_github(spec)
+    foundry = Az(args.project_endpoint)
+    state = current_state(foundry, name)
+    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name, github_token, azure_mcp)
     REDACT.append(secret)
     server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
     project_id = (f"/subscriptions/{args.subscription}/resourceGroups/{args.resource_group}/providers/"
                   f"Microsoft.CognitiveServices/accounts/{args.foundry_account}/projects/{args.foundry_project}")
     connection_written = ensure_connection(project_id, spec, server_url, secret)
-    reach: list[dict] = []
-    problems: list[str] = []
-    for server in candidates:
-        try:
-            connect_reach(project_id, server)
-            reach.append(server)
-            reach_status[server["serverLabel"]] = "attached"
-        except Blocked as error:
-            # Left out of the agent and reported; the job fails after the agent is defined, so it cannot go unnoticed.
-            reach_status[server["serverLabel"]] = f"not attached: the connection could not be written ({error})"
-            problems.append(f"{server['serverLabel']}: {error}")
-    wanted = fingerprint(spec, instructions, server_url, skills, reach)
+    # GitHub and Azure used to be harness tools with their own connections (one held the token, the other needed the project's
+    # identity); the backend reaches both now, so those connections have no purpose left.
+    for legacy in (spec["github"]["legacyConnection"], spec["azure"]["legacyConnection"]):
+        remove_connection(project_id, legacy)
+    wanted = fingerprint(spec, instructions, server_url, skills)
     unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
-    ensure_skills(azure, skills, unchanged, state["skills"] if state else {})
+    ensure_skills(foundry, skills, unchanged, state["skills"] if state else {})
     result = {"agent": name, "connection": spec["mcp"]["connection"], "connectionWritten": connection_written,
-              "skills": {s["name"]: s["version"] for s in skills}, "reach": reach_status, "problems": problems}
+              "skills": {s["name"]: s["version"] for s in skills}, "reach": {"github": github_status, "azure": azure_status},
+              "experiment": experiment}
     if unchanged:
         return {**result, "version": state["pinned"], "created": False}
-    definition = build_definition(spec, instructions, server_url, skills, reach)
+    definition = build_definition(spec, instructions, server_url, skills)
     metadata = {FINGERPRINT_KEY: wanted}
     # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
-    version = as_version(azure.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version"))
+    version = as_version(foundry.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version"))
     require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None, "agent_version_unknown")
-    verify(wait_active(azure, name, version), spec, instructions, reach)
-    pin(azure, name, version)
+    verify(wait_active(foundry, name, version), spec, instructions)
+    pin(foundry, name, version)
     return {**result, "version": version, "created": True}
 
 
@@ -445,6 +476,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--subscription", required=True)
     parser.add_argument("--azure-mcp-url", default="")
     parser.add_argument("--azure-mcp-client-id", default="")
+    parser.add_argument("--experiment", default="none", choices=EXPERIMENTS)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
@@ -457,9 +489,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     args.output.write_text(json.dumps(result) + "\n", encoding="utf-8")
     print("pi_agent_ready " + json.dumps(result))
-    for problem in result["problems"]:
-        print(f"::error::PI reach server left out: {problem}", file=sys.stderr)
-    return 1 if result["problems"] else 0
+    return 0
 
 
 if __name__ == "__main__":

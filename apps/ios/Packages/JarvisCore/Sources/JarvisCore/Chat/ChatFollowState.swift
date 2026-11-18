@@ -55,6 +55,11 @@ public struct ChatFollowState: Equatable, Sendable {
         messageSent()
     }
 
+    /// The keyboard came up under the composer: the owner is writing, so the latest message must stay in view.
+    public mutating func keyboardOpened() {
+        messageSent()
+    }
+
     public mutating func selectionChanged(messageID: String, isSelected: Bool) {
         if isSelected {
             selectedMessages.insert(messageID)

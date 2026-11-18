@@ -1,7 +1,8 @@
 import Foundation
 
 public enum JarvisNoteSort: String, CaseIterable, Sendable {
-    case updated, title
+    /// Folders follow the owner's manual order; notes in a folder are listed by title.
+    case updated, title, manual
 }
 
 public enum JarvisTaskSort: String, CaseIterable, Sendable {
@@ -32,7 +33,7 @@ extension JarvisNotesPresentation {
                     ? $0.title.localizedStandardCompare($1.title) == .orderedAscending
                     : $0.updatedAt > $1.updatedAt
             }
-        case .title:
+        case .title, .manual:
             return notes.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         }
     }
@@ -52,8 +53,8 @@ extension JarvisNotesPresentation {
     }
 }
 
-/// Pin order is display metadata kept on the device; it never moves a file.
-public enum JarvisPinOrder {
+/// Manual order of pins and folders is display metadata; it never moves a file.
+public enum JarvisManualOrder {
     public static func moved(_ items: [String], _ item: String, by offset: Int) -> [String] {
         guard let index = items.firstIndex(of: item) else { return items }
         let target = min(max(index + offset, 0), items.count - 1)

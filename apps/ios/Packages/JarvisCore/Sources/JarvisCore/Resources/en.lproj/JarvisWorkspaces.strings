@@ -62,8 +62,6 @@
 "workspace.htmlApp" = "HTML app";
 "workspace.htmlAppLoading" = "Loading HTML app";
 "workspace.htmlAppLoadFailed" = "The HTML app could not be loaded.";
-"workspace.knowledgeGraph" = "Knowledge graph";
-"workspace.codeView" = "Code view";
 "workspace.generatedView" = "Generated view";
 "workspace.unsupportedVersion" = "Unsupported version";
 "workspace.unsupportedView" = "Unsupported view";
@@ -84,14 +82,16 @@
 "workspace.imageUnavailable" = "Image unavailable";
 "workspace.loadingImage" = "Loading image";
 "workspace.nativeUnavailable" = "This view isn't available natively.";
-"workspace.openWebApp" = "Open web app";
-"workspace.webAppNotConfigured" = "Web app link not configured";
-"workspace.webAppUnavailable" = "Open in web app unavailable. Web app URL is not configured.";
-"workspace.unsupportedOnPhone" = "%@, %@, unsupported on iPhone";
+"workspace.knowledgeGraph.query" = "Search: %@";
+"workspace.knowledgeGraph.count" = "Notes found: %d";
+"workspace.openNotes" = "Open Notes";
 "workspace.actionUnavailable" = "Action unavailable";
 "workspace.actionUnavailableOnPhone" = "%@ unavailable on iPhone";
 "workspace.openUsage" = "Open Usage";
 "workspace.openSettings" = "Open Settings";
+"workspace.openHome" = "Open Jarvis";
+"workspace.openTask" = "Open task";
+"workspace.openFactory" = "Open Software Factory";
 "workspace.routeUnavailable" = "Route unavailable: %@";
 "workspace.toolUnavailableLabel" = "Tool unavailable: %@";
 "workspace.focusView" = "Focus view";
@@ -107,7 +107,6 @@
 "workspace.incompleteView" = "The workspace view is incomplete.";
 "workspace.validationFailed" = "The workspace view could not be validated.";
 "workspace.viewUnavailable" = "The workspace view is not available on iPhone.";
-"workspace.positioningUnsupported" = "Window positioning is not supported on iPhone.";
 "workspace.operationUnsupported" = "This workspace operation is not supported on iPhone.";
 "workspace.statusOK" = "OK";
 "workspace.statusWarning" = "Warning";
@@ -115,3 +114,10 @@
 "workspace.statusUnknown" = "Unknown";
 
 "workspace.pageSummary" = "Saved items in this view: {%ld}.";
+"workspace.voicePanel.close" = "Close content";
+"workspace.voicePanel.expand" = "Expand content";
+"workspace.voicePanel.collapse" = "Collapse content";
+"workspace.voicePanel.updating" = "Updating";
+"workspace.voicePanel.partial" = "Partial result.";
+"workspace.voicePanel.unavailable" = "This content is unavailable.";
+"workspace.voicePanel.shown" = "%@ shown";

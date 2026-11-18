@@ -25,9 +25,16 @@ extension JarvisNotesArea {
         }
     }
 
+    private var parentFolder: String { JarvisNotesPresentation.parentFolder(of: selectedFolder) ?? "" }
+
+    /// The back button and the edge swipe both lead one folder up; neither exists at the vault root.
+    var canNavigateUp: Bool { selectedTab == .notes && !selectedFolder.isEmpty }
+
+    func navigateUp() { navigateToFolder(parentFolder) }
+
     private var backButton: AnyView? {
-        guard selectedTab == .notes, !selectedFolder.isEmpty else { return nil }
-        let parent = JarvisNotesPresentation.parentFolder(of: selectedFolder) ?? ""
+        guard canNavigateUp else { return nil }
+        let parent = parentFolder
         let parentName = parent.isEmpty ? copy.vaultRoot : (parent.split(separator: "/").last.map(String.init) ?? parent)
         return AnyView(
             JarvisIconButton(
@@ -49,7 +56,12 @@ extension JarvisNotesArea {
                 Picker(copy[.sortBy], selection: $noteSort) {
                     Text(copy[.sortUpdated]).tag(JarvisNoteSort.updated)
                     Text(copy[.sortTitle]).tag(JarvisNoteSort.title)
+                    Text(copy[.sortManual]).tag(JarvisNoteSort.manual)
                 }
+                Button { sheet = .reorderFolders } label: {
+                    Label(copy[.reorderFolders], systemImage: "folder")
+                }
+                .disabled(folderItems.count < 2)
                 Button { sheet = .reorderPins } label: {
                     Label(copy[.reorderPins], systemImage: "arrow.up.arrow.down")
                 }
@@ -229,12 +241,22 @@ extension JarvisNotesArea {
         case "tasks": selectedTab = .tasks
         case "graph": selectedTab = .graph
         case "search": searchText = "plan"
+        case "graph-search": selectedTab = .graph; try? await Task.sleep(for: .seconds(1)); searchText = "plan"
+        case "pinned":
+            await setPinned("Work/Projects/release.md", pinned: true)
+            await setPinned("Personal/weekend.md", pinned: true)
         case "reader": await openNote(path: "Personal/weekend.md")
         case "new-note": sheet = .newNote(folder: "Personal", staged: [])
         case "new-task": sheet = .newTask
         case "new-folder": sheet = .newFolder
         case "folder-scope": sheet = .folderScope
         case "graph-list": selectedTab = .graph; try? await Task.sleep(for: .seconds(1)); sheet = .graphList
+        case "folders-manual":
+            saveFolderOrder(["Work", "Personal", "Attachments"])
+        case "folders-reorder":
+            saveFolderOrder(["Work", "Personal", "Attachments"])
+            try? await Task.sleep(for: .seconds(1))
+            sheet = .reorderFolders
         case "pins":
             await setPinned("Work/Projects/release.md", pinned: true)
             await setPinned("Personal/weekend.md", pinned: true)

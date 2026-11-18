@@ -205,7 +205,7 @@ struct JarvisFactoryReleaseDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(release.version)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

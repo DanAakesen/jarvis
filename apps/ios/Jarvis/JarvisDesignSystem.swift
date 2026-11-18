@@ -196,6 +196,9 @@ enum JarvisDesignTokens {
     static let voiceMinimizeDragDistance: CGFloat = 32
     static let voiceMinimizeSpringResponse: CGFloat = 0.38
     static let voiceMinimizeSpringDamping: CGFloat = 0.9
+    /// The orb stepping back for generated content and returning: one eased, critically damped spring, never linear.
+    /// It keeps its velocity when interrupted, and Reduce Motion replaces it with no animation.
+    static let voicePanelMotion: Animation = .smooth(duration: 0.55)
     static let voiceStatusSpacing: CGFloat = 12
     static let voiceEndActionColor = Color.red
     static let notesHorizontalInset: CGFloat = 16
@@ -209,6 +212,11 @@ enum JarvisDesignTokens {
         light: UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 1),
         dark: UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 1)
     )
+    /// The General folder's muted violet; the graph labels every cluster by name as well.
+    static let notesFolderGeneral = adaptiveColor(
+        light: UIColor(red: 111.0 / 255, green: 79.0 / 255, blue: 214.0 / 255, alpha: 1),
+        dark: UIColor(red: 182.0 / 255, green: 156.0 / 255, blue: 1, alpha: 1)
+    )
     /// Open task circles keep a warm orange ring that reads on both appearances; meaning is also in the label.
     static let notesTaskRing = adaptiveColor(
         light: UIColor(red: 200.0 / 255, green: 90.0 / 255, blue: 0, alpha: 1),
@@ -219,8 +227,6 @@ enum JarvisDesignTokens {
     static let labelledHorizontalPadding: CGFloat = 16
     static let labelledVerticalPadding: CGFloat = 10
     static let periodSelectorHorizontalInset: CGFloat = 10
-    static let notesGraphNodeRadius: CGFloat = 5
-    static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4
     static let segmentedBarSpacing: CGFloat = 12
     static let segmentedSelectionInset: CGFloat = 3
@@ -238,15 +244,6 @@ enum JarvisDesignTokens {
     static let notesEditorMinimumHeight: CGFloat = 120
     static let notesConflictPreviewMaximumHeight: CGFloat = 120
     static let notesConflictPanelRadius: CGFloat = 16
-    static let notesGraphSelectionStroke: CGFloat = 2
-    static let notesGraphNodeLabelWidth: CGFloat = 96
-    static let notesGraphLabelOffset: CGFloat = 18
-    static let notesGraphMinimumZoom: CGFloat = 0.65
-    static let notesGraphMaximumZoom: CGFloat = 4
-    static let notesGraphEmphasizedOpacity: Double = 0.38
-    static let notesGraphDimmedOpacity: Double = 0.12
-    static let notesGraphNeighbourOpacity: Double = 0.72
-    static let notesGraphNodeOpacity: Double = 0.46
     static let notesSearchSnippetLineLimit = 2
     static let settingsHorizontalInset = notesHorizontalInset
     static let settingsSectionSpacing = notesSectionSpacing
@@ -414,16 +411,20 @@ struct JarvisNeuralBackground: View {
     }
 }
 
-/// The living background with its orb placed in it, for a screen whose window and composer overlay the orb (chat):
-/// the same network and states as Voice, a little quieter so text stays legible on top.
+/// The living background with its orb placed in it, behind every page: the same network and states as Voice, a
+/// little quieter so text stays legible on top. Chat passes `.full` effects; every other page `.calm`, so the orb
+/// and the signals are slower and rarer. Reduce Motion, the Background motion switch and Low Power Mode are
+/// honoured here for the orb as well as the network.
 struct JarvisNeuralStage: View {
     var activity: JarvisOrbActivity
+    var effects: JarvisNeuralEffects = .full
     var intensity = 0.7
     /// The dark glass orb turns muddy on the light page when it is thin, so light mode keeps it denser.
     var orbOpacity: (dark: Double, light: Double) = (0.42, 0.62)
 
     @Environment(\.jarvisBackgroundPaused) private var isCovered
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(JarvisNeuralEffects.motionEnabledKey) private var motionEnabled = true
 
     var body: some View {
         GeometryReader { proxy in
@@ -431,10 +432,13 @@ struct JarvisNeuralStage: View {
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height * 0.3)
             ZStack {
                 JarvisNeuralBackground(
-                    activity: activity, effects: .full, orb: .local(center: center, radius: diameter / 2),
+                    activity: activity, effects: effects, orb: .local(center: center, radius: diameter / 2),
                     intensity: intensity
                 )
-                JarvisOrb(activity: activity, size: diameter, isPaused: isCovered)
+                JarvisOrb(
+                    activity: activity, size: diameter, isStatic: !motionEnabled, isPaused: isCovered,
+                    adaptsToLowPower: true
+                )
                     .opacity(colorScheme == .dark ? orbOpacity.dark : orbOpacity.light)
                     .position(center)
             }
@@ -465,6 +469,13 @@ struct JarvisGlassSurface: View {
     }
 }
 
+/// The background of a row in a native List or Form: the shared row surface (the glass of the glass buttons).
+struct JarvisGlassRowBackground: View {
+    var body: some View {
+        Color.clear.jarvisGlassSurface(in: Rectangle())
+    }
+}
+
 struct JarvisForm<Content: View>: View {
     private let content: Content
 
@@ -474,7 +485,7 @@ struct JarvisForm<Content: View>: View {
 
     var body: some View {
         Form {
-            content.listRowBackground(JarvisGlassSurface())
+            content.listRowBackground(JarvisGlassRowBackground())
         }
         .environment(\.defaultMinListRowHeight, JarvisDesignTokens.sheetRowMinimumHeight)
         .jarvisAmbientBackground()
@@ -502,7 +513,7 @@ struct JarvisList<Head: View, Content: View>: View {
             if customRowBackgrounds {
                 content
             } else {
-                content.listRowBackground(JarvisGlassSurface())
+                content.listRowBackground(JarvisGlassRowBackground())
             }
         }
         .scrollContentBackground(.hidden)
@@ -516,7 +527,15 @@ extension JarvisList where Head == EmptyView {
 }
 
 extension View {
-    /// The page's background: the neural network, calm unless the screen passes a `stage` (chat's live orb).
+    /// A page's background: the neural network with the orb behind the content, the same on every page. The page
+    /// chrome owns this, so no screen draws its own orb. Sheets and forms use `jarvisAmbientBackground()`, which
+    /// has no orb.
+    func jarvisPageBackground(activity: JarvisOrbActivity = .calm) -> some View {
+        jarvisAmbientBackground(stage: JarvisNeuralStage(activity: activity, effects: .calm))
+    }
+
+    /// The background of a sheet or form: the neural network without the orb, calm unless the screen passes a
+    /// `stage` (chat's live orb).
     func jarvisAmbientBackground(
         transparentNavigationBar: Bool = true,
         stage: JarvisNeuralStage? = nil

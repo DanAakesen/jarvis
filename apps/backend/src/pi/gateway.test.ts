@@ -44,6 +44,14 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
 }
 
 describe('PI gateway', () => {
+  it('puts the environment note on a smoke turn only when asked, so measured turns stay comparable', () => {
+    const { gateway } = setup([], { environment: 'ENV NOTE' });
+    const kit = gateway.smokeKit;
+    expect(kit.format('jt-x', 'hi')).not.toContain('ENV NOTE');
+    expect(kit.format('jt-x', 'hi', 'environment')).toContain('ENV NOTE');
+    expect(setup([]).gateway.smokeKit.format('jt-x', 'hi', 'environment')).not.toContain('ENV NOTE');
+  });
+
   it('streams one long conversation, sends the persona once, and records tokens and DKK per turn', async () => {
     const { run, calls, store, usage, registry, conversations } = setup([
       () => sse(delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),
@@ -161,6 +169,11 @@ describe('PI gateway', () => {
     await expect(limited.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', userMessage: expect.stringContaining('12 s') });
     const failed = setup([() => sse(delta('half'), frame({ type: 'response.failed', response: {} }))]);
     await expect(failed.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+    // The provider's own short error code is kept for the log and the smoke; its message never is.
+    const coded = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'tool_user_error', message: 'Bearer secret leaked here' } } }))]);
+    await expect(coded.run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'tool_user_error' });
+    const odd = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'not a code with spaces' } } }))]);
+    await expect(odd.run('hi')).rejects.toMatchObject({ detail: 'response.failed' });
     // The model had started, so the turn is charged at an estimate and counts toward the cap.
     expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 12_000, outputTokens: 2 });
     expect(failed.store.turns[0]!.costDkk).toBeGreaterThan(0.07);

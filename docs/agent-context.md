@@ -1,30 +1,64 @@
+## PI smoke parts — 17 November 2026 (#1910, P15-209)
+
+- `POST /pi/smoke` needs `{ "part": "core" | "voice" | "reach" }`. `.github/scripts/pi_smoke_report.py` calls the three in turn and merges them; run it through Deploy `measure_pi`. Checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`.
+
+## Azure MCP cold start — 17 November 2026 (#1910, P15-208)
+
+- Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text changed: deploy the PI agent, then run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.
+- Not verifiable here: the Azure MCP container's own logs (no Azure access from the build environment).
+
+## Voice visuals and chat blocks — 17 November 2026 (#1939, P15-205)
+
+- Checks: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run` (`src/pi/show-in-chat-route.test.ts` runs `show_in_chat` through the real PI door); `cd packages/contracts && node --test`; `cd apps/ios/Packages/JarvisCore && swift test` (a Swift 6.2 Linux toolchain works). The SwiftUI compiles only in the macOS `watch` job.
+- Instruction text changed (`agents/pi/instructions.md`, `voiceChannelNote`, `workspace_command` description, `capability-instructions.ts`): deploy the PI agent for it to take effect, and run `measure_pi` to see the voice smoke still passes.
+- The backend log lines for a failing tool are `tool.invalid_arguments` (the refused field) and `pi.stream_failed` (the provider code).
+
+## Voice bottom panel — 17 November 2026 (#1925, P15-191)
+
+- iOS only. `swift test` in `apps/ios/Packages/JarvisCore` (strings for the panel are in `JarvisWorkspaces.strings`). The SwiftUI (`VoiceContentPanel.swift`, `VoiceScreen.swift`) compiles only in the macOS `watch` job, which captures `polish-voice-panel.png` (`--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel`, simulator and debug only; the content is synthetic).
+
+## Conversational blocks — 17 November 2026 (#1925, P15-190)
+
+- No migration (blocks live in `dbo.messages.metadata`). Checks: `cd packages/contracts && node --test`; `cd apps/backend && npx vitest run src/core/chat-blocks.test.ts src/core/weather.test.ts`, `npx tsc --noEmit -p tsconfig.json`, `npx eslint src`; the SQL contract `src/database/conversation-blocks.integration.test.ts` (applies all migrations to a loopback SQL Server 2022 container, see `database-ci.yml`; run with `npx vitest run --config src/database/vitest.config.mts <file>` and the CI fixture variables); `swift test` in `apps/ios/Packages/JarvisCore` (`ChatBlockTests`, Linux `swift:6.2` image). The SwiftUI (`JarvisChatBlockView.swift`) compiles only in the macOS `watch` job, which captures `polish-chat-blocks.png` from synthetic history (`--screenshot-chat-fixture --ui-test-chat-blocks`, simulator and debug only).
+
+## Manual folder order — 16 November 2026 (#1920)
+
+- Needs migration `0089_notes_folder_order.sql` (applied by the normal startup migration step). Checks: `cd apps/backend && npx vitest run src/vault`; the SQL contract (`manual folder order`) with the loopback SQL Server container from `database-ci.yml`; `swift test` in `apps/ios/Packages/JarvisCore`. SwiftUI compiles only in the macOS `watch` job, which also captures `notes-folders-manual.png` and `notes-folders-reorder.png` (`--screenshot-notes-state=folders-manual` or `folders-reorder`).
+
 ## iOS UI guidance — 15 November 2026 (#1894)
 
 - Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
 - Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
 
-## PI cutover flip: draft, not in effect (#1887, P15-176, part 3)
-
-The flip is its own pull request and changes only the default (section 2 of `docs/pi/cutover.md`); it is not on the owner's approval list until he writes it on #1887. Test after merging and deploying it: a chat message and a voice session with no switch change both run on PI; "Current engine" in Settings still reaches the old path; a runtime-test session still works. Roll back by reverting the flip commit.
-
 ## PI cutover: flip, roll back, delete (#1887, P15-176)
 
-- Everything is in `docs/pi/cutover.md`. Nothing is deleted and the default is unchanged until the owner approves in writing on #1887.
-- Flip: the draft pull request "P15-176: PI cutover flip" (server default PI, iOS default PI). Merge only on his word; then Deploy. Roll back by reverting that commit and redeploying the previous release. Before the flip, tag the release it merges from: `git tag pi-last-old-path <commit>` and push the tag (gate check 6); that tag is the rollback target for phase 8.
+- [#1910](https://github.com/DanAakesen/jarvis/pull/1910) is the standalone draft for the [approved](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174) chat and voice default. Approval is not a release; no default is live from this change yet. Scope and gates are in `docs/pi/cutover.md`.
+- When release work is separately authorised, record and tag the last deployed release with the old default (`pi-last-old-path`, gate check 6). After the flip is released, confirm unnamed chat and voice on Watch and web, PI by default on iPhone, the saved Current engine choice on iPhone, isolated runtime tests, and `not_supported` for camera/screen context on PI web voice. Check actual spoken audio, interruption and follow-up on device; the smoke does not exercise audio. If rollback is needed, revert the flip on main or redeploy the previous qualified release; PI never falls back at runtime.
 - Before phase 8: repeat the reference scan (the commands are in cutover.md, section 5), run the full backend, Python and Swift suites after each move in section 4.1, and keep the manual Foundry steps (4.7) for last, after a week of zero requests to the old agents.
 
 ## PI voice: test it and measure it (#1887, P15-176)
 
 - Needs PI configured (the Deploy `pi-agent` job) and the Deploy that contains this change, because the agent instructions gained a Voice section (a new agent version).
 - Test: iOS Settings, General, "Engine test switch" to "PI engine", then start voice. The first answer takes a few seconds; later turns are about as fast as warm chat. Say something that needs a tool ("what is on my calendar today") to hear PI's short sentence before the answer. Interrupt it: the newest sentence wins. Roll back by switching to "Current engine" (a new voice session picks it up).
-- Measure: Deploy by hand with `measure_pi`; the job summary and log add "voice: plain" and "voice: with a tool" rows and the checks `voice_spoken_shape` and `voice_tools_over_mcp`. This is the PI leg only (about 0.3 to 0.5 DKK for the whole smoke). Real audio latency: backend logs `voice.pi_turn` (`transcriptToFirstTextMs`, `transcriptToDoneMs`) and `voice.turn_timing` (`firstAudioDeltaMs`), cost per turn in `pi.turn` (`channel: voice`) or Settings, "Last turn".
+- Measure: Deploy by hand with `measure_pi`; the job summary and log add "voice: plain" and "voice: with a tool" rows, a "fixed prompt, new conversation" row (the base prompt on its own, to read prompt growth against) and the checks `voice_spoken_shape` and `voice_tools_over_mcp`. This is the PI leg only (about 0.3 to 0.5 DKK for the whole smoke). Real audio latency: backend logs `voice.pi_turn` (`transcriptToFirstTextMs`, `transcriptToDoneMs`) and `voice.turn_timing` (`firstAudioDeltaMs`), cost per turn in `pi.turn` (`channel: voice`) or Settings, "Last turn".
 - Local checks: `cd apps/backend && npx vitest run src/voice src/pi src/logging.test.ts`; `npx tsc --noEmit -p tsconfig.json`; `npx eslint src`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux, the `swift:6.2` image). The relay test (`voice/relay-pi.test.ts`) drives the real relay against a local WebSocket standing in for Voice Live; it does not speak audio. SwiftUI changes compile only in the macOS `watch` job.
 - Not verifiable here: Voice Live accepting a session with no `tools` (the relay omits the keys instead of sending an empty list), real audio and echo behaviour with spoken replies, and what a real PI says in voice.
+
+## PI built-ins and wake actions (#1886, P15-175)
+
+- The PI agent runs with the harness built-ins on (shell, filesystem read and write, web, sub-agents): `builtinTools` in `agents/pi/definition.json`. After the Deploy that contains this change, run Deploy with `measure_pi` and compare first text and input tokens with the baseline in `docs/harness-trial/spike-results.md` (warm first text 1.1 to 1.3 s, about 17.7k input tokens). If first text gets more than twice as slow, set `builtinTools` to `"disabled"` and Deploy again.
+- A brain wake has every chat tool plus `message_dan`, `pi_note`, `inbox_trail` and `watch_look`, and acts on its own judgement. A wake's issue and task creation need no owner message (they become board tasks).
+
+## PI latency experiments (#1886, P15-175)
+
+- Measurement variants of the PI agent, one thing per Deploy: run Deploy by hand with `measure_pi` and `pi_experiment` set to `builtins_off` (harness shell, filesystem, web and sub-agents off) or `skills_off` (no skills). The `pi-agent` summary shows `Experiment: <name>`. **Deploy again with `pi_experiment` = `none` afterwards** to define the full agent again; a push to main does the same.
+- Baseline (Deploy 43911904900, GitHub through the door, built-ins on): about 14.1k input tokens per turn, warm first text 2.0 to 2.8 s, voice plain 1.7 s, voice with a tool 1.8 s, github reach 1.7 s (118 GitHub tools). Target: warm first text under about 1.5 s with every capability.
+- What we control in the static prompt, estimated at 4 characters per token: instructions 8.5k characters (about 2.1k tokens), the four skill descriptions 0.97k characters (about 0.25k tokens; skill bodies, 8.8k characters, are read only when a skill is used), the two door tools about 0.4k characters plus schemas (about 0.2k tokens). That is about 2.6k of the 14.1k tokens; the rest is the harness's own prompt and the built-in tool definitions. So shortening skill descriptions cannot move the number; the experiments above show what the built-ins and the skills cost.
 
 ## PI standing watches (#1886, P15-175)
 
 - Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.
-- Use: say "keep me updated on X" in chat or voice; "what are you watching" lists them with next look, looks today and the estimated cost; "change" and "stop" work in words. Limits: 10 open, 8 looks a day each, 5 minutes apart.
+- Use: say "keep me updated on X" in chat or voice; "what are you watching" lists them with next look, looks today and the estimated cost; "change" and "stop" work in words. There is no limit on open watches or looks; spend is bounded by the wakes (10 minutes apart, 12 a day) and the 100 DKK proactive budget. A wake can open and change watches too.
 - Foundry routine probe (manual, about 5 minutes): Deploy with input `probe_pi_wake`. It creates the throwaway agent `jarvis-pi-probe` (plain harness, no tools), tries a one-off timer routine, writes what it observed to the job log and summary, and deletes both. The reminder tool was probed and is not supported on a harness prompt agent.
 - Local checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; the SQL contract with the loopback SQL Server container.
 
@@ -42,13 +76,13 @@ The flip is its own pull request and changes only the default (section 2 of `doc
 
 What only the owner can do, in order:
 
-1. Create a GitHub **fine-grained** personal access token (resource owner: the account, repositories: only those PI may read, repository permissions read-only: Contents, Issues, Pull requests, Actions, Metadata) and store it as the repository secret `PI_GITHUB_READ_TOKEN`. Without it the Deploy `pi-agent` summary says "github: not attached: the owner has not provided the PI_GITHUB_READ_TOKEN secret".
-2. After the Deploy that contains this change has run once (it outputs `foundryProjectPrincipalId`), run `infra/setup-azure-mcp.ps1` from Windows PowerShell signed in with `az login` and `gh auth login`. It creates the Entra app `jarvis-azure-mcp`, lets only the Foundry project identity call it and sets the repository variable `JARVIS_AZURE_MCP_CLIENT_ID`. Then Deploy again: it creates the container (scale to zero, Reader on `rg-jarvis`) and attaches the server. Without the variable the summary says "azure: not attached: the Azure MCP container is not deployed".
-3. Deploy with `measure_pi`: the report lists the servers the harness reports, runs one read per attached server and prints the numbers in the job log.
+1. Create a GitHub **fine-grained** personal access token (resource owner `DanAakesen`, repositories: only the ones PI may work in, repository permissions: Read and write on Contents, Issues, Pull requests and Actions, plus Metadata read; no Administration and no Secrets permission; expiry up to one year), stored as the repository secret `PI_GITHUB_TOKEN`. Classic tokens are refused. Without the secret the Deploy `pi-agent` summary says "github: not attached: the owner has not provided the PI_GITHUB_TOKEN secret". The token is the only limit on what PI can do on GitHub; the backend uses the full server `https://api.githubcopilot.com/mcp/x/all` and offers its tools to PI through `find_tools` and `call_tool` as `gh_...` tools (the Deploy stores the token as the backend secret `pi-github-token`; withdrawing the secret removes it on the next Deploy).
+2. After the Deploy that contains this change has run once (its infrastructure step outputs `backendIdentityPrincipalId`), run `infra/setup-azure-mcp.ps1` from Windows PowerShell signed in with `az login` and `gh auth login`. It creates the Entra app `jarvis-azure-mcp`, lets only the Jarvis backend's managed identity call it (any other holder of the role is removed) and sets the repository variable `JARVIS_AZURE_MCP_CLIENT_ID`. Then Deploy again: it creates the container (scale to zero, Contributor on `rg-jarvis`; widening beyond that resource group is the owner's call) and attaches the server. Without the variable the summary says "azure: not attached: the Azure MCP container is not deployed".
+3. Deploy with `measure_pi`: the report lists the GitHub and Azure tools found through the door, runs one harmless read per attached server and prints the numbers in the job log.
 
 Reading the result: `reach` in the `pi-agent` summary says `attached`, `not attached: <reason>` or `not attached: the connection could not be written (<Foundry code>)`; the last also fails the job. Remove everything again by deleting the variable and the secret and deploying; the container and role go with the next infrastructure deployment (the resources are conditional).
 
-Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `cd apps/backend && npx vitest run src/pi src/proactive`; `bicep build infra/main.bicep`. Not verifiable here: Foundry accepting the Azure connection type, the harness listing the servers' tools, the cold start of the scaled-to-zero container.
+Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `cd apps/backend && npx vitest run src/pi src/proactive`; `bicep build infra/main.bicep`. Azure and GitHub reach PI through the Jarvis MCP door (`az_` and `gh_` tools), not as harness tools. If a turn fails, `pi.stream_failed` in the backend logs has the provider's short error code, and the smoke's HTTP 502 shows it. Not verifiable here: the Entra token for the backend identity and the cold start of the scaled-to-zero container (the first Azure call after a quiet period can take a minute).
 
 ## PI chat engine: deploy and test (#1885, P15-174)
 
@@ -7685,8 +7719,8 @@ The list renders table, list, detail, text, timeline, chart, task-card, status,
 image and HTML-app views. HTML artifacts are validated and run in a nonpersistent
 WKWebView with a restrictive CSP, no file scheme, and no native message bridge.
 The web-only `window.jarvis` ask/pin/link actions remain unavailable on iOS;
-knowledge-graph and code remain unsupported cards. `JARVIS_WEB_APP_URL` is
-optional and accepts only an HTTPS origin; it does not identify a workspace item.
+knowledge-graph and code views have native renderers (P15-205) and the app has no
+link to the web app (`JARVIS_WEB_APP_URL` was removed).
 The app uses the existing Keychain session and configured `JARVIS_API_BASE_URL`;
 no iOS-specific backend route is added. Active-client choice and command replay
 after reconnect remain unverified.

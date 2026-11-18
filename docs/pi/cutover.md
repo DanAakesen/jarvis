@@ -1,11 +1,11 @@
 # PI cutover checklist and deletion inventory
 
-Prepared for [#1887](https://github.com/DanAakesen/jarvis/issues/1887) (P15-176), 16 November 2026. **Nothing in this file has been done.** The owner's instruction was: build everything for the cutover, "just dont delete the old harness". The old chat harness, the old one-shot proactive pipeline and every Foundry resource stay exactly as they are until the owner approves the deletion **in writing** (a comment on #1887).
+Prepared for [#1887](https://github.com/DanAakesen/jarvis/issues/1887) (P15-176), 16 November 2026. **Phase 7's chat and voice default is approved, not live. Phase 8 is not approved.** The old chat harness, the old one-shot proactive pipeline and every Foundry resource stay in place; deletion needs separate written approval and the checks in section 3.
 
 ```mermaid
 flowchart LR
     T["Today<br/>PI behind the iOS test switch<br/>chat and voice<br/>old path is the default"] --> C1{"Owner tests<br/>chat, voice, brain, watches"}
-    C1 -->|"happy: owner says so in writing"| F["Phase 7 flip<br/>draft pull request, merge only on his word<br/>PI becomes the default"]
+    C1 -->|"owner approved the default on 18 Nov"| F["Phase 7 flip<br/>standalone draft #1910; not live<br/>PI becomes the default on release"]
     F --> D["Daily use<br/>two weeks, no revert"]
     D --> G{"Deletion gate<br/>7 checks, section 3"}
     G -->|"owner approves in writing"| X["Phase 8<br/>delete exactly the list in section 4"]
@@ -21,22 +21,24 @@ flowchart LR
 | Voice | Same switch; start voice (first answer takes a few seconds), ask something that needs a tool, interrupt it, ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; the newest sentence wins; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
 | Brain | Settings, "PI brain (test)" on | Messages worth reading, no storms, budget inside 100 DKK | `docs/agent-context.md`, "PI brain" |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, cost per watch shown, no storm | `docs/agent-context.md`, "PI standing watches" |
-| Reach | After the owner provides `PI_GITHUB_READ_TOKEN` and runs `infra/setup-azure-mcp.ps1` | Reads work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
+| Reach | After the owner provides `PI_GITHUB_TOKEN` (fine-grained token, see `docs/agent-context.md`) and runs `infra/setup-azure-mcp.ps1` | Reads and actions work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
 | Cost | Settings status rows, `measure_pi` summary | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | `docs/pi/plan.md` section 8 |
 
-**Known gaps to decide on before the flip (not bugs):** voice with PI has no camera or screen sharing yet (this also affects web voice after the flip); the Watch and the web app follow the server default once it is PI; the 07:00 and 18:00 proactive slots are not replaced by anything in PI (section 4.3, decision A).
+**Known limits:** Watch and web follow the server default. Once the flip is live, camera and screen sharing in web voice return `not_supported` on PI. The 07:00 and 18:00 proactive slots are unchanged; their replacement is still open (section 4.3, decision A).
 
 ## 2. The flip (phase 7) as one small, separate change
 
-Prepared as its own **draft pull request, stacked on the cutover documents, that must not merge until the owner says so in writing**. It changes only the default:
+Standalone draft [#1910](https://github.com/DanAakesen/jarvis/pull/1910) contains the default flip. The owner approved this change on 18 November; it has not been merged or deployed.
 
 | Change | Detail |
 | --- | --- |
-| Server default, chat | `POST /conversation/sessions/:id/turns` treats a missing `engine` as PI. `engine: "current"` selects the old path explicitly. An isolated runtime-test session is the old path by definition and is never sent to PI |
-| Server default, voice | `/voice` without `engine` runs on PI; `/voice?engine=current` is the old voice path |
-| iOS default | `ChatEngineSelection.load()` defaults to PI and the chat and voice clients send the owner's choice explicitly (`current` or `pi`); the Watch bridge sends none and follows the server |
-| What stays | The old path, its code, the test switch and every Foundry resource. The flip is one revert away from today |
-| What follows the default without a code change | The Watch (chat and voice) and the web app (chat, and voice without camera or screen sharing: the relay answers `not_supported`, so web camera and shared-screen voice stop working until PI supports them) |
+| Chat | The turn route treats a missing `engine` as PI for normal chat. `engine: "current"` selects the old path. Isolated runtime tests keep the runtime chosen for the session and reject explicit `pi` with HTTP 400 |
+| Voice | `/voice` without an `engine` query uses PI. `/voice?engine=current` selects the old voice path |
+| iPhone | `ChatEngineSelection.load()` defaults to PI. The chat and voice clients send the choice explicitly; a saved `current` remains selected |
+| Watch and web | Neither sends an engine for chat or voice. They follow the server default, and PI web voice does not support camera or screen sharing |
+| What stays | The old path, engine selector, PI Brain switch, proactive slots and every Foundry resource |
+
+Verify the explicit Current engine choice on the updated iPhone build. Older iPhone builds omit `engine` for that choice and therefore follow the new server default.
 
 Rollback: revert the flip commit and redeploy the previous release. There is no code that switches back at runtime.
 
@@ -148,7 +150,7 @@ The owner writes his approvals as comments on #1887. This table is filled in onl
 
 | Approval | Date | Link |
 | --- | --- | --- |
-| PI is good enough to become the default (the flip) | | |
+| Phase 7: PI is the approved default for chat and voice | 18 November 2026 | [Written approval on #1887](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174) |
 | Preview risk accepted (gate check 5) | | |
 | Decision A (the 07:00 and 18:00 slots) | | |
 | Phase 8: delete exactly the list in section 4 | | |

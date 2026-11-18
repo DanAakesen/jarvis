@@ -20,7 +20,6 @@ struct GeneratedWorkspaceSheet: View {
                     GeneratedViewContent(
                         view: presented.view,
                         runtime: runtime,
-                        webAppURL: runtime.webAppURL,
                         language: language,
                         previewImage: nil,
                         onAction: perform
@@ -52,25 +51,7 @@ struct GeneratedWorkspaceSheet: View {
     }
 
     private func perform(_ action: GeneratedViewAction) {
-        switch action {
-        case .openRoute(let route):
-            if !runtime.openRoute(route) {
-                actionNotice = text(.destinationUnavailable)
-            }
-        case .openLink(let url, _):
-            guard let url = URL(string: url) else {
-                actionNotice = text(.invalidLink)
-                return
-            }
-            openURL(url)
-            actionNotice = nil
-        case .callTool:
-            actionNotice = text(.toolUnavailable)
-        case .window(let windowAction):
-            if !runtime.perform(windowAction) {
-                actionNotice = text(.windowActionUnavailable)
-            }
-        }
+        actionNotice = performGeneratedViewAction(action, runtime: runtime, language: language, openURL: openURL)
     }
 
     private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
@@ -78,10 +59,34 @@ struct GeneratedWorkspaceSheet: View {
     }
 }
 
-private struct GeneratedViewContent: View {
+/// Runs an action from generated content and returns the notice to show when it cannot be done.
+@MainActor
+func performGeneratedViewAction(
+    _ action: GeneratedViewAction,
+    runtime: WorkspaceRuntime,
+    language: JarvisAppLanguage,
+    openURL: OpenURLAction
+) -> String? {
+    func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
+    switch action {
+    case .openRoute(let route):
+        return runtime.openRoute(route) ? nil : text(.destinationUnavailable)
+    case .openLink(let value, _):
+        guard let url = URL(string: value) else { return text(.invalidLink) }
+        openURL(url)
+        return nil
+    case .callTool:
+        return text(.toolUnavailable)
+    case .window(let windowAction):
+        return runtime.perform(windowAction) ? nil : text(.windowActionUnavailable)
+    }
+}
+
+struct GeneratedViewContent: View {
     let view: GeneratedView
     let runtime: WorkspaceRuntime
-    let webAppURL: URL?
     let language: JarvisAppLanguage
     let previewImage: Image?
     let onAction: (GeneratedViewAction) -> Void
@@ -130,23 +135,13 @@ private struct GeneratedViewContent: View {
         case .htmlApp(let envelope):
             HTMLAppRenderer(artifactId: envelope.data.artifactId, runtime: runtime, language: language)
         case .knowledgeGraph(let envelope):
-            UnsupportedRenderer(title: envelope.title, kind: text(.knowledgeGraph), webAppURL: webAppURL, language: language)
+            KnowledgeGraphRenderer(data: envelope.data, language: language, onOpenNotes: runtime.openNotesGraph)
         case .code(let envelope):
-            UnsupportedRenderer(title: envelope.title, kind: text(.codeView), webAppURL: webAppURL, language: language)
+            CodeRenderer(data: envelope.data)
         case .unsupportedVersion:
-            UnsupportedRenderer(
-                title: text(.generatedView),
-                kind: text(.unsupportedVersion),
-                webAppURL: nil,
-                language: language
-            )
+            UnsupportedRenderer(kind: text(.unsupportedVersion), language: language)
         case .unknown:
-            UnsupportedRenderer(
-                title: text(.generatedView),
-                kind: text(.unsupportedView),
-                webAppURL: nil,
-                language: language
-            )
+            UnsupportedRenderer(kind: text(.unsupportedView), language: language)
         }
     }
 
@@ -678,49 +673,92 @@ private struct ImageRenderer: View {
     }
 }
 
+/// A view this version of the app has no renderer for. The title is the view's own and is shown by the page that
+/// presents it, so this says only why there is nothing to draw.
 private struct UnsupportedRenderer: View {
-    let title: String
     let kind: String
-    let webAppURL: URL?
     let language: JarvisAppLanguage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
-            Text(title)
-                .font(.title2.weight(.semibold))
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
             Label(kind, systemImage: "rectangle.slash")
                 .font(.subheadline)
             Text(text(.nativeUnavailable))
                 .font(.body)
                 .foregroundStyle(.secondary)
-            if let webAppURL {
-                Link(text(.openWebApp), destination: webAppURL)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
-            } else {
-                Text(text(.webAppNotConfigured))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(text(.webAppUnavailable))
-            }
         }
-        .padding(JarvisDesignTokens.contentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            JarvisGlassSurface()
-                .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(formatted(.unsupportedOnPhone, title, kind))
+        .accessibilityElement(children: .combine)
     }
 
     private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
         JarvisWorkspaceLocalization.string(key, language: language)
     }
+}
 
-    private func formatted(_ key: JarvisWorkspaceLocalizationKey, _ arguments: CVarArg...) -> String {
-        JarvisWorkspaceLocalization.formatted(key, language: language, arguments: arguments)
+/// Which notes a search matched. The backend names them by an opaque id, so the card gives the count and the search
+/// and sends the owner to the graph in Notes.
+private struct KnowledgeGraphRenderer: View {
+    let data: GeneratedKnowledgeGraphData
+    let language: JarvisAppLanguage
+    let onOpenNotes: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
+            Text(JarvisWorkspaceLocalization.formatted(.knowledgeGraphQuery, language: language, arguments: [data.query]))
+                .font(.body)
+            Text(JarvisWorkspaceLocalization.formatted(.knowledgeGraphCount, language: language, arguments: [data.highlight.count]))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            JarvisLabelledButton(
+                title: JarvisWorkspaceLocalization.string(.openNotes, language: language),
+                systemImage: "arrow.up.right",
+                identifier: "workspace.knowledgeGraph.openNotes",
+                action: onOpenNotes
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Code with line numbers, the matched lines marked by a surface and a symbol, scrolling sideways instead of wrapping.
+private struct CodeRenderer: View {
+    let data: GeneratedCodeData
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
+            if !data.location.isEmpty {
+                Text(data.location)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            ScrollView(.horizontal) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(data.displayLines) { line in
+                        HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.rowSpacing) {
+                            Text(line.isHighlighted ? "›" : " ")
+                                .font(.system(.footnote, design: .monospaced).weight(.bold))
+                                .foregroundStyle(.primary)
+                                .accessibilityHidden(true)
+                            Text("\(line.number)")
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(minWidth: 36, alignment: .trailing)
+                            Text(line.text.isEmpty ? " " : line.text)
+                                .font(.system(.footnote, design: .monospaced))
+                                .foregroundStyle(.primary)
+                                .fixedSize()
+                        }
+                        .padding(.vertical, 1)
+                        .background(line.isHighlighted ? Color.primary.opacity(0.1) : .clear)
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -744,11 +782,14 @@ private struct GeneratedActionControl: View {
     private var title: String? {
         switch action {
         case .openRoute(let route):
-            route == "/usage"
-                ? text(.openUsage)
-                : route == "/settings"
-                    ? text(.openSettings)
-                    : formatted(.routeUnavailable, route)
+            switch GeneratedViewRoute(route: route) {
+            case .home: text(.openHome)
+            case .usage: text(.openUsage)
+            case .settings: text(.openSettings)
+            case .factoryTask: text(.openTask)
+            case .factoryProject, .factoryRelease: text(.openFactory)
+            case nil: formatted(.routeUnavailable, route)
+            }
         case .openLink(_, let label):
             label
         case .callTool(let tool):
@@ -790,7 +831,7 @@ private struct GeneratedActionControl: View {
     }
 }
 
-private extension GeneratedView {
+extension GeneratedView {
     func workspaceTitle(language: JarvisAppLanguage) -> String {
         switch self {
         case .table(let value): value.title
@@ -807,6 +848,25 @@ private extension GeneratedView {
         case .code(let value): value.title
         case .unsupportedVersion, .unknown:
             JarvisWorkspaceLocalization.string(.generatedView, language: language)
+        }
+    }
+
+    /// Where the content came from and whether it is still being produced, partial or unavailable.
+    var workspaceSource: GeneratedViewSource? {
+        switch self {
+        case .table(let value): value.source
+        case .list(let value): value.source
+        case .detail(let value): value.source
+        case .text(let value): value.source
+        case .timeline(let value): value.source
+        case .chart(let value): value.source
+        case .taskCard(let value): value.source
+        case .status(let value): value.source
+        case .image(let value): value.source
+        case .htmlApp(let value): value.source
+        case .knowledgeGraph(let value): value.source
+        case .code(let value): value.source
+        case .unsupportedVersion, .unknown: nil
         }
     }
 
@@ -897,7 +957,7 @@ private enum GeneratedWorkspacePreviewSamples {
 }
 
 private struct GeneratedWorkspacePreviewGallery: View {
-    @StateObject private var runtime = WorkspaceRuntime(client: nil, webAppURL: nil)
+    @StateObject private var runtime = WorkspaceRuntime(client: nil)
 
     private var language: JarvisAppLanguage {
         .default
@@ -911,7 +971,6 @@ private struct GeneratedWorkspacePreviewGallery: View {
                         GeneratedViewContent(
                             view: view,
                             runtime: runtime,
-                            webAppURL: nil,
                             language: language,
                             previewImage: Image(systemName: "photo"),
                             onAction: { _ in }

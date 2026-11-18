@@ -1,3 +1,82 @@
+## Remote MCP catalogues wake at startup (P15-208, #1910)
+
+- `createRemoteMcpBridge` (`apps/backend/src/pi/remote-mcp.ts`) exposes `status()` (`ready`, `starting`, `unreachable` with a reason), `warm()` and `label`. `createPiRoutes` calls `warm()` for every bridge as the backend starts, and `/pi/warm` does too. The refresh runs up to 200 s; a failed first list is not cached.
+- `find_tools` (`pi/mcp.ts`) adds a `note` when a bridge is not ready. The smoke lists the bridges in parallel and reports a failure reason.
+- Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
+
+## Voice visuals and the phone as the active device (17 November 2026, P15-205, #1939)
+
+- Showing in voice: a spoken PI turn gets a per-turn note (`voiceChannelNote`) that the phone shows what Jarvis puts on screen; PI reaches `workspace_command` through the door (`find_tools`, `call_tool`) and creates a view. `show_in_chat` checks the session channel (`conversationStore.getSession`) and refuses any session but a typed chat one.
+- `WorkspaceRuntime.reportActive()` posts the phone's snapshot when Voice opens or starts, so `target: active` (the latest reporter) is the phone. `VoiceScreenView` drops `presentedView` when a new session starts; content presented while a session was minimised carries over.
+- Navigation requests are typed (`WorkspaceNavigation`: a destination, the Notes graph, or a Factory task) and applied by `ContentView`; `GeneratedViewRoute` (JarvisCore) parses the contract's `open-route` values. The command interpreter maps place, move, resize and arrange to focus and minimise-all, close-all and restore-all to hide, forget and restore (`WorkspaceCommandIntent.dismissAll`, `.restoreLast`).
+- The iPhone has no path to the web app: `JARVIS_WEB_APP_URL`, `WorkspaceRuntime.webAppURL` and the unsupported-card link are removed. Knowledge-graph and code views have native renderers in `GeneratedWorkspaceView.swift`.
+- Chat block data tables: open state is `JarvisChatModel.expandedBlockDataIDs`.
+
+## Voice bottom panel (17 November 2026, #1925, P15-191)
+
+- No backend change. The workspace command path is unchanged (`workspace_command` → SSE → `WorkspaceRuntime.presentedView`).
+- Presenters: `ContentView` shows the sheet only when the current page is not Voice; `VoiceScreenView` hosts `VoiceContentSlot` (observes the runtime) and `VoiceContentPanel`. `prepareNavigation` dismisses the panel when the owner leaves Voice.
+- `performGeneratedViewAction` is the single place that runs an action from generated content (sheet, panel and chat blocks).
+- Layout: the slot reports the panel's height and frame to `VoiceScreenView`, which adds the height to `voiceBottomReservation` (orb sizing) and excludes the frame from the minimise drag.
+
+## Conversational blocks (17 November 2026, #1925, P15-190)
+
+```mermaid
+sequenceDiagram
+  participant M as Model (chat turn)
+  participant T as show_in_chat tool
+  participant B as ChatBlockBuffer (memory, per session)
+  participant C as conversation turn
+  participant S as dbo.messages.metadata
+  participant A as iPhone chat
+  M->>T: block (type, title, source, summary, data)
+  T->>T: validate with isChatBlock, stamp id and issue time
+  T->>B: add(session, block)
+  M-->>C: reply text
+  C->>B: take(session)
+  C->>S: INSERT reply with metadata.blocks
+  C-->>A: done {text, blocks}
+  A->>S: history (later, restart, reload)
+  S-->>A: same stored blocks
+```
+
+- Contract `packages/contracts/src/chat-blocks.js` (`isChatBlock`, `chatBlockInputSchema`); iOS mirror `ChatBlock` in JarvisCore. A block is at most 64 KiB, a reply at most 8 blocks.
+- The tool is registered by the conversation module and reaches both chat engines through the same `/tools` dispatch (header `x-jarvis-message-id` names the turn's message, which gives the session). It refuses voice calls and calls without a chat reply to attach to.
+- Persistence reuses `dbo.messages.metadata` for assistant messages (the column already holds a user message's visual context). `getHistory` and the `done` event return `blocks`; the history response schema allows them. The read path keeps only blocks that still validate.
+- Nothing refetches: a historic block renders from its stored JSON. A new request creates a new block.
+- `weather` with `report: false` returns values without a job or window; `hourly: true` adds hourly temperature and rain probability.
+- Voice is unchanged by this part: it still uses `workspace_command` views.
+
+## App polish: page chrome, row surface, swipe back (16 November 2026, #1923, P15-185)
+
+- iOS only, no backend or data change. `JarvisSwipeBack.swift`: `jarvisSwipeBack()` re-enables the `UINavigationController` interactive pop gesture (delegate on the
+  controller, active only with more than one page) for the root stack and the Settings stack; `jarvisEdgeSwipeBack` is the same edge swipe for state-based back (Notes folder).
+- `jarvisPageBackground()` (`JarvisDesignSystem.swift`) draws `JarvisNeuralStage` (orb plus calm network) behind pages; `JarvisLatticeOrbView(adaptsToLowPower:)` halves its frames on
+  the neural cheap path. Sheets and forms keep `jarvisAmbientBackground()`.
+- `jarvisRowSurface` (`JarvisPageHeader.swift`) is the one list-row background; `JarvisRowGroup`, `jarvisLazyRowSurface`, task and agenda rows and `JarvisList`/`JarvisForm` use it.
+- Chat: `ChatFollowState.keyboardOpened()` resumes following when the composer gains focus. `JarvisNotesLogic.swipeAction(distance:allowsDelete:)` gives pinned rows unpin only.
+- CI: the `watch` job captures `polish-*` Simulator states (graph search, pinned rows, Today, Settings, Health, chat keyboard, light mode).
+
+## Manual folder order (16 November 2026, #1920, P15-183)
+
+- Pins are device-local, so the folder order is not stored like them. It is owner data that must follow the owner to the Windows
+  app, so the backend keeps it in `dbo.notes_folder_order` (migration `0089`; `owner_object_id`, `parent_path`, `folder_path`,
+  `position`), one ordered list per parent folder (`""` is the vault root). It is display metadata only: nothing in the vault is
+  renamed, moved or prefixed, and a folder deleted in the vault just stops matching.
+- Routes (owner only, `vault/folder-order.ts`): `GET /notes/folder-order` returns `{ orders: [{ parent, folders }] }`;
+  `PUT /notes/folder-order` with `{ parent, folders }` replaces that parent's whole list in one serialised transaction. The body is
+  refused (400) unless every folder is a unique, safe, direct child of `parent` (at most 500). A store failure is a 503, never a
+  silent success.
+- iOS: `JarvisFolderOrder` (JarvisCore) ranks folders (listed ones first in stored order, the rest after them in their default order);
+  `JarvisNotesClient.folderOrder()` and `setFolderOrder(parent:folders:)`; `JarvisNotesArea` loads it with the folder tree and saves
+  each move in turn so the last move wins. `JarvisReorderSheet` serves both Reorder pins and Reorder folders. The chosen sort
+  (`noteSort`) is a device preference in `@AppStorage`.
+- Tests: `src/vault/folder-order.test.ts`, the SQL contract in `database.integration.test.ts` (loopback SQL Server), and the JarvisCore tests.
+
+## Tool choice and voice start (#1922, P15-184)
+
+Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description in `apps/backend/src/pi/mcp.ts`, and the PC and browser tool descriptions (`pc-bridge/bridge.ts`, `core/browser-agent.ts`). The old engine reads the same idea from `core/capability-instructions.ts`. The Deploy smoke (`pi/smoke.ts`) reports the tools reached for on four natural prompts. In the iOS voice start path, `URLSessionWebSocketTransport.connect` reads from the first moment and gives up after 15 s; the chat model keeps the failed turn's text so the error can offer Retry.
+
 ## Notes, Tasks and Graph pages — 15 November 2026 (#1894, P15-180)
 
 - iOS: `JarvisNotesArea` (state and loading, plus `+Pages` and `+Chrome` extensions) hosts the three pages, header menu and dock;
@@ -10,10 +89,12 @@
 - Backend: `DELETE /vault/tasks` (owner only) takes `{path,line,text,version}`, refuses a changed line with 409, removes only that
   line, and reports an unconfirmed write as 503; covered by `src/vault/task-delete.test.ts`.
 - CI: the macOS `watch` job compiles the iPhone app and captures the Notes states (continue-on-error, bounded).
+- Graph tab (#1924, P15-190): no new route or boundary. `JarvisCore/Graph3D` turns the existing `knowledge/graph` response into a deterministic 3D layout,
+  camera and motion schedule (pure, Linux-tested); the app's `JarvisNotesGraphView` draws it in a `Canvas` and receives touches through one UIKit gesture layer.
 
-## PI cutover flip (draft, not in effect) — #1887, P15-176
+## PI cutover flip (approved, not live) — #1887, P15-176
 
-If merged: a chat turn without `engine` runs on PI (`engine: "current"` selects the old agent; an isolated runtime-test session always runs on the old agent), `/voice` without `engine` runs the PI voice path (`?engine=current` the old one), iOS sends the owner's choice explicitly and defaults to PI, the Watch bridge and the web app send none and follow the server. The old path and the test switch stay until phase 8. Revert the flip commit to return to today.
+With [#1910](https://github.com/DanAakesen/jarvis/pull/1910) released, normal chat without `engine` and `/voice` without an `engine` query use PI. `engine: "current"` in chat and `?engine=current` for voice select the old route. Isolated runtime tests retain their own runtime and reject explicit `pi`. iPhone sends the saved choice explicitly, defaulting to PI; the Watch bridge and web omit the choice. The PI voice relay returns `not_supported` for camera/screen context. The old route and selector remain, with no automatic fallback.
 
 ## PI voice (test switch) — 16 November 2026 (#1887, P15-176)
 
@@ -49,7 +130,7 @@ sequenceDiagram
 | Relay switch | `apps/backend/src/voice/relay.ts` | `piVoiceRequested` is set from the query; owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). On PI: no tool-budget rung ladder, no partial-speech reflex or speech recognizer, no calendar, food or camera paths, typed `conversation.item.create` or `response.create` from the client closes the socket (1008), camera and screen frames get `jarvis.screen.context.unavailable` with reason `not_supported`, a Voice Live function call closes the socket (it has none). Status announcements for finished tasks and research still speak when no PI turn is in flight |
 | Voice Live session | `voice/realtime.ts` (`capabilityMode: 'pi'`) | Identity kernel plus a short "you are only the voice" prompt; no `tools`, no `tool_choice`. Turn detection is unchanged (the relay still creates every response) |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
-| Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write still proves Dan's own words; the MCP door, approvals and receipts are the chat ones |
+| Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
 | Logs | `voice.pi_turn`, `pi.turn` (registered in `logging.ts` with numeric fields only) | `transcriptToFirstTextMs`, `transcriptToDoneMs`, outcome (`ok`, `failed`, `timeout`, `cancelled`, `superseded`), whether a progress note was spoken. No text |
 | Deploy measurement | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | `measure_pi` adds two voice-channel turns (plain, with a Jarvis tool) in the smoke conversation and the checks `voice_spoken_shape` and `voice_tools_over_mcp`; reports first text, total and DKK. It is the PI leg only |
@@ -75,7 +156,7 @@ sequenceDiagram
     T->>T: a next look is due, or an event arrives (guards first)
     T->>A: wake: open watches in brief, due ones in full
     A->>X: look
-    A->>V: watch_look (result, next look; limits enforced)
+    A->>V: watch_look (result, next look)
     alt worth his attention
         A->>C: message_dan
     end
@@ -87,11 +168,11 @@ sequenceDiagram
 | --- | --- | --- |
 | A watch | `PI/Watches/<name>.md` (`pi/watch/note.ts`) | Title, Dan's quoted words, free text, a dated Trail, and one hidden last line `<!-- jarvis-watch:next=<ISO> -->`: the exact next look, or absent for events only. Closing moves the note to `PI/Watches/Closed/` with a trail line and no marker |
 | Index | `pi/watch/store.ts` | In memory, rebuilt from the vault on first use and after a restart; it only makes "what is due next" cheap. If the vault cannot be read, the brain keeps its events, calls no model and tries again in 5 minutes |
-| Tools | `pi/watch/tools.ts` | `watch_create`, `watch_update` (chat only: they verify Dan's stored message like `inbox_capture`), `watch_list` (read; chat and wake), `watch_stop` (Dan's word in chat, or the watch's own stop condition in a wake), `watch_look` (wake only, hidden from chat). A wake can never open or change a watch, so text read from outside cannot start one |
-| Guards | `pi/watch/store.ts` | At most 10 open watches; at most 8 looks per watch per day; at least 5 minutes between looks; next look 5 minutes to 400 days ahead. Hitting a look limit moves the next look (to tomorrow morning, or 5 minutes on) so a limit can never leave a watch due and wake the brain over and over; a due watch that got no look is moved an hour ahead with a trail line |
+| Tools | `pi/watch/tools.ts` | `watch_create`, `watch_update` (in chat they quote Dan's stored message like `inbox_capture`; a wake can open and change watches on its own), `watch_list`, `watch_stop`, `watch_look` (wake only, hidden from chat) |
+| Guards | `pi/watch/store.ts` | No limit on open watches, on looks, or on the next-look time (it only has to be a valid time). Spend is bounded by the wake guards and the proactive budget. A due watch that got no look is moved an hour ahead with a trail line, so one stuck watch cannot wake the brain over and over |
 | Waker | `pi/brain/runner.ts` `extras` | The ticker asks for the soonest next look; a due watch wakes the brain with no event. One wake covers every due watch and every queued event, so the fixed prompt is paid once. The wake text carries every open watch in brief (to match events) and the due ones in full with their recent trail, labelled as data |
 | Cost per watch | `dbo.pi_watch_look` (migration 0088), `watch_list` | One row per look. After a wake its cost is split evenly over what woke it (each event and each watch looked at); `watch_list` shows looks today, last look and an estimated DKK today and this month. Watch wakes spend on the same 100 DKK proactive ledger as the brain, so the same stop applies |
-| Untrusted content | brain policy | What a watch reads (web pages, feeds, repository text) is data. A wake reaches only read-only tools plus its own message, note, trail and look tools; it cannot write, send or start a Worker whatever the text says |
+| Untrusted content | PI instructions | What a watch reads (web pages, feeds, repository text) is data about the world; PI weighs it and decides for itself. A wake has the chat tools plus its own message, note, trail and look tools |
 | Foundry wake-ups | `.github/scripts/probe_pi_wake.py`, Deploy input `probe_pi_wake` | Observed 16 November 2026: the reminder tool is not supported on a harness prompt agent. The probe now only creates a timer routine on a throwaway plain harness agent and reports what happens. Not a dependency |
 
 ## PI brain loop (#1886, P15-175, part 2)
@@ -111,7 +192,7 @@ flowchart TB
     T["30 s ticker<br/>(proactive scheduler)"]
     G{"Exact guards<br/>owner switch, pause,<br/>10 min spacing, 12 wakes a day,<br/>100 DKK budget stop"}
     W["Wake: PI agent, scratch conversation<br/>jarvis-brain skill"]
-    R["Read-only Jarvis tools<br/>+ GitHub and Azure MCP"]
+    R["Jarvis tools, as in chat<br/>+ GitHub and Azure MCP"]
     A["Brain-only tools<br/>message_dan, pi_note, inbox_trail"]
     C["Chat message from Jarvis<br/>stored in Dan's chat, pushed (iOS, mirrored to Watch)"]
     L[("Vault: PI/Log/day.md<br/>PI/Notes, inbox trail")]
@@ -129,7 +210,7 @@ flowchart TB
 | Loop | `pi/brain/runner.ts` | Per tick: switch, pause, due work, spacing, daily count, budget, claim up to 30 events, admit (retry cap, staleness, a lone timer review skipped in quiet hours), `startBatch`, wake, bill, settle or retry, decision log. The old pipeline's rules that judged events (routine build results, hourly caps) are **not** used: the model decides |
 | Wake text | `pi/brain/wake.ts` | Why it woke (events with id, source, kind, age, summary, small detail), the budget note, and a request for a short closing statement. Event text is labelled as data |
 | Gateway | `pi/gateway.ts` `runBrain` | Scratch conversation, brain grant, 240 s deadline, usage recorded as a `brain` turn in `dbo.pi_turn` (tokens, cached tokens, DKK) and through `recordFoundryUsage` (event id `pi:brain:<run>`). A failure is returned with what was billed; a wake that reached the model without a usage report is charged at an estimate |
-| Reading | `pi/brain/policy.ts`, `pi/mcp.ts`, `core/index.ts` | A wake has no owner message. Its grant (`brain`) reaches only listed read-only tools whose call is classified as a read, plus three brain-only tools. The tool route lets the `x-jarvis-brain` header through only for the PI agent principal and applies the same rule again |
+| Tools | `pi/brain/policy.ts`, `pi/mcp.ts`, `core/index.ts`, `core/pi-authority.ts` | A wake has no owner message. Its grant (`brain`) reaches every chat tool plus the brain-only tools (`message_dan`, `pi_note`, `inbox_trail`, `watch_look`). The MCP door sends `x-jarvis-pi: turn` or `wake`; the tool route accepts both headers, and `x-jarvis-brain`, only for the PI agent principal. Tools that normally prove a Dan message accept a wake's stand-in source instead (Google mail and calendar, Factory issues, tasks and projects, vault writes, inbox, reminders), and a PI call picks its project itself instead of matching its name against Dan's message. A wake's own tasks are board tasks without an origin message |
 | Speaking | `pi/brain/comms.ts`, tool `message_dan` | A chat message: stored in the chat feed (the session of the latest message, or a new one), an open app is told to refresh, and the existing reply push is called exactly once (APNs, which the phone mirrors to the Watch). There are no tiers and no second channel; the only cap is 8 messages a day, and exact repeats are refused, so every message that is sent pushes |
 | Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
 | Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
@@ -141,29 +222,33 @@ Not covered: the call channel, the Now card, tiers (owner decision: none for now
 
 ## PI reach: GitHub, Azure and Workers (#1886, P15-175, part 1)
 
-The PI agent gets three kinds of reach. Jarvis tools stay the only way to **change** anything: GitHub and Azure are read-only by construction, and Workers are driven through Jarvis tools that already carry owner-message proof, approvals and receipts.
+The PI agent gets three kinds of reach. GitHub (the full server) and Azure (Contributor on the Jarvis resource group) can read and act, limited only by the token and the role the owner chose; Workers are driven through Jarvis tools that carry owner-message proof, approvals and receipts.
 
 ```mermaid
 flowchart LR
-    PI["PI agent<br/>managed harness, built-ins off"]
+    PI["PI agent<br/>managed harness, built-ins on"]
     JM["Jarvis MCP /pi/mcp<br/>find_tools, call_tool"]
-    GH["GitHub MCP, remote<br/>/mcp/readonly"]
-    AZ["Azure MCP 3.0.0<br/>container, scales to zero<br/>--read-only, Reader only"]
+    GB["GitHub bridge in the backend<br/>token held by the backend"]
+    GH["GitHub MCP, remote, full<br/>/mcp/x/all"]
+    AZ["Azure MCP 3.0.0<br/>container, scales to zero<br/>Contributor on rg-jarvis"]
     PI -->|"connection jarvis-pi-mcp<br/>static secret + per-turn grant"| JM
-    PI -->|"connection jarvis-pi-github<br/>fine-grained read-only token"| GH
-    PI -->|"connection jarvis-pi-azure<br/>project identity, Entra app role"| AZ
+    JM -->|"gh_ tools, searched like the others"| GB
+    GB -->|"fine-grained token"| GH
+    JM -->|"az_ tools, searched like the others"| AB["Azure bridge in the backend<br/>managed identity token"]
+    AB -->|"Entra app role"| AZ
     JM --> W["Workers<br/>create_issue, start_issue, get_work_status,<br/>steer_task, list_tasks"]
     W -->|"task events"| Q[("Event queue<br/>source: worker")]
 ```
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Reach declaration | `agents/pi/definition.json` (`reach`) | One entry per server: label, connection, URL. The same file feeds the provisioner and a test |
-| Attach logic | `.github/scripts/provision_pi_agent.py` (`resolve_reach`, `connect_reach`, `verify`) | A server is attached only when its input exists. A missing input is reported as "not attached: <what the owner must provide>"; a connection that cannot be written leaves the server out, is reported, and fails the job after the agent is defined. Nothing is silent and nothing is retried in a different way |
-| GitHub | remote server `https://api.githubcopilot.com/mcp/readonly`, connection `jarvis-pi-github` (custom keys, `Authorization: Bearer <token>`) | The token is the repository secret `PI_GITHUB_READ_TOKEN`: fine-grained only (the script refuses a classic token), read-only repository permissions chosen by the owner. The read-only URL and the token's own permissions both enforce read-only |
-| Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --read-only --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Foundry project's identity (set up by `infra/setup-azure-mcp.ps1`). Outgoing calls use the container's own system identity with the **Reader** role on `rg-jarvis`; Reader cannot read cost data or secrets. The unauthenticated call returns 401 (observed) |
-| Azure connection | `jarvis-pi-azure`, auth type `ProjectManagedIdentity`, audience `api://<client id>` | **Unproven live.** Learn lists project-identity authentication for agent MCP tools, but one Microsoft sample note says it works through a toolbox only. The first Deploy with the server settles it; if Foundry refuses it, the error code is in the job output |
-| Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | Starting, steering and retrying need the current owner message, so a Worker can only start from Dan's own words in a chat turn, never from text the agent read. Results come back as queue events (below) and as the existing chat notice |
+| Reach declaration | `agents/pi/definition.json` (`github`, `azure`) | GitHub's URL and token env name, and the names of the two old harness connections the Deploy deletes. Neither server is a harness tool. The same file feeds the provisioner and a test |
+| Attach logic | `.github/scripts/provision_pi_agent.py` (`resolve_github`, `resolve_azure`, `configure_backend`, `verify`) | A server is attached only when its input exists. A missing input is reported as "not attached: <what the owner must provide>". The backend gets the GitHub token as a Container App secret and the Azure server's URL and client ID as settings; a withdrawn input is removed again. Nothing is silent |
+| GitHub | remote server `https://api.githubcopilot.com/mcp/x/all` (the all-toolsets URL; the bare `/mcp/` serves only the default toolsets, without Actions and Copilot), reached by the backend (`pi/github-bridge.ts`, a small Streamable HTTP client) and offered through the Jarvis MCP door as tools named `gh_<tool>` | **Not a harness tool.** Attached as a harness MCP tool, the full server put its whole tool list (about 13k input tokens, and a tool listing per turn) in every turn: first text went from 1.1 to 1.5 s to 2.4 to 5.7 s (Deploy 43901841128). Through the door, `find_tools` ranks the GitHub tools with the Jarvis ones and `call_tool` forwards the call, so the harness lists two tools and nothing is lost. The token is the repository secret `PI_GITHUB_TOKEN`: fine-grained only (the script refuses a classic token), held by the backend as the Container App secret `pi-github-token` (env `JARVIS_PI_GITHUB_TOKEN`, a fingerprint in `JARVIS_PI_GITHUB_FP`), no longer in a Foundry connection (the old `jarvis-pi-github` connection is deleted by the Deploy). Its permissions, set by the owner, are the only limit. The tool list is cached for 30 minutes |
+| Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Jarvis backend's managed identity (set up by `infra/setup-azure-mcp.ps1`, which also removes any other holder). Outgoing calls use the container's own system identity with the **Contributor** role on `rg-jarvis`; widening beyond that resource group is the owner's call. The unauthenticated call returns 401 (observed) |
+| Environment note | `pi/context.ts` (`buildPiEnvironment`), wired in `index.ts` | The backend parses the Azure subscription and the Jarvis resource group from its own `BACKEND_CONTAINER_APP_RESOURCE_ID` and adds the GitHub defaults (DanAakesen, DanAakesen/jarvis, DanAakesen/vault). The note is part of the trusted context block (first turn, again on change, every wake); the smoke's Azure turn carries it. No identifier is committed. Without the setting the Azure line is omitted |
+| Azure through the door | `pi/remote-mcp.ts` (the same client as GitHub), backend settings `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` (set by the Deploy), tools named `az_<tool>` | Attached to the harness as an MCP tool with a `ProjectManagedIdentity` connection, the first Deploy with Azure (43924888427) failed the very first turn after about 28 s ("PI stopped before it finished the reply"): the harness fails the whole turn when a server's tool list does not come back, and a scale-to-zero container plus a project-identity token is exactly where that happens. So Azure is a door tool: the backend calls the guarded server with its own managed identity (token for `api://<client id>/.default`, app role granted to the backend identity by `infra/setup-azure-mcp.ps1`), a catalogue read waits at most 8 s in a search but the refresh itself may take 90 s so a cold container can finish starting, `/pi/warm` and the smoke start it, and a call may take 120 s. A failed stream now logs `pi.stream_failed` with the provider's short error code, and the smoke's HTTP 502 shows it |
+| Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | PI starts, steers and retries Workers on its own judgement, in a chat turn or in a wake. Results come back as queue events (below) and as the existing chat notice |
 | Worker results as signals | `workerEvent` in `proactive/events/producers.ts`, subscribed to the task event hub in `index.ts` | Source `worker`, kinds `task.done`, `task.needs_attention`, `task.cancelled`, `task.pull_request_opened` (the queue only accepts lowercase kinds; a test normalises each one), one dedupe key per task and state. They enter the existing queue; the queue has no consumer until the brain (next pull request) |
 | Stream parsing | `pi/gateway.ts` | The harness's `mcp_list_tools` and finished `mcp_call` items are read (labels sanitised) so the smoke and the logs can say which servers are attached and whether a call failed. A failed list or call is logged; it does not by itself fail a chat turn |
 | Smoke | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | Lists the servers the harness reports, runs one read per attached reach server and adds a check for each. The report prints in the job log as well as the summary |
@@ -172,7 +257,7 @@ Cost and latency: the Azure container is 0.25 vCPU and 0.5 GiB and scales to zer
 
 ## PI chat engine (test switch) — 15 November 2026 (#1885, P15-174)
 
-PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, built-ins off) in the existing Foundry project. A chat turn reaches it only when the app sends `engine: "pi"` (the iOS Settings test switch). The default path is unchanged.
+PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, harness built-ins on: shell, filesystem read and write, web and sub-agents) in the existing Foundry project. A chat turn reaches it only when the app sends `engine: "pi"` (the iOS Settings test switch). The default path is unchanged.
 
 ```mermaid
 sequenceDiagram
@@ -205,7 +290,7 @@ sequenceDiagram
 | Warm conversation | `dbo.pi_conversation` (migration 0086), `POST /pi/warm` | One conversation per owner; a warm-up turn primes the cache when the app opens |
 | Ledger | `dbo.pi_turn`, plus `recordFoundryUsage` (role `chat`) | Per turn: tokens, cached tokens, DKK, first-text ms; the monthly hard stop sums it |
 | MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` (injected by the Foundry project connection `jarvis-pi-mcp`) accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
-| Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role |
+| Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role (a test role for the Deploy smoke only) |
 | In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
 | Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
 
@@ -2439,12 +2524,9 @@ injects a CSP that blocks fetch/XHR connections, forms, frames and external scri
 script-message handler or file scheme. Scripts therefore have no native app
 bridge or app data access. The web
 `window.jarvis` actions are not implemented on iOS, so in-app ask/pin/link actions
-remain unavailable. Knowledge-graph, code and unknown-version views remain
-unsupported cards.
-The optional `JARVIS_WEB_APP_URL` is restricted to an HTTPS origin and only
-opens the web-app root because the contract has no item deep link. The app uses
-an existing Keychain session when configured; native sign-in remains a separate
-unimplemented flow. The backend's active-client choice and post-reconnect command
+remain unavailable. Knowledge-graph and code views have native renderers (P15-205);
+unknown-version views show a plain unavailable note. The iPhone has no link to the
+web app. The backend's active-client choice and post-reconnect command
 replay remain unverified, so opening from Workspaces does not assume the command
 targets the phone.
 
@@ -9826,4 +9908,4 @@ failed. Existing historical jobs are not rewritten.
 
 ## Vault layout paths — 15 November 2026 (P15-181)
 
-Jarvis uses one vault layout: task inboxes `Personal/Task inbox.md` and `Work/Task inbox.md`, gym log `Personal/Health/Gym log/` (backend writer, lift delete route, iOS `JarvisGymLogNote`; frontmatter type `gym-log` unchanged) and the agent log folder `_agent-activity`. There is no detection and no second location. The vault mirror (`apps/vault-mirror/src/engine/policy.ts`) excludes the `_agent-activity` segment and, until vault PR #5 has merged, the old `_agent-log` segment; remove the `_agent-log` rule then. The archived `General/Archive/Agent activity log/` is a normal tracked folder and is not excluded.
+Jarvis uses one vault layout: task inboxes `Personal/Task inbox.md` and `Work/Task inbox.md`, gym log `Personal/Health/Gym log/` (backend writer, lift delete route, iOS `JarvisGymLogNote`; frontmatter type `gym-log` unchanged) and the agent log folder `_agent-activity`. There is no detection and no second location. The vault mirror (`apps/vault-mirror/src/engine/policy.ts`) excludes only the `_agent-activity` segment (the local, gitignored live write log); the `_agent-log` rule was removed after vault PR #5 merged. The archived `General/Archive/Agent activity log/` is a normal tracked folder and is not excluded.

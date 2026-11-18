@@ -274,24 +274,32 @@ struct JarvisNewFolderSheet: View {
     }
 }
 
-struct JarvisPinnedItem: Identifiable, Equatable {
+struct JarvisReorderItem: Identifiable, Equatable {
     let path: String
     let title: String
     let location: String
     var id: String { path }
 }
 
-/// Reorder pins: drag handles plus Move up / Move down actions. Pin order is display metadata on this device; no
-/// file is moved or rewritten.
-struct JarvisReorderPinsSheet: View {
+/// Reorder pins or folders: drag handles plus Move up / Move down actions. The order is display metadata; no file
+/// is moved or rewritten. VoiceOver focus stays on the row that was moved.
+struct JarvisReorderSheet: View {
+    let title: String
+    let identifierPrefix: String
     let copy: JarvisNotesCopy
-    let items: [JarvisPinnedItem]
+    let items: [JarvisReorderItem]
     let onChanged: ([String]) -> Void
     let onClose: () -> Void
 
     @State private var order: [String]
+    @AccessibilityFocusState private var focusedPath: String?
 
-    init(copy: JarvisNotesCopy, items: [JarvisPinnedItem], onChanged: @escaping ([String]) -> Void, onClose: @escaping () -> Void) {
+    init(
+        title: String, identifierPrefix: String, copy: JarvisNotesCopy, items: [JarvisReorderItem],
+        onChanged: @escaping ([String]) -> Void, onClose: @escaping () -> Void
+    ) {
+        self.title = title
+        self.identifierPrefix = identifierPrefix
         self.copy = copy
         self.items = items
         self.onChanged = onChanged
@@ -299,12 +307,12 @@ struct JarvisReorderPinsSheet: View {
         _order = State(initialValue: items.map(\.path))
     }
 
-    private func item(_ path: String) -> JarvisPinnedItem? { items.first { $0.path == path } }
+    private func item(_ path: String) -> JarvisReorderItem? { items.first { $0.path == path } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
             HStack {
-                Text(copy[.reorderPins]).font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
+                Text(title).font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
                 Spacer()
                 JarvisSheetCloseButton(title: copy.done, action: onClose)
             }
@@ -316,32 +324,41 @@ struct JarvisReorderPinsSheet: View {
                             if !item.location.isEmpty { Text(item.location).font(.caption).foregroundStyle(.secondary) }
                         }
                         .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
-                        .listRowBackground(JarvisGlassSurface())
+                        .listRowBackground(JarvisGlassRowBackground())
                         .accessibilityElement(children: .combine)
+                        .accessibilityValue(position(of: path))
                         .accessibilityAction(named: Text(copy[.moveUp])) { move(path, by: -1) }
                         .accessibilityAction(named: Text(copy[.moveDown])) { move(path, by: 1) }
-                        .accessibilityIdentifier("pins.row.\(path)")
+                        .accessibilityFocused($focusedPath, equals: path)
+                        .accessibilityIdentifier("\(identifierPrefix).row.\(path)")
                     }
                 }
                 .onMove { source, destination in
-                    order = JarvisPinOrder.moved(order, from: source, to: destination)
+                    order = JarvisManualOrder.moved(order, from: source, to: destination)
                     onChanged(order)
                 }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .environment(\.editMode, .constant(.active))
-            JarvisLabelledButton(title: copy.done, identifier: "pins.done", isFullWidth: true, isEmphasised: true, action: onClose)
+            JarvisLabelledButton(
+                title: copy.done, identifier: "\(identifierPrefix).done", isFullWidth: true, isEmphasised: true, action: onClose
+            )
         }
         .padding(JarvisDesignTokens.notesHorizontalInset)
         .jarvisAmbientBackground()
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .accessibilityIdentifier("pins.sheet")
+        .accessibilityIdentifier("\(identifierPrefix).sheet")
+    }
+
+    private func position(of path: String) -> String {
+        String(format: copy[.positionOf], (order.firstIndex(of: path) ?? 0) + 1, order.count)
     }
 
     private func move(_ path: String, by offset: Int) {
-        order = JarvisPinOrder.moved(order, path, by: offset)
+        order = JarvisManualOrder.moved(order, path, by: offset)
+        focusedPath = path
         onChanged(order)
     }
 }

@@ -28,10 +28,7 @@ export interface PiTurnGrant {
   readonly messageId: string;
   /** The deploy smoke: tools run under the existing read-only smoke role, with no owner message. */
   readonly smoke?: boolean;
-  /**
-   * A brain wake: there is no owner message, so only the read-only brain tools and the brain's own few writes
-   * (message to Dan, notes in its vault area) are reachable, never a tool that needs Dan's words.
-   */
+  /** A brain wake: there is no owner message. It has the chat tools plus the brain's own (message to Dan, notes, trail, looks). */
   readonly brain?: PiBrainRun;
   /** Tools find_tools returned in this turn; call_tool refuses anything else, as the current agent does. */
   readonly discovered: Set<string>;

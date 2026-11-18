@@ -27,7 +27,7 @@ export interface BackendConfig {
   foundryCopilot?: { agentName: string; version: string; fingerprint: string };
   foundryCopilotPolicyCompatibility?: string;
   /** PI chat engine (managed Copilot-harness agent). Present only when its agent name and MCP secret are both set; test-selector only. */
-  pi?: { agentName: string; mcpSecret: string; monthlyCapDkk: number };
+  pi?: { agentName: string; mcpSecret: string; monthlyCapDkk: number; githubToken?: string; azureMcp?: { url: string; clientId: string } };
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
   codexToolModel: string;
@@ -188,8 +188,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (piAgentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_PI_AGENT_NAME is configured');
   }
+  const piGithubToken = env.JARVIS_PI_GITHUB_TOKEN || undefined;
+  if (piGithubToken !== undefined && !/^github_pat_[A-Za-z0-9_]{50,255}$/u.test(piGithubToken)) {
+    throw new ConfigurationError('JARVIS_PI_GITHUB_TOKEN must be a fine-grained GitHub token');
+  }
+  const piAzureMcpUrl = env.JARVIS_PI_AZURE_MCP_URL || undefined;
+  const piAzureMcpClientId = env.JARVIS_PI_AZURE_MCP_CLIENT_ID || undefined;
+  if ((piAzureMcpUrl === undefined) !== (piAzureMcpClientId === undefined) ||
+      (piAzureMcpUrl !== undefined && !/^https:\/\/[A-Za-z0-9.-]+\/?$/u.test(piAzureMcpUrl)) ||
+      (piAzureMcpClientId !== undefined && !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(piAzureMcpClientId))) {
+    throw new ConfigurationError('JARVIS_PI_AZURE_MCP_URL (an https URL) and JARVIS_PI_AZURE_MCP_CLIENT_ID (a GUID) must be set together');
+  }
   const pi = piAgentName !== undefined && piMcpSecret !== undefined
-    ? { agentName: piAgentName, mcpSecret: piMcpSecret, monthlyCapDkk: piMonthlyCapDkk } : undefined;
+    ? {
+      agentName: piAgentName, mcpSecret: piMcpSecret, monthlyCapDkk: piMonthlyCapDkk,
+      ...(piGithubToken ? { githubToken: piGithubToken } : {}),
+      ...(piAzureMcpUrl && piAzureMcpClientId ? { azureMcp: { url: piAzureMcpUrl, clientId: piAzureMcpClientId } } : {}),
+    } : undefined;
   const foundryMemoryEmbeddingDeploymentName = env.JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME;
   if (foundryMemoryEmbeddingDeploymentName !== undefined &&
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(foundryMemoryEmbeddingDeploymentName)) {

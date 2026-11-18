@@ -30,6 +30,8 @@ struct JarvisChatFollowLatest: ViewModifier {
     let bottomID: String
     let contentState: JarvisChatFollowContent
     let sendRevision: Int
+    /// Counts each time the keyboard opens, so the transcript scrolls to the latest message above it.
+    var keyboardRevision = 0
     let jumpToLatestTitle: String
     var isEnabled = true
     @Environment(\.scenePhase) private var scenePhase
@@ -97,6 +99,10 @@ struct JarvisChatFollowLatest: ViewModifier {
             }
             .onChange(of: sendRevision) { _, _ in
                 follow.messageSent()
+                revision += 1
+            }
+            .onChange(of: keyboardRevision) { _, _ in
+                follow.keyboardOpened()
                 revision += 1
             }
             .onChange(of: isEnabled) { _, enabled in

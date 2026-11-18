@@ -1,3 +1,4 @@
+import { isPiCall } from '../core/pi-authority.js';
 import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
@@ -232,8 +233,10 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
         }
       }
 
-      const message = await currentOwnerMessage(request, ownerObjectId, signal);
-      const intent = await resolveProactivePreferenceIntent(
+      // The PI agent decides the change itself; for the older chat path the server matches it to Dan's own words.
+      const pi = isPiCall(request);
+      const message = pi ? { text: '' } as Awaited<ReturnType<typeof currentOwnerMessage>> : await currentOwnerMessage(request, ownerObjectId, signal);
+      const intent = pi ? input.intent : await resolveProactivePreferenceIntent(
         message.text,
         [input.intent],
         approvalDeciderFor(request),
@@ -262,9 +265,11 @@ function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTo
         throw new ToolFailure('Proactive preferences could not be saved. Nothing was confirmed.');
       }
       if (signal.aborted) throw new ToolRefusal('The request was cancelled. Nothing was changed.');
-      const current = await currentOwnerMessage(request, ownerObjectId, signal);
-      if (current.text !== message.text || current.id !== message.id || current.sessionId !== message.sessionId) {
-        throw new ToolRefusal('The current owner request changed. Nothing was changed.');
+      if (!pi) {
+        const current = await currentOwnerMessage(request, ownerObjectId, signal);
+        if (current.text !== message.text || current.id !== message.id || current.sessionId !== message.sessionId) {
+          throw new ToolRefusal('The current owner request changed. Nothing was changed.');
+        }
       }
       signal.throwIfAborted();
       try {

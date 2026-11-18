@@ -9,18 +9,26 @@ public struct JarvisLatticeOrbView: View {
     let activity: JarvisOrbActivity
     let isStatic: Bool
     let isPaused: Bool
+    let adaptsToLowPower: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var clock = JarvisLatticeClock()
+    @State private var isCheap = JarvisNeuralRendering.usesCheapPath
 
     /// `isStatic` draws one still pose (Live Activities, widgets, previews). `isPaused` holds the current frame
-    /// while the orb is covered.
-    public init(activity: JarvisOrbActivity, isStatic: Bool = false, isPaused: Bool = false) {
+    /// while the orb is covered. `adaptsToLowPower` draws half the frames on the neural background's cheap path
+    /// (Low Power Mode, the Simulator), for the orb that sits behind every page.
+    public init(
+        activity: JarvisOrbActivity, isStatic: Bool = false, isPaused: Bool = false, adaptsToLowPower: Bool = false
+    ) {
         self.activity = activity
         self.isStatic = isStatic
         self.isPaused = isPaused
+        self.adaptsToLowPower = adaptsToLowPower
     }
+
+    private var frameInterval: Double { adaptsToLowPower && isCheap ? 1.0 / 15.0 : 1.0 / 30.0 }
 
     public var body: some View {
         GeometryReader { proxy in
@@ -29,7 +37,7 @@ public struct JarvisLatticeOrbView: View {
                 if isStatic || reduceMotion {
                     orb(frame: clock.frame(at: nil, activity: activity), side: side)
                 } else {
-                    TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused || scenePhase != .active)) { timeline in
+                    TimelineView(.animation(minimumInterval: frameInterval, paused: isPaused || scenePhase != .active)) { timeline in
                         orb(frame: clock.frame(at: timeline.date, activity: activity), side: side)
                     }
                 }
@@ -37,6 +45,9 @@ public struct JarvisLatticeOrbView: View {
             .frame(width: side, height: side)
         }
         .aspectRatio(1, contentMode: .fit)
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            isCheap = JarvisNeuralRendering.usesCheapPath
+        }
     }
 
     private func orb(frame: JarvisOrbFrame, side: CGFloat) -> some View {

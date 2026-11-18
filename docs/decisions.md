@@ -1,6 +1,223 @@
-## PROPOSED, NOT IN EFFECT — PI cutover flip: PI becomes the default, with the old path behind an explicit value (#1887, P15-176, part 3, draft pull request)
+## 17 November 2026 — The PI smoke runs as three requests, not one (#1910, P15-209)
 
-Becomes a decision only when the owner approves it in writing. The flip is the only change in its pull request: the server treats a missing `engine` as PI (chat and voice), `current` is the explicit old path, and the iOS test switch defaults to PI. Settings, General, "Engine test switch" stays until phase 8; its explanation then says PI is the default, and the Chat header's "PI test" pill shows by default until phase 8.
+After the Azure MCP wake-up fix, `measure_pi` still failed with HTTP 504. The backend log showed the Azure read inside the smoke completing in 7.3 s, so Azure reach worked; the whole smoke (cold turn, warm turns, tool and voice turns, GitHub, Azure and four tool-choice turns, each one to fifteen seconds) now takes about four minutes, and the Container Apps ingress ends one request at 240 s.
+
+| Choice | Why |
+| --- | --- |
+| `POST /pi/smoke` requires `part`: `core` (baseline, cold, warm, tool and cancelled turns), `voice` (the PI leg of a voice turn) or `reach` (GitHub, Azure, tool choice). Each part has its own scratch conversation and reports its own checks and cost | No request approaches 240 s, and the checks and what they measure are unchanged. The voice turns now start a fresh conversation instead of following the warm turns; the voice checks do not depend on that |
+| The workflow script calls the parts one after another and merges checks and cost into the one summary | One summary, one pass or fail, as before. A failing part names itself in the error. There is no unsplit path |
+| Each part is cut off at 220 s inside the backend and 235 s in the script | A part that is slow fails visibly under 240 s instead of as a 504 with no detail |
+
+
+## 17 November 2026 — The Azure MCP server's cold start must not look like "Azure is not attached" (#1910, P15-208)
+
+Two `measure_pi` Deploys on main failed after the voice-visuals merge: the first on `reach_azure` and `mcp_listing` (GitHub and the other checks passed), the second as "HTTP 504, no detail". The agent was v15 with Azure and GitHub attached, and an earlier run had listed 17 Azure tools and read 22 resources.
+
+**What the Deploy logs show.** In the first run the model answered "the Azure tools aren't attached" and the smoke recorded "azure: FAILED to list" while GitHub listed 118 tools. The second run's PI step ran from 21:01:47 to 21:05:49, 242 s: the smoke is one request and the Container Apps ingress ends a request at 240 s. In the earlier passing run the Azure turn took 50 s, so a cold start was already tens of seconds.
+
+**Cause, from the code (the build environment has no Azure access; the container logs below were read by the owner's session).** The Azure MCP server scales to zero (0.25 CPU, 0.5 GiB). The backend loaded its tool list only when a search asked: that search waited 8 s and returned nothing, so PI said Azure was not attached. The background refresh was cancelled after 90 s, before a slow cold start could finish, and the failure was then cached for 60 s with an empty list, so a search or the smoke in that minute saw "no tools" without trying again. The smoke then waited up to 100 s per server one after the other, which can push it past 240 s. No change in #1933, #1934, #1936 or #1953 touches this path; what changed is that the earlier run found the server already awake.
+
+| Choice | Why |
+| --- | --- |
+| The backend starts loading each remote catalogue when it starts (`bridge.warm()`), and `/pi/warm` calls the same | The wake happens at deploy and when the app opens PI, not inside the owner's first question. The list is kept 30 minutes, so Azure questions after that do not need the server awake |
+| The refresh may run 200 s, not 90 s | The ingress holds a request for a stopped app up to 240 s; cancelling earlier killed a start that was about to finish |
+| A failed first list is not cached; the next search retries (single-flight). With a list in hand, a failed refresh keeps it and retries in a minute | The 60 s empty cache turned one slow start into a minute of "no tools" |
+| `find_tools` adds a note when a server is still loading or unreachable (with a reason that never repeats server text); the PI instructions say what to do with it | A server PI has not heard from yet is not "not attached". This is information for the model, not a gate: nothing is blocked or routed elsewhere |
+| The smoke lists both servers at once and reports the failure reason; the Deploy sends one request to the Azure MCP server first and prints the HTTP code and time | Keeps the smoke inside the ingress limit and turns the next run into evidence: the printed time is the cold start, the reason says timeout, HTTP status or connection |
+
+**Container log evidence (added after the owner's session read `ContainerAppConsoleLogs_CL`, 17 November).** In the first failing run the Azure MCP container started at 20:54:36Z and listened on :8080 two seconds later; its first MCP request arrived at 20:54:45Z and finished as HTTP 499 after 5.6 s, which means the client closed the request. There was no server error, crash or out-of-memory line. So the server is ready within seconds and the failure is a client that gave up on the first, slow call (the first request on a fresh .NET process). Which client timeout fired was not identified from the logs; waking the server at backend start, a refresh that is retried at the next search instead of cached as empty, and the model being told the server is still loading cover it whichever it was.
+
+To confirm: run `measure_pi`. If Azure still fails to list, the smoke line now says why, and `ContainerAppConsoleLogs_CL` for `ca-jarvis-azmcp-*` is the next place to look (an out-of-memory restart at 0.5 GiB would show there and would call for more memory, not a longer wait).
+
+
+## 17 November 2026 — Voice visuals reach the phone through `workspace_command`; the panel belongs to the session; one eased orb (#1939, P15-205)
+
+Build 112 findings: visuals in voice did not work, Jarvis did not know it could show them, a card was on screen when voice started, the orb moved without an easing, `show_in_chat` failed, Show data and some buttons did not work, and the owner feared a route to the web workspace.
+
+| Finding | Root cause (from the code) | Choice |
+| --- | --- | --- |
+| Jarvis did not know it could show visuals in voice | The PI instructions said a voice turn "uses none of this" and to search by what a thing is, never how it looks; the per-turn voice note said only to keep answers short and offer chat; the `workspace_command` description opened with its target rules, and `find_tools` gives only the top three matches their full description (the rest are cut to 240 characters), so a search that did not rank it first never showed the visual use | The model is told, never gated: the voice note (every spoken turn), the PI Voice section, the lead of the `workspace_command` description and the realtime voice instruction say the phone shows what Jarvis puts on screen, and name the tool. Nothing decides for the model when to show something |
+| Visuals could go to a browser tab | `target: active` is the device that reported its snapshot last; the phone reported only when it connected | `WorkspaceRuntime.reportActive()` runs when Voice opens and starts, so the phone is the latest reporter |
+| `show_in_chat` in a spoken turn | A PI voice turn carries no voice header, so the tool queued a block in a voice session that no reply would ever take | The tool checks the session's channel and refuses anything but a typed chat session, pointing to `workspace_command`. One check replaces the voice-header check |
+| Card at voice start, with an "Open web app" link | **Inferred from the code, not reproduced:** content presented earlier stayed in `presentedView` (for example when a sheet could not show over another and was never dismissed) and the Voice page rendered it as the panel; knowledge-graph and code views, which the backend pushes when "show work" is on, had no iPhone renderer and showed an unsupported card whose link opened the web app | Starting a new voice session drops what was open (content presented while a session is minimised still carries over into the panel). The two views now draw natively (code with line numbers; the graph card gives the count and opens the Notes graph). The web link, `JARVIS_WEB_APP_URL`, its Info.plist key and `makeWebAppURL` are removed; no iPhone path opens the web app |
+| Orb moved without an easing | The orb's size followed a measured height set inside an animation on the way in, but reset without one on the way out, so it snapped back; expanding the panel was not animated at all | One animation on the page, keyed to the panel height, covers open, resize and close; the expand button animates with the same curve. `JarvisDesignTokens.voicePanelMotion` is `.smooth(duration: 0.55)`: eased, keeps velocity when interrupted. Reduce Motion: no animation |
+| Header | Title, expand and close sat on one row with the title first | A row of its own: close and expand at the top left, then the title the content gives; the content scrolls below it |
+| Buttons Jarvis said it could not do | The phone only opened `/usage` and `/settings`, refused move, resize, place, arrange and the bulk window operations, and ignored `taskId` and the `knowledge` page | Every route in the contract opens its native screen (a task route opens that task; project and release routes open the Factory page, which has no deep link to them); on a phone a view is one at a time, so move, resize, place and arrange bring the named view forward, minimise-all and close-all hide it, restore-all brings the last back; `knowledge` opens the Notes graph |
+| Show data | Open state lived in the block view, which a lazy list discards when it scrolls away | The open state is held in the chat model by block id. Forecasts get View data and Copy data; every renderable block has Copy data |
+
+Not fixed, stated plainly: the cause of the `show_in_chat` failure row could not be established. A PI turn runs the tool correctly through the real door for a forecast, a two-panel chart, a list and a table (new test), and its refusals name the field. The `call-tool` action type has no executor on the web or the phone; it still reads as unavailable. Browser sessions and the web app are unchanged.
+
+
+## 17 November 2026 — Tool activity: icon from the tool identifier, state from real events only (#1941, P15-204)
+
+- **Icon by tool type.** `ChatToolKind` maps the stable tool identifier (exact names first, then whole words such as `deployment`, `browser`, `write`) to document, pencil, terminal, globe, gear, cloud or, when nothing fits, the generic tools glyph. It never reads the localized label, and an unknown tool keeps the generic glyph rather than borrowing another tool's icon. The same icon is used in every state.
+- **State from events.** Started with no outcome is running; `ok` is success; `error` is failure; `refused` is refusal. A final reply never turns a running call into a success. A group is running while any child runs, then failed, then refused, and succeeded only when every child succeeded.
+- **Colour.** Success uses the primary accent (orange). Failure is red and refusal is grey, so neither looks like success, and each also says "Failed" or "Not allowed" in text so colour is not the only cue. Running and success carry no visible text; VoiceOver gets "tool, status" from the existing localized strings.
+- **Motion.** Running draws a short bright arc sweeping around the icon outline and a brighter band across the action text, both on a 1.4 s loop driven from the clock (`TimelineView`), so a state change ends them in the same frame and no animation state can get stuck. The icon never scales, pulses or glows. Reduce Motion shows a static row with a trailing ellipsis on the running label.
+- **Queued is not built.** The backend sends `tool-call-started` and `tool-call-finished` only; showing "queued" would be invented. If a queued event is ever added, it gets a white static icon with no motion.
+- **Cancellation.** There is no cancelled outcome today; `refused` is the only non-failure stop and keeps its own grey state.
+- **Scope.** The counts in the "Working" and "Tool activity" headers and the "×N" and status summary in groups are removed as the handover requires. Expansion rules, identifiers and the transcript scroll follow code are unchanged.
+- **Not verified.** The 1.4 s timing and the trace at native icon size need a device look, as the handover says.
+
+## 17 November 2026 — Graph selection pill is SwiftUI text; link lines get stronger (#1940, P15-201)
+
+- Decision: the selected note's name over the 3D graph is a SwiftUI view laid over the `Canvas`, not canvas text. Canvas text cannot wrap inside a measured border, which is why build 112 showed long titles wider than the pill. The pill wraps at up to 280 pt (less on a narrow scene) onto at most two lines, and its placement (above the note, clamped inside the scene, below the note at the top edge) is a pure function in `JarvisCore`, tested on Linux.
+- Decision: link lines are drawn at 0.50 opacity and 1.2 pt (was 0.30 and 1.0 pt); similarity lines 0.20 and 0.7 pt. Emphasised links keep the 0.8 ceiling. The ceiling stays below a note's full strength on purpose: the owner liked how the graph "looks and feels good and alive", so lines are raised, not turned into a web. One more step up or down is a one-constant change in `JarvisGraphLinkStyle`.
+- Unchanged: Reduce Motion and Background motion off still give one still pose; no extra timeline runs for the pill.
+- Evidence: the owner's build 112 comment on #1940; Linux unit tests for link ordering and pill placement. Real-vault strength is not yet seen and awaits the TestFlight check.
+
+## 17 November 2026 — PI reaches `show_in_chat` through the door, not as its own tool (#1925, P15-190)
+
+Deploy run 44030138506 (`measure_pi`) failed in the PI smoke with "PI asked for an approval or client tool the gateway does not answer" (HTTP 502). The gateway raises that when the stream carries a `function_call` or `mcp_approval_request` item. The only change to PI between the last passing measure run and this one was one instruction line that said "I call `show_in_chat`" and "I call `weather`" as if they were tools of PI's own. PI's only MCP tools are `find_tools` and `call_tool`; naming another tool as directly callable invites a call the harness reports as a client function call. The line now says these are Jarvis tools reached through `find_tools` then `call_tool`, and that voice turns use none of it. **Cause inferred from the code and the diff, not proven from the provider stream; confirm with the next `measure_pi` run.** No gate or fallback was added; the definition (`requireApproval: never`) is unchanged.
+
+## 17 November 2026 — Voice bottom panel: one presented view, shown where the owner is (#1925, P15-191)
+
+| Choice | Why |
+| --- | --- |
+| The content Jarvis opens (`workspace_command` create/update/show, saved items) is still one `presentedView` in `WorkspaceRuntime`; on the Voice page it renders as a bottom panel, on every other page the existing sheet | The owner approved the panel for Voice only and no sheet for typed Chat blocks (which are now inline). The Workspaces page and background results still open as a sheet, because that is an explicit "open this" and has no message to live in. One content model, two presenters chosen by page, no second pipeline |
+| Leaving the Voice page dismisses the panel without forgetting the view | Otherwise the content would reappear as a sheet over Chat. Jarvis can `show` it again |
+| Close dismisses the panel only; the session, orb, status and the four controls stay. A connection recovery replaces the controls and hides the panel until it ends | Reference behaviour; recovery actions must stay reachable |
+| Expand and collapse are shown only when the content needs more room, and use the same button to return | The reference's open-detail affordance is kept only where it does something; the return path is the same control |
+| The panel is capped (about a third of the height, up to what remains after the controls, captions on screen and a small orb); the orb area follows the panel's measured height | The orb and status stay visible, the controls stay usable, and long content scrolls inside the panel. The drag-to-minimise gesture ignores drags that start in the panel |
+| The status line already shows the real session state (`statusText`); the reference's "Connecting" is not copied | Production must display actual state |
+| Source status shows in the panel: running (progress), partial and unavailable (reason) | No fabricated success; unsupported renderers keep their existing card |
+
+## 17 November 2026 — Conversational blocks are typed data inside the assistant message (#1925, P15-190)
+
+Dan's design principle for #1925: model-driven and free-form wherever possible, deterministic only where exact results are needed; no restrictions, gates, fallbacks or old-plus-new code paths; never execute model-produced code.
+
+| Choice | Why |
+| --- | --- |
+| A block is typed data, not code. Three types: `forecast`, `chart` (panels, each with one unit and its own scale) and `view` (an existing generated view: text, list, table, detail, timeline, task-card, status or image) | The existing renderers and `GeneratedView` contract already cover most results, so `view` reuses them. A forecast card and a multi-unit chart are the two things they could not express exactly (a chart there has one shared scale and no unit), so those two are new. Contract: `packages/contracts/src/chat-blocks.js` |
+| The model chooses the type through one tool, `show_in_chat`, nudged by instructions and the tool description; the backend validates the shape and size and stamps the id and, when the model gives none, the issue time | Model-driven where free-form, deterministic where exactness matters (validation, ids, time). No classifier or gate decides when a block appears |
+| Blocks are saved in the assistant message's `dbo.messages.metadata` JSON (`{ "blocks": [...] }`), written when the reply is stored | The durable conversation store already carries per-message metadata; no migration, no second store. History reads return them with the reply, so scroll, navigation, restart and reload all show the same stored block. Nothing refetches or regenerates it |
+| Pending blocks live in memory only for the length of one turn (`ChatBlockBuffer`), keyed by session, and are dropped when the turn fails | The turn that wrote the tool call owns the block; a failed turn leaves no orphan |
+| `weather` gained `report` (false returns values only, nothing opened) and `hourly` (temperature °C and rain probability %, null for a missing hour) | Without hourly values the approved chart cannot be real, and the default report would open a window that typed Chat no longer wants. The default behaviour is unchanged |
+| iOS decodes a block leniently: an unknown type or version, or data that does not fit, becomes a readable fallback (title and text alternative); an entry that is not a block at all is dropped | One bad block must never cost the message or the history page |
+| Forecast heading is built from the block's own place and date; each block shows its source and issue time; the chart has a data table and Copy data in its ellipsis menu, selected-point values, distinct markers per series, and a text alternative. Only charts have a menu | The heading cannot disagree with the values; no inert menu on blocks that have no action |
+| Inline `view` blocks carry only open-route and open-link actions | Windows and tool calls have no meaning inside a message |
+
+Not done: the web app shows the reply text only; the next model turn sees the reply text, not the block data (it fetches again on request, which is the explicit new request the design allows).
+
+## 16 November 2026 — Voice bottom panel selected; Chat content lives in the conversation (#1925)
+
+Dan selected contextual option 1, Bottom panel, for Voice only. The [reference board](ui/jarvis-window-sheet/voice-bottom-panel-reference.png) contains both contexts; only its right-hand Voice design is approved. The orb and status remain above the panel and the four voice controls remain below.
+
+For Chat, Dan replaced the sheet direction with generative UI inside assistant messages. Weather forecasts and on-demand graphs must remain findable in conversation history. Dan subsequently approved **Conversational blocks**, with a forecast reply followed by a separately requested chart reply. His selection says "number 2 conversation blocks"; the matching named image is labelled 3. Use the [named approved reference](ui/chat-generative/approved-conversational-blocks.png), not the chart-led alternative. This is a product/design decision, not implementation or persistence verification. The [combined handover](ui/approved-handover-2026-11-16.md) records the approved scope and acceptance checks.
+
+## 16 November 2026 — Graph 2 approved; window sheets need actual screen context (#1924, #1925)
+
+Dan approved the [Graph 2: Folder clusters visual](ui/graph-3d/approved-folder-clusters.png). The design groups connected notes in spatial folder clusters while retaining the existing bottom dock. Approval selects the visual direction; it does not establish implemented interaction or verified device performance.
+
+Dan rejected the first three sheet concepts and supplied screenshots of the actual Chat and Voice pages. The next three alternatives must show presentation within both contexts, including the existing composer, lattice orb and microphone/plus/CC/hang-up controls. No sheet alternative is approved.
+
+## 16 November 2026 — App polish from build 111 (#1923, P15-185)
+
+| Choice | Why |
+| --- | --- |
+| Every list row takes its background from one shared surface, the glass of the glass buttons | Owner: all list rows should look like the two glass buttons. One modifier, so a later change reaches every list. Cards and fields are not rows and keep the material. HIG favours regular glass for text-heavy areas; the rows keep the buttons' light fill and Reduce Transparency still gives a solid fill |
+| The orb sits behind every page through `jarvisPageBackground()`; sheets and forms do not get one | Owner: the orb on all pages. The page chrome owns it, so no screen draws its own. Calm effects on pages, full in Chat |
+| A pinned row's swipe only unpins, at any length | Assumption, to be confirmed: a long swipe on a pinned note opened the delete confirmation, so it did not look like "swipe unpins". Delete is still in the reader, the task sheet and the accessibility action. No new limit on what can be deleted |
+| Edge-swipe back uses the system gesture for pushed pages and the same edge for Notes folders; the back button stays | Standard iOS behaviour; supplements the button as HIG advises. Pages hide the navigation bar, which turned the system gesture off |
+| Opening the Chat keyboard always resumes following the latest message | The owner expects the newest message above the keyboard, also after scrolling up |
+
+## 16 November 2026 — Manual folder order is owner data in the backend, not device state (#1920, P15-183)
+
+The owner asked for a manual sort of the vault folders ("iOS app: manual sort please"); Obsidian has none.
+
+| Choice | Why |
+| --- | --- |
+| The order is stored by the backend per owner and parent folder (`dbo.notes_folder_order`, migration 0089), keyed by folder path | Pins are device-local, but the owner wants one order on the phone and later on Windows. The smallest backend piece is one table and two owner-only routes |
+| It is display metadata only: no rename, no move, no number prefix, nothing written to the vault | Folders are the owner's vault structure; a view preference must never change it |
+| Unlisted folders sort after the ordered ones, alphabetically; a listed folder that is gone is ignored; saving a parent replaces its whole list | Deleted or renamed folders cannot break the order, and a new folder simply appears at the end. Stale rows are dropped the next time the owner reorders that parent |
+| Manual is a third Sort by choice and Reorder folders is a menu action; reordering switches to Manual. Notes in a folder keep Updated or Title (Manual lists them by title); pinned notes keep Reorder pins | He asked for notes to keep their sort; pins already have their own order |
+| A failed save closes the sheet, shows the stored order and says so | No false success and no second copy of the order on the device |
+| The selected sort is a device preference (`@AppStorage`) | Without it the manual order would be invisible after every relaunch; the order itself is not device state |
+| The folder chooser (destination picker) keeps its alphabetical order for now | Not asked for; one follow-up if wanted |
+
+This replaces "Manual note sort" in the 15 November list of things not built, for folders. Notes themselves still have no manual order.
+
+## 16 November 2026 — Build 111 bugs: nudge the model, restrict nothing (#1922, P15-184)
+
+| Choice | Why |
+| --- | --- |
+| PC control is steered by wording only: a "Choosing tools" section in the PI instructions, a line in the `find_tools` description, a "use when Dan asks to use his PC" lead on the PC and browser tool descriptions, and a matching line in the old engine's instructions. No gate, no approval step, every tool stays available | Owner: "I want it to be intentional ... it should be smart about its tool selection", with the agreed approach of model-driven nudging, not restrictions |
+| The Azure question that opened a browser ran on the old engine, which has no `az_` tools. The default engine is not changed here | Owner decision: the cutover (#1910) needs his written word. The old engine is told to say so plainly when it lacks a tool |
+| The Deploy smoke reports tool choice on natural prompts and does not fail on it | A model's choices are measured and read, not asserted; the smoke role refuses every action but its reads, so a PC request cannot act |
+| The voice WebSocket handshake starts reading at once and fails after 15 s | A pong is only handed over while a receive is outstanding, and nothing bounded the wait, so a stalled handshake showed "Connecting" for ever. Failure is now visible (existing error and retry), not a fallback |
+| The WebSocket ping handler resumes its continuation through `ResumeOnce` | The build 111 crash log showed `CheckedContinuation.resume` trapping a second time in `URLSessionWebSocketTransport.connect` every time a voice session closed: the ping handler fires again on close. Root cause, not a guard around the symptom |
+| A failed chat turn shows the server's own plain message and a Retry button; the backend logs the provider's error code from a closed list | The cause of `model_response_incomplete` was invisible; the app dropped the user's message and the server text |
+
+## 16 November 2026 — PI knows its environment: a runtime note, not committed identifiers (#1886, P15-175)
+
+After #1918 every smoke check passed except the Azure read: PI called `group_list` and Azure answered that it needs a subscription ID or name. That is missing context, not a restriction.
+
+| Choice | Why |
+| --- | --- |
+| The backend builds an environment note at startup (`buildPiEnvironment`) from its own settings: the Azure subscription and the Jarvis resource group are parsed from `BACKEND_CONTAINER_APP_RESOURCE_ID`, plus the GitHub defaults (account DanAakesen, default repository DanAakesen/jarvis, vault DanAakesen/vault). It goes into the trusted context block with the first turn, again when it changes, and into every brain wake | PI can call Azure tools on the first turn without asking. The public repository holds no subscription ID: it exists only in the running backend and in the Foundry conversation |
+| `agents/pi/instructions.md` gets a short "My environment" section: the stack and the repository layout, no identifiers | PI is useful on the first turn: it knows what Jarvis is made of and where things are |
+| The smoke's Azure turn carries the note and lists the resources in the Jarvis resource group using the defaults | It exercises a tool end to end with the real defaults |
+
+## 16 November 2026 — Azure reaches PI through the Jarvis door too, not as a harness tool (#1886, P15-175)
+
+Deploy 43924888427 attached the Azure MCP server to the harness (a `ProjectManagedIdentity` connection to the scale-to-zero container) and the smoke's very first call failed after about 28 s with "PI stopped before it finished the reply": every earlier measure_pi run had passed, so Azure was the new thing. Foundry's own error was not visible (the gateway discarded it), but the shape is known: the harness fails the whole turn when an MCP server's tool list does not come back, and a cold container plus a project-identity token (marked "unproven live" since the design) is where that happens. This would have broken PI chat for everything, to keep one optional server.
+
+| Choice | Why |
+| --- | --- |
+| Azure is offered through the Jarvis MCP door as `az_<tool>`, exactly like GitHub (one client, `pi/remote-mcp.ts`); the harness lists only the Jarvis door | A slow, cold or unauthenticated Azure server can no longer fail a turn, no Foundry connection or project identity is involved, and all capability stays. The earlier lesson (GitHub as a harness tool cost 13k tokens and seconds a turn) points the same way |
+| The backend calls the guarded server with its own managed identity (`api://<client id>/.default`); `infra/setup-azure-mcp.ps1` grants the app role to the backend identity and removes any other holder. The Bicep outputs `backendIdentityPrincipalId` | The Deploy has no Microsoft Graph rights by design, so the grant stays an owner-run step (idempotent). Until it is run, Azure is simply not found by `find_tools`; chat is unaffected |
+| A catalogue read waits at most 8 s for a search, but the refresh may take 90 s; `/pi/warm` and the smoke start it; a call may take 120 s; failures are cached for a minute | A container that scales from zero can finish starting in the background, and a search of the local tools never waits for it |
+| The Deploy deletes both old harness connections (`jarvis-pi-github`, `jarvis-pi-azure`), and the provisioner sets or removes `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` on the backend | A withdrawn input leaves nothing behind |
+| A failed stream logs `pi.stream_failed` with the provider's short error code (letters, digits and `_.:-` only; never its message) and the smoke's 502 shows it | The next failure names itself |
+
+## 16 November 2026 — The harness built-ins stay on; what they cost was measured (#1886, P15-175)
+
+Owner direction, as before: no restrictions on PI. The built-ins (shell, filesystem read and write, web, sub-agents) were turned on in #1914 and their cost was measured with one variant per Deploy (the `pi_experiment` input from #1916).
+
+| Measured | Built-ins on | Built-ins off (Deploy 43917007448) |
+| --- | ---: | ---: |
+| Fixed-prompt input tokens per turn | about 14.1k | 7.7k |
+| Warm first text (chat) | 2.0 to 2.8 s | 1.1 to 1.3 s |
+| Voice plain, first text | 1.7 s | 1.4 s |
+| Voice with a tool, first text | 1.8 s | 1.5 s |
+
+| Choice | Why |
+| --- | --- |
+| Built-ins stay **on**, no partial removal | They cost about 6.4k input tokens a turn, about 0.8 s on warm chat first text and about 0.3 s on voice. The dispatcher decided, in line with the owner's unrestricted goal, that the capability is worth it. The full agent was restored by Deploy 43917784950 (experiment `none`). The switch remains `builtinTools` in `agents/pi/definition.json`, and `pi_experiment` on Deploy for measuring |
+| The `skills_off` variant was not run | The four skill descriptions are about 0.25k tokens (the bodies are read only when a skill is used), so the result could not matter |
+| The target of warm first text under about 1.5 s is not met with built-ins on | Accepted. Voice, the latency-sensitive path, is 1.7 to 1.8 s |
+
+## 16 November 2026 — PI has no hard-coded restrictions: wakes act, built-ins on, no watch limits (#1886, P15-175)
+
+Owner, 16 November 2026, recorded as given: "If you keep adding restrictions we will never succeed with getting it to do what we want." This follows the entry below (full GitHub server, Azure Contributor) and removes what was left in PI's own path. The earlier statements that a wake can only read, that Workers and watches need Dan's own message, and that the built-ins are off are superseded.
+
+| Choice | Why |
+| --- | --- |
+| A brain wake has every chat tool plus its own (`message_dan`, `pi_note`, `inbox_trail`, `watch_look`); the read-only list and the "effect classification" gate are deleted | The owner wants PI to act in a wake (Workers, mail, tasks), not only look |
+| The PI agent's tool calls carry `x-jarvis-pi: turn` or `wake`. In a wake the tools that normally prove a Dan message (Google mail and calendar, Factory issue, task and project tools, GitHub App writes, vault writes, inbox, owner reminders) accept a stand-in source that is attributed to no one; a wake's own tasks are board tasks without an origin message. For any PI call the project is the one PI names, not one matched against Dan's words, and proactive preferences are changed as PI decides | There is no owner message in a wake, and in a turn PI is the one who reads Dan's message. The header is accepted only from the PI agent principal |
+| No approval, confirmation or "needs Dan's own message" rule in PI's instructions, skills or tool descriptions | PI uses its own judgement. Kept: external text is data about the world, not a message from Dan |
+| Watches: no limit on open watches, no limit on looks, no minimum gap, no horizon; a wake can open and change watches | The proactive budget and the wake guards bound spend. Kept as technical: a next look must be a valid time, and a due watch that got no look moves an hour ahead so one stuck watch cannot wake the brain in a loop |
+| GitHub is offered through the Jarvis MCP door as `gh_` tools, not as a harness MCP tool | Measured after the full server was attached to the harness (Deploy 43901841128): input tokens per turn about 31k (17.7k before), warm first text 2.4 to 5.7 s (1.1 to 1.5 s before), a tool turn 95k input. The harness lists every tool of every MCP server in every turn. The next Deploy (43905474658, built-ins also on) measured about 37.5k input tokens, warm first text 3.5 to 4.3 s, voice plain 4.1 s and voice with a tool 8.9 s. Options checked: (a) GitHub's remote server has no dynamic or tool-search mode (its docs have toolsets, individual tools, read-only, lockdown, insiders and feature flags only); (b) tool search with `defer_loading` exists for the Azure OpenAI Responses API, but nothing says the harness prompt-agent definition accepts it, and a wrong field fails agent-version creation, so it cannot be tried safely; (c) our own `find_tools` pattern works today. Chosen: (c). The backend holds the token and a small MCP client, so PI keeps every GitHub tool and the prompt carries none until a search asks for them. The token also leaves the Foundry project connection, where project members could read it |
+| Harness built-ins on (`default_config.enabled: true`: shell, filesystem read and write, web, sub-agents) via `builtinTools: "enabled"` in `agents/pi/definition.json`; the provisioner reads it and the readback must match | Documented names are `filesystem_read`, `filesystem_write`, `shell`, `web` and `subagents`; the web tool covers fetching, and there is no separate web-search or file-input name (an unknown name makes agent-version creation fail), so none is configured. Foundry's own default is all five on |
+| **Measurement still open.** The Deploy `measure_pi` run needs the production Foundry project and a Deploy, which this change does not run. After merge and Deploy, compare first-text time and input tokens with the baseline (warm first text 1.1 to 1.3 s, cold 3.3 s, about 17.7k input tokens per warm turn; `docs/harness-trial/spike-results.md`). Rule from the owner: keep the built-ins on unless first text gets clearly worse (more than 2x); then set `builtinTools` back to `"disabled"` | The built-ins add tool descriptions to every prompt, so the effect has to be measured, not assumed |
+| Kept, because the owner set them: the 100 DKK proactive budget and the chat cap. Kept as guards on a wake's cadence and noise, not on capability: at least 10 minutes between wakes, at most 12 wakes a day, at most 8 `message_dan` messages a day with exact repeats refused | Reported to the owner as remaining limits; removing them is one change each |
+| Left as technical, not policy: memory writes (they bind to a stored Dan message), Health changes and watch-for-camera (they act inside a live chat or voice session), the Gmail direct-access rule for computer use, secret scanning on vault writes and messages, the smoke role (Deploy test only) | A wake or a turn has nothing to attach these to, or the rule protects a credential or a provider term |
+
+## 16 November 2026 — PI reach is unrestricted: full GitHub server, Azure Contributor, no hard-coded approval rules (#1886, P15-175)
+
+Owner, 16 November 2026, recorded as given: "I dont see a use case where jarvis will only read? the whole idea is that its unrestricted and can serve me." and, on a proposed ask-before-irreversible-actions rule: "If you keep adding restrictions we will never succeed with getting it to do what we want." This supersedes the read-only choices of the "PI phase 3" entry below.
+
+| Choice | Why |
+| --- | --- |
+| GitHub through the full remote server `https://api.githubcopilot.com/mcp/x/all`, repository secret `PI_GITHUB_TOKEN` (the earlier read-only secret name is gone, no fallback). A classic token is still refused (a technical need: only a fine-grained token can be limited to chosen repositories) | Verified on 16 November 2026 in `github/github-mcp-server` `docs/remote-server.md`: the server URL is `https://api.githubcopilot.com/mcp/`, authentication is `Authorization: Bearer <token>`, `/readonly` or the `X-MCP-Readonly` header would restrict it (neither is used). The bare `/mcp/` URL serves only the default toolsets (context, repos, issues, pull_requests, users), which lack Actions (workflow dispatch) and Copilot (coding sessions). `/x/all` is the documented all-toolsets URL, so PI can do everything the token allows. The token is the only limit, and the owner sets it. |
+| The token: fine-grained, resource owner `DanAakesen`, chosen repositories, Read and write on Contents, Issues, Pull requests and Actions, Metadata read, no administration and no secrets permission, expiry up to one year | The owner's choice of reach. Widening it is the owner's call, made by editing the token, not code |
+| Azure MCP without `--read-only`; its identity gets Contributor on the Jarvis resource group instead of Reader | PI can act in Azure. Contributor on `rg-jarvis` is where it stops; widening beyond that resource group is the owner's call. The old Reader assignment is left in place by the incremental deployment and is harmless |
+| No approval, confirmation or safety rule is written into PI's instructions or skills for GitHub or Azure | PI uses its own judgement like any capable model; nothing about what it may or may not do is hard-coded. Kept only: never printing a token, redacting secrets, the existing cost cap |
+| The Deploy summary keeps `not attached: <reason>` when the secret or the Azure variable is missing | Unchanged: a missing input is said, not hidden |
+
+## 18 November 2026 — PI phase 7 default approved, not live (#1887, #1910)
+
+[Written owner approval](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174): “Make the flip default on.” A missing `engine` selects PI for normal chat and voice. iPhone defaults to PI and sends its choice explicitly; `current` still selects the old engine. Isolated runtime tests keep their selected runtime and reject explicit PI. Watch and web use the server default; camera and screen sharing remain unsupported on PI web voice. The standalone draft is not merged or deployed. The old harness, PI Brain switch and proactive slots are unchanged. Phase 8 needs separate approval and still has to meet its deletion gate.
 
 ## 16 November 2026 — PI phase 7: the cutover is prepared as a separate flip, and the deletion waits for his written word (#1887, P15-176)
 
@@ -8,7 +225,7 @@ Owner, 16 November 2026: "Just dont delete the old harness." Earlier rules still
 
 | Choice | Why |
 | --- | --- |
-| The flip is its own draft pull request, stacked on the cutover documents: the server treats a missing `engine` as PI (`current` selects the old path explicitly, used only by isolated runtime-test sessions) and the iOS default becomes PI | One small diff the owner can merge or leave, and one revert to undo. The old path stays in the code until phase 8, selected only by an explicit value, so there is still one switch and no second mechanism |
+| The flip is a separate draft pull request; the cutover documents landed independently in #1909 | One small diff the owner can merge or leave, and one revert to undo. The old path and engine selector remain available; there is no fallback |
 | The Watch and the web follow the server default after the flip | They send no engine today. The Watch is parked; its behaviour changes only through the server default the owner chose, not through Watch code |
 | `docs/pi/cutover.md` is the single list of what phase 8 deletes, from a reference scan, with "move first", "split" and "keep" instead of a flat delete list | The plan's candidate list was wrong in places: `core/approval*.ts` is used across Google, Factory, inbox, vault, health and proactive; `agents/jarvis/identity-contract.json` is read by the PI provisioner and the backend; `voice-tools.ts`, `chat-agent.ts` and `proactive/events/rules.ts` hold symbols PI imports |
 | **Open, the owner decides (decision A):** what replaces the 07:00 and 18:00 proactive slots | They trigger the inbox nudge pass, todo writes, reminder planning and alerts. PI's brain wakes on events and watches. Deleting the slot engine without a replacement removes those features, so the engine stays off the delete list until he chooses |
@@ -40,7 +257,7 @@ semantic colors. The design pack and its HANDOFF are in `docs/ui/notes-subpages-
 
 Shipped behaviour (the earlier concept text claimed more than the vault supports; this is what is true):
 - **Supported and built:** pin/unpin (local, per account), pin reorder (local display order, in a sheet), Updated/Title sort,
-  folder scope, task sort (due date or priority) and Work/Personal filter, delete note (existing route, version-checked),
+  folder scope, Manual folder order (#1920), task sort (due date or priority) and Work/Personal filter, delete note (existing route, version-checked),
   delete task (new `DELETE /vault/tasks`, removes exactly the identified line and returns a conflict if the line or note
   changed), edit and complete tasks, new note/task, staged new folder, search with scopes, linked notes from real graph edges.
 - **Not built, and why:** Rename and Move to folder (no route; a path change would break links and task identity), bulk Select items,
@@ -87,13 +304,15 @@ Owner rules, quoted from the brief: no fallbacks, no dual or shadow paths, no tr
 | Timer review alone is skipped in quiet hours | A review at night would cost money and the morning one covers it |
 | Not built: the owner's test switch for Watch, any call, the Now card, voice | Out of scope or parked by the owner |
 
-## 16 November 2026 — PI phase 3: reach is read-only by construction, and a missing input is said, not hidden (#1886, P15-175)
+## 16 November 2026 — PI phase 3: reach, and a missing input is said, not hidden (#1886, P15-175)
+
+The read-only choices in this entry were replaced the same day by the entry above; what stays is the attach logic and "not attached: reason".
 
 Owner brief, quoted: reach is "GitHub MCP (read-only by default, scoped token that only the owner can create; say clearly what the owner must provide), Azure MCP (Reader, read-only; any container scales to zero) and Workers (start and follow coding sessions) as tools of the PI agent". Rules: no fallbacks, no dual paths, no transition code.
 
 | Choice | Why |
 | --- | --- |
-| GitHub through the remote read-only MCP URL and a fine-grained token, repository secret `PI_GITHUB_READ_TOKEN`; a classic token is refused | A fine-grained token can be limited to chosen repositories and read permissions; only the owner can create it. The read-only URL and the token permissions are two independent locks. Writes still go through Jarvis tools (`create_issue` and the rest), which keep approvals and receipts |
+| GitHub through the remote read-only MCP URL and a fine-grained read token (superseded: see the entry above); a classic token is refused | A fine-grained token can be limited to chosen repositories and read permissions; only the owner can create it. The read-only URL and the token permissions are two independent locks. Writes still go through Jarvis tools (`create_issue` and the rest), which keep approvals and receipts |
 | Azure MCP in a container that scales to zero, started `--read-only`, with its own identity holding only Reader, guarded by an Entra app role held only by the Foundry project identity | Reader cannot write or read secrets or cost; the server's read-only flag is a third lock; the unauthenticated call is refused (observed locally, 401). Never the flag that disables incoming authentication |
 | The Entra app is created by an owner-run script (`infra/setup-azure-mcp.ps1`), not by the Deploy workflow | The deploy identity has no Microsoft Graph rights by design; creating apps stays with the owner, as in `bootstrap.ps1` |
 | Azure image pinned to `3.0.0` | An update is a reviewed change; the unpinned `latest` of the Microsoft sample would change behaviour silently |
@@ -2636,7 +2855,7 @@ colour alone must not carry scope.
 ## Notes map shows note categories only (22 October 2026; #1085)
 
 On the owner's request the Notes map lists and draws only the note categories (People,
-Work, Personal, General). Notes in the vault root or in system folders (`_agent-log`,
+Work, Personal, General). Notes in the vault root or in system folders (`_agent-activity`,
 `Templates`, anything else) are dropped in the browser when the graph loads: no stars,
 links, search matches or legend entries, with link counts and the Tasks count recomputed.
 The vault and the backend response are unchanged.
@@ -13188,6 +13407,31 @@ Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
 
+## 17 November 2026 — Watch focused voice view reuses the session state (P15-206 / #1945)
+
+Decisions: the view is a presentation of the existing session (`voiceID`, `voiceState`, `muted`); no voice ownership, networking or teardown changed. Muted overrides the label, with the underlying state kept in the accessibility value, because Jarvis can speak while the microphone is muted. The transcript is the latest real message (nothing is invented when there is none). Back is unchanged and keeps the session; to avoid an invisible microphone the menu's Chat row reads Resume voice while a session is live. End uses the existing `endVoice` teardown and Chat returns with history and draft intact. The voice status row of the composer is removed. Open: not verified on a Watch; session events (Thinking, Reconnecting, failed) are shown as the model reports them.
+
+## 17 November 2026 — Watch Chat adaptive composer is built on the native navigation bar (P15-203 / #1942)
+
+The owner un-parked the Watch for the approved adaptive composer. Decisions:
+- Keep the system navigation bar for the back control and time (title emptied) instead of drawing a header: the content already scrolls beneath it with the system material, and the handover forbids a replacement clock.
+- The composer is an overlay with a fixed end margin on the scroll content, so expanding or collapsing never moves the message being read. Reading mode is entered by a scroll geometry flip (more than 80 pt from the newest message) or a new scroll while away; it is blocked while a draft, dictation, voice start or live voice is active. Sending or reaching the end restores the composer.
+- Neutral glass for the new floating controls is one Watch component (`watchGlass`, `WatchIconButton`, `WatchEdgeFade` in `WatchDesign.swift`); the orb stays `WatchOrb`. No networking, voice or draft behaviour changed. The old Voice and Dictate menu rows are gone; the `jarvis-watch://voice` and `dictate` links still open Chat and act.
+
+Open: the 80 pt threshold, transition length, large-text and smallest-watch layout, VoiceOver focus after Reply, and Crown scrolling are unverified on a Watch or simulator; "do not collapse under a finger" is covered only by the busy rules, not by touch tracking.
+
+## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
+
+The owner heard nothing from the Watch: dictation reported a timeout and live voice never heard him. Backend logs (Log Analytics, 14:49Z) for two 10 s dictations: `audio_received` at 0.7 s and 2.6 s with 489,082 bytes / 10,189 ms (real 24 kHz audio, so capture and upload worked), the speech token acquired at the same moment, then no `recognizer_started`, `session_started`, speech or error row for 6.5 to 9.4 s until the Watch disconnected. The SDK reports start only after its Speech connection opens, so that connection never opened. The Watch transcriber was the only Speech caller using a fixed `speechRecognitionLanguage` on the universal v2 endpoint; the live partial recognizer, probed live on 6 October (L111), uses language identification there.
+
+Decisions:
+- The Watch transcriber uses language identification for Danish and English (the same call as the live recognizer). This also lets Danish dictation work. Not yet proven live: it is the most probable cause, and the next device test decides.
+- Bound the recognizer start to 6 s. A start that does not finish returns 503 with the logged stage `recognizer_start_timeout` instead of holding the request until the client gives up. New stages `recognizer_starting`, `recognizer_start_failed`, `service_connected` and `service_disconnected` show where a hang stops (numeric and fixed labels only; the log allow-list carries them).
+- The Watch's direct window with a reachable phone is 10 s plus the clip length (up to the server's 22 s ceiling) and the overall wait is 30 s plus the clip length (up to 120 s). A fixed 10 s window cannot succeed for a 10 s recording. This refines the 14 November 10 s rule; the server's 20 s deadline is unchanged.
+- Measure the captured PCM16 peak on the Watch (`WatchCaptureLevel`, tested). Dictation with no audio or only digital silence is not uploaded; the Watch says the microphone captured no sound. Live voice ends with the same message after 10 s of unmuted silence rather than showing a listening session that cannot hear. The converter follows each buffer's actual format. The peak is logged (`WatchVoice` category).
+
+Open: live voice shows no Watch voice socket in the backend logs (only dictation credential renewals), so the cause of "cannot hear me" in live voice is not explained; the capture-level check and the `WatchVoice` logs are the next evidence. Nothing here is verified on a Watch.
+
 ## Notes deletion and swipe thresholds — 13 November 2026
 
 The owner requested immediate pinning on a normal swipe and confirmation before
@@ -13203,5 +13447,19 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 ## 2026-11-15 P15-181: Single vault layout, cut over together with the vault clean-up
 
 - Decision: Jarvis uses only the new vault paths: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/`. The `gym-log` frontmatter type is kept. There is no dual support, no layout detection and no compatibility shim; a first draft of this change that accepted both layouts was dropped.
-- The vault mirror excludes the new `_agent-activity` segment. The existing `_agent-log` rule stays until vault PR #5 has merged (the vault still has that folder until then) and is removed afterwards. `General/Archive/Agent activity log/` is not excluded: its 19 historical logs are tracked and excluding them would make the mirror treat them as deleted.
+- The vault mirror excludes the new `_agent-activity` segment. The existing `_agent-log` rule stayed until vault PR #5 merged and has since been removed (see 2026-11-16 below). `General/Archive/Agent activity log/` is not excluded: its 19 historical logs are tracked and excluding them would make the mirror treat them as deleted.
 - Rollout: this merges and the backend deploys, then the vault clean-up PRs merge in the same cutover. A short window in which the vault and Jarvis disagree about paths is accepted.
+
+## 2026-11-16 Vault mirror: drop the `_agent-log` exclusion (#1895)
+
+- Decision: after vault PR #5 merged, the vault folder `_agent-log` no longer exists. The mirror policy (`apps/vault-mirror/src/engine/policy.ts`) now excludes only the `_agent-activity` segment, the local, gitignored live write log. There is no old-path rule or fallback left.
+- `General/Archive/Agent activity log/` holds the 19 historical logs. It is intentionally publishable, is not excluded, and stays tracked in the mirror.
+- Tests assert that `_agent-activity` paths (including nested and case-folded) are never approved and that `General/Archive/Agent activity log/` is approved.
+
+## 2026-11-17 P15-190: 3D vault graph renders as projected 3D in `Canvas`, layout and camera in JarvisCore (#1924)
+
+- Decision: the Graph tab uses the owner-approved Folder clusters design, drawn as projected 3D in a SwiftUI `Canvas` driven by a `TimelineView` (brief option A). Layout (clusters on a Fibonacci spiral, notes placed from a hash of their id, a fixed 32-step relaxation), camera, projection, hit testing, drift and the pulse schedule are pure functions in `JarvisCore/Graph3D` with Linux tests. The UIKit layer exists only because SwiftUI has no two-finger drag. SceneKit (soft-deprecated), RealityKit and SpriteKit were not chosen; Metal stays the fallback if a device measurement misses the brief's budget.
+- Evidence so far: Linux tests (determinism, order independence, 2,000 notes laid out in about 0.5 s in a debug build), the macOS CI compile of the full app and simulator captures of a three-note fixture. No gesture run or device measurement exists yet; the PR says so.
+- Data and colours: only real notes and edges are drawn (self links and unknown ends dropped, one edge per pair, an explicit link beats a similarity edge). Clusters are top-level folders. Work, Personal and General use amber, green and muted violet; every other folder is neutral. This follows the handover's three colours and does not add the brief's People blue. The preview shows the service's own open task count, and "Task count unavailable" when it sends none.
+- Motion: no auto-rotation; no Alive state (the Notes page cannot read Jarvis's activity, so it is dropped rather than faked); pulses run on explicit links only. Reduce Motion or Background motion off gives one still pose with no inertia and no flights.
+- Removed: the old 2D layout `graphPositions` and the unused `notesGraph*` size and opacity tokens.

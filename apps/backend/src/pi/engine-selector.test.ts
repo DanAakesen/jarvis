@@ -61,14 +61,17 @@ describe('PI is the default engine on the chat turn', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: null });
   });
 
-  it('keeps an isolated runtime-test session off PI', async () => {
+  it('keeps an isolated runtime-test session on its selected runtime and rejects explicit PI', async () => {
     let piCalls = 0;
-    const { turn } = setup({ piAgent: { stream: async function* () { piCalls += 1; yield 'from PI'; } }, runtimeTest: 'copilot' });
-    await turn({ text: 'hi' });
+    const { turn } = setup({ piAgent: { stream: async function* () { piCalls += 1; yield 'from PI'; } }, runtimeTest: 'current' });
+    const result = await turn({ text: 'hi' });
+    expect(result.status).toBe(200);
+    expect(result.events[1]!.data.text).toBe('from the current engine');
+    expect((await turn({ text: 'hi', engine: 'pi' })).status).toBe(400);
     expect(piCalls).toBe(0);
   });
 
-  it('streams from PI only when the turn asks for it, and labels the saved reply', async () => {
+  it('honours explicit PI and labels the saved reply', async () => {
     const seen: Array<{ messageId: string; sessionId?: string }> = [];
     const { turn, messages } = setup({
       piAgent: { stream: async function* (input) { seen.push({ messageId: input.messageId, ...(input.sessionId ? { sessionId: input.sessionId } : {}) }); yield 'from PI'; } },
@@ -80,9 +83,9 @@ describe('PI is the default engine on the chat turn', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'from PI', model: 'pi' });
   });
 
-  it('ends a PI turn with PI\'s own honest error when PI is not set up, and never uses the current engine', async () => {
+  it('does not fall back when PI is the default and is not set up', async () => {
     const { turn, messages } = setup();
-    const result = await turn({ text: 'hi', engine: 'pi' });
+    const result = await turn({ text: 'hi' });
     expect(result.events.map((event) => event.name)).toEqual(['user', 'error']);
     expect(result.events[1]!.data).toMatchObject({ code: 'pi_not_configured', error: expect.stringContaining('No other engine was used') });
     expect(messages.filter((message) => message.role === 'jarvis')).toEqual([]);

@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { isPiWake, piWakeSource } from '../core/pi-authority.js';
 import {
   createTaskWriter, TaskWriteError,
   taskCreateSchema, taskCompleteSchema, taskDeleteSchema, taskEditSchema,
@@ -1320,6 +1321,11 @@ export function createVaultModule(options: {
 
   async function checkSource(request: FastifyRequest, content: string, reason: string, signal: AbortSignal, automaticCapture = false) {
     if (!request.principal && !request.agentPrincipal) throw new ToolRefusal('Vault access is not authorized.');
+    if (isPiWake(request)) {
+      // A wake has no Dan message to check; credentials are still never written.
+      assertCaptureIsSafe('', `${content}\n${reason}`);
+      return { id: piWakeSource(request).sessionId, text: '' };
+    }
     const header = request.headers['x-jarvis-message-id'] ??
       request.jarvisConversationMessage?.id ?? request.jarvisMemorySourceMessageId;
     if (typeof header !== 'string' || !sourceMessagePattern.test(header) || BigInt(header) > maxSqlMessageId) {

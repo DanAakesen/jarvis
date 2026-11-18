@@ -181,13 +181,21 @@ extension View {
     }
 }
 
+extension View {
+    /// The one row surface: the clear glass of the glass buttons, in the row's own corner pattern. Every list row in
+    /// the app takes its background from here (`JarvisRowGroup`, `jarvisLazyRowSurface`, task and agenda rows and the
+    /// native lists), so a change to this look changes every list.
+    func jarvisRowSurface<S: Shape>(_ shape: S) -> some View {
+        clipShape(shape).jarvisGlassSurface(in: shape)
+    }
+}
+
 struct JarvisRowGroup<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(spacing: 0, content: content)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
-            .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+            .jarvisRowSurface(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
     }
 }
 
@@ -371,7 +379,7 @@ struct JarvisPageScaffold<Actions: View, Headline: View, Hero: View, Sections: V
                 JarvisPageHeader(title: title, language: language) { actions }
             }
         }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -474,9 +482,7 @@ private struct JarvisLazyRowSurface: ViewModifier {
             bottomTrailingRadius: last ? radius : 0,
             topTrailingRadius: first ? radius : 0
         )
-        content
-            .background(.regularMaterial, in: shape)
-            .clipShape(shape)
+        content.jarvisRowSurface(shape)
     }
 }
 

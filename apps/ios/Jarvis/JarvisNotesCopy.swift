@@ -115,6 +115,21 @@ struct JarvisNotesCopy {
     var collapsed: String { text(.collapsed) }
     var graphPanZoomHint: String { text(.graphPanZoomHint) }
 
+    func graphAccessibilityLabel(noteCount: Int) -> String { String(format: text(.graphAccessibilityLabel), noteCount) }
+
+    func graphTasks(_ summary: JarvisGraphTaskSummary) -> String {
+        switch summary {
+        case .open(1): text(.graphOpenTaskOne)
+        case .open(let count): String(format: text(.graphOpenTasksMany), count)
+        case .none: text(.graphNoOpenTasks)
+        case .unavailable: text(.graphTasksUnavailable)
+        }
+    }
+
+    func graphConnections(_ count: Int) -> String {
+        count == 1 ? text(.graphConnectionsOne) : String(format: text(.graphConnectionsMany), count)
+    }
+
     func text(_ key: JarvisNotesLocalizationKey) -> String {
         JarvisNotesLocalization.string(key, language: language)
     }

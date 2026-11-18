@@ -74,7 +74,7 @@ struct JarvisDeploymentsSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(copy(.deploymentsRow))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load(force: true) }

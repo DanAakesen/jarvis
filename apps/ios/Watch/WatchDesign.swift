@@ -7,6 +7,67 @@ enum WatchStyle {
     static let stone = Color(red: 201 / 255, green: 191 / 255, blue: 174 / 255)
     static let surface = Color(white: 0.10)
 }
+/// Neutral dark smoked glass for floating Watch controls. Reduce Transparency swaps the blur for a solid fill.
+struct WatchGlass<S: Shape>: ViewModifier {
+    var shape: S
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    func body(content: Content) -> some View {
+        content.background {
+            if reduceTransparency {
+                shape.fill(WatchStyle.surface)
+            } else {
+                shape.fill(Color.black.opacity(0.4)).background(.ultraThinMaterial, in: shape)
+            }
+        }
+        .overlay { shape.stroke(.white.opacity(reduceTransparency ? 0.3 : 0.18), lineWidth: 0.5) }
+    }
+}
+extension View {
+    func watchGlass<S: Shape>(in shape: S) -> some View { modifier(WatchGlass(shape: shape)) }
+}
+/// Round glass icon button with an amber symbol and a native-size hit target.
+struct WatchIconButton: View {
+    var systemName: String
+    var label: String
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName).font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(WatchStyle.amber)
+                .frame(width: 44, height: 44).watchGlass(in: Circle()).contentShape(Circle())
+        }.buttonStyle(.plain).accessibilityLabel(label)
+    }
+}
+/// Glass capsule button with an icon and a label; the label drops out at accessibility text sizes so the icon keeps a native hit target.
+struct WatchLabelledButton: View {
+    var title: String
+    var systemName: String
+    var tint: Color = WatchStyle.amber
+    var action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemName).font(.system(size: 16, weight: .semibold))
+                if !typeSize.isAccessibilitySize {
+                    Text(title).font(.system(.footnote, design: .rounded, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity, minHeight: 44).watchGlass(in: Capsule()).contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityLabel(title)
+    }
+}
+/// Soft black scrim that keeps floating controls readable over scrolling text; solid when transparency is reduced.
+struct WatchEdgeFade: View {
+    var edge: VerticalEdge
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var body: some View {
+        LinearGradient(colors: [.black.opacity(reduceTransparency ? 1 : 0), .black.opacity(reduceTransparency ? 1 : 0.88)],
+                       startPoint: edge == .bottom ? .top : .bottom, endPoint: edge == .bottom ? .bottom : .top)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
 struct WatchSurface: ViewModifier {
     var radius: CGFloat = 22
     func body(content: Content) -> some View {
@@ -34,7 +95,7 @@ struct WatchOrb: View {
     }
 }
 struct WatchGlyph: View {
-    enum Kind { case voice, dictate, tasks, factory, logLift }
+    enum Kind { case voice, dictate, chat, tasks, factory, logLift }
     var kind: Kind
     var body: some View {
         Group {
@@ -46,6 +107,7 @@ struct WatchGlyph: View {
                     Image(systemName: "mic.fill").resizable().scaledToFit().frame(width: 12)
                     WatchMiniWave()
                 }
+            case .chat: Image(systemName: "ellipsis.bubble").resizable().scaledToFit()
             case .tasks: Image(systemName: "checklist").resizable().scaledToFit()
             case .factory: Image(systemName: "chevron.left.forwardslash.chevron.right").resizable().scaledToFit()
             case .logLift:
