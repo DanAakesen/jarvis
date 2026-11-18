@@ -85,6 +85,10 @@ switch while a query is present; clearing the query restores the previous folder
 - Sheets can stack where the design returns to the same draft (editor to folder chooser, Edit task to Date & time);
   apple-hig prefers one sheet at a time. This is a known, deliberate deviation.
 
+## PI cutover flip (approved, not live) — #1887, P15-176
+
+Once the flip is released, the "Engine test switch" in Settings opens on "PI engine" when no choice is saved, and the Chat header's "PI test" pill shows by default. The explanation notes that "Current engine" remains selectable, that a new voice session reads the choice, and that PI voice has no camera or screen sharing or automatic fallback. Saved choices and the existing layout stay unchanged.
+
 ## PI voice — 16 November 2026 (#1887, P15-176)
 
 No new screen. The existing voice screen and orb are unchanged; the only visible differences with the PI engine are in what Jarvis says and when. Settings, General, "Engine test switch" (renamed from "Chat engine test switch") now applies to chat and voice: the choice is read when a voice session starts, the Watch keeps the current engine, and the explanation says so in one sentence plus the two limits that matter to a tester (no camera or screen sharing with PI yet; no fallback to the current engine). When Dan starts voice with PI the first answer takes a few seconds (accepted); a turn that needs a tool opens with one short spoken sentence from PI, then the answer. Replies are one to three short sentences; anything long is offered in chat. If PI cannot answer, Jarvis says why in one sentence ("No other engine was used"). Not inspected on a device or simulator: it is a copy change and a connection parameter, and the Apple CI compile is the check.

@@ -32,8 +32,8 @@
 
 ## PI cutover: flip, roll back, delete (#1887, P15-176)
 
-- Everything is in `docs/pi/cutover.md`. Nothing is deleted and the default is unchanged until the owner approves in writing on #1887.
-- Flip: the draft pull request "P15-176: PI cutover flip" (server default PI, iOS default PI). Merge only on his word; then Deploy. Roll back by reverting that commit and redeploying the previous release. Before the flip, tag the release it merges from: `git tag pi-last-old-path <commit>` and push the tag (gate check 6); that tag is the rollback target for phase 8.
+- [#1910](https://github.com/DanAakesen/jarvis/pull/1910) is the standalone draft for the [approved](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174) chat and voice default. Approval is not a release; no default is live from this change yet. Scope and gates are in `docs/pi/cutover.md`.
+- When release work is separately authorised, record and tag the last deployed release with the old default (`pi-last-old-path`, gate check 6). After the flip is released, confirm unnamed chat and voice on Watch and web, PI by default on iPhone, the saved Current engine choice on iPhone, isolated runtime tests, and `not_supported` for camera/screen context on PI web voice. Check actual spoken audio, interruption and follow-up on device; the smoke does not exercise audio. If rollback is needed, revert the flip on main or redeploy the previous qualified release; PI never falls back at runtime.
 - Before phase 8: repeat the reference scan (the commands are in cutover.md, section 5), run the full backend, Python and Swift suites after each move in section 4.1, and keep the manual Foundry steps (4.7) for last, after a week of zero requests to the old agents.
 
 ## PI voice: test it and measure it (#1887, P15-176)

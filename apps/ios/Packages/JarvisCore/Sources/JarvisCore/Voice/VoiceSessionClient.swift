@@ -211,7 +211,7 @@ public protocol WebSocketTransport: Sendable {
 
 public actor VoiceSessionClient {
     private let baseURL: URL
-    private let engine: ChatEngine
+    private let engine: ChatEngine?
     private let transport: any WebSocketTransport
     private let clock: any ChatClock
     private let reconnectPolicy: VoiceReconnectPolicy
@@ -230,7 +230,7 @@ public actor VoiceSessionClient {
 
     public init(
         baseURL: URL,
-        engine: ChatEngine = .current,
+        engine: ChatEngine? = nil,
         transport: any WebSocketTransport,
         clock: any ChatClock = ContinuousChatClock(),
         reconnectPolicy: VoiceReconnectPolicy = VoiceReconnectPolicy(),
