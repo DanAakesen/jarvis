@@ -187,8 +187,10 @@ enum JarvisDesignTokens {
     static let voiceCameraJPEGQuality = VoiceScreenShareContract.jpegQuality
     static let voiceScreenShareBarHeight: CGFloat = 58
     static let voiceScreenShareBarSpacing: CGFloat = 14
-    static let voiceCaptionMaximumHeight: CGFloat = 132
-    static let voiceAccessibilityCaptionMaximumHeight: CGFloat = 288
+    static let voiceIdleCaptionReservation: CGFloat = 132
+    static let voiceCaptionMaximumHeight: CGFloat = 176
+    static let voiceAccessibilityCaptionMaximumHeight: CGFloat = 320
+    static let voiceCaptionFadeDepth: CGFloat = 16
     static let voiceCaptionSpeakerSpacing: CGFloat = 6
     static let voiceCaptionLineSpacing: CGFloat = 4
     static let voiceStatusFontSize: CGFloat = 17

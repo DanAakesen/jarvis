@@ -1,6 +1,10 @@
+## iPhone Voice carousel and captions (18 November 2026, #1958, P15-210; build 113)
+
+The compact panel stays between captions and call controls. A new visual takes focus immediately; earlier visuals remain to its left. Swipe or use the previous/next controls. Close and Expand float over the top left without a separate header; a supplied native heading scrolls with the content beside them, and HTML owns its heading. Full screen uses the same carousel; Collapse returns to the compact panel without ending the call. The existing eased orb retreat and return are unchanged. Captions have a taller viewport with a soft fade on each edge and enough bottom padding to keep the latest line readable. HTML gets theme-aware defaults and the actual phone viewport; native charts keep their renderer. iPhone rendering is not yet verified.
+
 ## Voice panel header and orb motion (17 November 2026, #1939, P15-205; from owner feedback on build 112)
 
-The panel has a header row of its own that the content never uses: close and, when the content needs room, expand at the top left (both `JarvisIconButton`), then one title, which comes from the content. The content scrolls below the row. Nothing is shown when a new voice session starts; the panel appears only for what Jarvis presents during the session (content presented while it was minimised carries over).
+Build 112 used a dedicated header row, superseded by #1958. Nothing is shown when a new voice session starts; the panel appears only for what Jarvis presents during the session (content presented while it was minimised carries over).
 
 The orb steps back when content arrives and returns when it goes, with one eased spring (`JarvisDesignTokens.voicePanelMotion`, smooth, 0.55 s) in both directions and for expanding and collapsing. It is not linear, it keeps its velocity when interrupted by a new arrival or a close, and Reduce Motion removes it. Code views show line numbers with matched lines marked by a bold chevron and a faint surface; a knowledge-graph view is one line of search, one line of count and an Open Notes button. Chat blocks: the ellipsis opens View data and Copy data on a forecast or chart and Copy data on other blocks; an open data table stays open while scrolling. Not yet seen on a device.
 
@@ -16,7 +20,7 @@ The orb steps back when content arrives and returns when it goes, with one eased
 
 ## Voice bottom panel (17 November 2026, #1925; owner approved, Voice only)
 
-Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. Header: close and, when the content needs room, expand at the top left, then one title from the content (all `JarvisIconButton`; see the header and motion section above). Body: the existing generated-view renderers in a scroll area that takes the content's height up to the panel's cap. The orb stays visible (it shrinks to its minimum before the panel is capped), captions stay above the panel, the four controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion uses the fade only. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.
+Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. See #1958 above for the overlay controls and carousel that superseded the original header. The orb stays visible, captions stay above the panel, and the four call controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion removes the movement. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.
 
 ## Conversational blocks in Chat (17 November 2026, #1925; owner approved)
 

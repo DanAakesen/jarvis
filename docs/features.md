@@ -322,6 +322,7 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Under-orb voice status | Accessible session state/recovery follows the orb; compact More/End voice controls have no overlapping state or long language note | Jarvis browser voice | Implemented offline; fixture layout checks reported in PR #419 |  | P8-40 (#417) |
 | Microphone on voice start | Explicit voice start requests native permission and begins capture after session readiness; no normal Enable microphone button; preserve mute, recovery and cleanup | Jarvis browser voice | Implemented offline; lifecycle tests pass, real audio unverified |  | P8-40 (#417) |
 | Expressive awakening and live orb | Pronounced core/shell wake, distinct listening/thinking/tool-work motion and audible-playback-driven speech/light/reflection; interruptible and reduced-motion safe | Same Jarvis scene in typing/voice | Implemented offline; motion-model tests and software-WebGL observations, hardware acceptance pending |  | P8-40 (#417) |
+| iPhone Voice visuals and captions | New visual takes focus while earlier visuals stay swipeable. Open full screen or close without ending Voice; captions use a taller viewport with faded edges. | iPhone Voice | Implemented; simulator and physical-device checks pending | | P15-210 (#1958) |
 
 
 ## Voice UI hotfix (#435)
