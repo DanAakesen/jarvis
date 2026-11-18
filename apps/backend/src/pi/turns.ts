@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { RemoteMcpStatus } from './remote-mcp.js';
 
 /**
  * Per-turn authority for the PI agent.
@@ -34,11 +35,17 @@ export interface PiTurnGrant {
   readonly discovered: Set<string>;
   /** What each tool this turn actually ran returned, recorded by the MCP server itself, never taken from model text. */
   readonly results: { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
+  /** Content-free diagnostics from the latest completed discovery and from authenticated Azure call attempts. */
+  readonly azure: {
+    catalogue: RemoteMcpStatus['state'] | 'empty' | 'not_configured' | 'not_searched';
+    attempts: number;
+    undiscoveredRefusals: number;
+  };
   readonly signal: AbortSignal;
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
   findBrain(runId: unknown): PiTurnGrant | undefined;
@@ -56,7 +63,10 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       // One owner, one live conversation: a runaway caller cannot pile up authority.
       if (grants.size >= maxOpenTurns) throw new Error('Too many open PI turns');
       const turn = `jt-${randomBytes(16).toString('base64url')}`;
-      const grant: PiTurnGrant = { ...input, turn, discovered: new Set(), results: [] };
+      const grant: PiTurnGrant = {
+        ...input, turn, discovered: new Set(), results: [],
+        azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
+      };
       grants.set(turn, grant);
       return grant;
     },

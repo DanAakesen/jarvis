@@ -1,18 +1,24 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
+import { createPiAuth, piMcpPath } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { createConversationModule } from '../core/conversation.js';
 import type { ConversationAgent } from '../core/chat-agent.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { PiGatewayError } from './errors.js';
-import { createUnconfiguredPiAgent } from './gateway.js';
+import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
+import { azureToolPrefix, createRemoteMcpBridge } from './remote-mcp.js';
+import { createPiRoutes, type PiModuleOptions } from './routes.js';
+import { createMemoryPiStore } from './store.js';
+import { createPiTurnRegistry, piTurnPattern } from './turns.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boolean; runtimeTest?: string } = {}) {
+function setup(options: { piAgent?: ConversationAgent; pi?: PiModuleOptions; runtimeTest?: string } = {}) {
   const messages: ConversationMessage[] = [];
+  const piAgent = options.pi?.gateway ?? options.piAgent;
   const store = {
     getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null, ...(options.runtimeTest ? { runtimeTest: options.runtimeTest } : {}) }),
     addMessage: async (input: { sessionId: string; role: 'dan' | 'jarvis'; text: string; model: string | null }) => {
@@ -26,10 +32,12 @@ function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boole
   } as unknown as ConversationStore;
   const current: ConversationAgent = { stream: async function* () { yield 'from the current engine'; } };
   const app = buildApp(config, undefined, {
-    modules: [createConversationModule()],
+    modules: [createConversationModule(), ...(options.pi
+      ? [{ id: 'pi', tools: [], registerRoutes: createPiRoutes(options.pi) }] : [])],
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' }),
     conversationStore: store, conversationAgent: current,
-    ...(options.piAgent ? { piAgent: options.piAgent } : {}),
+    ...(piAgent ? { piAgent } : {}),
+    ...(options.pi ? { piAuth: options.pi.auth } : {}),
   });
   apps.push(app);
   const turn = async (payload: Record<string, unknown>) => {
@@ -42,8 +50,85 @@ function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boole
     }));
     return { status: response.statusCode, events };
   };
-  return { turn, messages };
+  return { app, turn, messages };
 }
+
+it('answers the iPhone Azure question through PI MCP in a reused owner conversation when its context changes', async () => {
+  const registry = createPiTurnRegistry();
+  const store = createMemoryPiStore();
+  const owner = config.auth.ownerObjectId;
+  await store.bindConversation(owner, 'jarvis-pi', 'existing-pi-conversation', AbortSignal.timeout(1_000));
+  const secret = 'A'.repeat(43);
+  const auth = createPiAuth(config.auth.tenantId, secret);
+  const catalogue = { name: 'group_resource_list', description: 'List resources in an Azure resource group', inputSchema: { type: 'object' } };
+  const remoteCalls: unknown[] = [];
+  const bridge = createRemoteMcpBridge({
+    url: 'https://azure.example/mcp', prefix: azureToolPrefix, label: 'Azure', token: async () => 'fixture',
+    fetch: async (_url, init) => {
+      const request = JSON.parse(String(init?.body)) as { id: number; method: string; params?: unknown };
+      if (request.method === 'notifications/initialized') return new Response(null, { status: 202 });
+      if (request.method === 'tools/call') remoteCalls.push(request.params);
+      const result = request.method === 'tools/list' ? { tools: [catalogue] }
+        : request.method === 'tools/call' ? { content: [{ type: 'text', text: 'fixture-storage, fixture-app' }] }
+          : { protocolVersion: '2025-06-18', capabilities: {} };
+      return Response.json({ jsonrpc: '2.0', id: request.id, result });
+    },
+  });
+  let context = 'Old environment context';
+  const logs: Array<Record<string, unknown>> = [];
+  const sse = (delta: string) => new Response(
+    `data: ${JSON.stringify({ type: 'response.output_text.delta', delta })}\n\ndata: {"type":"response.completed","response":{}}\n\n`,
+    { headers: { 'content-type': 'text/event-stream' } },
+  );
+  const gateway = createPiGateway({
+    agentName: 'jarvis-pi', projectEndpoint: 'https://foundry.example/api/projects/jarvis',
+    owner, store, registry, monthlyCapDkk: 250, timeZone: 'Europe/Copenhagen',
+    getToken: async () => 'fixture', context: async () => context,
+    log: (event, fields) => { if (event === 'pi.turn') logs.push(fields); },
+    fetcher: async (url, init) => {
+      expect(String(url)).toContain('/agents/jarvis-pi/endpoint/protocols/openai/responses');
+      const request = JSON.parse(String(init?.body)) as { conversation: string; input: Array<{ content: string }> };
+      expect(request.conversation).toBe('existing-pi-conversation');
+      const text = request.input[0]!.content;
+      if (text.endsWith('\nhello')) return sse('Hello.');
+      expect(text).toContain(context);
+      expect(text).toMatch(/\nwhat's in my Jarvis resource group\?$/u);
+      // The managed instructions take the reference from the first line, not from context or the history.
+      const turn = /^\[Turn (\S+) \| /u.exec(text)?.[1];
+      if (!turn || !piTurnPattern.test(turn)) return sse('I do not have a valid tool reference.');
+      expect(registry.resolve(turn)).toMatchObject({ messageId: '3', sessionId: '7' });
+      expect(registry.resolve(turn)?.smoke).toBeUndefined();
+      const find = await mcp('find_tools', { turn, query: 'azure resource group' });
+      expect(find.result.tools).toContainEqual(expect.objectContaining({ name: 'az_group_resource_list' }));
+      const call = await mcp('call_tool', {
+        turn, name: 'az_group_resource_list', arguments: { subscription: 'fixture-subscription', resource_group: 'fixture-rg' },
+      });
+      expect(call.outcome).toBe('ok');
+      return sse(call.result);
+    },
+  });
+  const { app, messages, turn } = setup({ pi: { gateway, registry, auth, monthlyCapDkk: 250, bridges: [bridge] } });
+  async function mcp(name: string, args: Record<string, unknown>) {
+    const response = await app.inject({
+      method: 'POST', url: piMcpPath,
+      headers: { authorization: `Bearer jp.${secret}`, accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18' },
+      payload: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.body.split('\n').find(line => line.startsWith('data:'))?.slice(5) ?? response.body;
+    return JSON.parse(JSON.parse(body).result.content[0].text);
+  }
+  await turn({ engine: 'pi', text: 'hello' });
+  context = 'Updated environment note: subscription fixture-subscription, resource group fixture-rg';
+  const answer = await turn({ engine: 'pi', text: "what's in my Jarvis resource group?" });
+  expect(answer.events.map(event => event.name)).toEqual(['user', 'delta', 'done']);
+  expect(answer.events[1]?.data.text).toBe('fixture-storage, fixture-app');
+  expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi', text: 'fixture-storage, fixture-app' });
+  expect(remoteCalls).toEqual([{ name: 'group_resource_list', arguments: { subscription: 'fixture-subscription', resource_group: 'fixture-rg' } }]);
+  expect(logs[0]).toMatchObject({ azureCatalogue: 'not_searched', azureToolsOffered: 0, azureCalls: { attempts: 0, ok: 0, refused: 0, error: 0 } });
+  expect(logs[1]).toMatchObject({ azureCatalogue: 'ready', azureToolsOffered: 1, azureCalls: { attempts: 1, ok: 1, refused: 0, error: 0 } });
+  expect(JSON.stringify(logs)).not.toMatch(/jt-|fixture-|resource group/iu);
+});
 
 describe('PI is the default engine on the chat turn', () => {
   it('runs a turn without an engine on PI', async () => {

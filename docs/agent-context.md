@@ -1,3 +1,8 @@
+## PI Azure on iPhone — 18 November 2026 (#1922, Build 113)
+
+- Check with `cd apps/backend && npx vitest run src/pi src/voice/pi-voice.test.ts`. The normal chat regression uses a reused Foundry conversation and fixture Azure data, not a live service.
+- Device acceptance: with Settings → General → Engine set to PI, ask “what's in my Jarvis resource group?” in normal chat. The reply should list actual resources. Match its time to the backend's `pi.turn`: `azureCatalogue` is the state at the last completed search, `azureToolsOffered` counts Azure schemas actually shown, and `azureCalls` counts attempts and recorded outcomes. A ready catalogue with no tools offered indicates no Azure schema made the search result; an offer with zero attempts means PI did not select one. A successful call is separate from a correct reply.
+
 ## PI smoke parts — 17 November 2026 (#1910, P15-209)
 
 - `POST /pi/smoke` needs `{ "part": "core" | "voice" | "reach" }`. `.github/scripts/pi_smoke_report.py` calls the three in turn and merges them; run it through Deploy `measure_pi`. Checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`.
