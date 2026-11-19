@@ -181,7 +181,7 @@ final class WatchModel: ObservableObject {
             configurePlaybackCompletion()
             let stream: AsyncStream<Data>
             do {
-                stream = try await startAudioCapture(tolerateDrops: true) { self.voiceGeneration == epoch }
+                stream = try await startAudioCapture(tolerateDrops: true, mode: .voiceChat, alternateMode: .default) { self.voiceGeneration == epoch }
             } catch {
                 // A cancelled start must not report an error or touch a newer attempt's audio.
                 guard epoch == voiceGeneration else { return }
@@ -210,7 +210,7 @@ final class WatchModel: ObservableObject {
                     }
                     self.captureLevel.add(pcm: bytes)
                     if self.captureLevel.isDeaf {
-                        self.voiceLogger.error("Voice microphone silent: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak) capture_drops=\(self.audio.droppedCaptureChunks)")
+                        self.voiceLogger.error("Voice microphone silent: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak) capture_drops=\(self.audio.droppedCaptureChunks) \(self.audio.captureSummary, privacy: .public)")
                         self.error = WatchMicrophoneFailure.silent.message
                         await self.endVoice(captureEndReason: "microphone_silent")
                         return
@@ -303,7 +303,8 @@ final class WatchModel: ObservableObject {
         do {
             dictationAudio.removeAll()
             captureLevel = WatchCaptureLevel()
-            let stream = try await startAudioCapture(tolerateDrops: false) { self.dictationGeneration == epoch }
+            // Dictation plays nothing, so it needs no voice processing; the other mode is the one-time recovery.
+            let stream = try await startAudioCapture(tolerateDrops: false, mode: .default, alternateMode: .voiceChat) { self.dictationGeneration == epoch }
             dictationState = .listening
             dictationCapture = Task { [weak self] in
                 for await bytes in stream {
@@ -344,7 +345,7 @@ final class WatchModel: ObservableObject {
         }
         audio.stop()
         guard await dictationCapture?.value == true, dictationGeneration == epoch else { return }
-        voiceLogger.info("Dictation captured: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak)")
+        voiceLogger.info("Dictation captured: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak) \(self.audio.captureSummary, privacy: .public)")
         // Silent or empty audio cannot be transcribed; say so instead of waiting for a timeout.
         if !captureLevel.hasAudio { failDictation(WatchMicrophoneFailure.noAudio); return }
         if captureLevel.isSilent { failDictation(WatchMicrophoneFailure.silent); return }
@@ -464,13 +465,15 @@ final class WatchModel: ObservableObject {
         voiceStartToken = nil; startingVoice = false; waitingForVoiceConnection = false
         await endVoice(captureEndReason: "start_cancelled")
     }
-    private func startAudioCapture(tolerateDrops: Bool, isCurrent: () -> Bool) async throws -> AsyncStream<Data> {
+    private func startAudioCapture(
+        tolerateDrops: Bool, mode: AVAudioSession.Mode, alternateMode: AVAudioSession.Mode, isCurrent: () -> Bool
+    ) async throws -> AsyncStream<Data> {
         // The first activation of the audio session can fail while the route settles.
         // Currency is checked before every start so a cancelled caller never touches the shared engine.
         var attempt = 1
         while true {
             guard isCurrent() else { throw CancellationError() }
-            do { return try audio.startCapture(tolerateDrops: tolerateDrops) }
+            do { return try audio.startCapture(tolerateDrops: tolerateDrops, mode: mode, alternateMode: alternateMode) }
             catch {
                 guard isCurrent() else { throw CancellationError() }
                 audio.stop()
