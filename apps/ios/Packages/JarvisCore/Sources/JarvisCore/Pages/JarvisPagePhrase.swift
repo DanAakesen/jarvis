@@ -252,18 +252,19 @@ public enum JarvisHealthPagePhrase {
 /// Status header phrase, written from the check results.
 public enum JarvisStatusPagePhrase {
     public static func make(_ snapshot: JarvisStatusSnapshot, language: JarvisAppLanguage, now: Date? = nil) -> JarvisPagePhrase {
-        let healthy = snapshot.entries.filter { $0.status == .ok }.count
+        let healthy = snapshot.entries.filter { JarvisStatusLogic.displayStatus(for: $0, now: now) == .ok }.count
         let total = snapshot.entries.count
         guard total > 0 else { return JarvisPagePhrase(markup: "Dan, there are {no checks yet}.") }
         if let now, JarvisStatusLogic.isStale(checkedAt: snapshot.checkedAt, now: now) {
             return JarvisPagePhrase(markup: "Dan, the numbers are {stale}. {\(healthy) of \(total) checks} were healthy.")
         }
-        let issues = JarvisStatusLogic.ordered(snapshot.entries).filter { $0.status != .ok }.prefix(3)
+        let issues = JarvisStatusLogic.ordered(snapshot.entries, now: now)
+            .filter { JarvisStatusLogic.displayStatus(for: $0, now: now) != .ok }.prefix(3)
         if !issues.isEmpty {
             let clauses = issues.map { entry in
                 let name = entry.check.map { JarvisInsightsLocalization.string($0.localizationKey, language: language) }
                     ?? JarvisStatusLogic.readable(entry.id)
-                let state: String = switch entry.status {
+                let state: String = switch JarvisStatusLogic.displayStatus(for: entry, now: now) {
                 case .down: "is down"
                 case .degraded: "is degraded"
                 case .unknown: "is unconfirmed"

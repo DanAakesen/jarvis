@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { planReconcile } from '../engine/index.js';
 import { isSafePath, normalizePath } from '../engine/normalize.js';
-import type { Action, FileRecord, Plan, ReconcileInput } from '../engine/types.js';
+import type { Action, FileRecord, GuardReason, Plan, ReconcileInput } from '../engine/types.js';
 import { GitHubMirrorError } from './github.js';
 import { mergeThreeWay } from './merge.js';
 import { ObCommandError } from './obsidian.js';
@@ -298,11 +298,32 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
   let renewTimer: NodeJS.Timeout | undefined;
   let ownedPlan: Plan | undefined;
   let approvedPending = 0;
+  let guardReasons: GuardReason[] = [];
+  let changedOnGitHub = 0;
+  let changedOnObsidian = 0;
+  let deletedOnGitHub = 0;
+  let deletedOnObsidian = 0;
+  let deferredOnGitHub = 0;
+  let deferredOnObsidian = 0;
   const invalidPendingPaths = new Set<string>();
   const skippedCount = (plan?: Plan): number => {
     const planned = new Set(plan?.skipped.map(item => normalizePath(item.path)) ?? []);
     return (plan?.counters.skipped ?? 0) +
       [...invalidPendingPaths].filter(path => !planned.has(normalizePath(path))).length;
+  };
+  const applyPlanCounters = (plan: Plan): void => {
+    counts.approved = plan.counters.approved;
+    counts.skipped = skippedCount(plan);
+    counts.conflicts = plan.counters.conflicts;
+    counts.credentialMatches = plan.counters.credentialMatches;
+    approvedPending = plan.counters.pendingWriteBack;
+    guardReasons = Object.keys(plan.counters.guardReasons).sort() as GuardReason[];
+    changedOnGitHub = plan.counters.changedOnG;
+    changedOnObsidian = plan.counters.changedOnO;
+    deletedOnGitHub = plan.counters.deletedOnG;
+    deletedOnObsidian = plan.counters.deletedOnO;
+    deferredOnGitHub = plan.counters.deferredOnG;
+    deferredOnObsidian = plan.counters.deferredOnO;
   };
 
   const status = (): RunResult['status'] => vaultMirrorStatusSchema.parse({
@@ -313,6 +334,17 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     ...(reason ? { reason } : {}),
     writeBack: options.config.writeBack,
     ...counts,
+    ...(guardReasons.length > 0 ? { guardReasons } : {}),
+    ...(changedOnGitHub > 0 || changedOnObsidian > 0 ||
+        deletedOnGitHub > 0 || deletedOnObsidian > 0 ||
+        deferredOnGitHub > 0 || deferredOnObsidian > 0 ? {
+      changedOnGitHub,
+      changedOnObsidian,
+      deletedOnGitHub,
+      deletedOnObsidian,
+      deferredOnGitHub,
+      deferredOnObsidian,
+    } : {}),
     consecutiveFailures,
     lastSuccessAt,
     conflictPaths,
@@ -332,6 +364,13 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
         skipped: current.skipped,
         credentialMatches: current.credentialMatches,
         pendingWriteBack: current.pendingWriteBack,
+        ...(current.guardReasons ? { guardReasons: current.guardReasons } : {}),
+        ...(current.changedOnGitHub !== undefined ? { changedOnGitHub: current.changedOnGitHub } : {}),
+        ...(current.changedOnObsidian !== undefined ? { changedOnObsidian: current.changedOnObsidian } : {}),
+        ...(current.deletedOnGitHub !== undefined ? { deletedOnGitHub: current.deletedOnGitHub } : {}),
+        ...(current.deletedOnObsidian !== undefined ? { deletedOnObsidian: current.deletedOnObsidian } : {}),
+        ...(current.deferredOnGitHub !== undefined ? { deferredOnGitHub: current.deferredOnGitHub } : {}),
+        ...(current.deferredOnObsidian !== undefined ? { deferredOnObsidian: current.deferredOnObsidian } : {}),
       });
     } catch { /* Logging cannot change the mirror result. */ }
   };
@@ -465,14 +504,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       stateCorrupt = true;
       throw new RunFailure('state-corrupt', 'needs-attention');
     }
-    const setCounts = (): void => {
-      counts.approved = plan.counters.approved;
-      counts.skipped = skippedCount(plan);
-      counts.conflicts = plan.counters.conflicts;
-      counts.credentialMatches = plan.counters.credentialMatches;
-      approvedPending = plan.counters.pendingWriteBack;
-    };
-    setCounts();
+    applyPlanCounters(plan);
     let committedGithubActions: Action[] = [];
     if (plan.verdict === 'guard-tripped') {
       outcome = 'needs-attention';
@@ -501,7 +533,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
             stateCorrupt = true;
             throw new RunFailure('state-corrupt', 'needs-attention');
           }
-          setCounts();
+          applyPlanCounters(plan);
           if (plan.verdict === 'guard-tripped') {
             outcome = 'needs-attention';
             reason = 'guard-tripped';
@@ -588,10 +620,7 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
       reason === 'pull-failed' || reason === 'upload-failed' ||
       reason === 'push-rejected' || reason === 'timeout') outcome = 'failed';
     if (ownedPlan) {
-      counts.approved = ownedPlan.counters.approved;
-      counts.skipped = skippedCount(ownedPlan);
-      counts.conflicts = ownedPlan.counters.conflicts;
-      counts.credentialMatches = ownedPlan.counters.credentialMatches;
+      applyPlanCounters(ownedPlan);
     }
     counts.pendingWriteBack = (state ? Object.keys(state.pendingWriteBack).length : 0) + approvedPending;
     if (stateLoaded && state && !stateCorrupt) {

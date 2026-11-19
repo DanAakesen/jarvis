@@ -1,0 +1,112 @@
+import Foundation
+import XCTest
+@testable import JarvisCore
+
+final class JarvisStatusEvidenceTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_795_053_600)
+
+    func testMissingOrStaleEvidenceStaysUnknownInsteadOfFalseDegraded() {
+        XCTAssertEqual(JarvisStatusLogic.smokeStatus(nil, now: now), .unknown)
+        let entry = JarvisStatusSmokeEntry(id: "chat_canary", status: .unknown, checkedAt: "2026-11-19T01:59:00Z")
+        let unknown = JarvisStatusSmoke(checkedAt: "2026-11-19T01:59:00Z", entries: [entry])
+        XCTAssertEqual(JarvisStatusLogic.smokeStatus(unknown, now: now), .unknown)
+
+        let old = JarvisStatusSmokeEntry(id: "research", status: .ok, checkedAt: "2026-11-19T01:00:00Z")
+        XCTAssertEqual(
+            JarvisStatusLogic.smokeStatus(
+                JarvisStatusSmoke(checkedAt: "2026-11-19T01:00:00Z", entries: [old]),
+                now: now
+            ),
+            .unknown
+        )
+    }
+
+    func testStatusReasonsDistinguishUnavailableNeverProbedAndStaleRuntimeEvidence() {
+        let missing = JarvisStatusEntry(
+            id: "foundry.chat", status: .down, checkedAt: "2026-11-19T02:00:00Z",
+            details: ["configured": .bool(false), "reason": .string("active_engine_unconfigured")]
+        )
+        XCTAssertEqual(JarvisStatusLogic.reason(for: missing), .key(.statusReasonActiveEngineMissing))
+
+        let never = JarvisStatusEntry(
+            id: "foundry.voice", status: .unknown, checkedAt: "2026-11-19T02:00:00Z",
+            details: ["configured": .bool(true), "runtimeProbe": .string("not_run")]
+        )
+        XCTAssertEqual(JarvisStatusLogic.reason(for: never), .key(.statusReasonPiNotProbed))
+
+        let stale = JarvisStatusEntry(
+            id: "foundry.embeddings", status: .unknown, checkedAt: "2026-11-19T01:00:00Z",
+            details: ["configured": .bool(true), "runtimeProbe": .string("stale")]
+        )
+        XCTAssertEqual(JarvisStatusLogic.reason(for: stale), .key(.statusReasonRuntimeStale))
+    }
+
+    func testRuntimeEvidenceAgesLocallyForRowsCountsAndFiltering() {
+        let entry = JarvisStatusEntry(
+            id: "foundry.chat", status: .ok, checkedAt: "2026-11-19T01:44:59Z",
+            details: [
+                "configured": .bool(true), "runtimeProbe": .string("runtime"),
+                "evidence": .string("runtime-turn"), "outcome": .string("ok"),
+            ]
+        )
+        XCTAssertEqual(JarvisStatusLogic.displayStatus(for: entry, now: now), .unknown)
+        XCTAssertEqual(JarvisStatusLogic.issueCount([entry], now: now), 1)
+        XCTAssertEqual(
+            JarvisStatusLogic.visible([entry], filter: .issues, now: now),
+            [entry]
+        )
+        XCTAssertEqual(
+            JarvisStatusLogic.reason(for: entry, now: now),
+            .key(.statusReasonRuntimeStale)
+        )
+    }
+
+    func testRuntimeRefusalAndEmbeddingFailureKeepTheirRealReason() {
+        let refused = JarvisStatusEntry(
+            id: "foundry.chat", status: .down, checkedAt: "2026-11-19T02:00:00Z",
+            details: [
+                "configured": .bool(true), "evidence": .string("runtime-turn"),
+                "outcome": .string("failed"), "reason": .string("budget_exhausted"),
+            ]
+        )
+        XCTAssertEqual(
+            JarvisStatusLogic.reason(for: refused),
+            .key(.statusReasonPiBudgetExhausted)
+        )
+        let embedding = JarvisStatusEntry(
+            id: "foundry.embeddings", status: .degraded, checkedAt: "2026-11-19T02:00:00Z",
+            details: [
+                "configured": .bool(true), "evidence": .string("vault-index"),
+                "outcome": .string("fallback"), "reason": .string("embedding_request_failed"),
+            ]
+        )
+        XCTAssertEqual(
+            JarvisStatusLogic.reason(for: embedding),
+            .key(.statusReasonEmbeddingFailed)
+        )
+    }
+
+    func testMirrorDecodingRetainsLastRunOutcomeAndReadReason() throws {
+        let data = Data("""
+        {
+          "state":"read-error",
+          "lastSuccessAt":null,
+          "lastRunAt":"2026-11-19T01:50:00Z",
+          "outcome":"failed",
+          "readReason":"access-denied",
+          "guardReasons":["max-changed-G"],
+          "changedOnGitHub":26,
+          "changedOnObsidian":11,
+          "deferredOnGitHub":1
+        }
+        """.utf8)
+        let mirror = try JSONDecoder().decode(JarvisVaultMirror.self, from: data)
+        XCTAssertEqual(mirror.lastRunAt, "2026-11-19T01:50:00Z")
+        XCTAssertEqual(mirror.outcome, "failed")
+        XCTAssertEqual(mirror.readReason, "access-denied")
+        XCTAssertEqual(mirror.guardReasons, ["max-changed-G"])
+        XCTAssertEqual(mirror.changedOnGitHub, 26)
+        XCTAssertEqual(mirror.changedOnObsidian, 11)
+        XCTAssertEqual(mirror.deferredOnGitHub, 1)
+    }
+}

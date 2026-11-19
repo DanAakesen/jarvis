@@ -84,6 +84,25 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
 
     if (!options.gateway) return;
     const gateway = options.gateway;
+    const recordSmokeEvidence = (
+      part: PiSmokePart,
+      status: 'ok' | 'degraded' | 'down',
+      reason?: 'budget_exhausted' | 'smoke_failed',
+    ) => {
+      const id = part === 'voice' ? 'foundry.voice' : part === 'core' ? 'foundry.chat' : undefined;
+      if (!id) return;
+      app.systemStatusReader.recordEvidence(id, {
+        status,
+        checkedAt: new Date().toISOString(),
+        details: {
+          configured: true,
+          engine: 'pi',
+          evidence: 'deploy-smoke',
+          smokePart: part,
+          ...(reason ? { reason } : {}),
+        },
+      });
+    };
     // Wake a server that scales from zero (Azure) as the backend starts, so its first search does not find it asleep.
     for (const bridge of options.bridges ?? []) bridge.warm();
     await app.register(createPiMcpRoutes({
@@ -99,9 +118,18 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
         if (!request.deployPrincipal) return reply.code(403).send({ error: 'Forbidden' });
         try {
           const status = await gateway.status(AbortSignal.timeout(10_000));
-          if (!status.enabled) return reply.code(409).send({ error: 'PI is over its monthly cap; the smoke did not run.', code: 'pi_budget_exhausted' });
-          return await runPiSmoke(gateway, AbortSignal.timeout(220_000), { bridges: options.bridges, part: request.body.part });
+          if (!status.enabled) {
+            recordSmokeEvidence(request.body.part, 'degraded', 'budget_exhausted');
+            return reply.code(409).send({ error: 'PI is over its monthly cap; the smoke did not run.', code: 'pi_budget_exhausted' });
+          }
+          const report = await runPiSmoke(gateway, AbortSignal.timeout(220_000), { bridges: options.bridges, part: request.body.part });
+          recordSmokeEvidence(
+            report.part,
+            Object.values(report.checks).every(Boolean) ? 'ok' : 'degraded',
+          );
+          return report;
         } catch (error) {
+          recordSmokeEvidence(request.body.part, 'down', 'smoke_failed');
           request.log.warn({ code: error instanceof PiGatewayError ? error.code : 'unknown' }, 'pi.smoke_failed');
           return reply.code(502).send(errorBody(error));
         }

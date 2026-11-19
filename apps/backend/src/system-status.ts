@@ -74,6 +74,11 @@ export interface SystemStatusReader {
   read(): Promise<SystemStatus>;
   peek?(): SystemStatus | undefined;
   refresh(): Promise<SystemStatus>;
+  recordEvidence(id: SystemStatusSubsystem, evidence: {
+    readonly status: SystemStatusValue;
+    readonly checkedAt: string;
+    readonly details?: SystemStatusEntry['details'];
+  }): void;
   recordError(route: string | undefined, statusCode: number): void;
   recordSmoke(report: SystemSmokeStatus): void;
 }
@@ -97,6 +102,8 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
+const lastErrorFreshMs = 5 * 60_000;
+const runtimeEvidenceFreshMs = 15 * 60_000;
 export const researchSmokeFailureReasons: ReadonlySet<string> = new Set([
   'research_settings_unavailable',
   'research_runner_auth',
@@ -461,6 +468,57 @@ export function createSystemStatusReader(
   let lastError: { occurredAt: string; route: string | null; statusCode: number } | undefined;
   let latestSmoke: SystemSmokeStatus | undefined;
   let latest: SystemStatus | undefined;
+  const observedSince = new Date(now()).toISOString();
+  const evidence = new Map<SystemStatusSubsystem, {
+    readonly status: SystemStatusValue;
+    readonly checkedAt: string;
+    readonly details?: SystemStatusEntry['details'];
+  }>();
+
+  const withEvidence = (entry: SystemStatusEntry): SystemStatusEntry => {
+    const observed = evidence.get(entry.id);
+    if (!observed) return entry;
+    if (entry.details?.configured === false && observed.details?.configured !== true) return entry;
+    const baseDetails = { ...entry.details };
+    for (const key of [
+      'reason', 'evidence', 'smokeCheck', 'smokePart', 'channel', 'outcome',
+      'source', 'runtimeProbe', 'lastEvidenceAt',
+    ]) delete baseDetails[key];
+    const checkedAtMs = Date.parse(observed.checkedAt);
+    const stale = !Number.isFinite(checkedAtMs) || checkedAtMs > now() + 30_000 ||
+      now() - checkedAtMs > runtimeEvidenceFreshMs;
+    return {
+      id: entry.id,
+      status: stale ? 'unknown' : isStatus(observed.status) ? observed.status : 'unknown',
+      checkedAt: observed.checkedAt,
+      details: {
+        ...baseDetails,
+        ...observed.details,
+        runtimeProbe: stale ? 'stale' : 'runtime',
+        lastEvidenceAt: observed.checkedAt,
+      },
+    };
+  };
+
+  const lastErrorEntry = (): SystemStatusEntry => {
+    const checkedAt = new Date(now()).toISOString();
+    const occurredAt = lastError?.occurredAt ?? null;
+    const occurredAtMs = occurredAt === null ? Number.NaN : Date.parse(occurredAt);
+    const fresh = Number.isFinite(occurredAtMs) && occurredAtMs <= now() + 30_000 &&
+      now() - occurredAtMs <= lastErrorFreshMs;
+    return {
+      id: 'last_error',
+      checkedAt,
+      status: fresh ? 'degraded' : 'ok',
+      details: {
+        occurredAt,
+        route: lastError?.route ?? null,
+        statusCode: lastError?.statusCode ?? null,
+        recent: fresh,
+        observedSince,
+      },
+    };
+  };
 
   const readProbe = async (id: SystemStatusSubsystem): Promise<SystemStatusEntry> => {
     const checkedAt = new Date(now()).toISOString();
@@ -473,28 +531,40 @@ export function createSystemStatusReader(
       };
     }
     if (id === 'last_error') {
-      return {
-        id,
-        checkedAt,
-        status: lastError ? 'degraded' : 'ok',
-        details: lastError
-          ? { occurredAt: lastError.occurredAt, route: lastError.route, statusCode: lastError.statusCode }
-          : { occurredAt: null, route: null, statusCode: null },
-      };
+      return lastErrorEntry();
     }
 
     const probe = probes[id];
-    if (!probe) return { id, checkedAt, status: 'unknown', details: { configured: false } };
+    if (!probe) return withEvidence({
+      id, checkedAt, status: 'unknown', details: { configured: false },
+    });
     try {
       const result = await probe();
-      return {
+      return withEvidence({
         id,
         checkedAt,
         status: isStatus(result.status) ? result.status : 'unknown',
         ...(result.details ? { details: result.details } : {}),
-      };
+      });
     } catch {
-      return { id, checkedAt, status: 'down', details: { reason: 'check_failed' } };
+      return withEvidence({
+        id, checkedAt, status: 'down', details: { reason: 'check_failed' },
+      });
+    }
+  };
+
+  const refreshEntryEvidence = (id: SystemStatusSubsystem): void => {
+    if (cached) {
+      cached.value = {
+        ...cached.value,
+        entries: cached.value.entries.map(entry => entry.id === id ? withEvidence(entry) : entry),
+      };
+    }
+    if (latest) {
+      latest = {
+        ...latest,
+        entries: latest.entries.map(entry => entry.id === id ? withEvidence(entry) : entry),
+      };
     }
   };
 
@@ -503,10 +573,9 @@ export function createSystemStatusReader(
       return latest ? {
         ...latest,
         ...(latestSmoke ? { smoke: latestSmoke } : {}),
-        entries: latest.entries.map((entry) => entry.id === 'last_error' && lastError
-          ? { id: entry.id, status: 'degraded', checkedAt: lastError.occurredAt,
-            details: { statusCode: lastError.statusCode } }
-          : entry),
+        entries: latest.entries.map(entry => entry.id === 'last_error'
+          ? lastErrorEntry()
+          : withEvidence(entry)),
       } : latestSmoke ? { checkedAt: latestSmoke.checkedAt, entries: [], smoke: latestSmoke } : undefined;
     },
     async read() {
@@ -529,6 +598,12 @@ export function createSystemStatusReader(
       cached = undefined;
       return this.read();
     },
+    recordEvidence(id, recorded) {
+      if (id === 'last_error' || id === 'deployed_commit') return;
+      if (!Number.isFinite(Date.parse(recorded.checkedAt))) return;
+      evidence.set(id, recorded);
+      refreshEntryEvidence(id);
+    },
     recordError(route, statusCode) {
       if (!Number.isInteger(statusCode) || statusCode < 500 || statusCode > 599) return;
       const safeRoute = typeof route === 'string' && route.startsWith('/') &&
@@ -544,6 +619,27 @@ export function createSystemStatusReader(
     },
     recordSmoke(report) {
       latestSmoke = { ...report, entries: report.entries.map((entry) => safeSmokeEntry(entry, true)) };
+      const evidenceChecks: readonly [
+        SystemStatusSubsystem,
+        SystemSmokeCheckId,
+      ][] = [
+        ['foundry.embeddings', 'foundry.embeddings'],
+        ['runner', 'research'],
+      ];
+      for (const [id, checkId] of evidenceChecks) {
+        const entry = latestSmoke.entries.find(candidate => candidate.id === checkId);
+        if (!entry) continue;
+        evidence.set(id, {
+          status: entry.status,
+          checkedAt: entry.checkedAt,
+          details: {
+            evidence: 'smoke',
+            smokeCheck: checkId,
+            ...(entry.reason ? { reason: entry.reason } : {}),
+          },
+        });
+        refreshEntryEvidence(id);
+      }
       if (cached) cached.value = { ...cached.value, smoke: latestSmoke };
     },
   };

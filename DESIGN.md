@@ -105,11 +105,11 @@ switch while a query is present; clearing the query restores the previous folder
 - Sheets can stack where the design returns to the same draft (editor to folder chooser, Edit task to Date & time);
   apple-hig prefers one sheet at a time. This is a known, deliberate deviation.
 
-## PI cutover flip (approved, not live) — #1887, P15-176
+## PI cutover flip (live) — #1887, P15-176
 
-Once the flip is released, the "Engine test switch" in Settings opens on "PI engine" when no choice is saved, and the Chat header's "PI test" pill shows by default. The explanation notes that "Current engine" remains selectable, that a new voice session reads the choice, and that PI voice has no camera or screen sharing or automatic fallback. Saved choices and the existing layout stay unchanged.
+PI is now the default when chat or voice sends no engine choice. The "Engine test switch" still exposes the Current engine deliberately; the Chat header shows PI by default and the explanation says there is no automatic fallback. A new voice session reads the choice, and PI voice has no camera or screen sharing. Saved choices and the existing layout stay unchanged.
 
-## PI voice — 16 November 2026 (#1887, P15-176)
+## PI voice — 16 November 2026, default from #1910
 
 No new screen. The existing voice screen and orb are unchanged; the only visible differences with the PI engine are in what Jarvis says and when. Settings, General, "Engine test switch" (renamed from "Chat engine test switch") now applies to chat and voice: the choice is read when a voice session starts, the Watch keeps the current engine, and the explanation says so in one sentence plus the two limits that matter to a tester (no camera or screen sharing with PI yet; no fallback to the current engine). When Dan starts voice with PI the first answer takes a few seconds (accepted); a turn that needs a tool opens with one short spoken sentence from PI, then the answer. Replies are one to three short sentences; anything long is offered in chat. If PI cannot answer, Jarvis says why in one sentence ("No other engine was used"). Not inspected on a device or simulator: it is a copy change and a connection parameter, and the Apple CI compile is the check.
 
@@ -129,7 +129,7 @@ No visible UI. PI says in plain words when a read-only server is not attached ("
 
 ## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
 
-A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affected chat only (from 16 November 2026 it covers voice too, see "PI voice" above) and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.
+A temporary Current-engine choice remains while the old route exists. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, PI by default) and has no fallback. Live rows show status, agent and model, month spend, warm/cold state and last turn. PI failures show the server's own sentence in the chat error banner. This control is removed with the old path.
 
 
 ## Event-driven proactive outreach — 15 November 2026 (#1858)
@@ -490,11 +490,16 @@ browsers keep the native list.
 ## Vault mirror Status row (19 October 2026; P14-29)
 
 Use one quiet row within System checks, with the Vault mirror label, a text
-state badge, relative last-success time and an explicit Dry-run label when
+state badge, relative last-run time and an explicit Dry-run label when
 reported. The existing status badge combines a dot with words; colour is never
-the only state signal. Not set up, healthy, stale, needs attention, failed,
+the only state signal. No status yet, healthy, stale, needs attention, failed,
 loading and read error use the same compact anatomy, without collapsed prose
-or lists.
+or lists. No status yet never claims the scheduled job is off; read errors name
+the bounded failure category. Expand for last run, last success, outcome and
+write-back evidence. Guard trips name the fixed planner predicate and show the
+proposed change/delete counts, not note paths.
+Healthy progress can include deferred change counts; ordinary differences do
+not appear as owner work or a manual attention queue.
 
 A full-width disclosure button uses the shared ghost-button geometry, a 44px
 minimum target, visible focus and `aria-expanded`. Enter/Space toggles details
@@ -504,7 +509,7 @@ expansion is immediate and has no motion dependency, including reduced motion.
 Loading/error retain this row and the page's existing Refresh/Retry recovery.
 The same disclosure remains mounted while the first snapshot arrives,
 preserving expansion and focus. A successful snapshot without mirror data
-shows Not set up; failed fetches and explicit read errors retain Read error.
+shows No status yet; failed fetches and explicit read errors retain Read error.
 Recovery copy does not assume whether the page offers Refresh or Retry.
 Synthetic Chromium inspected all seven states, disclosure, keyboard focus,
 repeated input, long paths and overflow at 1280×900, 390×900 and 320×900 with

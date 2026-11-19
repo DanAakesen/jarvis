@@ -170,6 +170,16 @@ public struct JarvisVaultMirrorCounts: Codable, Equatable, Sendable {
 public struct JarvisVaultMirror: Codable, Equatable, Sendable {
     public let state: JarvisVaultMirrorState
     public let lastSuccessAt: String?
+    public let lastRunAt: String?
+    public let outcome: String?
+    public let readReason: String?
+    public let guardReasons: [String]?
+    public let changedOnGitHub: Int?
+    public let changedOnObsidian: Int?
+    public let deletedOnGitHub: Int?
+    public let deletedOnObsidian: Int?
+    public let deferredOnGitHub: Int?
+    public let deferredOnObsidian: Int?
     public let writeBack: String?
     public let reason: String?
     public let counts: JarvisVaultMirrorCounts?
@@ -178,6 +188,16 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
     public init(
         state: JarvisVaultMirrorState,
         lastSuccessAt: String? = nil,
+        lastRunAt: String? = nil,
+        outcome: String? = nil,
+        readReason: String? = nil,
+        guardReasons: [String]? = nil,
+        changedOnGitHub: Int? = nil,
+        changedOnObsidian: Int? = nil,
+        deletedOnGitHub: Int? = nil,
+        deletedOnObsidian: Int? = nil,
+        deferredOnGitHub: Int? = nil,
+        deferredOnObsidian: Int? = nil,
         writeBack: String? = nil,
         reason: String? = nil,
         counts: JarvisVaultMirrorCounts? = nil,
@@ -185,6 +205,16 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
     ) {
         self.state = state
         self.lastSuccessAt = lastSuccessAt
+        self.lastRunAt = lastRunAt
+        self.outcome = outcome
+        self.readReason = readReason
+        self.guardReasons = guardReasons
+        self.changedOnGitHub = changedOnGitHub
+        self.changedOnObsidian = changedOnObsidian
+        self.deletedOnGitHub = deletedOnGitHub
+        self.deletedOnObsidian = deletedOnObsidian
+        self.deferredOnGitHub = deferredOnGitHub
+        self.deferredOnObsidian = deferredOnObsidian
         self.writeBack = writeBack
         self.reason = reason
         self.counts = counts
@@ -255,37 +285,93 @@ public enum JarvisStatusReason: Equatable, Sendable {
 
 public enum JarvisStatusLogic {
     public static let staleAfter: TimeInterval = 5 * 60
+    public static let runtimeEvidenceFreshFor: TimeInterval = 15 * 60
 
     /// Problems first, then by the backend's own order.
-    public static func ordered(_ entries: [JarvisStatusEntry]) -> [JarvisStatusEntry] {
+    public static func displayStatus(for entry: JarvisStatusEntry, now: Date? = nil) -> JarvisStatusValue {
+        guard let now,
+              text(entry.details?["runtimeProbe"]) == "runtime",
+              let checkedAt = JarvisInsightsDates.parse(entry.checkedAt),
+              checkedAt.timeIntervalSince(now) > 30 || now.timeIntervalSince(checkedAt) >= runtimeEvidenceFreshFor
+        else { return entry.status }
+        return .unknown
+    }
+
+    public static func ordered(_ entries: [JarvisStatusEntry], now: Date? = nil) -> [JarvisStatusEntry] {
         entries.enumerated()
-            .sorted { ($0.element.status.rank, $0.offset) < ($1.element.status.rank, $1.offset) }
+            .sorted { (displayStatus(for: $0.element, now: now).rank, $0.offset)
+                < (displayStatus(for: $1.element, now: now).rank, $1.offset) }
             .map(\.element)
     }
 
-    public static func visible(_ entries: [JarvisStatusEntry], filter: JarvisStatusFilter) -> [JarvisStatusEntry] {
-        let ordered = ordered(entries)
-        return filter == .issues ? ordered.filter { $0.status != .ok } : ordered
+    public static func visible(
+        _ entries: [JarvisStatusEntry], filter: JarvisStatusFilter, now: Date? = nil
+    ) -> [JarvisStatusEntry] {
+        let ordered = ordered(entries, now: now)
+        return filter == .issues ? ordered.filter { displayStatus(for: $0, now: now) != .ok } : ordered
     }
 
     public static func isStale(checkedAt: String, now: Date) -> Bool {
         guard let date = JarvisInsightsDates.parse(checkedAt) else { return false }
-        return now.timeIntervalSince(date) >= staleAfter
+        return date.timeIntervalSince(now) > 30 || now.timeIntervalSince(date) >= staleAfter
     }
 
-    public static func issueCount(_ entries: [JarvisStatusEntry]) -> Int {
-        entries.filter { $0.status != .ok }.count
+    public static func issueCount(_ entries: [JarvisStatusEntry], now: Date? = nil) -> Int {
+        entries.filter { displayStatus(for: $0, now: now) != .ok }.count
+    }
+
+    public static func smokeStatus(_ smoke: JarvisStatusSmoke?, now: Date) -> JarvisStatusValue {
+        guard let smoke, !smoke.entries.isEmpty,
+              !isStale(checkedAt: smoke.checkedAt, now: now) else { return .unknown }
+        if smoke.entries.contains(where: { $0.status == .down }) { return .down }
+        if smoke.entries.contains(where: { $0.status == .degraded }) { return .degraded }
+        return smoke.okCount == smoke.entries.count ? .ok : .unknown
     }
 
     /// The plain reason sentence for a check, or `nil` when the check needs none.
-    public static func reason(for entry: JarvisStatusEntry) -> JarvisStatusReason? {
+    public static func reason(for entry: JarvisStatusEntry, now: Date? = nil) -> JarvisStatusReason? {
         let details = entry.details ?? [:]
+        if displayStatus(for: entry, now: now) == .unknown,
+           text(details["runtimeProbe"]) == "runtime",
+           entry.status != .unknown {
+            return .key(.statusReasonRuntimeStale)
+        }
+        if text(details["reason"]) == "active_engine_unconfigured" { return .key(.statusReasonActiveEngineMissing) }
         if flag(details["configured"]) == false { return .key(.statusReasonNotConfigured) }
+        if entry.check == .lastError {
+            if flag(details["recent"]) == true { return .key(.statusReasonLastErrorRecent) }
+            if text(details["occurredAt"]) != nil { return .key(.statusReasonLastErrorHistorical) }
+            return .key(.statusReasonNoBackendError)
+        }
+        if text(details["runtimeProbe"]) == "stale" { return .key(.statusReasonRuntimeStale) }
+        if text(details["reason"]) == "embedding_request_failed" {
+            return .key(.statusReasonEmbeddingFailed)
+        }
+        if text(details["reason"]) == "budget_exhausted" { return .key(.statusReasonPiBudgetExhausted) }
+        if text(details["reason"]) == "busy" { return .key(.statusReasonPiBusy) }
+        if text(details["reason"]) == "preflight_failed" { return .key(.statusReasonPiPreflightFailed) }
         if let reason = text(details["reason"]),
            !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .text(readable(reason))
         }
+        if ["runtime-turn", "voice-turn"].contains(text(details["evidence"]) ?? ""), text(details["outcome"]) != "ok" {
+            let interrupted = ["cancelled", "superseded"].contains(text(details["outcome"]) ?? "")
+            return .key(interrupted ? .statusReasonNotEstablished : .statusReasonPiFailed)
+        }
+        if entry.status == .ok,
+           let evidence = text(details["evidence"]),
+           ["runtime-turn", "voice-turn", "vault-index", "smoke", "deploy-smoke"].contains(evidence) {
+            return nil
+        }
         let id = entry.check
+        if id == .runner, flag(details["configured"]) == true,
+           text(details["healthProbe"]) == "not_run" {
+            return .key(.statusReasonRunnerNotProbed)
+        }
+        if id == .foundryChat || id == .foundryVoice || id == .foundryEmbeddings,
+           text(details["runtimeProbe"]) == "not_run" {
+            return .key(.statusReasonPiNotProbed)
+        }
         if id == .foundryChat || id == .foundryVoice || id == .foundryEmbeddings {
             let catalogue = text(details["catalogue"])
             let available = flag(details["deploymentAvailable"])
@@ -293,10 +379,6 @@ public enum JarvisStatusLogic {
             if catalogue == "live", available == false { return .key(.statusReasonNoDeployment) }
             if catalogue == "live", available == true { return .key(.statusReasonDeploymentListed) }
             if flag(details["configured"]) == true { return .key(.statusReasonDeploymentUnconfirmed) }
-        }
-        if id == .runner, flag(details["configured"]) == true,
-           text(details["healthProbe"]) == "not_run" {
-            return .key(.statusReasonRunnerNotProbed)
         }
         if id == .vaultIndex {
             let outcome = text(details["syncOutcome"])
@@ -309,7 +391,7 @@ public enum JarvisStatusLogic {
                 return .key(.statusReasonVaultSyncStale)
             }
         }
-        switch entry.status {
+        switch displayStatus(for: entry, now: now) {
         case .unknown: return .key(.statusReasonNotEstablished)
         case .down:
             if id == .pcBridge, flag(details["connected"]) == false {

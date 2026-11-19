@@ -247,7 +247,8 @@ class ReleaseStateTests(unittest.TestCase):
                 os.chdir(previous_cwd)
 
     def test_applied_and_accepted_are_distinct_and_original_failure_remains(self):
-        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
+        results = {key: {"result": "success"}
+                   for key in ("plan", *PARTS, "smoke", "pi-agent", "acceptance")}
         results["acceptance"]["result"] = "failure"
         code, receipt = self.record_fixture(dict.fromkeys(PARTS, True), results, evidence=smoke())
         self.assertEqual(code, 1)
@@ -257,7 +258,8 @@ class ReleaseStateTests(unittest.TestCase):
         self.assertFalse(any(component_selection(INPUTS, receipt, True).values()))
 
     def test_missing_acceptance_evidence_and_failed_or_cancelled_jobs_block(self):
-        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
+        results = {key: {"result": "success"}
+                   for key in ("plan", *PARTS, "smoke", "pi-agent", "acceptance")}
         self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results)[0], 1)
         for key in results:
             for status in ("failure", "cancelled", "skipped"):
@@ -269,7 +271,8 @@ class ReleaseStateTests(unittest.TestCase):
                                                      evidence=smoke())[0], 1)
 
     def test_manual_only_live_acceptance_is_not_run_and_does_not_block_release(self):
-        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke")}
+        results = {key: {"result": "success"}
+                   for key in ("plan", *PARTS, "smoke", "pi-agent")}
         results["acceptance"] = {"result": "skipped"}
         code, receipt = self.record_fixture(dict.fromkeys(PARTS, True), results)
         self.assertEqual(code, 0)
@@ -281,7 +284,8 @@ class ReleaseStateTests(unittest.TestCase):
         self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results)[0], 1)
 
     def test_known_or_unknown_functional_failure_cannot_become_accepted(self):
-        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
+        results = {key: {"result": "success"}
+                   for key in ("plan", *PARTS, "smoke", "pi-agent", "acceptance")}
         for status in ("down", "degraded", "unknown"):
             report = smoke()
             next(entry for entry in report["entries"]
@@ -299,11 +303,20 @@ class DeployWorkflowTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.live_acceptance == true", deploy)
         self.assertNotIn('cat "$response"', deploy)
         self.assertNotIn("RELEASE_BUDGET:", deploy)
+        self.assertIn("needs: [plan, infra, backend, web, agent, smoke, pi-agent, acceptance]", deploy)
+        self.assertIn("Verify the latest scheduled Vault Mirror execution", deploy)
+        self.assertIn("--wait-seconds 1200", deploy)
         qualification = deploy.index("run: python .github/scripts/release_state.py plan")
         readback = deploy.index("name: Authenticate only after exact qualification")
         selected = deploy.index("run: python .github/scripts/release_state.py select")
         self.assertLess(qualification, readback)
         self.assertLess(readback, selected)
+
+    def test_enabled_vault_mirror_cannot_silently_fall_back(self):
+        script = (ROOT / ".github/scripts/deploy_bicep.sh").read_text()
+        self.assertIn("vault_mirror_required_failure", script)
+        self.assertNotIn("keeping the mirror disabled", script)
+        self.assertNotIn("skipping the image build", script)
 
 
 if __name__ == "__main__":

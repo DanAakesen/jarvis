@@ -22,6 +22,34 @@ Completion means deterministic backend, web, contracts, script, migration/SQL an
 **Status: implemented; all 195 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
 The newest visual takes focus while older visuals stay swipeable for the call. Close/expand float over the content, expansion uses the full screen, and HTML visuals follow the active appearance without changing native charts. Captions have more room and fade at both edges.
 
+## Vault Mirror and Status reliability — 19 November 2026 (#1962)
+
+**Status: implemented and locally qualified; exact PR CI for the final review
+head and production-drain evidence remain open.** Production evidence establishes that the mirror is
+running every ten minutes. The latest executions finish in about 14 seconds as
+`needs-attention / guard-tripped`, with 11 pending Obsidian write-backs and one
+conflict; no changes are applied. The fix keeps the 25/3 caps as per-run batches:
+whole paths drain over successive schedules, Obsidian immediately wins ordinary
+unclean/no-base conflicts, and only hard source-loss/secret/path/content guards
+stop work. Guard enums and deferred/proposed counts make the remaining safety
+state visible without a cap or policy bypass.
+
+| Step | State |
+| --- | --- |
+| Verify latest main Deploy, mirror variables, image build and fail-silent paths | Done |
+| Establish the live mirror outcome and distinguish schedule failure from a planner guard | Done: job executes, but the all-or-nothing planner guard repeats and no actions commit |
+| Expose mirror last-run/outcome/read-reason evidence to web and iOS | Built |
+| Make `JARVIS_VAULT_MIRROR_ENABLED=true` fail closed and add a read-only fresh-execution probe | Built |
+| Resolve ordinary conflicts in Obsidian favour immediately and batch changes under existing per-run caps | Built; hard guards and secret/path filtering remain |
+| Use PI chat/voice/brain and embedding evidence with 15-minute freshness; age Last backend error after five minutes | Built |
+| Focused and full local regressions | Broader suites pass; the final review additions pass 15 focused PI/status and 57 GitHub-script tests |
+| Swift model tests and real-browser desktop/phone inspection | Done; 196 JarvisCore tests pass, and the actual web component was checked at 1280×900 and 390×844 |
+| PR CI review and production drain evidence from the next qualified Deploy | Exact PR qualification pending for the final review fixes; current production is proven to be running and blocked by the old all-or-nothing plan; no deployment or merge by this branch |
+
+Next: qualify the automatic reconciliation and final review fixes in PR CI, then verify that the
+11 pending write-backs and one conflict drain in bounded runs. A cap/policy
+change is not required for this backlog unless a hard guard explicitly remains.
+
 ## PI smoke in three requests (#1910, P15-209)
 
 **Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
@@ -270,19 +298,19 @@ Run 43762776242: the `watch` job failed only because capture steps hit their 8-m
 Low Power Mode, and the screenshot steps are `continue-on-error` with a 12-minute bound (compile steps stay strict).
 Next: owner review of the captures and a TestFlight build.
 
-## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
+## PI phases 0 to 2 together: PI agent, Jarvis MCP and default chat — 15 November 2026 (#1885, P15-174, PR #1890)
 
-**Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.
+**Status: delivered; PI became the chat and voice default in #1910.** The owner
+asked for phases 0, 1 and 2 as one piece. The Current-engine selector remains a
+deliberate compatibility choice with no automatic fallback.
 
 | Part | State |
 | --- | --- |
-| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, harness built-ins on, Jarvis MCP server, skills from the repository | Written; **Deploy has not run it yet** |
+| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, harness built-ins on, Jarvis MCP server, skills from the repository | Deployed; provisioning is now required for an accepted release |
 | Jarvis MCP server (`/pi/mcp`: `find_tools`, `call_tool`) with per-turn authority and the in-process dispatch through the normal tool route | Built; 9 offline tests including forged, closed and smoke grants |
 | Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (100 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
-| Test selector: turn field `engine: "pi"`, Settings switch in iOS, `GET /pi/status`, `POST /pi/warm` | Built; backend route tests pass; iOS compiled only by CI |
-| Live proof of MCP, streaming, cancellation and first-text times | **Open**: dispatch Deploy with `measure_pi` after merge (about 0.5 DKK); results land in the job summary |
-
-Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, then the owner tests PI chat on the phone and sends feedback. Phases 3 to 8 are unchanged.
+| Engine selector: default PI, optional `engine: "current"`, Settings compatibility choice, `GET /pi/status`, `POST /pi/warm` | Live |
+| Live proof of MCP, streaming, cancellation and first-text times | Manual `measure_pi` remains the paid measurement path |
 
 
 ## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)
@@ -4452,7 +4480,7 @@ when the backlog is near empty.
 | P14-23 | [#1069](https://github.com/DanAakesen/jarvis/issues/1069) | One shared date and time format across the web app | Every absolute date, time and date-time shown to the user goes through one shared helper (en-GB, 24-hour clock) with date-time, date-only and time-only variants; date-time is medium date plus short time in the browser time zone unless a surface pins one; date-only values show no clock and never shift the day; relative times and timezone-less source text such as Daily brief timestamps keep their own shape; the credential expiry that printed raw ISO is readable; the duplicate helpers are gone; tests assert the strings and a static guard stops new ad-hoc formatters; the same shape renders at 390 and 1440 in light and dark without overflow. | P14-12 | Complete |
 | P14-24 | [#1073](https://github.com/DanAakesen/jarvis/issues/1073) | Plan task reminders when the vault changes | A verified push to the vault repository's default branch starts a bounded, todos-only reminder-planning pass without waiting for a scheduled check; a high-priority task with an explicit due time less than 48 hours ahead gets a pending reminder shortly after the push, and a task already past its due time gets none; the pass reads nothing and logs a reason when proactive work is paused, todos are disabled, or the planner is not configured; during the 22:00 to 07:00 Europe/Copenhagen quiet window it reads tasks but plans only explicitly requested at-due reminders (#1706); other repositories, branches and event types do not start it; rapid pushes collapse to one running pass plus one trailing pass with a minimum gap, and shutdown aborts a running pass; a later scheduled check adds no duplicate reminder rows; tests use a fake clock, a fake vault client and synthetic tasks only. | P13-13 | Complete |
 | P14-25 | [#1074](https://github.com/DanAakesen/jarvis/issues/1074) | Recognise every high-priority task marker and surface undated ones | `🔺`, `⏫`, `[priority:: highest]`, `[priority:: high]` and their round-bracket forms count as high priority, case-insensitively with flexible spacing, alongside the legacy `priority:: P1 - High` form; `🔼`, `🔽`, `⏬`, medium, low and finished tasks do not; a `🔺` task gets reminders and deadline findings exactly like a `⏫` task; the Tasks page and `vault_search kind=tasks` report it as high without showing the marker; a scheduled check with undated high-priority tasks creates one digest finding per day and task set, never a push; tests use synthetic task lines only. | P13-07, P13-19 | Complete |
-| P14-26 | [#1077](https://github.com/DanAakesen/jarvis/issues/1077) | Vault mirror: reconcile engine, policy and status contract | A new `apps/vault-mirror` workspace holds a pure `planReconcile` engine (no network, file-system, process, clock or random access) that covers every row of the decision table, the approved-path policy and the safety guards (change and delete caps, partial-pull and one-sided-empty checks, the 24-hour conflict rule); property tests prove convergence after a crash at any step, no write in `dry-run`, no unapproved path, no path planned in both directions and no dropped change; synthetic fixtures cover Unicode normalisation, line endings and case-only path differences; `vaultMirrorStatusSchema` is exported from `packages/contracts` and rejects unknown keys and reasons, oversized lists and bad counts; the workspace runs in CI as its own required check; the architecture and decision docs and a README describe it. | — | Complete |
+| P14-26 | [#1077](https://github.com/DanAakesen/jarvis/issues/1077) | Vault mirror: reconcile engine, policy and status contract | A new `apps/vault-mirror` workspace holds a pure `planReconcile` engine (no network, file-system, process, clock or random access) that covers every row of the decision table, the approved-path policy and the safety guards. The 19 November 2026 decision supersedes the original 24-hour wait: unclean/no-base conflicts use Obsidian immediately, and ordinary caps batch whole paths instead of stopping all work. Tests cover the changed boundary plus the hard guards. The shared strict status contract and CI workspace remain. | — | Complete |
 | P14-27 | [#1078](https://github.com/DanAakesen/jarvis/issues/1078) | Vault mirror: runner, Obsidian Headless Sync wrapper and image | One run of `apps/vault-mirror/dist/main.js` works end to end against fakes and exits with the documented codes; `dry-run` writes nothing to the working copy and never uses a writing `ob` mode, `on` applies, verifies and uploads the planned write-back, and a failed upload is retried on the next run; overlapping runs never both write (the second exits `skipped-busy`, a lost lease aborts before any write); the state archive is checksummed, size-capped and uploaded with an ETag precondition; the destination repository is verified private with the expected default branch before every push; no token, password, note text or path reaches the logs; the image builds and passes its smoke test in CI; every unverified assumption about `ob` is recorded in the decision log. | P14-26 | Complete |
 | P14-28 | [#1080](https://github.com/DanAakesen/jarvis/issues/1080) | Vault mirror: Azure job, deploy wiring and owner setup script | With the switch off (the default) the Bicep template builds and lints and creates no new resource; with it on, the template defines the job, its identity, container-scoped role assignments and both containers, and grants nothing else; no secret value appears in the template, parameters, workflow logs or setup output, because the job reads secrets at run time; the deploy flow builds and pushes the mirror image only when the switch is on and skips visibly when the Dockerfile is absent; `infra/setup-vault-mirror.ps1` takes hidden input, removes its temporary role on success and failure and reports presence and version only; the runbook covers enabling, the first dry-run, going live, rolling back and disabling; the architecture and decision docs show the job, containers, data flow, identity, switch and cost estimate. | — | Complete |
 | P14-29 | [#1081](https://github.com/DanAakesen/jarvis/issues/1081) | Vault mirror: freshness on the Status page and a stale warning | With no status document the Status page shows "not set up" without an alert or error; a fresh `ok` or `ok-noop` document shows healthy, one older than 30 minutes shows stale, each fixed reason maps to one short plain sentence, and a malformed document shows a read error and is never passed through; `dry-run` is stated on the row; conflict paths appear only in the authenticated response after the row is expanded and are never logged; a stale or failing mirror creates at most one finding per Copenhagen day and reason, with no push and nothing when the mirror is not set up; backend and web tests cover every state and the keyboard behaviour; the row is inspected in a real browser at desktop and mobile widths. | P14-26 | Complete |

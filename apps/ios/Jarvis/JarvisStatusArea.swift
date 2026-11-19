@@ -144,7 +144,9 @@ struct JarvisStatusArea: View {
                 stats: JarvisStatusValue.allCases.map { tone in
                     JarvisPageStat(
                         id: tone.rawValue,
-                        value: state.snapshot?.entries.filter { $0.status == tone }.count,
+                        value: state.snapshot?.entries.filter {
+                            JarvisStatusLogic.displayStatus(for: $0, now: now) == tone
+                        }.count,
                         label: text(tone.localizationKey),
                         systemImage: tone == .ok ? "checkmark.circle" : tone == .unknown ? "questionmark.circle" : "exclamationmark.circle",
                         tint: tone == .down ? .red : JarvisDesignTokens.primaryAccent,
@@ -158,9 +160,9 @@ struct JarvisStatusArea: View {
     }
 
     private func loaded(_ snapshot: JarvisStatusSnapshot) -> some View {
-        let entries = JarvisStatusLogic.visible(snapshot.entries, filter: filter)
-        let mirror = snapshot.vaultMirror
-        let showMirror = mirror.map { filter == .all || $0.displayState(now: now).tone != .ok } ?? false
+        let entries = JarvisStatusLogic.visible(snapshot.entries, filter: filter, now: now)
+        let mirror = snapshot.vaultMirror ?? JarvisVaultMirror(state: .notSetUp, readReason: "status-missing")
+        let showMirror = filter == .all || mirror.displayState(now: now).tone != .ok
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             if state.isPartial, let failure = state.failure {
                 HStack {
@@ -190,7 +192,7 @@ struct JarvisStatusArea: View {
                 }
             }
             JarvisRowGroup {
-                if let mirror, showMirror { mirrorRow(mirror) }
+                if showMirror { mirrorRow(mirror) }
                 smokeRow(snapshot.smoke)
             }
         }
@@ -232,11 +234,12 @@ struct JarvisStatusArea: View {
 
     private func checkRow(_ entry: JarvisStatusEntry) -> some View {
         let title = entry.check.map { text($0.localizationKey) } ?? JarvisStatusLogic.readable(entry.id)
-        let reason = JarvisStatusLogic.reason(for: entry)
+        let tone = JarvisStatusLogic.displayStatus(for: entry, now: now)
+        let reason = JarvisStatusLogic.reason(for: entry, now: now)
         return JarvisStatusRow(
             title: title,
-            tone: entry.status,
-            toneTitle: text(entry.status.localizationKey),
+            tone: tone,
+            toneTitle: text(tone.localizationKey),
             isExpanded: expanded.contains(entry.id),
             identifier: "status.row.\(entry.id)",
             language: language,
@@ -245,7 +248,7 @@ struct JarvisStatusArea: View {
             toggle(entry.id)
         } detail: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(reasonText(reason) ?? text(entry.status.localizationKey))
+                Text(reasonText(reason) ?? text(tone.localizationKey))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -275,14 +278,65 @@ struct JarvisStatusArea: View {
             isExpanded: expanded.contains("vault-mirror"),
             identifier: "status.row.vault-mirror",
             language: language,
-            subtitle: lastSuccessText(mirror)
+            subtitle: lastRunText(mirror)
         ) {
             toggle("vault-mirror")
         } detail: {
             VStack(alignment: .leading, spacing: 8) {
-                Text(lastSuccessText(mirror))
+                Text(lastRunText(mirror))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                if let lastSuccessAt = mirror.lastSuccessAt.flatMap(JarvisInsightsDates.parse) {
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .statusMirrorLastSuccess, language: language,
+                            JarvisInsightsDates.elapsed(from: lastSuccessAt, now: now, language: language)
+                        )
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+                if let outcome = mirror.outcome {
+                    Text(text(.statusMirrorLastOutcome) + ": " + JarvisStatusLogic.readable(outcome))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let reasons = mirror.guardReasons, !reasons.isEmpty {
+                    Text(reasons.map(mirrorGuardReasonText).joined(separator: " "))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let changedOnGitHub = mirror.changedOnGitHub {
+                    Text(text(.statusMirrorChangedGitHub) + ": \(changedOnGitHub)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let changedOnObsidian = mirror.changedOnObsidian {
+                    Text(text(.statusMirrorChangedObsidian) + ": \(changedOnObsidian)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deletedOnGitHub = mirror.deletedOnGitHub {
+                    Text(text(.statusMirrorDeletedGitHub) + ": \(deletedOnGitHub)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deletedOnObsidian = mirror.deletedOnObsidian {
+                    Text(text(.statusMirrorDeletedObsidian) + ": \(deletedOnObsidian)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deferredOnGitHub = mirror.deferredOnGitHub {
+                    Text(text(.statusMirrorDeferredGitHub) + ": \(deferredOnGitHub)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deferredOnObsidian = mirror.deferredOnObsidian {
+                    Text(text(.statusMirrorDeferredObsidian) + ": \(deferredOnObsidian)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 if let writeBack = mirror.writeBack {
                     Text(
                         text(.statusMirrorWriteBack) + ": "
@@ -347,6 +401,53 @@ struct JarvisStatusArea: View {
         )
     }
 
+    private func lastRunText(_ mirror: JarvisVaultMirror) -> String {
+        let deferred = (mirror.deferredOnGitHub ?? 0) + (mirror.deferredOnObsidian ?? 0)
+        let withDeferred = { (base: String) in
+            deferred > 0 ? base + " · \(deferred) deferred to next run" : base
+        }
+        guard let last = mirror.lastRunAt.flatMap(JarvisInsightsDates.parse) else {
+            if let readReason = mirror.readReason { return mirrorReadReasonText(readReason) }
+            return withDeferred(lastSuccessText(mirror))
+        }
+        return withDeferred(JarvisInsightsLocalization.format(
+            .statusMirrorLastRun,
+            language: language,
+            JarvisInsightsDates.elapsed(from: last, now: now, language: language)
+        ))
+    }
+
+    private func mirrorReadReasonText(_ reason: String) -> String {
+        switch reason {
+        case "backend-not-configured":
+            "The backend has no mirror status reader configured; the job's existence is not established."
+        case "status-missing":
+            "No mirror status document has been received; the job's existence is not established."
+        case "access-denied":
+            "The backend identity could not read the private mirror status."
+        case "timed-out":
+            "The mirror status read timed out."
+        case "invalid":
+            "The mirror status document is invalid."
+        default:
+            "The mirror status document could not be read."
+        }
+    }
+
+    private func mirrorGuardReasonText(_ reason: String) -> String {
+        switch reason {
+        case "max-changed-G": "The per-run cap would be exceeded by changes to GitHub."
+        case "max-changed-O": "The per-run cap would be exceeded by changes to Obsidian."
+        case "max-deletes-G": "The delete cap would be exceeded in GitHub."
+        case "max-deletes-O": "The delete cap would be exceeded in Obsidian."
+        case "base-deletion-ratio": "The delete ratio safety limit was exceeded."
+        case "empty-side": "One complete side appears empty while the other has notes."
+        case "missing-base-O": "Obsidian is missing too much of the recorded base."
+        case "missing-base-G": "GitHub is missing too much of the recorded base."
+        default: "The planner rejected an invalid input."
+        }
+    }
+
     private func checkedText(_ timestamp: String) -> String? {
         guard let date = JarvisInsightsDates.parse(timestamp) else { return nil }
         return JarvisInsightsLocalization.format(.statusChecked, language: language,
@@ -354,7 +455,7 @@ struct JarvisStatusArea: View {
     }
 
     private func smokeRow(_ smoke: JarvisStatusSmoke?) -> some View {
-        let tone: JarvisStatusValue = smoke.map { $0.entries.isEmpty ? .unknown : $0.okCount == $0.entries.count ? .ok : .degraded } ?? .unknown
+        let tone = JarvisStatusLogic.smokeStatus(smoke, now: now)
         return JarvisStatusRow(title: text(.statusSmoke), tone: tone,
             toneTitle: smoke.map { "\($0.okCount)/\($0.entries.count)" } ?? "—",
             isExpanded: expanded.contains("smoke"), identifier: "status.smoke", language: language,

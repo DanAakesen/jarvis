@@ -26,6 +26,7 @@ CHECK_ONLY_SCRIPTS = {
     "worker_label.py", "ci_timing.py", "python-ci.sh", "normalize-pr-title.sh", "validate-pr-title.sh",
     "chat_failure_diagnostics.py", "inspect_factory_capacity.py", "reuse_factory_image.py", "provision_managed_chat.py", "provision_managed_chat_handoff.sh",
     "provision_pi_agent.py", "pi_smoke_report.py",
+    "vault_mirror_probe.py",
 }
 
 
