@@ -138,14 +138,17 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
       }
     },
 
-    async startBatch(batchId, now, eventCount) {
+    async startBatch(batchId, now, eventCount, metadata) {
       await pool.request()
         .input('id', sql.UniqueIdentifier, batchId)
         .input('owner', sql.UniqueIdentifier, owner)
         .input('now', sql.DateTime2, now)
         .input('count', sql.Int, eventCount)
-        .query(`INSERT dbo.proactive_event_batches (id, owner_object_id, created_at, event_count)
-          VALUES (@id, @owner, @now, @count);`);
+        .input('activationType', sql.VarChar(10), metadata?.activationType ?? 'event')
+        .input('satisfiedSlot', sql.NVarChar(16), metadata?.satisfiedSlot ?? null)
+        .query(`INSERT dbo.proactive_event_batches (
+            id, owner_object_id, created_at, event_count, activation_type, satisfied_slot
+          ) VALUES (@id, @owner, @now, @count, @activationType, @satisfiedSlot);`);
     },
 
     async modelBatchesSince(since) {
@@ -155,6 +158,40 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
         .query<{ count: number }>(`SELECT COUNT(*) AS count FROM dbo.proactive_event_batches
           WHERE owner_object_id = @owner AND created_at >= @since;`);
       return recordset[0]?.count ?? 0;
+    },
+
+    async lastBatch() {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .query<{ last_at: Date | string; activation_type: 'event' | 'scheduled'; satisfied_slot: string | null }>(
+          `SELECT TOP (1) created_at AS last_at, activation_type, satisfied_slot
+            FROM dbo.proactive_event_batches
+            WHERE owner_object_id=@owner
+            ORDER BY created_at DESC, id DESC;`);
+      const row = recordset[0];
+      return row ? {
+        at: date(row.last_at),
+        activationType: row.activation_type,
+        satisfiedSlot: row.satisfied_slot,
+      } : null;
+    },
+
+    async recovery(now) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('now', sql.DateTime2, now)
+        .query<{ pending: number; leased: number; retrying: number }>(`
+          SELECT
+            COUNT_BIG(*) AS pending,
+            SUM(CASE WHEN claimed_until > @now THEN 1 ELSE 0 END) AS leased,
+            SUM(CASE WHEN retry_at > @now THEN 1 ELSE 0 END) AS retrying
+          FROM dbo.proactive_events
+          WHERE owner_object_id=@owner AND processed_at IS NULL;`);
+      return {
+        pending: Number(recordset[0]?.pending ?? 0),
+        leased: Number(recordset[0]?.leased ?? 0),
+        retrying: Number(recordset[0]?.retrying ?? 0),
+      };
     },
 
     async escalatedSince(source, since) {

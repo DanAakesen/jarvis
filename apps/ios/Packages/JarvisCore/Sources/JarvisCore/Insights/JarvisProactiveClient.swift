@@ -1,7 +1,7 @@
 import Foundation
 
 public enum JarvisProactiveSourceID: String, CaseIterable, Codable, Sendable, Identifiable {
-    case todos, calendar, mail, weather, factory, news, travel, x, health, nutrition, notes, memory
+    case todos, calendar, mail, weather, factory, news, travel, x, health, nutrition, notes, memory, location
 
     public var id: String { rawValue }
 
@@ -19,6 +19,7 @@ public enum JarvisProactiveSourceID: String, CaseIterable, Codable, Sendable, Id
         case .nutrition: .proactiveSourceNutrition
         case .notes: .proactiveSourceNotes
         case .memory: .proactiveSourceMemory
+        case .location: .proactiveSourceLocation
         }
     }
 }
@@ -221,10 +222,12 @@ public struct JarvisProactiveStatus: Codable, Equatable, Sendable {
     public let lastRun: JarvisProactiveRun?
     public let budget: JarvisProactiveBudget
     public let sources: [JarvisProactiveSourceStatus]
+    public let background: PiBrainStatus?
 
     public init(
         paused: Bool, quietNow: Bool, nextSlotAt: String?, lastRun: JarvisProactiveRun?,
-        budget: JarvisProactiveBudget, sources: [JarvisProactiveSourceStatus]
+        budget: JarvisProactiveBudget, sources: [JarvisProactiveSourceStatus],
+        background: PiBrainStatus? = nil
     ) {
         self.paused = paused
         self.quietNow = quietNow
@@ -232,6 +235,7 @@ public struct JarvisProactiveStatus: Codable, Equatable, Sendable {
         self.lastRun = lastRun
         self.budget = budget
         self.sources = sources
+        self.background = background
     }
 
     var isValid: Bool {
@@ -270,6 +274,7 @@ public struct JarvisProactiveToggle<ID: Codable & Hashable & Sendable>: Codable,
 public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
     public let paused: Bool
     public let monthlyBudgetDkk: Int
+    public let backgroundTurnsPerDay: Int
     public let sources: [JarvisProactiveToggle<JarvisProactiveSourceID>]
     public let categories: [JarvisProactiveToggle<JarvisProactiveCategory>]
     public let suggestionScope: JarvisProactiveScope
@@ -281,6 +286,7 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
     public init(
         paused: Bool = false,
         monthlyBudgetDkk: Int = 50,
+        backgroundTurnsPerDay: Int = 12,
         sources: [JarvisProactiveToggle<JarvisProactiveSourceID>]? = nil,
         categories: [JarvisProactiveToggle<JarvisProactiveCategory>]? = nil,
         suggestionScope: JarvisProactiveScope = .all,
@@ -291,6 +297,7 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
     ) {
         self.paused = paused
         self.monthlyBudgetDkk = monthlyBudgetDkk
+        self.backgroundTurnsPerDay = backgroundTurnsPerDay
         self.sources = sources ?? JarvisProactiveSourceID.allCases.map { JarvisProactiveToggle(id: $0, enabled: true) }
         self.categories = categories ?? JarvisProactiveCategory.allCases.map { JarvisProactiveToggle(id: $0, enabled: true) }
         self.suggestionScope = suggestionScope
@@ -302,6 +309,8 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
 
     var isValid: Bool {
         JarvisProactiveLimits.budgetRange.contains(monthlyBudgetDkk)
+            && JarvisProactiveLimits.backgroundTurnsRange.contains(backgroundTurnsPerDay)
+            && sources.count == JarvisProactiveSourceID.allCases.count
             && Set(sources.map(\.id)).count == sources.count
             && categories.count == JarvisProactiveCategory.allCases.count
             && Set(categories.map(\.id)).count == categories.count
@@ -314,18 +323,20 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
 }
 
 public enum JarvisProactiveLimits {
-    public static let budgetRange = 0...1_000
+    public static let budgetRange = 0...100
     public static let guidanceLength = 1_000
     public static let preferenceCount = 12
     public static let preferenceLength = 300
     public static let feedCount = 10
     public static let feedLength = 300
+    public static let backgroundTurnsRange = 1...12
 }
 
 /// Only the fields that changed. Fields left `nil` are not sent, so the backend keeps its values.
 public struct JarvisProactiveSettingsPatch: Encodable, Equatable, Sendable {
     public var paused: Bool?
     public var monthlyBudgetDkk: Int?
+    public var backgroundTurnsPerDay: Int?
     public var sources: [JarvisProactiveToggle<JarvisProactiveSourceID>]?
     public var categories: [JarvisProactiveToggle<JarvisProactiveCategory>]?
     public var suggestionScope: JarvisProactiveScope?
@@ -335,7 +346,7 @@ public struct JarvisProactiveSettingsPatch: Encodable, Equatable, Sendable {
 
     public var isEmpty: Bool {
         paused == nil && monthlyBudgetDkk == nil && sources == nil && categories == nil
-            && suggestionScope == nil && newsFeeds == nil && guidance == nil
+            && backgroundTurnsPerDay == nil && suggestionScope == nil && newsFeeds == nil && guidance == nil
     }
 }
 
@@ -360,6 +371,7 @@ public enum JarvisProactiveIssue: Equatable, Sendable {
 public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
     public var paused: Bool
     public var budgetText: String
+    public var backgroundTurnsPerDay: Int
     public var sources: [JarvisProactiveToggle<JarvisProactiveSourceID>]
     public var categories: [JarvisProactiveToggle<JarvisProactiveCategory>]
     public var scope: JarvisProactiveScope
@@ -370,6 +382,7 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
     public init(_ settings: JarvisProactiveConfig) {
         paused = settings.paused
         budgetText = String(settings.monthlyBudgetDkk)
+        backgroundTurnsPerDay = settings.backgroundTurnsPerDay
         sources = settings.sources
         categories = settings.categories
         scope = settings.suggestionScope
@@ -418,6 +431,9 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
         var patch = JarvisProactiveSettingsPatch(expectedRevision: settings.revision)
         if paused != settings.paused { patch.paused = paused }
         if budget != settings.monthlyBudgetDkk { patch.monthlyBudgetDkk = budget }
+        if backgroundTurnsPerDay != settings.backgroundTurnsPerDay {
+            patch.backgroundTurnsPerDay = backgroundTurnsPerDay
+        }
         let changedSources = sources.filter { toggle in
             settings.sources.first { $0.id == toggle.id }?.enabled != toggle.enabled
         }
@@ -511,7 +527,8 @@ public enum JarvisProactiveLogic {
 
     /// "Check now" is refused by the backend while paused or out of budget, so the button follows suit.
     public static func canCheckNow(_ status: JarvisProactiveStatus) -> Bool {
-        !status.paused && status.budget.state != .exhausted && status.lastRun?.status != .running
+        !status.paused && status.background?.available == true && status.background?.enabled == true
+            && status.budget.state != .exhausted && status.lastRun?.status != .running
     }
 
     /// Tomorrow 07:00 Danish time, the only snooze the page offers.
@@ -537,6 +554,9 @@ public enum JarvisProactiveLogic {
         case "read_failed": .proactiveReasonReadFailed
         case "too_large": .proactiveReasonTooLarge
         case "no_location": .proactiveReasonNoLocation
+        case "location_permission_not_granted", "location_permission_denied",
+            "location_permission_restricted": .proactiveReasonLocationPermission
+        case "location_observation_stale": .proactiveReasonLocationStale
         case "todo_file_missing": .proactiveReasonTodoMissing
         case "todo_file_ambiguous": .proactiveReasonTodoAmbiguous
         case "no_provider": .proactiveReasonNoProvider
@@ -666,6 +686,21 @@ public final class JarvisProactiveClient: Sendable {
             idempotent: false,
             additionalSuccessStatuses: [202]
         )
+    }
+
+    public func backgroundStatus() async throws -> PiBrainStatus {
+        let value: PiBrainStatus = try await get(["pi", "brain"])
+        return value
+    }
+
+    public func setBackgroundEnabled(_ enabled: Bool) async throws -> PiBrainStatus {
+        let response = try await client.performAuthenticatedRequest(
+            method: .put,
+            path: ["pi", "brain"],
+            body: try JSONEncoder().encode(PiBrainSwitchBody(enabled: enabled)),
+            idempotent: false
+        )
+        return try decode(response)
     }
 
     public func settings() async throws -> JarvisProactiveConfig {

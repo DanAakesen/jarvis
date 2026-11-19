@@ -571,8 +571,8 @@ return {
       Params: { sessionId: string };
       Body: {
         text: string;
-        /** 'current' selects the old engine; a turn without it runs on PI (test switch, removed with the old path). */
-        engine?: 'pi' | 'current';
+        /** Older clients may explicitly name PI; normal chat never selects another engine. */
+        engine?: 'pi';
         attachmentIds?: string[];
         screenContext?: string;
         visualContext?: VisualContext;
@@ -592,7 +592,7 @@ return {
           type: 'object',
           properties: {
             text: { type: 'string', minLength: 1, maxLength: 20_000 },
-            engine: { type: 'string', enum: ['pi', 'current'] },
+            engine: { type: 'string', enum: ['pi'] },
             attachmentIds: {
               type: 'array',
               minItems: 0,
@@ -654,11 +654,11 @@ return {
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
       if (explicitEngine === 'pi' && session.runtimeTest) {
-        return reply.code(400).send({ error: 'The PI test switch applies to normal chat, not to an isolated runtime test session.' });
+        return reply.code(400).send({ error: 'PI is the normal chat route; isolated runtime tests keep their selected runtime.' });
       }
       // Isolated runtime tests keep their session's selected runtime, independent of the normal chat default.
       // A turn on PI never falls back: an unconfigured PI ends the turn with its own honest error.
-      const piRequested = explicitEngine === 'pi' || (explicitEngine === undefined && !session.runtimeTest);
+      const piRequested = !session.runtimeTest;
       const agent = piRequested ? (app.piAgent ?? createUnconfiguredPiAgent()) : app.conversationAgent;
       if (!agent) return reply.code(503).send({ error: 'Chat is unavailable until the Jarvis agent is configured' });
       const runtimeOption = session.runtimeTest ? (await runtimeTests())[session.runtimeTest] : undefined;

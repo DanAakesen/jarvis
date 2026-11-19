@@ -3,10 +3,15 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
-import { isCurrentAssistantTool, isWakeTool, type RegisteredTool, type ToolRegistry } from '../core/tool-registry.js';
+import {
+  isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
+  type RegisteredTool, type ToolRegistry,
+} from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
+import type { PiSituationService } from './situation.js';
+import type { SourceId } from '../proactive/types.js';
 
 const maxFullResults = 3;
 const maxOtherResults = 5;
@@ -41,7 +46,12 @@ function shapeSchema(tool: RegisteredTool): unknown {
  * Authority is the per-turn reference (see turns.ts): the owner message and session come from the server-side grant,
  * never from anything the model writes.
  */
-export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; readonly auth: PiAuth; readonly bridges?: readonly RemoteMcpBridge[] | undefined }): FastifyPluginAsync {
+export function createPiMcpRoutes(options: {
+  readonly registry: PiTurnRegistry;
+  readonly auth: PiAuth;
+  readonly situation?: PiSituationService | undefined;
+  readonly bridges?: readonly RemoteMcpBridge[] | undefined;
+}): FastifyPluginAsync {
   const { registry, auth } = options;
   const bridges = options.bridges ?? [];
 
@@ -50,6 +60,39 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     if (name.startsWith(githubToolPrefix)) return name === `${githubToolPrefix}issue_read` && args.issue_number === 700 && args.method === 'get';
     return name.startsWith(azureToolPrefix) && /^[a-z_]*list[a-z_]*$/u.test(name.slice(azureToolPrefix.length));
   }
+
+  function automaticSources(name: string, args: Record<string, unknown>): readonly SourceId[] {
+    if (name.startsWith('calendar_')) return ['calendar'];
+    if (name.startsWith('mail_')) return ['mail'];
+    if (name === 'weather') return ['weather'];
+    if (name.startsWith('memory_')) return ['memory'];
+    if (name.startsWith('health_nutrition_') || name.startsWith('health_food') ||
+        name.startsWith('health_meal') || name === 'health_saved_food') return ['nutrition'];
+    if (name === 'health_query' || name === 'health_show') {
+      const requested = typeof args.source === 'string' ? args.source : '';
+      return requested.includes('nutrition') ? ['nutrition'] : ['health'];
+    }
+    if (name.startsWith('health_')) return ['health'];
+    if (name.startsWith('vault_task_')) return ['todos'];
+    if (name === 'vault_search' || name === 'vault_read') return ['notes'];
+    const factoryTools = [
+      'get_work_status', 'list_projects', 'update_project', 'archive_project', 'list_tasks', 'get_task',
+      'list_releases', 'get_release', 'get_deployment_status', 'create_task', 'set_task_model',
+      'retry_task', 'steer_task',
+    ];
+    if (factoryTools.includes(name) || name.startsWith(githubToolPrefix)) return ['factory'];
+    return [];
+  }
+
+  const sourceAllowed = (name: string, args: Record<string, unknown>, disabled: ReadonlySet<string>): boolean => {
+    const sources = automaticSources(name, args);
+    return sources.length === 0 || sources.some((source) => !disabled.has(source));
+  };
+  const turnSignalFor = (
+    grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>,
+    requestSignal: AbortSignal,
+    serverSignal: AbortSignal,
+  ) => AbortSignal.any([grant.signal, requestSignal, serverSignal]);
 
   async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
     if (grant.smoke === true && !smokeMayCall(name, args)) {
@@ -74,6 +117,13 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
+      let disabled = new Set<string>(grant.activation?.disabledSources ?? []);
+      if (grant.brain && options.situation) {
+        try { disabled = new Set((await options.situation.read(turnSignalFor(grant, ctx.mcpReq.signal, signal))).disabledSources); }
+        catch {
+          return text({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
+        }
+      }
       // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, so only the ones a turn asks for are ever put in
       // front of the model. Each catalogue is bounded, so a slow server never holds up a search of the local tools.
       const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
@@ -89,7 +139,13 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
         list: () => [...app.jarvisTools.list(), ...remoteTools],
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
       };
-      const matches = searchVoiceTools(catalogue, input.query, grant.brain ? isWakeTool : undefined);
+      const visible = (name: string) => {
+        const local = grant.brain
+          ? isWakeTool(name)
+          : isCurrentAssistantTool(name) || isSituationActivationTool(name);
+        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
+      };
+      const matches = searchVoiceTools(catalogue, input.query, visible);
       // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
       // reports a server it simply has not heard from yet as "not attached".
       const notes = (noMatch: boolean) => {
@@ -122,6 +178,22 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
+      if (grant.brain) {
+        let disabled = new Set<string>(grant.activation?.disabledSources ?? []);
+        if (options.situation) {
+          try { disabled = new Set((await options.situation.read(turnSignalFor(grant, ctx.mcpReq.signal, signal))).disabledSources); }
+          catch {
+            return text({ tool: input.name, outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
+          }
+        }
+        if (!sourceAllowed(input.name, input.arguments, disabled)) {
+          grant.results.push({ tool: input.name, outcome: 'refused' });
+          return text({
+            tool: input.name, outcome: 'refused',
+            result: { refused: 'That source is disabled in Proactive settings. Nothing was read.' },
+          });
+        }
+      }
       const azureRequested = input.name.startsWith(azureToolPrefix);
       if (azureRequested) grant.azure.attempts += 1;
       const bridge = bridges.find((candidate) => input.name.startsWith(candidate.prefix));
@@ -129,7 +201,9 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
         return callRemote(bridge, input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
       }
       const tool = app.jarvisTools.get(input.name);
-      const visible = tool && (grant.brain ? isWakeTool(tool.name) : isCurrentAssistantTool(tool.name));
+      const visible = tool && (grant.brain
+        ? isWakeTool(tool.name)
+        : isCurrentAssistantTool(tool.name) || isSituationActivationTool(tool.name));
       if (!tool || !visible || !grant.discovered.has(tool.name)) {
         if (azureRequested) grant.azure.undiscoveredRefusals += 1;
         return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
@@ -146,6 +220,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
             ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' }
               : grant.brain ? { 'x-jarvis-pi': 'wake', 'x-jarvis-brain': grant.brain.runId }
                 : { 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': grant.messageId }),
+            ...(grant.activation ? { 'x-jarvis-activation': grant.activation.id } : {}),
           },
           payload: JSON.stringify(input.arguments),
           signal: abort,
@@ -158,6 +233,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
         const parsed = JSON.parse(serialized) as { outcome?: unknown };
         const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
         grant.results.push({ tool: tool.name, outcome });
+        if (outcome === 'ok' && tool.execution?.defaultEffect === 'action') grant.actions.count += 1;
         if (serialized.length > maxResultCharacters) {
           return text({
             tool: tool.name, outcome, truncated: true,

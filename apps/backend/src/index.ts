@@ -112,12 +112,16 @@ import { createInboxRoutes } from './inbox/routes.js';
 import { createInboxMcpRoutes } from './inbox/mcp.js';
 import { createPiAuth } from './auth/pi-credential.js';
 import { createPiStore } from './database/pi-store.js';
+import { createPiSituationStore } from './database/pi-situation-store.js';
 import { buildPiContext, buildPiEnvironment } from './pi/context.js';
 import { createPiGateway } from './pi/gateway.js';
 import { createPiRoutes } from './pi/routes.js';
 import { azureToolPrefix, createRemoteMcpBridge, githubToolPrefix } from './pi/remote-mcp.js';
 import { PI_GITHUB_MCP_URL } from './pi/definition.js';
 import { createPiTurnRegistry } from './pi/turns.js';
+import { createPiActivationService } from './pi/activation.js';
+import { createPiSituationService } from './pi/situation.js';
+import { createSituationTools } from './pi/situation-tools.js';
 import { createPiArea } from './pi/area.js';
 import { createBrain, type Brain } from './pi/brain/runner.js';
 import { createBrainComms } from './pi/brain/comms.js';
@@ -199,6 +203,7 @@ import { registerProactive } from './proactive/composition.js';
 import { createProactiveConversationContext } from './proactive/conversation-context.js';
 import { createSqlConversationSelectionStore } from './database/proactive-conversation-context.js';
 import { buildSourceRegistry } from './proactive/sources/registry.js';
+import type { ProactiveSource } from './proactive/types.js';
 import { registerHomeBriefRoutes } from './home/brief.js';
 import { createProactiveStore } from './database/proactive-store.js';
 import { createOwnerReminderStore } from './database/owner-reminder-store.js';
@@ -577,13 +582,30 @@ try {
   const piAuth = createPiAuth(config.auth.tenantId, config.pi?.mcpSecret);
   const piRegistry = createPiTurnRegistry();
   const piStore = database ? createPiStore(database.pool) : undefined;
+  const proactiveStore = config.proactiveEnabled || config.pi
+    ? database
+      ? createProactiveStore(database.pool, config.auth.ownerObjectId)
+      : createMemoryProactiveStore(config.auth.ownerObjectId)
+    : undefined;
+  let piSources: readonly ProactiveSource[] = [];
+  const piSituationService = database && piStore && proactiveStore
+    ? createPiSituationService({
+      owner: config.auth.ownerObjectId,
+      store: createPiSituationStore(database.pool),
+      proactive: proactiveStore,
+      sources: () => piSources,
+    })
+    : undefined;
+  const piActivations = piSituationService
+    ? createPiActivationService({ registry: piRegistry, situation: piSituationService })
+    : undefined;
   const piEnvironment = buildPiEnvironment(process.env);
-  const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore
+  const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore && piActivations
     ? createPiGateway({
       environment: piEnvironment,
       projectEndpoint: config.foundryProjectEndpoint, agentName: config.pi.agentName, owner: config.auth.ownerObjectId,
       monthlyCapDkk: config.pi.monthlyCapDkk, timeZone: config.googleTimeZone ?? 'Europe/Copenhagen',
-      store: piStore, registry: piRegistry,
+      store: piStore, registry: piRegistry, activations: piActivations,
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('PI identity unavailable');
@@ -1144,11 +1166,6 @@ try {
         : {}),
     })
     : undefined;
-  const proactiveStore = config.proactiveEnabled
-    ? database
-      ? createProactiveStore(database.pool, config.auth.ownerObjectId)
-      : createMemoryProactiveStore(config.auth.ownerObjectId)
-    : undefined;
   let scheduleOwnerReminderWake: (fireAt: Date) => void = () => {};
   const ownerReminderStore = config.proactiveEnabled && config.pushEnabled && config.staticWebAppOrigin &&
       database && vaultClient
@@ -1165,7 +1182,7 @@ try {
       onReminderScheduled: (fireAt: Date) => scheduleOwnerReminderWake(fireAt),
     } : {}),
   });
-  // The PI brain: its own tools (message to Dan, notes in PI's corner of the vault, an inbox trail line), its test switch and its
+  // The PI brain: its own tools (message to Dan, notes in PI's corner of the vault, an inbox trail line), its Proactive switch and its
   // status. The brain itself is built when the event queue exists (registerProactive below); it needs the vault for its decision log.
   const piArea = vaultClient ? createPiArea({ vault: vaultClient }) : undefined;
   let announceBrainMessage: () => void = () => {};
@@ -1177,17 +1194,43 @@ try {
     }) : undefined;
   // Standing watches: free-text notes in PI's corner of the vault, woken by the same ticker, listed and stopped from chat.
   const watches = piArea && piStore ? createWatches({ area: piArea, store: piStore, now: () => new Date(), changed: () => brainHandle?.wake() }) : undefined;
-  const brainControl = piGateway && piStore && brainComms && proactiveStore
-    ? createBrainControl({ owner: config.auth.ownerObjectId, store: piStore, proactive: proactiveStore, now: () => new Date(), brain: () => brainHandle })
+  piSources = buildSourceRegistry({
+    ownerObjectId: config.auth.ownerObjectId,
+    healthEnabled: config.healthEnabled === true,
+    ...(database ? { pool: database.pool } : {}),
+    ...(googleApiClient ? { googleApiClient } : {}),
+    ...(vaultClient ? { vaultClient } : {}),
+    ...(settingsStore ? { settingsStore } : {}),
+    ...(taskStore ? { taskStore } : {}),
+    ...(memoryStore ? { memoryStore } : {}),
+  });
+  const brainControl = piGateway && piStore && brainComms && proactiveStore && piSituationService
+    ? createBrainControl({
+      owner: config.auth.ownerObjectId,
+      store: piStore,
+      proactive: proactiveStore,
+      situation: piSituationService,
+      now: () => new Date(),
+      brain: () => brainHandle,
+    })
     : undefined;
   const piModule = {
     id: 'pi',
     tools: [
-      ...(brainComms ? createBrainTools({ registry: piRegistry, comms: brainComms, area: piArea, inbox: inboxStore, now: () => new Date() }) : []),
+      ...(piSituationService ? createSituationTools({ registry: piRegistry, service: piSituationService, now: () => new Date() }) : []),
+      ...(brainComms && proactiveStore ? createBrainTools({
+        registry: piRegistry,
+        comms: brainComms,
+        proactive: proactiveStore,
+        area: piArea,
+        inbox: inboxStore,
+        now: () => new Date(),
+      }) : []),
       ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
     ],
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
+      situation: piSituationService,
       bridges: [
         ...(config.pi?.githubToken ? [createRemoteMcpBridge({
           url: PI_GITHUB_MCP_URL, prefix: githubToolPrefix, label: 'GitHub', token: async () => config.pi!.githubToken!,
@@ -1654,6 +1697,7 @@ try {
     })()
     : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
+    ...(brainControl ? { background: brainControl } : {}),
     ...(inboxNudgeHook ? { onFindingsStored: [inboxNudgeHook] } : {}),
     healthEnabled: config.healthEnabled === true,
     ...(nativeProactive ? { hasNativeRecipients: nativeProactive.hasRecipients } : {}),
@@ -1682,7 +1726,7 @@ try {
     eventsEnabled: config.proactiveEventsEnabled,
     ...(alertActivityStore ? { nowCardFeed: alertActivityStore } : {}),
     registerEventSink: (sink: ProactiveEventSink) => { proactiveEventSink = sink; },
-    // PI reads the event queue instead of the old one-shot pipeline; the owner's test switch decides whether it wakes.
+    // PI reads the event queue instead of the old one-shot pipeline; the Proactive Background PI switch decides whether it wakes.
     ...(piGateway && piStore && brainComms && piArea && proactiveStore ? {
       brain: (queue: EventQueueStore) => {
         brainHandle = createBrain({

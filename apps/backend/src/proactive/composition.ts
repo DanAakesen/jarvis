@@ -36,6 +36,8 @@ import type { ActivityAlert } from '../alerts.js';
 import { createEventPath, type EventConsumer } from './events/wiring.js';
 import type { EventQueueStore } from './events/event-queue.js';
 import type { ProactiveEventSink } from './events/types.js';
+import type { BrainControl } from '../pi/brain/control.js';
+import { readSettings } from '../core/settings.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -77,6 +79,7 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   nowCardFeed?: { record(alert: ActivityAlert): Promise<boolean> };
   /** Hands producers outside this module (webhook, alerts) the queue's entrance. */
   registerEventSink?: (sink: ProactiveEventSink) => void;
+  background?: BrainControl;
 }
 
 export function registerProactive<Logger extends FastifyBaseLogger>(
@@ -222,8 +225,9 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     logger: options.logger,
   });
   if (events) options.registerEventSink?.(events.sink);
+  const scheduledRun = events?.runScheduled ?? run;
   const scheduler = createProactiveScheduler({
-    store, now, run, ...(options.logger ? { logger: options.logger } : {}),
+    store, now, run: scheduledRun, ...(options.logger ? { logger: options.logger } : {}),
     ...(events ? { onTick: events.tick } : {}),
   });
   app.addHook('onReady', async () => {
@@ -246,8 +250,33 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     databaseAvailable: options.pool !== undefined,
     registerItemDetail: options.pushEnabled !== true,
     now,
-    run,
-    worstCaseDkk: () => model.worstCaseDkk(),
+    run: scheduledRun,
+    worstCaseDkk: () => events?.runScheduled
+      ? 0.79
+      : model.worstCaseDkk(),
     ...(events?.outreach ? { outreach: events.outreach } : {}),
+    ...(options.background ? { background: options.background } : {}),
+    ...(options.settingsStore ? {
+      locationStatus: async () => {
+        const location = (await readSettings(options.settingsStore!)).location;
+        if (location.permission !== 'granted') {
+          return {
+            state: 'unavailable' as const,
+            reason: location.permission === 'denied' || location.permission === 'restricted'
+              ? `location_permission_${location.permission}`
+              : 'location_permission_not_granted',
+            observedAt: location.observedAt,
+          };
+        }
+        if (!location.observedAt || !location.city || location.latitude === null || location.longitude === null) {
+          return {
+            state: 'unavailable' as const,
+            reason: 'no_location',
+            observedAt: location.observedAt,
+          };
+        }
+        return { state: 'ok' as const, reason: null, observedAt: location.observedAt };
+      },
+    } : {}),
   });
 }

@@ -1,46 +1,45 @@
 # PI cutover checklist and deletion inventory
 
-Prepared for [#1887](https://github.com/DanAakesen/jarvis/issues/1887) (P15-176), 16 November 2026. **Phase 7's chat and voice default is approved, not live. Phase 8 is not approved.** The old chat harness, the old one-shot proactive pipeline and every Foundry resource stay in place; deletion needs separate written approval and the checks in section 3.
+Prepared for [#1887](https://github.com/DanAakesen/jarvis/issues/1887) (P15-176), 16 November 2026, and updated by #1966 on 19 November. **PI is the normal Chat and Voice default; #1966 removes its normal-route selector and makes infrastructure preserve the exact PI configuration. Phase 8's broader harness/resource deletion is still not approved.**
 
 ```mermaid
 flowchart LR
-    T["Today<br/>PI behind the iOS test switch<br/>chat and voice<br/>old path is the default"] --> C1{"Owner tests<br/>chat, voice, brain, watches"}
-    C1 -->|"owner approved the default on 18 Nov"| F["Phase 7 flip<br/>standalone draft #1910; not live<br/>PI becomes the default on release"]
-    F --> D["Daily use<br/>two weeks, no revert"]
+    T["Phase 7<br/>PI normal default<br/>Current kept selectable"] --> C1["#1966\nPI-only normal clients\nexact PI config retention"]
+    C1 --> D["Daily use<br/>owner acceptance and no revert"]
     D --> G{"Deletion gate<br/>7 checks, section 3"}
     G -->|"owner approves in writing"| X["Phase 8<br/>delete exactly the list in section 4"]
     G -->|"no"| R["Fix PI<br/>old code still there,<br/>no code switches to it"]
-    F -. "problem" .-> B["Revert the flip commit,<br/>redeploy the previous release"]
+    C1 -. "release problem" .-> B["Revert the reviewed change,<br/>redeploy the prior release"]
 ```
 
-## 1. What the owner tests before the flip
+## 1. What the owner tests in normal use
 
 | Area | How | What good looks like | Reference |
 | --- | --- | --- | --- |
-| Chat | Settings, General, "Engine test switch" to **PI engine**; use chat for a day | Quality at least as good as today; first text about 1.1 to 1.3 s warm, about 3.3 s cold; honest errors; approvals work | `docs/harness-trial/spike-results.md` (16 November measurements) |
-| Voice | Same switch; start voice (first answer takes a few seconds), ask something that needs a tool, interrupt it, ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; the newest sentence wins; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
-| Brain | Settings, "PI brain (test)" on | Messages worth reading, no storms, budget inside 100 DKK | `docs/agent-context.md`, "PI brain" |
+| Chat | Use normal Chat for a day; there is no engine choice | Quality at least as good as today; first text about 1.1 to 1.3 s warm, about 3.3 s cold; honest errors; approvals work | `docs/harness-trial/spike-results.md` (16 November measurements) |
+| Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, interrupt it, ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; the newest sentence wins; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
+| Brain | Settings > Proactive, Background PI on | Messages worth reading, no storms, budget inside 100 DKK | `docs/agent-context.md`, "PI brain" |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, cost per watch shown, no storm | `docs/agent-context.md`, "PI standing watches" |
 | Reach | After the owner provides `PI_GITHUB_TOKEN` (fine-grained token, see `docs/agent-context.md`) and runs `infra/setup-azure-mcp.ps1` | Reads and actions work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
 | Cost | Settings status rows, `measure_pi` summary | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | `docs/pi/plan.md` section 8 |
 
-**Known limits:** Watch and web follow the server default. Once the flip is live, camera and screen sharing in web voice return `not_supported` on PI. The 07:00 and 18:00 proactive slots are unchanged; their replacement is still open (section 4.3, decision A).
+**Known limits:** Watch and web follow the same PI route. Camera and screen sharing in web voice return `not_supported`. The old harness still exists for isolated runtime tests and is not a normal fallback. The combined PI situational loop now owns the proactive slots through the persisted event/slot ledger; ordinary source policy and budget rules still apply.
 
-## 2. The flip (phase 7) as one small, separate change
+## 2. PI-only normal route and release receipt (#1966)
 
-Standalone draft [#1910](https://github.com/DanAakesen/jarvis/pull/1910) contains the default flip. The owner approved this change on 18 November; it has not been merged or deployed.
+[#1910](https://github.com/DanAakesen/jarvis/pull/1910) made PI the normal default. #1966 removes the compatibility selector from normal clients and makes infrastructure preserve the working PI tuple.
 
 | Change | Detail |
 | --- | --- |
-| Chat | The turn route treats a missing `engine` as PI for normal chat. `engine: "current"` selects the old path. Isolated runtime tests keep the runtime chosen for the session and reject explicit `pi` with HTTP 400 |
-| Voice | `/voice` without an `engine` query uses PI. `/voice?engine=current` selects the old voice path |
-| iPhone | `ChatEngineSelection.load()` defaults to PI. The chat and voice clients send the choice explicitly; a saved `current` remains selected |
-| Watch and web | Neither sends an engine for chat or voice. They follow the server default, and PI web voice does not support camera or screen sharing |
-| What stays | The old path, engine selector, PI Brain switch, proactive slots and every Foundry resource |
+| Chat | Every normal turn uses PI. Older clients may send `engine: "pi"`; `current` and unknown values are rejected. Isolated runtime-test sessions retain their own runtime |
+| Voice | `/voice` and compatibility `/voice?engine=pi` use PI. Any other engine query closes 1008 |
+| iPhone | `ChatEngine`, the saved choice, Settings selector, PI test pill and normal-client engine parameters are removed. `PiBrainStatus` stays in Proactive settings |
+| Watch and web | Neither sends an engine. They use the same PI route; PI web voice does not support camera or screen sharing |
+| Infrastructure | Bicep receives a validated secure PI configuration captured from the old backend, rather than losing values during the infrastructure revision |
+| Readiness | `pi-agent` runs before smoke, waits for its exact backend revision and supplies the accepted release receipt |
+| What stays | Isolated runtime-test support, the old harness/resources pending phase 8, Background PI in Proactive and all proactive ledgers |
 
-Verify the explicit Current engine choice on the updated iPhone build. Older iPhone builds omit `engine` for that choice and therefore follow the new server default.
-
-Rollback: revert the flip commit and redeploy the previous release. There is no code that switches back at runtime.
+Rollback is a reviewed revert and redeploy of the prior release. There is no runtime switch back to Current.
 
 ## 3. Deletion gate (from `docs/pi/plan.md`, section 7)
 
@@ -104,7 +103,7 @@ Every test file whose subject is in 4.2 or 4.3 "Whole"/"Split (removed part)" go
 
 | Area | What goes |
 | --- | --- |
-| iOS | The test switch: `ChatEngine.swift`, `PiStatus.swift`, `PiBrainStatus.swift` (the brain switch goes only if the brain no longer needs an owner toggle), `JarvisChatEngineTestSection.swift`, its call site in `JarvisSettingsArea.swift`, the "PI test" pill, `ChatEngineSelection` uses in `JarvisChatModel`, `JarvisChatScreen`, `VoiceScreenModel`; the `engine` parameter of the chat and voice clients; the isolated runtime-test UI (`JarvisRuntimeTestSheet.swift`, `JarvisRuntimeTestFixtureTransport.swift`, `ChatRuntimeTest.swift`, the plus-menu entry, runtime-test strings and fixtures); `PiWarmThrottle` stays (chat still warms PI). `JarvisDesignSystemGuardTests` and localization tests are updated with them |
+| iOS | **Done in #1966:** `ChatEngine.swift`, `PiStatus.swift`, `JarvisChatEngineTestSection.swift`, the "PI test" pill, stored `ChatEngineSelection` calls and normal-chat/voice `engine` parameters. **Keep:** `PiBrainStatus` and its Proactive switch, plus `PiWarmThrottle`. **Phase 8 later:** isolated runtime-test UI (`JarvisRuntimeTestSheet.swift`, transport, `ChatRuntimeTest.swift`, plus-menu entry and fixtures) only with retirement of that managed path |
 | Web | `RuntimeTestSelector.tsx|css`, `RuntimeTestConversation.tsx` and their use in `ConversationHistory.tsx`, `conversation-history.ts` |
 | Watch | Nothing to delete; it follows the server default. Parked work is not touched |
 

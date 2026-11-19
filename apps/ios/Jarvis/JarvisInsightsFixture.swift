@@ -25,13 +25,15 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     private var revision = 1
     private var paused = false
     private var budget = 50
+    private var backgroundEnabled = false
+    private var backgroundTurns = 12
     private var scope = "all"
     private var guidance = "Keep it short."
     private var feeds: [String] = []
     private var sourceEnabled: [String: Bool] = [
         "todos": true, "calendar": true, "mail": true, "weather": true,
         "factory": true, "news": false, "travel": true, "x": false,
-        "health": true, "nutrition": true, "notes": true, "memory": true,
+        "health": true, "nutrition": true, "notes": true, "memory": true, "location": true,
     ]
     private var categoryEnabled: [String: Bool] = [
         "deadline": true, "clash": true, "travel": true, "todo": true, "prep": true,
@@ -77,6 +79,15 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         case (.post, "/proactive/runs"): return startRun()
         case (.get, "/proactive/settings"): return Self.response(200, settings())
         case (.patch, "/proactive/settings"): return patchSettings(request.body)
+        case (.get, "/pi/brain"): return Self.response(200, backgroundStatus())
+        case (.put, "/pi/brain"):
+            if let body = request.body,
+               let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+               let enabled = value["enabled"] as? Bool {
+                backgroundEnabled = enabled
+                return Self.response(200, backgroundStatus())
+            }
+            return Self.response(400, ["error": "invalid_request"])
         default:
             if request.method == .post, path.hasPrefix("/proactive/items/"), path.hasSuffix("/conversation") {
                 let parts = path.split(separator: "/")
@@ -262,7 +273,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     }
 
     private func proactiveStatus() -> [String: Any] {
-        let order = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x", "health", "nutrition", "notes", "memory"]
+        let order = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x", "health", "nutrition", "notes", "memory", "location"]
         let sources: [[String: Any]] = order.map { id in
             let enabled = sourceEnabled[id] ?? false
             var value: [String: Any] = ["id": id, "enabled": enabled]
@@ -290,6 +301,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
                 "estimatedSpendDkk": budgetInfo.spend, "state": budgetInfo.state,
             ],
             "sources": sources,
+            "background": backgroundStatus(),
         ]
     }
 
@@ -309,6 +321,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
 
     private func startRun() -> HTTPResponse {
         if paused { return Self.response(409, ["error": "paused"]) }
+        if !backgroundEnabled { return Self.response(409, ["error": "background_off"]) }
         let run: [String: Any] = [
             "id": "run-manual-\(extraRuns.count + 1)", "trigger": "manual", "slot": NSNull(), "status": "done",
             "reason": NSNull(), "startedAt": Self.iso(Self.now), "finishedAt": Self.iso(Self.now), "findingCount": 0,
@@ -318,11 +331,12 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     }
 
     private func settings() -> [String: Any] {
-        let sources = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x", "health", "nutrition", "notes", "memory"]
+        let sources = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x", "health", "nutrition", "notes", "memory", "location"]
         let categories = ["deadline", "clash", "travel", "todo", "prep", "news", "weather", "status", "suggestion"]
         return [
             "paused": paused,
             "monthlyBudgetDkk": budget,
+            "backgroundTurnsPerDay": backgroundTurns,
             "sources": sources.map { ["id": $0, "enabled": sourceEnabled[$0] ?? false] },
             "categories": categories.map { ["id": $0, "enabled": categoryEnabled[$0] ?? false] },
             "suggestionScope": scope,
@@ -344,6 +358,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         }
         if let value = patch["paused"] as? Bool { paused = value }
         if let value = patch["monthlyBudgetDkk"] as? Int { budget = value }
+        if let value = patch["backgroundTurnsPerDay"] as? Int { backgroundTurns = value }
         if let value = patch["suggestionScope"] as? String { scope = value }
         if let value = patch["guidance"] as? String { guidance = value }
         if let value = patch["newsFeeds"] as? [String] { feeds = value }
@@ -355,6 +370,40 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         }
         revision += 1
         return Self.response(200, settings())
+    }
+
+    private func backgroundStatus() -> [String: Any] {
+        [
+            "available": true,
+            "enabled": backgroundEnabled,
+            "updatedAt": Self.ago(minutes: 4),
+            "paused": paused,
+            "budget": ["limitDkk": Double(budget), "spentDkk": 12.5, "state": "ok"],
+            "month": ["wakes": 2, "costDkk": 0.34],
+            "today": ["messages": 0, "usedTurns": 2, "allowedTurns": backgroundTurns],
+            "lastWake": [
+                "at": Self.ago(minutes: 20), "totalMs": 4100, "inputTokens": 12_000,
+                "cachedTokens": 9_000, "outputTokens": 300, "costDkk": 0.17, "outcome": "ok",
+            ],
+            "logPending": 0,
+            "slots": [
+                "used": 2, "allowed": backgroundTurns, "remaining": max(0, backgroundTurns - 2),
+                "lastAt": Self.ago(minutes: 20), "nextAllowedAt": NSNull(), "quiet": false,
+                "queue": ["pending": 0, "leased": 0, "retrying": 0],
+            ],
+            "situation": [
+                "revision": 3, "asOf": Self.ago(minutes: 20), "updatedAt": Self.ago(minutes: 4),
+                "staleSources": [], "missingSources": ["travel"], "disabledSources": ["x"],
+            ],
+            "cost": [
+                "coldSweepMinDkk": 0.14, "coldSweepMaxDkk": 0.28,
+                "representativeToolTurnDkk": 0.17, "preflightWorstCaseDkk": 0.79,
+                "estimatedDayMinDkk": Double(backgroundTurns) * 0.14,
+                "estimatedDayMaxDkk": Double(backgroundTurns) * 0.28,
+                "estimatedThirtyDayMinDkk": Double(backgroundTurns) * 0.14 * 30,
+                "estimatedThirtyDayMaxDkk": min(100, Double(backgroundTurns) * 0.28 * 30),
+            ],
+        ]
     }
 
     private func feedback(path: String, body: Data?) -> HTTPResponse {

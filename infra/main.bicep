@@ -24,6 +24,10 @@ param foundryCopilotDefinitionSha256 string = ''
 @description('Receipt from an exact-target complete-policy canary. Empty keeps Copilot unavailable.')
 param foundryCopilotPolicyCompatibility string = ''
 
+@description('PI backend configuration captured from the existing app by the deploy workflow. Secure values are restored in Bicep so an ordinary revision cannot remove PI.')
+@secure()
+param piAgentConfiguration object
+
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
 
@@ -138,7 +142,9 @@ var azureMcpArgs = flatten(concat([
   ]
 ], azureMcpNamespaceArgs))
 var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
-var nativePushSecretNames = nativePushEnabled ? ['apns-team-id', 'apns-key-id', 'apns-signing-key'] : []
+var piAgentConfigured = !empty(piAgentConfiguration.agentName) && !empty(piAgentConfiguration.mcpSecret)
+var piGithubConfigured = !empty(piAgentConfiguration.githubToken) && !empty(piAgentConfiguration.githubFingerprint)
+var piAzureConfigured = !empty(piAgentConfiguration.azureMcpUrl) && !empty(piAgentConfiguration.azureMcpClientId)
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
@@ -840,11 +846,33 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
           identity: backendIdentity.id
         }
       ]
-      secrets: [for name in nativePushSecretNames: {
-        name: name
-        keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${name}'
-        identity: backendIdentity.id
-      }]
+      secrets: concat(nativePushEnabled ? [
+        {
+          name: 'apns-team-id'
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/apns-team-id'
+          identity: backendIdentity.id
+        }
+        {
+          name: 'apns-key-id'
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/apns-key-id'
+          identity: backendIdentity.id
+        }
+        {
+          name: 'apns-signing-key'
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/apns-signing-key'
+          identity: backendIdentity.id
+        }
+      ] : [], piAgentConfigured ? [
+        {
+          name: 'pi-mcp-secret'
+          value: piAgentConfiguration.mcpSecret
+        }
+      ] : [], piGithubConfigured ? [
+        {
+          name: 'pi-github-token'
+          value: piAgentConfiguration.githubToken
+        }
+      ] : [])
     }
     template: {
       scale: {
@@ -1000,7 +1028,39 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'VOICE_LIVE_ENDPOINT'
               value: 'wss://${foundryAccount.name}.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15'
             }
-          ], empty(foundryCopilotAgentName) ? [] : [
+          ], piAgentConfigured ? [
+            {
+              name: 'JARVIS_PI_AGENT_NAME'
+              value: piAgentConfiguration.agentName
+            }
+            {
+              name: 'JARVIS_PI_MCP_SECRET'
+              secretRef: 'pi-mcp-secret'
+            }
+          ] : [], piGithubConfigured ? [
+            {
+              name: 'JARVIS_PI_GITHUB_TOKEN'
+              secretRef: 'pi-github-token'
+            }
+            {
+              name: 'JARVIS_PI_GITHUB_FP'
+              value: piAgentConfiguration.githubFingerprint
+            }
+          ] : [], piAzureConfigured ? [
+            {
+              name: 'JARVIS_PI_AZURE_MCP_URL'
+              value: piAgentConfiguration.azureMcpUrl
+            }
+            {
+              name: 'JARVIS_PI_AZURE_MCP_CLIENT_ID'
+              value: piAgentConfiguration.azureMcpClientId
+            }
+          ] : [], !empty(piAgentConfiguration.monthlyCapDkk) ? [
+            {
+              name: 'JARVIS_PI_MONTHLY_CAP_DKK'
+              value: piAgentConfiguration.monthlyCapDkk
+            }
+          ] : [], empty(foundryCopilotAgentName) ? [] : [
             {
               name: 'FOUNDRY_COPILOT_AGENT_NAME'
               value: foundryCopilotAgentName

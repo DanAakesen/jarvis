@@ -155,7 +155,7 @@ export const defaultSettings: Settings = {
     graphTextSimilarityThreshold: 0.12,
     automaticCapture: true,
   },
-  location: { city: '', latitude: null, longitude: null },
+  location: { city: '', latitude: null, longitude: null, observedAt: null, permission: 'unknown' },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
   roles: Object.fromEntries(modelRoles.map((role) => [role, {
@@ -252,6 +252,8 @@ const settingKeys = {
     city: 'location.home_city',
     latitude: 'location.latitude',
     longitude: 'location.longitude',
+    observedAt: 'location.observed_at',
+    permission: 'location.permission',
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
@@ -390,6 +392,13 @@ function validSetting(
     }
     if (key === 'longitude') {
       return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= -180 && value <= 180);
+    }
+    if (key === 'observedAt') {
+      return value === null || typeof value === 'string' && value.length <= 40 &&
+        Number.isFinite(Date.parse(value));
+    }
+    if (key === 'permission') {
+      return isOption(value, ['unknown', 'not_determined', 'granted', 'denied', 'restricted']);
     }
   }
   if (area === 'codex') {

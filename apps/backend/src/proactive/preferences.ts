@@ -49,6 +49,7 @@ export function proactiveSettingsRevision(settings: ProactiveSettings): string {
   const value = {
     paused: settings.paused,
     monthlyBudgetDkk: settings.monthlyBudgetDkk,
+    backgroundTurnsPerDay: settings.backgroundTurnsPerDay,
     sources: sourceIds.map((id) => [id, settings.sources[id]]),
     categories: findingCategories.map((id) => [id, settings.categories[id]]),
     suggestionScope: settings.suggestionScope,

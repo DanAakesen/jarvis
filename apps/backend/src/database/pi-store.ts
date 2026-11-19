@@ -20,12 +20,26 @@ interface ConversationRecord {
 interface TurnRecord {
   at: Date; kind: PiTurnKind; message_id: string | null; model: string; input_tokens: number; cached_tokens: number;
   output_tokens: number; cost_dkk: number; first_text_ms: number | null; total_ms: number; outcome: PiStoredTurn['outcome'];
+  activation_id: string | null; activation_type: PiStoredTurn['activationType'] | null;
+  activation_source: string | null; slot_key: string | null; state_revision: string | number | null;
+  stale_source_count: number; tool_count: number; action_count: number; push_count: number;
+  activation_result: PiStoredTurn['activationResult'] | null;
 }
 
 const toTurn = (row: TurnRecord): PiStoredTurn => ({
   at: row.at, kind: row.kind, messageId: row.message_id, model: row.model, inputTokens: row.input_tokens,
   cachedTokens: row.cached_tokens, outputTokens: row.output_tokens, costDkk: Number(row.cost_dkk),
   firstTextMs: row.first_text_ms, totalMs: row.total_ms, outcome: row.outcome,
+  ...(row.activation_id ? { activationId: row.activation_id.toLowerCase() } : {}),
+  ...(row.activation_type ? { activationType: row.activation_type } : {}),
+  activationSource: row.activation_source,
+  slotKey: row.slot_key,
+  stateRevision: row.state_revision === null ? null : Number(row.state_revision),
+  staleSourceCount: Number(row.stale_source_count),
+  toolCount: Number(row.tool_count),
+  actionCount: Number(row.action_count),
+  pushCount: Number(row.push_count),
+  ...(row.activation_result ? { activationResult: row.activation_result } : {}),
 });
 
 const toRow = (row: ConversationRecord): PiConversationRow => ({
@@ -82,9 +96,26 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
         .input('input', sql.Int, turn.inputTokens).input('cached', sql.Int, turn.cachedTokens)
         .input('output', sql.Int, turn.outputTokens).input('cost', sql.Decimal(12, 6), turn.costDkk)
         .input('first', sql.Int, turn.firstTextMs).input('total', sql.Int, turn.totalMs)
-        .input('outcome', sql.VarChar(12), turn.outcome),
-      `INSERT dbo.pi_turn (kind, message_id, model, input_tokens, cached_tokens, output_tokens, cost_dkk, first_text_ms, total_ms, outcome)
-        VALUES (@kind, @message, @model, @input, @cached, @output, @cost, @first, @total, @outcome);`, signal);
+        .input('outcome', sql.VarChar(12), turn.outcome)
+        .input('activationId', sql.UniqueIdentifier, turn.activationId ?? null)
+        .input('activationType', sql.VarChar(10), turn.activationType ?? null)
+        .input('activationSource', sql.NVarChar(64), turn.activationSource ?? null)
+        .input('slotKey', sql.NVarChar(32), turn.slotKey ?? null)
+        .input('stateRevision', sql.BigInt, turn.stateRevision ?? null)
+        .input('staleSources', sql.Int, turn.staleSourceCount ?? 0)
+        .input('toolCount', sql.Int, turn.toolCount ?? 0)
+        .input('actionCount', sql.Int, turn.actionCount ?? 0)
+        .input('pushCount', sql.Int, turn.pushCount ?? 0)
+        .input('activationResult', sql.VarChar(8), turn.activationResult ?? null),
+      `INSERT dbo.pi_turn (
+          kind, message_id, model, input_tokens, cached_tokens, output_tokens, cost_dkk, first_text_ms, total_ms, outcome,
+          activation_id, activation_type, activation_source, slot_key, state_revision, stale_source_count,
+          tool_count, action_count, push_count, activation_result
+        ) VALUES (
+          @kind, @message, @model, @input, @cached, @output, @cost, @first, @total, @outcome,
+          @activationId, @activationType, @activationSource, @slotKey, @stateRevision, @staleSources,
+          @toolCount, @actionCount, @pushCount, @activationResult
+        );`, signal);
     },
     async spendSince(from, kinds, signal) {
       const result = await query<{ cost: number | null; turns: number }>(
@@ -97,14 +128,19 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
     async recentTurns(limit, kinds, signal) {
       const result = await query<TurnRecord>(databaseReadRequest(pool).input('limit', sql.Int, limit).input('kinds', sql.VarChar(64), kinds.join(',')),
         `SELECT TOP (@limit) at, kind, CONVERT(varchar(19), message_id) AS message_id, model, input_tokens, cached_tokens,
-          output_tokens, cost_dkk, first_text_ms, total_ms, outcome FROM dbo.pi_turn
+          output_tokens, cost_dkk, first_text_ms, total_ms, outcome, CONVERT(varchar(36), activation_id) AS activation_id,
+          activation_type, activation_source, slot_key, CONVERT(varchar(19), state_revision) AS state_revision,
+          stale_source_count, tool_count, action_count, push_count, activation_result FROM dbo.pi_turn
           WHERE kind IN (SELECT value FROM STRING_SPLIT(@kinds, ',')) ORDER BY id DESC;`, signal);
       return result.recordset.map(toTurn);
     },
     async lastTurn(kinds, signal) {
       const result = await query<TurnRecord>(databaseReadRequest(pool).input('kinds', sql.VarChar(64), kinds.join(',')), `SELECT TOP (1) at, kind,
         CONVERT(varchar(19), message_id) AS message_id, model, input_tokens, cached_tokens, output_tokens, cost_dkk,
-        first_text_ms, total_ms, outcome FROM dbo.pi_turn WHERE kind IN (SELECT value FROM STRING_SPLIT(@kinds, ',')) ORDER BY id DESC;`, signal);
+      first_text_ms, total_ms, outcome, CONVERT(varchar(36), activation_id) AS activation_id,
+      activation_type, activation_source, slot_key, CONVERT(varchar(19), state_revision) AS state_revision,
+      stale_source_count, tool_count, action_count, push_count, activation_result
+      FROM dbo.pi_turn WHERE kind IN (SELECT value FROM STRING_SPLIT(@kinds, ',')) ORDER BY id DESC;`, signal);
       const row = result.recordset[0];
       return row ? toTurn(row) : null;
     },

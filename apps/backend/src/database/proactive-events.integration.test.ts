@@ -24,6 +24,9 @@ beforeAll(async () => {
   await administrator.request().batch(`CREATE DATABASE [${database}];`);
   await pool.connect();
   await pool.request().batch(await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8'));
+  await pool.request().batch(`ALTER TABLE dbo.proactive_event_batches ADD
+    activation_type varchar(10) NOT NULL DEFAULT 'event',
+    satisfied_slot nvarchar(16) NULL;`);
 });
 afterAll(async () => {
   await pool.close();
@@ -79,13 +82,18 @@ describe('proactive event queue on SQL Server', () => {
     const b = await queue.enqueue({ ...event('settle-b'), source: 'mail', kind: 'message.new' }, now);
     const batch = randomUUID();
     await queue.claim(now, 10, 60_000);
-    await queue.startBatch(batch, now, 1);
-    await queue.startBatch(randomUUID(), now, 1);
+    await queue.startBatch(batch, now, 1, { activationType: 'scheduled', satisfiedSlot: '2026-11-15T07:00' });
+    await queue.startBatch(randomUUID(), new Date(now.getTime() + 1), 1, {
+      activationType: 'event', satisfiedSlot: '2026-11-15T18:00',
+    });
     await queue.settle([{ id: a.id, outcome: 'outreach x (medium)', batchId: batch }, { id: b.id, outcome: 'rule: stale' }], now);
     expect(await queue.hasWork(new Date(now.getTime() + 3_600_000))).toBe(false);
     const since = new Date(now.getTime() - 60_000);
     // A call that settled nothing still counts.
     expect(await queue.modelBatchesSince(since)).toBe(2);
+    await expect(queue.lastBatch()).resolves.toMatchObject({
+      activationType: 'event', satisfiedSlot: '2026-11-15T18:00',
+    });
     expect(await queue.escalatedSince('github', since)).toBe(1);
     expect(await queue.escalatedSince('mail', since)).toBe(0);
     expect(await queue.hasSource('mail')).toBe(true);

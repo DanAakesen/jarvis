@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { UsageStore } from '../../core/usage.js';
-import { canRunWithinBudget, estimateCost } from '../budget.js';
+import { canRunWithinBudget, effectiveProactiveBudget, estimateCost } from '../budget.js';
 import { automaticProactiveWorkAllowed } from '../policy.js';
 import type { ProactiveStore } from '../store.js';
 import { copenhagenDayStart, monthKey } from '../time.js';
@@ -104,8 +104,9 @@ export function createEventPipeline(options: EventPipelineOptions) {
       return result('daily_cap');
     }
     const worstCase = reasoner.worstCaseDkk();
-    const withinBudget = async () => settings.monthlyBudgetDkk > 0 && canRunWithinBudget(
-      settings.monthlyBudgetDkk, await store.spend.monthTotal(monthKey(now())), worstCase);
+    const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
+    const withinBudget = async () => budgetLimit > 0 && canRunWithinBudget(
+      budgetLimit, await store.spend.monthTotal(monthKey(now())), worstCase);
     if (!await withinBudget()) {
       wake(new Date(current.getTime() + HOUR_MS));
       return result('budget_exhausted');

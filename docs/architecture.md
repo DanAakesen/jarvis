@@ -1,3 +1,19 @@
+## PI-only release path — 19 November 2026 (#1966)
+
+```mermaid
+flowchart LR
+    P["Existing backend\nPI env + secret refs"] --> C["Private config capture\nno log output"]
+    C --> B["Bicep secure object\nrestore PI / GitHub / Azure / cap"]
+    B --> R["Configured backend revision"]
+    R --> A["PI agent provisioning\nwait exact latest = ready"]
+    A --> S["Runtime readiness\nmust follow pi-agent"]
+    S --> E["Release receipt\nPI revision + job attempt"]
+```
+
+- `deploy_bicep.sh` reads at most one backend, captures its `JARVIS_PI_*` references plus the `pi-mcp-secret` and `pi-github-token` values, validates the tuple and writes a mode-0600 parameter file. The file is deleted on every exit, locally and on GitHub runners.
+- `infra/main.bicep` accepts the object as `@secure()` input and restores the PI core secret refs, GitHub fingerprint/token, Azure MCP URL/client ID and monthly cap only when each complete configuration is present. No secret is placed in an output or log.
+- The `pi-agent` workflow job provisions before readiness, returns the exact latest/ready backend revision, and receives the exact healthy revision from `provision_pi_agent.py`. `release_state.py` prefers that PI revision and records the `pi-agent` run attempt; an agent-only or stale backend revision cannot become the accepted receipt.
+
 ## Remote MCP catalogues wake at startup (P15-208, #1910)
 
 - `createRemoteMcpBridge` (`apps/backend/src/pi/remote-mcp.ts`) exposes `status()` (`ready`, `starting`, `unreachable` with a reason), `warm()` and `label`. `createPiRoutes` calls `warm()` for every bridge as the backend starts, and `/pi/warm` does too. The refresh runs up to 200 s; a failed first list is not cached.
@@ -93,28 +109,53 @@ Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choos
 - Graph tab (#1924, P15-190): no new route or boundary. `JarvisCore/Graph3D` turns the existing `knowledge/graph` response into a deterministic 3D layout,
   camera and motion schedule (pure, Linux-tested); the app's `JarvisNotesGraphView` draws it in a `Canvas` and receives touches through one UIKit gesture layer.
 
-## PI cutover flip (live) — #1887, P15-176
+## PI situational intelligence and shared activation loop — 19 November 2026
 
-After [#1910](https://github.com/DanAakesen/jarvis/pull/1910), normal chat without `engine` and `/voice` without an `engine` query use PI. `engine: "current"` in chat and `?engine=current` for voice select the old route. Isolated runtime tests retain their own runtime and reject explicit `pi`. iPhone sends the saved choice explicitly, defaulting to PI; the Watch bridge and web omit the choice. The PI voice relay returns `not_supported` for camera/screen context. The old route and selector remain, with no automatic fallback.
+```mermaid
+flowchart LR
+    U["Chat / Voice"] --> A["PiActivationService"]
+    E["Event queue, 6h timer,\n07:00/18:00 sweep, Check now"] --> S["Combined PI slot service\n1–12/day, 10 min, quiet, lease"]
+    S --> A
+    A --> G["jarvis-pi gateway\none harness invocation"]
+    A <--> ST["PiSituationService"]
+    ST <--> SQL[("Azure SQL\npi_situational_state\npi_turn + existing ledgers")]
+    A --> M["MCP activation grant"]
+    M --> T["Jarvis tools + situation_read /\nlookup / commit"]
+    T --> RAW[("Existing raw stores\nvault, mail, calendar, health,\nfactory, providers")]
+    G --> O["Reply, action, push or silence"]
+```
 
-Because PI is the default, the `pi-agent` Deploy job is a required release
-receipt check. A failed or cancelled provisioning step cannot produce an
-accepted release while the backend still starts on the PI-default route.
+- `PiActivationService` opens one UUID-scoped grant for a normal Chat/Voice turn or a background activation. `jarvis-pi` remains the one managed `microsoft_copilot_preview` agent in Sweden Central; Chat/Voice reuse the owner conversation, while a background activation uses a scratch conversation. The provider conversation is cache/working context only.
+- `pi_situational_state` is one owner row with bounded, schema-validated JSON, an optimistic revision, SHA-256 content hash, derived raw-reference/freshness/stale metadata, last activation and as-of/update times. Non-empty summaries and follow-ups carry fresh raw-reference IDs; when any supporting source/reference becomes disabled or stale, those claims are removed from activation context. `pi_turn` remains the one activation ledger and now records activation ID/type/source/slot, state revision, stale/tool/action/push counts and action/push/silence/failed outcome.
+- `PiSituationService` reads the authoritative row, applies current Proactive policy and explicit freshness, retains stale storage, redacts commits and rejects stale revisions or policy changes. A failed invocation marks the prior state stale rather than inventing a successful replacement. `situation_lookup` resolves one bounded reference through the existing source reader; raw records are not copied into the state.
+- The existing `proactive_events` queue, batches, 30-second scheduler, leases, exact dedupe and 6h pollers form the only combined background slot/cadence service. A persisted event-batch reservation carries activation type and the scheduled slot it satisfies, consumes the day allowance before model work, and survives midnight/restart spacing. An event may satisfy the next 07:00/18:00 slot; a scheduled batch never consumes a later slot. The old one-shot model path is not run in parallel when PI is configured.
+- The owner switch in `pi_switch` remains false until explicitly enabled. Pollers and timer producers do not read/enqueue while it is off or paused. A scheduled/manual claim is finished `skipped` with a visible reason when PI is off, instead of falling through to a hidden call.
+- Mail/calendar pollers read Proactive settings before any source read. Brain event admission and Jarvis MCP tool discovery/call enforce the same source policy. `message_dan` additionally requires category, scope and every evidence source; server-side policy refuses disabled/stale source, category or Personal/Work mismatches before pushing. Current guidance is carried in each background activation. Direct owner Chat/Voice tool use is not gated by automatic-source policy.
+- Location is stored as a coarse city/rounded coordinate with `observedAt` and permission in existing Settings, exposed through an independent `location` proactive source with a six-hour freshness label. It is independent from Weather and carries only a stable `location:device` raw reference.
+- Status is read-only: it joins settings, PI switch, event-batch recovery counts, situational metadata and recorded spend. Neither `/proactive/status` nor `/pi/brain` starts a model turn.
+
+## PI-only normal route — #1887, P15-176, #1966
+
+Normal chat always uses PI; the only accepted compatibility field is `engine: "pi"`. `current` and all other values fail validation. Isolated runtime-test sessions still use the runtime selected for that session and reject explicit PI. iOS, Watch and web do not send an engine. The obsolete device preference, client parameters, Settings selector and Chat test badge are removed. The PI voice relay has the same rule: `/voice` and `/voice?engine=pi` use PI, while every other engine query closes with 1008. Camera and screen context still return `not_supported`; there is no automatic fallback.
+
+Because PI is the only normal route, the `pi-agent` Deploy job is a required
+pre-readiness and release-receipt check. A failed, cancelled or stale
+provisioning result cannot produce an accepted release.
 
 ## PI voice (default) — 16 November 2026 (#1887, P15-176)
 
 Voice Live stays the realtime speech layer. A voice socket opened without an
-engine query runs the PI engine; `/voice?engine=current` selects the old route,
-and any other value closes the socket (1008).
+engine query runs PI; an older client may name `pi`, and every other value
+closes the socket (1008).
 
 ```mermaid
 sequenceDiagram
     participant A as iOS app
-    participant R as Voice relay (/voice?engine=pi)
+    participant R as Voice relay (/voice)
     participant V as Voice Live
     participant G as PI gateway
     participant P as PI agent (one conversation, shared with chat)
-    A->>R: connect (owner token, engine=pi)
+    A->>R: connect (owner token)
     R->>G: warm (skips when fresh, over the cap or after failures)
     R->>V: session.update (speech-only prompt, no tools)
     A->>V: audio (through the relay)
@@ -134,16 +175,16 @@ sequenceDiagram
 | Piece | Where | Notes |
 | --- | --- | --- |
 | PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; Dan starting to speak (`speech_started`) or a newer utterance cancels the turn in flight, and the next turn waits for it to release the gateway; 90 s deadline; speaks the first progress note at once and the answer at the end; failures become one honest spoken sentence (`PiGatewayError.userMessage`, never provider text); cancelled and superseded turns say nothing |
-| Relay switch | `apps/backend/src/voice/relay.ts` | `piVoiceRequested` is true unless the query explicitly selects `current`; owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). On PI: no tool-budget rung ladder, no partial-speech reflex or speech recognizer, no calendar, food or camera paths, typed `conversation.item.create` or `response.create` from the client closes the socket (1008), camera and screen frames get `jarvis.screen.context.unavailable` with reason `not_supported`, a Voice Live function call closes the socket (it has none). Status announcements for finished tasks and research still speak when no PI turn is in flight |
+| Relay route | `apps/backend/src/voice/relay.ts` | Owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). `current` and unknown query values close 1008. PI has no tool-budget rung ladder, partial-speech reflex or speech recognizer, calendar, food or camera path; typed client `conversation.item.create` or `response.create` closes the socket, camera/screen frames get `not_supported`, and Voice Live has no function calls. Status announcements still speak while no PI turn is in flight |
 | Voice Live session | `voice/realtime.ts` (`capabilityMode: 'pi'`) | Identity kernel plus a short "you are only the voice" prompt; no `tools`, no `tool_choice`. Turn detection is unchanged (the relay still creates every response) |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
 | Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
 | Logs | `voice.pi_turn`, `pi.turn` (registered in `logging.ts` with numeric fields only) | `transcriptToFirstTextMs`, `transcriptToDoneMs`, outcome (`ok`, `failed`, `timeout`, `cancelled`, `superseded`), whether a progress note was spoken. No text |
 | Deploy measurement | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | `measure_pi` adds two voice-channel turns (plain, with a Jarvis tool) in the smoke conversation and the checks `voice_spoken_shape` and `voice_tools_over_mcp`; reports first text, total and DKK. It is the PI leg only |
-| iOS | `VoiceEndpoint.url(baseURL:engine:)`, `VoiceSessionClient(engine:)`, `VoiceScreenModel` | The test switch (`ChatEngineSelection`) is read when a session starts and kept for its reconnects; the Watch bridge does not pass an engine |
+| iOS | `VoiceEndpoint.url(baseURL:)`, `VoiceSessionClient`, `VoiceScreenModel` | The client connects to `/voice` without a selector and reuses that endpoint on reconnect; Watch follows the same route |
 
-Not done on purpose: camera and screen sharing with PI, Watch voice on PI, a canned "one moment" line, a second fast path. Rollback: switch the iOS test switch to Current, or revert the pull request; the Deploy `pi-agent` job restores the previous instructions with the revert.
+Not done on purpose: camera and screen sharing with PI, Watch voice on PI, a canned "one moment" line, a second fast path. Rollback is a reviewed revert and redeploy; there is no runtime engine fallback.
 
 ## PI standing watches (#1886, P15-175, part 3)
 
@@ -264,7 +305,7 @@ Cost and latency: the Azure container is 0.25 vCPU and 0.5 GiB and scales to zer
 
 ## PI chat engine (default) — 15 November 2026 (#1885, P15-174)
 
-PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, harness built-ins on: shell, filesystem read and write, web and sub-agents) in the existing Foundry project. It is the default chat engine. A request with `engine: "current"` deliberately selects the compatibility path.
+PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, harness built-ins on: shell, filesystem read and write, web and sub-agents) in the existing Foundry project. It is the only normal chat engine. Older clients may explicitly send `engine: "pi"`; `current` and all other selectors are refused, while isolated runtime-test sessions keep their own runtime.
 
 ```mermaid
 sequenceDiagram
@@ -301,7 +342,7 @@ sequenceDiagram
 | In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
 | Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | Core and voice smoke results feed the System Status runtime evidence. The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
 
-Configuration: `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET` (Container App secret `pi-mcp-secret`), `JARVIS_PI_MONTHLY_CAP_DKK` (default 100). Both of the first two must be set; otherwise a PI turn ends with `pi_not_configured`. Deploy creates the secret once and sets the first two on the backend; a later infrastructure deployment drops them, and the same run's `pi-agent` job restores them, reusing the secret value read back from the agent definition so the agent version does not change (if Foundry redacts that header on readback, a new secret and agent version are created instead). Warm-ups are skipped over the cap, for 10 minutes after a failed warm-up and for 30 minutes after three failed turns in a row (`warm` returns `skipped`). A turn that ends before the provider reports usage but after the model started is charged at an estimate (12k input tokens plus streamed text) so the monthly stop counts it.
+Configuration: `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET` (Container App secret `pi-mcp-secret`), `JARVIS_PI_MONTHLY_CAP_DKK` (default 100), plus optional GitHub and Azure MCP pairs. Both core values must be set or PI returns `pi_not_configured`. Every ordinary Bicep deploy validates and carries the prior complete configuration through a secure object, so provisioning is not repairing a deliberately stripped backend revision. Warm-ups are skipped over the cap, for 10 minutes after a failed warm-up and for 30 minutes after three failed turns in a row (`warm` returns `skipped`). A turn that ends before the provider reports usage but after the model started is charged at an estimate (12k input tokens plus streamed text) so the monthly stop counts it.
 
 
 ## Inbox sweeps, spend and status — 15 November 2026 (#1855, step 8)

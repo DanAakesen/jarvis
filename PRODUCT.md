@@ -1,3 +1,19 @@
+## PI situational intelligence — 19 November 2026
+
+PI has one owner-scoped situational loop around the managed `jarvis-pi` Foundry agent. Normal Chat and Voice turns, scheduled sweeps and event activations use the same agent definition, Skills and Jarvis MCP tools; only trusted activation metadata differs. A wake is one PI invocation and one turn-ledger row. Tool and model iterations stay inside that invocation.
+
+Normal Chat and Voice have one engine: PI. The iPhone no longer stores or presents a Current/PI choice; older clients may still explicitly name `pi`, but naming `current` is refused rather than routed to the old harness. Isolated runtime-test conversations remain separate. Chat opens PI without a test badge, while ordinary Voice connects to the same `/voice` route with no engine query.
+
+Ordinary infrastructure deployments preserve the existing PI agent, MCP secret, GitHub token/fingerprint, Azure MCP binding and monthly cap through a secure Bicep parameter. PI provisioning then waits for and reports the exact backend revision it configured. Readiness must observe that revision ready before the release can be accepted, so an infra deployment cannot silently strip PI while a green release receipt names an older revision.
+
+The compact situational state is a model-maintained working model, not the source archive. It is bounded to about 500–2000 tokens, revision checked, source linked, freshness labelled and stored in Azure SQL. Mail, calendar, conversation, vault, health and provider records remain authoritative where they already live; the state never copies complete source or conversation archives into the provider conversation. `situation_read`, `situation_lookup` and version-checked `situation_commit` are available only under the live activation grant. PI commits only material changes.
+
+Background PI remains **off by default**. Enabling it activates one combined allowance of 1–12 scheduled, manual and event activations per Copenhagen day, with the existing ten-minute spacing, queue leases, exact dedupe and quiet rules. An event can consume the next scheduled sweep; it never creates an extra hidden turn. Failed activations retain the earlier state but mark it stale. A 0.79 DKK preflight worst case is checked before a background call, and the effective monthly proactive hard cap remains 100 DKK. Conservative estimates use 0.14–0.28 DKK per cold sweep and 0.17 DKK for a representative tool turn. Status reads never invoke a model.
+
+The Proactive menu remains the policy owner for sources, categories, Personal/Work/All scope, pause, guidance and budget. Turning a source off stops its automatic read, excludes stale facts from activation context and prevents a new automatic state contribution. A direct owner Chat or Voice request can still use the underlying tool normally. Location is an independent coarse source: it has its own permission, observation time and freshness state, remains available when Weather is off, and can ground hotel, flight, driving, traffic and map requests. It is never presented as live GPS.
+
+The existing iOS and web Proactive pages show the Background PI switch, combined turns per day, estimated DKK/day and 30-day spend, the 0.14–0.28 DKK completed-turn band, representative and worst-case figures, actual month spend, turns used/allowed, state/activation freshness, stale or missing sources, and queue recovery. There is no new main screen. Physical-device location permission, native rendering and live provider acceptance remain separate owner checks; all repository qualification is deterministic and offline.
+
 ## Generated content in Chat and Voice — 16 November 2026 (#1925; approved direction, not implemented here)
 
 In typed Chat, Jarvis can present generated UI such as a weather forecast or a chart as an element within its reply. These elements scroll with the thread and remain available when the owner revisits the conversation; they are not temporary pop-up sheets. Preserve the original dated result and its source/freshness context so historical forecasts are not presented as current weather. The chat composer remains accessible. The approved layout is Conversational blocks: a forecast in one reply and a generated chart in a follow-up reply, with both retained in history. The implementation handover is `docs/ui/approved-handover-2026-11-16.md`. Typed Chat blocks are implemented (P15-190): the model chooses a forecast, a chart or an existing generated view, and the block is saved with the reply. The web chat shows reply text only. The Voice bottom panel is implemented (P15-191): content Jarvis opens during a voice session appears below the orb and status, above the controls; close dismisses it without ending the session.
@@ -174,9 +190,11 @@ A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
 
-## PI default for chat and voice (#1887, #1910; approved 18 November 2026, not live)
+## PI-only normal chat and voice (#1887, #1910, #1966)
 
-PI is the approved default for normal chat and voice when no engine is named. iPhone starts on PI unless the owner has saved another choice; **Current engine** remains selectable for both chat and voice. Isolated runtime tests keep their own selected runtime. Watch and web follow the server default; PI web voice does not support camera or screen sharing. A PI failure does not switch engines. This approval does not cover removal of the old harness or changes to proactive behaviour.
+PI is the only normal Chat and Voice route. The obsolete engine selector, saved device choice, Chat test badge and client `engine` parameters are removed. The server accepts an older client's explicit `pi` only; `current` and every other value are refused. Isolated runtime tests keep their own selected runtime. Watch and web follow the server's one normal route; PI web voice still does not support camera or screen sharing. A PI failure does not switch engines.
+
+Background PI is a separate policy decision in Settings > Proactive, not an engine selector: it is off by default, and its existing loading, unavailable and save-failure states have a visible Retry path. Removing the normal selector does not remove the old harness infrastructure; that broader retirement remains gated separately.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 

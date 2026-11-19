@@ -67,7 +67,7 @@ struct JarvisSettingsArea: View {
     @AppStorage(JarvisNeuralEffects.motionEnabledKey) private var backgroundMotion = true
 
     let client: JarvisSettingsClient?
-    /// TEST-ONLY: reads PI engine status for the chat engine test switch. Nil in fixture previews.
+    /// Reads Background PI status and owns its explicit Proactive switch.
     var piClient: JarvisChatClient?
     let onSignedOut: () -> Void
 
@@ -257,7 +257,6 @@ struct JarvisSettingsArea: View {
                         Text(copy(.backgroundMotionHint))
                     }
                     .textCase(nil)
-                    JarvisChatEngineTestSection(client: piClient)
                 }
                 if section == .account && !visibleAccountActions.isEmpty {
                     Section { accountActions }
@@ -497,7 +496,13 @@ struct JarvisSettingsArea: View {
     private func detailView(for detail: JarvisSettingsDetail) -> some View {
         switch detail {
         case .proactive:
-            JarvisProactiveSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
+            JarvisProactiveSettingsView(
+                client: client,
+                piClient: piClient,
+                language: language,
+                readOnly: readOnly,
+                onFailure: noteResourceFailure
+            )
         case .routines:
             JarvisRoutinesSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .memory:

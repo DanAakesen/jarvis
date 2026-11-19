@@ -23,6 +23,11 @@ export interface EventConsumer {
   wake(): void;
   start(): Promise<void>;
   tick(signal: AbortSignal): Promise<unknown>;
+  enabled?(signal: AbortSignal): Promise<boolean>;
+  runScheduled?(
+    claim: { run: { id: string; slot: string | null; trigger: 'scheduled' | 'catchup' | 'manual' }; generation: number },
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 export interface EventPathOptions {
@@ -51,6 +56,7 @@ export interface EventPath {
   tick(signal: AbortSignal): Promise<unknown>;
   start(): Promise<void>;
   stop(): Promise<void>;
+  runScheduled?: EventConsumer['runScheduled'];
 }
 
 /** The queue, rules, reasoner, tiers and producers, assembled. Undefined when switched off or not configured. */
@@ -104,14 +110,18 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
   const timer = createTimerProducer({
     sink, now: options.now, ...(options.usageStore ? { usageStore: options.usageStore } : {}),
     ...(options.logger ? { logger: options.logger } : {}),
+    ...(pipeline.enabled ? { allowed: () => pipeline.enabled!(AbortSignal.timeout(5_000)).catch(() => false) } : {}),
   });
   const poller = createSourceChangePoller({
     sources: options.sources.filter(({ id }) => id === 'mail' || id === 'calendar'),
-    sink, queue, now: options.now, ...(options.logger ? { logger: options.logger } : {}),
+    sink, queue, now: options.now,
+    settings: () => options.store.settings.read(),
+    ...(pipeline.enabled ? { allowed: () => pipeline.enabled!(AbortSignal.timeout(5_000)).catch(() => false) } : {}),
+    ...(options.logger ? { logger: options.logger } : {}),
   });
   const unsubscribe = options.store.settings.subscribePreferencesChanged(() => pipeline.wake());
   return {
-    sink, outreach,
+    sink, outreach, runScheduled: pipeline.runScheduled,
     tick: (signal) => pipeline.tick(signal),
     async start() {
       await pipeline.start();

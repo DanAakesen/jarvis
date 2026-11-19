@@ -197,6 +197,8 @@ export interface HomeLocationSettings {
   city: string;
   latitude: number | null;
   longitude: number | null;
+  observedAt: string | null;
+  permission: 'unknown' | 'not_determined' | 'granted' | 'denied' | 'restricted';
 }
 export const homeLocationSettingsSchema: Readonly<{
   type: 'object';

@@ -25,12 +25,14 @@ export const sourceLabels: Record<SourceId, string> = {
   nutrition: 'Nutrition',
   notes: 'Notes',
   memory: 'Memory',
+  location: 'Location',
 };
 
 export function defaultProactiveSettings(): ProactiveSettings {
   return {
     paused: false,
     monthlyBudgetDkk: 100,
+    backgroundTurnsPerDay: 12,
     sources: {
       todos: true,
       calendar: true,
@@ -44,6 +46,7 @@ export function defaultProactiveSettings(): ProactiveSettings {
       nutrition: true,
       notes: true,
       memory: true,
+      location: true,
     },
     categories: Object.fromEntries(findingCategories.map((category) => [category, true])) as Record<FindingCategory, boolean>,
     suggestionScope: 'all',
@@ -52,7 +55,7 @@ export function defaultProactiveSettings(): ProactiveSettings {
   };
 }
 
-export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'newsFeeds' | 'guidance'>> & {
+export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'backgroundTurnsPerDay' | 'newsFeeds' | 'guidance'>> & {
   sources?: Partial<Record<SourceId, boolean>>;
   categories?: Partial<Record<FindingCategory, boolean>>;
   suggestionScope?: SuggestionScopePreference;
@@ -169,6 +172,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         const previousCategories = { ...settings.categories };
         const previousScope = settings.suggestionScope;
         const previousPaused = settings.paused;
+        const previousTurns = settings.backgroundTurnsPerDay;
         const previousSources = { ...settings.sources };
         settings = {
           ...settings,
@@ -178,6 +182,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           newsFeeds: patch.newsFeeds === undefined ? [...settings.newsFeeds] : [...patch.newsFeeds],
         };
         if (previousPaused !== settings.paused ||
+            previousTurns !== settings.backgroundTurnsPerDay ||
             sourceIds.some((source) => previousSources[source] !== settings.sources[source]) ||
             previousScope !== settings.suggestionScope ||
             findingCategories.some((category) => previousCategories[category] !== settings.categories[category])) {

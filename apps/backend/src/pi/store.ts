@@ -16,6 +16,16 @@ export interface PiTurnRecord {
   readonly firstTextMs: number | null;
   readonly totalMs: number;
   readonly outcome: 'ok' | 'failed' | 'cancelled' | 'timeout';
+  readonly activationId?: string | undefined;
+  readonly activationType?: 'chat' | 'voice' | 'scheduled' | 'event' | undefined;
+  readonly activationSource?: string | null | undefined;
+  readonly slotKey?: string | null | undefined;
+  readonly stateRevision?: number | null | undefined;
+  readonly staleSourceCount?: number | undefined;
+  readonly toolCount?: number | undefined;
+  readonly actionCount?: number | undefined;
+  readonly pushCount?: number | undefined;
+  readonly activationResult?: 'action' | 'push' | 'silence' | 'failed' | undefined;
 }
 
 export interface PiStoredTurn extends PiTurnRecord { readonly at: Date }
@@ -47,7 +57,7 @@ export interface PiStore {
   lastTurn(kinds: readonly PiTurnKind[], signal: AbortSignal): Promise<PiStoredTurn | null>;
   /** Newest first; used to pause background warm-ups after repeated failures, so the pause survives a restart. */
   recentTurns(limit: number, kinds: readonly PiTurnKind[], signal: AbortSignal): Promise<readonly PiStoredTurn[]>;
-  /** The owner's test switch for the brain: it wakes only while this is on. Off until the owner turns it on. */
+  /** The owner's Background PI switch: it wakes only while this is on. Off until the owner turns it on. */
   readBrainSwitch(owner: string, signal: AbortSignal): Promise<{ readonly enabled: boolean; readonly updatedAt: Date | null }>;
   writeBrainSwitch(owner: string, enabled: boolean, at: Date, signal: AbortSignal): Promise<void>;
   /** A chat message the brain sent: the daily limit and the repeat check read these. */

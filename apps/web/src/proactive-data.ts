@@ -1,7 +1,7 @@
 import { backendFetch } from './backend-request';
 import { formatDateTime, formatTimeOnly } from './format/date-time';
 
-export type SourceId = 'todos' | 'calendar' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'x' | 'health' | 'nutrition' | 'notes' | 'memory';
+export type SourceId = 'todos' | 'calendar' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'x' | 'health' | 'nutrition' | 'notes' | 'memory' | 'location';
 export type ItemState = 'new' | 'seen' | 'dismissed' | 'snoozed';
 export type ItemAction = 'seen' | 'dismiss' | 'snooze' | 'useful' | 'wrong';
 export type RunStatus = 'running' | 'done' | 'failed' | 'skipped' | 'cancelled';
@@ -54,11 +54,13 @@ export interface ProactiveStatus {
     state: 'ok' | 'warn' | 'exhausted';
   };
   sources: SourceStatus[];
+  background: PiBackgroundStatus | null;
 }
 
 export interface ProactiveSettings {
   paused: boolean;
   monthlyBudgetDkk: number;
+  backgroundTurnsPerDay: number;
   sources: { id: SourceId; enabled: boolean }[];
   categories: { id: FindingCategory; enabled: boolean }[];
   suggestionScope: SuggestionScopePreference;
@@ -67,6 +69,33 @@ export interface ProactiveSettings {
   revision: string;
   preferences: string[];
   capabilities: { title: string; examples: string[] };
+}
+
+export interface PiBackgroundStatus {
+  available: boolean;
+  enabled: boolean;
+  updatedAt: string | null;
+  paused: boolean;
+  budget: { limitDkk: number; spentDkk: number; state: 'ok' | 'warn' | 'exhausted' };
+  month: { wakes: number; costDkk: number };
+  today: { messages: number; usedTurns: number; allowedTurns: number };
+  lastWake: null | {
+    at: string; totalMs: number; inputTokens: number; cachedTokens: number; outputTokens: number;
+    costDkk: number; outcome: string;
+  };
+  logPending: number;
+  slots: {
+    used: number; allowed: number; remaining: number; lastAt: string | null; nextAllowedAt: string | null; quiet: boolean;
+    queue: { pending: number; leased: number; retrying: number };
+  };
+  situation: {
+    revision: number; asOf: string | null; updatedAt: string | null;
+    staleSources: SourceId[]; missingSources: SourceId[]; disabledSources: SourceId[];
+  };
+  cost: {
+    coldSweepMinDkk: number; coldSweepMaxDkk: number; representativeToolTurnDkk: number; preflightWorstCaseDkk: number;
+    estimatedDayMinDkk: number; estimatedDayMaxDkk: number; estimatedThirtyDayMinDkk: number; estimatedThirtyDayMaxDkk: number;
+  };
 }
 
 export const findingCategoryIds = [
@@ -103,7 +132,8 @@ function isDate(value: unknown): value is string {
 
 export function isSourceId(value: unknown): value is SourceId {
   return value === 'todos' || value === 'calendar' || value === 'mail' || value === 'weather' ||
-    value === 'factory' || value === 'news' || value === 'travel' || value === 'x' || value === 'health' || value === 'nutrition' || value === 'notes' || value === 'memory';
+    value === 'factory' || value === 'news' || value === 'travel' || value === 'x' || value === 'health' ||
+    value === 'nutrition' || value === 'notes' || value === 'memory' || value === 'location';
 }
 
 export function isRun(value: unknown): value is RunSummary {
@@ -149,6 +179,37 @@ function isSourceStatus(value: unknown): value is SourceStatus {
     (value.observedAt === null || isDate(value.observedAt));
 }
 
+function finiteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+export function isBackgroundStatus(value: unknown): value is PiBackgroundStatus {
+  if (!isRecord(value) || !isRecord(value.budget) || !isRecord(value.month) || !isRecord(value.today) ||
+      !isRecord(value.slots) || !isRecord(value.situation) || !isRecord(value.cost)) return false;
+  const slots = value.slots;
+  const situation = value.situation;
+  const cost = value.cost;
+  return typeof value.available === 'boolean' && typeof value.enabled === 'boolean' &&
+    (value.updatedAt === null || isDate(value.updatedAt)) && typeof value.paused === 'boolean' &&
+    finiteNumber(value.budget.limitDkk) && finiteNumber(value.budget.spentDkk) &&
+    Number.isSafeInteger(value.month.wakes) && finiteNumber(value.month.costDkk) &&
+    Number.isSafeInteger(value.today.messages) && Number.isSafeInteger(value.today.usedTurns) &&
+    Number.isSafeInteger(value.today.allowedTurns) &&
+    (value.lastWake === null || isRecord(value.lastWake) && isDate(value.lastWake.at)) &&
+    Number.isSafeInteger(value.logPending) &&
+    Number.isSafeInteger(slots.used) && Number.isSafeInteger(slots.allowed) &&
+    Number.isSafeInteger(slots.remaining) && (slots.lastAt === null || isDate(slots.lastAt)) &&
+    (slots.nextAllowedAt === null || isDate(slots.nextAllowedAt)) && typeof slots.quiet === 'boolean' &&
+    isRecord(slots.queue) && Number.isSafeInteger(slots.queue.pending) &&
+    Number.isSafeInteger(slots.queue.leased) && Number.isSafeInteger(slots.queue.retrying) &&
+    Number.isSafeInteger(situation.revision) && (situation.asOf === null || isDate(situation.asOf)) &&
+    (situation.updatedAt === null || isDate(situation.updatedAt)) &&
+    Array.isArray(situation.staleSources) && situation.staleSources.every(isSourceId) &&
+    Array.isArray(situation.missingSources) && situation.missingSources.every(isSourceId) &&
+    Array.isArray(situation.disabledSources) && situation.disabledSources.every(isSourceId) &&
+    Object.values(cost).every(finiteNumber);
+}
+
 export function isProactiveStatus(value: unknown): value is ProactiveStatus {
   if (!isRecord(value) || !isRecord(value.budget)) return false;
   const budget = value.budget;
@@ -159,15 +220,19 @@ export function isProactiveStatus(value: unknown): value is ProactiveStatus {
     Number(budget.monthlyLimitDkk) >= 0 && Number.isFinite(budget.estimatedSpendDkk) &&
     Number(budget.estimatedSpendDkk) >= 0 &&
     (budget.state === 'ok' || budget.state === 'warn' || budget.state === 'exhausted') &&
-    Array.isArray(value.sources) && value.sources.every(isSourceStatus);
+    Array.isArray(value.sources) && value.sources.every(isSourceStatus) &&
+    (value.background === null || isBackgroundStatus(value.background));
 }
 
 export function isProactiveSettings(value: unknown): value is ProactiveSettings {
   return isRecord(value) && typeof value.paused === 'boolean' &&
     Number.isSafeInteger(value.monthlyBudgetDkk) && Number(value.monthlyBudgetDkk) >= 0 &&
-    Number(value.monthlyBudgetDkk) <= 1000 &&
-    Array.isArray(value.sources) && value.sources.every((source) =>
+    Number(value.monthlyBudgetDkk) <= 100 &&
+    Number.isSafeInteger(value.backgroundTurnsPerDay) && Number(value.backgroundTurnsPerDay) >= 1 &&
+    Number(value.backgroundTurnsPerDay) <= 12 &&
+    Array.isArray(value.sources) && value.sources.length === 13 && value.sources.every((source) =>
       isRecord(source) && isSourceId(source.id) && typeof source.enabled === 'boolean') &&
+    new Set(value.sources.map((source) => isRecord(source) ? source.id : null)).size === 13 &&
     Array.isArray(value.categories) && value.categories.length === findingCategoryIds.length &&
     value.categories.every((category) => isRecord(category) &&
       findingCategoryIds.includes(category.id as FindingCategory) && typeof category.enabled === 'boolean') &&
@@ -218,6 +283,7 @@ export const sourceLabels: Record<SourceId, string> = {
   nutrition: 'Nutrition',
   notes: 'Notes',
   memory: 'Memory',
+  location: 'Location',
 };
 
 const sourceReasons: Record<string, string> = {
@@ -228,6 +294,10 @@ const sourceReasons: Record<string, string> = {
   read_failed: 'Could not be read',
   too_large: 'Too large',
   no_location: 'No home location saved',
+  location_permission_not_granted: 'Location permission not granted',
+  location_permission_denied: 'Location permission denied',
+  location_permission_restricted: 'Location permission restricted',
+  location_observation_stale: 'Location observation is stale',
   todo_file_missing: 'Todo file not found',
   todo_file_ambiguous: 'More than one todo file',
   no_provider: 'No provider connected',

@@ -139,6 +139,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
   const settingsFromRow = (row: {
     paused: boolean;
     monthly_budget_dkk: number;
+    background_turns_per_day: number;
     sources_json: string;
     categories_json: string | null;
     suggestion_scope: ProactiveSettings['suggestionScope'] | null;
@@ -147,6 +148,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
   }): ProactiveSettings => ({
     paused: row.paused,
     monthlyBudgetDkk: row.monthly_budget_dkk,
+    backgroundTurnsPerDay: row.background_turns_per_day,
     sources: { ...defaults.sources, ...parseJson<Partial<ProactiveSettings['sources']>>(row.sources_json, {}) },
     categories: parseCategories(row.categories_json, defaults.categories),
     suggestionScope: row.suggestion_scope === 'personal' || row.suggestion_scope === 'work' || row.suggestion_scope === 'all'
@@ -160,12 +162,13 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
       .query<{
         paused: boolean;
         monthly_budget_dkk: number;
+        background_turns_per_day: number;
         sources_json: string;
         categories_json: string | null;
         suggestion_scope: ProactiveSettings['suggestionScope'] | null;
         news_feeds_json: string;
         guidance: string;
-      }>(`SELECT paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+      }>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
           news_feeds_json, guidance
         FROM dbo.proactive_settings WHERE owner_object_id = @owner;`);
     return recordset[0] ? settingsFromRow(recordset[0]) : {
@@ -207,12 +210,13 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .query<{
               paused: boolean;
               monthly_budget_dkk: number;
+              background_turns_per_day: number;
               sources_json: string;
               categories_json: string | null;
               suggestion_scope: ProactiveSettings['suggestionScope'] | null;
               news_feeds_json: string;
               guidance: string;
-            }>(`SELECT paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+            }>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
                 news_feeds_json, guidance
               FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const row = read.recordset[0];
@@ -231,6 +235,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('owner', sql.UniqueIdentifier, owner)
             .input('paused', sql.Bit, updated.paused)
             .input('budget', sql.Int, updated.monthlyBudgetDkk)
+            .input('backgroundTurns', sql.Int, updated.backgroundTurnsPerDay)
             .input('sources', sql.NVarChar(sql.MAX), JSON.stringify(updated.sources))
             .input('categories', sql.NVarChar(sql.MAX), JSON.stringify(updated.categories))
             .input('suggestionScope', sql.NVarChar(16), updated.suggestionScope)
@@ -240,15 +245,17 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               USING (SELECT @owner AS owner_object_id) AS source
               ON target.owner_object_id = source.owner_object_id
               WHEN MATCHED THEN UPDATE SET paused = @paused, monthly_budget_dkk = @budget,
+                background_turns_per_day = @backgroundTurns,
                 sources_json = @sources, categories_json = @categories, suggestion_scope = @suggestionScope,
                 news_feeds_json = @feeds, guidance = @guidance,
                 updated_at = SYSUTCDATETIME()
               WHEN NOT MATCHED THEN INSERT
-                (owner_object_id, paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+                (owner_object_id, paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
                  news_feeds_json, guidance)
-                VALUES (@owner, @paused, @budget, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
+                VALUES (@owner, @paused, @budget, @backgroundTurns, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
           await transaction.commit();
           if (current.paused !== updated.paused ||
+              current.backgroundTurnsPerDay !== updated.backgroundTurnsPerDay ||
               sourceIds.some((source) => current.sources[source] !== updated.sources[source]) ||
               current.suggestionScope !== updated.suggestionScope ||
               Object.keys(updated.categories).some((category) =>
@@ -391,6 +398,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           const currentSettings = await query<{
             paused: boolean;
             monthly_budget_dkk: number;
+            background_turns_per_day: number;
             sources_json: string;
             categories_json: string | null;
             suggestion_scope: ProactiveSettings['suggestionScope'] | null;
@@ -398,7 +406,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             guidance: string;
           }>(new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, owner),
-          `SELECT paused, monthly_budget_dkk, sources_json, categories_json, suggestion_scope,
+          `SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
               news_feeds_json, guidance
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const latest = currentSettings.recordset[0]

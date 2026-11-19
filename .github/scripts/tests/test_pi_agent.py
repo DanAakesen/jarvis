@@ -59,12 +59,13 @@ class DefinitionTest(unittest.TestCase):
         self.assertNotIn("{{", self.instructions)
 
     def test_skills_are_repository_files_pinned_by_version(self):
-        self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches"])
+        self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches", "jarvis-situational-context"])
         self.assertEqual(self.definition()["skills"], [
             {"type": "skill_reference", "name": "jarvis-inbox-triage", "version": "1"},
             {"type": "skill_reference", "name": "jarvis-workers", "version": "1"},
             {"type": "skill_reference", "name": "jarvis-brain", "version": "1"},
-            {"type": "skill_reference", "name": "jarvis-watches", "version": "1"}])
+            {"type": "skill_reference", "name": "jarvis-watches", "version": "1"},
+            {"type": "skill_reference", "name": "jarvis-situational-context", "version": "1"}])
 
     def test_fingerprint_changes_with_instructions_url_and_skill_content_only(self):
         base = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills)
@@ -138,6 +139,7 @@ class DefinitionTest(unittest.TestCase):
             return {}
 
         with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43), \
+                mock.patch.object(pi, "wait_ready", return_value="ca-jarvis--revision-1"), \
                 mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         # The Jarvis connection is written, and the two old harness connections (GitHub with the token, Azure) are removed.
@@ -268,13 +270,16 @@ class ReachTest(unittest.TestCase):
                                   azure_mcp_url="https://azure-mcp.example", azure_mcp_client_id=self.client, output=None)
         configure = mock.Mock(return_value="S" * 43)
         with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True), mock.patch.object(pi, "Az", Fake), \
-                mock.patch.object(pi, "configure_backend", configure), mock.patch.object(pi, "arm_request", fake_arm):
+                mock.patch.object(pi, "configure_backend", configure), \
+                mock.patch.object(pi, "wait_ready", return_value="ca-jarvis--revision-2"), \
+                mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         self.assertEqual([tool["server_label"] for tool in stored["definition"]["tools"] if tool["type"] == "mcp"], ["jarvis"])
         self.assertEqual(result["reach"], {"github": "attached", "azure": "attached"})
         self.assertEqual(configure.call_args.args[-2:], (self.token, ("https://azure-mcp.example", self.client)))
         self.assertEqual(sorted(deleted), ["jarvis-pi-azure", "jarvis-pi-github"])
         self.assertTrue(result["created"])
+        self.assertEqual(result["backendRevision"], "ca-jarvis--revision-2")
 
 
 class BackendTokenTest(unittest.TestCase):

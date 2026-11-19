@@ -18,7 +18,8 @@
     "jarvis-inbox-triage",
     "jarvis-workers",
     "jarvis-brain",
-    "jarvis-watches"
+    "jarvis-watches",
+    "jarvis-situational-context"
   ],
   "azure": {
     "legacyConnection": "jarvis-pi-azure"

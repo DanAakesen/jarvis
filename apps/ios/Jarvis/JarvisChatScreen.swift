@@ -40,7 +40,6 @@ struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(ChatEngineSelection.key) private var chatEngine: ChatEngine = .pi
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
     @State private var pendingActivityTaskID: String?
@@ -157,17 +156,6 @@ struct JarvisChatScreen: View {
                         systemImage: "house",
                         identifier: "chat.backToToday",
                         action: onBackToToday
-                    )
-                }
-                .sharedBackgroundVisibility(.hidden)
-            }
-            if chatEngine == .pi {
-                ToolbarItem(placement: .principal) {
-                    JarvisStatusPill(
-                        title: copy(.engineIndicator),
-                        systemImage: "testtube.2",
-                        accessibilityTitle: copy(.engineIndicatorLabel),
-                        identifier: "chat.engineIndicator"
                     )
                 }
                 .sharedBackgroundVisibility(.hidden)

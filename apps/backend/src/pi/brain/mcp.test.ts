@@ -12,6 +12,7 @@ import { createPiTurnRegistry } from '../turns.js';
 import { memoryConversations, memoryVault } from './brain.testkit.js';
 import { createBrainComms } from './comms.js';
 import { createBrainTools } from './tools.js';
+import { createMemoryProactiveStore } from '../../proactive/store.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -36,10 +37,13 @@ function setup(...bridges: RemoteMcpBridge[]) {
   const conversations = memoryConversations();
   const pushes: unknown[] = [];
   const store = createMemoryPiStore();
+  const proactive = createMemoryProactiveStore(config.auth.ownerObjectId);
   const comms = createBrainComms({ conversations: conversations.store, store, ownerObjectId: config.auth.ownerObjectId, push: (m) => pushes.push(m), announce: () => {}, now: () => new Date('2026-11-16T10:00:00Z') });
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: probes, registerRoutes: async () => {} },
-      { id: 'pi', tools: createBrainTools({ registry, comms, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z') }),
+      { id: 'pi', tools: createBrainTools({
+        registry, comms, proactive, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z'),
+      }),
         registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges }) }],
     auth: async (token) => {
       if (token === 'agent.token.fixture') return { kind: 'jarvis-agent', objectId: '11111111-2222-4333-8444-555555555555', tenantId: config.auth.tenantId };
@@ -64,7 +68,7 @@ function setup(...bridges: RemoteMcpBridge[]) {
   }
   const wake = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', brain: { runId: 'run-1', sent: [], wrote: [], looked: [] }, signal: live() });
   const chat = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '41', signal: live() });
-  return { app, registry, tool, wake, chat, vault, pushes, conversations };
+  return { app, registry, tool, wake, chat, vault, pushes, conversations, proactive };
 }
 
 describe('a brain wake over the Jarvis MCP server', () => {
@@ -102,7 +106,16 @@ describe('a brain wake over the Jarvis MCP server', () => {
     const { tool, wake, vault, pushes, conversations } = setup();
     const grant = wake();
     await tool('find_tools', { turn: grant.turn, query: 'message note dan' });
-    const sent = await tool('call_tool', { turn: grant.turn, name: 'message_dan', arguments: { text: 'The deploy failed.' } });
+    const sent = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+      },
+    });
     expect(sent.outcome).toBe('ok');
     expect(pushes).toHaveLength(1);
     expect(conversations.messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
@@ -111,6 +124,25 @@ describe('a brain wake over the Jarvis MCP server', () => {
     expect(vault.files.get('PI/Notes/Deploys.md')).toContain('Waiting for the next green run.');
     expect(grant.brain!.sent.map(({ text }) => text)).toEqual(['The deploy failed.']);
     expect(grant.brain!.wrote).toEqual(['PI/Notes/Deploys.md']);
+  });
+
+  it('refuses a background message that violates disabled categories or scope before pushing', async () => {
+    const { tool, wake, proactive, pushes } = setup();
+    await proactive.settings.patch({ categories: { travel: false }, suggestionScope: 'personal' });
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The work flight booking changed.',
+        category: 'status',
+        suggestionScope: 'work',
+        evidenceSources: ['mail'],
+      },
+    });
+    expect(refused).toMatchObject({ outcome: 'refused' });
+    expect(pushes).toEqual([]);
   });
 
   it('never lets a note leave PI\'s corner of the vault or carry a credential', async () => {
@@ -197,7 +229,8 @@ describe('chat and the brain stay apart', () => {
     });
     expect(response.statusCode).toBe(403);
     const message = await app.inject({
-      method: 'POST', url: '/tools/message_dan', payload: { text: 'hi' },
+      method: 'POST', url: '/tools/message_dan',
+      payload: { text: 'hi', category: 'status', suggestionScope: 'unknown', evidenceSources: ['factory'] },
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
     });
     expect(message.statusCode).toBe(403);

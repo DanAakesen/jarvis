@@ -11,6 +11,7 @@ import { azureToolPrefix, createRemoteMcpBridge } from './remote-mcp.js';
 import { createPiRoutes, type PiModuleOptions } from './routes.js';
 import { createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry, piTurnPattern } from './turns.js';
+import type { PiActivationService } from './activation.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -56,6 +57,29 @@ function setup(options: { piAgent?: ConversationAgent; pi?: PiModuleOptions; run
 it('answers the iPhone Azure question through PI MCP in a reused owner conversation when its context changes', async () => {
   const registry = createPiTurnRegistry();
   const store = createMemoryPiStore();
+  let activationSequence = 0;
+  const activations: PiActivationService = {
+    situation: {} as never,
+    async begin(input) {
+      activationSequence += 1;
+      const id = `00000000-0000-4000-8000-${String(activationSequence).padStart(12, '0')}`;
+      const grant = registry.open({
+        ownerObjectId: input.ownerObjectId, sessionId: input.sessionId, messageId: input.messageId,
+        ...(input.brain ? { brain: input.brain } : {}), signal: input.signal,
+        activation: {
+          id, type: input.type, source: input.source, slotKey: input.slotKey ?? null,
+          stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: [],
+        },
+      });
+      return {
+        grant, context: '', situation: {
+          state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+          staleSources: [], missingSources: [], disabledSources: [], freshSources: [], asOf: null, updatedAt: null, lastActivation: null,
+        },
+      };
+    },
+    async failed() {},
+  };
   const owner = config.auth.ownerObjectId;
   await store.bindConversation(owner, 'jarvis-pi', 'existing-pi-conversation', AbortSignal.timeout(1_000));
   const secret = 'A'.repeat(43);
@@ -82,7 +106,7 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
   );
   const gateway = createPiGateway({
     agentName: 'jarvis-pi', projectEndpoint: 'https://foundry.example/api/projects/jarvis',
-    owner, store, registry, monthlyCapDkk: 250, timeZone: 'Europe/Copenhagen',
+    owner, store, registry, activations, monthlyCapDkk: 250, timeZone: 'Europe/Copenhagen',
     getToken: async () => 'fixture', context: async () => context,
     log: (event, fields) => { if (event === 'pi.turn') logs.push(fields); },
     fetcher: async (url, init) => {
@@ -139,11 +163,11 @@ describe('PI is the default engine on the chat turn', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
   });
 
-  it('keeps the old engine reachable only by naming it', async () => {
+  it('refuses the obsolete Current engine selection', async () => {
     const { turn, messages } = setup({ piAgent: { stream: async function* () { yield 'from PI'; } } });
     const result = await turn({ text: 'hi', engine: 'current' });
-    expect(result.events[1]!.data.text).toBe('from the current engine');
-    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: null });
+    expect(result.status).toBe(400);
+    expect(messages).toEqual([]);
   });
 
   it('keeps an isolated runtime-test session on its selected runtime and rejects explicit PI', async () => {
@@ -156,7 +180,7 @@ describe('PI is the default engine on the chat turn', () => {
     expect(piCalls).toBe(0);
   });
 
-  it('honours explicit PI and labels the saved reply', async () => {
+  it('accepts an older client that explicitly names PI and labels the saved reply', async () => {
     const seen: Array<{ messageId: string; sessionId?: string }> = [];
     const { turn, messages } = setup({
       piAgent: { stream: async function* (input) { seen.push({ messageId: input.messageId, ...(input.sessionId ? { sessionId: input.sessionId } : {}) }); yield 'from PI'; } },
@@ -185,9 +209,10 @@ describe('PI is the default engine on the chat turn', () => {
     expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: 'PI has used 250.00 of its 250 DKK monthly cap, so it stopped.', code: 'pi_budget_exhausted' } });
   });
 
-  it('rejects any engine other than pi or current', async () => {
+  it('rejects Current and every engine other than PI', async () => {
     const { turn } = setup();
     expect((await turn({ text: 'hi', engine: 'copilot' })).status).toBe(400);
+    expect((await turn({ text: 'hi', engine: 'current' })).status).toBe(400);
   });
 
   it('exposes the unconfigured agent as an error, not as a reply', async () => {

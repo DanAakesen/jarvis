@@ -491,8 +491,8 @@ jobs:
 
   smoke:
     name: Deterministic runtime readiness
-    needs: [plan, infra, backend, web, agent]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.web.result == 'success' || needs.web.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
+    needs: [plan, infra, backend, web, agent, pi-agent]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.web.result == 'success' || needs.web.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') && needs.pi-agent.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
@@ -574,12 +574,15 @@ jobs:
 
   pi-agent:
     name: PI agent (Copilot harness in Foundry)
-    needs: [plan, infra, backend, agent, smoke]
+    needs: [plan, infra, backend, agent]
     # PI is the normal chat/voice default. This defines the agent, skills and backend settings; a failed PI
-    # handoff remains visible without changing the legacy Current-engine route or adding fallback behaviour.
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
+    # handoff blocks readiness because normal chat and voice have no fallback route.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      backend-revision: ${{ steps.provision.outputs.backend_revision }}
+      attempt: ${{ github.run_attempt }}
     permissions:
       contents: read
       id-token: write
@@ -618,6 +621,8 @@ jobs:
             --experiment "$PI_EXPERIMENT" --output "$RUNNER_TEMP/pi-agent.json" || status=$?
           # A reach server whose connection failed fails this step, but only after the agent is defined and written down here.
           [[ -s "$RUNNER_TEMP/pi-agent.json" ]] || exit "${status:-1}"
+          revision=$(jq -er '.backendRevision' "$RUNNER_TEMP/pi-agent.json")
+          echo "backend_revision=$revision" >>"$GITHUB_OUTPUT"
           {
             echo "### PI agent"
             echo
@@ -626,17 +631,28 @@ jobs:
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Reach: $(jq -r '.reach | to_entries | map("\(.key): \(.value)") | join("; ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Experiment: $(jq -r .experiment "$RUNNER_TEMP/pi-agent.json") (anything but none is a measurement variant: Deploy again without it to restore the full agent)"
-            echo "- PI is the default chat and voice engine; Current remains an explicit compatibility choice."
+            echo "- PI is the only normal chat and voice engine."
           } >>"$GITHUB_STEP_SUMMARY"
           exit "${status:-0}"
-      - name: Wait for the backend with the PI settings
-        if: ${{ inputs.measure_pi == true }}
+      - name: Wait for the exact PI-configured backend revision
+        env:
+          PI_BACKEND_REVISION: ${{ steps.provision.outputs.backend_revision }}
         run: |
+          [[ -n "$PI_BACKEND_REVISION" ]] || { echo "::error::PI provisioning returned no backend revision."; exit 1; }
           for _ in $(seq 1 20); do
-            if curl --fail --silent --show-error --max-time 20 "https://$BACKEND_FQDN/health" >/dev/null; then exit 0; fi
+            az containerapp show --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" \
+              --subscription "$SUBSCRIPTION_ID" --output json --only-show-errors >"$RUNNER_TEMP/pi-backend.json"
+            latest=$(jq -r '.properties.latestRevisionName // ""' "$RUNNER_TEMP/pi-backend.json")
+            ready=$(jq -r '.properties.latestReadyRevisionName // ""' "$RUNNER_TEMP/pi-backend.json")
+            if [[ "$latest" == "$PI_BACKEND_REVISION" && "$ready" == "$PI_BACKEND_REVISION" ]] &&
+                curl --fail --silent --show-error --max-time 20 "https://$BACKEND_FQDN/health" >/dev/null; then
+              echo "Backend revision $PI_BACKEND_REVISION is ready with the PI configuration."
+              exit 0
+            fi
+            echo "Waiting for PI-configured backend revision $PI_BACKEND_REVISION."
             sleep 15
           done
-          echo "::error::Backend /health did not return 200."
+          echo "::error::The PI-configured backend revision did not become ready."
           exit 1
       - name: Wake the Azure MCP server (manual only)
         if: ${{ inputs.measure_pi == true && env.AZURE_MCP_URL != '' }}
@@ -766,13 +782,15 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
           VERSIONS: >-
             {"infra":{"deployment":"jarvis-infra"},
-            "backend":{"image":"${{ needs.backend.outputs.image }}","revision":"${{ needs.agent.outputs.backend-revision || needs.backend.outputs.revision }}"},
+            "backend":{"image":"${{ needs.backend.outputs.image }}","revision":"${{ needs.pi-agent.outputs.backend-revision || needs.agent.outputs.backend-revision || needs.backend.outputs.revision }}"},
             "agent":{"image":"${{ needs.agent.outputs.image }}","version":"${{ needs.agent.outputs.version }}"},
             "web":{"source":"${{ github.sha }}","bundle":"${{ needs.web.outputs.bundle }}"}}
           APPLY_ATTEMPTS: >-
             {"infra":"${{ needs.infra.outputs.attempt }}","backend":"${{ needs.backend.outputs.attempt }}",
             "web":"${{ needs.web.outputs.attempt }}","agent":"${{ needs.agent.outputs.attempt }}"}
           AGENT_BACKEND_REVISION: ${{ needs.agent.outputs.backend-revision }}
+          PI_BACKEND_REVISION: ${{ needs.pi-agent.outputs.backend-revision }}
+          PI_APPLY_ATTEMPT: ${{ needs.pi-agent.outputs.attempt }}
         run: python .github/scripts/release_state.py record
       - name: Retain immutable release and failure evidence
         if: always()

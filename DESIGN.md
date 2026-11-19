@@ -1,3 +1,21 @@
+## Background PI in Proactive — 19 November 2026
+
+This is an extension of the existing Proactive settings and status surfaces, not a new screen. The iOS sheet keeps the existing page scaffold, shared rows, glass, toggle and slider language; the web page uses its existing Proactive blocks and shared primary/secondary controls.
+
+Normal Chat and Voice do not show an engine selector, saved engine state or PI test badge. Background PI's sole owner control sits in Proactive settings. Loading the switch and saving it are separate operations: an unavailable read or rejected save keeps the previous state visible and offers Retry with the shared control.
+
+The settings hierarchy is:
+
+1. Existing automatic-suggestion pause.
+2. A distinct **Background PI** switch, off by default.
+3. Existing source, category and scope policy, with an independent **Location** row.
+4. Existing monthly budget and a 1–12 **Background turns per day** control.
+5. Existing feeds and guidance.
+
+Status uses one scan-friendly Background PI block before Open items. It states On/Off, used/allowed turns today, estimated daily/30-day DKK, actual month spend, the completed-turn band and representative/worst-case costs, situational-state age, last activation age, stale/missing sources and queue recovery counts. Missing, stale and disabled sources pair words with the existing status iconography; colour is never the only signal. Refreshes read backend status only and do not invoke a model.
+
+No decorative metrics, chart, orb or extra card grid is added. At narrow widths, background cost rows stack to one column; the source grid remains two columns only when Dynamic Type permits it. All controls use the existing shared components and localization, with loading, disabled and explicit error copy retained. Native simulator rendering, motion and physical-device readability remain outside local Linux proof and are exact-head CI/owner acceptance items.
+
 ## iPhone Voice carousel and captions (18 November 2026, #1958, P15-210; build 113)
 
 The compact panel stays between captions and call controls. A new visual takes focus immediately; earlier visuals remain to its left. Swipe or use the previous/next controls. Close and Expand float over the top left without a separate header; a supplied native heading scrolls with the content beside them, and HTML owns its heading. Full screen uses the same carousel; Collapse returns to the compact panel without ending the call. The existing eased orb retreat and return are unchanged. Captions have a taller viewport with a soft fade on each edge and enough bottom padding to keep the latest line readable. HTML gets theme-aware defaults and the actual phone viewport; native charts keep their renderer. iPhone rendering is not yet verified.
@@ -89,32 +107,19 @@ switch while a query is present; clearing the query restores the previous folder
 - Sheets can stack where the design returns to the same draft (editor to folder chooser, Edit task to Date & time);
   apple-hig prefers one sheet at a time. This is a known, deliberate deviation.
 
-## PI cutover flip (live) — #1887, P15-176
+## PI-only normal Chat and Voice (#1966)
 
-PI is now the default when chat or voice sends no engine choice. The "Engine test switch" still exposes the Current engine deliberately; the Chat header shows PI by default and the explanation says there is no automatic fallback. A new voice session reads the choice, and PI voice has no camera or screen sharing. Saved choices and the existing layout stay unchanged.
+No engine selection is drawn and no saved device choice is read. Chat keeps its normal header, composer and error recovery; the PI test badge is gone. Voice keeps the existing screen, orb and controls, and connects without an engine query. PI remains unavailable rather than falling back to another engine.
 
-## PI voice — 16 November 2026, default from #1910
-
-No new screen. The existing voice screen and orb are unchanged; the only visible differences with the PI engine are in what Jarvis says and when. Settings, General, "Engine test switch" (renamed from "Chat engine test switch") now applies to chat and voice: the choice is read when a voice session starts, the Watch keeps the current engine, and the explanation says so in one sentence plus the two limits that matter to a tester (no camera or screen sharing with PI yet; no fallback to the current engine). When Dan starts voice with PI the first answer takes a few seconds (accepted); a turn that needs a tool opens with one short spoken sentence from PI, then the answer. Replies are one to three short sentences; anything long is offered in chat. If PI cannot answer, Jarvis says why in one sentence ("No other engine was used"). Not inspected on a device or simulator: it is a copy change and a connection parameter, and the Apple CI compile is the check.
+In Voice, the first answer may take a few seconds. A turn that needs a tool opens with one short spoken sentence before the result. Replies remain one to three short sentences; longer material is offered in Chat. Native rendering and Voice behaviour still require exact-head Apple CI and owner-device acceptance.
 
 ## PI standing watches — 16 November 2026 (#1886, P15-175)
 
 No new screen: watches are listed, changed and stopped in chat or by voice, in plain sentences (name, next look, looks today, an estimated cost in DKK with the word "estimate"). The reply to "keep me updated on X" is one sentence: what is watched and when the first look is. A report from a watch is an ordinary Jarvis chat message and push, only when something changed that matters; there is never a "still waiting" message. The Watch is parked and was not touched.
 
-## PI brain test switch in iOS — 16 November 2026 (#1886, P15-175)
-
-A second section under the PI engine switch in Settings, General, titled "PI brain (test)", with the same temporary status as the engine switch. A native toggle turns the brain on or off (saved on the backend, so it holds on every device); it is disabled, with the status row saying why, while the app has no backend, a request is running, or the backend has no brain ("Not set up on this backend"). Rows show the status (On, Off, Paused in proactive settings), the proactive budget used against its limit with plain text for "Almost used" and "Used: the brain has stopped" (red text for the stop, never colour alone), wakes and DKK this month, messages today, the last wake (outcome, time, DKK) and, only when above zero, decision-log entries waiting for the vault. A refresh button uses the shared labelled button; a loading row and a red error line cover the other states. Not inspected on a device or simulator: it compiles only in the Apple CI.
-
-A message from the brain is an ordinary Jarvis chat message and an ordinary reply push; there is no new card, tier or channel.
-
 ## PI reach — 16 November 2026 (#1886, P15-175)
 
 No visible UI. PI says in plain words when a read-only server is not attached ("I have no GitHub tools in this session") and never claims to have looked; Azure and GitHub results arrive as ordinary chat text.
-
-## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
-
-A temporary Current-engine choice remains while the old route exists. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, PI by default) and has no fallback. Live rows show status, agent and model, month spend, warm/cold state and last turn. PI failures show the server's own sentence in the chat error banner. This control is removed with the old path.
-
 
 ## Event-driven proactive outreach — 15 November 2026 (#1858)
 

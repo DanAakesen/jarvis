@@ -14,6 +14,8 @@ function age(event: Pick<QueuedEvent, 'occurredAt'>, now: Date): string {
 
 export interface WakeInput {
   readonly runId: string;
+  readonly activationType?: 'scheduled' | 'event';
+  readonly activationSource?: string;
   readonly now: Date;
   readonly timeZone: string;
   readonly events: readonly QueuedEvent[];
@@ -21,6 +23,8 @@ export interface WakeInput {
   readonly sections?: readonly string[] | undefined;
   /** A short note when the month's proactive budget is nearly used. */
   readonly budgetNote?: string | undefined;
+  /** The current categories, scope and owner guidance enforced before background delivery. */
+  readonly policyNote?: string | undefined;
 }
 
 /**
@@ -31,6 +35,7 @@ export interface WakeInput {
 export function formatWake(input: WakeInput): string {
   const lines = [
     `[Brain wake ${input.runId.slice(0, 8)} | ${formatLocalTime(input.now, input.timeZone)}]`,
+    `Activation: type=${input.activationType ?? 'event'} source=${oneLine(input.activationSource ?? 'event', 64)}.`,
     'This is a background wake, not a message from Dan. Nobody is waiting for a reply here, and there is no owner message. Use the `jarvis-brain` skill.',
     '',
   ];
@@ -43,6 +48,7 @@ export function formatWake(input: WakeInput): string {
     }
   }
   for (const section of input.sections ?? []) lines.push('', section);
+  if (input.policyNote) lines.push('', `Proactive delivery policy (enforced by the server): ${oneLine(input.policyNote, 1_800)}`);
   if (input.budgetNote) lines.push('', input.budgetNote);
   lines.push('', 'Finish with a short plain statement: what you saw, what you decided and why, and whether you told Dan. It goes to the decision log.');
   return lines.join('\n');

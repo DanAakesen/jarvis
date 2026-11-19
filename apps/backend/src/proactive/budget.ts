@@ -1,6 +1,11 @@
 import { foundryTokenCosts, highestFoundryTokenCosts } from '../core/usage-pricing.js';
 
 export type BudgetState = 'ok' | 'warn' | 'exhausted';
+export const PROACTIVE_HARD_CAP_DKK = 100;
+
+export function effectiveProactiveBudget(monthlyLimitDkk: number): number {
+  return Math.min(PROACTIVE_HARD_CAP_DKK, monthlyLimitDkk);
+}
 
 export function estimateCost(model: string, inputTokens: number, outputTokens: number): {
   estimatedDkk: number;

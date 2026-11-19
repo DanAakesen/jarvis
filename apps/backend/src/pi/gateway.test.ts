@@ -4,6 +4,7 @@ import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
+import type { PiActivationService } from './activation.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -21,6 +22,37 @@ interface Call { url: string; body: Record<string, unknown> | undefined; headers
 function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
   const store = createMemoryPiStore(() => new Date('2026-11-15T16:00:00Z'));
   const registry = createPiTurnRegistry();
+  let activationSequence = 0;
+  const activations: PiActivationService = {
+    situation: {} as never,
+    async begin(input) {
+      activationSequence += 1;
+      const id = input.id && /^[0-9a-f-]{36}$/iu.test(input.id)
+        ? input.id
+        : `00000000-0000-4000-8000-${String(activationSequence).padStart(12, '0')}`;
+      const grant = registry.open({
+        ownerObjectId: input.ownerObjectId,
+        sessionId: input.sessionId,
+        messageId: input.messageId,
+        ...(input.brain ? { brain: input.brain } : {}),
+        signal: input.signal,
+        activation: {
+          id, type: input.type, source: input.source, slotKey: input.slotKey ?? null,
+          stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: [],
+        },
+      });
+      return {
+        grant,
+        context: '',
+        situation: {
+          state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+          staleSources: [], missingSources: [], disabledSources: [], freshSources: [], asOf: null, updatedAt: null,
+          lastActivation: null,
+        },
+      };
+    },
+    async failed() {},
+  };
   const calls: Call[] = [];
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
@@ -32,7 +64,7 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
   }) as typeof fetch;
   const gateway = createPiGateway({
     projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/proj', agentName: 'jarvis-pi', owner, monthlyCapDkk: 1, timeZone: 'Europe/Copenhagen',
-    store, registry, fetcher, getToken: async () => 'token', context: async () => 'CONTEXT BLOCK',
+    store, registry, activations, fetcher, getToken: async () => 'token', context: async () => 'CONTEXT BLOCK',
     recordUsage: async (record) => { usage.push(record); }, now: () => new Date('2026-11-15T16:00:00Z'), ...overrides,
   });
   const run = async (text: string, signal = new AbortController().signal) => {

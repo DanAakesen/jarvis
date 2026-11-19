@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { foundryTokenCosts, highestFoundryTokenCosts } from '../core/usage-pricing.js';
-import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
+import { budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost } from './budget.js';
 
 describe('proactive budget meter', () => {
   it('prices GPT-6.1 Terra at USD 1 input and USD 5 output per million tokens', () => {
@@ -27,6 +27,7 @@ describe('proactive budget meter', () => {
   });
 
   it('keeps the hard monthly stop', () => {
+    expect(effectiveProactiveBudget(500)).toBe(100);
     expect(canRunWithinBudget(100, 99.5, 0.4)).toBe(true);
     expect(canRunWithinBudget(100, 99.5, 0.6)).toBe(false);
     expect(canRunWithinBudget(0, 0, 0.01)).toBe(false);

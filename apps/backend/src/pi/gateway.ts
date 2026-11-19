@@ -10,6 +10,8 @@ import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
 import { chatTurnKinds, type PiStore, type PiStoredTurn, type PiTurnRecord } from './store.js';
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
+import type { PiActivationService } from './activation.js';
+import type { PiActivationType } from './situation.js';
 
 export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
@@ -57,6 +59,7 @@ export interface PiGatewayOptions {
   readonly timeZone: string;
   readonly store: PiStore;
   readonly registry: PiTurnRegistry;
+  readonly activations: PiActivationService;
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
   /** The owner-specific persona block; it is re-read each turn and sent only when it changed. */
   readonly context: (signal: AbortSignal) => Promise<string>;
@@ -96,7 +99,13 @@ export interface PiGateway extends ConversationAgent {
    * One brain wake in its own scratch conversation, never the owner's chat conversation. It spends against the brain's
    * budget, not the chat cap; the caller has already checked that budget. A failure is returned with what was billed.
    */
-  runBrain(input: { readonly runId: string; readonly body: string }, signal: AbortSignal): Promise<PiBrainRunResult>;
+  runBrain(input: {
+    readonly runId: string;
+    readonly body: string;
+    readonly activationType?: PiActivationType;
+    readonly activationSource?: string | null;
+    readonly slotKey?: string | null;
+  }, signal: AbortSignal): Promise<PiBrainRunResult>;
   /** Never spends when over the cap or after failures: it then returns `skipped` instead of calling the model. */
   warm(signal: AbortSignal): Promise<PiWarmResult>;
   status(signal: AbortSignal): Promise<PiStatus>;
@@ -455,10 +464,19 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       const conversationId = await ensureConversation(signal);
       const context = await options.context(signal);
       const stored = await options.store.getConversation(options.owner, signal);
-      const hash = contextHash(context);
-      grant = options.registry.open({ ownerObjectId: options.owner, sessionId: input.sessionId ?? '', messageId: input.messageId, signal: deadline });
+      const activation = await options.activations.begin({
+        type: input.channel === 'voice' ? 'voice' : 'chat',
+        source: input.channel === 'voice' ? 'voice' : 'chat',
+        ownerObjectId: options.owner,
+        sessionId: input.sessionId ?? '',
+        messageId: input.messageId,
+        signal: deadline,
+      });
+      grant = activation.grant;
+      const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
+      const activationHash = contextHash(activationContext);
       const text = formatTurn({
-        ...(stored?.contextHash === hash ? {} : { context }), turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
+        ...(stored?.contextHash === activationHash ? {} : { context: activationContext }), turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
       });
       let segment = '';
       let boundaries = 0;
@@ -475,7 +493,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           if (event.failed && event.server !== PI_MCP_SERVER_LABEL) log('pi.mcp_call_failed', { server: event.server, tool: event.name });
         } else if (event.kind === 'tool') {
           sawTool = true;
-          // Text before a tool call is a progress note, as with the current engine; very long text stays in the answer.
+          // Text before a tool call is a progress note; very long text stays in the answer.
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
             boundaries += 1;
@@ -484,7 +502,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         } else usage = event.usage;
       }
       outcome = 'ok';
-      await options.store.markWarm(options.owner, hash, now(), signal).catch(() => log('pi.mark_warm_failed', {}));
+      await options.store.markWarm(options.owner, activationHash, now(), signal).catch(() => log('pi.mark_warm_failed', {}));
     } catch (error) {
       outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
       if (error instanceof PiGatewayError && error.code === 'pi_unavailable' && /HTTP 404/u.test(error.userMessage) && !sawText) {
@@ -497,17 +515,37 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       throw error;
     } finally {
       releaseTurn();
-      if (grant) options.registry.close(grant.turn);
       const totalMs = Math.round(performance.now() - started);
       // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
       // conservative estimate (the measured fixed prompt plus what streamed) so the monthly stop cannot be dodged.
       const billed = usage ?? (sawText || sawTool
         ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: Math.ceil(streamedCharacters / 3) } : undefined);
+      const failedActivation = outcome !== 'ok' && grant
+        ? options.activations.failed(grant, now(), AbortSignal.timeout(10_000))
+          .catch(() => log('pi.situation_stale_failed', { activation: grant?.activation?.id ?? '' }))
+        : null;
       await record({
         kind: 'chat', messageId: /^[1-9]\d{0,18}$/u.test(input.messageId) ? input.messageId : null, model: PI_MODEL,
         inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0, outputTokens: billed?.outputTokens ?? 0,
         costDkk: billed ? costOf(billed) : 0, firstTextMs, totalMs, outcome,
+        ...(grant?.activation ? {
+          activationId: grant.activation.id,
+          activationType: grant.activation.type,
+          activationSource: grant.activation.source,
+          slotKey: grant.activation.slotKey,
+          stateRevision: grant.activation.stateRevision,
+          staleSourceCount: grant.activation.staleSources,
+          toolCount: grant.results.length,
+          actionCount: grant.actions.count,
+          pushCount: grant.brain?.sent.length ?? grant.pushes.count,
+          activationResult: outcome === 'ok'
+            ? (grant.brain?.sent.length ?? grant.pushes.count) > 0 ? 'push'
+              : grant.actions.count > 0 ? 'action' : 'silence'
+            : 'failed',
+        } : {}),
       }, billed, `pi:${input.messageId}:${now().getTime()}`);
+      await failedActivation;
+      if (grant) options.registry.close(grant.turn);
       const azureCalls = { attempts: grant?.azure.attempts ?? 0, ok: 0, refused: grant?.azure.undiscoveredRefusals ?? 0, error: 0 };
       for (const result of grant?.results ?? []) {
         if (result.tool.startsWith(azureToolPrefix)) azureCalls[result.outcome] += 1;
@@ -515,6 +553,14 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       log('pi.turn', {
         channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
         estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0,
+        activationId: grant?.activation?.id ?? null,
+        activationType: grant?.activation?.type ?? (input.channel === 'voice' ? 'voice' : 'chat'),
+        activationSource: grant?.activation?.source ?? 'chat',
+        stateRevision: grant?.activation?.stateRevision ?? null,
+        staleSourceCount: grant?.activation?.staleSources ?? 0,
+        toolCount: grant?.results.length ?? 0,
+        actionCount: grant?.actions.count ?? 0,
+        pushCount: grant?.brain?.sent.length ?? grant?.pushes.count ?? 0,
         azureCatalogue: grant?.azure.catalogue ?? 'not_searched',
         azureToolsOffered: [...(grant?.discovered ?? [])].filter(name => name.startsWith(azureToolPrefix)).length,
         azureCalls,
@@ -523,7 +569,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
   }
 
-  async function runBrain(input: { readonly runId: string; readonly body: string }, signal: AbortSignal): Promise<PiBrainRunResult> {
+  async function runBrain(input: {
+    readonly runId: string;
+    readonly body: string;
+    readonly activationType?: PiActivationType;
+    readonly activationSource?: string | null;
+    readonly slotKey?: string | null;
+  }, signal: AbortSignal): Promise<PiBrainRunResult> {
     const started = performance.now();
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(options.brainTimeoutMs ?? 240_000)]);
     const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [], looked: [] };
@@ -538,8 +590,22 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     try {
       const conversationId = await createConversation(deadline);
       const context = await options.context(deadline);
-      grant = options.registry.open({ ownerObjectId: options.owner, sessionId: '', messageId: '', brain: run, signal: deadline });
-      const message = formatTurn({ context, turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body });
+      const activation = await options.activations.begin({
+        id: input.runId,
+        type: input.activationType ?? 'event',
+        source: input.activationSource ?? 'event',
+        slotKey: input.slotKey ?? null,
+        ownerObjectId: options.owner,
+        sessionId: '',
+        messageId: '',
+        brain: run,
+        signal: deadline,
+      });
+      grant = activation.grant;
+      const message = formatTurn({
+        context: [context, activation.context].filter(Boolean).join('\n\n'),
+        turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
+      });
       for await (const event of respond(conversationId, message, deadline)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
@@ -557,6 +623,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         : new PiGatewayError('pi_failed', 'The brain wake failed.', { cause: error });
     }
     const toolResults = grant ? [...grant.results] : [];
+    if (outcome !== 'ok' && grant) {
+      await options.activations.failed(grant, now(), AbortSignal.timeout(10_000))
+        .catch(() => log('pi.situation_stale_failed', { activation: grant?.activation?.id ?? '' }));
+    }
     if (grant) options.registry.close(grant.turn);
     // As for chat: a wake that reached the model without a usage report is charged at an estimate, so the stop cannot be dodged.
     const billed = usage ?? (sawModel ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: Math.ceil(streamed / 3) } : undefined);
@@ -565,8 +635,32 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     await record({
       kind: 'brain', messageId: null, model: PI_MODEL, inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0,
       outputTokens: billed?.outputTokens ?? 0, costDkk, firstTextMs, totalMs, outcome,
+      ...(grant?.activation ? {
+        activationId: grant.activation.id,
+        activationType: grant.activation.type,
+        activationSource: grant.activation.source,
+        slotKey: grant.activation.slotKey,
+        stateRevision: grant.activation.stateRevision,
+        staleSourceCount: grant.activation.staleSources,
+        toolCount: toolResults.length,
+        actionCount: grant.actions.count,
+        pushCount: grant.brain?.sent.length ?? grant.pushes.count,
+        activationResult: outcome === 'ok'
+          ? (grant.brain?.sent.length ?? grant.pushes.count) > 0 ? 'push'
+            : grant.actions.count > 0 ? 'action' : 'silence'
+          : 'failed',
+      } : {}),
     }, billed, `pi:brain:${input.runId}`);
-    log('pi.brain_run', { outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk, tools: toolResults.length });
+    log('pi.brain_run', {
+      outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined,
+      costDkk, tools: toolResults.length, activationId: grant?.activation?.id ?? input.runId,
+      activationType: grant?.activation?.type ?? input.activationType ?? 'event',
+      activationSource: grant?.activation?.source ?? input.activationSource ?? 'event',
+      stateRevision: grant?.activation?.stateRevision ?? null,
+      staleSourceCount: grant?.activation?.staleSources ?? 0,
+      actionCount: grant?.actions.count ?? 0,
+      pushCount: grant?.brain?.sent.length ?? grant?.pushes.count ?? 0,
+    });
     reportRuntime('chat', outcome, 'brain');
     return {
       ok: outcome === 'ok', text: text.trim(), usage: billed ?? { inputTokens: 0, cachedTokens: 0, outputTokens: 0 }, costDkk,

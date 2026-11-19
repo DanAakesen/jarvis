@@ -97,7 +97,15 @@ enum JarvisFixtureScenario {
     }
 
     static func makeSettingsClient() throws -> JarvisSettingsClient {
-        let client = try JarvisClient(
+        JarvisSettingsClient(client: try makeSettingsJarvisClient())
+    }
+
+    static func makeSettingsPiClient() throws -> JarvisChatClient {
+        JarvisChatClient(client: try makeSettingsJarvisClient())
+    }
+
+    private static func makeSettingsJarvisClient() throws -> JarvisClient {
+        try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
@@ -105,7 +113,6 @@ enum JarvisFixtureScenario {
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
-        return JarvisSettingsClient(client: client)
     }
 
     private static let settingsScenario = #"""

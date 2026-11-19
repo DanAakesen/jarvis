@@ -131,6 +131,7 @@ function StatusOutcome({ run }: { run: RunSummary | null }) {
 }
 
 function StatusSentence({ status }: { status: ProactiveStatus }) {
+  if (status.background?.enabled === false) return <>Background PI is off</>;
   if (status.lastRun?.status === 'running') return <>Checking now</>;
   if (status.paused) return <>Paused</>;
   if (status.quietNow) return <>Quiet hours, scheduled checks resume at 07:00</>;
@@ -143,9 +144,43 @@ function sourceStateReason(status: ProactiveStatus | null): string | null {
   if (!status) return null;
   if (status.lastRun?.status === 'running') return 'A check is running.';
   if (status.paused) return 'Proactive is paused.';
+  if (!status.background?.available) return 'Background PI is not available on this backend.';
+  if (!status.background.enabled) return 'Background PI is off.';
   if (status.budget.state === 'exhausted') return 'The monthly budget is used up.';
   if (status.sources.length === 0 || status.sources.every(({ enabled }) => !enabled)) return 'Every source is switched off.';
   return null;
+}
+
+function BackgroundStatus({ status, now }: { status: ProactiveStatus; now: number }) {
+  const background = status.background;
+  if (!background) return <p role="status">Background PI status is unavailable.</p>;
+  const stateTime = background.situation.asOf;
+  return <div className="proactive-background-status">
+    <p><strong>{background.enabled ? 'On' : 'Off'}</strong> — {background.today.usedTurns} of {background.today.allowedTurns} combined background turns used today.</p>
+    <dl>
+      <div>
+        <dt>Estimated spend</dt>
+        <dd>{background.cost.estimatedDayMinDkk.toFixed(2)}–{background.cost.estimatedDayMaxDkk.toFixed(2)} DKK/day · {background.cost.estimatedThirtyDayMinDkk.toFixed(2)}–{background.cost.estimatedThirtyDayMaxDkk.toFixed(2)} DKK/30 days</dd>
+      </div>
+      <div>
+        <dt>Actual spend and band</dt>
+        <dd>{status.budget.estimatedSpendDkk.toFixed(2)} DKK this month · {background.cost.coldSweepMinDkk.toFixed(2)}–{background.cost.coldSweepMaxDkk.toFixed(2)} DKK/completed turn ({background.cost.representativeToolTurnDkk.toFixed(2)} representative) · {background.cost.preflightWorstCaseDkk.toFixed(2)} DKK admission worst case</dd>
+      </div>
+      <div>
+        <dt>Situational state</dt>
+        <dd>{stateTime ? `Updated ${timeAgo(stateTime, now)}, revision ${background.situation.revision}` : 'No committed state yet'}</dd>
+      </div>
+    </dl>
+    {background.situation.staleSources.length > 0 &&
+      <p className="proactive-status-warning">Stale sources: {background.situation.staleSources.map((id) => sourceLabels[id]).join(', ')}.</p>}
+    {background.situation.missingSources.length > 0 &&
+      <p className="proactive-status-muted">Missing sources: {background.situation.missingSources.map((id) => sourceLabels[id]).join(', ')}.</p>}
+    {background.slots.lastAt &&
+      <p className="proactive-status-muted">Last background activation: {timeAgo(background.slots.lastAt, now)}.</p>}
+    <p className="proactive-status-muted">
+      Queue recovery: {background.slots.queue.pending} pending · {background.slots.queue.leased} leased · {background.slots.queue.retrying} retrying.
+    </p>
+  </div>;
 }
 
 export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injectedClock }: AreaProps & {
@@ -368,6 +403,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
           already_running: 'A check is already running.',
           paused: 'Proactive is paused.',
           budget_exhausted: 'The monthly budget is used up.',
+          background_off: 'Background PI is off. Enable it in Settings first.',
           no_sources: 'Every source is switched off.',
         };
         setCheckMessage(response.status === 404 ? 'Check now is not available on this backend yet.'
@@ -468,6 +504,13 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
           </p>
           {checkMessage && <p role="status">{checkMessage}</p>}
         </>}
+      </section>
+
+      <section className="proactive-block" aria-labelledby="proactive-background-heading">
+        <h2 id="proactive-background-heading">Background PI</h2>
+        {loadedStatus
+          ? <BackgroundStatus status={loadedStatus} now={now()} />
+          : <StateMessage variant="loading" message="Loading Background PI status" />}
       </section>
 
       <section className="proactive-block" aria-labelledby="proactive-items-heading">

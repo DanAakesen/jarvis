@@ -188,13 +188,13 @@ describe('voice relay on the PI engine', () => {
     expect(upstreamEvents).toEqual([]);
   });
 
-  it('leaves the current voice path exactly as it was when it is named explicitly', async () => {
+  it('refuses the obsolete Current voice selection instead of opening the old path', async () => {
     const { connect, responses, upstreamEvents } = await harness(undefined);
-    connect('?engine=current');
-    await until(() => responses().length === 1, 'the greeting');
-    const update = upstreamEvents.find(event => event.type === 'session.update')!;
-    expect(update.session!.tools!.map(tool => tool.name)).toEqual(['find_tools', 'call_tool']);
-    expect(update.session!.tool_choice).toBe('auto');
+    const session = connect('?engine=current');
+    await until(() => session.closed() !== undefined, 'the close');
+    expect(session.closed()).toMatchObject({ code: 1008 });
+    expect(responses()).toHaveLength(0);
+    expect(upstreamEvents).toEqual([]);
   });
 
   it('routes an unnamed voice session to PI', async () => {

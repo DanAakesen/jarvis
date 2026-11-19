@@ -79,6 +79,38 @@ describe('outreach thumbs', () => {
   });
 });
 
+describe('proactive PI policy', () => {
+  it('keeps the combined allowance in 1-12 and the hard spend cap at 100 DKK', async () => {
+    const { app } = await build();
+    const current = (await app.inject({ method: 'GET', url: '/proactive/settings' })).json();
+    expect(current.backgroundTurnsPerDay).toBe(12);
+    const tooMany = await app.inject({
+      method: 'PATCH', url: '/proactive/settings',
+      payload: { backgroundTurnsPerDay: 13, expectedRevision: current.revision },
+    });
+    expect(tooMany.statusCode).toBe(400);
+    const overBudget = await app.inject({
+      method: 'PATCH', url: '/proactive/settings',
+      payload: { monthlyBudgetDkk: 101, expectedRevision: current.revision },
+    });
+    expect(overBudget.statusCode).toBe(400);
+    const saved = await app.inject({
+      method: 'PATCH', url: '/proactive/settings',
+      payload: { backgroundTurnsPerDay: 4, expectedRevision: current.revision },
+    });
+    expect(saved.json()).toMatchObject({ backgroundTurnsPerDay: 4 });
+    await app.close();
+  });
+
+  it('wakes an active consumer when the combined allowance changes', async () => {
+    const store = createMemoryProactiveStore(OWNER);
+    const changed = vi.fn();
+    store.settings.subscribePreferencesChanged(changed);
+    await store.settings.patch({ backgroundTurnsPerDay: 5 });
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('scheduler event tick', () => {
   it('runs the event pipeline on every tick, also during quiet hours, without touching the 07:00 and 18:00 slots', async () => {
     const store = createMemoryProactiveStore(OWNER);

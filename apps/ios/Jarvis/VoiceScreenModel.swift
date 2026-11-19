@@ -239,7 +239,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             let audio = self.audio
             let client = VoiceSessionClient(
                 baseURL: baseURL,
-                engine: ChatEngineSelection.load(),
                 transport: URLSessionWebSocketTransport(),
                 onMessage: { [weak self] message in
                     Task { @MainActor in

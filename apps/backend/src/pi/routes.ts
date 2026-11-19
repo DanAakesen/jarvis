@@ -8,6 +8,7 @@ import { piSmokeParts, runPiSmoke, type PiSmokePart } from './smoke.js';
 import type { PiTurnRegistry } from './turns.js';
 import type { BrainControl } from './brain/control.js';
 import { PI_MODEL, PI_REASONING_EFFORT } from './definition.js';
+import type { PiSituationService } from './situation.js';
 
 export interface PiModuleOptions {
   /** Absent until the Deploy workflow has provisioned the agent and given the backend its name and MCP secret. */
@@ -15,10 +16,11 @@ export interface PiModuleOptions {
   readonly registry: PiTurnRegistry;
   readonly auth: PiAuth;
   readonly monthlyCapDkk: number;
-  /** The owner's test switch and status for the brain; absent when the brain is not wired on this backend. */
+  /** The owner's Background PI switch and status; absent when the brain is not wired on this backend. */
   readonly brain?: BrainControl | undefined;
   /** GitHub's and Azure's tools, reached through the Jarvis MCP door. Each is present only when it is configured. */
   readonly bridges?: readonly RemoteMcpBridge[] | undefined;
+  readonly situation?: PiSituationService | undefined;
 }
 
 const isOwner = (app: FastifyInstance, objectId: string | undefined) => objectId?.toLowerCase() === app.ownerObjectId.toLowerCase();
@@ -27,7 +29,7 @@ const errorBody = (error: unknown) => error instanceof PiGatewayError
   ? { error: error.userMessage, code: error.code, ...(error.detail ? { detail: error.detail } : {}) }
   : { error: 'PI could not be reached. No other engine was used.', code: 'pi_unavailable' };
 
-/** The test-only PI surface: status for the Settings switch, a warm-up the app calls when it opens, the MCP door, and the deploy smoke. */
+/** The PI surface: status/warm-up, Proactive enablement, the MCP door and manual deploy-only smoke. */
 export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
   return async (app) => {
     app.get('/pi/status', async (request, reply) => {
@@ -103,7 +105,12 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
     };
     // Wake a server that scales from zero (Azure) as the backend starts, so its first search does not find it asleep.
     for (const bridge of options.bridges ?? []) bridge.warm();
-    await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth, bridges: options.bridges }));
+    await app.register(createPiMcpRoutes({
+      registry: options.registry,
+      auth: options.auth,
+      situation: options.situation,
+      bridges: options.bridges,
+    }));
 
     app.post<{ Body: { part: PiSmokePart } }>('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: 'object', required: ['part'], additionalProperties: false, properties: { part: { enum: [...piSmokeParts] } } } } },
       async (request, reply) => {

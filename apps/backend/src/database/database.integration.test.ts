@@ -9,6 +9,9 @@ import { createInboxIndexStore } from './inbox-index-store.js';
 import { createInboxOpsStore } from './inbox-ops-store.js';
 import { createPiStore } from './pi-store.js';
 import { createNotesFolderOrderStore } from './notes-folder-order-store.js';
+import { createPiSituationStore } from './pi-situation-store.js';
+import { parsePiSituationState } from '../pi/situation.js';
+import { sourceIds } from '../proactive/types.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 
 const configuration = loadDatabaseConfig();
@@ -174,15 +177,27 @@ describe('real SQL Server migration contract', () => {
   });
   describe('PI conversation and turn ledger', () => {
     it('binds one conversation per owner, re-binds on a new agent, and sums spend by month', async () => {
+      const proactiveSchema = await readFile(new URL('../../../../db/migrations/0054_proactive_push.sql', import.meta.url), 'utf8');
+      const proactiveDown = await readFile(new URL('../../../../db/migrations/down/0054_proactive_push.sql', import.meta.url), 'utf8');
+      const foundationSchema = await readFile(new URL('../../../../db/migrations/0055_proactive_foundation.sql', import.meta.url), 'utf8');
+      const foundationDown = await readFile(new URL('../../../../db/migrations/down/0055_proactive_foundation.sql', import.meta.url), 'utf8');
+      const eventsSchema = await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8');
+      const eventsDown = await readFile(new URL('../../../../db/migrations/down/0080_proactive_events.sql', import.meta.url), 'utf8');
       const schema = await readFile(new URL('../../../../db/migrations/0086_pi_chat.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0086_pi_chat.sql', import.meta.url), 'utf8');
       const brainSchema = await readFile(new URL('../../../../db/migrations/0087_pi_brain.sql', import.meta.url), 'utf8');
       const brainDown = await readFile(new URL('../../../../db/migrations/down/0087_pi_brain.sql', import.meta.url), 'utf8');
       const watchSchema = await readFile(new URL('../../../../db/migrations/0088_pi_watch_look.sql', import.meta.url), 'utf8');
       const watchDown = await readFile(new URL('../../../../db/migrations/down/0088_pi_watch_look.sql', import.meta.url), 'utf8');
+      const situationSchema = await readFile(new URL('../../../../db/migrations/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
+      const situationDown = await readFile(new URL('../../../../db/migrations/down/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
+      await pool.request().batch(proactiveSchema);
+      await pool.request().batch(foundationSchema);
+      await pool.request().batch(eventsSchema);
       await pool.request().batch(schema);
       await pool.request().batch(brainSchema);
       await pool.request().batch(watchSchema);
+      await pool.request().batch(situationSchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -242,10 +257,37 @@ describe('real SQL Server migration contract', () => {
         expect(activity.map(({ watch, looks, costDkk }) => ({ watch, looks, costDkk })).sort((a, b) => a.watch.localeCompare(b.watch)))
           .toEqual([{ watch: 'Deploy of main', looks: 1, costDkk: 0.05 }, { watch: 'Price', looks: 2, costDkk: 0.05 }]);
         expect(await store.watchActivity(new Date(Date.now() + 60_000), signal)).toEqual([]);
+
+        const situations = createPiSituationStore(pool);
+        const situation = parsePiSituationState({
+          version: 1, asOf: at.toISOString(), summary: '', summaryRefIds: [],
+          sources: sourceIds.map((id) => ({
+            id, state: 'missing', observedAt: null, expiresAt: null, reason: 'not_observed', refIds: [],
+          })),
+          refs: [], facts: [], followUps: [],
+        });
+        const activation = {
+          id: randomUUID(), type: 'event' as const, source: 'timer', at,
+        };
+        const stored = await situations.commit({
+          owner, expectedRevision: 0, expectedHash: null, state: situation, activation,
+        }, signal);
+        expect(await situations.read(owner, signal)).toMatchObject({
+          revision: 1, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
+        });
+        await expect(situations.commit({
+          owner, expectedRevision: 0, expectedHash: null, state: situation,
+          activation: { ...activation, id: randomUUID() },
+        }, signal)).rejects.toMatchObject({ code: 'conflict' });
       } finally {
+        await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
+        await pool.request().batch(situationDown);
         await pool.request().batch(watchDown);
         await pool.request().batch(brainDown);
         await pool.request().batch(down);
+        await pool.request().batch(eventsDown);
+        await pool.request().batch(foundationDown);
+        await pool.request().batch(proactiveDown);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_watch_look', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_message', N'U') AS id")).recordset).toEqual([{ id: null }]);

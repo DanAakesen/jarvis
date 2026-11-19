@@ -24,7 +24,25 @@ function setup(options: { wired?: boolean } = {}) {
   let woken = 0;
   const control = createBrainControl({
     owner: config.auth.ownerObjectId, store: piStore, proactive, now,
-    brain: () => options.wired === false ? undefined : { wake: () => { woken += 1; }, pendingLogs: 2 },
+    situation: {
+      async read() {
+        return {
+          state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+          staleSources: [], missingSources: [], disabledSources: [], freshSources: [], asOf: null, updatedAt: null, lastActivation: null,
+        };
+      },
+    } as never,
+    brain: () => options.wired === false ? undefined : {
+      wake: () => { woken += 1; },
+      pendingLogs: 2,
+      async status() {
+        return {
+          used: 0, allowed: 12, remaining: 12, lastAt: null, lastActivationType: null,
+          lastSatisfiedSlot: null, nextAllowedAt: null, quiet: false,
+          queue: { pending: 0, leased: 0, retrying: 0 },
+        };
+      },
+    },
   });
   const app = buildApp(config, undefined, {
     modules: [{ id: 'pi', tools: [], registerRoutes: createPiRoutes({

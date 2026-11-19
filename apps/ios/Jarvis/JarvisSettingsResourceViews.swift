@@ -8,6 +8,7 @@ private func settingsCacheDigest(_ value: String) -> String {
 
 struct JarvisProactiveSettingsView: View {
     let client: JarvisSettingsClient?
+    let piClient: JarvisChatClient?
     let language: JarvisAppLanguage
     let readOnly: Bool
     let onFailure: (Error) -> Void
@@ -19,9 +20,17 @@ struct JarvisProactiveSettingsView: View {
     @State private var loading = true
     @State private var saving = false
     @State private var error: String?
+    @State private var background: PiBrainStatus?
+    @State private var backgroundLoading = true
+    @State private var backgroundFailed = false
+    @State private var backgroundSaving = false
+    @State private var requestedBackgroundEnabled: Bool?
 
     private func copy(_ key: JarvisSettingsLocalizationKey) -> String {
         JarvisSettingsLocalization.string(key, language: language)
+    }
+    private func insightsText(_ key: JarvisInsightsLocalizationKey) -> String {
+        JarvisInsightsLocalization.string(key, language: language)
     }
 
     private var isDirty: Bool {
@@ -50,6 +59,52 @@ struct JarvisProactiveSettingsView: View {
             if loadFailed {
                 JarvisLabelledButton(title: copy(.retry), isDisabled: loading || saving) { Task { await load(force: true) } }
             }
+            Toggle(insightsText(.editorBackgroundEnable), isOn: Binding(
+                get: { background?.enabled ?? false },
+                set: { enabled in Task { await setBackground(enabled) } }
+            ))
+            .disabled(piClient == nil || background?.available != true || backgroundLoading || backgroundSaving || readOnly)
+            .accessibilityIdentifier("settings.proactive.backgroundPi")
+            if let background {
+                Text(background.enabled ? insightsText(.proactiveBackgroundOn) : insightsText(.proactiveBackgroundOff))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(
+                    JarvisInsightsLocalization.format(
+                        .proactiveTurnsToday,
+                        language: language,
+                        background.today.usedTurns,
+                        background.today.allowedTurns
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                if !background.available {
+                    Text(insightsText(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
+                }
+                if backgroundFailed, let requestedBackgroundEnabled {
+                    HStack(spacing: 10) {
+                        Text(insightsText(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
+                        Spacer(minLength: 0)
+                        JarvisIconButton(
+                            title: copy(.retry),
+                            systemImage: "arrow.clockwise",
+                            identifier: "settings.proactive.backgroundPi.saveRetry",
+                            isDisabled: backgroundSaving
+                        ) { Task { await setBackground(requestedBackgroundEnabled) } }
+                    }
+                }
+            } else if backgroundLoading {
+                JarvisLoadingView(title: copy(.loading))
+            } else if backgroundFailed {
+                Text(insightsText(.proactiveUnavailable))
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                JarvisLabelledButton(
+                    title: copy(.retry),
+                    isDisabled: piClient == nil || backgroundLoading || backgroundSaving
+                ) { Task { await loadBackground(force: true) } }
+            }
         }
         .navigationTitle(copy(.proactiveRow))
         .navigationBarTitleDisplayMode(.inline)
@@ -62,6 +117,7 @@ struct JarvisProactiveSettingsView: View {
         }
         .task {
             if settings == nil { await load() }
+            if background == nil && !backgroundFailed { await loadBackground() }
         }
         .onDisappear { loadGeneration += 1; loading = false }
         .onChange(of: readOnly) { _, value in
@@ -121,6 +177,43 @@ struct JarvisProactiveSettingsView: View {
             onFailure(error)
         }
         saving = false
+    }
+
+    private func loadBackground(force: Bool = true) async {
+        guard force || !backgroundLoading, !backgroundSaving else { return }
+        guard let piClient else {
+            background = nil
+            backgroundFailed = true
+            backgroundLoading = false
+            return
+        }
+        backgroundLoading = true
+        backgroundFailed = false
+        requestedBackgroundEnabled = nil
+        do {
+            background = try await piClient.piBrainStatus()
+        } catch {
+            if !Task.isCancelled { backgroundFailed = true }
+        }
+        backgroundLoading = false
+    }
+
+    private func setBackground(_ enabled: Bool) async {
+        guard let piClient, !backgroundSaving else { return }
+        backgroundSaving = true
+        backgroundFailed = false
+        do {
+            background = try await piClient.setPiBrain(enabled: enabled)
+            requestedBackgroundEnabled = nil
+            backgroundFailed = false
+        } catch {
+            if !Task.isCancelled {
+                backgroundFailed = true
+                requestedBackgroundEnabled = enabled
+            }
+            onFailure(error)
+        }
+        backgroundSaving = false
     }
 }
 

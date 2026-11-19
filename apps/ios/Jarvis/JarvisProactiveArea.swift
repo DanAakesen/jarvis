@@ -278,6 +278,7 @@ struct JarvisProactiveArea: View {
     @ViewBuilder private var content: some View {
         VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
             nextCheckCard(loadedStatus)
+            backgroundCard(loadedStatus)
             if (loadedStatus != nil && statusRefreshFailed) || (itemsLoaded && itemsFailure != nil) {
                 HStack {
                     Text(text(.refreshFailedShowingSaved)).font(.footnote).foregroundStyle(.secondary)
@@ -327,6 +328,7 @@ struct JarvisProactiveArea: View {
     }
 
     private func sentence(_ status: JarvisProactiveStatus) -> String {
+        if status.background?.enabled == false { return text(.proactiveBackgroundOff) }
         switch JarvisProactiveLogic.statusLine(status) {
         case .checking:
             return text(.proactiveSentenceChecking)
@@ -761,6 +763,7 @@ struct JarvisProactiveArea: View {
         case .nutrition: "fork.knife"
         case .notes: "note.text"
         case .memory: "brain.head.profile"
+        case .location: "location"
         }
     }
 
@@ -830,6 +833,127 @@ struct JarvisProactiveArea: View {
                 .accessibilityIdentifier("proactive.budget")
             } else { statusDataState("proactive.budget") }
         }
+    }
+
+    private func backgroundCard(_ status: JarvisProactiveStatus?) -> some View {
+        JarvisInsightsCard(title: text(.proactiveBackground)) {
+            if let background = status?.background {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(background.enabled ? text(.proactiveBackgroundOn) : text(.proactiveBackgroundOff))
+                        .font(.subheadline.weight(.medium))
+                        .accessibilityIdentifier("proactive.background.enabled")
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .proactiveTurnsToday,
+                            language: language,
+                            background.today.usedTurns,
+                            background.today.allowedTurns
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .proactiveCostEstimate,
+                            language: language,
+                            costRange(background.cost.estimatedDayMinDkk, background.cost.estimatedDayMaxDkk),
+                            costRange(background.cost.estimatedThirtyDayMinDkk, background.cost.estimatedThirtyDayMaxDkk)
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .proactiveCostActual,
+                            language: language,
+                            money(status?.budget.estimatedSpendDkk ?? 0),
+                            money(background.cost.coldSweepMinDkk),
+                            money(background.cost.coldSweepMaxDkk),
+                            money(background.cost.representativeToolTurnDkk),
+                            money(background.cost.preflightWorstCaseDkk)
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    stateLine(background.situation)
+                    if let last = background.slots.lastAt.flatMap(JarvisInsightsDates.parse) {
+                        Text(
+                            JarvisInsightsLocalization.format(
+                                .proactiveLastActivation,
+                                language: language,
+                                JarvisInsightsDates.elapsed(from: last, now: now, language: language)
+                            )
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    if !background.situation.staleSources.isEmpty {
+                        Text(
+                            JarvisInsightsLocalization.format(
+                                .proactiveStateStale,
+                                language: language,
+                                sourceNames(background.situation.staleSources)
+                            )
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    }
+                    if !background.situation.missingSources.isEmpty {
+                        Text(
+                            JarvisInsightsLocalization.format(
+                                .proactiveStateMissing,
+                                language: language,
+                                sourceNames(background.situation.missingSources)
+                            )
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .proactiveQueueRecovery,
+                            language: language,
+                            background.slots.queue.pending,
+                            background.slots.queue.leased,
+                            background.slots.queue.retrying
+                        )
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("proactive.background")
+            } else {
+                Text(text(.proactiveUnavailable)).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func costRange(_ low: Double, _ high: Double) -> String {
+        "\(money(low))–\(money(high))"
+    }
+
+    @ViewBuilder
+    private func stateLine(_ situation: PiBrainStatus.Situation) -> some View {
+        if let updated = situation.asOf.flatMap(JarvisInsightsDates.parse) {
+            Text(
+                JarvisInsightsLocalization.format(
+                    .proactiveStateFresh,
+                    language: language,
+                    JarvisInsightsDates.elapsed(from: updated, now: now, language: language)
+                )
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else {
+            Text(text(.proactiveStateNone)).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func sourceNames(_ values: [String]) -> String {
+        values.map { value in
+            JarvisProactiveSourceID(rawValue: value).map { text($0.localizationKey) } ?? value
+        }.joined(separator: ", ")
     }
 
     private var runsCard: some View {

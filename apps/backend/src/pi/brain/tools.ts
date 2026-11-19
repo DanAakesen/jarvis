@@ -5,6 +5,20 @@ import type { InboxStore } from '../../inbox/store.js';
 import { PiAreaError, type PiAreaStore } from '../area.js';
 import type { PiTurnGrant, PiTurnRegistry } from '../turns.js';
 import { BrainCommsRefusal, MAX_BRAIN_MESSAGE_CHARACTERS, type BrainComms } from './comms.js';
+import {
+  findingCategories,
+  sourceIds,
+  type FindingCategory,
+  type SourceId,
+  type SuggestionScope,
+} from '../../proactive/types.js';
+import {
+  classifySuggestionScope,
+  findingAllowed,
+  hasTravelEvidence,
+  proactiveEvidenceSourcesAllowed,
+} from '../../proactive/policy.js';
+import type { ProactiveStore } from '../../proactive/store.js';
 
 const noteName = /^[^/\\:*?"<>|#%^[\]\p{Cc}\p{Cf}.][^/\\:*?"<>|#%^[\]\p{Cc}\p{Cf}]{0,95}$/u;
 
@@ -43,6 +57,7 @@ function translate(error: unknown): never {
 export function createBrainTools(options: {
   readonly registry: PiTurnRegistry;
   readonly comms: BrainComms;
+  readonly proactive: Pick<ProactiveStore, 'settings'>;
   readonly area?: PiAreaStore | undefined;
   readonly inbox?: Pick<InboxStore, 'find' | 'replace'> | undefined;
   readonly now: () => Date;
@@ -53,18 +68,59 @@ export function createBrainTools(options: {
     description: [
       'Tell Dan something, as a chat message from Jarvis that always pushes to his phone and Watch. Only for a background wake; in a chat turn I answer in the reply instead.',
       `Send it only when it is worth interrupting him: something he would want to know now or soon, a decision he has to make, or a result he asked to be kept updated on. Say it in his language, plainly and briefly (at most ${MAX_BRAIN_MESSAGE_CHARACTERS} characters), with what, why it matters and what he can do. Do not repeat what he was already told, and do not send greetings or status noise.`,
+      'Name the one category and Personal/Work/unknown suggestion scope, and list every Proactive source used (GitHub and Worker evidence use factory). The server enforces the current Proactive categories, scope and source switches before delivery; declare Travel as a related category when the message contains travel or booking context.',
       'There is a daily limit and exact repeats are refused; the result says so. Report success only from the result.',
     ].join(' '),
     execution: { defaultEffect: 'action' },
     inputSchema: {
       type: 'object',
-      properties: { text: { type: 'string', minLength: 1, maxLength: MAX_BRAIN_MESSAGE_CHARACTERS * 4 } },
-      required: ['text'], additionalProperties: false,
+      properties: {
+        text: { type: 'string', minLength: 1, maxLength: MAX_BRAIN_MESSAGE_CHARACTERS * 4 },
+        category: { enum: [...findingCategories] },
+        suggestionScope: { enum: ['personal', 'work', 'unknown'] },
+        relatedCategories: { type: 'array', items: { enum: [...findingCategories] }, maxItems: 4, uniqueItems: true },
+        evidenceSources: {
+          type: 'array',
+          items: { enum: [...sourceIds] },
+          minItems: 1,
+          maxItems: 4,
+          uniqueItems: true,
+        },
+      },
+      required: ['text', 'category', 'suggestionScope', 'evidenceSources'],
+      additionalProperties: false,
     },
     execute: async (input, request, signal) => {
       const grant = wake(registry, request);
       const text = isRecord(input) && typeof input.text === 'string' ? input.text : '';
+      const category = isRecord(input) && typeof input.category === 'string' ? input.category as FindingCategory : null;
+      const suggestionScope = isRecord(input) && typeof input.suggestionScope === 'string'
+        ? input.suggestionScope as SuggestionScope
+        : null;
+      const evidenceSources = isRecord(input) && Array.isArray(input.evidenceSources)
+        ? input.evidenceSources.filter((source): source is SourceId =>
+          typeof source === 'string' && (sourceIds as readonly string[]).includes(source))
+        : [];
+      const relatedCategories = isRecord(input) && Array.isArray(input.relatedCategories)
+        ? input.relatedCategories.filter((value): value is FindingCategory =>
+          typeof value === 'string' && (findingCategories as readonly string[]).includes(value))
+        : [];
+      if (!category || !findingCategories.includes(category) || !suggestionScope ||
+          !['personal', 'work', 'unknown'].includes(suggestionScope) ||
+          evidenceSources.length === 0 || relatedCategories.length > 4) {
+        throw new ToolRefusal('The delivery policy metadata is invalid. Nothing was sent.');
+      }
+      const inferredScope = classifySuggestionScope(text, [{ text }]);
+      if (inferredScope !== 'unknown' && inferredScope !== suggestionScope) {
+        throw new ToolRefusal('The declared Personal/Work scope does not match the message. Nothing was sent.');
+      }
+      if (hasTravelEvidence(text, []) && !relatedCategories.includes('travel')) relatedCategories.push('travel');
       try {
+        const settings = await options.proactive.settings.read();
+        if (!proactiveEvidenceSourcesAllowed(settings, evidenceSources) ||
+            !findingAllowed(settings, category, suggestionScope, relatedCategories)) {
+          throw new ToolRefusal('The current Proactive source, category or scope policy does not allow this message. Nothing was sent.');
+        }
         const sent = await comms.send({ text }, grant.brain!, signal);
         return { sent: true, messageId: sent.messageId };
       } catch (error) { return translate(error); }

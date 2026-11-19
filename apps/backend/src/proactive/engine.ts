@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { BackgroundJobHandle, BackgroundJobRegistry } from '../core/jobs.js';
 import type { UsageStore } from '../core/usage.js';
-import { canRunWithinBudget, estimateCost } from './budget.js';
+import { canRunWithinBudget, effectiveProactiveBudget, estimateCost } from './budget.js';
 import { detectFindings, normaliseFactText } from './detect.js';
 import type { ProactiveModel } from './model.js';
 import { sourceLabels, type FindingInput, type ProactiveStore } from './store.js';
@@ -169,8 +169,8 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       if (run.trigger !== 'manual') watchQuiet();
       const worstCase = await abortable(options.model.worstCaseDkk(), controller.signal);
       const spent = await abortable(store.spend.monthTotal(monthKey(now())), controller.signal);
-      if (settings.monthlyBudgetDkk === 0 ||
-          !canRunWithinBudget(settings.monthlyBudgetDkk, spent, worstCase)) {
+      const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
+      if (budgetLimit === 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
         reason = 'budget_exhausted';
         return;
       }
@@ -247,7 +247,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       if (facts.length > 0) {
         check();
         // Re-check the calendar month immediately before incurring model spend.
-        if (!canRunWithinBudget(settings.monthlyBudgetDkk,
+        if (!canRunWithinBudget(effectiveProactiveBudget(settings.monthlyBudgetDkk),
           await abortable(store.spend.monthTotal(monthKey(now())), controller.signal), worstCase)) {
           reason = 'budget_exhausted';
           return;
