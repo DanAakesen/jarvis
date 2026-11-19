@@ -132,4 +132,30 @@ describe('Key Vault failure classification', () => {
     await expect(dependencies.readSecrets(new AbortController().signal))
       .rejects.toMatchObject({ message: 'unexpected' });
   });
+
+  it('logs fixed guard evidence and per-direction counts without private paths', () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const dependencies = createProductionDependencies(config);
+    dependencies.log?.({
+      outcome: 'needs-attention',
+      reason: 'guard-tripped',
+      guardReasons: ['max-changed-G'],
+      changedOnGitHub: 26,
+      changedOnObsidian: 11,
+      deletedOnGitHub: 0,
+      deletedOnObsidian: 0,
+      privatePath: 'Notes/private.md',
+    });
+    const summary = JSON.parse(String(output.mock.calls[0]?.[0]));
+    expect(summary).toEqual({
+      outcome: 'needs-attention',
+      reason: 'guard-tripped',
+      guardReasons: ['max-changed-G'],
+      changedOnGitHub: 26,
+      changedOnObsidian: 11,
+      deletedOnGitHub: 0,
+      deletedOnObsidian: 0,
+    });
+    output.mockRestore();
+  });
 });

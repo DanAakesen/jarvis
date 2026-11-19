@@ -12,7 +12,8 @@ export interface VaultMirrorStatusReader {
 }
 
 function project(status: VaultMirrorStatus, now: number, paths: boolean): VaultMirrorStatusView {
-  const { finishedAt, outcome, lastSuccessAt, writeBack, reason, conflictPaths,
+  const { finishedAt, outcome, guardReasons, changedOnGitHub, changedOnObsidian,
+    deletedOnGitHub, deletedOnObsidian, lastSuccessAt, writeBack, reason, conflictPaths,
     approved, pushed, writtenBack, deleted, conflicts, skipped,
     credentialMatches, pendingWriteBack, consecutiveFailures } = status;
   const lastSuccessTime = lastSuccessAt === null ? Number.NaN : Date.parse(lastSuccessAt);
@@ -21,7 +22,13 @@ function project(status: VaultMirrorStatus, now: number, paths: boolean): VaultM
     : !Number.isFinite(lastSuccessTime) || lastSuccessTime > now + 30_000 ||
         now - lastSuccessTime > 30 * 60_000 ? 'stale' : 'healthy';
   return {
-    state, lastSuccessAt, lastRunAt: finishedAt, outcome, writeBack,
+    state, lastSuccessAt, lastRunAt: finishedAt, outcome,
+    ...(guardReasons ? { guardReasons: [...guardReasons] } : {}),
+    ...(changedOnGitHub !== undefined ? { changedOnGitHub } : {}),
+    ...(changedOnObsidian !== undefined ? { changedOnObsidian } : {}),
+    ...(deletedOnGitHub !== undefined ? { deletedOnGitHub } : {}),
+    ...(deletedOnObsidian !== undefined ? { deletedOnObsidian } : {}),
+    writeBack,
     ...(reason ? { reason } : {}),
     counts: { approved, pushed, writtenBack, deleted, conflicts, skipped,
       credentialMatches, pendingWriteBack, consecutiveFailures },

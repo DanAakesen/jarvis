@@ -82,4 +82,24 @@ describe('StatusPage evidence copy', () => {
     expect(screen.getByText('No status yet')).not.toBeNull();
     expect(screen.queryByText('Read error')).toBeNull();
   });
+
+  it('shows the exact mirror guard and proposed change counts', async () => {
+    const data = snapshot();
+    data.vaultMirror = {
+      state: 'needs-attention',
+      lastSuccessAt: null,
+      lastRunAt: checkedAt(),
+      outcome: 'needs-attention',
+      reason: 'guard-tripped',
+      guardReasons: ['max-changed-G'],
+      changedOnGitHub: 26,
+      changedOnObsidian: 11,
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
+    render(<StatusPage backendUrl="https://api.example.test" getAccessToken={async () => 'token'} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Vault mirror details' }));
+    expect(screen.getByText(/per-run cap would be exceeded by changes to GitHub/u)).not.toBeNull();
+    expect(screen.getByText('Proposed GitHub changes')).not.toBeNull();
+    expect(screen.getByText('26')).not.toBeNull();
+  });
 });

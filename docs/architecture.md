@@ -982,8 +982,9 @@ logged or returned.
 
 Authenticated `GET /status` adds a reduced `vaultMirror` view independently of
 the general one-minute probe cache. It carries the last completed run time,
-outcome and read reason while still omitting run identifiers, start time and
-other runner-only fields.
+outcome, fixed guard predicates, proposed change/delete counts per direction
+and read reason while still omitting run identifiers, start time and other
+runner-only fields.
 Conflict paths are confined to this owner response and the expanded web row;
 agent status tools, proactive facts and logs do not receive them. Contracts add
 `vaultMirrorStatusViewSchema` without changing the shared runner document.
@@ -1021,9 +1022,10 @@ the digest-pinned schedule, dedicated user-assigned identity/client ID, ACR
 identity, required runtime setting names, configured write-back/caps and one
 terminal scheduled execution fresh enough for the ten-minute cadence, then
 reads only the runner's allow-listed terminal JSON summary. A completed `needs-attention` is visible as a
-warning; missing executions, a missing summary, config drift, auth failure and
-other failed outcomes fail readiness. The probe starts no manual job and changes
-no Azure resource or secret.
+warning unless `reason=guard-tripped`, which fails readiness because every
+action was blocked. Missing executions, a missing summary, config drift, auth
+failure and other failed outcomes also fail readiness. The probe starts no
+manual job and changes no Azure resource or secret.
 
 The job has its own user-assigned identity. It can pull from the existing
 registry, read Key Vault secrets at runtime through the SDK, and read/write only

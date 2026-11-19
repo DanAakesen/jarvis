@@ -90,14 +90,16 @@ class VaultMirrorProbeTests(unittest.TestCase):
     def test_runner_log_parser_keeps_only_bounded_summary(self):
         output = (
             "2026-11-19T02:00:00Z starting\n"
-            '{"runId":"private","outcome":"needs-attention","reason":"conflict",'
+            '{"runId":"private","outcome":"needs-attention","reason":"conflict","guardReasons":["max-changed-G"],'
             '"durationMs":1200,"approved":4,"pushed":0,"writtenBack":0,"deleted":0,"conflicts":1,'
-            '"skipped":0,"credentialMatches":0,"pendingWriteBack":1}'
+            '"skipped":0,"credentialMatches":0,"pendingWriteBack":1,"changedOnGitHub":26}'
         )
         parsed = parse_runner_log(output)
         self.assertEqual(parsed["outcome"], "needs-attention")
         self.assertEqual(parsed["reason"], "conflict")
         self.assertNotIn("runId", parsed)
+        self.assertEqual(parsed["guardReasons"], ["max-changed-G"])
+        self.assertEqual(parsed["changedOnGitHub"], 26)
         unsafe = parse_runner_log('{"outcome":"failed","reason":"private detail","approved":"secret"}')
         self.assertEqual(unsafe, {"outcome": "failed", "reason": None})
 
@@ -110,7 +112,10 @@ class VaultMirrorProbeTests(unittest.TestCase):
                 "endTime": "2026-11-19T01:58:10Z",
             },
         }
-        attention = '{"outcome":"needs-attention","reason":"conflict","durationMs":1}'
+        attention = (
+            '{"outcome":"needs-attention","reason":"conflict","durationMs":1,'
+            '"conflicts":1}'
+        )
         with (
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=attention),
@@ -121,6 +126,16 @@ class VaultMirrorProbeTests(unittest.TestCase):
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=failed),
             self.assertRaisesRegex(RuntimeError, "run_failed:auth"),
+        ):
+            probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)
+        guarded = (
+            '{"outcome":"needs-attention","reason":"guard-tripped","durationMs":1,'
+            '"guardReasons":["max-changed-G"],"changedOnGitHub":26}'
+        )
+        with (
+            patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
+            patch("vault_mirror_probe.read_logs", return_value=guarded),
+            self.assertRaisesRegex(RuntimeError, "guard_tripped:max-changed-G"),
         ):
             probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)
 

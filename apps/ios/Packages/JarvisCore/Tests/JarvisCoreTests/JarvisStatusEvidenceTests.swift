@@ -48,12 +48,18 @@ final class JarvisStatusEvidenceTests: XCTestCase {
           "lastSuccessAt":null,
           "lastRunAt":"2026-11-19T01:50:00Z",
           "outcome":"failed",
-          "readReason":"access-denied"
+          "readReason":"access-denied",
+          "guardReasons":["max-changed-G"],
+          "changedOnGitHub":26,
+          "changedOnObsidian":11
         }
         """.utf8)
         let mirror = try JSONDecoder().decode(JarvisVaultMirror.self, from: data)
         XCTAssertEqual(mirror.lastRunAt, "2026-11-19T01:50:00Z")
         XCTAssertEqual(mirror.outcome, "failed")
         XCTAssertEqual(mirror.readReason, "access-denied")
+        XCTAssertEqual(mirror.guardReasons, ["max-changed-G"])
+        XCTAssertEqual(mirror.changedOnGitHub, 26)
+        XCTAssertEqual(mirror.changedOnObsidian, 11)
     }
 }

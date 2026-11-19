@@ -17,6 +17,11 @@ RUN_REASONS = {
     "conflict", "secret-match", "push-rejected", "upload-failed", "state-corrupt",
     "timeout", "unexpected",
 }
+GUARD_REASONS = {
+    "invalid-input", "max-changed-G", "max-changed-O", "max-deletes-G",
+    "max-deletes-O", "base-deletion-ratio", "empty-side", "missing-base-O",
+    "missing-base-G",
+}
 REQUIRED_ENV = {
     "KEY_VAULT_URI", "AZURE_CLIENT_ID", "GITHUB_APP_ID",
     "VAULT_MIRROR_STORAGE_URL", "VAULT_MIRROR_WRITE_BACK",
@@ -157,10 +162,17 @@ def parse_runner_log(output: str) -> dict[str, object] | None:
             for key in (
                 "durationMs", "approved", "pushed", "writtenBack", "deleted",
                 "conflicts", "skipped", "credentialMatches", "pendingWriteBack",
+                "changedOnGitHub", "changedOnObsidian", "deletedOnGitHub",
+                "deletedOnObsidian",
             )
             if type(value.get(key)) is int and 0 <= value[key] <= 1_000_000_000
         }
         reason = value.get("reason")
+        guard_reasons = value.get("guardReasons")
+        if isinstance(guard_reasons, list) and 0 < len(guard_reasons) <= len(GUARD_REASONS) and all(
+            isinstance(item, str) and item in GUARD_REASONS for item in guard_reasons
+        ):
+            counts["guardReasons"] = guard_reasons
         summary = {
             "outcome": value.get("outcome"),
             "reason": reason if isinstance(reason, str) and reason in RUN_REASONS else None,
@@ -243,6 +255,10 @@ def probe(
     outcome = runner["outcome"]
     verdict = "healthy" if outcome in {"ok", "ok-noop", "skipped-busy"} else \
         "attention" if outcome == "needs-attention" else "failed"
+    if outcome == "needs-attention" and runner.get("reason") == "guard-tripped":
+        guards = runner.get("guardReasons") or []
+        detail = ",".join(guards) if isinstance(guards, list) and guards else "unknown"
+        raise ProbeError("vault_mirror_guard_tripped:" + detail)
     if verdict == "failed":
         raise ProbeError(f"vault_mirror_run_failed:{runner.get('reason') or 'unknown'}")
     return {

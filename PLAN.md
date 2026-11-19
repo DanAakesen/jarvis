@@ -5,23 +5,27 @@ The newest visual takes focus while older visuals stay swipeable for the call. C
 
 ## Vault Mirror and Status reliability — 19 November 2026 (#1962)
 
-**Status: in progress.** Production evidence confirms the mirror variables and
-latest infrastructure/Bicep/image deployment were accepted, but this worktree
-cannot read current Container Apps executions because the remote managed-identity
-endpoint is unavailable. The fix does not infer job state from a missing blob.
+**Status: in progress.** Production evidence establishes that the mirror is
+running every ten minutes. The latest executions finish in about 14 seconds as
+`needs-attention / guard-tripped`, with 11 pending Obsidian write-backs and one
+conflict; no changes are applied. The old log omits which fixed safety predicate
+fired, so this fix adds guard enums and proposed per-direction counts to the
+runner status/log and Status page rather than raising a cap or changing policy
+without approval.
 
 | Step | State |
 | --- | --- |
 | Verify latest main Deploy, mirror variables, image build and fail-silent paths | Done |
+| Establish the live mirror outcome and distinguish schedule failure from a planner guard | Done: job executes, but the all-or-nothing planner guard repeats and no actions commit |
 | Expose mirror last-run/outcome/read-reason evidence to web and iOS | Built |
 | Make `JARVIS_VAULT_MIRROR_ENABLED=true` fail closed and add a read-only fresh-execution probe | Built |
 | Use PI chat/voice/brain and embedding evidence with 15-minute freshness; age Last backend error after five minutes | Built |
-| Focused and full local regressions | Passing: 621 backend, 40 web, 12 contracts, 26 vault-mirror, 55 GitHub-script and 196 JarvisCore tests; focused lint/builds pass |
+| Focused and full local regressions | Passing: 621 backend, 40 web, 12 contracts, 28 vault-mirror, 55 GitHub-script and 196 JarvisCore tests; focused lint/builds pass |
 | Swift model tests and real-browser desktop/phone inspection | Done; 196 JarvisCore tests pass, and the actual web component was checked at 1280×900 and 390×844 |
-| PR CI review and production-execution evidence from the next qualified Deploy | Pending; no deployment or merge by this branch |
+| PR CI review and exact guard evidence from the next qualified Deploy | Pending; current production is proven to be running and blocked by `guard-tripped`; no deployment or merge by this branch |
 
-Next: finish local validation and CI review, then report the unobserved production
-execution evidence explicitly rather than claiming it from a status blob.
+Next: qualify the guard-evidence fix in PR CI, then read the first new scheduled
+execution before considering any reviewed cap/policy change.
 
 ## PI smoke in three requests (#1910, P15-209)
 

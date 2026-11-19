@@ -31,9 +31,10 @@ When production enables the job, Deploy fails closed if the digest cannot be
 built or the mirror configuration is incomplete. Deterministic readiness then
 runs `.github/scripts/vault_mirror_probe.py`: it verifies the ten-minute
 schedule, waits for a fresh terminal execution and prints only the runner's
-fixed-count terminal JSON. `needs-attention` is a warning; no execution,
-configuration drift, `failed` or missing logs is a readiness failure. It
-starts no job and changes no secret, policy or state.
+fixed-count terminal JSON. An ordinary `needs-attention` is a warning, but
+`guard-tripped` is a readiness failure because the all-or-nothing plan applied
+nothing. No execution, configuration drift, `failed` or missing logs also
+fails readiness. It starts no job and changes no secret, policy or state.
 
 ## Runtime
 
@@ -59,7 +60,9 @@ preflighted before GitHub or Obsidian writes. An oversized or corrupt archive
 reports the existing `state-corrupt` reason with `needs-attention`; the shared
 status schema and Status-page explanation remain unchanged. Status is written
 to `vault-mirror-status/status.json` using the strict shared contract. Logs use
-an explicit allow-list of run ID, outcome, fixed reason, duration and counts.
+an explicit allow-list of run ID, outcome, fixed reason, duration, counts,
+guard-reason enums and proposed changes/deletes per direction. No note path is
+included.
 Conflict paths appear only in private status, never in logs.
 
 The working copy and configuration home use fixed absolute paths below the
@@ -219,6 +222,10 @@ more than 10% of distinct base paths across both directions, an empty side versu
 at least ten approved files, or more than 20% of base paths missing on either
 side empties **all** actions, including base updates. Threshold equality is
 allowed. Proposed mutations are counted before write-back gating.
+The runner status and production log carry the tripped fixed reason(s) plus the
+proposed per-direction counts, so an operational report can distinguish a
+change cap from delete, empty-side or missing-base protection without exposing
+a note path.
 
 If a complete first-run snapshot exceeds a change cap, the owner can raise that
 cap **for one run**, within the hard maximum, inspect the result, and restore it.

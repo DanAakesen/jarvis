@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isApprovedPath, validatePolicy } from '../src/engine/index.js';
-import { policyData } from './fixtures.js';
+import { isApprovedPath, planReconcile, validatePolicy } from '../src/engine/index.js';
+import { fixture, policyData, record } from './fixtures.js';
 
 const validated = validatePolicy({ ...policyData, allowedRoots: ['Notes', 'General', '_agent-activity'] });
 if (!validated.success) throw new Error('policy-invalid');
@@ -20,5 +20,21 @@ describe('isApprovedPath', () => {
     'Notes/_AGENT-ACTIVITY/Day.md',
   ])('never publishes %s', (path) => {
     expect(isApprovedPath(policy, path)).toBe(false);
+  });
+
+  it('keeps the exact fixed guard reason and proposed direction counts', () => {
+    const { input, texts } = fixture();
+    const ours = new Map(input.O);
+    for (let index = 0; index < 26; index += 1) {
+      const path = `Notes/backlog-${index}.md`;
+      texts.O.set(path, 'new');
+      ours.set(path, record('new'));
+    }
+    const plan = planReconcile({ ...input, O: ours });
+    expect(plan.verdict).toBe('guard-tripped');
+    expect(plan.counters.guardReasons).toEqual({ 'max-changed-G': 1 });
+    expect(plan.counters.changedOnG).toBe(26);
+    expect(plan.counters.changedOnO).toBe(0);
+    expect(plan.actions).toEqual([]);
   });
 });

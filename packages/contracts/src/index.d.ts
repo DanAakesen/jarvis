@@ -18,6 +18,15 @@ export interface VaultMirrorStatus {
   credentialMatches: number;
   pendingWriteBack: number;
   consecutiveFailures: number;
+  changedOnGitHub?: number;
+  changedOnObsidian?: number;
+  deletedOnGitHub?: number;
+  deletedOnObsidian?: number;
+  guardReasons?: (
+    | 'invalid-input' | 'max-changed-G' | 'max-changed-O' | 'max-deletes-G'
+    | 'max-deletes-O' | 'base-deletion-ratio' | 'empty-side' | 'missing-base-O'
+    | 'missing-base-G'
+  )[];
   lastSuccessAt: string | null;
   conflictPaths: string[];
 }
@@ -27,6 +36,11 @@ export interface VaultMirrorStatusView {
   lastSuccessAt: string | null;
   lastRunAt?: string;
   outcome?: VaultMirrorStatus['outcome'];
+  guardReasons?: VaultMirrorStatus['guardReasons'];
+  changedOnGitHub?: number;
+  changedOnObsidian?: number;
+  deletedOnGitHub?: number;
+  deletedOnObsidian?: number;
   readReason?: 'backend-not-configured' | 'status-missing' | 'access-denied' | 'timed-out'
     | 'invalid' | 'unavailable';
   writeBack?: VaultMirrorStatus['writeBack'];

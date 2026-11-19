@@ -617,7 +617,9 @@ failure names the safe category: backend not configured, status missing, access
 denied, timed out, invalid or unavailable. Healthy includes no-op and busy
 runs; freshness becomes stale after 30 minutes without success. Dry-run is
 always visible when reported. Expand the row for counts, write-back mode, fixed
-reasons and up to ten conflict paths. No status document is normal, not a failure.
+reasons and up to ten conflict paths. Guard trips show the fixed safety
+predicate(s) and proposed change/delete counts per direction, never note paths.
+No status document is normal, not a failure.
 
 The existing proactive checks create a normal-urgency finding immediately for
 needs-attention, or for failed/stale status when success is over an hour old or

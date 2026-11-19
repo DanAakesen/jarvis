@@ -33,6 +33,17 @@ const readReasons = {
   invalid: 'The mirror status document is missing required evidence or is not valid.',
   unavailable: 'The mirror status document could not be read.',
 } as const;
+const guardReasons: Record<NonNullable<VaultMirrorView['guardReasons']>[number], string> = {
+  'invalid-input': 'The planner received invalid input.',
+  'max-changed-G': 'The per-run cap would be exceeded by changes to GitHub.',
+  'max-changed-O': 'The per-run cap would be exceeded by changes to Obsidian.',
+  'max-deletes-G': 'The delete cap would be exceeded in GitHub.',
+  'max-deletes-O': 'The delete cap would be exceeded in Obsidian.',
+  'base-deletion-ratio': 'The delete ratio safety limit was exceeded.',
+  'empty-side': 'One complete side appears empty while the other has notes.',
+  'missing-base-O': 'Obsidian is missing too much of the recorded base.',
+  'missing-base-G': 'GitHub is missing too much of the recorded base.',
+};
 const countLabels = {
   approved: 'Approved',
   pushed: 'Pushed to GitHub',
@@ -87,10 +98,17 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
     <div id={detailsId} className="system-status-details vault-mirror-details" hidden={!expanded}>
       {expanded && (showDetails ? <>
         {value.reason && <p className="system-status-reason">{reasons[value.reason]}</p>}
+        {!!value.guardReasons?.length && <p className="system-status-reason">
+          Safety guard: {value.guardReasons.map(reason => guardReasons[reason]).join(' ')}
+        </p>}
         <dl>
           {value.lastRunAt && <div><dt>Last run</dt><dd>{formatDateTime(value.lastRunAt)}</dd></div>}
           {value.outcome && <div><dt>Last outcome</dt><dd>{readableOutcome(value.outcome)}</dd></div>}
           {value.lastSuccessAt && <div><dt>Last success</dt><dd>{formatDateTime(value.lastSuccessAt)}</dd></div>}
+          {value.changedOnGitHub !== undefined && <div><dt>Proposed GitHub changes</dt><dd>{value.changedOnGitHub}</dd></div>}
+          {value.changedOnObsidian !== undefined && <div><dt>Proposed Obsidian changes</dt><dd>{value.changedOnObsidian}</dd></div>}
+          {value.deletedOnGitHub !== undefined && <div><dt>Proposed GitHub deletes</dt><dd>{value.deletedOnGitHub}</dd></div>}
+          {value.deletedOnObsidian !== undefined && <div><dt>Proposed Obsidian deletes</dt><dd>{value.deletedOnObsidian}</dd></div>}
           {value.writeBack && <div><dt>Write-back</dt><dd>{value.writeBack === 'dry-run' ? 'Dry-run — not writing into Obsidian' : 'On'}</dd></div>}
           {value.counts && Object.entries(countLabels).map(([key, label]) => <div key={key}>
             <dt>{label}</dt><dd>{value.counts![key as keyof typeof countLabels]}</dd>

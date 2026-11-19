@@ -173,6 +173,11 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
     public let lastRunAt: String?
     public let outcome: String?
     public let readReason: String?
+    public let guardReasons: [String]?
+    public let changedOnGitHub: Int?
+    public let changedOnObsidian: Int?
+    public let deletedOnGitHub: Int?
+    public let deletedOnObsidian: Int?
     public let writeBack: String?
     public let reason: String?
     public let counts: JarvisVaultMirrorCounts?
@@ -184,6 +189,11 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
         lastRunAt: String? = nil,
         outcome: String? = nil,
         readReason: String? = nil,
+        guardReasons: [String]? = nil,
+        changedOnGitHub: Int? = nil,
+        changedOnObsidian: Int? = nil,
+        deletedOnGitHub: Int? = nil,
+        deletedOnObsidian: Int? = nil,
         writeBack: String? = nil,
         reason: String? = nil,
         counts: JarvisVaultMirrorCounts? = nil,
@@ -194,6 +204,11 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
         self.lastRunAt = lastRunAt
         self.outcome = outcome
         self.readReason = readReason
+        self.guardReasons = guardReasons
+        self.changedOnGitHub = changedOnGitHub
+        self.changedOnObsidian = changedOnObsidian
+        self.deletedOnGitHub = deletedOnGitHub
+        self.deletedOnObsidian = deletedOnObsidian
         self.writeBack = writeBack
         self.reason = reason
         self.counts = counts

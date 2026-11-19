@@ -112,7 +112,9 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
     log(entry) {
       const allowed = Object.fromEntries(Object.entries(entry).filter(([key]) =>
         ['runId', 'outcome', 'reason', 'durationMs', 'approved', 'pushed', 'writtenBack',
-          'deleted', 'conflicts', 'skipped', 'credentialMatches', 'pendingWriteBack'].includes(key)));
+          'deleted', 'conflicts', 'skipped', 'credentialMatches', 'pendingWriteBack',
+          'guardReasons', 'changedOnGitHub', 'changedOnObsidian', 'deletedOnGitHub',
+          'deletedOnObsidian'].includes(key)));
       console.log(JSON.stringify(allowed));
     },
   };

@@ -480,7 +480,8 @@ the only state signal. No status yet, healthy, stale, needs attention, failed,
 loading and read error use the same compact anatomy, without collapsed prose
 or lists. No status yet never claims the scheduled job is off; read errors name
 the bounded failure category. Expand for last run, last success, outcome and
-write-back evidence.
+write-back evidence. Guard trips name the fixed planner predicate and show the
+proposed change/delete counts, not note paths.
 
 A full-width disclosure button uses the shared ghost-button geometry, a 44px
 minimum target, visible focus and `aria-expanded`. Enter/Space toggles details
@@ -490,7 +491,7 @@ expansion is immediate and has no motion dependency, including reduced motion.
 Loading/error retain this row and the page's existing Refresh/Retry recovery.
 The same disclosure remains mounted while the first snapshot arrives,
 preserving expansion and focus. A successful snapshot without mirror data
-shows Not set up; failed fetches and explicit read errors retain Read error.
+shows No status yet; failed fetches and explicit read errors retain Read error.
 Recovery copy does not assume whether the page offers Refresh or Retry.
 Synthetic Chromium inspected all seven states, disclosure, keyboard focus,
 repeated input, long paths and overflow at 1280×900, 390×900 and 320×900 with

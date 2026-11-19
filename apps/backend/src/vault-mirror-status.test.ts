@@ -71,10 +71,13 @@ describe('vault mirror status reader', () => {
   });
 
   it('exposes the last completed run and sanitizes conflict paths by reader purpose', async () => {
-    const document = {
+    const document: VaultMirrorStatus = {
       ...status,
-      outcome: 'needs-attention' as const,
-      reason: 'conflict' as const,
+      outcome: 'needs-attention',
+      reason: 'conflict',
+      guardReasons: ['max-changed-G'],
+      changedOnGitHub: 26,
+      changedOnObsidian: 11,
       conflictPaths: ['private/path.md'],
     };
     const reader = createVaultMirrorStatusReader(blobWith(document), () => at);
@@ -83,6 +86,9 @@ describe('vault mirror status reader', () => {
       lastSuccessAt: status.lastSuccessAt,
       lastRunAt: status.finishedAt,
       outcome: 'needs-attention',
+      guardReasons: ['max-changed-G'],
+      changedOnGitHub: 26,
+      changedOnObsidian: 11,
       writeBack: 'on',
       reason: 'conflict',
       counts: {

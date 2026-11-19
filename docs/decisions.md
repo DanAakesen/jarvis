@@ -17,12 +17,26 @@ cloud worktree could not read Container Apps executions through ARM because its
 managed-identity endpoint was unreachable. A missing/stale status blob is not
 used as evidence that the job is off.
 
+Read-only Container Apps evidence subsequently established the live state:
+execution `job-jarvis-vault-mirror-29917610` started at 02:50 UTC on 19
+November; the platform marked it `Failed`, while the runner completed with
+`needs-attention`, `reason=guard-tripped`, 151 approved files, 11 pending
+Obsidian write-backs, one conflict, no pushed/written/deleted files and no
+credential match in 13.686 seconds. The same bounded summary repeated every
+ten minutes for at least six hours. **The job is running.** The planner trips a
+safety guard, returns no actions and exits non-zero, so the platform's
+`Failed` execution is not a stopped schedule. Eleven pending Obsidian changes
+are below the configured change cap of 25; because the old log discarded
+`guardReasons` and proposed per-direction counts, the exact guard cannot be
+named safely from the current execution evidence. The runner now retains and
+logs those fixed enums/counts, and the Status page displays them.
+
 | Choice | Why |
 | --- | --- |
 | An explicitly enabled mirror is fail-closed in `deploy_bicep.sh`: invalid App ID/caps, missing Dockerfile, registry/digest, or image-build failure stops before Bicep | Silent fallback produced a successful release while the one explicitly requested component was ambiguous |
 | Deterministic readiness verifies the scheduled job, its dedicated identity/client ID and required runtime setting names, and waits for one fresh terminal execution, then parses only the allow-listed runner JSON | The job's resource definition is not execution evidence; bounded logs prove outcome and secret usability without vault paths, values or note text |
-| `needs-attention` remains a readiness warning; no execution, config drift, `failed` and missing runner evidence fail readiness | A conflict/safety stop is a completed run that needs owner attention, while auth, timeout or a dead schedule is an operational failure |
-| `GET /status` projects mirror `lastRunAt`, `outcome` and safe `readReason`; the UI says **No status yet**, not **Not set up** | A missing status document does not identify a missing Azure job, while run/outcome/read failures are separate facts |
+| Ordinary `needs-attention` remains a warning; `reason=guard-tripped`, no execution, config drift, `failed` and missing runner evidence fail readiness | A guard trip applies zero actions and is the current blocked state; an isolated conflict still warrants visible attention without claiming the job is off |
+| The mirror contract carries fixed `guardReasons` plus proposed change/delete counts per direction; `GET /status` projects these with `lastRunAt`, `outcome` and safe `readReason`; the UI says **No status yet**, not **Not set up** | A repeated guard trip is diagnosable without a note path or guess; a missing status document does not identify a missing Azure job |
 | PI is the active Foundry chat/voice subject. Bounded chat, voice, brain and embedding runtime results are current for 15 minutes, then unknown/stale | Catalogue or code configuration is not live health, and PI brain/turn evidence is available without adding another paid request |
 | A successful PI agent provisioning job is required for an accepted release receipt | PI is now the normal chat and voice path, so optional-test failure must not become a successful default-engine release |
 | Agent runner remains unknown until a completed runtime or research smoke result exists | Active-session count and configuration do not prove the Foundry runner is healthy |

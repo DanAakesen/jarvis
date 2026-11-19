@@ -244,9 +244,15 @@ Leave `JARVIS_VAULT_MIRROR_WRITE_BACK` as `dry-run` for initial runs.
 Review the Deploy **Deterministic runtime readiness** job. With the switch on,
 the read-only probe verifies the schedule, digest-pinned image, one fresh
 terminal execution and the runner's bounded outcome summary. It starts no
-manual execution and changes no resource. A `needs-attention` outcome is
-printed as a warning; missing executions, configuration drift, auth failure and
-other failed outcomes fail readiness.
+manual execution and changes no resource. An ordinary `needs-attention`
+outcome is printed as a warning; `needs-attention / guard-tripped` fails
+readiness because the planner applied nothing. Missing executions,
+configuration drift, auth failure and other failed outcomes also fail.
+
+When the summary is `guard-tripped`, read its `guardReasons` and proposed
+`changedOnGitHub`/`changedOnObsidian` and delete counts before changing a cap.
+Do not infer or fix that with a guessed increase. A cap/policy change remains an
+owner-reviewed production setting and requires a fresh Deploy.
 
 The same owner-side check is:
 

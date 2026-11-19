@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 const count = z.number().int().nonnegative();
 const timestamp = z.iso.datetime({ offset: true }).max(64);
+const guardReason = z.enum([
+  'invalid-input', 'max-changed-G', 'max-changed-O', 'max-deletes-G',
+  'max-deletes-O', 'base-deletion-ratio', 'empty-side', 'missing-base-O',
+  'missing-base-G',
+]);
 
 export const vaultMirrorStatusSchema = z.object({
   runId: z.string().min(1).max(128),
@@ -23,6 +28,11 @@ export const vaultMirrorStatusSchema = z.object({
   credentialMatches: count,
   pendingWriteBack: count,
   consecutiveFailures: count,
+  changedOnGitHub: count.optional(),
+  changedOnObsidian: count.optional(),
+  deletedOnGitHub: count.optional(),
+  deletedOnObsidian: count.optional(),
+  guardReasons: z.array(guardReason).max(9).optional(),
   lastSuccessAt: timestamp.nullable(),
   conflictPaths: z.array(z.string().min(1).max(1024)).max(10),
 }).strict();
@@ -32,6 +42,11 @@ export const vaultMirrorStatusViewSchema = z.object({
   lastSuccessAt: timestamp.nullable(),
   lastRunAt: timestamp.optional(),
   outcome: vaultMirrorStatusSchema.shape.outcome.optional(),
+  guardReasons: vaultMirrorStatusSchema.shape.guardReasons,
+  changedOnGitHub: vaultMirrorStatusSchema.shape.changedOnGitHub,
+  changedOnObsidian: vaultMirrorStatusSchema.shape.changedOnObsidian,
+  deletedOnGitHub: vaultMirrorStatusSchema.shape.deletedOnGitHub,
+  deletedOnObsidian: vaultMirrorStatusSchema.shape.deletedOnObsidian,
   readReason: z.enum([
     'backend-not-configured', 'status-missing', 'access-denied', 'timed-out',
     'invalid', 'unavailable',

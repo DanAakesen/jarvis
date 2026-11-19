@@ -298,6 +298,32 @@ struct JarvisStatusArea: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                if let reasons = mirror.guardReasons, !reasons.isEmpty {
+                    Text(reasons.map(mirrorGuardReasonText).joined(separator: " "))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let changedOnGitHub = mirror.changedOnGitHub {
+                    Text("Proposed GitHub changes: \(changedOnGitHub)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let changedOnObsidian = mirror.changedOnObsidian {
+                    Text("Proposed Obsidian changes: \(changedOnObsidian)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deletedOnGitHub = mirror.deletedOnGitHub {
+                    Text("Proposed GitHub deletes: \(deletedOnGitHub)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deletedOnObsidian = mirror.deletedOnObsidian {
+                    Text("Proposed Obsidian deletes: \(deletedOnObsidian)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 if let writeBack = mirror.writeBack {
                     Text(
                         text(.statusMirrorWriteBack) + ": "
@@ -388,6 +414,20 @@ struct JarvisStatusArea: View {
             "The mirror status document is invalid."
         default:
             "The mirror status document could not be read."
+        }
+    }
+
+    private func mirrorGuardReasonText(_ reason: String) -> String {
+        switch reason {
+        case "max-changed-G": "The per-run cap would be exceeded by changes to GitHub."
+        case "max-changed-O": "The per-run cap would be exceeded by changes to Obsidian."
+        case "max-deletes-G": "The delete cap would be exceeded in GitHub."
+        case "max-deletes-O": "The delete cap would be exceeded in Obsidian."
+        case "base-deletion-ratio": "The delete ratio safety limit was exceeded."
+        case "empty-side": "One complete side appears empty while the other has notes."
+        case "missing-base-O": "Obsidian is missing too much of the recorded base."
+        case "missing-base-G": "GitHub is missing too much of the recorded base."
+        default: "The planner rejected an invalid input."
         }
     }
 
