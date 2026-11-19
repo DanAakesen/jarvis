@@ -135,7 +135,7 @@ class VaultMirrorProbeTests(unittest.TestCase):
         with (
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=guarded),
-            self.assertRaisesRegex(RuntimeError, "guard_tripped:max-changed-G"),
+            self.assertRaisesRegex(RuntimeError, 'guard_tripped:.*changedOnGitHub.*26.*max-changed-G'),
         ):
             probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)
 

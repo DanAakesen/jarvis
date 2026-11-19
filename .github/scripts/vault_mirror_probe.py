@@ -257,8 +257,18 @@ def probe(
         "attention" if outcome == "needs-attention" else "failed"
     if outcome == "needs-attention" and runner.get("reason") == "guard-tripped":
         guards = runner.get("guardReasons") or []
-        detail = ",".join(guards) if isinstance(guards, list) and guards else "unknown"
-        raise ProbeError("vault_mirror_guard_tripped:" + detail)
+        evidence = {
+            "guardReasons": guards if isinstance(guards, list) else ["unknown"],
+            **{
+                key: runner[key]
+                for key in (
+                    "changedOnGitHub", "changedOnObsidian",
+                    "deletedOnGitHub", "deletedOnObsidian",
+                )
+                if key in runner
+            },
+        }
+        raise ProbeError("vault_mirror_guard_tripped:" + json.dumps(evidence, sort_keys=True))
     if verdict == "failed":
         raise ProbeError(f"vault_mirror_run_failed:{runner.get('reason') or 'unknown'}")
     return {
