@@ -41,6 +41,26 @@ final class JarvisStatusEvidenceTests: XCTestCase {
         XCTAssertEqual(JarvisStatusLogic.reason(for: stale), .key(.statusReasonRuntimeStale))
     }
 
+    func testRuntimeEvidenceAgesLocallyForRowsCountsAndFiltering() {
+        let entry = JarvisStatusEntry(
+            id: "foundry.chat", status: .ok, checkedAt: "2026-11-19T01:44:59Z",
+            details: [
+                "configured": .bool(true), "runtimeProbe": .string("runtime"),
+                "evidence": .string("runtime-turn"), "outcome": .string("ok"),
+            ]
+        )
+        XCTAssertEqual(JarvisStatusLogic.displayStatus(for: entry, now: now), .unknown)
+        XCTAssertEqual(JarvisStatusLogic.issueCount([entry], now: now), 1)
+        XCTAssertEqual(
+            JarvisStatusLogic.visible([entry], filter: .issues, now: now),
+            [entry]
+        )
+        XCTAssertEqual(
+            JarvisStatusLogic.reason(for: entry, now: now),
+            .key(.statusReasonRuntimeStale)
+        )
+    }
+
     func testMirrorDecodingRetainsLastRunOutcomeAndReadReason() throws {
         let data = Data("""
         {

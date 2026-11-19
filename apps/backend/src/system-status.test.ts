@@ -85,4 +85,37 @@ describe('system status evidence', () => {
       details: { evidence: 'smoke', smokeCheck: 'research' },
     });
   });
+
+  it('clears superseded failure details when newer runtime evidence succeeds', async () => {
+    const reader = createSystemStatusReader({
+      'foundry.chat': async () => ({
+        status: 'unknown',
+        details: { configured: true, engine: 'pi', runtimeProbe: 'not_run' },
+      }),
+    }, undefined, () => Date.parse(checkAt));
+    reader.recordEvidence('foundry.chat', {
+      status: 'down',
+      checkedAt: checkAt,
+      details: {
+        configured: true, evidence: 'deploy-smoke', smokePart: 'core',
+        reason: 'smoke_failed',
+      },
+    });
+    await reader.read();
+    reader.recordEvidence('foundry.chat', {
+      status: 'ok',
+      checkedAt: checkAt,
+      details: {
+        configured: true, evidence: 'runtime-turn', channel: 'chat',
+        outcome: 'ok', source: 'turn',
+      },
+    });
+    const entry = (await reader.read()).entries.find(candidate => candidate.id === 'foundry.chat')!;
+    expect(entry).toMatchObject({
+      status: 'ok',
+      details: { evidence: 'runtime-turn', outcome: 'ok', runtimeProbe: 'runtime' },
+    });
+    expect(entry.details).not.toHaveProperty('reason');
+    expect(entry.details).not.toHaveProperty('smokePart');
+  });
 });

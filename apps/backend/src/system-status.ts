@@ -478,6 +478,11 @@ export function createSystemStatusReader(
   const withEvidence = (entry: SystemStatusEntry): SystemStatusEntry => {
     const observed = evidence.get(entry.id);
     if (!observed) return entry;
+    const baseDetails = { ...entry.details };
+    for (const key of [
+      'reason', 'evidence', 'smokeCheck', 'smokePart', 'channel', 'outcome',
+      'source', 'runtimeProbe', 'lastEvidenceAt',
+    ]) delete baseDetails[key];
     const checkedAtMs = Date.parse(observed.checkedAt);
     const stale = !Number.isFinite(checkedAtMs) || checkedAtMs > now() + 30_000 ||
       now() - checkedAtMs > runtimeEvidenceFreshMs;
@@ -486,7 +491,7 @@ export function createSystemStatusReader(
       status: stale ? 'unknown' : isStatus(observed.status) ? observed.status : 'unknown',
       checkedAt: observed.checkedAt,
       details: {
-        ...entry.details,
+        ...baseDetails,
         configured: true,
         ...observed.details,
         runtimeProbe: stale ? 'stale' : 'runtime',

@@ -285,17 +285,30 @@ public enum JarvisStatusReason: Equatable, Sendable {
 
 public enum JarvisStatusLogic {
     public static let staleAfter: TimeInterval = 5 * 60
+    public static let runtimeEvidenceFreshFor: TimeInterval = 15 * 60
 
     /// Problems first, then by the backend's own order.
-    public static func ordered(_ entries: [JarvisStatusEntry]) -> [JarvisStatusEntry] {
+    public static func displayStatus(for entry: JarvisStatusEntry, now: Date? = nil) -> JarvisStatusValue {
+        guard let now,
+              text(entry.details?["runtimeProbe"]) == "runtime",
+              let checkedAt = JarvisInsightsDates.parse(entry.checkedAt),
+              checkedAt.timeIntervalSince(now) > 30 || now.timeIntervalSince(checkedAt) >= runtimeEvidenceFreshFor
+        else { return entry.status }
+        return .unknown
+    }
+
+    public static func ordered(_ entries: [JarvisStatusEntry], now: Date? = nil) -> [JarvisStatusEntry] {
         entries.enumerated()
-            .sorted { ($0.element.status.rank, $0.offset) < ($1.element.status.rank, $1.offset) }
+            .sorted { (displayStatus(for: $0.element, now: now).rank, $0.offset)
+                < (displayStatus(for: $1.element, now: now).rank, $1.offset) }
             .map(\.element)
     }
 
-    public static func visible(_ entries: [JarvisStatusEntry], filter: JarvisStatusFilter) -> [JarvisStatusEntry] {
-        let ordered = ordered(entries)
-        return filter == .issues ? ordered.filter { $0.status != .ok } : ordered
+    public static func visible(
+        _ entries: [JarvisStatusEntry], filter: JarvisStatusFilter, now: Date? = nil
+    ) -> [JarvisStatusEntry] {
+        let ordered = ordered(entries, now: now)
+        return filter == .issues ? ordered.filter { displayStatus(for: $0, now: now) != .ok } : ordered
     }
 
     public static func isStale(checkedAt: String, now: Date) -> Bool {
@@ -303,8 +316,8 @@ public enum JarvisStatusLogic {
         return date.timeIntervalSince(now) > 30 || now.timeIntervalSince(date) >= staleAfter
     }
 
-    public static func issueCount(_ entries: [JarvisStatusEntry]) -> Int {
-        entries.filter { $0.status != .ok }.count
+    public static func issueCount(_ entries: [JarvisStatusEntry], now: Date? = nil) -> Int {
+        entries.filter { displayStatus(for: $0, now: now) != .ok }.count
     }
 
     public static func smokeStatus(_ smoke: JarvisStatusSmoke?, now: Date) -> JarvisStatusValue {
@@ -316,8 +329,13 @@ public enum JarvisStatusLogic {
     }
 
     /// The plain reason sentence for a check, or `nil` when the check needs none.
-    public static func reason(for entry: JarvisStatusEntry) -> JarvisStatusReason? {
+    public static func reason(for entry: JarvisStatusEntry, now: Date? = nil) -> JarvisStatusReason? {
         let details = entry.details ?? [:]
+        if displayStatus(for: entry, now: now) == .unknown,
+           text(details["runtimeProbe"]) == "runtime",
+           entry.status != .unknown {
+            return .key(.statusReasonRuntimeStale)
+        }
         if text(details["reason"]) == "active_engine_unconfigured" { return .key(.statusReasonActiveEngineMissing) }
         if flag(details["configured"]) == false { return .key(.statusReasonNotConfigured) }
         if entry.check == .lastError {
@@ -367,7 +385,7 @@ public enum JarvisStatusLogic {
                 return .key(.statusReasonVaultSyncStale)
             }
         }
-        switch entry.status {
+        switch displayStatus(for: entry, now: now) {
         case .unknown: return .key(.statusReasonNotEstablished)
         case .down:
             if id == .pcBridge, flag(details["connected"]) == false {

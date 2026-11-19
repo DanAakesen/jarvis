@@ -144,7 +144,9 @@ struct JarvisStatusArea: View {
                 stats: JarvisStatusValue.allCases.map { tone in
                     JarvisPageStat(
                         id: tone.rawValue,
-                        value: state.snapshot?.entries.filter { $0.status == tone }.count,
+                        value: state.snapshot?.entries.filter {
+                            JarvisStatusLogic.displayStatus(for: $0, now: now) == tone
+                        }.count,
                         label: text(tone.localizationKey),
                         systemImage: tone == .ok ? "checkmark.circle" : tone == .unknown ? "questionmark.circle" : "exclamationmark.circle",
                         tint: tone == .down ? .red : JarvisDesignTokens.primaryAccent,
@@ -158,7 +160,7 @@ struct JarvisStatusArea: View {
     }
 
     private func loaded(_ snapshot: JarvisStatusSnapshot) -> some View {
-        let entries = JarvisStatusLogic.visible(snapshot.entries, filter: filter)
+        let entries = JarvisStatusLogic.visible(snapshot.entries, filter: filter, now: now)
         let mirror = snapshot.vaultMirror ?? JarvisVaultMirror(state: .notSetUp, readReason: "status-missing")
         let showMirror = filter == .all || mirror.displayState(now: now).tone != .ok
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
@@ -232,11 +234,12 @@ struct JarvisStatusArea: View {
 
     private func checkRow(_ entry: JarvisStatusEntry) -> some View {
         let title = entry.check.map { text($0.localizationKey) } ?? JarvisStatusLogic.readable(entry.id)
-        let reason = JarvisStatusLogic.reason(for: entry)
+        let tone = JarvisStatusLogic.displayStatus(for: entry, now: now)
+        let reason = JarvisStatusLogic.reason(for: entry, now: now)
         return JarvisStatusRow(
             title: title,
-            tone: entry.status,
-            toneTitle: text(entry.status.localizationKey),
+            tone: tone,
+            toneTitle: text(tone.localizationKey),
             isExpanded: expanded.contains(entry.id),
             identifier: "status.row.\(entry.id)",
             language: language,
@@ -245,7 +248,7 @@ struct JarvisStatusArea: View {
             toggle(entry.id)
         } detail: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(reasonText(reason) ?? text(entry.status.localizationKey))
+                Text(reasonText(reason) ?? text(tone.localizationKey))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
