@@ -254,8 +254,11 @@ jobs:
           polish health --screenshot-health-fixture
           polish chat-keyboard --screenshot-chat-fixture --screenshot-chat-keyboard
           polish chat-blocks --screenshot-chat-fixture --ui-test-chat-blocks
-          polish voice-panel --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel
+          VOICE=(--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel)
+          polish voice-panel "${VOICE[@]}"
+          polish voice-panel-chart "${VOICE[@]}" --screenshot-voice-chart
           xcrun simctl ui "$PHONE_ID" appearance light
+          polish voice-panel-fullscreen-light "${VOICE[@]}" --screenshot-voice-fullscreen
           polish notes-pinned-light "${NOTES[@]}" --screenshot-notes-state=pinned
           polish today-light --ui-test-navigation --ui-test-today
           xcrun simctl ui "$PHONE_ID" appearance dark

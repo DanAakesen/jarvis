@@ -12,6 +12,10 @@
 - Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text changed: deploy the PI agent, then run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.
 - Not verifiable here: the Azure MCP container's own logs (no Azure access from the build environment).
 
+## iPhone Voice carousel — 18 November 2026 (#1958, P15-210)
+
+- Run `swift test --filter 'VoiceVisualHistoryTests|VoiceCaptionTests'` in `apps/ios/Packages/JarvisCore`. The macOS iPhone screenshot step in `watch-build.yml` uses `--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel` with synthetic captions and chart/HTML pages. Add `--screenshot-voice-chart` for the older native chart or `--screenshot-voice-fullscreen` for the full-screen HTML fixture. Static captures do not test swipes, arrival during a call, or motion.
+
 ## Voice visuals and chat blocks — 17 November 2026 (#1939, P15-205)
 
 - Checks: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run` (`src/pi/show-in-chat-route.test.ts` runs `show_in_chat` through the real PI door); `cd packages/contracts && node --test`; `cd apps/ios/Packages/JarvisCore && swift test` (a Swift 6.2 Linux toolchain works). The SwiftUI compiles only in the macOS `watch` job.

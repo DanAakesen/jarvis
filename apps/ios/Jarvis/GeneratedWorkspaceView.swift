@@ -89,6 +89,7 @@ struct GeneratedViewContent: View {
     let runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
     let previewImage: Image?
+    var voiceHTMLHeight: CGFloat? = nil
     let onAction: (GeneratedViewAction) -> Void
 
     var body: some View {
@@ -133,7 +134,13 @@ struct GeneratedViewContent: View {
         case .image(let envelope):
             ImageRenderer(data: envelope.data, previewImage: previewImage, language: language)
         case .htmlApp(let envelope):
-            HTMLAppRenderer(artifactId: envelope.data.artifactId, runtime: runtime, language: language)
+            HTMLAppRenderer(
+                artifactId: envelope.data.artifactId,
+                runtime: runtime,
+                language: language,
+                voiceHeight: voiceHTMLHeight,
+                revision: voiceHTMLHeight == nil ? nil : envelope.source.updatedAt
+            )
         case .knowledgeGraph(let envelope):
             KnowledgeGraphRenderer(data: envelope.data, language: language, onOpenNotes: runtime.openNotesGraph)
         case .code(let envelope):

@@ -117,6 +117,9 @@
 "workspace.voicePanel.close" = "Close content";
 "workspace.voicePanel.expand" = "Expand content";
 "workspace.voicePanel.collapse" = "Collapse content";
+"workspace.voicePanel.previous" = "Previous visual";
+"workspace.voicePanel.next" = "Next visual";
+"workspace.voicePanel.position" = "%d of %d";
 "workspace.voicePanel.updating" = "Updating";
 "workspace.voicePanel.partial" = "Partial result.";
 "workspace.voicePanel.unavailable" = "This content is unavailable.";

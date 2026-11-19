@@ -73,6 +73,21 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             screenshotState = voiceState
             isAudioReady = true
             errorMessage = JarvisVoiceLocalization.string(.preview)
+#if DEBUG
+            if arguments.contains("--screenshot-voice-panel") {
+                isCaptionsEnabled = true
+                captions.receive(.transcriptionCompleted(
+                    transcript: "Can you show me the rainfall chart and then bring up Wednesday's outlook?",
+                    itemID: "fixture"
+                ))
+                captions.receive(.assistantTranscriptDelta(
+                    "This is a synthetic conversation for the simulator. The rainfall chart is still in the carousel. "
+                    + "Swipe back to compare it with the outlook. The controls stay below the captions in the compact layout. "
+                    + "The newest line stays readable while earlier lines fade at the top."
+                ))
+                errorMessage = nil
+            }
+#endif
         }
 #endif
     }
