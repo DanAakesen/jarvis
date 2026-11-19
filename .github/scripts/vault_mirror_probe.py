@@ -40,6 +40,10 @@ class ProbeError(RuntimeError):
     pass
 
 
+def same_resource_id(left: object, right: object) -> bool:
+    return isinstance(left, str) and isinstance(right, str) and left.casefold() == right.casefold()
+
+
 def az(subscription: str, *arguments: str):
     command = [
         "az", *arguments, "--subscription", subscription, "--only-show-errors", "--output", "json",
@@ -57,6 +61,7 @@ def job_identity(job: dict) -> tuple[str, str]:
     identity = job.get("identity") or {}
     assigned = identity.get("userAssignedIdentities") or {}
     resource_ids = list(assigned) if isinstance(assigned, dict) else []
+    identity_resource_id = resource_ids[0] if len(resource_ids) == 1 else None
     properties = job.get("properties") or {}
     configuration = properties.get("configuration") or {}
     registries = configuration.get("registries") or []
@@ -69,15 +74,15 @@ def job_identity(job: dict) -> tuple[str, str]:
     }
     if (
         identity.get("type") != "UserAssigned"
-        or len(resource_ids) != 1
-        or not resource_ids[0].rsplit("/", 1)[-1].startswith("id-jarvis-vault-mirror-")
+        or not isinstance(identity_resource_id, str)
+        or not identity_resource_id.rsplit("/", 1)[-1].casefold().startswith("id-jarvis-vault-mirror-")
         or len(registries) != 1
-        or registries[0].get("identity") != resource_ids[0]
+        or not same_resource_id(registries[0].get("identity"), identity_resource_id)
         or not REQUIRED_ENV.issubset(env)
         or any(not isinstance(env.get(key), str) or not env[key] for key in REQUIRED_ENV)
     ):
         raise ProbeError("vault_mirror_identity_configuration_mismatch")
-    return resource_ids[0], env["AZURE_CLIENT_ID"]
+    return identity_resource_id, env["AZURE_CLIENT_ID"]
 
 
 def job_summary(job: dict, expected: dict[str, object]) -> dict[str, object]:

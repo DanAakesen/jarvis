@@ -52,6 +52,15 @@ for terminal log reads; the probe rejects a shorter positive wait. A
 120-second remainder after scheduling was enough to notice the new run but
 not enough for that healthy run to finish.
 
+Post-merge Deploy 44477956290 proved the mirror identity itself was valid:
+`UserAssigned`, one matching ACR binding, the expected client ID and the
+required env names. ARM returned the assigned-identity key with lowercase
+`resourcegroups` and the registry binding with `resourceGroups`; the probe's
+raw string comparison therefore rejected the same resource. Readiness now
+compares the two complete resource IDs case-insensitively, as ARM semantics
+require, while retaining exact type, cardinality, name-prefix, client-ID and
+required-setting checks. A different identity still fails.
+
 Dan subsequently made the source-precedence decision explicit: ordinary
 differences must drain without a manual attention backlog. The reconciler now
 uses Obsidian immediately for an unclean/no-base conflict, selects whole paths
