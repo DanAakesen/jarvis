@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 JOB_NAME = "job-jarvis-vault-mirror"
@@ -201,10 +202,10 @@ def probe(
     max_deletes: int,
     max_age_seconds: int,
     wait_seconds: int,
-    now: datetime | None = None,
+    clock: Callable[[], datetime] | None = None,
     sleep=time.sleep,
 ) -> dict[str, object]:
-    now = now or datetime.now(UTC)
+    clock = clock or (lambda: datetime.now(UTC))
     expected = {
         "name": JOB_NAME,
         "provisioningState": "Succeeded",
@@ -234,7 +235,7 @@ def probe(
                    "--name", JOB_NAME, "--resource-group", group)
         if not isinstance(items, list):
             raise ProbeError("vault_mirror_executions_invalid")
-        execution = latest_execution(items, now, max_age_seconds)
+        execution = latest_execution(items, clock(), max_age_seconds)
         if execution and (execution.get("properties") or {}).get("status") in TERMINAL:
             break
         if time.monotonic() >= deadline:

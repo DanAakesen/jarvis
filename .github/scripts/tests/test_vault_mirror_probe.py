@@ -1,6 +1,6 @@
 import json
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from hermetic import setUpModule  # noqa: F401
@@ -122,7 +122,7 @@ class VaultMirrorProbeTests(unittest.TestCase):
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=attention),
         ):
-            self.assertEqual(probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)["verdict"], "attention")
+            self.assertEqual(probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)["verdict"], "attention")
         healthy = (
             '{"outcome":"ok","durationMs":1,"changedOnGitHub":26,'
             '"deferredOnGitHub":1}'
@@ -131,21 +131,21 @@ class VaultMirrorProbeTests(unittest.TestCase):
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=healthy),
         ):
-            self.assertEqual(probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)["verdict"], "healthy")
+            self.assertEqual(probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)["verdict"], "healthy")
         failed = '{"outcome":"failed","reason":"auth","durationMs":1}'
         with (
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=failed),
             self.assertRaisesRegex(RuntimeError, "run_failed:auth"),
         ):
-            probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)
+            probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
         unsafe = '{"outcome":"needs-attention","reason":"state-corrupt","durationMs":1}'
         with (
             patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
             patch("vault_mirror_probe.read_logs", return_value=unsafe),
             self.assertRaisesRegex(RuntimeError, "needs_attention:state-corrupt"),
         ):
-            probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)
+            probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
         guarded = (
             '{"outcome":"needs-attention","reason":"guard-tripped","durationMs":1,'
             '"guardReasons":["max-changed-G"],"changedOnGitHub":26}'
@@ -155,7 +155,33 @@ class VaultMirrorProbeTests(unittest.TestCase):
             patch("vault_mirror_probe.read_logs", return_value=guarded),
             self.assertRaisesRegex(RuntimeError, 'guard_tripped:.*changedOnGitHub.*26.*max-changed-G'),
         ):
-            probe("sub", "group", "on", 25, 3, 600, 0, now=NOW)
+            probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
+
+    def test_poll_recomputes_time_for_an_execution_that_starts_during_the_wait(self):
+        future = {
+            "name": "run-2",
+            "properties": {
+                "status": "Succeeded",
+                "startTime": (NOW + timedelta(minutes=2)).isoformat(),
+                "endTime": (NOW + timedelta(minutes=2, seconds=10)).isoformat(),
+            },
+        }
+        times = iter([NOW, NOW + timedelta(minutes=2, seconds=1)])
+        with (
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [], [future]],
+            ),
+            patch(
+                "vault_mirror_probe.read_logs",
+                return_value='{"outcome":"ok-noop","durationMs":1}',
+            ),
+        ):
+            result = probe(
+                "sub", "group", "on", 25, 3, 600, 600,
+                clock=lambda: next(times), sleep=lambda _seconds: None,
+            )
+        self.assertEqual(result["execution"]["name"], "run-2")
 
 
 if __name__ == "__main__":
