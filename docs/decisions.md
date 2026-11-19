@@ -219,13 +219,17 @@ Owner, 16 November 2026, recorded as given: "I dont see a use case where jarvis 
 | No approval, confirmation or safety rule is written into PI's instructions or skills for GitHub or Azure | PI uses its own judgement like any capable model; nothing about what it may or may not do is hard-coded. Kept only: never printing a token, redacting secrets, the existing cost cap |
 | The Deploy summary keeps `not attached: <reason>` when the secret or the Azure variable is missing | Unchanged: a missing input is said, not hidden |
 
+## 18 November 2026 — PI phase 7 default approved, not live (#1887, #1910)
+
+[Written owner approval](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174): “Make the flip default on.” A missing `engine` selects PI for normal chat and voice. iPhone defaults to PI and sends its choice explicitly; `current` still selects the old engine. Isolated runtime tests keep their selected runtime and reject explicit PI. Watch and web use the server default; camera and screen sharing remain unsupported on PI web voice. The standalone draft is not merged or deployed. The old harness, PI Brain switch and proactive slots are unchanged. Phase 8 needs separate approval and still has to meet its deletion gate.
+
 ## 16 November 2026 — PI phase 7: the cutover is prepared as a separate flip, and the deletion waits for his written word (#1887, P15-176)
 
 Owner, 16 November 2026: "Just dont delete the old harness." Earlier rules still hold: no fallbacks, no shims, no dual or shadow paths, "build this, test it, and then when we're happy with it, then we delete everything that we don't need anymore."
 
 | Choice | Why |
 | --- | --- |
-| The flip is its own draft pull request, stacked on the cutover documents: the server treats a missing `engine` as PI (`current` selects the old path explicitly, used only by isolated runtime-test sessions) and the iOS default becomes PI | One small diff the owner can merge or leave, and one revert to undo. The old path stays in the code until phase 8, selected only by an explicit value, so there is still one switch and no second mechanism |
+| The flip is a separate draft pull request; the cutover documents landed independently in #1909 | One small diff the owner can merge or leave, and one revert to undo. The old path and engine selector remain available; there is no fallback |
 | The Watch and the web follow the server default after the flip | They send no engine today. The Watch is parked; its behaviour changes only through the server default the owner chose, not through Watch code |
 | `docs/pi/cutover.md` is the single list of what phase 8 deletes, from a reference scan, with "move first", "split" and "keep" instead of a flat delete list | The plan's candidate list was wrong in places: `core/approval*.ts` is used across Google, Factory, inbox, vault, health and proactive; `agents/jarvis/identity-contract.json` is read by the PI provisioner and the backend; `voice-tools.ts`, `chat-agent.ts` and `proactive/events/rules.ts` hold symbols PI imports |
 | **Open, the owner decides (decision A):** what replaces the 07:00 and 18:00 proactive slots | They trigger the inbox nudge pass, todo writes, reminder planning and alerts. PI's brain wakes on events and watches. Deleting the slot engine without a replacement removes those features, so the engine stays off the delete list until he chooses |

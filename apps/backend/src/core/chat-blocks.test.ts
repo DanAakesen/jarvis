@@ -43,7 +43,7 @@ function setup(agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<s
   const app = buildApp(config, undefined, {
     modules: [createConversationModule()],
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' }),
-    conversationStore: store, conversationAgent: agent,
+    conversationStore: store, piAgent: agent,
   });
   running.app = app;
   apps.push(app);

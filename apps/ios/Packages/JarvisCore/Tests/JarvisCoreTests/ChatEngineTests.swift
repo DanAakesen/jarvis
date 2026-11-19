@@ -4,36 +4,36 @@ import XCTest
 
 // TEST-ONLY chat engine switch: delete with the switch at cutover.
 final class ChatEngineTests: XCTestCase {
-    func testSelectionDefaultsToCurrentPersistsAndIgnoresUnknownValues() throws {
+    func testSelectionDefaultsToPiPersistsAndIgnoresUnknownValues() throws {
         let suite = "ChatEngineTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        XCTAssertEqual(ChatEngineSelection.load(from: defaults), .current)
-        ChatEngineSelection.save(.pi, to: defaults)
-        XCTAssertEqual(defaults.string(forKey: "jarvis.test.chatEngine"), "pi")
         XCTAssertEqual(ChatEngineSelection.load(from: defaults), .pi)
-        defaults.set("something-else", forKey: ChatEngineSelection.key)
+        ChatEngineSelection.save(.current, to: defaults)
+        XCTAssertEqual(defaults.string(forKey: "jarvis.test.chatEngine"), "current")
         XCTAssertEqual(ChatEngineSelection.load(from: defaults), .current)
+        defaults.set("something-else", forKey: ChatEngineSelection.key)
+        XCTAssertEqual(ChatEngineSelection.load(from: defaults), .pi)
     }
 
-    func testVoiceEndpointCarriesEngineOnlyForPi() throws {
+    func testVoiceEndpointNamesTheEngineOnlyWhenOneIsChosen() throws {
         let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
         XCTAssertEqual(try VoiceEndpoint.url(baseURL: base).absoluteString, "wss://example.invalid/api/voice")
-        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .current).absoluteString, "wss://example.invalid/api/voice")
+        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .current).absoluteString, "wss://example.invalid/api/voice?engine=current")
         XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .pi).absoluteString, "wss://example.invalid/api/voice?engine=pi")
     }
 
     func testVoiceSessionConnectsWithTheChosenEngine() async throws {
         let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
-        let pi = VoiceRecordingSocket()
-        try await VoiceSessionClient(baseURL: base, engine: .pi, transport: pi).start(accessToken: "a.b.c")
         let current = VoiceRecordingSocket()
-        try await VoiceSessionClient(baseURL: base, transport: current).start(accessToken: "a.b.c")
-        let piURLs = await pi.connectedURLs()
+        try await VoiceSessionClient(baseURL: base, engine: .current, transport: current).start(accessToken: "a.b.c")
+        let unnamed = VoiceRecordingSocket()
+        try await VoiceSessionClient(baseURL: base, transport: unnamed).start(accessToken: "a.b.c")
         let currentURLs = await current.connectedURLs()
-        XCTAssertEqual(piURLs.map(\.absoluteString), ["wss://example.invalid/api/voice?engine=pi"])
-        XCTAssertEqual(currentURLs.map(\.absoluteString), ["wss://example.invalid/api/voice"])
+        let unnamedURLs = await unnamed.connectedURLs()
+        XCTAssertEqual(currentURLs.map(\.absoluteString), ["wss://example.invalid/api/voice?engine=current"])
+        XCTAssertEqual(unnamedURLs.map(\.absoluteString), ["wss://example.invalid/api/voice"])
     }
 
     func testWarmThrottleAllowsOneAttemptPerInterval() {
@@ -44,7 +44,7 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertTrue(throttle.shouldWarm(now: start.addingTimeInterval(300)))
     }
 
-    func testTurnBodyCarriesEngineOnlyForPi() async throws {
+    func testTurnBodyNamesTheEngineOnlyWhenOneIsChosen() async throws {
         let transport = RecordingTransport([])
         let chat = JarvisChatClient(client: try makeClient(transport: transport))
 
@@ -59,7 +59,7 @@ final class ChatEngineTests: XCTestCase {
         }
         XCTAssertEqual(requests.map(\.url.path), Array(repeating: "/api/conversation/sessions/12/turns", count: 3))
         XCTAssertNil(bodies[0]["engine"])
-        XCTAssertNil(bodies[1]["engine"])
+        XCTAssertEqual(bodies[1]["engine"] as? String, "current")
         XCTAssertEqual(bodies[2]["engine"] as? String, "pi")
         XCTAssertEqual(bodies[2]["text"] as? String, "Hello")
     }

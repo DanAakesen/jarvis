@@ -174,6 +174,10 @@ A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
 
+## PI default for chat and voice (#1887, #1910; approved 18 November 2026, not live)
+
+PI is the approved default for normal chat and voice when no engine is named. iPhone starts on PI unless the owner has saved another choice; **Current engine** remains selectable for both chat and voice. Isolated runtime tests keep their own selected runtime. Watch and web follow the server default; PI web voice does not support camera or screen sharing. A PI failure does not switch engines. This approval does not cover removal of the old harness or changes to proactive behaviour.
+
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
 The 6 November follow-up exposes the same explicit runtime test through the
