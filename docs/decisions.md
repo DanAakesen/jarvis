@@ -42,6 +42,16 @@ logs those fixed enums/counts, and the Status page displays them.
 | Agent runner remains unknown until a completed runtime or research smoke result exists | Active-session count and configuration do not prove the Foundry runner is healthy |
 | Last backend error is degraded for five minutes, then OK with a retained timestamp | It is an incident marker, not a permanent failure indicator |
 
+The deploy smoke records its requested chat or voice capability as degraded
+with `budget_exhausted` before returning a 409, matching ordinary PI stream
+preflight refusals rather than leaving the status row healthy or unknown.
+
+The readiness wait is 1,200 seconds. That is the ten-minute scheduling
+interval plus the job's eight-minute replica timeout and a two-minute margin
+for terminal log reads; the probe rejects a shorter positive wait. A
+120-second remainder after scheduling was enough to notice the new run but
+not enough for that healthy run to finish.
+
 Dan subsequently made the source-precedence decision explicit: ordinary
 differences must drain without a manual attention backlog. The reconciler now
 uses Obsidian immediately for an unclean/no-base conflict, selects whole paths

@@ -28,6 +28,12 @@ REQUIRED_ENV = {
     "VAULT_MIRROR_STORAGE_URL", "VAULT_MIRROR_WRITE_BACK",
     "VAULT_MIRROR_MAX_CHANGED", "VAULT_MIRROR_MAX_DELETES",
 }
+SCHEDULE_INTERVAL_SECONDS = 10 * 60
+REPLICA_TIMEOUT_SECONDS = 8 * 60
+LOG_READ_MARGIN_SECONDS = 2 * 60
+MINIMUM_WAIT_SECONDS = (
+    SCHEDULE_INTERVAL_SECONDS + REPLICA_TIMEOUT_SECONDS + LOG_READ_MARGIN_SECONDS
+)
 
 
 class ProbeError(RuntimeError):
@@ -211,6 +217,8 @@ def probe(
     clock: Callable[[], datetime] | None = None,
     sleep=time.sleep,
 ) -> dict[str, object]:
+    if wait_seconds < 0 or 0 < wait_seconds < MINIMUM_WAIT_SECONDS:
+        raise ProbeError("vault_mirror_wait_seconds_too_short")
     clock = clock or (lambda: datetime.now(UTC))
     probe_started_at = clock()
     expected = {
@@ -220,7 +228,7 @@ def probe(
         "cronExpression": "*/10 * * * *",
         "parallelism": 1,
         "replicaCompletionCount": 1,
-        "replicaTimeout": 480,
+        "replicaTimeout": REPLICA_TIMEOUT_SECONDS,
         "replicaRetryLimit": 0,
         "writeBack": write_back,
         "maxChanged": str(max_changed),

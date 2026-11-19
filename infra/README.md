@@ -264,14 +264,18 @@ python .github/scripts/vault_mirror_probe.py \
   --write-back on \
   --max-changed 25 \
   --max-deletes 3 \
-  --wait-seconds 720
+  --wait-seconds 1200
 ```
 
 This command reads Container Apps configuration, the dedicated user-assigned
 identity/client ID, executions and allow-listed logs only. It never prints a
 vault note, conflict path or credential. It confirms the job's ACR identity
-and required runtime settings, but the first execution's fixed auth/policy
-reason remains the proof that Key Vault secrets were readable. Also
+and required runtime settings. The 1,200-second wait covers the ten-minute
+schedule interval, the eight-minute replica timeout and two minutes for the
+terminal log to become readable. A shorter positive wait is rejected because
+it cannot prove a fresh scheduled execution had enough time to finish. The
+first execution's fixed auth/policy reason remains the proof that Key Vault
+secrets were readable. Also
 review the authenticated Jarvis Status page for counts, last run/outcome and
 safe read-failure reasons. **No status yet** is evidence about the status
 document only; it is not proof the job is off. Do not enable write-back until

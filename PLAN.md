@@ -5,7 +5,8 @@ The newest visual takes focus while older visuals stay swipeable for the call. C
 
 ## Vault Mirror and Status reliability — 19 November 2026 (#1962)
 
-**Status: in progress.** Production evidence establishes that the mirror is
+**Status: implemented and locally qualified; exact PR CI for the final review
+head and production-drain evidence remain open.** Production evidence establishes that the mirror is
 running every ten minutes. The latest executions finish in about 14 seconds as
 `needs-attention / guard-tripped`, with 11 pending Obsidian write-backs and one
 conflict; no changes are applied. The fix keeps the 25/3 caps as per-run batches:
@@ -22,11 +23,11 @@ state visible without a cap or policy bypass.
 | Make `JARVIS_VAULT_MIRROR_ENABLED=true` fail closed and add a read-only fresh-execution probe | Built |
 | Resolve ordinary conflicts in Obsidian favour immediately and batch changes under existing per-run caps | Built; hard guards and secret/path filtering remain |
 | Use PI chat/voice/brain and embedding evidence with 15-minute freshness; age Last backend error after five minutes | Built |
-| Focused and full local regressions | Passing: 621 backend, 43 web, 12 contracts, 31 vault-mirror, 55 GitHub-script and 196 JarvisCore tests; focused lint/builds pass |
+| Focused and full local regressions | Broader suites pass; the final review additions pass 15 focused PI/status and 57 GitHub-script tests |
 | Swift model tests and real-browser desktop/phone inspection | Done; 196 JarvisCore tests pass, and the actual web component was checked at 1280×900 and 390×844 |
-| PR CI review and production drain evidence from the next qualified Deploy | Pending; current production is proven to be running and blocked by the old all-or-nothing plan; no deployment or merge by this branch |
+| PR CI review and production drain evidence from the next qualified Deploy | Exact PR qualification pending for the final review fixes; current production is proven to be running and blocked by the old all-or-nothing plan; no deployment or merge by this branch |
 
-Next: qualify the automatic reconciliation fix in PR CI, then verify that the
+Next: qualify the automatic reconciliation and final review fixes in PR CI, then verify that the
 11 pending write-backs and one conflict drain in bounded runs. A cap/policy
 change is not required for this backlog unless a hard guard explicitly remains.
 

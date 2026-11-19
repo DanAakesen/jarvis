@@ -219,10 +219,50 @@ class VaultMirrorProbeTests(unittest.TestCase):
             ),
         ):
             result = probe(
-                "sub", "group", "on", 25, 3, 600, 600,
+                "sub", "group", "on", 25, 3, 600, 1200,
                 clock=lambda: next(times, final_time), sleep=lambda _seconds: None,
             )
         self.assertEqual(result["execution"]["name"], "run-2")
+
+    def test_wait_budget_covers_the_next_schedule_execution_and_log_read(self):
+        with self.assertRaisesRegex(RuntimeError, "wait_seconds_too_short"):
+            probe("sub", "group", "on", 25, 3, 1200, 720)
+
+        running = {
+            "name": "run-boundary",
+            "properties": {
+                "status": "Running",
+                "startTime": (NOW + timedelta(seconds=600)).isoformat(),
+                "template": {"containers": [{"image": JOB["properties"]["template"]["containers"][0]["image"]}]},
+            },
+        }
+        completed = {
+            "name": "run-boundary",
+            "properties": {
+                "status": "Succeeded",
+                "startTime": (NOW + timedelta(seconds=600)).isoformat(),
+                "endTime": (NOW + timedelta(seconds=1080)).isoformat(),
+                "template": {"containers": [{"image": JOB["properties"]["template"]["containers"][0]["image"]}]},
+            },
+        }
+        times = iter([NOW, NOW + timedelta(seconds=720), NOW + timedelta(seconds=1080)])
+        with (
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [running], [completed], completed],
+            ),
+            patch(
+                "vault_mirror_probe.read_logs",
+                return_value='{"outcome":"ok","durationMs":480000}',
+            ),
+            patch("vault_mirror_probe.time.monotonic", side_effect=[0, 720]),
+        ):
+            result = probe(
+                "sub", "group", "on", 25, 3, 1200, 1200,
+                clock=lambda: next(times), sleep=lambda _seconds: None,
+            )
+        self.assertEqual(result["execution"]["name"], "run-boundary")
+        self.assertEqual(result["verdict"], "healthy")
 
 
 if __name__ == "__main__":

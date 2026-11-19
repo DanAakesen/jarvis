@@ -305,6 +305,7 @@ class DeployWorkflowTests(unittest.TestCase):
         self.assertNotIn("RELEASE_BUDGET:", deploy)
         self.assertIn("needs: [plan, infra, backend, web, agent, smoke, pi-agent, acceptance]", deploy)
         self.assertIn("Verify the latest scheduled Vault Mirror execution", deploy)
+        self.assertIn("--wait-seconds 1200", deploy)
         qualification = deploy.index("run: python .github/scripts/release_state.py plan")
         readback = deploy.index("name: Authenticate only after exact qualification")
         selected = deploy.index("run: python .github/scripts/release_state.py select")

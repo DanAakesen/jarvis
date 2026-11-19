@@ -1023,9 +1023,12 @@ identity, required runtime setting names, configured write-back/caps and one
 terminal scheduled execution fresh enough for the ten-minute cadence, then
 reads only the runner's allow-listed terminal JSON summary. A completed `needs-attention` is visible as a
 warning unless `reason=guard-tripped`, which fails readiness because every
-action was blocked. Missing executions, a missing summary, config drift, auth
-failure and other failed outcomes also fail readiness. The probe starts no
-manual job and changes no Azure resource or secret.
+action was blocked. Its 1,200-second positive wait covers the ten-minute
+schedule interval, the job's eight-minute replica timeout and a two-minute
+log-read margin; shorter positive waits are rejected. Missing executions, a
+missing summary, config drift, auth failure and other failed outcomes also
+fail readiness. The probe starts no manual job and changes no Azure resource
+or secret.
 
 The job has its own user-assigned identity. It can pull from the existing
 registry, read Key Vault secrets at runtime through the SDK, and read/write only

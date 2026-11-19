@@ -538,7 +538,7 @@ jobs:
             --write-back "${JARVIS_VAULT_MIRROR_WRITE_BACK:-dry-run}" \
             --max-changed "${JARVIS_VAULT_MIRROR_MAX_CHANGED:-25}" \
             --max-deletes "${JARVIS_VAULT_MIRROR_MAX_DELETES:-3}" \
-            --wait-seconds 720
+            --wait-seconds 1200
       - name: Check retained or newly applied web readiness
         run: |
           for path in / /settings; do
