@@ -44,7 +44,7 @@ public enum WatchMicrophoneFailure: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .noAudio: "The Watch microphone delivered no audio. Try again."
-        case .silent: "The Watch microphone captured no sound. Check it is not covered, then try again."
+        case .silent: "Jarvis got no sound from the Watch microphone. Try again."
         }
     }
 }

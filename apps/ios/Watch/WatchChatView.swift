@@ -11,12 +11,15 @@ struct WatchChatView: View {
     @State private var reopened = false
     @State private var reading = false
     @AccessibilityFocusState private var messageFocused: Bool
-    @ScaledMetric(relativeTo: .body) private var clearance: CGFloat = 56
+    @State private var composerHeight: CGFloat = 52
+    @State private var safeAreaBottom: CGFloat = 0
     var dictate: () -> Void
     @Binding var pendingDictation: Bool
 
-    /// Distance from the newest message beyond which the reader counts as browsing history.
-    private static let readingDistance: CGFloat = 80
+    /// Real content after the newest message, so scrolling to the end brings it fully above the composer.
+    private var clearance: CGFloat {
+        CGFloat(WatchChatLayout.endClearance(composerHeight: Double(composerHeight), safeAreaBottom: Double(safeAreaBottom)))
+    }
 
     /// Drafting, dictation and voice keep their controls on screen; only an idle composer may shrink.
     private var composerBusy: Bool {
@@ -37,6 +40,7 @@ struct WatchChatView: View {
                     conversation
                     composerLayer
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeAreaBottom = $0 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,7 +87,7 @@ struct WatchChatView: View {
                             if !message.user { Spacer(minLength: 0) }
                         }.id(message.id)
                     }
-                    Color.clear.frame(height: 1).id("latest")
+                    Color.clear.frame(height: clearance).id("latest").accessibilityHidden(true)
                 }
             }
             .defaultScrollAnchor(.bottom)
@@ -96,14 +100,12 @@ struct WatchChatView: View {
                 }
                 #endif
             }
-            // A fixed end margin keeps the last message clear of the controls and means the composer changing shape never moves the text.
-            .contentMargins(.bottom, clearance + (hasStatusRow ? 34 : 0), for: .scrollContent)
+            // The clearance is real content, not a margin: scrolling anchors ignore margins, which left the last lines behind the composer.
             .ignoresSafeArea(.container, edges: .bottom)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, geometry.contentSize.height - geometry.visibleRect.maxY)
             } action: { _, distance in
-                // Hysteresis keeps the composer from flickering around the threshold.
-                let next = reading ? distance > Self.readingDistance / 3 : distance > Self.readingDistance
+                let next = WatchChatLayout.isReading(distanceFromEnd: Double(distance), wasReading: reading, clearance: Double(clearance))
                 guard next != reading else { return }
                 withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) {
                     reading = next
@@ -115,6 +117,11 @@ struct WatchChatView: View {
                 if phase.isScrolling, reading, reopened {
                     withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { reopened = false }
                 }
+            }
+            .onChange(of: clearance) { _, _ in
+                // A taller composer (status row) must not slide the newest message back under it.
+                guard !reading else { return }
+                proxy.scrollTo("latest", anchor: .bottom)
             }
             .onChange(of: model.messages.last?.text) { _, _ in
                 guard !reading else { return }
@@ -144,7 +151,8 @@ struct WatchChatView: View {
         VStack(spacing: 0) {
             if expanded {
                 composer
-                    .background(alignment: .bottom) { WatchEdgeFade(edge: .bottom).frame(height: clearance + 24).offset(y: 8) }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
+                    .background(alignment: .bottom) { WatchEdgeFade(edge: .bottom).frame(height: composerHeight + 24).offset(y: 8) }
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.9, anchor: .bottomTrailing)))
             } else {
                 HStack {
