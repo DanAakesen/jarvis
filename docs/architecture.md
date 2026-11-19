@@ -2530,6 +2530,8 @@ web app. The backend's active-client choice and post-reconnect command
 replay remain unverified, so opening from Workspaces does not assume the command
 targets the phone.
 
+For iPhone Voice (#1958), `WorkspaceRuntime` also keeps an in-memory `VoiceVisualHistory` while the call is active. The same workspace events append or update entries by view ID and select the incoming visual. Swiping is local: it does not advertise more windows or change the backend snapshot protocol. Minimising keeps the history in Voice, not in the destination's workspace sheet. Ending or starting a call clears that history. Only the Voice HTML renderer forwards SwiftUI appearance to WebKit and supplies theme variables and a viewport; the existing sandbox policy and native chart path are unchanged.
+
 Workspaces labels, status, action and accessibility copy are read from the
 English-only JarvisCore `JarvisWorkspaces` strings. The approved reference keeps
 search fixed at the bottom; no create route or orb is added to the screen.

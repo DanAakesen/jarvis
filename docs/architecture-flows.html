@@ -216,6 +216,7 @@ const FLOWS = [
       { id: "new-project-pr", lane: "github", col: 10, s: "proven", t: "Open the scaffold PR", d: "The coding agent opens a PR against the configured default branch.", ev: "The task prompt requires the PR; live repository creation and scaffold acceptance are the coordinator's post-merge check." },
       { id: "chat", lane: "board", col: 4, s: "assumed", t: "Type to Jarvis", d: "Chat box on the board.", ev: "Design assumption: the board can also send free text to the Jarvis agent." },
       { id: "speak", lane: "voice", col: 2, s: "proven", t: "Speak Danish or English", d: "Start voice requests microphone permission and prepares audio, connects to the authenticated `/voice` route, and attaches the granted microphone after session readiness. Reconnect preserves explicit mute; speech start stops playback.", ev: "P8-40 voice-client tests cover gesture activation, permission/readiness ordering, denial, late grants, mute/reconnect and device loss. Fixture browser checks exercise the real client with a fake microphone. Real microphone/speaker behavior and live round-trip are unverified." },
+      { id: "voice-visuals", lane: "voice", col: 3, s: "docs", t: "Browse visuals on iPhone", d: "Workspace events feed the current call's carousel. A new visual takes focus while older visuals stay swipeable; expanding does not end the call.", ev: "P15-210 carousel model tests pass; Apple compilation, iPhone layout and live interaction remain unverified." },
       { id: "relay", lane: "backend", col: 3, s: "proven", t: "Reconcile final turns", d: "Voice Live finals remain the source of truth; the backend routes stable clauses from Azure Speech interim hypotheses through the P7-20 ledger and Jev path.", ev: "P7-24 fake-recognizer tests cover early action, contradiction undo, failure fallback and mute. Live Azure delivery and browser audio remain unverified." },
       { id: "speech-partials", lane: "speech", col: 4, s: "proven", t: "Recognize while speaking", d: "Feed the same mono 24 kHz PCM to continuous Speech recognition only while the mic is active and unmuted. Use `da-DK` or `en-GB`, bounded phrase hints, and no audio retention.", ev: "Azure Speech on the Foundry account uses backend Entra identity; fake recognizer lifecycle tests pass. The 5 October live evidence and $1/audio-hour S1 retail reference are recorded in decisions.md; production acceptance remains pending." },
       { id: "stt", lane: "voice", col: 4, s: "proven", t: "Transcribe both languages", d: "Final Voice Live transcription uses `azure-speech` without a fixed hint; interim Azure Speech detects `da-DK` or `en-GB`.", ev: "Current shared realtime configuration; live Danish/English recognition remains unverified." },
@@ -235,6 +236,7 @@ const FLOWS = [
       ["relay", "stt", "unknown", "final transcript"],
       ["stt", "jin", "proven", "text"], ["chat", "jin", "docs", "text", { off: 32 }],
       ["chat", "visual-feedback", "docs", "chat turn"], ["speak", "visual-feedback", "docs", "voice status + PCM"],
+      ["speak", "voice-visuals", "docs", "workspace event"],
     ],
   },
   {

@@ -4,6 +4,8 @@ In typed Chat, Jarvis can present generated UI such as a weather forecast or a c
 
 In Voice, Jarvis decides by its own judgement when something is easier to see than to hear and puts it on the phone's screen; nothing is shown when a session starts, and the owner is never sent to the web workspace from the iPhone. Use the approved bottom-panel direction: content sits below the lattice orb and status, above the existing microphone, plus, CC and hang-up controls. This records the owner's required experience, not verified persistence or a delivered renderer.
 
+Build 113 follow-up ([#1958](https://github.com/DanAakesen/jarvis/issues/1958)): show new visuals immediately and let the owner swipe back to earlier visuals in the same call. Close dismisses the carousel without ending Voice; Expand opens it full screen. Controls overlay the content and do not supply a title. HTML visuals follow the active appearance, native charts remain native, and captions have more vertical space with soft edges.
+
 ## App polish from build 111 — 16 November 2026 (#1923, P15-185)
 
 - Graph search: the clear (X) sits inside the search field with no background of its own, and the matching notes sit directly above the dock, as far from it as

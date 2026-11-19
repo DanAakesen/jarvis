@@ -7,6 +7,10 @@ struct HTMLAppRenderer: View {
     let artifactId: String
     let runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
+    var voiceHeight: CGFloat? = nil
+    var revision: String? = nil
+
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var artifact: HtmlArtifact?
     @State private var failedArtifactID: String?
@@ -15,8 +19,8 @@ struct HTMLAppRenderer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
             if let artifact, artifact.id.caseInsensitiveCompare(artifactId) == .orderedSame {
-                SandboxedHTMLApp(artifact: artifact)
-                    .frame(height: 560)
+                SandboxedHTMLApp(artifact: artifact, voiceStyle: voiceHeight == nil ? nil : (colorScheme == .dark ? .dark : .light))
+                    .frame(height: voiceHeight ?? 560)
             }
             if failedArtifactID == artifactId {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
@@ -30,7 +34,7 @@ struct HTMLAppRenderer: View {
                     .frame(maxWidth: .infinity, minHeight: 160)
             }
         }
-        .task(id: "\(artifactId)-\(attempt)") {
+        .task(id: "\(artifactId)-\(revision ?? "")-\(attempt)") {
             if artifact?.id.caseInsensitiveCompare(artifactId) != .orderedSame { artifact = nil }
             failedArtifactID = nil
             do {
@@ -52,6 +56,7 @@ struct HTMLAppRenderer: View {
 
 private struct SandboxedHTMLApp: UIViewRepresentable {
     let artifact: HtmlArtifact
+    let voiceStyle: UIUserInterfaceStyle?
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -68,31 +73,68 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
+        if voiceStyle != nil {
+            webView.scrollView.contentInsetAdjustmentBehavior = .never
+            webView.scrollView.contentInset.top = JarvisDesignTokens.controlMinimumHeight
+            webView.scrollView.verticalScrollIndicatorInsets.top = JarvisDesignTokens.controlMinimumHeight
+        }
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.loadedArtifactID != artifact.id else { return }
-        context.coordinator.loadedArtifactID = artifact.id
-        webView.loadHTMLString(Self.sandboxedDocument(artifact.html), baseURL: nil)
+        if let voiceStyle, webView.overrideUserInterfaceStyle != voiceStyle {
+            webView.overrideUserInterfaceStyle = voiceStyle
+        }
+        guard context.coordinator.loadedArtifact != artifact else { return }
+        context.coordinator.loadedArtifact = artifact
+        webView.loadHTMLString(Self.sandboxedDocument(artifact.html, followsVoiceTheme: voiceStyle != nil), baseURL: nil)
     }
 
-    private static func sandboxedDocument(_ html: String) -> String {
+    private static func sandboxedDocument(_ html: String, followsVoiceTheme: Bool) -> String {
         let policy = """
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'">
         <meta name="referrer" content="no-referrer">
         """
+        let appearance = followsVoiceTheme ? voiceAppearance : ""
         guard let doctype = html.range(
             of: #"^\s*<!doctype[^>]*>"#,
             options: [.regularExpression, .caseInsensitive]
         ) else {
-            return policy + html
+            return policy + appearance + html
         }
-        return String(html[..<doctype.upperBound]) + policy + String(html[doctype.upperBound...])
+        return String(html[..<doctype.upperBound]) + policy + appearance + String(html[doctype.upperBound...])
+    }
+
+    private static var voiceAppearance: String {
+        func color(_ value: UIColor) -> String {
+            func rgb(in style: UIUserInterfaceStyle) -> String {
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                _ = value.resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+                    .getRed(&r, green: &g, blue: &b, alpha: &a)
+                return "rgb(\(Int((r * 255).rounded())) \(Int((g * 255).rounded())) \(Int((b * 255).rounded()))"
+            }
+            return "light-dark(\(rgb(in: .light)), \(rgb(in: .dark)))"
+        }
+        return """
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+        :root {
+            color-scheme: light dark !important;
+            --jarvis-text: \(color(.label));
+            --jarvis-muted: \(color(.secondaryLabel));
+            --jarvis-background: \(color(UIColor(JarvisDesignTokens.glassSolid)));
+            --jarvis-accent: \(color(UIColor(JarvisDesignTokens.primaryAccent)));
+            --jarvis-accent-warm: \(color(UIColor(JarvisDesignTokens.ambientWarm)));
+            --jarvis-error: \(color(.systemRed));
+        }
+        :where(body) { color: var(--jarvis-text); background: var(--jarvis-background); font-family: system-ui, sans-serif; }
+        :where(a) { color: var(--jarvis-accent); }
+        </style>
+        """
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var loadedArtifactID: String?
+        var loadedArtifact: HtmlArtifact?
 
         func webView(
             _ webView: WKWebView,

@@ -1,3 +1,8 @@
+## iPhone Voice carousel and captions (#1958, P15-210)
+
+**Status: implemented; all 195 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
+The newest visual takes focus while older visuals stay swipeable for the call. Close/expand float over the content, expansion uses the full screen, and HTML visuals follow the active appearance without changing native charts. Captions have more room and fade at both edges.
+
 ## PI smoke in three requests (#1910, P15-209)
 
 **Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
@@ -3169,6 +3174,8 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **P15-210 / [#1958](https://github.com/DanAakesen/jarvis/issues/1958):** next, inspect the compact chart and HTML carousel and full-screen light HTML fixture in macOS CI, then verify live arrivals, swipes and captions on an iPhone.
 
 - **Device-feedback delivery (#1614): source merged and verified.** Compact task
   groups, shared glass/padding/headings, Health pull refresh, animated loading,
