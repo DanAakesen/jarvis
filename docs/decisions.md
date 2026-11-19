@@ -42,6 +42,15 @@ logs those fixed enums/counts, and the Status page displays them.
 | Agent runner remains unknown until a completed runtime or research smoke result exists | Active-session count and configuration do not prove the Foundry runner is healthy |
 | Last backend error is degraded for five minutes, then OK with a retained timestamp | It is an incident marker, not a permanent failure indicator |
 
+Dan subsequently made the source-precedence decision explicit: ordinary
+differences must drain without a manual attention backlog. The reconciler now
+uses Obsidian immediately for an unclean/no-base conflict, selects whole paths
+up to the existing per-run change/delete caps and defers the rest to the next
+schedule. Hard empty-side, missing-base and deletion-ratio guards remain, as do
+per-path secret/size/path/content refusal. The current 11 pending Obsidian
+changes and one conflict are therefore next-run work, not an owner checklist.
+No cap, secret, policy or Azure setting is raised or bypassed.
+
 No production setting, secret, policy, state blob, schedule or resource is
 changed by this decision. The exact read-only command is in `infra/README.md`;
 the next qualified Deploy will execute it through the existing OIDC identity.
@@ -4239,9 +4248,9 @@ allocation is a starting point for the Node process and the contract's 200 MiB
 state-archive limit; it is not a live workload benchmark. The Bicep switch
 defaults off, and the deployment requires both the repository opt-in and a
 digest-pinned image before it creates the job, identity, roles or containers.
-The deploy flow skips visibly when the Dockerfile, image digest or required
-non-secret App ID is unavailable; that does not block the core infrastructure
-deployment.
+The deploy flow fails before Bicep when an explicitly enabled mirror lacks the
+Dockerfile, image digest or required non-secret App ID; it no longer reports a
+partial core success.
 
 Use a dedicated user-assigned identity with exactly `AcrPull` on the registry,
 `Key Vault Secrets User` on the vault, and `Storage Blob Data Contributor`
@@ -4354,25 +4363,25 @@ bytes and no outgoing credential-pattern match. Skips never reveal a match.
 | G only, no B | Create O, subject to write-back gating |
 | G only, equals B | O deletion: delete G |
 | G only, differs from B | Preserve edit: recreate O, subject to write-back gating |
-| Different present O/G, no B | Conflict: skip |
+| Different present O/G, no B | Resolve in Obsidian's favour immediately; write O to G |
 | Different present O/G, B equals O | Write G back to O |
 | Different present O/G, B equals G | Push O to G |
-| Different present O/G, B equals neither | Injected three-way merge; clean writes identical text to both, otherwise skip |
+| Different present O/G, B equals neither | Injected three-way merge; clean writes identical text to both, otherwise use O and write it to G |
 
-Unresolved conflicts never modify O. Persist first-seen conflict times separately
-when no base exists. At 24 hours, a still-conflicting path resolves in O's favour
-by pushing O to G only, counted separately; GitHub retains the other version in
-history. Apply writes before their common-base action, stop on failure and replan
-fresh snapshots after crashes. The injected merge must be lossless/idempotent.
+Unresolved conflicts never modify O. The 19 November 2026 owner decision
+supersedes the original 24-hour wait: use O immediately and count the resolution;
+GitHub retains the other version in history. Apply writes before their
+common-base action, stop on failure and replan fresh snapshots after crashes.
+The injected merge must be lossless/idempotent.
 
-Any per-direction change/delete cap breach, deletions of more than 10% of
-distinct base paths, an empty side against at least ten approved files, or more
-than 20% of base paths missing on either side empties the whole plan, including
-state actions. Proposed changes include deletes and are counted before gating.
-Caps default to 25 changes / 3 deletes; hard maxima are 100 / 10. The owner may
-raise a cap for one complete first-run snapshot, then restore it; ratio/empty
-guards have no override. Per-path invalid/oversized/non-regular/collision/content
-failures skip and count; credential matches flag `needs-attention/secret-match`.
+Per-direction change/delete caps now select whole-path batches and defer the
+rest to a later run. Deletions of more than 10% of distinct base paths, an empty
+side against at least ten approved files, or more than 20% of base paths missing
+on either side still empty the whole plan, including state actions. Proposed
+changes include deletes and are counted before gating. Caps default to 25
+changes / 3 deletes; hard maxima are 100 / 10. Per-path
+invalid/oversized/non-regular/collision/content failures skip and count;
+credential matches flag `needs-attention/secret-match`.
 
 Write-back remains `dry-run` by default, also suppressed for freshly initialized
 state and all guard trips. Pending O writes never advance/forget the base.

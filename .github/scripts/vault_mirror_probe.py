@@ -163,7 +163,7 @@ def parse_runner_log(output: str) -> dict[str, object] | None:
                 "durationMs", "approved", "pushed", "writtenBack", "deleted",
                 "conflicts", "skipped", "credentialMatches", "pendingWriteBack",
                 "changedOnGitHub", "changedOnObsidian", "deletedOnGitHub",
-                "deletedOnObsidian",
+                "deletedOnObsidian", "deferredOnGitHub", "deferredOnObsidian",
             )
             if type(value.get(key)) is int and 0 <= value[key] <= 1_000_000_000
         }
@@ -264,11 +264,14 @@ def probe(
                 for key in (
                     "changedOnGitHub", "changedOnObsidian",
                     "deletedOnGitHub", "deletedOnObsidian",
+                    "deferredOnGitHub", "deferredOnObsidian",
                 )
                 if key in runner
             },
         }
         raise ProbeError("vault_mirror_guard_tripped:" + json.dumps(evidence, sort_keys=True))
+    if outcome == "needs-attention" and runner.get("reason") not in {"conflict", "secret-match"}:
+        raise ProbeError(f"vault_mirror_needs_attention:{runner.get('reason') or 'unknown'}")
     if verdict == "failed":
         raise ProbeError(f"vault_mirror_run_failed:{runner.get('reason') or 'unknown'}")
     return {

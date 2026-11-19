@@ -616,8 +616,10 @@ status was received. It never proves that the scheduled job is absent. A read
 failure names the safe category: backend not configured, status missing, access
 denied, timed out, invalid or unavailable. Healthy includes no-op and busy
 runs; freshness becomes stale after 30 minutes without success. Dry-run is
-always visible when reported. Expand the row for counts, write-back mode, fixed
-reasons and up to ten conflict paths. Guard trips show the fixed safety
+always visible when reported. A run may report deferred changes after completing
+one bounded batch; that remains healthy when it made progress and leaves a
+count, not an owner task. Expand the row for counts, write-back mode, fixed
+reasons and up to ten conflict paths. Hard guard trips show the fixed safety
 predicate(s) and proposed change/delete counts per direction, never note paths.
 No status document is normal, not a failure.
 
@@ -656,9 +658,10 @@ Obsidian-to-GitHub sync is enabled from the first run. GitHub-to-Obsidian
 write-back defaults to `dry-run`; only the owner may explicitly set it to `on`
 after reviewing runs, and it has been `on` since 22 October 2026. Fresh state,
 conflicts, private policy and partial-pull/mass-deletion guards prevent unsafe
-writes. Unresolved conflicts resolve in Obsidian's favour after 24 hours, never
-by overwriting Obsidian. Whether a change reached a second device is visible only
-on that device.
+write-back. Clean three-way edits merge automatically. An unresolved conflict
+uses Obsidian's version immediately and records the GitHub version in history;
+it never overwrites Obsidian or waits for an owner. Whether a change reached a
+second device is visible only on that device.
 
 ## Shared overlays (18 October 2026; P14-09)
 

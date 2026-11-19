@@ -250,9 +250,10 @@ readiness because the planner applied nothing. Missing executions,
 configuration drift, auth failure and other failed outcomes also fail.
 
 When the summary is `guard-tripped`, read its `guardReasons` and proposed
-`changedOnGitHub`/`changedOnObsidian` and delete counts before changing a cap.
-Do not infer or fix that with a guessed increase. A cap/policy change remains an
-owner-reviewed production setting and requires a fresh Deploy.
+directional counts. Ordinary cap overflow no longer trips: it drains as a
+bounded batch. A remaining guard is a hard source-loss/safety condition, not a
+reason to guess at a larger cap. Any policy change still requires a separate
+owner-reviewed production decision and Deploy.
 
 The same owner-side check is:
 

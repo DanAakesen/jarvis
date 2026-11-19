@@ -22,6 +22,8 @@ export interface VaultMirrorStatus {
   changedOnObsidian?: number;
   deletedOnGitHub?: number;
   deletedOnObsidian?: number;
+  deferredOnGitHub?: number;
+  deferredOnObsidian?: number;
   guardReasons?: (
     | 'invalid-input' | 'max-changed-G' | 'max-changed-O' | 'max-deletes-G'
     | 'max-deletes-O' | 'base-deletion-ratio' | 'empty-side' | 'missing-base-O'
@@ -41,6 +43,8 @@ export interface VaultMirrorStatusView {
   changedOnObsidian?: number;
   deletedOnGitHub?: number;
   deletedOnObsidian?: number;
+  deferredOnGitHub?: number;
+  deferredOnObsidian?: number;
   readReason?: 'backend-not-configured' | 'status-missing' | 'access-denied' | 'timed-out'
     | 'invalid' | 'unavailable';
   writeBack?: VaultMirrorStatus['writeBack'];

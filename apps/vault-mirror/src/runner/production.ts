@@ -114,7 +114,7 @@ export function createProductionDependencies(config: MirrorConfig): RunDependenc
         ['runId', 'outcome', 'reason', 'durationMs', 'approved', 'pushed', 'writtenBack',
           'deleted', 'conflicts', 'skipped', 'credentialMatches', 'pendingWriteBack',
           'guardReasons', 'changedOnGitHub', 'changedOnObsidian', 'deletedOnGitHub',
-          'deletedOnObsidian'].includes(key)));
+          'deletedOnObsidian', 'deferredOnGitHub', 'deferredOnObsidian'].includes(key)));
       console.log(JSON.stringify(allowed));
     },
   };

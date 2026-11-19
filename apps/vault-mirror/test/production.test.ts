@@ -144,6 +144,8 @@ describe('Key Vault failure classification', () => {
       changedOnObsidian: 11,
       deletedOnGitHub: 0,
       deletedOnObsidian: 0,
+      deferredOnGitHub: 1,
+      deferredOnObsidian: 0,
       privatePath: 'Notes/private.md',
     });
     const summary = JSON.parse(String(output.mock.calls[0]?.[0]));
@@ -155,6 +157,8 @@ describe('Key Vault failure classification', () => {
       changedOnObsidian: 11,
       deletedOnGitHub: 0,
       deletedOnObsidian: 0,
+      deferredOnGitHub: 1,
+      deferredOnObsidian: 0,
     });
     output.mockRestore();
   });

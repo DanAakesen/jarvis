@@ -79,6 +79,7 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
       ? 'stale' : value.state;
   const tone = state === 'healthy' ? 'ok' : state === 'stale' || state === 'needs-attention' ? 'degraded' :
     state === 'failed' || state === 'read-error' ? 'down' : 'unknown';
+  const deferred = (value?.deferredOnGitHub ?? 0) + (value?.deferredOnObsidian ?? 0);
   const showDetails = !loading && !unavailable && value && state !== 'read-error' && state !== 'not-set-up';
   return <div className="system-status-row vault-mirror-row" role="group" aria-label="Vault mirror">
     <button type="button" className="ghost-button vault-mirror-toggle" aria-label="Vault mirror details"
@@ -89,9 +90,13 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
       <span id={timeId} className="system-status-time">
         {value?.writeBack === 'dry-run' && <><span>Dry-run</span>{' '}</>}
         {value?.lastRunAt
-          ? <time dateTime={value.lastRunAt} title={formatDateTime(value.lastRunAt)}>Last run {elapsed(value.lastRunAt, now)}</time>
+          ? <time dateTime={value.lastRunAt} title={formatDateTime(value.lastRunAt)}>
+            Last run {elapsed(value.lastRunAt, now)}{deferred > 0 ? ` · ${deferred} deferred to next run` : ''}
+          </time>
           : value?.lastSuccessAt
-          ? <time dateTime={value.lastSuccessAt} title={formatDateTime(value.lastSuccessAt)}>Last success {elapsed(value.lastSuccessAt, now)}</time>
+          ? <time dateTime={value.lastSuccessAt} title={formatDateTime(value.lastSuccessAt)}>
+            Last success {elapsed(value.lastSuccessAt, now)}{deferred > 0 ? ` · ${deferred} deferred to next run` : ''}
+          </time>
           : !loading && state !== 'not-set-up' && state !== 'read-error' ? 'No successful sync yet' : null}
       </span>
     </button>
@@ -109,6 +114,8 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
           {value.changedOnObsidian !== undefined && <div><dt>Proposed Obsidian changes</dt><dd>{value.changedOnObsidian}</dd></div>}
           {value.deletedOnGitHub !== undefined && <div><dt>Proposed GitHub deletes</dt><dd>{value.deletedOnGitHub}</dd></div>}
           {value.deletedOnObsidian !== undefined && <div><dt>Proposed Obsidian deletes</dt><dd>{value.deletedOnObsidian}</dd></div>}
+          {value.deferredOnGitHub !== undefined && <div><dt>Deferred GitHub changes</dt><dd>{value.deferredOnGitHub}</dd></div>}
+          {value.deferredOnObsidian !== undefined && <div><dt>Deferred Obsidian changes</dt><dd>{value.deferredOnObsidian}</dd></div>}
           {value.writeBack && <div><dt>Write-back</dt><dd>{value.writeBack === 'dry-run' ? 'Dry-run — not writing into Obsidian' : 'On'}</dd></div>}
           {value.counts && Object.entries(countLabels).map(([key, label]) => <div key={key}>
             <dt>{label}</dt><dd>{value.counts![key as keyof typeof countLabels]}</dd>

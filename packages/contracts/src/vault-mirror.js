@@ -32,6 +32,8 @@ export const vaultMirrorStatusSchema = z.object({
   changedOnObsidian: count.optional(),
   deletedOnGitHub: count.optional(),
   deletedOnObsidian: count.optional(),
+  deferredOnGitHub: count.optional(),
+  deferredOnObsidian: count.optional(),
   guardReasons: z.array(guardReason).max(9).optional(),
   lastSuccessAt: timestamp.nullable(),
   conflictPaths: z.array(z.string().min(1).max(1024)).max(10),
@@ -47,6 +49,8 @@ export const vaultMirrorStatusViewSchema = z.object({
   changedOnObsidian: vaultMirrorStatusSchema.shape.changedOnObsidian,
   deletedOnGitHub: vaultMirrorStatusSchema.shape.deletedOnGitHub,
   deletedOnObsidian: vaultMirrorStatusSchema.shape.deletedOnObsidian,
+  deferredOnGitHub: vaultMirrorStatusSchema.shape.deferredOnGitHub,
+  deferredOnObsidian: vaultMirrorStatusSchema.shape.deferredOnObsidian,
   readReason: z.enum([
     'backend-not-configured', 'status-missing', 'access-denied', 'timed-out',
     'invalid', 'unavailable',

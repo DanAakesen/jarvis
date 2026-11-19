@@ -78,6 +78,7 @@ describe('vault mirror status reader', () => {
       guardReasons: ['max-changed-G'],
       changedOnGitHub: 26,
       changedOnObsidian: 11,
+      deferredOnGitHub: 1,
       conflictPaths: ['private/path.md'],
     };
     const reader = createVaultMirrorStatusReader(blobWith(document), () => at);
@@ -89,6 +90,7 @@ describe('vault mirror status reader', () => {
       guardReasons: ['max-changed-G'],
       changedOnGitHub: 26,
       changedOnObsidian: 11,
+      deferredOnGitHub: 1,
       writeBack: 'on',
       reason: 'conflict',
       counts: {

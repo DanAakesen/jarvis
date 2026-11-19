@@ -178,6 +178,8 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
     public let changedOnObsidian: Int?
     public let deletedOnGitHub: Int?
     public let deletedOnObsidian: Int?
+    public let deferredOnGitHub: Int?
+    public let deferredOnObsidian: Int?
     public let writeBack: String?
     public let reason: String?
     public let counts: JarvisVaultMirrorCounts?
@@ -194,6 +196,8 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
         changedOnObsidian: Int? = nil,
         deletedOnGitHub: Int? = nil,
         deletedOnObsidian: Int? = nil,
+        deferredOnGitHub: Int? = nil,
+        deferredOnObsidian: Int? = nil,
         writeBack: String? = nil,
         reason: String? = nil,
         counts: JarvisVaultMirrorCounts? = nil,
@@ -209,6 +213,8 @@ public struct JarvisVaultMirror: Codable, Equatable, Sendable {
         self.changedOnObsidian = changedOnObsidian
         self.deletedOnGitHub = deletedOnGitHub
         self.deletedOnObsidian = deletedOnObsidian
+        self.deferredOnGitHub = deferredOnGitHub
+        self.deferredOnObsidian = deferredOnObsidian
         self.writeBack = writeBack
         self.reason = reason
         self.counts = counts

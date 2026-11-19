@@ -482,6 +482,8 @@ or lists. No status yet never claims the scheduled job is off; read errors name
 the bounded failure category. Expand for last run, last success, outcome and
 write-back evidence. Guard trips name the fixed planner predicate and show the
 proposed change/delete counts, not note paths.
+Healthy progress can include deferred change counts; ordinary differences do
+not appear as owner work or a manual attention queue.
 
 A full-width disclosure button uses the shared ghost-button geometry, a 44px
 minimum target, visible focus and `aria-expanded`. Enter/Space toggles details

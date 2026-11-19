@@ -983,8 +983,8 @@ logged or returned.
 Authenticated `GET /status` adds a reduced `vaultMirror` view independently of
 the general one-minute probe cache. It carries the last completed run time,
 outcome, fixed guard predicates, proposed change/delete counts per direction
-and read reason while still omitting run identifiers, start time and other
-runner-only fields.
+and deferred counts, plus the read reason, while still omitting run identifiers,
+start time and other runner-only fields.
 Conflict paths are confined to this owner response and the expanded web row;
 agent status tools, proactive facts and logs do not receive them. Contracts add
 `vaultMirrorStatusViewSchema` without changing the shared runner document.
@@ -1079,9 +1079,16 @@ engine, then applies GitHub changes as one Git Data API commit with a non-force
 ref update. A moved branch is read and planned once more. Obsidian write-back is
 gated by `on`, rechecked against the planned paths, uploaded, and returned to
 `pull-only`; unrelated remote edits pulled in the same sync do not fail
-verification. Unsuccessful paths remain pending and retry before the next plan.
+verification. Clean three-way changes merge automatically; an unclean or
+no-base two-sided difference uses the Obsidian copy immediately, preserving
+the established source precedence without a manual 24-hour wait. Ordinary
+changes are selected as whole-path batches within the per-run caps and remaining
+work is deferred to the next schedule. Only hard state/mass-loss guards stop the
+whole plan. Unsuccessful paths and deferred work retry before or during the
+next plan.
 Since 22 October 2026 the production job runs with write-back `on` and the
-default caps; see the decision log for the go-live record.
+default caps; the status/log carries deferred and proposed counts so partial
+progress is observable. See the decision log for the go-live record.
 
 Since P14-28, the mirror image is built by the infrastructure deployment when
 `JARVIS_VAULT_MIRROR_ENABLED=true`. Its Dockerfile copy inputs and `.dockerignore`

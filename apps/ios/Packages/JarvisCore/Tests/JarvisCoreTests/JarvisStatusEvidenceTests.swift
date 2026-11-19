@@ -51,7 +51,8 @@ final class JarvisStatusEvidenceTests: XCTestCase {
           "readReason":"access-denied",
           "guardReasons":["max-changed-G"],
           "changedOnGitHub":26,
-          "changedOnObsidian":11
+          "changedOnObsidian":11,
+          "deferredOnGitHub":1
         }
         """.utf8)
         let mirror = try JSONDecoder().decode(JarvisVaultMirror.self, from: data)
@@ -61,5 +62,6 @@ final class JarvisStatusEvidenceTests: XCTestCase {
         XCTAssertEqual(mirror.guardReasons, ["max-changed-G"])
         XCTAssertEqual(mirror.changedOnGitHub, 26)
         XCTAssertEqual(mirror.changedOnObsidian, 11)
+        XCTAssertEqual(mirror.deferredOnGitHub, 1)
     }
 }

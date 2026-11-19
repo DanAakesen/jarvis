@@ -303,6 +303,8 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
   let changedOnObsidian = 0;
   let deletedOnGitHub = 0;
   let deletedOnObsidian = 0;
+  let deferredOnGitHub = 0;
+  let deferredOnObsidian = 0;
   const invalidPendingPaths = new Set<string>();
   const skippedCount = (plan?: Plan): number => {
     const planned = new Set(plan?.skipped.map(item => normalizePath(item.path)) ?? []);
@@ -320,6 +322,8 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     changedOnObsidian = plan.counters.changedOnO;
     deletedOnGitHub = plan.counters.deletedOnG;
     deletedOnObsidian = plan.counters.deletedOnO;
+    deferredOnGitHub = plan.counters.deferredOnG;
+    deferredOnObsidian = plan.counters.deferredOnO;
   };
 
   const status = (): RunResult['status'] => vaultMirrorStatusSchema.parse({
@@ -330,12 +334,16 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
     ...(reason ? { reason } : {}),
     writeBack: options.config.writeBack,
     ...counts,
-    ...(guardReasons.length > 0 ? {
-      guardReasons,
+    ...(guardReasons.length > 0 ? { guardReasons } : {}),
+    ...(changedOnGitHub > 0 || changedOnObsidian > 0 ||
+        deletedOnGitHub > 0 || deletedOnObsidian > 0 ||
+        deferredOnGitHub > 0 || deferredOnObsidian > 0 ? {
       changedOnGitHub,
       changedOnObsidian,
       deletedOnGitHub,
       deletedOnObsidian,
+      deferredOnGitHub,
+      deferredOnObsidian,
     } : {}),
     consecutiveFailures,
     lastSuccessAt,
@@ -361,6 +369,8 @@ export async function runMirror(options: RunOptions): Promise<RunResult> {
         ...(current.changedOnObsidian !== undefined ? { changedOnObsidian: current.changedOnObsidian } : {}),
         ...(current.deletedOnGitHub !== undefined ? { deletedOnGitHub: current.deletedOnGitHub } : {}),
         ...(current.deletedOnObsidian !== undefined ? { deletedOnObsidian: current.deletedOnObsidian } : {}),
+        ...(current.deferredOnGitHub !== undefined ? { deferredOnGitHub: current.deferredOnGitHub } : {}),
+        ...(current.deferredOnObsidian !== undefined ? { deferredOnObsidian: current.deferredOnObsidian } : {}),
       });
     } catch { /* Logging cannot change the mirror result. */ }
   };

@@ -116,6 +116,12 @@
 "insights.statusMirrorLastSuccess" = "Last success %@";
 "insights.statusMirrorLastRun" = "Last run %@";
 "insights.statusMirrorLastOutcome" = "Last outcome";
+"insights.statusMirrorChangedGitHub" = "Proposed GitHub changes";
+"insights.statusMirrorChangedObsidian" = "Proposed Obsidian changes";
+"insights.statusMirrorDeletedGitHub" = "Proposed GitHub deletes";
+"insights.statusMirrorDeletedObsidian" = "Proposed Obsidian deletes";
+"insights.statusMirrorDeferredGitHub" = "Deferred GitHub changes";
+"insights.statusMirrorDeferredObsidian" = "Deferred Obsidian changes";
 "insights.statusMirrorNoSuccess" = "No successful sync yet";
 "insights.statusMirrorWriteBack" = "Write-back";
 "insights.statusMirrorWriteBackOn" = "On";

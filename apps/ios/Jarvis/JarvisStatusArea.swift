@@ -305,22 +305,32 @@ struct JarvisStatusArea: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let changedOnGitHub = mirror.changedOnGitHub {
-                    Text("Proposed GitHub changes: \(changedOnGitHub)")
+                    Text(text(.statusMirrorChangedGitHub) + ": \(changedOnGitHub)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 if let changedOnObsidian = mirror.changedOnObsidian {
-                    Text("Proposed Obsidian changes: \(changedOnObsidian)")
+                    Text(text(.statusMirrorChangedObsidian) + ": \(changedOnObsidian)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 if let deletedOnGitHub = mirror.deletedOnGitHub {
-                    Text("Proposed GitHub deletes: \(deletedOnGitHub)")
+                    Text(text(.statusMirrorDeletedGitHub) + ": \(deletedOnGitHub)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 if let deletedOnObsidian = mirror.deletedOnObsidian {
-                    Text("Proposed Obsidian deletes: \(deletedOnObsidian)")
+                    Text(text(.statusMirrorDeletedObsidian) + ": \(deletedOnObsidian)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deferredOnGitHub = mirror.deferredOnGitHub {
+                    Text(text(.statusMirrorDeferredGitHub) + ": \(deferredOnGitHub)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if let deferredOnObsidian = mirror.deferredOnObsidian {
+                    Text(text(.statusMirrorDeferredObsidian) + ": \(deferredOnObsidian)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -389,15 +399,19 @@ struct JarvisStatusArea: View {
     }
 
     private func lastRunText(_ mirror: JarvisVaultMirror) -> String {
+        let deferred = (mirror.deferredOnGitHub ?? 0) + (mirror.deferredOnObsidian ?? 0)
+        let withDeferred = { (base: String) in
+            deferred > 0 ? base + " · \(deferred) deferred to next run" : base
+        }
         guard let last = mirror.lastRunAt.flatMap(JarvisInsightsDates.parse) else {
             if let readReason = mirror.readReason { return mirrorReadReasonText(readReason) }
-            return lastSuccessText(mirror)
+            return withDeferred(lastSuccessText(mirror))
         }
-        return JarvisInsightsLocalization.format(
+        return withDeferred(JarvisInsightsLocalization.format(
             .statusMirrorLastRun,
             language: language,
             JarvisInsightsDates.elapsed(from: last, now: now, language: language)
-        )
+        ))
     }
 
     private func mirrorReadReasonText(_ reason: String) -> String {

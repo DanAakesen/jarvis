@@ -13,7 +13,8 @@ export interface VaultMirrorStatusReader {
 
 function project(status: VaultMirrorStatus, now: number, paths: boolean): VaultMirrorStatusView {
   const { finishedAt, outcome, guardReasons, changedOnGitHub, changedOnObsidian,
-    deletedOnGitHub, deletedOnObsidian, lastSuccessAt, writeBack, reason, conflictPaths,
+    deletedOnGitHub, deletedOnObsidian, deferredOnGitHub, deferredOnObsidian,
+    lastSuccessAt, writeBack, reason, conflictPaths,
     approved, pushed, writtenBack, deleted, conflicts, skipped,
     credentialMatches, pendingWriteBack, consecutiveFailures } = status;
   const lastSuccessTime = lastSuccessAt === null ? Number.NaN : Date.parse(lastSuccessAt);
@@ -28,6 +29,8 @@ function project(status: VaultMirrorStatus, now: number, paths: boolean): VaultM
     ...(changedOnObsidian !== undefined ? { changedOnObsidian } : {}),
     ...(deletedOnGitHub !== undefined ? { deletedOnGitHub } : {}),
     ...(deletedOnObsidian !== undefined ? { deletedOnObsidian } : {}),
+    ...(deferredOnGitHub !== undefined ? { deferredOnGitHub } : {}),
+    ...(deferredOnObsidian !== undefined ? { deferredOnObsidian } : {}),
     writeBack,
     ...(reason ? { reason } : {}),
     counts: { approved, pushed, writtenBack, deleted, conflicts, skipped,

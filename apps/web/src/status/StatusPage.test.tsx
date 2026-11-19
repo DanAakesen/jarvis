@@ -94,6 +94,7 @@ describe('StatusPage evidence copy', () => {
       guardReasons: ['max-changed-G'],
       changedOnGitHub: 26,
       changedOnObsidian: 11,
+      deferredOnGitHub: 1,
     };
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
     render(<StatusPage backendUrl="https://api.example.test" getAccessToken={async () => 'token'} />);
@@ -101,5 +102,26 @@ describe('StatusPage evidence copy', () => {
     expect(screen.getByText(/per-run cap would be exceeded by changes to GitHub/u)).not.toBeNull();
     expect(screen.getByText('Proposed GitHub changes')).not.toBeNull();
     expect(screen.getByText('26')).not.toBeNull();
+    expect(screen.getByText('Deferred GitHub changes')).not.toBeNull();
+  });
+
+  it('shows bounded deferred work as healthy progress rather than owner attention', async () => {
+    const data = snapshot();
+    data.vaultMirror = {
+      state: 'healthy',
+      lastSuccessAt: checkedAt(),
+      lastRunAt: checkedAt(),
+      outcome: 'ok',
+      writeBack: 'on',
+      changedOnGitHub: 26,
+      deferredOnGitHub: 1,
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
+    render(<StatusPage backendUrl="https://api.example.test" getAccessToken={async () => 'token'} />);
+    expect(await screen.findByText('Healthy')).not.toBeNull();
+    expect(screen.getByText(/1 deferred to next run/u)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Vault mirror details' }));
+    expect(screen.getByText('Deferred GitHub changes')).not.toBeNull();
+    expect(screen.queryByText(/Safety guard:/u)).toBeNull();
   });
 });

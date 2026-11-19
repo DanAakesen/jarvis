@@ -29,6 +29,7 @@ test('vault mirror view is a bounded runtime contract independent of the runner 
     state: 'needs-attention', lastSuccessAt: status.finishedAt, writeBack: 'dry-run',
     lastRunAt: status.finishedAt, outcome: 'needs-attention', readReason: 'invalid',
     guardReasons: ['max-changed-G'], changedOnGitHub: 26, changedOnObsidian: 11,
+    deferredOnGitHub: 1,
     reason: 'conflict', conflictPaths: ['private/note.md'],
     counts: {
       approved: 0, pushed: 0, writtenBack: 0, deleted: 0, conflicts: 1, skipped: 0,
