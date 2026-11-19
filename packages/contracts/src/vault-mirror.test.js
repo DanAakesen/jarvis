@@ -27,6 +27,7 @@ test('vault mirror view is a bounded runtime contract independent of the runner 
   }
   const view = {
     state: 'needs-attention', lastSuccessAt: status.finishedAt, writeBack: 'dry-run',
+    lastRunAt: status.finishedAt, outcome: 'needs-attention', readReason: 'invalid',
     reason: 'conflict', conflictPaths: ['private/note.md'],
     counts: {
       approved: 0, pushed: 0, writtenBack: 0, deleted: 0, conflicts: 1, skipped: 0,
@@ -37,6 +38,7 @@ test('vault mirror view is a bounded runtime contract independent of the runner 
   for (const patch of [
     { state: 'ok' }, { runId: status.runId }, { startedAt: status.startedAt },
     { finishedAt: status.finishedAt }, { reason: 'private error' },
+    { outcome: 'success' }, { readReason: 'private' },
     { conflictPaths: Array(11).fill('private') }, { conflictPaths: ['x'.repeat(1025)] },
     { counts: { ...view.counts, pushed: -1 } }, { counts: { ...view.counts, extra: 0 } },
   ]) assert.equal(vaultMirrorStatusViewSchema.safeParse({ ...view, ...patch }).success, false);

@@ -1295,7 +1295,19 @@ function registerVoiceRoute(
         else if (!active && microphoneActive && !assistantResponding && !userSpeaking && pendingToolCalls === 0) publishActivity('listening');
         if (!active) statusAnnouncer?.flush();
       },
-      log: (turn) => request.log.info({ ...turn, channel: 'voice' }, 'voice.pi_turn'),
+      log: (turn) => {
+        request.log.info({ ...turn, channel: 'voice' }, 'voice.pi_turn');
+        app.systemStatusReader.recordEvidence('foundry.voice', {
+          status: turn.outcome === 'ok' ? 'ok'
+            : turn.outcome === 'failed' || turn.outcome === 'timeout' ? 'down' : 'unknown',
+          checkedAt: new Date().toISOString(),
+          details: {
+            engine: 'pi',
+            evidence: 'voice-turn',
+            outcome: turn.outcome,
+          },
+        });
+      },
     }) : undefined;
     const handlePiVoiceTurn = (itemId: string, text: string) => {
       if (!piTurns || reflexedItems.has(itemId) || reflexedItems.size >= MAX_TRANSCRIPTS_PER_SESSION) return;

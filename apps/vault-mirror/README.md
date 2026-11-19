@@ -27,6 +27,14 @@ pushing, verifies `ob --version`, and runs the runner against in-memory fakes
 inside the image. Mirror-only changes qualify this component; they do not deploy
 an existing application or the Azure job.
 
+When production enables the job, Deploy fails closed if the digest cannot be
+built or the mirror configuration is incomplete. Deterministic readiness then
+runs `.github/scripts/vault_mirror_probe.py`: it verifies the ten-minute
+schedule, waits for a fresh terminal execution and prints only the runner's
+fixed-count terminal JSON. `needs-attention` is a warning; no execution,
+configuration drift, `failed` or missing logs is a readiness failure. It
+starts no job and changes no secret, policy or state.
+
 ## Runtime
 
 `node apps/vault-mirror/dist/main.js` performs one run and exits. The image

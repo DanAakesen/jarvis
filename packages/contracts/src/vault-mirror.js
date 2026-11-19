@@ -30,6 +30,12 @@ export const vaultMirrorStatusSchema = z.object({
 export const vaultMirrorStatusViewSchema = z.object({
   state: z.enum(['not-set-up', 'healthy', 'stale', 'needs-attention', 'failed', 'read-error']),
   lastSuccessAt: timestamp.nullable(),
+  lastRunAt: timestamp.optional(),
+  outcome: vaultMirrorStatusSchema.shape.outcome.optional(),
+  readReason: z.enum([
+    'backend-not-configured', 'status-missing', 'access-denied', 'timed-out',
+    'invalid', 'unavailable',
+  ]).optional(),
   writeBack: vaultMirrorStatusSchema.shape.writeBack.optional(),
   reason: vaultMirrorStatusSchema.shape.reason,
   counts: vaultMirrorStatusSchema.pick({

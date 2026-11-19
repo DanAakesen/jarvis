@@ -3,6 +3,26 @@
 **Status: implemented; all 195 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
 The newest visual takes focus while older visuals stay swipeable for the call. Close/expand float over the content, expansion uses the full screen, and HTML visuals follow the active appearance without changing native charts. Captions have more room and fade at both edges.
 
+## Vault Mirror and Status reliability — 19 November 2026 (#1962)
+
+**Status: in progress.** Production evidence confirms the mirror variables and
+latest infrastructure/Bicep/image deployment were accepted, but this worktree
+cannot read current Container Apps executions because the remote managed-identity
+endpoint is unavailable. The fix does not infer job state from a missing blob.
+
+| Step | State |
+| --- | --- |
+| Verify latest main Deploy, mirror variables, image build and fail-silent paths | Done |
+| Expose mirror last-run/outcome/read-reason evidence to web and iOS | Built |
+| Make `JARVIS_VAULT_MIRROR_ENABLED=true` fail closed and add a read-only fresh-execution probe | Built |
+| Use PI chat/voice/brain and embedding evidence with 15-minute freshness; age Last backend error after five minutes | Built |
+| Focused and full local regressions | Passing: 621 backend, 40 web, 12 contracts, 26 vault-mirror, 55 GitHub-script and 196 JarvisCore tests; focused lint/builds pass |
+| Swift model tests and real-browser desktop/phone inspection | Done; 196 JarvisCore tests pass, and the actual web component was checked at 1280×900 and 390×844 |
+| PR CI review and production-execution evidence from the next qualified Deploy | Pending; no deployment or merge by this branch |
+
+Next: finish local validation and CI review, then report the unobserved production
+execution evidence explicitly rather than claiming it from a status blob.
+
 ## PI smoke in three requests (#1910, P15-209)
 
 **Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
@@ -251,19 +271,19 @@ Run 43762776242: the `watch` job failed only because capture steps hit their 8-m
 Low Power Mode, and the screenshot steps are `continue-on-error` with a 12-minute bound (compile steps stay strict).
 Next: owner review of the captures and a TestFlight build.
 
-## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
+## PI phases 0 to 2 together: PI agent, Jarvis MCP and default chat — 15 November 2026 (#1885, P15-174, PR #1890)
 
-**Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.
+**Status: delivered; PI became the chat and voice default in #1910.** The owner
+asked for phases 0, 1 and 2 as one piece. The Current-engine selector remains a
+deliberate compatibility choice with no automatic fallback.
 
 | Part | State |
 | --- | --- |
-| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, harness built-ins on, Jarvis MCP server, skills from the repository | Written; **Deploy has not run it yet** |
+| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, harness built-ins on, Jarvis MCP server, skills from the repository | Deployed; provisioning is now required for an accepted release |
 | Jarvis MCP server (`/pi/mcp`: `find_tools`, `call_tool`) with per-turn authority and the in-process dispatch through the normal tool route | Built; 9 offline tests including forged, closed and smoke grants |
 | Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (100 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
-| Test selector: turn field `engine: "pi"`, Settings switch in iOS, `GET /pi/status`, `POST /pi/warm` | Built; backend route tests pass; iOS compiled only by CI |
-| Live proof of MCP, streaming, cancellation and first-text times | **Open**: dispatch Deploy with `measure_pi` after merge (about 0.5 DKK); results land in the job summary |
-
-Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, then the owner tests PI chat on the phone and sends feedback. Phases 3 to 8 are unchanged.
+| Engine selector: default PI, optional `engine: "current"`, Settings compatibility choice, `GET /pi/status`, `POST /pi/warm` | Live |
+| Live proof of MCP, streaming, cancellation and first-text times | Manual `measure_pi` remains the paid measurement path |
 
 
 ## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)

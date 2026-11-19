@@ -308,7 +308,7 @@ def record() -> int:
         }
         if results.get("agent", {}).get("result") == "success":
             components["backend"]["state"] = "applied"
-    expected = {"plan", *PARTS, "smoke", "acceptance"}
+    expected = {"plan", *PARTS, "smoke", "pi-agent", "acceptance"}
     superseded = bool(plan and plan["superseded"])
     # Live acceptance spends money, so it only runs by hand; a skipped run is "not run", not a failure.
     acceptance_not_run = results.get("acceptance", {}).get("result") == "skipped"
@@ -318,6 +318,7 @@ def record() -> int:
         and all(results[key]["result"] == ("success" if plan["selected"][key] else "skipped")
                 for key in PARTS)
         and results["smoke"]["result"] == "success"
+        and results["pi-agent"]["result"] == "success"
         and (results["acceptance"]["result"] == "success" or acceptance_not_run)
     )
     statuses = {"success", "failure", "cancelled", "skipped"}

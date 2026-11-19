@@ -21,6 +21,7 @@ const checks: Readonly<Record<SystemStatusSubsystem, string>> = {
 };
 const statuses: Record<SystemStatusValue, string> = { ok: 'OK', degraded: 'Degraded', down: 'Failing', unknown: 'Unknown' };
 const staleAfterMs = 5 * 60_000;
+const runtimeEvidenceStaleAfterMs = 15 * 60_000;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -55,7 +56,41 @@ function readableKey(key: string): string {
 
 function reason(entry: SystemStatusEntry): string | undefined {
   const details = entry.details;
+  if (details?.reason === 'active_engine_unconfigured') {
+    return 'The active PI engine is not configured; the legacy engine is not treated as a fallback.';
+  }
   if (details?.configured === false) return 'This check is not configured.';
+  if (entry.id === 'last_error') {
+    if (details?.recent === true && isTime(details.occurredAt)) {
+      return `A backend HTTP server error was recorded at ${formatDateTime(details.occurredAt)}.`;
+    }
+    if (isTime(details?.occurredAt)) {
+      return `No recent backend server error is recorded. The last one was at ${formatDateTime(details.occurredAt)}.`;
+    }
+    return isTime(details?.observedSince)
+      ? `No backend HTTP server error has been recorded since ${formatDateTime(details.observedSince)}.`
+      : 'No backend HTTP server error is recorded in this process.';
+  }
+  if (details?.runtimeProbe === 'stale') {
+    return 'The last runtime result is older than 15 minutes; this check no longer claims current health.';
+  }
+  if (details?.runtimeProbe === 'not_run') {
+    if (entry.id === 'runner') {
+      return 'The runner is configured, but no runtime probe has completed for this backend process.';
+    }
+    if (entry.id.startsWith('foundry.')) {
+      return 'The active PI engine is configured, but no recent runtime result is recorded for this capability.';
+    }
+  }
+  if ((details?.evidence === 'runtime-turn' || details?.evidence === 'voice-turn') && details.outcome !== 'ok') {
+    return details.outcome === 'cancelled' || details.outcome === 'superseded'
+      ? 'The latest PI turn was interrupted; no current runtime verdict is available.'
+      : 'The latest PI runtime turn failed.';
+  }
+  if (entry.status === 'ok' &&
+      ['runtime-turn', 'voice-turn', 'vault-index', 'smoke', 'deploy-smoke'].includes(String(details?.evidence))) {
+    return undefined;
+  }
   if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
   if (entry.id.startsWith('foundry.')) {
     if (details?.catalogue === 'fallback') return 'The model catalogue uses fallback configuration; live deployment availability is not verified.';
@@ -68,7 +103,7 @@ function reason(entry: SystemStatusEntry): string | undefined {
     if (details?.configured === true) return 'The required model deployment could not be confirmed.';
   }
   if (entry.id === 'runner' && details?.configured === true && details.healthProbe === 'not_run') {
-    return 'The runner is configured, but its runtime health has not been probed.';
+    return 'The runner is configured, but no runtime probe has completed for this backend process.';
   }
   if (entry.id === 'vault_index') {
     if (details?.syncOutcome === 'pending') {
@@ -128,11 +163,14 @@ function StatusBadge({ value }: { value: SystemStatusValue }) {
   return <span className="system-status-badge" data-status={value}>{statuses[value]}</span>;
 }
 
-function CheckedAt({ value, now, label = 'Checked' }: { value: string; now: number; label?: string }) {
+function CheckedAt({ value, now, label = 'Checked', staleAfter = staleAfterMs }: {
+  value: string; now: number; label?: string; staleAfter?: number;
+}) {
   return <span className="system-status-time">
     {label}{' '}
     <time dateTime={value} title={formatDateTime(value)}>{formatDateTime(value)}</time>
-    {now - Date.parse(value) >= staleAfterMs && <span className="system-status-stale">Stale</span>}
+    {(Date.parse(value) > now + 30_000 || now - Date.parse(value) >= staleAfter) &&
+      <span className="system-status-stale">Stale</span>}
   </span>;
 }
 
@@ -225,8 +263,13 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
       </p>}
       <section className="system-status-panel" aria-labelledby="system-checks-heading" aria-busy={pending}>
         <h2 id="system-checks-heading">System checks</h2>
-        <p className="system-status-note">Foundry checks describe configured deployments, not a live model turn. The last backend error is historical evidence, not a claim that the backend is currently failing.</p>
-        <VaultMirrorRow value={data?.vaultMirror} loading={!data && pending} unavailable={!!error} now={now} />
+        <p className="system-status-note">Configuration alone never proves runtime health. Unknown means no recent runtime result; stale evidence is labelled rather than kept green. PI is the active chat and voice engine.</p>
+        <VaultMirrorRow
+          value={data?.vaultMirror}
+          loading={!data && pending}
+          unavailable={!!error && !data}
+          now={now}
+        />
         {data && <ul className="system-status-list">
           {data.entries.map(entry => <li className="system-status-row" key={entry.id} aria-label={checks[entry.id]}>
             <div className="system-status-row-heading">
@@ -238,7 +281,12 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
                 entry.details?.connected === false ? 'Disconnected at check time.' : 'Connection state was not reported.'}
               {typeof entry.details?.controlPaused === 'boolean' && (entry.details.controlPaused ? ' PC control is paused.' : ' PC control is not paused.')}
             </p>}
-            <CheckedAt value={entry.checkedAt} now={now} label="Status check" />
+            <CheckedAt
+              value={entry.checkedAt}
+              now={now}
+              label="Status check"
+              staleAfter={entry.details?.runtimeProbe === 'runtime' ? runtimeEvidenceStaleAfterMs : staleAfterMs}
+            />
             {entry.id === 'vault_index' && <>
               <EvidenceTime label="Latest sync attempt" value={entry.details?.latestSyncAttemptAt} />
               <EvidenceTime label="Last successful sync" value={entry.details?.lastSuccessfulSyncAt} />
@@ -256,7 +304,7 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
       </section>
       {data && <section className="system-status-panel" aria-labelledby="system-smoke-heading">
         <h2 id="system-smoke-heading">Recorded smoke check</h2>
-        <p className="system-status-note">The latest report retained by the backend. It has no deployment ID or commit association; refreshing this page does not run smoke checks or model canaries.</p>
+        <p className="system-status-note">The latest report retained by this backend process. Chat canaries in this report cover the legacy comparison agent, not PI. Refreshing this page does not run model canaries.</p>
         {data.smoke ? <>
           <p className="system-status-snapshot">Checked <CheckedAt value={data.smoke.checkedAt} now={now} />.</p>
           <ul className="system-status-list">

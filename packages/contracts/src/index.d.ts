@@ -25,6 +25,10 @@ export const vaultMirrorStatusSchema: ZodType<VaultMirrorStatus>;
 export interface VaultMirrorStatusView {
   state: 'not-set-up' | 'healthy' | 'stale' | 'needs-attention' | 'failed' | 'read-error';
   lastSuccessAt: string | null;
+  lastRunAt?: string;
+  outcome?: VaultMirrorStatus['outcome'];
+  readReason?: 'backend-not-configured' | 'status-missing' | 'access-denied' | 'timed-out'
+    | 'invalid' | 'unavailable';
   writeBack?: VaultMirrorStatus['writeBack'];
   reason?: VaultMirrorStatus['reason'];
   counts?: Pick<VaultMirrorStatus, 'approved' | 'pushed' | 'writtenBack' | 'deleted' | 'conflicts'

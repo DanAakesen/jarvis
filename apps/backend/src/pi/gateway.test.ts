@@ -93,6 +93,31 @@ describe('PI gateway', () => {
     expect(input()).not.toContain('Channel: voice');
   });
 
+  it('records only bounded runtime evidence for chat and voice turns', async () => {
+    const evidence: Array<Record<string, unknown>> = [];
+    const { gateway } = setup([
+      () => sse(delta('x'), completed(1, 0, 1)),
+      () => sse(delta('y'), completed(1, 0, 1)),
+    ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
+    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'private chat text' }, '', new AbortController().signal)) void chunk;
+    for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'private voice text', channel: 'voice' }, '', new AbortController().signal)) void chunk;
+    expect(evidence).toEqual([
+      { channel: 'chat', outcome: 'ok', at: '2026-11-15T16:00:00.000Z', source: 'turn' },
+      { channel: 'voice', outcome: 'ok', at: '2026-11-15T16:00:00.000Z', source: 'turn' },
+    ]);
+  });
+
+  it('reports bounded brain turns as Foundry runtime evidence without exposing wake text', async () => {
+    const evidence: Array<Record<string, unknown>> = [];
+    const { gateway } = setup([
+      () => sse(delta('Nothing for Dan.'), completed(1, 0, 1)),
+    ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
+    await gateway.runBrain({ runId: 'run-1', body: 'private wake text' }, new AbortController().signal);
+    expect(evidence).toEqual([
+      { channel: 'chat', outcome: 'ok', at: '2026-11-15T16:00:00.000Z', source: 'brain' },
+    ]);
+  });
+
   it('marks text before a tool call as an acknowledgment, then commentary', async () => {
     const { run } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
     expect(await run('look')).toEqual([

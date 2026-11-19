@@ -6,6 +6,32 @@ The managed instructions read the tool reference from the first line. The normal
 
 Use the existing phone workspace events to populate a local Voice carousel, without changing the backend window contract. A new ID appends and takes focus; an update to an existing ID replaces that page. Close clears the carousel, Collapse returns from full screen, and minimising the call keeps its visual history. Use the existing glass controls over the page and let the HTML document own its heading and authored colours; WebKit gets the active appearance, Jarvis theme variables and readable defaults. Apple compilation, rendering and live call acceptance remain unverified.
 
+## 19 November 2026 — Treat Vault Mirror and Status uncertainty as evidence, not a green/red guess (#1962)
+
+Production Deploy run 44348929578 applied main
+`318b923be74e601719ebd03c839c823dd6d4cbfd` on 18 November with the mirror
+switch `true`, write-back `on`, caps `25/3`, a successful infrastructure job
+and a rebuilt mirror image. That proves the desired job configuration was
+submitted and accepted; it does **not** prove a scheduled execution ran. This
+cloud worktree could not read Container Apps executions through ARM because its
+managed-identity endpoint was unreachable. A missing/stale status blob is not
+used as evidence that the job is off.
+
+| Choice | Why |
+| --- | --- |
+| An explicitly enabled mirror is fail-closed in `deploy_bicep.sh`: invalid App ID/caps, missing Dockerfile, registry/digest, or image-build failure stops before Bicep | Silent fallback produced a successful release while the one explicitly requested component was ambiguous |
+| Deterministic readiness verifies the scheduled job, its dedicated identity/client ID and required runtime setting names, and waits for one fresh terminal execution, then parses only the allow-listed runner JSON | The job's resource definition is not execution evidence; bounded logs prove outcome and secret usability without vault paths, values or note text |
+| `needs-attention` remains a readiness warning; no execution, config drift, `failed` and missing runner evidence fail readiness | A conflict/safety stop is a completed run that needs owner attention, while auth, timeout or a dead schedule is an operational failure |
+| `GET /status` projects mirror `lastRunAt`, `outcome` and safe `readReason`; the UI says **No status yet**, not **Not set up** | A missing status document does not identify a missing Azure job, while run/outcome/read failures are separate facts |
+| PI is the active Foundry chat/voice subject. Bounded chat, voice, brain and embedding runtime results are current for 15 minutes, then unknown/stale | Catalogue or code configuration is not live health, and PI brain/turn evidence is available without adding another paid request |
+| A successful PI agent provisioning job is required for an accepted release receipt | PI is now the normal chat and voice path, so optional-test failure must not become a successful default-engine release |
+| Agent runner remains unknown until a completed runtime or research smoke result exists | Active-session count and configuration do not prove the Foundry runner is healthy |
+| Last backend error is degraded for five minutes, then OK with a retained timestamp | It is an incident marker, not a permanent failure indicator |
+
+No production setting, secret, policy, state blob, schedule or resource is
+changed by this decision. The exact read-only command is in `infra/README.md`;
+the next qualified Deploy will execute it through the existing OIDC identity.
+
 ## 17 November 2026 — The PI smoke runs as three requests, not one (#1910, P15-209)
 
 After the Azure MCP wake-up fix, `measure_pi` still failed with HTTP 504. The backend log showed the Azure read inside the smoke completing in 7.3 s, so Azure reach worked; the whole smoke (cold turn, warm turns, tool and voice turns, GitHub, Azure and four tool-choice turns, each one to fifteen seconds) now takes about four minutes, and the Container Apps ingress ends one request at 240 s.

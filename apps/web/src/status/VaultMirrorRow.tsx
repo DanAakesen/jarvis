@@ -17,13 +17,21 @@ const reasons: Record<NonNullable<VaultMirrorStatus['reason']>, string> = {
   unexpected: 'The mirror run failed unexpectedly.',
 };
 const states = {
-  'not-set-up': 'Not set up',
+  'not-set-up': 'No status yet',
   healthy: 'Healthy',
   stale: 'Stale',
   'needs-attention': 'Needs attention',
   failed: 'Failed',
   loading: 'Loading',
   'read-error': 'Read error',
+} as const;
+const readReasons = {
+  'backend-not-configured': 'This backend has no mirror-status storage reader configured. That does not establish whether the scheduled job exists.',
+  'status-missing': 'No mirror status document has been written yet. That does not establish whether the scheduled job exists or ran.',
+  'access-denied': 'The backend identity could not read the private mirror status document.',
+  'timed-out': 'The mirror status read timed out.',
+  invalid: 'The mirror status document is missing required evidence or is not valid.',
+  unavailable: 'The mirror status document could not be read.',
 } as const;
 const countLabels = {
   approved: 'Approved',
@@ -69,7 +77,9 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
       <span id={stateId} className="system-status-badge" data-status={tone}>{states[state]}</span>
       <span id={timeId} className="system-status-time">
         {value?.writeBack === 'dry-run' && <><span>Dry-run</span>{' '}</>}
-        {value?.lastSuccessAt
+        {value?.lastRunAt
+          ? <time dateTime={value.lastRunAt} title={formatDateTime(value.lastRunAt)}>Last run {elapsed(value.lastRunAt, now)}</time>
+          : value?.lastSuccessAt
           ? <time dateTime={value.lastSuccessAt} title={formatDateTime(value.lastSuccessAt)}>Last success {elapsed(value.lastSuccessAt, now)}</time>
           : !loading && state !== 'not-set-up' && state !== 'read-error' ? 'No successful sync yet' : null}
       </span>
@@ -78,6 +88,9 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
       {expanded && (showDetails ? <>
         {value.reason && <p className="system-status-reason">{reasons[value.reason]}</p>}
         <dl>
+          {value.lastRunAt && <div><dt>Last run</dt><dd>{formatDateTime(value.lastRunAt)}</dd></div>}
+          {value.outcome && <div><dt>Last outcome</dt><dd>{readableOutcome(value.outcome)}</dd></div>}
+          {value.lastSuccessAt && <div><dt>Last success</dt><dd>{formatDateTime(value.lastSuccessAt)}</dd></div>}
           {value.writeBack && <div><dt>Write-back</dt><dd>{value.writeBack === 'dry-run' ? 'Dry-run — not writing into Obsidian' : 'On'}</dd></div>}
           {value.counts && Object.entries(countLabels).map(([key, label]) => <div key={key}>
             <dt>{label}</dt><dd>{value.counts![key as keyof typeof countLabels]}</dd>
@@ -89,8 +102,19 @@ export function VaultMirrorRow({ value, loading = false, unavailable = false, no
         </>}
       </> : <p className="system-status-reason">
         {state === 'loading' ? 'Waiting for mirror status.' : state === 'not-set-up'
-          ? 'No mirror status document yet.' : 'Mirror status could not be read. Try loading status again.'}
+          ? value?.readReason ? readReasons[value.readReason] : 'No mirror status has been received yet. This alone does not prove the scheduled job is off.'
+          : value?.readReason ? readReasons[value.readReason] : 'Mirror status could not be read. Try loading status again.'}
       </p>)}
     </div>
   </div>;
+}
+
+function readableOutcome(outcome: NonNullable<VaultMirrorView['outcome']>): string {
+  switch (outcome) {
+    case 'ok': return 'Completed';
+    case 'ok-noop': return 'Completed with no changes';
+    case 'skipped-busy': return 'Skipped because another run held the lease';
+    case 'needs-attention': return 'Completed but needs attention';
+    default: return outcome.charAt(0).toUpperCase() + outcome.slice(1);
+  }
 }

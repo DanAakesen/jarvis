@@ -159,8 +159,8 @@ struct JarvisStatusArea: View {
 
     private func loaded(_ snapshot: JarvisStatusSnapshot) -> some View {
         let entries = JarvisStatusLogic.visible(snapshot.entries, filter: filter)
-        let mirror = snapshot.vaultMirror
-        let showMirror = mirror.map { filter == .all || $0.displayState(now: now).tone != .ok } ?? false
+        let mirror = snapshot.vaultMirror ?? JarvisVaultMirror(state: .notSetUp, readReason: "status-missing")
+        let showMirror = filter == .all || mirror.displayState(now: now).tone != .ok
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             if state.isPartial, let failure = state.failure {
                 HStack {
@@ -190,7 +190,7 @@ struct JarvisStatusArea: View {
                 }
             }
             JarvisRowGroup {
-                if let mirror, showMirror { mirrorRow(mirror) }
+                if showMirror { mirrorRow(mirror) }
                 smokeRow(snapshot.smoke)
             }
         }
@@ -275,14 +275,29 @@ struct JarvisStatusArea: View {
             isExpanded: expanded.contains("vault-mirror"),
             identifier: "status.row.vault-mirror",
             language: language,
-            subtitle: lastSuccessText(mirror)
+            subtitle: lastRunText(mirror)
         ) {
             toggle("vault-mirror")
         } detail: {
             VStack(alignment: .leading, spacing: 8) {
-                Text(lastSuccessText(mirror))
+                Text(lastRunText(mirror))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                if let lastSuccessAt = mirror.lastSuccessAt.flatMap(JarvisInsightsDates.parse) {
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .statusMirrorLastSuccess, language: language,
+                            JarvisInsightsDates.elapsed(from: lastSuccessAt, now: now, language: language)
+                        )
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+                if let outcome = mirror.outcome {
+                    Text(text(.statusMirrorLastOutcome) + ": " + JarvisStatusLogic.readable(outcome))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 if let writeBack = mirror.writeBack {
                     Text(
                         text(.statusMirrorWriteBack) + ": "
@@ -347,6 +362,35 @@ struct JarvisStatusArea: View {
         )
     }
 
+    private func lastRunText(_ mirror: JarvisVaultMirror) -> String {
+        guard let last = mirror.lastRunAt.flatMap(JarvisInsightsDates.parse) else {
+            if let readReason = mirror.readReason { return mirrorReadReasonText(readReason) }
+            return lastSuccessText(mirror)
+        }
+        return JarvisInsightsLocalization.format(
+            .statusMirrorLastRun,
+            language: language,
+            JarvisInsightsDates.elapsed(from: last, now: now, language: language)
+        )
+    }
+
+    private func mirrorReadReasonText(_ reason: String) -> String {
+        switch reason {
+        case "backend-not-configured":
+            "The backend has no mirror status reader configured; the job's existence is not established."
+        case "status-missing":
+            "No mirror status document has been received; the job's existence is not established."
+        case "access-denied":
+            "The backend identity could not read the private mirror status."
+        case "timed-out":
+            "The mirror status read timed out."
+        case "invalid":
+            "The mirror status document is invalid."
+        default:
+            "The mirror status document could not be read."
+        }
+    }
+
     private func checkedText(_ timestamp: String) -> String? {
         guard let date = JarvisInsightsDates.parse(timestamp) else { return nil }
         return JarvisInsightsLocalization.format(.statusChecked, language: language,
@@ -354,7 +398,7 @@ struct JarvisStatusArea: View {
     }
 
     private func smokeRow(_ smoke: JarvisStatusSmoke?) -> some View {
-        let tone: JarvisStatusValue = smoke.map { $0.entries.isEmpty ? .unknown : $0.okCount == $0.entries.count ? .ok : .degraded } ?? .unknown
+        let tone = JarvisStatusLogic.smokeStatus(smoke, now: now)
         return JarvisStatusRow(title: text(.statusSmoke), tone: tone,
             toneTitle: smoke.map { "\($0.okCount)/\($0.entries.count)" } ?? "—",
             isExpanded: expanded.contains("smoke"), identifier: "status.smoke", language: language,

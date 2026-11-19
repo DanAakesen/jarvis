@@ -13,6 +13,13 @@ import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 
 export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
+export interface PiRuntimeTurnEvidence {
+  readonly channel: 'chat' | 'voice';
+  readonly outcome: 'ok' | 'failed' | 'cancelled' | 'timeout';
+  readonly at: string;
+  readonly source: 'turn' | 'brain';
+}
+
 export type PiEvent =
   | { readonly kind: 'delta'; readonly text: string }
   | { readonly kind: 'tool'; readonly server: string }
@@ -62,6 +69,8 @@ export interface PiGatewayOptions {
   readonly connectTimeoutMs?: number;
   readonly warmFreshMs?: number;
   readonly brainTimeoutMs?: number;
+  /** Bounded runtime evidence for status pages; status consumers must not inspect turn text. */
+  readonly onRuntimeTurn?: (evidence: PiRuntimeTurnEvidence) => void;
 }
 
 export interface PiBrainRunResult {
@@ -483,6 +492,14 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         azureToolsOffered: [...(grant?.discovered ?? [])].filter(name => name.startsWith(azureToolPrefix)).length,
         azureCalls,
       });
+      try {
+        options.onRuntimeTurn?.({
+          channel: input.channel === 'voice' ? 'voice' : 'chat',
+          outcome,
+          at: now().toISOString(),
+          source: 'turn',
+        });
+      } catch { /* Status observation must not change the turn outcome. */ }
     }
   }
 
@@ -530,6 +547,14 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       outputTokens: billed?.outputTokens ?? 0, costDkk, firstTextMs, totalMs, outcome,
     }, billed, `pi:brain:${input.runId}`);
     log('pi.brain_run', { outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk, tools: toolResults.length });
+    try {
+      options.onRuntimeTurn?.({
+        channel: 'chat',
+        outcome,
+        at: now().toISOString(),
+        source: 'brain',
+      });
+    } catch { /* Status observation must not change the brain result. */ }
     return {
       ok: outcome === 'ok', text: text.trim(), usage: billed ?? { inputTokens: 0, cachedTokens: 0, outputTokens: 0 }, costDkk,
       estimated: usage === undefined && billed !== undefined, outcome, firstTextMs, totalMs, toolResults, run, ...(failure ? { error: failure } : {}),

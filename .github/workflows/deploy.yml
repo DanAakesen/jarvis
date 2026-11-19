@@ -529,6 +529,16 @@ jobs:
       - name: Foundry administration and runtime hosts answer for the project
         if: needs.plan.outputs.infra == 'true'
         run: python .github/scripts/deploy_smoke.py --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --outputs "$RUNNER_TEMP/infra-outputs.json" --principal "$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)"
+      - name: Verify the latest scheduled Vault Mirror execution
+        if: env.JARVIS_VAULT_MIRROR_ENABLED == 'true'
+        run: |
+          python .github/scripts/vault_mirror_probe.py \
+            --subscription "$SUBSCRIPTION_ID" \
+            --resource-group "$RESOURCE_GROUP" \
+            --write-back "${JARVIS_VAULT_MIRROR_WRITE_BACK:-dry-run}" \
+            --max-changed "${JARVIS_VAULT_MIRROR_MAX_CHANGED:-25}" \
+            --max-deletes "${JARVIS_VAULT_MIRROR_MAX_DELETES:-3}" \
+            --wait-seconds 720
       - name: Check retained or newly applied web readiness
         run: |
           for path in / /settings; do
@@ -565,8 +575,8 @@ jobs:
   pi-agent:
     name: PI agent (Copilot harness in Foundry)
     needs: [plan, infra, backend, agent, smoke]
-    # Inert until the owner's test switch asks for PI: this only defines the agent, its skills and the backend settings.
-    # Nothing waits on it, so a failure is visible here without blocking the release record.
+    # PI is the normal chat/voice default. This defines the agent, skills and backend settings; a failed PI
+    # handoff remains visible without changing the legacy Current-engine route or adding fallback behaviour.
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -616,7 +626,7 @@ jobs:
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Reach: $(jq -r '.reach | to_entries | map("\(.key): \(.value)") | join("; ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Experiment: $(jq -r .experiment "$RUNNER_TEMP/pi-agent.json") (anything but none is a measurement variant: Deploy again without it to restore the full agent)"
-            echo "- Selected only when the iOS test switch is set to PI; the default chat path is unchanged."
+            echo "- PI is the default chat and voice engine; Current remains an explicit compatibility choice."
           } >>"$GITHUB_STEP_SUMMARY"
           exit "${status:-0}"
       - name: Wait for the backend with the PI settings
@@ -731,7 +741,7 @@ jobs:
   result:
     name: Release result and failure evidence
     if: always() && github.ref == 'refs/heads/main'
-    needs: [plan, infra, backend, web, agent, smoke, acceptance]
+    needs: [plan, infra, backend, web, agent, smoke, pi-agent, acceptance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

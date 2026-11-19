@@ -236,17 +236,40 @@ secret separately after confirming the vault's encryption state.
 After the setup script completes and the image Dockerfile is on `main`, set
 repository variable `JARVIS_VAULT_MIRROR_ENABLED` to `true` and manually
 dispatch **Deploy** from `main`. The workflow builds a digest-pinned image
-before enabling the Bicep resources. If the Dockerfile, image digest or
-non-secret App ID is unavailable, the log shows a notice and the core
-infrastructure deploys without creating/updating the mirror. Leave
-`JARVIS_VAULT_MIRROR_WRITE_BACK` as `dry-run` for initial runs.
+before enabling the Bicep resources. While that switch is true, a missing
+Dockerfile, image, digest, App ID or invalid cap fails the infrastructure job
+before Bicep; the release cannot silently call a partial result successful.
+Leave `JARVIS_VAULT_MIRROR_WRITE_BACK` as `dry-run` for initial runs.
 
-Review the Container Apps job's **Executions** history for completion, duration
-and failures. After the companion backend status reader is deployed, also review
-the authenticated Jarvis Status page for counts, outcomes and any bounded
-conflict paths. Note text and ordinary vault paths are never logged. Do not
-enable write-back until the initial dry runs are clean and the status indicates
-no unresolved conflicts or credential matches. To go live, set
+Review the Deploy **Deterministic runtime readiness** job. With the switch on,
+the read-only probe verifies the schedule, digest-pinned image, one fresh
+terminal execution and the runner's bounded outcome summary. It starts no
+manual execution and changes no resource. A `needs-attention` outcome is
+printed as a warning; missing executions, configuration drift, auth failure and
+other failed outcomes fail readiness.
+
+The same owner-side check is:
+
+```sh
+python .github/scripts/vault_mirror_probe.py \
+  --subscription 0ac7d719-89bc-4100-be87-a79d33e953a7 \
+  --resource-group rg-jarvis \
+  --write-back on \
+  --max-changed 25 \
+  --max-deletes 3 \
+  --wait-seconds 720
+```
+
+This command reads Container Apps configuration, the dedicated user-assigned
+identity/client ID, executions and allow-listed logs only. It never prints a
+vault note, conflict path or credential. It confirms the job's ACR identity
+and required runtime settings, but the first execution's fixed auth/policy
+reason remains the proof that Key Vault secrets were readable. Also
+review the authenticated Jarvis Status page for counts, last run/outcome and
+safe read-failure reasons. **No status yet** is evidence about the status
+document only; it is not proof the job is off. Do not enable write-back until
+the initial dry runs are clean and the status indicates no unresolved conflicts
+or credential matches. To go live, set
 `JARVIS_VAULT_MIRROR_WRITE_BACK` to `on`, keep conservative caps in
 `JARVIS_VAULT_MIRROR_MAX_CHANGED` and `JARVIS_VAULT_MIRROR_MAX_DELETES`, then
 dispatch **Deploy** again.
