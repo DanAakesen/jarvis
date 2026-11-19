@@ -11,10 +11,10 @@ const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestatica
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boolean } = {}) {
+function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boolean; runtimeTest?: string } = {}) {
   const messages: ConversationMessage[] = [];
   const store = {
-    getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null }),
+    getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null, ...(options.runtimeTest ? { runtimeTest: options.runtimeTest } : {}) }),
     addMessage: async (input: { sessionId: string; role: 'dan' | 'jarvis'; text: string; model: string | null }) => {
       const message = { id: String(messages.length + 1), sessionId: input.sessionId, role: input.role, text: input.text, model: input.model, at: new Date() };
       messages.push(message);
@@ -45,16 +45,33 @@ function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boole
   return { turn, messages };
 }
 
-describe('PI test selector on the chat turn', () => {
-  it('keeps the default path on the current engine', async () => {
+describe('PI is the default engine on the chat turn', () => {
+  it('runs a turn without an engine on PI', async () => {
     const { turn, messages } = setup({ piAgent: { stream: async function* () { yield 'from PI'; } } });
     const result = await turn({ text: 'hi' });
     expect(result.events.map((event) => event.name)).toEqual(['user', 'delta', 'done']);
+    expect(result.events[1]!.data.text).toBe('from PI');
+    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
+  });
+
+  it('keeps the old engine reachable only by naming it', async () => {
+    const { turn, messages } = setup({ piAgent: { stream: async function* () { yield 'from PI'; } } });
+    const result = await turn({ text: 'hi', engine: 'current' });
     expect(result.events[1]!.data.text).toBe('from the current engine');
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: null });
   });
 
-  it('streams from PI only when the turn asks for it, and labels the saved reply', async () => {
+  it('keeps an isolated runtime-test session on its selected runtime and rejects explicit PI', async () => {
+    let piCalls = 0;
+    const { turn } = setup({ piAgent: { stream: async function* () { piCalls += 1; yield 'from PI'; } }, runtimeTest: 'current' });
+    const result = await turn({ text: 'hi' });
+    expect(result.status).toBe(200);
+    expect(result.events[1]!.data.text).toBe('from the current engine');
+    expect((await turn({ text: 'hi', engine: 'pi' })).status).toBe(400);
+    expect(piCalls).toBe(0);
+  });
+
+  it('honours explicit PI and labels the saved reply', async () => {
     const seen: Array<{ messageId: string; sessionId?: string }> = [];
     const { turn, messages } = setup({
       piAgent: { stream: async function* (input) { seen.push({ messageId: input.messageId, ...(input.sessionId ? { sessionId: input.sessionId } : {}) }); yield 'from PI'; } },
@@ -66,9 +83,9 @@ describe('PI test selector on the chat turn', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'from PI', model: 'pi' });
   });
 
-  it('ends a PI turn with PI\'s own honest error when PI is not set up, and never uses the current engine', async () => {
+  it('does not fall back when PI is the default and is not set up', async () => {
     const { turn, messages } = setup();
-    const result = await turn({ text: 'hi', engine: 'pi' });
+    const result = await turn({ text: 'hi' });
     expect(result.events.map((event) => event.name)).toEqual(['user', 'error']);
     expect(result.events[1]!.data).toMatchObject({ code: 'pi_not_configured', error: expect.stringContaining('No other engine was used') });
     expect(messages.filter((message) => message.role === 'jarvis')).toEqual([]);
@@ -83,7 +100,7 @@ describe('PI test selector on the chat turn', () => {
     expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: 'PI has used 250.00 of its 250 DKK monthly cap, so it stopped.', code: 'pi_budget_exhausted' } });
   });
 
-  it('rejects any engine other than pi', async () => {
+  it('rejects any engine other than pi or current', async () => {
     const { turn } = setup();
     expect((await turn({ text: 'hi', engine: 'copilot' })).status).toBe(400);
   });

@@ -138,7 +138,7 @@ public final class JarvisChatClient: Sendable {
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
             screenContext: screenContext,
             visualContext: visualContext,
-            engine: engine == .pi ? .pi : nil
+            engine: engine
         ))
         let response = try await client.performChatStream(
             method: .post,

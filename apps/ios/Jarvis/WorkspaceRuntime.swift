@@ -31,13 +31,6 @@ enum WorkspaceConnectionStatus: Equatable {
     }
 }
 
-struct PresentedWorkspaceView: Equatable, Identifiable {
-    let viewId: String
-    let view: GeneratedView
-
-    var id: String { viewId }
-}
-
 /// Where a workspace command or an action in generated content sends the owner inside the app.
 enum WorkspaceNavigation: Equatable {
     case destination(JarvisDestination)
@@ -51,6 +44,7 @@ final class WorkspaceRuntime: ObservableObject {
 
     @Published private(set) var connectionStatus: WorkspaceConnectionStatus
     @Published private(set) var presentedView: PresentedWorkspaceView?
+    @Published private(set) var voiceVisuals: VoiceVisualHistory?
     @Published private(set) var requestedNavigation: WorkspaceNavigation?
 
     private let client: JarvisClient?
@@ -111,13 +105,17 @@ final class WorkspaceRuntime: ObservableObject {
         lastPresentedViewId = nil
         trustedBlobHost = nil
         presentedView = nil
+        voiceVisuals = nil
         requestedNavigation = nil
         connectionStatus = workspaceClient == nil ? .unavailable : .connecting
     }
 
 #if DEBUG && targetEnvironment(simulator)
+    private var fixtureHTMLArtifact: HtmlArtifact?
+
     /// Simulator captures only: shows synthetic content without a backend command.
-    func presentFixture(viewId: String, view: GeneratedView) {
+    func presentFixture(viewId: String, view: GeneratedView, artifact: HtmlArtifact? = nil) {
+        if let artifact { fixtureHTMLArtifact = artifact }
         knownViews[viewId] = view
         present(viewId: viewId, view: view)
     }
@@ -153,8 +151,9 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     func userDismissedView() {
-        guard presentedView != nil else { return }
+        guard presentedView != nil || voiceVisuals?.entries.isEmpty == false else { return }
         presentedView = nil
+        if voiceVisuals != nil { voiceVisuals = VoiceVisualHistory() }
         let generation = sessionGeneration
         Task {
             guard generation == sessionGeneration else { return }
@@ -169,6 +168,22 @@ final class WorkspaceRuntime: ObservableObject {
         }
     }
 
+    func beginVoiceVisuals() {
+        userDismissedView()
+        voiceVisuals = VoiceVisualHistory()
+    }
+
+    func endVoiceVisuals() {
+        guard voiceVisuals != nil else { return }
+        userDismissedView()
+        voiceVisuals = nil
+    }
+
+    func selectVoiceVisual(_ id: String) {
+        guard voiceVisuals?.selectedID != id else { return }
+        voiceVisuals?.select(id)
+    }
+
     func openRoute(_ route: String) -> Bool {
         guard let navigation = Self.routeNavigation(for: route) else { return false }
         requestedNavigation = navigation
@@ -176,6 +191,9 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     func loadHTMLArtifact(id: String) async throws -> HtmlArtifact {
+#if DEBUG && targetEnvironment(simulator)
+        if let fixtureHTMLArtifact, id == fixtureHTMLArtifact.id { return fixtureHTMLArtifact }
+#endif
         guard let workspaceClient else {
             throw JarvisWorkspaceClientError.invalidResponse
         }
@@ -206,10 +224,10 @@ final class WorkspaceRuntime: ObservableObject {
         case .close:
             guard knownViews[action.windowId] != nil else { return false }
             knownViews.removeValue(forKey: action.windowId)
-            if presentedView?.viewId == action.windowId { presentedView = nil }
+            dismiss(viewId: action.windowId)
         case .minimise:
             guard knownViews[action.windowId] != nil else { return false }
-            if presentedView?.viewId == action.windowId { presentedView = nil }
+            dismiss(viewId: action.windowId)
         }
         let generation = sessionGeneration
         Task {
@@ -289,6 +307,7 @@ final class WorkspaceRuntime: ObservableObject {
                 present(viewId: viewId, view: view)
             case .dismissAll(let forget):
                 presentedView = nil
+                if voiceVisuals != nil { voiceVisuals = VoiceVisualHistory() }
                 if forget {
                     knownViews.removeAll()
                     lastPresentedViewId = nil
@@ -302,7 +321,7 @@ final class WorkspaceRuntime: ObservableObject {
                 guard knownViews[viewId] != nil else {
                     return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
                 }
-                if presentedView?.viewId == viewId { presentedView = nil }
+                dismiss(viewId: viewId)
             }
             return .applied
         }
@@ -310,7 +329,16 @@ final class WorkspaceRuntime: ObservableObject {
 
     private func present(viewId: String, view: GeneratedView) {
         lastPresentedViewId = viewId
-        presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
+        let visual = PresentedWorkspaceView(viewId: viewId, view: view)
+        presentedView = visual
+        voiceVisuals?.present(visual)
+    }
+
+    private func dismiss(viewId: String) {
+        voiceVisuals?.dismiss(viewId)
+        if presentedView?.viewId == viewId {
+            presentedView = voiceVisuals?.entries.last
+        }
     }
 
     private func registerCurrentSnapshot() async throws {

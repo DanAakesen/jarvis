@@ -4,6 +4,8 @@ In typed Chat, Jarvis can present generated UI such as a weather forecast or a c
 
 In Voice, Jarvis decides by its own judgement when something is easier to see than to hear and puts it on the phone's screen; nothing is shown when a session starts, and the owner is never sent to the web workspace from the iPhone. Use the approved bottom-panel direction: content sits below the lattice orb and status, above the existing microphone, plus, CC and hang-up controls. This records the owner's required experience, not verified persistence or a delivered renderer.
 
+Build 113 follow-up ([#1958](https://github.com/DanAakesen/jarvis/issues/1958)): show new visuals immediately and let the owner swipe back to earlier visuals in the same call. Close dismisses the carousel without ending Voice; Expand opens it full screen. Controls overlay the content and do not supply a title. HTML visuals follow the active appearance, native charts remain native, and captions have more vertical space with soft edges.
+
 ## App polish from build 111 — 16 November 2026 (#1923, P15-185)
 
 - Graph search: the clear (X) sits inside the search field with no background of its own, and the matching notes sit directly above the dock, as far from it as
@@ -171,6 +173,10 @@ sanitized failure information instead of describing every failure as interruptio
 A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
+
+## PI default for chat and voice (#1887, #1910; approved 18 November 2026, not live)
+
+PI is the approved default for normal chat and voice when no engine is named. iPhone starts on PI unless the owner has saved another choice; **Current engine** remains selectable for both chat and voice. Isolated runtime tests keep their own selected runtime. Watch and web follow the server default; PI web voice does not support camera or screen sharing. A PI failure does not switch engines. This approval does not cover removal of the old harness or changes to proactive behaviour.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 

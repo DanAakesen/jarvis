@@ -1,3 +1,8 @@
+## iPhone Voice carousel and captions (#1958, P15-210)
+
+**Status: implemented; all 195 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
+The newest visual takes focus while older visuals stay swipeable for the call. Close/expand float over the content, expansion uses the full screen, and HTML visuals follow the active appearance without changing native charts. Captions have more room and fade at both edges.
+
 ## PI smoke in three requests (#1910, P15-209)
 
 **Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
@@ -140,9 +145,11 @@ Owner's approach, binding: model-driven nudging in instructions and tool descrip
 
 **Status: step 1 (design brief) written; superseded by the approved design and the build in "3D vault graph, Folder clusters" above.** `docs/ui/graph-3d/brief.md` covers what the graph shows, the interactions, the motion language tied to the neural background, a performance budget, the rendering options with a recommendation (projected 3D in `Canvas`, gated by a measured device spike, Metal if it misses the budget; nothing measured yet), and 12 open questions.
 
-## PI phase 7: cutover prepared, not done — 16 November 2026 (#1887, P15-176, part 2)
+## PI phase 7: default flip approved, not live — 18 November 2026 (#1887, P15-176)
 
-Owner, 16 November 2026: "Just dont delete the old harness." Prepared: `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, an approval record) and the flip itself as a separate draft pull request that merges only on the owner's written word. **Nothing is deleted and no default changed.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
+The owner approved only the chat and voice default in [writing on #1887](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174). The change is in standalone draft [#1910](https://github.com/DanAakesen/jarvis/pull/1910), not merged or deployed. Exact-revision CI, native checks and live verification are still needed; the three-part smoke on the earlier release exercises PI, not the new default or device audio. [The cutover checklist](docs/pi/cutover.md#2-the-flip-phase-7-as-one-small-separate-change) records scope and rollback.
+
+Owner, 16 November 2026: "Just dont delete the old harness." The original cutover prep produced `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, and an approval record). **No deletion is authorised.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
 
 ## PI phase 6: voice on the PI agent — 16 November 2026 (#1887, P15-176, part 1)
 
@@ -3167,6 +3174,8 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **P15-210 / [#1958](https://github.com/DanAakesen/jarvis/issues/1958):** next, inspect the compact chart and HTML carousel and full-screen light HTML fixture in macOS CI, then verify live arrivals, swipes and captions on an iPhone.
 
 - **Device-feedback delivery (#1614): source merged and verified.** Compact task
   groups, shared glass/padding/headings, Health pull refresh, animated loading,

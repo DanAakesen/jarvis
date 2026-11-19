@@ -174,7 +174,7 @@
 "chat.engine.engineChoiceLabel" = "Engine for chat and voice";
 "chat.engine.engineCurrent" = "Current engine";
 "chat.engine.enginePi" = "PI engine";
-"chat.engine.engineExplanation" = "Temporary test switch, removed later. It applies to chat and to voice on this iPhone; a voice session picks it up when it starts. The Watch always uses the current engine. With PI, voice has no camera or screen sharing yet. If PI fails, chat and voice say so and never fall back to the current engine.";
+"chat.engine.engineExplanation" = "Temporary test switch, removed later. PI is the default for chat and voice on this iPhone; a voice session picks the choice up when it starts. Current engine is the old path, kept only until it is deleted. With PI, voice has no camera or screen sharing yet. If PI fails, chat and voice say so and never fall back to the current engine.";
 "chat.engine.engineIndicator" = "PI test";
 "chat.engine.engineIndicatorLabel" = "The PI test engine answers in this chat";
 "chat.engine.engineStatusLoading" = "Loading PI status";

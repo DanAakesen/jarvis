@@ -7,7 +7,7 @@ struct JarvisChatEngineTestSection: View {
     /// Nil when no live backend is available (fixture previews); the status then explains it instead of inventing data.
     let client: JarvisChatClient?
 
-    @AppStorage(ChatEngineSelection.key) private var engine: ChatEngine = .current
+    @AppStorage(ChatEngineSelection.key) private var engine: ChatEngine = .pi
     @State private var status: PiStatus?
     @State private var isLoading = false
     @State private var failed = false

@@ -218,13 +218,15 @@ struct ContentView: View {
                         guard !Task.isCancelled else { return }
                         appliedSessionEpoch = sessionEpoch
                         openProactiveNotificationIfNeeded()
-                        if navigation.currentDestination == .voice { await voiceModel.start() }
+                        if navigation.currentDestination == .voice {
+                            workspaceRuntime.beginVoiceVisuals()
+                            await voiceModel.start()
+                        }
                     }
                     guard !Task.isCancelled else { return }
 #if DEBUG && targetEnvironment(simulator)
-                    if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-panel"),
-                       let view = Self.voicePanelFixture() {
-                        workspaceRuntime.presentFixture(viewId: "fixture-panel", view: view)
+                    if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-panel") {
+                        loadVoicePanelFixture()
                     }
 #endif
                     await workspaceRuntime.run()
@@ -232,28 +234,15 @@ struct ContentView: View {
                 .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in
                     returnToChatAfterVoiceIfNeeded()
                 }
-                .onChange(of: workspaceRuntime.requestedNavigation) { _, request in
-                    guard request != nil, let request = workspaceRuntime.consumeRequestedNavigation() else { return }
-                    // Following a native link leaves the content that offered it, or its sheet would keep covering the destination.
-                    // On Voice the panel stays: a page change from there already dismisses it.
-                    if navigation.currentDestination != .voice { workspaceRuntime.userDismissedView() }
-                    switch request {
-                    case .destination(let destination):
-                        navigate(to: destination)
-                    case .notesGraph:
-                        notesSelectedTab = .graph
-                        navigate(to: .notes)
-                    case .factoryTask(let id):
-                        navigation.openFactoryTask(id)
+                .onChange(of: voiceModel.isSessionActive) { wasActive, isActive in
+                    if wasActive && !isActive && !voiceModel.showsConnectionRecovery {
+                        workspaceRuntime.endVoiceVisuals()
                     }
                 }
-                .sheet(
-                    item: Binding(
-                        // On the Voice page the same content is a panel above the controls, never a sheet.
-                        get: { navigation.currentDestination == .voice ? nil : workspaceRuntime.presentedView },
-                        set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
-                    )
-                ) { presented in
+                .onChange(of: workspaceRuntime.requestedNavigation) { _, _ in
+                    handleWorkspaceNavigation()
+                }
+                .sheet(item: workspaceSheet) { presented in
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .frame(width: size.width, height: size.height)
@@ -291,6 +280,34 @@ struct ContentView: View {
                     withTransaction(transaction) { navigation.closeSidebar() }
                 }
             }
+    }
+
+    private var workspaceSheet: Binding<PresentedWorkspaceView?> {
+        Binding(
+            get: {
+                guard navigation.currentDestination != .voice, workspaceRuntime.voiceVisuals == nil else { return nil }
+                return workspaceRuntime.presentedView
+            },
+            set: { value in
+                if value == nil && workspaceRuntime.voiceVisuals == nil { workspaceRuntime.userDismissedView() }
+            }
+        )
+    }
+
+    private func handleWorkspaceNavigation() {
+        guard let request = workspaceRuntime.consumeRequestedNavigation() else { return }
+        if navigation.currentDestination != .voice && workspaceRuntime.voiceVisuals == nil {
+            workspaceRuntime.userDismissedView()
+        }
+        switch request {
+        case .destination(let destination):
+            navigate(to: destination)
+        case .notesGraph:
+            notesSelectedTab = .graph
+            navigate(to: .notes)
+        case .factoryTask(let id):
+            navigation.openFactoryTask(id)
+        }
     }
 
     private func destinationView(_ destination: JarvisDestination) -> some View {
@@ -456,11 +473,27 @@ struct ContentView: View {
     }
 
 #if DEBUG && targetEnvironment(simulator)
-    private static func voicePanelFixture() -> GeneratedView? {
-        let json = """
-        {"version":1,"title":"Synthetic plan","renderer":"list","source":{"id":"now","status":"complete"},        "data":{"items":[{"title":"Confirm the date","description":"Synthetic item"},{"title":"Book transport","description":"Synthetic item"},{"title":"Update the address","description":"Synthetic item"}]}}
+    private func loadVoicePanelFixture() {
+        let decoder = JSONDecoder()
+        let chart = """
+        {"version":1,"title":"Synthetic rainfall","renderer":"chart","source":{"id":"now","status":"complete"},"data":{"kind":"bar","series":[{"name":"Rain (mm)","points":[{"x":"Monday","y":6},{"x":"Tuesday","y":2},{"x":"Wednesday","y":8}]}]}}
         """
-        return try? JSONDecoder().decode(GeneratedView.self, from: Data(json.utf8))
+        let artifactID = "9a400b82-bb18-45a6-bb35-e6da757a3d27"
+        let htmlView = """
+        {"version":1,"title":"Synthetic outlook","renderer":"html-app","source":{"id":"now","status":"complete"},"data":{"artifactId":"\(artifactID)"}}
+        """
+        let htmlArtifact = #"""
+        {"id":"\#(artifactID)","kind":"html","title":"Synthetic outlook","createdAt":"2026-11-18T12:00:00.000Z","pinned":false,"sources":[],"html":"<!doctype html><html lang='en'><head><title>Synthetic outlook</title><style>body{margin:0;padding:16px} h1{font-size:1.25rem;margin:0} small{color:var(--jarvis-muted)} meter{width:100%;accent-color:var(--jarvis-accent)}</style></head><body><h1>Synthetic outlook</h1><p>Fixture data for testing the phone layout, not a real forecast.</p><label>Rain probability <meter value='0.7'>70%</meter></label><small>Wednesday · 70%</small></body></html>"}
+        """#
+        guard let chart = try? decoder.decode(GeneratedView.self, from: Data(chart.utf8)),
+              let htmlView = try? decoder.decode(GeneratedView.self, from: Data(htmlView.utf8)),
+              let htmlArtifact = try? decoder.decode(HtmlArtifact.self, from: Data(htmlArtifact.utf8)) else { return }
+        workspaceRuntime.beginVoiceVisuals()
+        workspaceRuntime.presentFixture(viewId: "fixture-chart", view: chart)
+        workspaceRuntime.presentFixture(viewId: "fixture-html", view: htmlView, artifact: htmlArtifact)
+        if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-chart") {
+            workspaceRuntime.selectVoiceVisual("fixture-chart")
+        }
     }
 #endif
 
@@ -471,6 +504,7 @@ struct ContentView: View {
     private func returnToChatAfterVoiceIfNeeded() {
         guard appliedSessionEpoch == sessionEpoch,
               voiceModel.consumeReturnToChatRequest() else { return }
+        workspaceRuntime.endVoiceVisuals()
         navigate(to: .chat)
     }
 
@@ -482,8 +516,7 @@ struct ContentView: View {
             workspaceRuntime.reportActive()
             voiceModel.restore()
         } else if previous == .voice {
-            // The panel belongs to the Voice page; leaving it must not turn the content into a sheet.
-            workspaceRuntime.userDismissedView()
+            // Minimising keeps the Voice carousel in the session, not in the destination's sheet.
             if voiceModel.isSessionActive { voiceModel.minimize() }
         }
         if navigationFixtureMode {
