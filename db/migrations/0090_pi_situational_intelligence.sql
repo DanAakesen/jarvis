@@ -36,6 +36,17 @@ ALTER TABLE dbo.pi_turn ADD
 EXEC(N'CREATE UNIQUE INDEX UX_pi_turn_activation
   ON dbo.pi_turn (activation_id) WHERE activation_id IS NOT NULL;');
 
+ALTER TABLE dbo.proactive_event_batches ADD
+  activation_type varchar(10) NOT NULL
+    CONSTRAINT DF_proactive_event_batches_activation_type DEFAULT 'event',
+  satisfied_slot nvarchar(16) NULL,
+  CONSTRAINT CK_proactive_event_batches_activation_type
+    CHECK (activation_type IN ('event', 'scheduled')),
+  CONSTRAINT CK_proactive_event_batches_satisfied_slot
+    CHECK (satisfied_slot IS NULL OR
+      satisfied_slot LIKE '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T07:00' OR
+      satisfied_slot LIKE '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T18:00');
+
 CREATE TABLE dbo.pi_situational_state (
   owner_object_id uniqueidentifier NOT NULL,
   schema_version smallint NOT NULL CONSTRAINT DF_pi_situational_state_schema_version DEFAULT 1,

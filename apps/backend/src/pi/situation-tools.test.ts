@@ -53,7 +53,8 @@ describe('PI situation MCP tools', () => {
     const state = parsePiSituationState({
       version: 1,
       asOf: at.toISOString(),
-      summary: 'Ready for a flight check.',
+      summary: '',
+      summaryRefIds: [],
       sources: sourceIds.map((id) => ({
         id, state: id === 'location' ? 'fresh' : 'missing',
         observedAt: id === 'location' ? at.toISOString() : null,

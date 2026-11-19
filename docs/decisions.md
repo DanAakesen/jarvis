@@ -4,7 +4,7 @@
 - **Activation:** one `PiActivationService` envelope spans Chat, Voice, scheduled, manual and event invocations. The same `jarvis-pi` agent, four existing Skills plus `jarvis-situational-context`, Jarvis MCP and tool catalogue are used. A harness invocation produces one `pi_turn` row; internal iterations do not create hidden turns.
 - **Cadence/cost:** `proactive_event_batches` is the persisted combined slot reservation. The owner chooses 1–12 background activations per Copenhagen day; ten-minute spacing, queue leases/deduplication, quiet behaviour and 0.79 DKK preflight worst case remain exact. A recent event can satisfy the next scheduled sweep. The effective proactive hard cap is 100 DKK.
 - **Default:** the existing `pi_switch.brain` row remains off when absent. Timer and source pollers do no automatic work while off/paused; enabling never creates an extra fallback or compatibility model path.
-- **Policy:** disabled sources are excluded before automatic reads and MCP admission, and stale source facts are never reused proactively. A direct owner Chat/Voice request may use the underlying tool. Location is independent from Weather, coarse, permissioned, observed and freshness labelled.
+- **Policy:** disabled sources are excluded before automatic reads and MCP admission, and stale source facts are never reused proactively. Non-empty summaries and follow-ups need fresh raw refs, so an unsupported summary cannot survive a source switch. `message_dan` carries category, Personal/Work/unknown scope and evidence source IDs, and the server enforces category/source/scope policy plus owner guidance before delivery. A direct owner Chat/Voice request may use the underlying tool. Location is independent from Weather, coarse, permissioned, observed and freshness labelled.
 - **Delivery UI:** the existing Proactive page/settings on iOS and web show turns, costs, actual spend, source/state/activation freshness and recovery. There is no new main screen.
 - **Evidence:** deterministic backend, web, contracts, workflow-script, isolated SQL and JarvisCore checks cover the implementation. No live paid provider/model call, deploy or TestFlight action is part of this decision. CI at the exact PR head and the owner's physical-device/live checks are separate acceptance evidence.
 
@@ -61,6 +61,15 @@ interval plus the job's eight-minute replica timeout and a two-minute margin
 for terminal log reads; the probe rejects a shorter positive wait. A
 120-second remainder after scheduling was enough to notice the new run but
 not enough for that healthy run to finish.
+
+Post-merge Deploy 44477956290 proved the mirror identity itself was valid:
+`UserAssigned`, one matching ACR binding, the expected client ID and the
+required env names. ARM returned the assigned-identity key with lowercase
+`resourcegroups` and the registry binding with `resourceGroups`; the probe's
+raw string comparison therefore rejected the same resource. Readiness now
+compares the two complete resource IDs case-insensitively, as ARM semantics
+require, while retaining exact type, cardinality, name-prefix, client-ID and
+required-setting checks. A different identity still fails.
 
 Dan subsequently made the source-precedence decision explicit: ordinary
 differences must drain without a manual attention backlog. The reconciler now

@@ -138,14 +138,17 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
       }
     },
 
-    async startBatch(batchId, now, eventCount) {
+    async startBatch(batchId, now, eventCount, metadata) {
       await pool.request()
         .input('id', sql.UniqueIdentifier, batchId)
         .input('owner', sql.UniqueIdentifier, owner)
         .input('now', sql.DateTime2, now)
         .input('count', sql.Int, eventCount)
-        .query(`INSERT dbo.proactive_event_batches (id, owner_object_id, created_at, event_count)
-          VALUES (@id, @owner, @now, @count);`);
+        .input('activationType', sql.VarChar(10), metadata?.activationType ?? 'event')
+        .input('satisfiedSlot', sql.NVarChar(16), metadata?.satisfiedSlot ?? null)
+        .query(`INSERT dbo.proactive_event_batches (
+            id, owner_object_id, created_at, event_count, activation_type, satisfied_slot
+          ) VALUES (@id, @owner, @now, @count, @activationType, @satisfiedSlot);`);
     },
 
     async modelBatchesSince(since) {
@@ -157,13 +160,20 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
       return recordset[0]?.count ?? 0;
     },
 
-    async lastBatchAt(since) {
+    async lastBatch() {
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
-        .input('since', sql.DateTime2, since)
-        .query<{ last_at: Date | string | null }>(`SELECT MAX(created_at) AS last_at FROM dbo.proactive_event_batches
-          WHERE owner_object_id = @owner AND created_at >= @since;`);
-      return recordset[0]?.last_at ? date(recordset[0].last_at) : null;
+        .query<{ last_at: Date | string; activation_type: 'event' | 'scheduled'; satisfied_slot: string | null }>(
+          `SELECT TOP (1) created_at AS last_at, activation_type, satisfied_slot
+            FROM dbo.proactive_event_batches
+            WHERE owner_object_id=@owner
+            ORDER BY created_at DESC, id DESC;`);
+      const row = recordset[0];
+      return row ? {
+        at: date(row.last_at),
+        activationType: row.activation_type,
+        satisfiedSlot: row.satisfied_slot,
+      } : null;
     },
 
     async recovery(now) {

@@ -21,7 +21,7 @@ The situational state is a compact, revisioned working model. It is not the sour
 ## State quality
 
 - Keep the state useful at roughly 500–2000 tokens. Summarise; never copy full conversations, mail, notes or source archives.
-- Every material fact links to one or more raw refs with a source and observation time.
+- Every material fact links to one or more raw refs with a source and observation time. A non-empty summary also names its `summaryRefIds`; if one becomes disabled or stale, the summary is withheld rather than copied as an unqualified claim.
 - Retain prior facts only with an explicit stale label and reason. Disabled-source facts must not be used proactively and are excluded from a new automatic contribution.
 - Never put secrets, credentials, raw credentials, tokens or unnecessary personal detail in state.
 - A tool or commit failure is a failure. Report it as such; do not describe the old state as freshly confirmed.

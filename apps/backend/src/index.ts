@@ -1218,7 +1218,14 @@ try {
     id: 'pi',
     tools: [
       ...(piSituationService ? createSituationTools({ registry: piRegistry, service: piSituationService, now: () => new Date() }) : []),
-      ...(brainComms ? createBrainTools({ registry: piRegistry, comms: brainComms, area: piArea, inbox: inboxStore, now: () => new Date() }) : []),
+      ...(brainComms && proactiveStore ? createBrainTools({
+        registry: piRegistry,
+        comms: brainComms,
+        proactive: proactiveStore,
+        area: piArea,
+        inbox: inboxStore,
+        now: () => new Date(),
+      }) : []),
       ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
     ],
     registerRoutes: createPiRoutes({

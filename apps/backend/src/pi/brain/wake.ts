@@ -23,6 +23,8 @@ export interface WakeInput {
   readonly sections?: readonly string[] | undefined;
   /** A short note when the month's proactive budget is nearly used. */
   readonly budgetNote?: string | undefined;
+  /** The current categories, scope and owner guidance enforced before background delivery. */
+  readonly policyNote?: string | undefined;
 }
 
 /**
@@ -46,6 +48,7 @@ export function formatWake(input: WakeInput): string {
     }
   }
   for (const section of input.sections ?? []) lines.push('', section);
+  if (input.policyNote) lines.push('', `Proactive delivery policy (enforced by the server): ${oneLine(input.policyNote, 1_800)}`);
   if (input.budgetNote) lines.push('', input.budgetNote);
   lines.push('', 'Finish with a short plain statement: what you saw, what you decided and why, and whether you told Dan. It goes to the decision log.');
   return lines.join('\n');

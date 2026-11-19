@@ -18,6 +18,7 @@ function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
     version: 1,
     asOf: at.toISOString(),
     summary: 'One compact cross-source model.',
+    summaryRefIds: ['mail:42', 'location:device'],
     sources: sourceIds.map((id) => ({
       id,
       state: id === 'mail' || id === 'location' ? 'fresh' : 'missing',
@@ -96,11 +97,14 @@ describe('PI situational state', () => {
   it('excludes disabled-source contributions while retaining explicit stale storage', async () => {
     const { service, store, proactive } = setup();
     const initial = await service.read(signal());
+    const withExpiredMail = state();
+    withExpiredMail.sources.find(({ id }) => id === 'mail')!.expiresAt =
+      new Date(at.getTime() - 60_000).toISOString();
     await service.commit({
       expectedRevision: 0,
       expectedHash: null,
       policyRevision: initial.policyRevision,
-      state: state(),
+      state: withExpiredMail,
       activation: { id: '00000000-0000-4000-8000-000000000003', type: 'event', source: 'mail', at },
     }, signal());
     await proactive.settings.patch({ sources: { mail: false } });
@@ -119,6 +123,8 @@ describe('PI situational state', () => {
     }, signal());
     expect(result.excluded).toContain('mail');
     const stored = store.records.get(owner)!;
+    expect(stored.state.summary).toBe('');
+    expect(stored.state.summaryRefIds).toEqual([]);
     expect(stored.state.facts.filter(({ source }) => source === 'mail').every(({ stale }) => stale)).toBe(true);
     expect((await service.read(signal())).state?.facts.some(({ source }) => source === 'mail')).toBe(false);
   });
@@ -158,13 +164,49 @@ describe('PI situational state', () => {
       expectedRevision: 0, expectedHash: null, policyRevision: initial.policyRevision, state: state(),
       activation: { id: '00000000-0000-4000-8000-000000000006', type: 'scheduled', source: 'timer', at },
     }, signal());
+    const baseline = store.records.get(owner)!;
     await service.markFailed({
-      id: '00000000-0000-4000-8000-000000000007',
-      type: 'scheduled',
-      source: 'timer',
-      at: new Date(at.getTime() + 60_000),
+      activation: {
+        id: '00000000-0000-4000-8000-000000000007',
+        type: 'scheduled',
+        source: 'timer',
+        at: new Date(at.getTime() + 60_000),
+      },
+      expectedRevision: baseline.revision,
+      expectedHash: baseline.hash,
     }, signal());
     expect(store.records.get(owner)?.state.facts.every(({ stale }) => stale)).toBe(true);
-    expect((await service.read(signal())).staleSources.length).toBeGreaterThan(0);
+    const failed = await service.read(signal());
+    expect(failed.staleSources.length).toBeGreaterThan(0);
+    expect(failed.state?.summary).toBe('');
+    expect(failed.state?.summaryRefIds).toEqual([]);
+  });
+
+  it('does not stale a newer successful state from an older failed activation', async () => {
+    const { service, store } = setup();
+    const firstView = await service.read(signal());
+    const first = await service.commit({
+      expectedRevision: 0, expectedHash: null, policyRevision: firstView.policyRevision, state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000011', type: 'chat', source: 'chat', at },
+    }, signal());
+    const secondState = state();
+    secondState.summary = 'A newer successful activation confirmed the state.';
+    await service.commit({
+      expectedRevision: first.record.revision,
+      expectedHash: first.record.hash,
+      policyRevision: firstView.policyRevision,
+      state: secondState,
+      activation: { id: '00000000-0000-4000-8000-000000000012', type: 'event', source: 'mail', at },
+    }, signal());
+    await service.markFailed({
+      activation: {
+        id: '00000000-0000-4000-8000-000000000013', type: 'chat', source: 'chat',
+        at: new Date(at.getTime() + 60_000),
+      },
+      expectedRevision: first.record.revision,
+      expectedHash: first.record.hash,
+    }, signal());
+    expect(store.records.get(owner)).toMatchObject({ revision: 2 });
+    expect(store.records.get(owner)?.state.facts.every(({ stale }) => !stale)).toBe(true);
   });
 });

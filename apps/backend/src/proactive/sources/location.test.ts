@@ -52,4 +52,23 @@ describe('independent coarse location source', () => {
       state: 'unavailable', reason: 'location_permission_not_granted', facts: [],
     });
   });
+
+  it('does not expose retained coordinates without granted permission or after the freshness window', async () => {
+    const values = {
+      'location.home_city': 'Copenhagen',
+      'location.latitude': 55.67,
+      'location.longitude': 12.56,
+      'location.observed_at': '2026-01-01T05:00:00.000Z',
+      'location.permission': 'unknown',
+    };
+    const unknown = createLocationSource(settingsStore(values));
+    const stale = createLocationSource(settingsStore({ ...values, 'location.permission': 'granted' }));
+    const context = { now: new Date(at), signal: new AbortController().signal, settings: {} as never };
+    await expect(unknown.read(context)).resolves.toMatchObject({
+      state: 'unavailable', reason: 'location_permission_not_granted', facts: [],
+    });
+    await expect(stale.read(context)).resolves.toMatchObject({
+      state: 'unavailable', reason: 'location_observation_stale', facts: [],
+    });
+  });
 });

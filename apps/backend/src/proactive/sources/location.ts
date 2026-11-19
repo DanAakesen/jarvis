@@ -14,11 +14,13 @@ export function createLocationSource(settingsStore?: SettingsStore): ProactiveSo
         return { source: 'location', state: 'unavailable', reason: 'not_connected', facts: [], observedAt: now.toISOString() };
       }
       const settings = (await readSettings(settingsStore)).location;
-      if (settings.permission === 'denied' || settings.permission === 'restricted') {
+      if (settings.permission !== 'granted') {
         return {
           source: 'location',
           state: 'unavailable',
-          reason: `location_permission_${settings.permission}`,
+          reason: settings.permission === 'denied' || settings.permission === 'restricted'
+            ? `location_permission_${settings.permission}`
+            : 'location_permission_not_granted',
           facts: [],
           observedAt: settings.observedAt ?? now.toISOString(),
         };
@@ -27,11 +29,18 @@ export function createLocationSource(settingsStore?: SettingsStore): ProactiveSo
         return {
           source: 'location',
           state: 'unavailable',
-          reason: settings.permission === 'unknown' || settings.permission === 'not_determined'
-            ? 'location_permission_not_granted'
-            : 'no_location',
+          reason: 'no_location',
           facts: [],
           observedAt: settings.observedAt ?? now.toISOString(),
+        };
+      }
+      if (now.getTime() - Date.parse(settings.observedAt) > LOCATION_FRESHNESS_MS) {
+        return {
+          source: 'location',
+          state: 'unavailable',
+          reason: 'location_observation_stale',
+          facts: [],
+          observedAt: settings.observedAt,
         };
       }
       const text = JSON.stringify({

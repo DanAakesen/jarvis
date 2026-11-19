@@ -255,6 +255,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 VALUES (@owner, @paused, @budget, @backgroundTurns, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
           await transaction.commit();
           if (current.paused !== updated.paused ||
+              current.backgroundTurnsPerDay !== updated.backgroundTurnsPerDay ||
               sourceIds.some((source) => current.sources[source] !== updated.sources[source]) ||
               current.suggestionScope !== updated.suggestionScope ||
               Object.keys(updated.categories).some((category) =>

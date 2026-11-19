@@ -4,7 +4,9 @@
 - Background PI is the existing `/pi/brain` switch, now presented as **Background PI** in Proactive settings. It is off when no `pi_switch` row exists. `GET /proactive/status` and `GET /pi/brain` are database-only status reads and must never start a model; `PUT /pi/brain` is the explicit owner switch.
 - Scheduled/manual runs and event wakes go through the same `PiActivationService` and gateway. The event batch ledger is the combined daily reservation. Do not add a second background timer, hidden model call, Foundry Memory lookup or a pre/post Chat model turn.
 - `situation_read`, `situation_lookup` and `situation_commit` are PI-only tools. They require the `x-jarvis-activation` grant installed by the PI MCP door. Commits are schema bounded, secret filtered and revision/policy checked. Status and logs contain only IDs, counts, revisions, freshness and costs.
+- Non-empty situation summaries require `summaryRefIds`; follow-ups require raw refs. If any supporting source/reference is disabled or stale, the claim is removed from activation context. An older failed activation may mark only its own baseline revision stale, never a newer successful commit.
 - A disabled source must be gated before polling/discovery, not after reading. Location is independent from Weather and reads existing Settings only for status. The iPhone sync writes rounded coordinates, `observedAt` and permission at most hourly; no live GPS claim is made.
+- `message_dan` requires category, Personal/Work/unknown scope, related categories and evidence source IDs. The server enforces Proactive category/scope/source policy before pushing; a background activation's owner guidance is carried in the wake.
 - Offline checks:
   - `npm run build --workspace @jarvis/backend`
   - `npm test --workspace @jarvis/backend`

@@ -12,6 +12,14 @@ BEGIN
   THROW 51000, 'PI activation ledger details are durable evidence; retain them before rollback', 1;
 END;
 
+IF EXISTS (
+  SELECT 1 FROM dbo.proactive_event_batches WITH (TABLOCKX, HOLDLOCK)
+  WHERE activation_type <> 'event' OR satisfied_slot IS NOT NULL
+)
+BEGIN
+  THROW 51000, 'PI slot activation metadata is durable cadence evidence; retain it before rollback', 1;
+END;
+
 IF EXISTS (SELECT 1 FROM dbo.proactive_source_status WITH (TABLOCKX, HOLDLOCK) WHERE source_id = N'location')
 BEGIN
   THROW 51000, 'Location source history is durable context; retain it before rollback', 1;
@@ -26,6 +34,11 @@ BEGIN
 END;
 
 DROP TABLE dbo.pi_situational_state;
+
+ALTER TABLE dbo.proactive_event_batches DROP CONSTRAINT CK_proactive_event_batches_satisfied_slot;
+ALTER TABLE dbo.proactive_event_batches DROP CONSTRAINT CK_proactive_event_batches_activation_type;
+ALTER TABLE dbo.proactive_event_batches DROP CONSTRAINT DF_proactive_event_batches_activation_type;
+ALTER TABLE dbo.proactive_event_batches DROP COLUMN satisfied_slot, activation_type;
 
 DROP INDEX UX_pi_turn_activation ON dbo.pi_turn;
 ALTER TABLE dbo.pi_turn DROP CONSTRAINT CK_pi_turn_activation_counts;

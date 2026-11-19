@@ -172,6 +172,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         const previousCategories = { ...settings.categories };
         const previousScope = settings.suggestionScope;
         const previousPaused = settings.paused;
+        const previousTurns = settings.backgroundTurnsPerDay;
         const previousSources = { ...settings.sources };
         settings = {
           ...settings,
@@ -181,6 +182,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           newsFeeds: patch.newsFeeds === undefined ? [...settings.newsFeeds] : [...patch.newsFeeds],
         };
         if (previousPaused !== settings.paused ||
+            previousTurns !== settings.backgroundTurnsPerDay ||
             sourceIds.some((source) => previousSources[source] !== settings.sources[source]) ||
             previousScope !== settings.suggestionScope ||
             findingCategories.some((category) => previousCategories[category] !== settings.categories[category])) {

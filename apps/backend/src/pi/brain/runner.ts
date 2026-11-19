@@ -93,6 +93,18 @@ export function createBrain(options: BrainOptions) {
     if (value === 'github' || value === 'worker') return 'factory';
     return undefined;
   };
+  const policyNote = (settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>): string => {
+    const enabledCategories = Object.entries(settings.categories)
+      .filter(([, enabled]) => enabled).map(([category]) => category);
+    const enabledSources = sourceIds.filter((source) => settings.sources[source]);
+    return [
+      `enabled sources=${enabledSources.join(',') || 'none'}`,
+      `enabled categories=${enabledCategories.join(',') || 'none'}`,
+      `suggestion scope=${settings.suggestionScope}`,
+      `guidance=${JSON.stringify(settings.guidance)}`,
+      'message_dan must carry category, Personal/Work/unknown scope and every evidence source.',
+    ].join('; ');
+  };
 
   async function flushLogs(signal: AbortSignal): Promise<void> {
     while (pendingLogs.length > 0) {
@@ -207,7 +219,11 @@ export function createBrain(options: BrainOptions) {
     const slotKey = activationType === 'event' ? nextSlotAfter(current).key : null;
     // Counted before the call, so a failing or crashing wake still uses up the combined daily allowance.
     const reservation = await slots.reserve({
-      runId, eventCount: survivors.length, allowQuiet: activationType === 'event',
+      runId,
+      eventCount: survivors.length,
+      activationType,
+      satisfiedSlot: slotKey,
+      allowQuiet: activationType === 'event',
     });
     if (!reservation.allowed) {
       const retryAt = reservation.status.nextAllowedAt
@@ -225,7 +241,8 @@ export function createBrain(options: BrainOptions) {
       slotKey,
       body: formatWake({
         runId, activationType, activationSource,
-        now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections, budgetNote,
+        now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections,
+        policyNote: policyNote(settings), budgetNote,
       }),
     }, signal);
     const at = now();
@@ -274,10 +291,11 @@ export function createBrain(options: BrainOptions) {
     const current = now();
     const slot = await slots.status();
     if (slot.used >= slot.allowed) { await finish('skipped', 'daily_cap'); return; }
-    if (claim.run.slot && slot.lastAt) {
+    if (claim.run.slot && slot.lastAt && slot.lastActivationType === 'event') {
       const currentSlotAt = localSlotInstant(claim.run.slot);
       const previousSlotAt = latestSlotAtOrBefore(new Date(currentSlotAt.getTime() - 1)).at;
-      if (Date.parse(slot.lastAt) > previousSlotAt.getTime()) {
+      if (slot.lastSatisfiedSlot === claim.run.slot &&
+          Date.parse(slot.lastAt) > previousSlotAt.getTime()) {
         await finish('skipped', 'satisfied_by_event');
         return;
       }
@@ -310,6 +328,8 @@ export function createBrain(options: BrainOptions) {
     const reservation = await slots.reserve({
       runId: claim.run.id,
       eventCount: 0,
+      activationType: 'scheduled',
+      satisfiedSlot: claim.run.slot,
       allowQuiet: claim.run.trigger === 'manual',
     });
     if (!reservation.allowed) {
@@ -331,6 +351,7 @@ export function createBrain(options: BrainOptions) {
         timeZone: options.timeZone,
         events: [],
         sections: extra.sections,
+        policyNote: policyNote(settings),
         budgetNote,
       }),
     }, signal);

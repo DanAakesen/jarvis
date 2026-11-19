@@ -10,6 +10,8 @@ export interface PiBackgroundSlotStatus {
   readonly allowed: number;
   readonly remaining: number;
   readonly lastAt: string | null;
+  readonly lastActivationType: 'event' | 'scheduled' | null;
+  readonly lastSatisfiedSlot: string | null;
   readonly nextAllowedAt: string | null;
   readonly quiet: boolean;
   readonly queue: {
@@ -32,6 +34,8 @@ export interface PiBackgroundSlotService {
   reserve(input: {
     readonly runId: string;
     readonly eventCount: number;
+    readonly activationType: 'event' | 'scheduled';
+    readonly satisfiedSlot?: string | null;
     readonly allowQuiet?: boolean;
   }): Promise<PiBackgroundReservation>;
 }
@@ -47,11 +51,12 @@ export function createPiBackgroundSlotService(options: {
     const day = copenhagenDayStart(at);
     const [used, last, recovery] = await Promise.all([
       options.queue.modelBatchesSince(day),
-      options.queue.lastBatchAt(day),
+      options.queue.lastBatch(),
       options.queue.recovery(at),
     ]);
     const quiet = isQuietHour(at);
-    const gapReady = last ? new Date(last.getTime() + MIN_WAKE_GAP_MS) : at;
+    const lastAt = last?.at ?? null;
+    const gapReady = lastAt ? new Date(lastAt.getTime() + MIN_WAKE_GAP_MS) : at;
     const quietReady = quiet || isQuietHour(gapReady) ? nextSlotAfter(quiet ? at : gapReady).at : at;
     const nextAllowed = new Date(Math.max(gapReady.getTime(), quietReady.getTime()));
     const allowed = Math.min(DEFAULT_BACKGROUND_TURNS_PER_DAY, settings.backgroundTurnsPerDay);
@@ -59,7 +64,9 @@ export function createPiBackgroundSlotService(options: {
       used,
       allowed,
       remaining: Math.max(0, allowed - used),
-      lastAt: last?.toISOString() ?? null,
+      lastAt: lastAt?.toISOString() ?? null,
+      lastActivationType: last?.activationType ?? null,
+      lastSatisfiedSlot: last?.satisfiedSlot ?? null,
       nextAllowedAt: used >= allowed || !settings.paused && nextAllowed.getTime() <= at.getTime()
         ? null
         : nextAllowed.toISOString(),
@@ -82,7 +89,10 @@ export function createPiBackgroundSlotService(options: {
       if (current.lastAt && at.getTime() - Date.parse(current.lastAt) < MIN_WAKE_GAP_MS) {
         return { allowed: false, reason: 'spaced', status: current };
       }
-      await options.queue.startBatch(input.runId, at, input.eventCount);
+      await options.queue.startBatch(input.runId, at, input.eventCount, {
+        activationType: input.activationType,
+        satisfiedSlot: input.satisfiedSlot ?? null,
+      });
       const updated = await status();
       return { allowed: true, status: updated };
     },

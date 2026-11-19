@@ -51,6 +51,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
   const requestRef = useRef<AbortController | null>(null);
   const [signInRequired, setSignInRequired] = useState(false);
   const [background, setBackground] = useState<PiBackgroundStatus | null>(null);
+  const [backgroundUnavailable, setBackgroundUnavailable] = useState(false);
   const [backgroundSaving, setBackgroundSaving] = useState(false);
   const [turnsDraft, setTurnsDraft] = useState(12);
   const savedRef = useRef(saved);
@@ -86,11 +87,23 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       }
       const value: unknown = await proactiveJson(response);
       if (!isProactiveSettings(value)) throw new Error('Invalid settings');
-      const backgroundResponse = await proactiveRequest(backendUrl, getAccessToken, '/pi/brain', {
-        signal: controller.signal,
-      });
-      const backgroundValue: unknown = await proactiveJson(backgroundResponse);
-      if (isBackgroundStatus(backgroundValue) && !controller.signal.aborted) setBackground(backgroundValue);
+      try {
+        const backgroundResponse = await proactiveRequest(backendUrl, getAccessToken, '/pi/brain', {
+          signal: controller.signal,
+        });
+        const backgroundValue: unknown = await proactiveJson(backgroundResponse);
+        if (!isBackgroundStatus(backgroundValue)) throw new Error('Invalid background status');
+        if (!controller.signal.aborted) {
+          setBackground(backgroundValue);
+          setBackgroundUnavailable(false);
+        }
+      } catch (backgroundError) {
+        if (!controller.signal.aborted) {
+          if (needsSignIn(backgroundError)) setSignInRequired(true);
+          setBackground(null);
+          setBackgroundUnavailable(true);
+        }
+      }
       if (controller.signal.aborted) return;
       const clean = normalizedSettings(value);
       if (replaceDraft || savedRef.current === null ||
@@ -195,6 +208,7 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       const value: unknown = await proactiveJson(response);
       if (!isBackgroundStatus(value)) throw new Error('Invalid background status');
       setBackground(value);
+      setBackgroundUnavailable(false);
       setNotice(enabled ? 'Background PI enabled. It can use the next available allowance.' : 'Background PI is off. No periodic PI work will run.');
     } catch (error) {
       if (needsSignIn(error)) setSignInRequired(true);
@@ -279,7 +293,9 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
         Background PI
       </label>
       <p className="settings-explanation">
-        {background?.enabled === true
+        {backgroundUnavailable
+          ? 'Background PI is unavailable on this backend. Existing Proactive preferences remain editable.'
+          : background?.enabled === true
           ? `${background.today.usedTurns} of ${background.today.allowedTurns} combined background turns used today.`
           : 'Off by default. No scheduled or event PI turn runs until enabled.'}
       </p>

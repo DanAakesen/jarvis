@@ -46,13 +46,14 @@ const followUpSchema = z.object({
   id,
   text: z.string().min(1).max(300),
   dueAt: iso.nullable(),
-  refIds: z.array(id).max(4),
+  refIds: z.array(id).min(1).max(4),
 }).strict();
 
 const schema = z.object({
   version: z.literal(PI_SITUATION_SCHEMA_VERSION),
   asOf: iso,
   summary: z.string().max(1_600),
+  summaryRefIds: z.array(id).max(8),
   sources: z.array(sourceSchema).min(1).max(sourceIds.length),
   refs: z.array(refSchema).max(48),
   facts: z.array(factSchema).max(24),
@@ -80,6 +81,9 @@ const schema = z.object({
   }
   if (state.followUps.some((entry) => !validRefs(entry.refIds))) {
     context.addIssue({ code: 'custom', message: 'A follow-up references an unknown record' });
+  }
+  if (!validRefs(state.summaryRefIds) || state.summary.length > 0 && state.summaryRefIds.length === 0) {
+    context.addIssue({ code: 'custom', message: 'A non-empty summary needs fresh raw references' });
   }
 });
 
@@ -156,7 +160,11 @@ export interface PiSituationService {
     readonly state: unknown;
     readonly activation: PiSituationCommit['activation'];
   }, signal: AbortSignal): Promise<{ record: PiSituationRecord; excluded: readonly SourceId[] }>;
-  markFailed(activation: PiSituationCommit['activation'], signal: AbortSignal): Promise<void>;
+  markFailed(input: {
+    readonly activation: PiSituationCommit['activation'];
+    readonly expectedRevision: number;
+    readonly expectedHash: string | null;
+  }, signal: AbortSignal): Promise<void>;
   lookup(input: { readonly source: SourceId; readonly ref: string }, signal: AbortSignal): Promise<Record<string, unknown>>;
 }
 
@@ -200,6 +208,7 @@ function emptyState(now: Date): PiSituationState {
     version: PI_SITUATION_SCHEMA_VERSION,
     asOf: now.toISOString(),
     summary: '',
+    summaryRefIds: [],
     sources: sourceIds.map((value) => ({
       id: value, state: 'missing', observedAt: null, expiresAt: null, reason: 'not_observed', refIds: [],
     })),
@@ -263,7 +272,7 @@ export function createPiSituationService(options: {
         id: 'location',
         label: 'Location',
         enabled: true,
-        state: result.state,
+        state: result.reason === 'location_observation_stale' ? 'stale' : result.state,
         reason: result.reason,
         observedAt: result.observedAt,
       };
@@ -289,7 +298,7 @@ export function createPiSituationService(options: {
       const expired = entry.expiresAt !== null && Date.parse(entry.expiresAt) <= at.getTime();
       return {
         ...entry,
-        state: expired ? 'stale' : freshness,
+        state: freshness === 'disabled' ? 'disabled' : expired ? 'stale' : freshness,
         reason: freshness === 'disabled' ? 'source_disabled'
           : expired ? 'expired' : freshness === 'missing' ? status?.reason ?? entry.reason ?? 'not_observed'
             : freshness === 'stale' ? status?.reason ?? entry.reason ?? 'stale'
@@ -297,10 +306,16 @@ export function createPiSituationService(options: {
       } as PiSituationState['sources'][number];
     });
     const available = new Set(states.filter(({ state }) => state === 'fresh').map(({ id: value }) => value));
-    const refIds = new Set(raw.refs.filter(({ source }) => available.has(source)).map(({ id: value }) => value));
+    const refIds = new Set(raw.refs.filter(({ source, expiresAt }) =>
+      available.has(source) && (expiresAt === null || Date.parse(expiresAt) > at.getTime()))
+      .map(({ id: value }) => value));
+    const summaryAvailable = raw.summaryRefIds.length > 0 &&
+      raw.summaryRefIds.every((value) => refIds.has(value));
     const state: PiSituationState = {
       ...raw,
       sources: states,
+      summary: summaryAvailable ? raw.summary : '',
+      summaryRefIds: summaryAvailable ? [...raw.summaryRefIds] : [],
       refs: raw.refs.filter(({ id: value, source }) => available.has(source) && refIds.has(value)),
       facts: raw.facts.filter(({ source, stale, refIds: values, expiresAt }) =>
         available.has(source) && !stale && values.every((value) => refIds.has(value)) &&
@@ -401,13 +416,20 @@ export function createPiSituationService(options: {
         .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
         .slice(0, 48);
       const refIds = new Set(refs.map(({ id: value }) => value));
+      const activeRefIds = new Set(acceptedRefs.map(({ id: value }) => value));
       const acceptedFacts = submitted.facts
         .filter(({ source, refIds: values }) => policy.settings.sources[source] && values.every((value) => refIds.has(value)));
       const staleFacts = retainedDisabled
         .filter(({ refIds: values }) => values.every((value) => refIds.has(value)));
       const facts = [...acceptedFacts, ...staleFacts].slice(0, 24);
       const followUps = submitted.followUps.filter(({ refIds: values }) =>
-        values.every((value) => refIds.has(value)));
+        values.every((value) => activeRefIds.has(value)));
+      const filteredSummaryRefs = submitted.summaryRefIds.filter((value) => activeRefIds.has(value));
+      const summary = filteredSummaryRefs.length === submitted.summaryRefIds.length &&
+        filteredSummaryRefs.length > 0
+        ? submitted.summary
+        : '';
+      const summaryRefIds = summary ? filteredSummaryRefs : [];
       const sourceById = new Map(policy.statuses.map((entry) => [entry.id, entry]));
       for (const entry of submitted.sources) {
         const status = sourceById.get(entry.id);
@@ -421,6 +443,8 @@ export function createPiSituationService(options: {
       }
       const next = parsePiSituationState({
         ...submitted,
+        summary,
+        summaryRefIds,
         refs,
         facts,
         followUps,
@@ -438,9 +462,10 @@ export function createPiSituationService(options: {
       }, signal);
       return { record, excluded: [...new Set(excluded)] };
     },
-    async markFailed(activation, signal) {
+    async markFailed(input, signal) {
       const current = await options.store.read(options.owner, signal);
       if (!current) return;
+      if (current.revision !== input.expectedRevision || current.hash !== input.expectedHash) return;
       const state = clone(current.state);
       state.sources = state.sources.map((source) => source.state === 'disabled'
         ? source
@@ -453,7 +478,7 @@ export function createPiSituationService(options: {
         expectedRevision: current.revision,
         expectedHash: current.hash,
         state: next,
-        activation,
+        activation: input.activation,
       }, signal);
     },
     async lookup(input, signal) {

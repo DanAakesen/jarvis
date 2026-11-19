@@ -69,7 +69,8 @@ export function createBrainControl(options: {
       options.store.messagesSince(copenhagenDayStart(now), signal),
       options.situation.read(signal),
       brain ? brain.status() : Promise.resolve({
-        used: 0, allowed: 12, remaining: 12, lastAt: null, nextAllowedAt: null, quiet: false,
+        used: 0, allowed: 12, remaining: 12, lastAt: null, lastActivationType: null,
+        lastSatisfiedSlot: null, nextAllowedAt: null, quiet: false,
         queue: { pending: 0, leased: 0, retrying: 0 },
       } as const),
     ]);

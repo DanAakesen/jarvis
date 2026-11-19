@@ -12,6 +12,12 @@ export interface EventSettlement {
   batchId?: string;
 }
 
+export interface EventBatchReservation {
+  readonly at: Date;
+  readonly activationType: 'event' | 'scheduled';
+  readonly satisfiedSlot: string | null;
+}
+
 /** The queue is a table read by the existing ticker. State is derived from columns, never an enum. */
 export interface EventQueueStore {
   enqueue(input: ProactiveEventInput, now: Date): Promise<{ id: string; inserted: boolean }>;
@@ -22,9 +28,14 @@ export interface EventQueueStore {
   settle(settlements: readonly EventSettlement[], now: Date): Promise<void>;
   retryLater(ids: readonly string[], retryAt: Date): Promise<void>;
   /** Records a model call before it is made; every call counts toward the daily limit, whatever its outcome. */
-  startBatch(batchId: string, now: Date, eventCount: number): Promise<void>;
+  startBatch(
+    batchId: string,
+    now: Date,
+    eventCount: number,
+    metadata?: { readonly activationType?: 'event' | 'scheduled'; readonly satisfiedSlot?: string | null },
+  ): Promise<void>;
   modelBatchesSince(since: Date): Promise<number>;
-  lastBatchAt(since: Date): Promise<Date | null>;
+  lastBatch(): Promise<EventBatchReservation | null>;
   recovery(now: Date): Promise<{
     readonly pending: number;
     readonly leased: number;
@@ -82,7 +93,7 @@ interface MemoryRow extends QueuedEvent {
 export function createMemoryEventQueueStore(): EventQueueStore {
   const rows = new Map<string, MemoryRow>();
   const byKey = new Map<string, string>();
-  const batches: Date[] = [];
+  const batches: EventBatchReservation[] = [];
   const view = (row: MemoryRow): QueuedEvent => ({
     id: row.id, source: row.source, kind: row.kind, dedupeKey: row.dedupeKey, summary: row.summary,
     detail: structuredClone(row.detail), occurredAt: row.occurredAt, receivedAt: row.receivedAt, attempts: row.attempts,
@@ -137,11 +148,18 @@ export function createMemoryEventQueueStore(): EventQueueStore {
         row.retryAt = retryAt;
       }
     },
-    async startBatch(_batchId, now) { batches.push(now); },
-    async modelBatchesSince(since) { return batches.filter((at) => at >= since).length; },
-    async lastBatchAt(since) {
-      const matches = batches.filter((at) => at >= since);
-      return matches.length > 0 ? new Date(Math.max(...matches.map((at) => at.getTime()))) : null;
+    async startBatch(_batchId, now, _eventCount, metadata) {
+      batches.push({
+        at: new Date(now),
+        activationType: metadata?.activationType ?? 'event',
+        satisfiedSlot: metadata?.satisfiedSlot ?? null,
+      });
+    },
+    async modelBatchesSince(since) { return batches.filter(({ at }) => at >= since).length; },
+    async lastBatch() {
+      if (batches.length === 0) return null;
+      const value = batches.reduce((latest, entry) => entry.at > latest.at ? entry : latest);
+      return { ...value, at: new Date(value.at) };
     },
     async recovery(now) {
       const open = [...rows.values()].filter((row) => row.processedAt === null);

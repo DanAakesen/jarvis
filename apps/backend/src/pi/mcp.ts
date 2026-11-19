@@ -68,7 +68,7 @@ export function createPiMcpRoutes(options: {
     if (name.startsWith('memory_')) return ['memory'];
     if (name.startsWith('health_nutrition_') || name.startsWith('health_food') ||
         name.startsWith('health_meal') || name === 'health_saved_food') return ['nutrition'];
-    if (name === 'health_query') {
+    if (name === 'health_query' || name === 'health_show') {
       const requested = typeof args.source === 'string' ? args.source : '';
       return requested.includes('nutrition') ? ['nutrition'] : ['health'];
     }

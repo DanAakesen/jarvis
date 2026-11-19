@@ -37,7 +37,8 @@ function setup(options: { wired?: boolean } = {}) {
       pendingLogs: 2,
       async status() {
         return {
-          used: 0, allowed: 12, remaining: 12, lastAt: null, nextAllowedAt: null, quiet: false,
+          used: 0, allowed: 12, remaining: 12, lastAt: null, lastActivationType: null,
+          lastSatisfiedSlot: null, nextAllowedAt: null, quiet: false,
           queue: { pending: 0, leased: 0, retrying: 0 },
         };
       },

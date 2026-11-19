@@ -101,6 +101,14 @@ describe('proactive PI policy', () => {
     expect(saved.json()).toMatchObject({ backgroundTurnsPerDay: 4 });
     await app.close();
   });
+
+  it('wakes an active consumer when the combined allowance changes', async () => {
+    const store = createMemoryProactiveStore(OWNER);
+    const changed = vi.fn();
+    store.settings.subscribePreferencesChanged(changed);
+    await store.settings.patch({ backgroundTurnsPerDay: 5 });
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('scheduler event tick', () => {

@@ -76,6 +76,8 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(body).toContain('Workflow 2 success');
     expect(body).toContain('not a message from Dan');
     expect(body).toContain('data about what happened');
+    expect(body).toContain('Proactive delivery policy');
+    expect(body).toContain('suggestion scope=all');
     expect(await t.queue.hasWork(t.now())).toBe(false);
     const log = t.log();
     expect(log).toContain('# PI decision log 2026-11-16');
@@ -93,6 +95,50 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     await t.enqueue(failedDeploy);
     await t.tick();
     expect(await t.proactive.spend.monthTotal('2026-11')).toBeGreaterThan(0);
+  });
+
+  it('runs a scheduled sweep through PI with categories, scope and guidance in the trusted policy', async () => {
+    const t = setup();
+    await t.ready;
+    await t.proactive.settings.patch({ guidance: 'Prefer short operational updates.', categories: { travel: false } });
+    const claim = await t.proactive.runs.claim({
+      trigger: 'scheduled', slot: '2026-11-16T07:00', now: t.now(),
+    });
+    await t.brain.runScheduled(claim!, signal());
+    expect(t.gateway.wakes).toHaveLength(1);
+    expect(t.gateway.wakes[0]!.body).not.toMatch(/enabled categories=[^;]*travel/u);
+    expect(t.gateway.wakes[0]!.body).toContain('Prefer short operational updates.');
+    expect(t.gateway.wakes[0]!.body).toContain('type=scheduled');
+    expect((await t.proactive.runs.latest())?.status).toBe('done');
+  });
+
+  it('does not let a scheduled morning run consume the evening sweep', async () => {
+    const t = setup();
+    await t.ready;
+    const morning = await t.proactive.runs.claim({
+      trigger: 'scheduled', slot: '2026-11-16T07:00', now: t.now(),
+    });
+    await t.brain.runScheduled(morning!, signal());
+    t.advance(7 * 60 * 60_000);
+    const evening = await t.proactive.runs.claim({
+      trigger: 'scheduled', slot: '2026-11-16T18:00', now: t.now(),
+    });
+    await t.brain.runScheduled(evening!, signal());
+    expect(t.gateway.wakes).toHaveLength(2);
+    expect((await t.proactive.runs.latest())?.status).toBe('done');
+  });
+
+  it('lets an event consume the next scheduled slot without another hidden PI turn', async () => {
+    const t = setup();
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('done');
+    t.advance(7 * 60 * 60_000);
+    const evening = await t.proactive.runs.claim({
+      trigger: 'scheduled', slot: '2026-11-16T18:00', now: t.now(),
+    });
+    await t.brain.runScheduled(evening!, signal());
+    expect(t.gateway.wakes).toHaveLength(1);
+    expect((await t.proactive.runs.latest())?.reason).toBe('satisfied_by_event');
   });
 
   it('turns the model\'s decision to speak into one chat message that pushes once, and logs what was sent', async () => {

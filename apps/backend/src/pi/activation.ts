@@ -82,7 +82,13 @@ export function createPiActivationService(options: {
     },
     async failed(grant, at, signal) {
       const activation = metadata(grant);
-      await options.situation.markFailed({ ...activation, at }, signal);
+      const baseline = grant.activation;
+      if (!baseline) return;
+      await options.situation.markFailed({
+        activation: { ...activation, at },
+        expectedRevision: baseline.stateRevision,
+        expectedHash: baseline.stateHash,
+      }, signal);
     },
   };
 }

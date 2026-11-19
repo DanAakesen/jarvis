@@ -25,4 +25,6 @@ The wake text lists the open watches and marks the ones due now. For each due wa
 4. If it is worth his attention, one `message_dan`: what changed, why it matters, what he can do. Never a "still waiting" message, never a repeat. If nothing changed, say nothing.
 5. If the stop condition is met, `watch_stop` with the reason and tell him with `message_dan`. If a watch has been quiet for a long time, I may stop it or say in the decision statement that it is a candidate to stop.
 
+For every `message_dan`, supply the wake's Proactive category, Personal/Work/unknown scope and evidence-source IDs; the server enforces the current switches before delivery.
+
 Events in the wake (mail, calendar, builds, Worker results) are matched to the open watches listed: if an event is about a watch, record a look for it and decide as above.

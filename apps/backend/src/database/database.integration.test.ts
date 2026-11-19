@@ -181,6 +181,8 @@ describe('real SQL Server migration contract', () => {
       const proactiveDown = await readFile(new URL('../../../../db/migrations/down/0054_proactive_push.sql', import.meta.url), 'utf8');
       const foundationSchema = await readFile(new URL('../../../../db/migrations/0055_proactive_foundation.sql', import.meta.url), 'utf8');
       const foundationDown = await readFile(new URL('../../../../db/migrations/down/0055_proactive_foundation.sql', import.meta.url), 'utf8');
+      const eventsSchema = await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8');
+      const eventsDown = await readFile(new URL('../../../../db/migrations/down/0080_proactive_events.sql', import.meta.url), 'utf8');
       const schema = await readFile(new URL('../../../../db/migrations/0086_pi_chat.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0086_pi_chat.sql', import.meta.url), 'utf8');
       const brainSchema = await readFile(new URL('../../../../db/migrations/0087_pi_brain.sql', import.meta.url), 'utf8');
@@ -191,6 +193,7 @@ describe('real SQL Server migration contract', () => {
       const situationDown = await readFile(new URL('../../../../db/migrations/down/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
       await pool.request().batch(proactiveSchema);
       await pool.request().batch(foundationSchema);
+      await pool.request().batch(eventsSchema);
       await pool.request().batch(schema);
       await pool.request().batch(brainSchema);
       await pool.request().batch(watchSchema);
@@ -257,7 +260,7 @@ describe('real SQL Server migration contract', () => {
 
         const situations = createPiSituationStore(pool);
         const situation = parsePiSituationState({
-          version: 1, asOf: at.toISOString(), summary: 'Compact owner state.',
+          version: 1, asOf: at.toISOString(), summary: '', summaryRefIds: [],
           sources: sourceIds.map((id) => ({
             id, state: 'missing', observedAt: null, expiresAt: null, reason: 'not_observed', refIds: [],
           })),
@@ -282,6 +285,7 @@ describe('real SQL Server migration contract', () => {
         await pool.request().batch(watchDown);
         await pool.request().batch(brainDown);
         await pool.request().batch(down);
+        await pool.request().batch(eventsDown);
         await pool.request().batch(foundationDown);
         await pool.request().batch(proactiveDown);
       }

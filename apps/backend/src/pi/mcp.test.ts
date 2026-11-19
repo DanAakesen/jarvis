@@ -175,6 +175,43 @@ describe('PI MCP server', () => {
     expect(called.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
   });
 
+  it('uses the selected Health source rather than allowing Nutrition through Health', async () => {
+    const health: JarvisTool = {
+      name: 'health_show',
+      description: 'Show retained health and nutrition records.',
+      inputSchema: { type: 'object', properties: { source: { type: 'string' } }, additionalProperties: false },
+      execution: { defaultEffect: 'read' },
+      execute: async () => ({ shown: true }),
+    };
+    const situation = {
+      async read() {
+        return {
+          state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+          staleSources: [], missingSources: [], disabledSources: ['nutrition'], freshSources: ['health'],
+          asOf: null, updatedAt: null, lastActivation: null,
+        };
+      },
+    } as PiSituationService;
+    const { registry, tool } = setup([], { tools: [health], situation });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '',
+      brain: { runId: '00000000-0000-4000-8000-000000000002', sent: [], wrote: [], looked: [] },
+      signal: live(),
+      activation: {
+        id: '00000000-0000-4000-8000-000000000002', type: 'event', source: 'timer', slotKey: null,
+        stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0,
+        disabledSources: ['nutrition'],
+      },
+    });
+    await tool('find_tools', { turn: grant.turn, query: 'health nutrition show' });
+    const blocked = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'health_show',
+      arguments: { source: 'daily.nutrition.meals' },
+    });
+    expect(blocked.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
+  });
+
   it('shows chat the system-health tool without its smoke-only operation selector', async () => {
     const { registry, tool } = setup();
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });

@@ -79,6 +79,21 @@ class VaultMirrorProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "identity_configuration"):
             job_summary(broken, EXPECTED)
 
+    def test_job_summary_accepts_only_the_same_arm_identity_with_different_casing(self):
+        live_shape = json.loads(json.dumps(JOB))
+        assigned_id = next(iter(live_shape["identity"]["userAssignedIdentities"]))
+        live_shape["identity"]["userAssignedIdentities"] = {
+            assigned_id.replace("/resourceGroups/", "/resourcegroups/"): {},
+        }
+        self.assertEqual(job_summary(live_shape, EXPECTED)["name"], JOB["name"])
+
+        wrong_identity = json.loads(json.dumps(live_shape))
+        wrong_identity["properties"]["configuration"]["registries"][0]["identity"] = (
+            assigned_id.replace("fixture", "other").upper()
+        )
+        with self.assertRaisesRegex(RuntimeError, "identity_configuration"):
+            job_summary(wrong_identity, EXPECTED)
+
     def test_latest_execution_uses_only_fresh_runs(self):
         executions = [
             {"name": "old", "properties": {"startTime": "2026-11-19T01:30:00Z"}},
