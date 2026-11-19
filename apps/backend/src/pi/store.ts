@@ -16,6 +16,16 @@ export interface PiTurnRecord {
   readonly firstTextMs: number | null;
   readonly totalMs: number;
   readonly outcome: 'ok' | 'failed' | 'cancelled' | 'timeout';
+  readonly activationId?: string | undefined;
+  readonly activationType?: 'chat' | 'voice' | 'scheduled' | 'event' | undefined;
+  readonly activationSource?: string | null | undefined;
+  readonly slotKey?: string | null | undefined;
+  readonly stateRevision?: number | null | undefined;
+  readonly staleSourceCount?: number | undefined;
+  readonly toolCount?: number | undefined;
+  readonly actionCount?: number | undefined;
+  readonly pushCount?: number | undefined;
+  readonly activationResult?: 'action' | 'push' | 'silence' | 'failed' | undefined;
 }
 
 export interface PiStoredTurn extends PiTurnRecord { readonly at: Date }

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { RemoteMcpStatus } from './remote-mcp.js';
+import type { PiActivationType } from './situation.js';
 
 /**
  * Per-turn authority for the PI agent.
@@ -42,11 +43,28 @@ export interface PiTurnGrant {
     undiscoveredRefusals: number;
   };
   readonly signal: AbortSignal;
+  /** One exact PI activation. It is server-created and shared by context, tools and ledger telemetry. */
+  readonly activation?: {
+    readonly id: string;
+    readonly type: PiActivationType;
+    readonly source: string | null;
+    readonly slotKey: string | null;
+    readonly stateRevision: number;
+    readonly stateHash: string | null;
+    readonly policyRevision: string;
+    readonly staleSources: number;
+    readonly disabledSources: readonly string[];
+  } | undefined;
+  /** Successful action calls recorded from the authenticated local tool catalogue. */
+  readonly actions: { count: number };
+  /** Successful chat pushes from message_dan, recorded by the wake itself. */
+  readonly pushes: { count: number };
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'pushes'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
+  resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
   findBrain(runId: unknown): PiTurnGrant | undefined;
   close(turn: string): void;
@@ -66,6 +84,7 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       const grant: PiTurnGrant = {
         ...input, turn, discovered: new Set(), results: [],
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
+        actions: { count: 0 }, pushes: { count: 0 },
       };
       grants.set(turn, grant);
       return grant;
@@ -74,6 +93,13 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       if (typeof turn !== 'string' || !piTurnPattern.test(turn)) return undefined;
       const grant = grants.get(turn);
       return grant && !grant.signal.aborted ? grant : undefined;
+    },
+    resolveActivation(id) {
+      if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/iu.test(id)) return undefined;
+      for (const grant of grants.values()) {
+        if (grant.activation?.id === id && !grant.signal.aborted) return grant;
+      }
+      return undefined;
     },
     findBrain(runId) {
       if (typeof runId !== 'string') return undefined;

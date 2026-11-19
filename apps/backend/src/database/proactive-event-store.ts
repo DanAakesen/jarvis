@@ -157,6 +157,33 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
       return recordset[0]?.count ?? 0;
     },
 
+    async lastBatchAt(since) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('since', sql.DateTime2, since)
+        .query<{ last_at: Date | string | null }>(`SELECT MAX(created_at) AS last_at FROM dbo.proactive_event_batches
+          WHERE owner_object_id = @owner AND created_at >= @since;`);
+      return recordset[0]?.last_at ? date(recordset[0].last_at) : null;
+    },
+
+    async recovery(now) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('now', sql.DateTime2, now)
+        .query<{ pending: number; leased: number; retrying: number }>(`
+          SELECT
+            COUNT_BIG(*) AS pending,
+            SUM(CASE WHEN claimed_until > @now THEN 1 ELSE 0 END) AS leased,
+            SUM(CASE WHEN retry_at > @now THEN 1 ELSE 0 END) AS retrying
+          FROM dbo.proactive_events
+          WHERE owner_object_id=@owner AND processed_at IS NULL;`);
+      return {
+        pending: Number(recordset[0]?.pending ?? 0),
+        leased: Number(recordset[0]?.leased ?? 0),
+        retrying: Number(recordset[0]?.retrying ?? 0),
+      };
+    },
+
     async escalatedSince(source, since) {
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)

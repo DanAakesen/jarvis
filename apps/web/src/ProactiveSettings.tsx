@@ -5,7 +5,7 @@ import { StateMessage } from './StateMessage';
 import { saveSignInReturnPath } from './auth';
 import {
   isProactiveSettings, proactiveJson, proactiveRequest, ProactiveRequestError,
-  type ProactiveSettings as SettingsValue,
+  isBackgroundStatus, type PiBackgroundStatus, type ProactiveSettings as SettingsValue,
 } from './proactive-data';
 
 type View =
@@ -50,14 +50,19 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
   const [notice, setNotice] = useState('');
   const requestRef = useRef<AbortController | null>(null);
   const [signInRequired, setSignInRequired] = useState(false);
+  const [background, setBackground] = useState<PiBackgroundStatus | null>(null);
+  const [backgroundSaving, setBackgroundSaving] = useState(false);
+  const [turnsDraft, setTurnsDraft] = useState(12);
   const savedRef = useRef(saved);
   const instructionRef = useRef(instruction);
+  const turnsDraftRef = useRef(turnsDraft);
   const { latestActivity } = useJarvisActivity();
 
   useEffect(() => {
     savedRef.current = saved;
     instructionRef.current = instruction;
-  }, [instruction, saved]);
+    turnsDraftRef.current = turnsDraft;
+  }, [instruction, saved, turnsDraft]);
 
   const load = useCallback(async ({ silent = false, replaceDraft = false }: LoadOptions = {}) => {
     if (!backendUrl) {
@@ -81,8 +86,17 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       }
       const value: unknown = await proactiveJson(response);
       if (!isProactiveSettings(value)) throw new Error('Invalid settings');
+      const backgroundResponse = await proactiveRequest(backendUrl, getAccessToken, '/pi/brain', {
+        signal: controller.signal,
+      });
+      const backgroundValue: unknown = await proactiveJson(backgroundResponse);
+      if (isBackgroundStatus(backgroundValue) && !controller.signal.aborted) setBackground(backgroundValue);
       if (controller.signal.aborted) return;
       const clean = normalizedSettings(value);
+      if (replaceDraft || savedRef.current === null ||
+          savedRef.current.backgroundTurnsPerDay === turnsDraftRef.current) {
+        setTurnsDraft(clean.backgroundTurnsPerDay);
+      }
       if (replaceDraft) {
         setSaved(clean);
         setInstruction('');
@@ -169,6 +183,45 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
     }
   };
 
+  const setBackgroundEnabled = async (enabled: boolean) => {
+    if (backgroundSaving) return;
+    setBackgroundSaving(true);
+    setNotice('');
+    try {
+      const response = await proactiveRequest(backendUrl, getAccessToken, '/pi/brain', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
+      });
+      const value: unknown = await proactiveJson(response);
+      if (!isBackgroundStatus(value)) throw new Error('Invalid background status');
+      setBackground(value);
+      setNotice(enabled ? 'Background PI enabled. It can use the next available allowance.' : 'Background PI is off. No periodic PI work will run.');
+    } catch (error) {
+      if (needsSignIn(error)) setSignInRequired(true);
+      setNotice('Could not confirm the Background PI switch. Refresh before trying again.');
+    } finally {
+      setBackgroundSaving(false);
+    }
+  };
+
+  const saveTurnAllowance = async () => {
+    if (!saved || turnsDraft === saved.backgroundTurnsPerDay || pauseSaving || saving || backgroundSaving) return;
+    setSaving(true);
+    setNotice('');
+    try {
+      await patchSettings({ backgroundTurnsPerDay: turnsDraft });
+      setNotice('Background turn allowance saved.');
+    } catch (error) {
+      if (needsSignIn(error)) setSignInRequired(true);
+      if (error instanceof ProactiveRequestError && error.status === 409) setConflict(true);
+      setNotice(error instanceof ProactiveRequestError && error.status === 409
+        ? 'Preferences changed elsewhere. Reload the current values before changing them.'
+        : 'Could not save the background turn allowance. Refresh and try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveInstruction = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!saved || !instruction.trim() || saving) return;
@@ -215,6 +268,42 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
       <p className="settings-explanation" role="status">
         {saved.paused ? 'Paused' : 'On'} — requested reminders are separate and are not changed by this switch.
       </p>
+      <label className="choice proactive-pause-choice">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={background?.enabled ?? false}
+          disabled={!background?.available || backgroundSaving || saving}
+          onChange={(event) => { void setBackgroundEnabled(event.target.checked); }}
+        />
+        Background PI
+      </label>
+      <p className="settings-explanation">
+        {background?.enabled === true
+          ? `${background.today.usedTurns} of ${background.today.allowedTurns} combined background turns used today.`
+          : 'Off by default. No scheduled or event PI turn runs until enabled.'}
+      </p>
+      <div className="settings-field proactive-turn-allowance">
+        <label htmlFor="proactive-background-turns">Combined background turns per day: {turnsDraft}</label>
+        <input
+          id="proactive-background-turns"
+          type="range"
+          min={1}
+          max={12}
+          step={1}
+          value={turnsDraft}
+          disabled={saving || pauseSaving || backgroundSaving}
+          onChange={(event) => setTurnsDraft(Number(event.target.value))}
+        />
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={turnsDraft === saved.backgroundTurnsPerDay || saving || pauseSaving || backgroundSaving}
+          onClick={() => { void saveTurnAllowance(); }}
+        >
+          Save turn allowance
+        </button>
+      </div>
       <div className="proactive-understood">
         <p><strong>What Jarvis understands</strong></p>
         <ul>{saved.preferences.map((preference) => <li key={preference}>{preference}</li>)}</ul>

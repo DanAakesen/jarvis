@@ -1,7 +1,7 @@
 import type { UsageStore } from '../../core/usage.js';
-import { defaultProactiveSettings } from '../store.js';
 import { dayKey } from '../time.js';
 import type { ProactiveSource } from '../types.js';
+import type { ProactiveSettings } from '../types.js';
 import type { EventQueueStore } from './event-queue.js';
 import { factEvent } from './producers.js';
 import type { ProactiveEventSink } from './types.js';
@@ -44,6 +44,7 @@ export function createTimerProducer(options: {
   now: () => Date;
   intervalMs?: number;
   logger?: ProducerLogger;
+  allowed?: () => Promise<boolean>;
 }) {
   const interval = options.intervalMs ?? SIX_HOURS_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -52,6 +53,7 @@ export function createTimerProducer(options: {
   async function fire(slot: Date) {
     const now = options.now();
     try {
+      if (options.allowed && !await options.allowed()) return;
       await options.sink.enqueue({
         source: 'timer', kind: 'review', dedupeKey: `timer:review:${slot.toISOString()}`,
         summary: 'Periodic review: notice anything that has stalled, slipped or needs preparation.',
@@ -103,6 +105,8 @@ export function createSourceChangePoller(options: {
   intervalMs?: number;
   firstPollDelayMs?: number;
   logger?: ProducerLogger;
+  settings: () => Promise<ProactiveSettings>;
+  allowed?: () => Promise<boolean>;
 }) {
   const seen = new Set<string>();
   const baselined = new Set<string>();
@@ -111,11 +115,11 @@ export function createSourceChangePoller(options: {
   let polling: Promise<void> | undefined;
   let stopped = false;
 
-  async function pollSource(source: ProactiveSource & { id: 'mail' | 'calendar' }) {
+  async function pollSource(source: ProactiveSource & { id: 'mail' | 'calendar' }, settings: ProactiveSettings) {
     const timeout = AbortSignal.any([controller.signal, AbortSignal.timeout(SOURCE_TIMEOUT_MS)]);
     const now = options.now();
     // Mail and calendar read nothing from the settings; the queue's rules apply the owner's switches later.
-    const result = await source.read({ now, signal: timeout, settings: defaultProactiveSettings() });
+    const result = await source.read({ now, signal: timeout, settings });
     if (result.state !== 'ok') return;
     if (!baselined.has(source.id)) {
       baselined.add(source.id);
@@ -138,10 +142,14 @@ export function createSourceChangePoller(options: {
   }
 
   async function poll() {
+    if (options.allowed && !await options.allowed()) return;
+    const settings = await options.settings();
     for (const source of options.sources) {
       if (stopped) return;
       if (source.id !== 'mail' && source.id !== 'calendar') continue;
-      try { await pollSource(source as ProactiveSource & { id: 'mail' | 'calendar' }); }
+      if (!settings.paused && !settings.sources[source.id]) continue;
+      if (settings.paused) continue;
+      try { await pollSource(source as ProactiveSource & { id: 'mail' | 'calendar' }, settings); }
       catch { options.logger?.warn?.({ reason: 'source_poll_failed', source: source.id }, 'proactive.event_producer'); }
     }
   }

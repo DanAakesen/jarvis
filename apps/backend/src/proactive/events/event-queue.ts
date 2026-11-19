@@ -24,6 +24,12 @@ export interface EventQueueStore {
   /** Records a model call before it is made; every call counts toward the daily limit, whatever its outcome. */
   startBatch(batchId: string, now: Date, eventCount: number): Promise<void>;
   modelBatchesSince(since: Date): Promise<number>;
+  lastBatchAt(since: Date): Promise<Date | null>;
+  recovery(now: Date): Promise<{
+    readonly pending: number;
+    readonly leased: number;
+    readonly retrying: number;
+  }>;
   escalatedSince(source: string, since: Date): Promise<number>;
   hasSource(source: string): Promise<boolean>;
   purge(olderThan: Date): Promise<number>;
@@ -133,6 +139,18 @@ export function createMemoryEventQueueStore(): EventQueueStore {
     },
     async startBatch(_batchId, now) { batches.push(now); },
     async modelBatchesSince(since) { return batches.filter((at) => at >= since).length; },
+    async lastBatchAt(since) {
+      const matches = batches.filter((at) => at >= since);
+      return matches.length > 0 ? new Date(Math.max(...matches.map((at) => at.getTime()))) : null;
+    },
+    async recovery(now) {
+      const open = [...rows.values()].filter((row) => row.processedAt === null);
+      return {
+        pending: open.length,
+        leased: open.filter((row) => row.claimedUntil !== null && row.claimedUntil > now).length,
+        retrying: open.filter((row) => row.retryAt !== null && row.retryAt > now).length,
+      };
+    },
     async escalatedSince(source, since) {
       return [...rows.values()].filter((row) => row.source === source && row.batchId !== null &&
         row.processedAt !== null && row.processedAt >= since).length;

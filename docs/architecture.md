@@ -93,6 +93,31 @@ Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choos
 - Graph tab (#1924, P15-190): no new route or boundary. `JarvisCore/Graph3D` turns the existing `knowledge/graph` response into a deterministic 3D layout,
   camera and motion schedule (pure, Linux-tested); the app's `JarvisNotesGraphView` draws it in a `Canvas` and receives touches through one UIKit gesture layer.
 
+## PI situational intelligence and shared activation loop — 19 November 2026
+
+```mermaid
+flowchart LR
+    U["Chat / Voice"] --> A["PiActivationService"]
+    E["Event queue, 6h timer,\n07:00/18:00 sweep, Check now"] --> S["Combined PI slot service\n1–12/day, 10 min, quiet, lease"]
+    S --> A
+    A --> G["jarvis-pi gateway\none harness invocation"]
+    A <--> ST["PiSituationService"]
+    ST <--> SQL[("Azure SQL\npi_situational_state\npi_turn + existing ledgers")]
+    A --> M["MCP activation grant"]
+    M --> T["Jarvis tools + situation_read /\nlookup / commit"]
+    T --> RAW[("Existing raw stores\nvault, mail, calendar, health,\nfactory, providers")]
+    G --> O["Reply, action, push or silence"]
+```
+
+- `PiActivationService` opens one UUID-scoped grant for a normal Chat/Voice turn or a background activation. `jarvis-pi` remains the one managed `microsoft_copilot_preview` agent in Sweden Central; Chat/Voice reuse the owner conversation, while a background activation uses a scratch conversation. The provider conversation is cache/working context only.
+- `pi_situational_state` is one owner row with bounded, schema-validated JSON, an optimistic revision, SHA-256 content hash, derived raw-reference/freshness/stale metadata, last activation and as-of/update times. `pi_turn` remains the one activation ledger and now records activation ID/type/source/slot, state revision, stale/tool/action/push counts and action/push/silence/failed outcome.
+- `PiSituationService` reads the authoritative row, applies current Proactive policy and explicit freshness, retains stale storage, redacts commits and rejects stale revisions or policy changes. A failed invocation marks the prior state stale rather than inventing a successful replacement. `situation_lookup` resolves one bounded reference through the existing source reader; raw records are not copied into the state.
+- The existing `proactive_events` queue, batches, 30-second scheduler, leases, exact dedupe and 6h pollers form the only combined background slot/cadence service. A persisted event-batch reservation consumes the day allowance before model work, including on crash. Events may satisfy the next 07:00/18:00 slot. The old one-shot model path is not run in parallel when PI is configured.
+- The owner switch in `pi_switch` remains false until explicitly enabled. Pollers and timer producers do not read/enqueue while it is off or paused. A scheduled/manual claim is finished `skipped` with a visible reason when PI is off, instead of falling through to a hidden call.
+- Mail/calendar pollers read Proactive settings before any source read. Brain event admission and Jarvis MCP tool discovery/call enforce the same source policy. Direct owner Chat/Voice tool use is not gated by automatic-source policy.
+- Location is stored as a coarse city/rounded coordinate with `observedAt` and permission in existing Settings, exposed through an independent `location` proactive source with a six-hour freshness label. It is independent from Weather and carries only a stable `location:device` raw reference.
+- Status is read-only: it joins settings, PI switch, event-batch recovery counts, situational metadata and recorded spend. Neither `/proactive/status` nor `/pi/brain` starts a model turn.
+
 ## PI cutover flip (approved, not live) — #1887, P15-176
 
 With [#1910](https://github.com/DanAakesen/jarvis/pull/1910) released, normal chat without `engine` and `/voice` without an `engine` query use PI. `engine: "current"` in chat and `?engine=current` for voice select the old route. Isolated runtime tests retain their own runtime and reject explicit `pi`. iPhone sends the saved choice explicitly, defaulting to PI; the Watch bridge and web omit the choice. The PI voice relay returns `not_supported` for camera/screen context. The old route and selector remain, with no automatic fallback.

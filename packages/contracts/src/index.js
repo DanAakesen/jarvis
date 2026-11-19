@@ -134,6 +134,16 @@ export const homeLocationSettingsSchema = Object.freeze({
         Object.freeze({ type: 'null' }),
       ]),
     }),
+    observedAt: Object.freeze({
+      anyOf: Object.freeze([
+        Object.freeze({ type: 'string', format: 'date-time' }),
+        Object.freeze({ type: 'null' }),
+      ]),
+    }),
+    permission: Object.freeze({
+      type: 'string',
+      enum: ['unknown', 'not_determined', 'granted', 'denied', 'restricted'],
+    }),
   }),
 });
 export function isModelCatalogue(value) {

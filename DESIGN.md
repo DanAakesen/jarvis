@@ -1,3 +1,19 @@
+## Background PI in Proactive — 19 November 2026
+
+This is an extension of the existing Proactive settings and status surfaces, not a new screen. The iOS sheet keeps the existing page scaffold, shared rows, glass, toggle and slider language; the web page uses its existing Proactive blocks and shared primary/secondary controls.
+
+The settings hierarchy is:
+
+1. Existing automatic-suggestion pause.
+2. A distinct **Background PI** switch, off by default.
+3. Existing source, category and scope policy, with an independent **Location** row.
+4. Existing monthly budget and a 1–12 **Background turns per day** control.
+5. Existing feeds and guidance.
+
+Status uses one scan-friendly Background PI block before Open items. It states On/Off, used/allowed turns today, estimated daily/30-day DKK, actual month spend, the completed-turn band and representative/worst-case costs, situational-state age, last activation age, stale/missing sources and queue recovery counts. Missing, stale and disabled sources pair words with the existing status iconography; colour is never the only signal. Refreshes read backend status only and do not invoke a model.
+
+No decorative metrics, chart, orb or extra card grid is added. At narrow widths, background cost rows stack to one column; the source grid remains two columns only when Dynamic Type permits it. All controls use the existing shared components and localization, with loading, disabled and explicit error copy retained. Native simulator rendering, motion and physical-device readability remain outside local Linux proof and are exact-head CI/owner acceptance items.
+
 ## iPhone Voice carousel and captions (18 November 2026, #1958, P15-210; build 113)
 
 The compact panel stays between captions and call controls. A new visual takes focus immediately; earlier visuals remain to its left. Swipe or use the previous/next controls. Close and Expand float over the top left without a separate header; a supplied native heading scrolls with the content beside them, and HTML owns its heading. Full screen uses the same carousel; Collapse returns to the compact panel without ending the call. The existing eased orb retreat and return are unchanged. Captions have a taller viewport with a soft fade on each edge and enough bottom padding to keep the latest line readable. HTML gets theme-aware defaults and the actual phone viewport; native charts keep their renderer. iPhone rendering is not yet verified.

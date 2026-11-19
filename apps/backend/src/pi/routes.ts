@@ -8,6 +8,7 @@ import { piSmokeParts, runPiSmoke, type PiSmokePart } from './smoke.js';
 import type { PiTurnRegistry } from './turns.js';
 import type { BrainControl } from './brain/control.js';
 import { PI_MODEL, PI_REASONING_EFFORT } from './definition.js';
+import type { PiSituationService } from './situation.js';
 
 export interface PiModuleOptions {
   /** Absent until the Deploy workflow has provisioned the agent and given the backend its name and MCP secret. */
@@ -19,6 +20,7 @@ export interface PiModuleOptions {
   readonly brain?: BrainControl | undefined;
   /** GitHub's and Azure's tools, reached through the Jarvis MCP door. Each is present only when it is configured. */
   readonly bridges?: readonly RemoteMcpBridge[] | undefined;
+  readonly situation?: PiSituationService | undefined;
 }
 
 const isOwner = (app: FastifyInstance, objectId: string | undefined) => objectId?.toLowerCase() === app.ownerObjectId.toLowerCase();
@@ -84,7 +86,12 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
     const gateway = options.gateway;
     // Wake a server that scales from zero (Azure) as the backend starts, so its first search does not find it asleep.
     for (const bridge of options.bridges ?? []) bridge.warm();
-    await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth, bridges: options.bridges }));
+    await app.register(createPiMcpRoutes({
+      registry: options.registry,
+      auth: options.auth,
+      situation: options.situation,
+      bridges: options.bridges,
+    }));
 
     app.post<{ Body: { part: PiSmokePart } }>('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: 'object', required: ['part'], additionalProperties: false, properties: { part: { enum: [...piSmokeParts] } } } } },
       async (request, reply) => {

@@ -5,6 +5,7 @@ import { createMemoryEventQueueStore, normalizeEvent } from './event-queue.js';
 import { alertEvent, factEvent, githubEvent, workerEvent } from './producers.js';
 import { createSourceChangePoller, createTimerProducer, detectCostSpike } from './scheduled-producers.js';
 import type { ProactiveEventInput } from './types.js';
+import { defaultProactiveSettings } from '../store.js';
 
 const NOW = new Date('2026-11-15T10:00:00.000Z');
 
@@ -105,7 +106,10 @@ describe('mail and calendar change poller', () => {
     const queue = createMemoryEventQueueStore();
     const sink = { enqueue: vi.fn(async (event: ProactiveEventInput) => { await queue.enqueue(event, NOW); }) };
     let facts = [fact('From Anna: Invoice'), fact('From Bo: Lunch?')];
-    const poller = createSourceChangePoller({ sources: [source('mail', () => facts)], sink, queue, now: () => NOW });
+    const poller = createSourceChangePoller({
+      sources: [source('mail', () => facts)], sink, queue, now: () => NOW,
+      settings: async () => defaultProactiveSettings(),
+    });
     await poller.poll();
     expect(sink.enqueue.mock.calls.every(([event]) => event.baseline === true)).toBe(true);
     expect(await queue.hasWork(NOW)).toBe(false);
@@ -128,6 +132,7 @@ describe('mail and calendar change poller', () => {
     const poller = createSourceChangePoller({
       sources: [source('calendar', () => [fact('Planning', { kind: 'event', startsAt: start, endsAt: '2026-11-16T10:00:00.000Z' })])],
       sink, queue, now: () => NOW,
+      settings: async () => defaultProactiveSettings(),
     });
     await poller.poll();
     start = '2026-11-17T09:00:00.000Z';
@@ -142,8 +147,26 @@ describe('mail and calendar change poller', () => {
     const queue = createMemoryEventQueueStore();
     const sink = { enqueue: vi.fn() };
     const unavailable: ProactiveSource = { id: 'mail', label: 'Mail', async read() { throw new Error('down'); } };
-    const poller = createSourceChangePoller({ sources: [unavailable], sink, queue, now: () => NOW });
+    const poller = createSourceChangePoller({
+      sources: [unavailable], sink, queue, now: () => NOW,
+      settings: async () => defaultProactiveSettings(),
+    });
     await expect(poller.poll()).resolves.toBeUndefined();
+    expect(sink.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('does not read a source that Proactive policy disabled', async () => {
+    const queue = createMemoryEventQueueStore();
+    const sink = { enqueue: vi.fn() };
+    const read = vi.fn(async () => ({ source: 'mail' as const, state: 'ok' as const, reason: null, observedAt: NOW.toISOString(), facts: [fact('x')] }));
+    const settings = defaultProactiveSettings();
+    settings.sources.mail = false;
+    const poller = createSourceChangePoller({
+      sources: [{ id: 'mail', label: 'Mail', read }], sink, queue, now: () => NOW,
+      settings: async () => settings,
+    });
+    await poller.poll();
+    expect(read).not.toHaveBeenCalled();
     expect(sink.enqueue).not.toHaveBeenCalled();
   });
 });

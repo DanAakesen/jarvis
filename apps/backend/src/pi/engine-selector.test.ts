@@ -11,6 +11,7 @@ import { azureToolPrefix, createRemoteMcpBridge } from './remote-mcp.js';
 import { createPiRoutes, type PiModuleOptions } from './routes.js';
 import { createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry, piTurnPattern } from './turns.js';
+import type { PiActivationService } from './activation.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -56,6 +57,29 @@ function setup(options: { piAgent?: ConversationAgent; pi?: PiModuleOptions; run
 it('answers the iPhone Azure question through PI MCP in a reused owner conversation when its context changes', async () => {
   const registry = createPiTurnRegistry();
   const store = createMemoryPiStore();
+  let activationSequence = 0;
+  const activations: PiActivationService = {
+    situation: {} as never,
+    async begin(input) {
+      activationSequence += 1;
+      const id = `00000000-0000-4000-8000-${String(activationSequence).padStart(12, '0')}`;
+      const grant = registry.open({
+        ownerObjectId: input.ownerObjectId, sessionId: input.sessionId, messageId: input.messageId,
+        ...(input.brain ? { brain: input.brain } : {}), signal: input.signal,
+        activation: {
+          id, type: input.type, source: input.source, slotKey: input.slotKey ?? null,
+          stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: [],
+        },
+      });
+      return {
+        grant, context: '', situation: {
+          state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+          staleSources: [], missingSources: [], disabledSources: [], freshSources: [], asOf: null, updatedAt: null, lastActivation: null,
+        },
+      };
+    },
+    async failed() {},
+  };
   const owner = config.auth.ownerObjectId;
   await store.bindConversation(owner, 'jarvis-pi', 'existing-pi-conversation', AbortSignal.timeout(1_000));
   const secret = 'A'.repeat(43);
@@ -82,7 +106,7 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
   );
   const gateway = createPiGateway({
     agentName: 'jarvis-pi', projectEndpoint: 'https://foundry.example/api/projects/jarvis',
-    owner, store, registry, monthlyCapDkk: 250, timeZone: 'Europe/Copenhagen',
+    owner, store, registry, activations, monthlyCapDkk: 250, timeZone: 'Europe/Copenhagen',
     getToken: async () => 'fixture', context: async () => context,
     log: (event, fields) => { if (event === 'pi.turn') logs.push(fields); },
     fetcher: async (url, init) => {

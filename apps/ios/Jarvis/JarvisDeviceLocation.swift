@@ -28,15 +28,32 @@ final class JarvisDeviceLocation: NSObject, CLLocationManagerDelegate {
                 try? await Task.sleep(for: .milliseconds(500))
             }
         }
-        guard manager.authorizationStatus == .authorizedWhenInUse ||
-                manager.authorizationStatus == .authorizedAlways,
+        let authorization = manager.authorizationStatus
+        if authorization == .notDetermined {
+            if let patch = DeviceLocationSettings.permissionPatch("not_determined"),
+               (try? await settings.saveSettings(patch)) != nil {
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
+            }
+            return false
+        }
+        if authorization == .denied || authorization == .restricted {
+            let value = authorization == .denied ? "denied" : "restricted"
+            if let patch = DeviceLocationSettings.permissionPatch(value),
+               (try? await settings.saveSettings(patch)) != nil {
+                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
+            }
+            return false
+        }
+        guard authorization == .authorizedWhenInUse ||
+                authorization == .authorizedAlways,
               let location = await currentLocation(),
               let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first,
               let city = placemark.locality ?? placemark.administrativeArea,
               let patch = DeviceLocationSettings.patch(
                 city: city,
                 latitude: location.coordinate.latitude,
-                longitude: location.coordinate.longitude
+                longitude: location.coordinate.longitude,
+                observedAt: location.timestamp
               ) else { return false }
         do {
             _ = try await settings.saveSettings(patch)

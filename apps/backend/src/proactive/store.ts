@@ -25,12 +25,14 @@ export const sourceLabels: Record<SourceId, string> = {
   nutrition: 'Nutrition',
   notes: 'Notes',
   memory: 'Memory',
+  location: 'Location',
 };
 
 export function defaultProactiveSettings(): ProactiveSettings {
   return {
     paused: false,
     monthlyBudgetDkk: 100,
+    backgroundTurnsPerDay: 12,
     sources: {
       todos: true,
       calendar: true,
@@ -44,6 +46,7 @@ export function defaultProactiveSettings(): ProactiveSettings {
       nutrition: true,
       notes: true,
       memory: true,
+      location: true,
     },
     categories: Object.fromEntries(findingCategories.map((category) => [category, true])) as Record<FindingCategory, boolean>,
     suggestionScope: 'all',
@@ -52,7 +55,7 @@ export function defaultProactiveSettings(): ProactiveSettings {
   };
 }
 
-export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'newsFeeds' | 'guidance'>> & {
+export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'backgroundTurnsPerDay' | 'newsFeeds' | 'guidance'>> & {
   sources?: Partial<Record<SourceId, boolean>>;
   categories?: Partial<Record<FindingCategory, boolean>>;
   suggestionScope?: SuggestionScopePreference;

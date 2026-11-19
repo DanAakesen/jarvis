@@ -1,5 +1,7 @@
 import type { FoundryModelUsage } from '../core/usage.js';
-import { budgetState, canRunWithinBudget, estimateCost } from '../proactive/budget.js';
+import {
+  budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
+} from '../proactive/budget.js';
 import type { FindingsStoredContext } from '../proactive/engine.js';
 import type { ProactiveStore } from '../proactive/store.js';
 import { dayKey, monthKey } from '../proactive/time.js';
@@ -116,7 +118,8 @@ export function createInboxNudgeHook(options: {
     // ok is false when the budget or the daily ceiling says stop; otherwise value is what the work returned.
     const stage = async <T>(kind: InboxSpendKind, work: () => Promise<T>): Promise<{ ok: boolean; value?: T }> => {
       if (spentToday >= INBOX_DAILY_CEILING_DKK) { log({ outcome: 'daily_ceiling' }); return { ok: false }; }
-      if (settings.monthlyBudgetDkk === 0 || !canRunWithinBudget(settings.monthlyBudgetDkk, spentMonth, worstCaseDkk)) {
+      const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
+      if (budgetLimit === 0 || !canRunWithinBudget(budgetLimit, spentMonth, worstCaseDkk)) {
         log({ outcome: 'budget_exhausted' });
         return { ok: false };
       }
@@ -155,7 +158,7 @@ export function createInboxNudgeHook(options: {
     const slot = await stage('review', () => options.pass(context).run(signal, 'slot'));
     if (!slot.ok) return;
     const nudgedThisRun = slot.value?.status === 'done' && slot.value.nudged !== null;
-    if (budgetState(settings.monthlyBudgetDkk, spentMonth) !== 'ok' || !options.ops) return;
+    if (budgetState(effectiveProactiveBudget(settings.monthlyBudgetDkk), spentMonth) !== 'ok' || !options.ops) return;
 
     const { hour, sunday } = copenhagenHourAndWeekday(at);
     if (options.audit && hour >= 18 && await options.ops.getState(AUDIT_DAY_KEY, signal).catch(() => today) !== today) {
@@ -163,7 +166,7 @@ export function createInboxNudgeHook(options: {
       if (!audit.ok) return;
       if (finished(audit.value)) await options.ops.setState(AUDIT_DAY_KEY, today, signal).catch(() => undefined);
     }
-    if (budgetState(settings.monthlyBudgetDkk, spentMonth) !== 'ok') return;
+    if (budgetState(effectiveProactiveBudget(settings.monthlyBudgetDkk), spentMonth) !== 'ok') return;
     if (sunday && await options.ops.getState(WEEKLY_WEEK_KEY, signal).catch(() => today) !== today) {
       // One nudge per run: if the slot review already reached Dan, the weekly review only tidies and learns.
       const weekly = await stage('weekly', () => options.pass(context).run(signal, 'weekly', { nudge: !nudgedThisRun }));

@@ -1,3 +1,21 @@
+## PI situational intelligence — 19 November 2026
+
+- Migration `0090_pi_situational_intelligence.sql` is required before this backend revision. It adds the owner state row, PI activation telemetry and the 1–12 setting; its down script refuses to discard state, non-default policy, Location history or activation evidence. Keep migration checksums immutable.
+- Background PI is the existing `/pi/brain` switch, now presented as **Background PI** in Proactive settings. It is off when no `pi_switch` row exists. `GET /proactive/status` and `GET /pi/brain` are database-only status reads and must never start a model; `PUT /pi/brain` is the explicit owner switch.
+- Scheduled/manual runs and event wakes go through the same `PiActivationService` and gateway. The event batch ledger is the combined daily reservation. Do not add a second background timer, hidden model call, Foundry Memory lookup or a pre/post Chat model turn.
+- `situation_read`, `situation_lookup` and `situation_commit` are PI-only tools. They require the `x-jarvis-activation` grant installed by the PI MCP door. Commits are schema bounded, secret filtered and revision/policy checked. Status and logs contain only IDs, counts, revisions, freshness and costs.
+- A disabled source must be gated before polling/discovery, not after reading. Location is independent from Weather and reads existing Settings only for status. The iPhone sync writes rounded coordinates, `observedAt` and permission at most hourly; no live GPS claim is made.
+- Offline checks:
+  - `npm run build --workspace @jarvis/backend`
+  - `npm test --workspace @jarvis/backend`
+  - `npm run lint --workspace @jarvis/backend`
+  - `npm run build --workspace @jarvis/web`, `npm test --workspace @jarvis/web`, `npm run lint --workspace @jarvis/web`
+  - `npm test --workspace @jarvis/contracts`
+  - `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`
+  - isolated loopback SQL: `npm run test:database --workspace @jarvis/backend`
+  - JarvisCore: `swift test -j 2` under Swift 6.2; parse changed iOS app files on Linux. Native SwiftUI compile/simulator is macOS CI only.
+- Never use `measure_pi`, `probe_pi_wake`, a live smoke, Foundry/Voice/Azure/GitHub MCP call, or a live canary for this feature. Deployment provisioning may update the prompt-agent definition but may not invoke it. Merge, deploy and TestFlight belong to Dispatcher; the PR must state the exact head and physical-device/live gaps.
+
 ## PI Azure on iPhone — 18 November 2026 (#1922, Build 113)
 
 - Check with `cd apps/backend && npx vitest run src/pi src/voice/pi-voice.test.ts`. The normal chat regression uses a reused Foundry conversation and fixture Azure data, not a live service.

@@ -8,9 +8,13 @@ const legacyConfirmationTools = new Set([
   'get_pending_issue', 'confirm_create_issue', 'confirm_project_archive',
   'calendar_get_pending_change', 'calendar_confirm_change', 'mail_confirm_action',
 ]);
+const situationActivationTools = new Set(['situation_read', 'situation_lookup', 'situation_commit']);
+export function isSituationActivationTool(name: string): boolean {
+  return situationActivationTools.has(name);
+}
 export function isCurrentAssistantTool(name: string): boolean {
   // The brain's own tools exist for background wakes only; chat and voice never see them.
-  return !legacyConfirmationTools.has(name) && !isBrainOnlyTool(name);
+  return !legacyConfirmationTools.has(name) && !isBrainOnlyTool(name) && !isSituationActivationTool(name);
 }
 
 /** A background wake sees everything chat does, plus the brain's own tools. */

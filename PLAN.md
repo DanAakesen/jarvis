@@ -1,3 +1,22 @@
+## PI situational intelligence — 19 November 2026
+
+**Status: implementation complete; local qualification complete in this worktree, with exact-head PR/CI and physical-device acceptance still pending.** Background PI is off by default and every check in this phase is local or fixture driven; no live model, Foundry, Voice Live, Azure MCP, GitHub MCP or paid canary was run.
+
+| Step | State |
+| --- | --- |
+| Add migration `0090` with matching down migration: bounded owner state JSON, revision/hash, refs/freshness, activation metadata, 1–12 allowance and independent Location source | Done |
+| Add `PiSituationService`/SQL store, redaction, stale retention, stale-revision refusal and failure-to-stale handling | Done |
+| Add one `PiActivationService` envelope for Chat, Voice, scheduled and event invocations, including content-free ledger telemetry | Done |
+| Reuse `proactive_events` and its lease/dedupe/cadence ledger for combined event, manual and scheduled PI slots; event can satisfy the next sweep | Done |
+| Add `situation_read`, `situation_lookup`, `situation_commit` and the `jarvis-situational-context` Skill | Done |
+| Enforce source switches before automatic mail/calendar polls and before PI background tool admission/context; retain direct owner tool use | Done |
+| Add coarse Location permission/observation/freshness independent of Weather | Done |
+| Extend existing iOS/web Proactive settings and status for turns, cost, actual spend, freshness, source state and recovery | Done |
+| Update product, design, architecture, agent context and decision log | Done in this change |
+| Push one ready PR against `main`, qualify that exact head, address CI/review and hand off to Dispatcher | In progress |
+
+Completion means deterministic backend, web, contracts, script, migration/SQL and JarvisCore checks pass at the PR head, CI and review findings are addressed, and Dispatcher receives the exact SHA and TestFlight/live gaps. Merge, deployment and TestFlight remain Dispatcher-owned.
+
 ## iPhone Voice carousel and captions (#1958, P15-210)
 
 **Status: implemented; all 195 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**

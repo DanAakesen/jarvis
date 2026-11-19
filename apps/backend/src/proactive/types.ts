@@ -1,4 +1,4 @@
-export const sourceIds = ['todos', 'calendar', 'mail', 'weather', 'factory', 'news', 'travel', 'x', 'health', 'nutrition', 'notes', 'memory'] as const;
+export const sourceIds = ['todos', 'calendar', 'mail', 'weather', 'factory', 'news', 'travel', 'x', 'health', 'nutrition', 'notes', 'memory', 'location'] as const;
 export type SourceId = typeof sourceIds[number];
 export const findingCategories = [
   'deadline', 'clash', 'travel', 'todo', 'prep', 'news', 'weather', 'status', 'suggestion',
@@ -52,7 +52,7 @@ export interface SourceFact {
   identity?: string;
   taskScope?: 'personal' | 'work';
   projectRelated?: boolean;
-  kind: 'todo' | 'event' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'health' | 'nutrition' | 'note' | 'memory' | 'commitment';
+  kind: 'todo' | 'event' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'health' | 'nutrition' | 'note' | 'memory' | 'commitment' | 'location';
   label: string;
   text: string;
   observedAt: string;
@@ -76,6 +76,7 @@ export interface SourceResult {
 export interface ProactiveSettings {
   paused: boolean;
   monthlyBudgetDkk: number;
+  backgroundTurnsPerDay: number;
   sources: Record<SourceId, boolean>;
   categories: Record<FindingCategory, boolean>;
   suggestionScope: SuggestionScopePreference;

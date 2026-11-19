@@ -14,6 +14,8 @@ function age(event: Pick<QueuedEvent, 'occurredAt'>, now: Date): string {
 
 export interface WakeInput {
   readonly runId: string;
+  readonly activationType?: 'scheduled' | 'event';
+  readonly activationSource?: string;
   readonly now: Date;
   readonly timeZone: string;
   readonly events: readonly QueuedEvent[];
@@ -31,6 +33,7 @@ export interface WakeInput {
 export function formatWake(input: WakeInput): string {
   const lines = [
     `[Brain wake ${input.runId.slice(0, 8)} | ${formatLocalTime(input.now, input.timeZone)}]`,
+    `Activation: type=${input.activationType ?? 'event'} source=${oneLine(input.activationSource ?? 'event', 64)}.`,
     'This is a background wake, not a message from Dan. Nobody is waiting for a reply here, and there is no owner message. Use the `jarvis-brain` skill.',
     '',
   ];

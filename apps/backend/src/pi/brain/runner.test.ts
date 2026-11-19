@@ -182,6 +182,15 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(t.gateway.wakes).toEqual([]);
   });
 
+  it('settles events from a disabled source before the PI wake sees their facts', async () => {
+    const t = setup();
+    await t.proactive.settings.patch({ sources: { factory: false } });
+    await t.enqueue(failedDeploy);
+    expect((await t.tick()).outcome).toBe('filtered');
+    expect(t.gateway.wakes).toEqual([]);
+    expect(await t.queue.hasWork(t.now())).toBe(false);
+  });
+
   it('retries a failed wake later on the same events, bills what was spent, and logs the failure', async () => {
     let attempt = 0;
     const t = setup({ decide: async () => { attempt += 1; return attempt === 1 ? { text: '', fail: true } : { text: 'Handled.' }; } });

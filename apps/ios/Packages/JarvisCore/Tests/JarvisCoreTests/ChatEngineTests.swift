@@ -4,6 +4,36 @@ import XCTest
 
 // TEST-ONLY chat engine switch: delete with the switch at cutover.
 final class ChatEngineTests: XCTestCase {
+    func testDeviceLocationPatchKeepsPermissionAndObservationFreshness() throws {
+        let observed = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-19T05:00:00Z"))
+        let patch = try XCTUnwrap(DeviceLocationSettings.patch(
+            city: " Copenhagen ",
+            latitude: 55.6761,
+            longitude: 12.5683,
+            observedAt: observed
+        ))
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(patch)) as? [String: Any]
+        )
+        let location = try XCTUnwrap((object["settings"] as? [String: Any])?["location"] as? [String: Any])
+        XCTAssertEqual(location["city"] as? String, "Copenhagen")
+        XCTAssertEqual(location["permission"] as? String, "granted")
+        XCTAssertEqual(location["observedAt"] as? String, "2026-11-19T05:00:00Z")
+        XCTAssertEqual(location["latitude"] as? Double, 55.68)
+        XCTAssertEqual(location["longitude"] as? Double, 12.57)
+        XCTAssertNil(DeviceLocationSettings.permissionPatch("authorized_when_in_use"))
+    }
+
+    func testProactiveEditorPatchesTheCombinedBackgroundTurnAllowance() throws {
+        let config = JarvisProactiveConfig(monthlyBudgetDkk: 100, backgroundTurnsPerDay: 12)
+        var editor = JarvisProactiveSettingsEditor(settings: config)
+        editor.draft.backgroundTurnsPerDay = 4
+        let patch = try XCTUnwrap(editor.beginSave())
+        XCTAssertEqual(patch.backgroundTurnsPerDay, 4)
+        XCTAssertNil(patch.monthlyBudgetDkk)
+        XCTAssertFalse(patch.isEmpty)
+    }
+
     func testSelectionDefaultsToPiPersistsAndIgnoresUnknownValues() throws {
         let suite = "ChatEngineTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -131,9 +161,15 @@ final class ChatEngineTests: XCTestCase {
         let body = #"""
         {"available":true,"enabled":true,"updatedAt":"2026-11-16T10:00:00.000Z","paused":false,
          "budget":{"limitDkk":100,"spentDkk":82.5,"state":"warn"},
-         "month":{"wakes":14,"costDkk":1.9},"today":{"messages":2},
+         "month":{"wakes":14,"costDkk":1.9},"today":{"messages":2,"usedTurns":3,"allowedTurns":12},
          "lastWake":{"at":"2026-11-16T10:00:00.000Z","totalMs":4100,"inputTokens":12000,"cachedTokens":9000,"outputTokens":300,"costDkk":0.09,"outcome":"ok"},
-         "logPending":1}
+         "logPending":1,
+         "slots":{"used":3,"allowed":12,"remaining":9,"lastAt":"2026-11-16T10:00:00.000Z","nextAllowedAt":null,"quiet":false,
+                  "queue":{"pending":0,"leased":0,"retrying":0}},
+         "situation":{"revision":2,"asOf":"2026-11-16T09:55:00.000Z","updatedAt":"2026-11-16T10:00:00.000Z",
+                      "staleSources":[],"missingSources":["weather"],"disabledSources":[]},
+         "cost":{"coldSweepMinDkk":0.14,"coldSweepMaxDkk":0.28,"representativeToolTurnDkk":0.17,"preflightWorstCaseDkk":0.79,
+                 "estimatedDayMinDkk":1.68,"estimatedDayMaxDkk":3.36,"estimatedThirtyDayMinDkk":50.4,"estimatedThirtyDayMaxDkk":100}}
         """#
         let transport = RecordingTransport([
             HTTPResponse(statusCode: 200, body: Data(body.utf8)),
@@ -147,6 +183,9 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertEqual(status.budget, PiBrainStatus.Budget(limitDkk: 100, spentDkk: 82.5, state: "warn"))
         XCTAssertEqual(status.month.wakes, 14)
         XCTAssertEqual(status.today.messages, 2)
+        XCTAssertEqual(status.today.usedTurns, 3)
+        XCTAssertEqual(status.slots.remaining, 9)
+        XCTAssertEqual(status.situation.revision, 2)
         XCTAssertEqual(status.lastWake?.cachedTokens, 9000)
         XCTAssertEqual(status.logPending, 1)
 

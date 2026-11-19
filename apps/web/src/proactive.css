@@ -294,6 +294,50 @@
   height: 1em;
 }
 
+.proactive-background-status {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.proactive-background-status p,
+.proactive-background-status dl {
+  margin: 0;
+}
+
+.proactive-background-status dl {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.proactive-background-status dl > div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.4fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.proactive-background-status dt {
+  font-weight: 650;
+}
+
+.proactive-background-status dd {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.proactive-status-warning {
+  color: var(--state-error-fg);
+}
+
+.proactive-status-muted {
+  color: var(--text-muted);
+  font-size: var(--type-small);
+}
+
+.proactive-turn-allowance {
+  display: grid;
+  gap: var(--space-2);
+}
+
 @media (pointer: coarse) {
   .proactive-budget a {
     display: flex;
@@ -435,6 +479,11 @@
 
   .proactive-source-row {
     justify-content: flex-start;
+  }
+
+  .proactive-background-status dl > div {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
   }
 
   .proactive-snooze-menu {

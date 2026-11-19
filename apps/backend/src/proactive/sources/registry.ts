@@ -11,6 +11,7 @@ import { createNewsSource } from './news.js';
 import { createTodosSource } from './todos.js';
 import { createTravelSource } from './travel.js';
 import { createWeatherSource } from './weather.js';
+import { createLocationSource } from './location.js';
 
 type VaultClient = ReturnType<typeof createGitHubVaultClient>;
 
@@ -38,6 +39,7 @@ export function buildSourceRegistry(dependencies: SourceDependencies): Proactive
     createTodosSource(dependencies.vaultClient, true),
     createTravelSource(dependencies.googleApiClient),
     createWeatherSource(dependencies.settingsStore),
+    createLocationSource(dependencies.settingsStore),
   ];
   sources.push(...createContextSources(dependencies));
   sources.sort((left, right) => left.id.localeCompare(right.id));

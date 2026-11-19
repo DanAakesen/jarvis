@@ -7,6 +7,7 @@ import type { JarvisTool } from '../core/tool-registry.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { RemoteMcpBridge } from './remote-mcp.js';
+import type { PiSituationService } from './situation.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -27,13 +28,19 @@ const probe: JarvisTool = {
   }),
 };
 
-function setup(bridges: RemoteMcpBridge[] = []) {
+function setup(
+  bridges: RemoteMcpBridge[] = [],
+  options: { tools?: JarvisTool[]; situation?: PiSituationService } = {},
+) {
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
   const recorded: Array<{ messageId: string; tool: string }> = [];
   const app = buildApp(config, undefined, {
-    modules: [coreModule, { id: 'probe', tools: [probe], registerRoutes: async () => {} },
-      { id: 'pi', tools: [], registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges }) }],
+    modules: [coreModule, { id: 'probe', tools: [probe, ...(options.tools ?? [])], registerRoutes: async () => {} },
+      { id: 'pi', tools: [], registerRoutes: createPiRoutes({
+        gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges,
+        ...(options.situation ? { situation: options.situation } : {}),
+      }) }],
     auth: async (token) => {
       if (token === deployToken) return { kind: 'jarvis-deploy', objectId: config.auth.deployObjectId, tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
@@ -125,6 +132,40 @@ describe('PI MCP server', () => {
     expect(undiscovered.body?.outcome).toBe('refused');
     expect(grant.azure).toMatchObject({ attempts: 1, undiscoveredRefusals: 1 });
     expect(grant.results).toEqual([]);
+  });
+
+  it('hides and refuses automatic mail tools when Mail is disabled', async () => {
+    const mail: JarvisTool = {
+      name: 'mail_search',
+      description: 'Search owner mail. Keyword: inbox.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execution: { defaultEffect: 'read' },
+      execute: async () => ({ found: 1 }),
+    };
+    const situation = {
+      async read() {
+        return {
+          state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+          staleSources: [], missingSources: [], disabledSources: ['mail'], freshSources: [],
+          asOf: null, updatedAt: null, lastActivation: null,
+        };
+      },
+    } as PiSituationService;
+    const { registry, tool } = setup([], { tools: [mail], situation });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '',
+      brain: { runId: '00000000-0000-4000-8000-000000000001', sent: [], wrote: [], looked: [] },
+      signal: live(),
+      activation: {
+        id: '00000000-0000-4000-8000-000000000001', type: 'event', source: 'timer', slotKey: null,
+        stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: ['mail'],
+      },
+    });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'mail inbox' });
+    expect(found.body?.result.tools.map((entry: { name: string }) => entry.name)).not.toContain('mail_search');
+    grant.discovered.add('mail_search');
+    const called = await tool('call_tool', { turn: grant.turn, name: 'mail_search', arguments: {} });
+    expect(called.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
   });
 
   it('shows chat the system-health tool without its smoke-only operation selector', async () => {

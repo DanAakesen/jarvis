@@ -3,7 +3,12 @@ import Foundation
 /// Turns a device fix into the saved home-location setting that the weather tool reads, so the assistant has the
 /// device's position once Location Services permission is granted. Coordinates are rounded to about one kilometre.
 public enum DeviceLocationSettings {
-    public static func patch(city: String, latitude: Double, longitude: Double) -> JarvisSettingsPatch? {
+    public static func patch(
+        city: String,
+        latitude: Double,
+        longitude: Double,
+        observedAt: Date = Date()
+    ) -> JarvisSettingsPatch? {
         guard latitude.isFinite, longitude.isFinite,
               (-90...90).contains(latitude), (-180...180).contains(longitude) else { return nil }
         let trimmed = String(city.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
@@ -13,8 +18,15 @@ public enum DeviceLocationSettings {
                 "city": .string(trimmed),
                 "latitude": .number(rounded(latitude)),
                 "longitude": .number(rounded(longitude)),
+                "observedAt": .string(ISO8601DateFormatter().string(from: observedAt)),
+                "permission": .string("granted"),
             ],
         ])
+    }
+
+    public static func permissionPatch(_ permission: String) -> JarvisSettingsPatch? {
+        guard ["unknown", "not_determined", "denied", "restricted"].contains(permission) else { return nil }
+        return JarvisSettingsPatch(areas: ["location": ["permission": .string(permission)]])
     }
 
     public static func rounded(_ value: Double) -> Double {

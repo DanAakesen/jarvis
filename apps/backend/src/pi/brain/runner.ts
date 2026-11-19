@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { budgetState, canRunWithinBudget, estimateCost } from '../../proactive/budget.js';
+import {
+  budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
+} from '../../proactive/budget.js';
 import type { EventQueueStore } from '../../proactive/events/event-queue.js';
 import { MAX_EVENT_ATTEMPTS } from '../../proactive/events/rules.js';
 import type { QueuedEvent } from '../../proactive/events/types.js';
 import type { ProactiveStore } from '../../proactive/store.js';
-import { copenhagenDayStart, isQuietHour, monthKey } from '../../proactive/time.js';
+import {
+  copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
+} from '../../proactive/time.js';
+import { sourceIds, type SourceId } from '../../proactive/types.js';
 import { PI_MODEL } from '../definition.js';
 import type { PiBrainRun } from '../turns.js';
 import type { PiGateway } from '../gateway.js';
@@ -12,10 +17,16 @@ import type { PiStore } from '../store.js';
 import { BrainCommsRefusal, type BrainComms } from './comms.js';
 import type { DecisionLog, DecisionRecord } from './decision-log.js';
 import { MAX_WAKE_EVENTS, formatWake } from './wake.js';
+import {
+  DEFAULT_BACKGROUND_TURNS_PER_DAY,
+  MIN_WAKE_GAP_MS,
+  createPiBackgroundSlotService,
+  type PiBackgroundSlotService,
+} from '../activation-slots.js';
 
 /** Exact cost guards. One wake covers many events; wakes are spaced and counted. */
-export const MIN_WAKE_GAP_MS = 10 * 60_000;
-export const MAX_WAKES_PER_DAY = 12;
+export { MIN_WAKE_GAP_MS } from '../activation-slots.js';
+export const MAX_WAKES_PER_DAY = DEFAULT_BACKGROUND_TURNS_PER_DAY;
 const LEASE_MS = 6 * 60_000;
 const HOUR_MS = 60 * 60_000;
 const RETRY_MS = 5 * 60_000;
@@ -29,7 +40,7 @@ const maxPendingLogs = 24;
 export interface BrainOptions {
   readonly queue: EventQueueStore;
   readonly gateway: Pick<PiGateway, 'runBrain'>;
-  readonly proactive: Pick<ProactiveStore, 'settings' | 'spend'>;
+  readonly proactive: Pick<ProactiveStore, 'settings' | 'spend' | 'runs'>;
   readonly piStore: Pick<PiStore, 'readBrainSwitch'>;
   readonly comms: BrainComms;
   readonly decisionLog: DecisionLog;
@@ -46,6 +57,7 @@ export interface BrainOptions {
     /** After a wake: what it cost, and what woke it, so each watch looked at can be given its share. */
     afterRun(input: { runId: string; costDkk: number; events: number; run: PiBrainRun; due: readonly string[] }, signal: AbortSignal): Promise<void>;
   } | undefined;
+  readonly slots?: PiBackgroundSlotService | undefined;
 }
 
 export interface BrainTick {
@@ -70,10 +82,17 @@ export function createBrain(options: BrainOptions) {
   let nextWorkAt: Date | null = null;
   let lastWakeAt = 0;
   let running: Promise<BrainTick> | undefined;
+  let scheduledActive = false;
+  const slots = options.slots ?? createPiBackgroundSlotService({ queue, proactive: options.proactive, now });
   const pendingLogs: DecisionRecord[] = [];
   const notified = new Set<string>();
 
   const wake = (at: Date) => { if (nextWorkAt === null || at < nextWorkAt) nextWorkAt = at; };
+  const eventSource = (value: string): SourceId | undefined => {
+    if ((sourceIds as readonly string[]).includes(value)) return value as SourceId;
+    if (value === 'github' || value === 'worker') return 'factory';
+    return undefined;
+  };
 
   async function flushLogs(signal: AbortSignal): Promise<void> {
     while (pendingLogs.length > 0) {
@@ -108,6 +127,7 @@ export function createBrain(options: BrainOptions) {
     if (!state.enabled) return result('off');
     const settings = await proactive.settings.read();
     if (settings.paused) return result('paused');
+    if (!Object.values(settings.sources).some(Boolean)) return result('no_sources');
     const queueDue = await queue.hasWork(current);
     let extraDue: Date | null = null;
     if (options.extras) {
@@ -119,24 +139,31 @@ export function createBrain(options: BrainOptions) {
     }
     const extraNow = extraDue !== null && extraDue <= current;
     if (!queueDue && !extraNow) return result('empty');
+    const slotStatus = await slots.status();
+    const persistedLastWakeAt = slotStatus.lastAt === null ? 0 : Date.parse(slotStatus.lastAt);
+    lastWakeAt = Math.max(lastWakeAt, persistedLastWakeAt);
     const sinceLast = current.getTime() - lastWakeAt;
-    if (sinceLast < MIN_WAKE_GAP_MS) { wake(new Date(lastWakeAt + MIN_WAKE_GAP_MS)); return result('spaced'); }
-    if (await queue.modelBatchesSince(copenhagenDayStart(current)) >= MAX_WAKES_PER_DAY) {
+    if (lastWakeAt > 0 && sinceLast < MIN_WAKE_GAP_MS) {
+      wake(new Date(lastWakeAt + MIN_WAKE_GAP_MS));
+      return result('spaced');
+    }
+    if (slotStatus.used >= slotStatus.allowed) {
       wake(new Date(copenhagenDayStart(current).getTime() + 36 * HOUR_MS));
       return result('daily_cap');
     }
     const month = monthKey(current);
     const spent = await proactive.spend.monthTotal(month);
     const worstCase = estimateCost(PI_MODEL, worstCaseInputTokens, worstCaseOutputTokens).estimatedDkk;
-    if (settings.monthlyBudgetDkk <= 0 || !canRunWithinBudget(settings.monthlyBudgetDkk, spent, worstCase)) {
+    const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
+    if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
       wake(new Date(current.getTime() + HOUR_MS));
-      await notifyBudget('exhausted', spent, settings.monthlyBudgetDkk, signal);
+      await notifyBudget('exhausted', spent, budgetLimit, signal);
       return result('budget_exhausted');
     }
-    const budgetNote = budgetState(settings.monthlyBudgetDkk, spent) === 'warn'
-      ? `The proactive budget is ${Math.round((spent / settings.monthlyBudgetDkk) * 100)} percent used this month (${spent.toFixed(0)} of ${settings.monthlyBudgetDkk.toFixed(0)} DKK). Be sparing: look at what matters, skip what can wait.`
+    const budgetNote = budgetState(budgetLimit, spent) === 'warn'
+      ? `The proactive budget is ${Math.round((spent / budgetLimit) * 100)} percent used this month (${spent.toFixed(0)} of ${budgetLimit.toFixed(0)} DKK). Be sparing: look at what matters, skip what can wait.`
       : undefined;
-    if (budgetNote) await notifyBudget('warn', spent, settings.monthlyBudgetDkk, signal);
+    if (budgetNote) await notifyBudget('warn', spent, budgetLimit, signal);
 
     const claimed = queueDue ? await queue.claim(current, MAX_WAKE_EVENTS, LEASE_MS) : [];
     if (claimed.length === MAX_WAKE_EVENTS) wake(current);
@@ -145,6 +172,9 @@ export function createBrain(options: BrainOptions) {
     for (const event of claimed) {
       const maxAge = event.source === 'timer' ? timerMaxAgeMs : defaultMaxAgeMs;
       if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
+      else if (eventSource(event.source) && !settings.sources[eventSource(event.source)!]) {
+        settled.push({ id: event.id, outcome: 'source disabled' });
+      }
       else if (current.getTime() - event.occurredAt.getTime() > maxAge) settled.push({ id: event.id, outcome: 'stale' });
       else survivors.push(event);
     }
@@ -169,11 +199,34 @@ export function createBrain(options: BrainOptions) {
       }
     }
     const runId = (options.newRunId ?? randomUUID)();
-    // Counted before the call, so a failing or crashing wake still uses up the daily allowance.
-    await queue.startBatch(runId, current, survivors.length);
+    const sourceNames = [...new Set(survivors.map(({ source }) => source))];
+    const activationType = sourceNames.length > 0 && sourceNames.every((source) => source === 'timer')
+      ? 'scheduled' as const
+      : 'event' as const;
+    const activationSource = sourceNames.length === 1 ? sourceNames[0]! : 'mixed';
+    const slotKey = activationType === 'event' ? nextSlotAfter(current).key : null;
+    // Counted before the call, so a failing or crashing wake still uses up the combined daily allowance.
+    const reservation = await slots.reserve({
+      runId, eventCount: survivors.length, allowQuiet: activationType === 'event',
+    });
+    if (!reservation.allowed) {
+      const retryAt = reservation.status.nextAllowedAt
+        ? new Date(reservation.status.nextAllowedAt)
+        : new Date(current.getTime() + HOUR_MS);
+      await queue.retryLater(survivors.map(({ id }) => id), retryAt);
+      wake(retryAt);
+      return result(reservation.reason, claimed.length);
+    }
     lastWakeAt = current.getTime();
     const outcome = await options.gateway.runBrain({
-      runId, body: formatWake({ runId, now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections, budgetNote }),
+      runId,
+      activationType,
+      activationSource,
+      slotKey,
+      body: formatWake({
+        runId, activationType, activationSource,
+        now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections, budgetNote,
+      }),
     }, signal);
     const at = now();
     if (outcome.usage.inputTokens > 0 || outcome.usage.outputTokens > 0) {
@@ -205,9 +258,145 @@ export function createBrain(options: BrainOptions) {
     return result(outcome.ok ? 'done' : 'failed', claimed.length, runId);
   }
 
+  async function runScheduledOnce(
+    claim: { run: { id: string; slot: string | null; trigger: 'scheduled' | 'catchup' | 'manual' }; generation: number },
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<void> {
+    const finish = async (
+      status: 'done' | 'failed' | 'skipped' | 'cancelled',
+      reason: string | null,
+    ) => options.proactive.runs.finish(claim.run.id, claim.generation, status, reason, 0, now());
+    const state = await options.piStore.readBrainSwitch(options.owner, signal);
+    if (!state.enabled) { await finish('skipped', 'background_off'); return; }
+    const settings = await options.proactive.settings.read();
+    if (settings.paused) { await finish('skipped', 'paused'); return; }
+    if (!Object.values(settings.sources).some(Boolean)) { await finish('skipped', 'no_sources'); return; }
+    const current = now();
+    const slot = await slots.status();
+    if (slot.used >= slot.allowed) { await finish('skipped', 'daily_cap'); return; }
+    if (claim.run.slot && slot.lastAt) {
+      const currentSlotAt = localSlotInstant(claim.run.slot);
+      const previousSlotAt = latestSlotAtOrBefore(new Date(currentSlotAt.getTime() - 1)).at;
+      if (Date.parse(slot.lastAt) > previousSlotAt.getTime()) {
+        await finish('skipped', 'satisfied_by_event');
+        return;
+      }
+    }
+    if (slot.lastAt && current.getTime() - Date.parse(slot.lastAt) < MIN_WAKE_GAP_MS) {
+      await finish('skipped', 'satisfied_by_recent_activation');
+      return;
+    }
+    const spent = await options.proactive.spend.monthTotal(monthKey(current));
+    const worstCase = estimateCost(PI_MODEL, worstCaseInputTokens, worstCaseOutputTokens).estimatedDkk;
+    const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
+    if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
+      await notifyBudget('exhausted', spent, budgetLimit, signal);
+      await finish('skipped', 'budget_exhausted');
+      return;
+    }
+    const budgetNote = budgetState(budgetLimit, spent) === 'warn'
+      ? `The proactive budget is ${Math.round((spent / budgetLimit) * 100)} percent used this month. Be sparing.`
+      : undefined;
+    let extra: { sections: readonly string[]; lines: readonly string[]; due: readonly string[] } = {
+      sections: [], lines: [], due: [],
+    };
+    if (options.extras) {
+      try { extra = await options.extras.sections(current, signal); }
+      catch {
+        await finish('failed', 'situation_sources_unavailable');
+        return;
+      }
+    }
+    const reservation = await slots.reserve({
+      runId: claim.run.id,
+      eventCount: 0,
+      allowQuiet: claim.run.trigger === 'manual',
+    });
+    if (!reservation.allowed) {
+      await finish('skipped', reservation.reason === 'spaced'
+        ? 'satisfied_by_recent_activation'
+        : reservation.reason);
+      return;
+    }
+    const outcome = await options.gateway.runBrain({
+      runId: claim.run.id,
+      activationType: 'scheduled',
+      activationSource: claim.run.trigger === 'manual' ? 'manual' : 'timer',
+      slotKey: claim.run.slot,
+      body: formatWake({
+        runId: claim.run.id,
+        activationType: 'scheduled',
+        activationSource: claim.run.trigger === 'manual' ? 'manual' : 'timer',
+        now: current,
+        timeZone: options.timeZone,
+        events: [],
+        sections: extra.sections,
+        budgetNote,
+      }),
+    }, signal);
+    const at = now();
+    if (outcome.usage.inputTokens > 0 || outcome.usage.outputTokens > 0) {
+      await options.proactive.spend.record({
+        runId: claim.run.id,
+        month: monthKey(at),
+        inputTokens: outcome.usage.inputTokens,
+        outputTokens: outcome.usage.outputTokens,
+        estimatedDkk: outcome.costDkk,
+        createdAt: at,
+      });
+    }
+    await options.extras?.afterRun({
+      runId: claim.run.id, costDkk: outcome.costDkk, events: 0, run: outcome.run, due: extra.due,
+    }, signal).catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));
+    if (pendingLogs.length < maxPendingLogs) {
+      pendingLogs.push({
+        runId: claim.run.id,
+        at,
+        events: [],
+        extra: extra.lines,
+        result: outcome,
+        errorMessage: outcome.error?.code,
+      });
+    }
+    await flushLogs(signal);
+    await finish(outcome.ok ? 'done' : 'failed', outcome.ok ? null : outcome.error?.code ?? outcome.outcome);
+    log(outcome.ok ? 'info' : 'warn', {
+      reason: outcome.ok ? 'scheduled_done' : outcome.error?.code ?? outcome.outcome,
+      events: 0,
+      sent: outcome.run.sent.length,
+      tools: outcome.toolResults.length,
+      costDkk: Number(outcome.costDkk.toFixed(4)),
+    });
+  }
+
+  async function runScheduled(
+    claim: Parameters<typeof runScheduledOnce>[0],
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<void> {
+    if (running || scheduledActive) {
+      await options.proactive.runs.finish(
+        claim.run.id, claim.generation, 'skipped', 'satisfied_by_active_activation', 0, now(),
+      );
+      return;
+    }
+    scheduledActive = true;
+    try { await runScheduledOnce(claim, signal); }
+    finally { scheduledActive = false; }
+  }
+
   return {
     /** A producer queued something, or the owner turned the switch on: look at the queue on the next tick. */
     wake: () => wake(now()),
+    /** The exact same PI path for a 07:00/18:00 sweep or an owner-requested Check now. */
+    runScheduled,
+    async enabled(signal: AbortSignal): Promise<boolean> {
+      const [state, settings] = await Promise.all([
+        options.piStore.readBrainSwitch(options.owner, signal),
+        options.proactive.settings.read(),
+      ]);
+      return state.enabled && !settings.paused;
+    },
+    async status() { return slots.status(); },
     /** Reads the queue once at startup, so work left by a restart is picked up. */
     async start(): Promise<void> {
       const due = await queue.nextDueAt();
@@ -218,6 +407,7 @@ export function createBrain(options: BrainOptions) {
     },
     /** One pass. Idle without a database read when nothing is due. */
     tick(signal: AbortSignal): Promise<BrainTick> {
+      if (scheduledActive) return Promise.resolve({ outcome: 'active_activation', claimed: 0 });
       if (running) return running;
       if (nextWorkAt === null || nextWorkAt > now()) return Promise.resolve({ outcome: 'idle', claimed: 0 });
       nextWorkAt = null;

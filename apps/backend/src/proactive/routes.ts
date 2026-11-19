@@ -4,7 +4,9 @@ import type {
 } from 'fastify';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
-import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
+import {
+  budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
+} from './budget.js';
 import { copenhagenDayStart, monthKey, nextSlotAfter, isQuietHour } from './time.js';
 import { itemFeedback, itemIdPattern as uuidPattern, outreachFeedback } from './feedback.js';
 import type { OutreachStore } from './events/outreach-store.js';
@@ -21,6 +23,8 @@ import {
   resolveProactivePreferenceIntent,
   proactiveSettingsRevision, understoodProactivePreferences, ProactiveSettingsConflictError,
 } from './preferences.js';
+import type { BrainControl } from '../pi/brain/control.js';
+import { LOCATION_FRESHNESS_MS } from './sources/location.js';
 
 const statusLabels = sourceLabels;
 
@@ -37,6 +41,9 @@ export interface ProactiveRouteOptions {
   worstCaseDkk?: () => number | Promise<number>;
   /** Present when the event-driven path is on. */
   outreach?: OutreachStore;
+  /** PI background switch, queue/slot and situational-state status. */
+  background?: BrainControl;
+  locationStatus?: () => Promise<Pick<SourceStatus, 'state' | 'reason' | 'observedAt'>>;
 }
 
 function validUrl(value: unknown): value is string {
@@ -68,7 +75,7 @@ async function parseSettingsPatch(
       : { error: 'unsupported_preference' };
   }
   if (Object.keys(body).some((key) =>
-    !['paused', 'monthlyBudgetDkk', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance',
+    !['paused', 'monthlyBudgetDkk', 'backgroundTurnsPerDay', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance',
       'expectedRevision'].includes(key))) {
     return undefined;
   }
@@ -80,10 +87,18 @@ async function parseSettingsPatch(
     patch.paused = body.paused;
   }
   if (Object.hasOwn(body, 'monthlyBudgetDkk')) {
-    if (!Number.isInteger(body.monthlyBudgetDkk) || (body.monthlyBudgetDkk as number) < 0 || (body.monthlyBudgetDkk as number) > 1000) {
+    if (!Number.isInteger(body.monthlyBudgetDkk) ||
+        (body.monthlyBudgetDkk as number) < 0 || (body.monthlyBudgetDkk as number) > 100) {
       return undefined;
     }
     patch.monthlyBudgetDkk = body.monthlyBudgetDkk as number;
+  }
+  if (Object.hasOwn(body, 'backgroundTurnsPerDay')) {
+    if (!Number.isInteger(body.backgroundTurnsPerDay) ||
+        (body.backgroundTurnsPerDay as number) < 1 || (body.backgroundTurnsPerDay as number) > 12) {
+      return undefined;
+    }
+    patch.backgroundTurnsPerDay = body.backgroundTurnsPerDay as number;
   }
   if (Object.hasOwn(body, 'sources')) {
     if (!Array.isArray(body.sources)) return undefined;
@@ -137,7 +152,8 @@ async function parseSettingsPatch(
 function responseSettings(settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>) {
   return {
     paused: settings.paused,
-    monthlyBudgetDkk: settings.monthlyBudgetDkk,
+    monthlyBudgetDkk: effectiveProactiveBudget(settings.monthlyBudgetDkk),
+    backgroundTurnsPerDay: settings.backgroundTurnsPerDay,
     sources: sourceIds.map((id) => ({ id, enabled: settings.sources[id] })),
     categories: findingCategories.map((id) => ({ id, enabled: settings.categories[id] })),
     suggestionScope: settings.suggestionScope,
@@ -175,24 +191,33 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
     app.get('/proactive/status', async (request, reply) => {
       if (!owner(request, reply)) return;
       const now = options.now();
-      const [settings, lastRun, estimatedSpendDkk, storedStatuses] = await Promise.all([
+      const [settings, lastRun, estimatedSpendDkk, storedStatuses, background, liveLocation] = await Promise.all([
         options.store.settings.read(),
         options.store.runs.latest(),
         options.store.spend.monthTotal(monthKey(now)),
         options.store.sources.list(),
+        options.background?.read(AbortSignal.timeout(10_000)) ?? Promise.resolve(null),
+        options.locationStatus?.() ?? Promise.resolve(null),
       ]);
       const byId = new Map(storedStatuses.map((entry) => [entry.id, entry]));
+      const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
       const sources: SourceStatus[] = sourceIds.map((id) => {
         const status = byId.get(id);
         const enabled = settings.sources[id];
         const unavailableReason = id === 'x' ? 'no_provider' : !options.databaseAvailable ? 'not_connected' : null;
+        const observedMs = status?.observedAt ? Date.parse(status.observedAt) : Number.NaN;
+        const current = id === 'location' && liveLocation ? liveLocation : status;
+        const currentObservedMs = current?.observedAt ? Date.parse(current.observedAt) : observedMs;
+        const stale = id === 'location' && Number.isFinite(currentObservedMs) &&
+          now.getTime() - currentObservedMs > LOCATION_FRESHNESS_MS;
         return {
           id,
           label: statusLabels[id],
           enabled,
-          state: !enabled ? 'disabled' : status?.state ?? (!options.databaseAvailable ? 'unavailable' : id === 'x' ? 'unavailable' : 'not_run'),
-          reason: !enabled ? null : status?.reason ?? unavailableReason,
-          observedAt: status?.observedAt ?? null,
+          state: !enabled ? 'disabled' : stale ? 'stale'
+            : current?.state ?? (!options.databaseAvailable ? 'unavailable' : id === 'x' ? 'unavailable' : 'not_run'),
+          reason: !enabled ? null : stale ? 'location_observation_stale' : current?.reason ?? unavailableReason,
+          observedAt: current?.observedAt ?? null,
         };
       });
       return {
@@ -202,15 +227,16 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
         lastRun,
         budget: {
           month: monthKey(now),
-          monthlyLimitDkk: settings.monthlyBudgetDkk,
+          monthlyLimitDkk: budgetLimit,
           estimatedSpendDkk,
-          state: budgetState(settings.monthlyBudgetDkk, estimatedSpendDkk),
+          state: budgetState(budgetLimit, estimatedSpendDkk),
         },
         sources,
         capabilities: {
           todoWrites: options.todoWritesEnabled,
           alerts: options.alertsEnabled && options.pushEnabled,
         },
+        background,
       };
     });
 
@@ -235,14 +261,19 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
       try {
         const now = options.now();
         const settings = await options.store.settings.read();
+        if (options.background) {
+          const background = await options.background.read(AbortSignal.timeout(10_000));
+          if (!background.available) return reply.code(503).send({ error: 'not_available' });
+          if (!background.enabled) return reply.code(409).send({ error: 'background_off' });
+        }
         if (settings.paused) return reply.code(409).send({ error: 'paused' });
         if (!Object.values(settings.sources).some(Boolean)) {
           return reply.code(409).send({ error: 'no_sources' });
         }
         const spent = await options.store.spend.monthTotal(monthKey(now));
         const worstCase = await (options.worstCaseDkk?.() ?? estimateCost('unknown', 100_000, 8_000).estimatedDkk);
-        if (settings.monthlyBudgetDkk === 0 ||
-            !canRunWithinBudget(settings.monthlyBudgetDkk, spent, worstCase)) {
+        const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
+        if (budgetLimit === 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
           return reply.code(409).send({ error: 'budget_exhausted' });
         }
         const latest = await options.store.runs.running(now);

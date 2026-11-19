@@ -1,0 +1,170 @@
+import { describe, expect, it } from 'vitest';
+import { createMemoryProactiveStore } from '../proactive/store.js';
+import { sourceIds, type ProactiveSource } from '../proactive/types.js';
+import {
+  createMemoryPiSituationStore,
+  createPiSituationService,
+  parsePiSituationState,
+  PiSituationError,
+  type PiSituationState,
+} from './situation.js';
+
+const owner = '11111111-1111-4111-8111-111111111111';
+const signal = () => new AbortController().signal;
+const at = new Date('2026-11-19T05:00:00.000Z');
+
+function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
+  return parsePiSituationState({
+    version: 1,
+    asOf: at.toISOString(),
+    summary: 'One compact cross-source model.',
+    sources: sourceIds.map((id) => ({
+      id,
+      state: id === 'mail' || id === 'location' ? 'fresh' : 'missing',
+      observedAt: id === 'mail' || id === 'location' ? at.toISOString() : null,
+      expiresAt: id === 'location' ? new Date(at.getTime() + 3_600_000).toISOString() : null,
+      reason: id === 'mail' || id === 'location' ? null : 'not_observed',
+      refIds: id === 'mail' ? ['mail:42'] : id === 'location' ? ['location:device'] : [],
+    })),
+    refs: [
+      {
+        id: 'mail:42', source: 'mail', identity: 'mail:42', label: 'Travel confirmation',
+        observedAt: at.toISOString(), expiresAt: null,
+      },
+      {
+        id: 'location:device', source: 'location', identity: 'location:device', label: 'Near Copenhagen',
+        observedAt: at.toISOString(), expiresAt: new Date(at.getTime() + 3_600_000).toISOString(),
+      },
+    ],
+    facts: [
+      {
+        id: 'fact:mail', source: 'mail', refIds: ['mail:42'], text: 'Flight confirmation exists.',
+        observedAt: at.toISOString(), expiresAt: null, stale: false,
+      },
+      {
+        id: 'fact:location', source: 'location', refIds: ['location:device'], text: 'Coarse position near Copenhagen.',
+        observedAt: at.toISOString(), expiresAt: new Date(at.getTime() + 3_600_000).toISOString(), stale: false,
+      },
+    ],
+    followUps: [{ id: 'follow:trip', text: 'Check the departure before leaving.', dueAt: null, refIds: ['mail:42'] }],
+    ...overrides,
+  });
+}
+
+function setup(sources: readonly ProactiveSource[] = []) {
+  const store = createMemoryPiSituationStore();
+  const proactive = createMemoryProactiveStore(owner);
+  const service = createPiSituationService({
+    owner,
+    store,
+    proactive,
+    sources,
+    now: () => at,
+  });
+  return { store, proactive, service };
+}
+
+describe('PI situational state', () => {
+  it('requires the bounded schema and refuses credentials', () => {
+    expect(() => parsePiSituationState({ ...state(), summary: 'token ghp_' + 'A'.repeat(36) }))
+      .toThrow(PiSituationError);
+    expect(() => parsePiSituationState({ ...state(), facts: [{ ...state().facts[0]!, refIds: ['unknown'] }] }))
+      .toThrow(PiSituationError);
+  });
+
+  it('commits revision-checked state and rejects a stale hash without overwriting it', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    const committed = await service.commit({
+      expectedRevision: 0,
+      expectedHash: null,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000001', type: 'chat', source: 'chat', at },
+    }, signal());
+    expect(committed.record).toMatchObject({ revision: 1 });
+    await expect(service.commit({
+      expectedRevision: 0,
+      expectedHash: null,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000002', type: 'chat', source: 'chat', at },
+    }, signal())).rejects.toMatchObject({ code: 'conflict' });
+    expect(store.records.get(owner)?.revision).toBe(1);
+  });
+
+  it('excludes disabled-source contributions while retaining explicit stale storage', async () => {
+    const { service, store, proactive } = setup();
+    const initial = await service.read(signal());
+    await service.commit({
+      expectedRevision: 0,
+      expectedHash: null,
+      policyRevision: initial.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000003', type: 'event', source: 'mail', at },
+    }, signal());
+    await proactive.settings.patch({ sources: { mail: false } });
+    const latest = await service.read(signal());
+    expect(latest.disabledSources).toContain('mail');
+    expect(latest.state?.facts.some(({ source }) => source === 'mail')).toBe(false);
+
+    const replacement = state();
+    replacement.summary = 'A newer summary must not add mail data.';
+    const result = await service.commit({
+      expectedRevision: latest.revision,
+      expectedHash: latest.hash,
+      policyRevision: latest.policyRevision,
+      state: replacement,
+      activation: { id: '00000000-0000-4000-8000-000000000004', type: 'event', source: 'mail', at },
+    }, signal());
+    expect(result.excluded).toContain('mail');
+    const stored = store.records.get(owner)!;
+    expect(stored.state.facts.filter(({ source }) => source === 'mail').every(({ stale }) => stale)).toBe(true);
+    expect((await service.read(signal())).state?.facts.some(({ source }) => source === 'mail')).toBe(false);
+  });
+
+  it('keeps location available when Weather is off and refuses a disabled source lookup', async () => {
+    const location: ProactiveSource = {
+      id: 'location',
+      label: 'Location',
+      async read() {
+        return {
+          source: 'location', state: 'ok', reason: null, observedAt: at.toISOString(),
+          facts: [{
+            ref: 'location:device', identity: 'location:device', kind: 'location',
+            label: 'Near Copenhagen', text: 'Coarse position', observedAt: at.toISOString(),
+          }],
+        };
+      },
+    };
+    const { service, proactive } = setup([location]);
+    const initial = await service.read(signal());
+    expect(initial.freshSources).toContain('location');
+    await service.commit({
+      expectedRevision: 0, expectedHash: null, policyRevision: initial.policyRevision, state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000005', type: 'chat', source: 'chat', at },
+    }, signal());
+    await proactive.settings.patch({ sources: { weather: false, location: true, mail: false } });
+    await expect(service.lookup({ source: 'mail', ref: 'mail:42' }, signal())).rejects.toMatchObject({ code: 'invalid' });
+    await expect(service.lookup({ source: 'location', ref: 'location:device' }, signal())).resolves.toMatchObject({
+      source: 'location', ref: 'location:device',
+    });
+  });
+
+  it('marks prior state stale after a failed activation without inventing a replacement', async () => {
+    const { service, store } = setup();
+    const initial = await service.read(signal());
+    await service.commit({
+      expectedRevision: 0, expectedHash: null, policyRevision: initial.policyRevision, state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000006', type: 'scheduled', source: 'timer', at },
+    }, signal());
+    await service.markFailed({
+      id: '00000000-0000-4000-8000-000000000007',
+      type: 'scheduled',
+      source: 'timer',
+      at: new Date(at.getTime() + 60_000),
+    }, signal());
+    expect(store.records.get(owner)?.state.facts.every(({ stale }) => stale)).toBe(true);
+    expect((await service.read(signal())).staleSources.length).toBeGreaterThan(0);
+  });
+});
