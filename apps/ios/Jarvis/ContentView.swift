@@ -239,35 +239,10 @@ struct ContentView: View {
                         workspaceRuntime.endVoiceVisuals()
                     }
                 }
-                .onChange(of: workspaceRuntime.requestedNavigation) { _, request in
-                    guard request != nil, let request = workspaceRuntime.consumeRequestedNavigation() else { return }
-                    // Following a native link leaves the content that offered it, or its sheet would keep covering the destination.
-                    // On Voice the panel stays: a page change from there already dismisses it.
-                    if navigation.currentDestination != .voice && workspaceRuntime.voiceVisuals == nil {
-                        workspaceRuntime.userDismissedView()
-                    }
-                    switch request {
-                    case .destination(let destination):
-                        navigate(to: destination)
-                    case .notesGraph:
-                        notesSelectedTab = .graph
-                        navigate(to: .notes)
-                    case .factoryTask(let id):
-                        navigation.openFactoryTask(id)
-                    }
+                .onChange(of: workspaceRuntime.requestedNavigation) { _, _ in
+                    handleWorkspaceNavigation()
                 }
-                .sheet(
-                    item: Binding(
-                        // On the Voice page the same content is a panel above the controls, never a sheet.
-                        get: {
-                            guard navigation.currentDestination != .voice, workspaceRuntime.voiceVisuals == nil else { return nil }
-                            return workspaceRuntime.presentedView
-                        },
-                        set: {
-                            if $0 == nil && workspaceRuntime.voiceVisuals == nil { workspaceRuntime.userDismissedView() }
-                        }
-                    )
-                ) { presented in
+                .sheet(item: workspaceSheet) { presented in
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .frame(width: size.width, height: size.height)
@@ -305,6 +280,34 @@ struct ContentView: View {
                     withTransaction(transaction) { navigation.closeSidebar() }
                 }
             }
+    }
+
+    private var workspaceSheet: Binding<PresentedWorkspaceView?> {
+        Binding(
+            get: {
+                guard navigation.currentDestination != .voice, workspaceRuntime.voiceVisuals == nil else { return nil }
+                return workspaceRuntime.presentedView
+            },
+            set: { value in
+                if value == nil && workspaceRuntime.voiceVisuals == nil { workspaceRuntime.userDismissedView() }
+            }
+        )
+    }
+
+    private func handleWorkspaceNavigation() {
+        guard let request = workspaceRuntime.consumeRequestedNavigation() else { return }
+        if navigation.currentDestination != .voice && workspaceRuntime.voiceVisuals == nil {
+            workspaceRuntime.userDismissedView()
+        }
+        switch request {
+        case .destination(let destination):
+            navigate(to: destination)
+        case .notesGraph:
+            notesSelectedTab = .graph
+            navigate(to: .notes)
+        case .factoryTask(let id):
+            navigation.openFactoryTask(id)
+        }
     }
 
     private func destinationView(_ destination: JarvisDestination) -> some View {
