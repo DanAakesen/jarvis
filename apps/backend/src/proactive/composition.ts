@@ -259,17 +259,19 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     ...(options.settingsStore ? {
       locationStatus: async () => {
         const location = (await readSettings(options.settingsStore!)).location;
-        if (location.permission === 'denied' || location.permission === 'restricted') {
+        if (location.permission !== 'granted') {
           return {
             state: 'unavailable' as const,
-            reason: `location_permission_${location.permission}`,
+            reason: location.permission === 'denied' || location.permission === 'restricted'
+              ? `location_permission_${location.permission}`
+              : 'location_permission_not_granted',
             observedAt: location.observedAt,
           };
         }
         if (!location.observedAt || !location.city || location.latitude === null || location.longitude === null) {
           return {
             state: 'unavailable' as const,
-            reason: location.permission === 'granted' ? 'no_location' : 'location_permission_not_granted',
+            reason: 'no_location',
             observedAt: location.observedAt,
           };
         }
