@@ -77,7 +77,14 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
       // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, so only the ones a turn asks for are ever put in
       // front of the model. Each catalogue is bounded, so a slow server never holds up a search of the local tools.
       const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
-      const remoteTools = (await Promise.all(bridges.map((bridge) => bridge.tools(turnSignal)))).flat();
+      const catalogues = await Promise.all(bridges.map(async (bridge) => {
+        const tools = await bridge.tools(turnSignal);
+        return { bridge, tools, status: bridge.status() };
+      }));
+      const azure = catalogues.find(({ bridge }) => bridge.prefix === azureToolPrefix);
+      grant.azure.catalogue = !azure ? 'not_configured'
+        : azure.status.state === 'ready' && azure.tools.length === 0 ? 'empty' : azure.status.state;
+      const remoteTools = catalogues.flatMap(({ tools }) => tools);
       const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
@@ -88,8 +95,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
       const notes = (noMatch: boolean) => {
         const lines = [
           ...(noMatch ? ['No matching tool. Say so plainly.'] : []),
-          ...bridges.flatMap((bridge) => {
-            const status = bridge.status();
+          ...catalogues.flatMap(({ bridge, status }) => {
             if (status.state === 'starting') return [`${bridge.label} tools are still loading (the server wakes from sleep and can take a minute or two). Search again shortly; ${bridge.label} is attached, just not loaded yet.`];
             if (status.state === 'unreachable') return [`${bridge.label} could not be reached (${status.reason}). Say so plainly; do not claim to have looked.`];
             return [];
@@ -116,6 +122,8 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
+      const azureRequested = input.name.startsWith(azureToolPrefix);
+      if (azureRequested) grant.azure.attempts += 1;
       const bridge = bridges.find((candidate) => input.name.startsWith(candidate.prefix));
       if (bridge && grant.discovered.has(input.name)) {
         return callRemote(bridge, input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
@@ -123,6 +131,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
       const tool = app.jarvisTools.get(input.name);
       const visible = tool && (grant.brain ? isWakeTool(tool.name) : isCurrentAssistantTool(tool.name));
       if (!tool || !visible || !grant.discovered.has(tool.name)) {
+        if (azureRequested) grant.azure.undiscoveredRefusals += 1;
         return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
       }
       const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);

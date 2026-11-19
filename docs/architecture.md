@@ -3,6 +3,7 @@
 - `createRemoteMcpBridge` (`apps/backend/src/pi/remote-mcp.ts`) exposes `status()` (`ready`, `starting`, `unreachable` with a reason), `warm()` and `label`. `createPiRoutes` calls `warm()` for every bridge as the backend starts, and `/pi/warm` does too. The refresh runs up to 200 s; a failed first list is not cached.
 - `find_tools` (`pi/mcp.ts`) adds a `note` when a bridge is not ready. The smoke lists the bridges in parallel and reports a failure reason.
 - Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
+- On a normal PI turn, the live tool reference is the first line of the Foundry message, even when the backend resends the trusted context. The gateway's `pi.turn` log separates the last Azure catalogue state seen by `find_tools`, the number of Azure tool schemas returned during the turn, and the number and outcomes of `az_` call attempts. It does not record searches, arguments, results or references.
 
 ## Voice visuals and the phone as the active device (17 November 2026, P15-205, #1939)
 

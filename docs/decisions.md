@@ -1,3 +1,7 @@
+## 18 November 2026 — Keep the PI tool reference on line one (#1922, Build 113)
+
+The managed instructions read the tool reference from the first line. The normal chat formatter put the owner's context before it whenever context was first sent or changed. A test of the normal PI chat route reproduced the missing reference on a reused owner conversation; putting the reference first lets the contract-following harness fixture discover and call Azure through Jarvis MCP. The smoke's environment note is not that context block. Run 44185584236 proved Azure reach in a separate conversation, not what happened on the phone. Keep the existing turn grant and tool checks; use content-free counts to tell catalogue, selection and execution failures apart in device testing.
+
 ## 18 November 2026 — iPhone Voice keeps visuals for the current call (#1958, P15-210)
 
 Use the existing phone workspace events to populate a local Voice carousel, without changing the backend window contract. A new ID appends and takes focus; an update to an existing ID replaces that page. Close clears the carousel, Collapse returns from full screen, and minimising the call keeps its visual history. Use the existing glass controls over the page and let the HTML document own its heading and authored colours; WebKit gets the active appearance, Jarvis theme variables and readable defaults. Apple compilation, rendering and live call acceptance remain unverified.

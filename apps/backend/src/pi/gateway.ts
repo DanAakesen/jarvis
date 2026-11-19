@@ -7,6 +7,7 @@ import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
+import { azureToolPrefix } from './remote-mcp.js';
 import { chatTurnKinds, type PiStore, type PiStoredTurn, type PiTurnRecord } from './store.js';
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 
@@ -471,7 +472,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0, outputTokens: billed?.outputTokens ?? 0,
         costDkk: billed ? costOf(billed) : 0, firstTextMs, totalMs, outcome,
       }, billed, `pi:${input.messageId}:${now().getTime()}`);
-      log('pi.turn', { channel: input.channel ?? 'chat', outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0 });
+      const azureCalls = { attempts: grant?.azure.attempts ?? 0, ok: 0, refused: grant?.azure.undiscoveredRefusals ?? 0, error: 0 };
+      for (const result of grant?.results ?? []) {
+        if (result.tool.startsWith(azureToolPrefix)) azureCalls[result.outcome] += 1;
+      }
+      log('pi.turn', {
+        channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
+        estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0,
+        azureCatalogue: grant?.azure.catalogue ?? 'not_searched',
+        azureToolsOffered: [...(grant?.discovered ?? [])].filter(name => name.startsWith(azureToolPrefix)).length,
+        azureCalls,
+      });
     }
   }
 

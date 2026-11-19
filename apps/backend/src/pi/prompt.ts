@@ -24,8 +24,8 @@ export interface PiTurnText {
  */
 export function formatTurn(input: PiTurnText): string {
   return [
-    ...(input.context ? [input.context, ''] : []),
     `[Turn ${input.turn} | ${formatLocalTime(input.now, input.timeZone)}]`,
+    ...(input.context ? [input.context, ''] : []),
     ...(input.notes ?? []).flatMap(note => [note, '']),
     input.text,
   ].join('\n');

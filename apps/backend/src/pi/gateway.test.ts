@@ -66,7 +66,7 @@ describe('PI gateway', () => {
     expect(responses[0]!.body).toMatchObject({ conversation: 'conv_1', stream: true });
     const first = (responses[0]!.body!.input as Array<{ content: string }>)[0]!.content;
     const second = (responses[1]!.body!.input as Array<{ content: string }>)[0]!.content;
-    expect(first).toMatch(/^CONTEXT BLOCK\n\n\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nhi$/u);
+    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\nhi$/u);
     expect(second).not.toContain('CONTEXT BLOCK');
     expect(store.turns.map(turn => [turn.kind, turn.outcome, turn.inputTokens, turn.cachedTokens, turn.outputTokens])).toEqual([
       ['chat', 'ok', 11_000, 9_000, 20], ['chat', 'ok', 11_100, 11_000, 10],

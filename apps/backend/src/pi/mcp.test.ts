@@ -112,12 +112,19 @@ describe('PI MCP server', () => {
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
     const loading = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
     expect(loading.body?.result.note).toMatch(/Azure tools are still loading.*attached, just not loaded yet/u);
+    expect(grant.azure.catalogue).toBe('starting');
     status = { state: 'unreachable', reason: 'no answer within 200 seconds' };
     const down = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
     expect(down.body?.result.note).toMatch(/Azure could not be reached \(no answer within 200 seconds\)/u);
+    expect(grant.azure.catalogue).toBe('unreachable');
     status = { state: 'ready' };
     const ready = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
     expect(ready.body?.result.note).toBeUndefined();
+    expect(grant.azure.catalogue).toBe('empty');
+    const undiscovered = await tool('call_tool', { turn: grant.turn, name: 'az_group_resource_list', arguments: {} });
+    expect(undiscovered.body?.outcome).toBe('refused');
+    expect(grant.azure).toMatchObject({ attempts: 1, undiscoveredRefusals: 1 });
+    expect(grant.results).toEqual([]);
   });
 
   it('shows chat the system-health tool without its smoke-only operation selector', async () => {
