@@ -74,9 +74,10 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
   signal = AbortSignal.any([signal, AbortSignal.timeout(5_000)]);
   const components: SystemHealthComponent[] = [];
   const add = (id: string, status: SystemStatusValue, detail: string, checkedAt: unknown,
-    recovery: SystemHealthComponent['recovery'] = [], freshness = false) => {
+    recovery: SystemHealthComponent['recovery'] = [], freshness: boolean | number = false) => {
     const at = timestamp(checkedAt);
-    if (freshness && status !== 'unknown' && (!at || now - Date.parse(at) > staleMs || Date.parse(at) > now)) {
+    const maxAge = typeof freshness === 'number' ? freshness : staleMs;
+    if (freshness && status !== 'unknown' && (!at || now - Date.parse(at) > maxAge || Date.parse(at) > now)) {
       status = 'unknown';
       detail = 'Cached check is stale or has no valid timestamp.';
     }
@@ -91,16 +92,22 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
     const detail = !entry ? 'No verified cached check is available.' :
       entry.details?.configured === false ? 'Component is not configured.' :
       entry.details?.healthProbe === 'not_run' ? 'Runner health has not been probed.' :
+      entry.details?.runtimeProbe === 'not_run' ? 'No recent runtime check has completed.' :
+      entry.details?.runtimeProbe === 'stale' ? 'The last runtime check is stale.' :
+      entry.details?.reason === 'embedding_request_failed' ? 'The latest embedding request failed.' :
       entry.details?.deploymentAvailable === false ? 'Required model deployment is unavailable.' :
       entry.details?.catalogue === 'fallback' ? 'Model catalogue is using fallback configuration.' :
       id === 'pc_bridge' && entry.details?.connected === false ? 'PC bridge is disconnected.' :
       id === 'vault_index' && status === 'degraded' ? 'Vault index is stale or embedding coverage is incomplete.' :
       status === 'unknown' ? 'No verified cached check is available.' :
       entry.details?.reason === 'check_failed' ? 'Component check failed.' :
-      id === 'last_error' && status !== 'ok' ? 'An HTTP server error was recorded.' :
+      id === 'last_error' && status !== 'ok' ? 'A recent HTTP server error was recorded.' :
+      id === 'last_error' && typeof entry.details?.occurredAt === 'string'
+        ? 'Only an older historical HTTP server error is recorded.' :
       status === 'ok' ? 'Cached component check passed.' :
       status === 'down' ? 'Cached component check failed.' : 'Cached component check reports reduced availability.';
-    add(id, status, detail, entry?.checkedAt, [], true);
+    add(id, status, detail, entry?.checkedAt, [],
+      entry?.details?.runtimeProbe === 'runtime' ? 15 * 60_000 : true);
   }
   for (const id of systemSmokeCheckIds) {
     const entry = snapshot?.smoke?.entries.find((item) => item.id === id);

@@ -27,13 +27,22 @@ const probe: JarvisTool = {
   }),
 };
 
-function setup(bridges: RemoteMcpBridge[] = []) {
+function setup(bridges: RemoteMcpBridge[] = [], smokeBudgetExhausted = false) {
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
   const recorded: Array<{ messageId: string; tool: string }> = [];
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: [probe], registerRoutes: async () => {} },
-      { id: 'pi', tools: [], registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges }) }],
+      { id: 'pi', tools: [], registerRoutes: createPiRoutes({
+        gateway: {
+          stream: async function* () {},
+          status: async () => ({ enabled: !smokeBudgetExhausted }),
+        } as never,
+        registry,
+        auth,
+        monthlyCapDkk: 250,
+        bridges,
+      }) }],
     auth: async (token) => {
       if (token === deployToken) return { kind: 'jarvis-deploy', objectId: config.auth.deployObjectId, tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
@@ -179,5 +188,45 @@ describe('PI MCP server', () => {
     expect(noPart.statusCode).toBe(400);
     expect((await call(deployToken, 'GET', '/pi/status')).statusCode).toBe(403);
     expect((await call(deployToken, 'POST', '/pi/warm')).statusCode).toBe(403);
+  });
+
+  it('records degraded smoke evidence for each capability refused by the budget preflight', async () => {
+    const { app } = setup([], true);
+    const call = (part: 'core' | 'voice') => app.inject({
+      method: 'POST',
+      url: '/pi/smoke',
+      payload: { part },
+      headers: { authorization: bearer(deployToken) },
+    });
+
+    const core = await call('core');
+    expect(core.statusCode).toBe(409);
+    expect(core.json()).toMatchObject({ code: 'pi_budget_exhausted' });
+    expect((await app.systemStatusReader.read()).entries.find(entry => entry.id === 'foundry.chat'))
+      .toMatchObject({
+        status: 'degraded',
+        details: {
+          configured: true,
+          engine: 'pi',
+          evidence: 'deploy-smoke',
+          smokePart: 'core',
+          reason: 'budget_exhausted',
+        },
+      });
+
+    const voice = await call('voice');
+    expect(voice.statusCode).toBe(409);
+    expect(voice.json()).toMatchObject({ code: 'pi_budget_exhausted' });
+    expect((await app.systemStatusReader.read()).entries.find(entry => entry.id === 'foundry.voice'))
+      .toMatchObject({
+        status: 'degraded',
+        details: {
+          configured: true,
+          engine: 'pi',
+          evidence: 'deploy-smoke',
+          smokePart: 'voice',
+          reason: 'budget_exhausted',
+        },
+      });
   });
 });

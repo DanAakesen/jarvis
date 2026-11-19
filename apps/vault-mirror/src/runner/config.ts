@@ -20,11 +20,17 @@ function httpsUrl(value: string | undefined, name: string, allowPath: boolean): 
   return url.toString().replace(/\/$/u, '');
 }
 
-function limit(value: string | undefined, fallback: number, maximum: number, name: string): number {
+function limit(
+  value: string | undefined,
+  fallback: number,
+  minimum: number,
+  maximum: number,
+  name: string,
+): number {
   if (value === undefined || value === '') return fallback;
   if (!/^(?:0|[1-9]\d*)$/u.test(value)) throw new TypeError(`Invalid ${name}`);
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed > maximum) throw new TypeError(`Invalid ${name}`);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) throw new TypeError(`Invalid ${name}`);
   return parsed;
 }
 
@@ -44,7 +50,7 @@ export function readMirrorConfig(env: NodeJS.ProcessEnv): MirrorConfig {
     githubAppId,
     storageUrl: httpsUrl(env.VAULT_MIRROR_STORAGE_URL, 'VAULT_MIRROR_STORAGE_URL', false),
     writeBack,
-    maxChanged: limit(env.VAULT_MIRROR_MAX_CHANGED, 25, 100, 'VAULT_MIRROR_MAX_CHANGED'),
-    maxDeletes: limit(env.VAULT_MIRROR_MAX_DELETES, 3, 10, 'VAULT_MIRROR_MAX_DELETES'),
+    maxChanged: limit(env.VAULT_MIRROR_MAX_CHANGED, 25, 1, 100, 'VAULT_MIRROR_MAX_CHANGED'),
+    maxDeletes: limit(env.VAULT_MIRROR_MAX_DELETES, 3, 0, 10, 'VAULT_MIRROR_MAX_DELETES'),
   };
 }

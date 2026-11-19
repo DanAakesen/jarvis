@@ -18,6 +18,17 @@ export interface VaultMirrorStatus {
   credentialMatches: number;
   pendingWriteBack: number;
   consecutiveFailures: number;
+  changedOnGitHub?: number;
+  changedOnObsidian?: number;
+  deletedOnGitHub?: number;
+  deletedOnObsidian?: number;
+  deferredOnGitHub?: number;
+  deferredOnObsidian?: number;
+  guardReasons?: (
+    | 'invalid-input' | 'max-changed-G' | 'max-changed-O' | 'max-deletes-G'
+    | 'max-deletes-O' | 'base-deletion-ratio' | 'empty-side' | 'missing-base-O'
+    | 'missing-base-G'
+  )[];
   lastSuccessAt: string | null;
   conflictPaths: string[];
 }
@@ -25,6 +36,17 @@ export const vaultMirrorStatusSchema: ZodType<VaultMirrorStatus>;
 export interface VaultMirrorStatusView {
   state: 'not-set-up' | 'healthy' | 'stale' | 'needs-attention' | 'failed' | 'read-error';
   lastSuccessAt: string | null;
+  lastRunAt?: string;
+  outcome?: VaultMirrorStatus['outcome'];
+  guardReasons?: VaultMirrorStatus['guardReasons'];
+  changedOnGitHub?: number;
+  changedOnObsidian?: number;
+  deletedOnGitHub?: number;
+  deletedOnObsidian?: number;
+  deferredOnGitHub?: number;
+  deferredOnObsidian?: number;
+  readReason?: 'backend-not-configured' | 'status-missing' | 'access-denied' | 'timed-out'
+    | 'invalid' | 'unavailable';
   writeBack?: VaultMirrorStatus['writeBack'];
   reason?: VaultMirrorStatus['reason'];
   counts?: Pick<VaultMirrorStatus, 'approved' | 'pushed' | 'writtenBack' | 'deleted' | 'conflicts'

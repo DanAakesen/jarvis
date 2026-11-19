@@ -68,6 +68,8 @@ export interface Counters {
   changedOnO: number;
   deletedOnG: number;
   deletedOnO: number;
+  deferredOnG: number;
+  deferredOnO: number;
   skipReasons: Partial<Record<SkipReason, number>>;
   guardReasons: Partial<Record<GuardReason, number>>;
 }

@@ -12,14 +12,26 @@ export interface VaultMirrorStatusReader {
 }
 
 function project(status: VaultMirrorStatus, now: number, paths: boolean): VaultMirrorStatusView {
-  const { lastSuccessAt, writeBack, reason, conflictPaths,
+  const { finishedAt, outcome, guardReasons, changedOnGitHub, changedOnObsidian,
+    deletedOnGitHub, deletedOnObsidian, deferredOnGitHub, deferredOnObsidian,
+    lastSuccessAt, writeBack, reason, conflictPaths,
     approved, pushed, writtenBack, deleted, conflicts, skipped,
     credentialMatches, pendingWriteBack, consecutiveFailures } = status;
-  const state = status.outcome === 'needs-attention' || status.outcome === 'failed'
-    ? status.outcome
-    : lastSuccessAt === null || now - Date.parse(lastSuccessAt) > 30 * 60_000 ? 'stale' : 'healthy';
+  const lastSuccessTime = lastSuccessAt === null ? Number.NaN : Date.parse(lastSuccessAt);
+  const state = outcome === 'needs-attention' || outcome === 'failed'
+    ? outcome
+    : !Number.isFinite(lastSuccessTime) || lastSuccessTime > now + 30_000 ||
+        now - lastSuccessTime > 30 * 60_000 ? 'stale' : 'healthy';
   return {
-    state, lastSuccessAt, writeBack,
+    state, lastSuccessAt, lastRunAt: finishedAt, outcome,
+    ...(guardReasons ? { guardReasons: [...guardReasons] } : {}),
+    ...(changedOnGitHub !== undefined ? { changedOnGitHub } : {}),
+    ...(changedOnObsidian !== undefined ? { changedOnObsidian } : {}),
+    ...(deletedOnGitHub !== undefined ? { deletedOnGitHub } : {}),
+    ...(deletedOnObsidian !== undefined ? { deletedOnObsidian } : {}),
+    ...(deferredOnGitHub !== undefined ? { deferredOnGitHub } : {}),
+    ...(deferredOnObsidian !== undefined ? { deferredOnObsidian } : {}),
+    writeBack,
     ...(reason ? { reason } : {}),
     counts: { approved, pushed, writtenBack, deleted, conflicts, skipped,
       credentialMatches, pendingWriteBack, consecutiveFailures },
@@ -31,11 +43,16 @@ export function createVaultMirrorStatusReader(
   blob?: Pick<BlobClient, 'download'>,
   now: () => number = Date.now,
 ): VaultMirrorStatusReader {
-  type Result = VaultMirrorStatus | 'not-set-up' | 'read-error';
+  type Result =
+    | { readonly status: VaultMirrorStatus }
+    | {
+      readonly state: 'not-set-up' | 'read-error';
+      readonly readReason: NonNullable<VaultMirrorStatusView['readReason']>;
+    };
   let cached: { value: Result; expiresAt: number } | undefined;
   let pending: Promise<Result> | undefined;
   async function load(): Promise<Result> {
-    if (!blob) return 'not-set-up';
+    if (!blob) return { state: 'not-set-up', readReason: 'backend-not-configured' };
     const controller = new AbortController();
     let body: Readable | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -53,10 +70,10 @@ export function createVaultMirrorStatusReader(
         maxRetryRequests: 0,
       });
       body = response.readableStreamBody as Readable | undefined;
-      if (!body) return 'read-error';
+      if (!body) return { state: 'read-error', readReason: 'unavailable' };
       if (controller.signal.aborted || (response.contentLength ?? 0) > MAX_BYTES) {
         body.destroy?.();
-        return 'read-error';
+        return { state: 'read-error', readReason: controller.signal.aborted ? 'timed-out' : 'invalid' };
       }
       const chunks: Buffer[] = [];
       let bytes = 0;
@@ -66,17 +83,36 @@ export function createVaultMirrorStatusReader(
         if (bytes > MAX_BYTES) {
           controller.abort();
           body.destroy?.();
-          return 'read-error';
+          return { state: 'read-error', readReason: 'invalid' };
         }
         chunks.push(buffer);
       }
-      return vaultMirrorStatusSchema.parse(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      let document: unknown;
+      try {
+        document = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch {
+        return { state: 'read-error', readReason: 'invalid' };
+      }
+      const parsed = vaultMirrorStatusSchema.safeParse(document);
+      return parsed.success
+        ? { status: parsed.data }
+        : { state: 'read-error', readReason: 'invalid' };
     };
     try {
       return await Promise.race([work(), deadline]);
     } catch (error) {
-      const code = (error as { code?: unknown } | null)?.code;
-      return code === 'ContainerNotFound' || code === 'BlobNotFound' ? 'not-set-up' : 'read-error';
+      const failure = error as { code?: unknown; name?: unknown; message?: unknown } | null;
+      const code = typeof failure?.code === 'string' ? failure.code : '';
+      if (code === 'ContainerNotFound' || code === 'BlobNotFound') {
+        return { state: 'not-set-up', readReason: 'status-missing' };
+      }
+      if (['AuthorizationFailure', 'AuthorizationPermissionMismatch', 'AuthenticationFailed', 'Forbidden'].includes(code)) {
+        return { state: 'read-error', readReason: 'access-denied' };
+      }
+      if (failure?.message === 'deadline' || failure?.name === 'AbortError' || controller.signal.aborted) {
+        return { state: 'read-error', readReason: 'timed-out' };
+      }
+      return { state: 'read-error', readReason: 'unavailable' };
     } finally {
       clearTimeout(timer);
     }
@@ -90,7 +126,9 @@ export function createVaultMirrorStatusReader(
       await pending;
     }
     const value = cached!.value;
-    return typeof value === 'string' ? { state: value, lastSuccessAt: null } : project(value, now(), paths);
+    return 'status' in value
+      ? project(value.status, now(), paths)
+      : { state: value.state, lastSuccessAt: null, readReason: value.readReason };
   }
   return { read: () => read(false), readForStatus: () => read(true) };
 }

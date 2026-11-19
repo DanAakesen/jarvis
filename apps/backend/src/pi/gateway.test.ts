@@ -93,6 +93,31 @@ describe('PI gateway', () => {
     expect(input()).not.toContain('Channel: voice');
   });
 
+  it('records only bounded runtime evidence for chat and voice turns', async () => {
+    const evidence: Array<Record<string, unknown>> = [];
+    const { gateway } = setup([
+      () => sse(delta('x'), completed(1, 0, 1)),
+      () => sse(delta('y'), completed(1, 0, 1)),
+    ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
+    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'private chat text' }, '', new AbortController().signal)) void chunk;
+    for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'private voice text', channel: 'voice' }, '', new AbortController().signal)) void chunk;
+    expect(evidence).toEqual([
+      { channel: 'chat', outcome: 'ok', at: '2026-11-15T16:00:00.000Z', source: 'turn' },
+      { channel: 'voice', outcome: 'ok', at: '2026-11-15T16:00:00.000Z', source: 'turn' },
+    ]);
+  });
+
+  it('reports bounded brain turns as Foundry runtime evidence without exposing wake text', async () => {
+    const evidence: Array<Record<string, unknown>> = [];
+    const { gateway } = setup([
+      () => sse(delta('Nothing for Dan.'), completed(1, 0, 1)),
+    ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
+    await gateway.runBrain({ runId: 'run-1', body: 'private wake text' }, new AbortController().signal);
+    expect(evidence).toEqual([
+      { channel: 'chat', outcome: 'ok', at: '2026-11-15T16:00:00.000Z', source: 'brain' },
+    ]);
+  });
+
   it('marks text before a tool call as an acknowledgment, then commentary', async () => {
     const { run } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
     expect(await run('look')).toEqual([
@@ -156,10 +181,17 @@ describe('PI gateway', () => {
   });
 
   it('stops before sending anything once the monthly cap is reached', async () => {
-    const { run, calls, store } = setup([]);
+    const evidence: Array<Record<string, unknown>> = [];
+    const { run, calls, store } = setup([], {
+      onRuntimeTurn: (entry) => evidence.push({ ...entry }),
+    });
     await store.recordTurn({ kind: 'chat', messageId: null, model: 'm', inputTokens: 0, cachedTokens: 0, outputTokens: 0, costDkk: 1.5, firstTextMs: 1, totalMs: 1, outcome: 'ok' }, new AbortController().signal);
     await expect(run('hi')).rejects.toMatchObject({ code: 'pi_budget_exhausted' });
     expect(calls).toEqual([]);
+    expect(evidence).toEqual([{
+      channel: 'chat', outcome: 'failed', source: 'turn',
+      reason: 'budget_exhausted', at: '2026-11-15T16:00:00.000Z',
+    }]);
   });
 
   it('reports honest errors for a missing agent, rate limiting and a broken stream, with no fallback', async () => {
@@ -273,6 +305,32 @@ describe('PI gateway', () => {
     await chat;
     expect(second.calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
     expect(second.store.turns.map(turn => turn.kind)).toEqual(['chat']);
+  });
+
+  it('records a claim refusal without sending a model request', async () => {
+    const evidence: Array<Record<string, unknown>> = [];
+    const { gateway, calls } = setup([
+      () => new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode(delta('first'))); },
+      }), { headers: { 'content-type': 'text/event-stream' } }),
+    ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
+    const controller = new AbortController();
+    const first = gateway.stream(
+      { messageId: '42', sessionId: '7', text: 'first' }, '', controller.signal,
+    );
+    expect((await first.next()).value).toBe('first');
+    const second = async () => {
+      for await (const chunk of gateway.stream(
+        { messageId: '43', sessionId: '7', text: 'second' }, '', new AbortController().signal,
+      )) void chunk;
+    };
+    await expect(second()).rejects.toMatchObject({ code: 'pi_failed' });
+    expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+    expect(evidence).toContainEqual(expect.objectContaining({
+      channel: 'chat', outcome: 'failed', source: 'turn', reason: 'busy',
+    }));
+    controller.abort();
+    await first.return(undefined).catch(() => undefined);
   });
 
   it('does not spend on a warm-up once over the cap, and shows what is left', async () => {

@@ -609,12 +609,19 @@ changes lasting preferences, completes a vault task, or creates a reminder.
 
 ## Vault mirror freshness (19 October 2026; P14-29)
 
-Status shows one compact **Vault mirror** row: not set up, healthy, stale,
-needs attention, failed, loading or read error, plus time since the last success.
-Healthy includes no-op and busy runs; freshness becomes stale after 30 minutes
-without success. Dry-run is always visible when reported: the mirror is not
-writing into Obsidian. Expand the row for counts, write-back mode, a short fixed
-reason and up to ten conflict paths. No status document is normal, not a failure.
+Status shows one compact **Vault mirror** row: no status yet, healthy, stale,
+needs attention, failed, loading or read error. A received document shows its
+last run, last success and bounded outcome; a missing document says only that no
+status was received. It never proves that the scheduled job is absent. A read
+failure names the safe category: backend not configured, status missing, access
+denied, timed out, invalid or unavailable. Healthy includes no-op and busy
+runs; freshness becomes stale after 30 minutes without success. Dry-run is
+always visible when reported. A run may report deferred changes after completing
+one bounded batch; that remains healthy when it made progress and leaves a
+count, not an owner task. Expand the row for counts, write-back mode, fixed
+reasons and up to ten conflict paths. Hard guard trips show the fixed safety
+predicate(s) and proposed change/delete counts per direction, never note paths.
+No status document is normal, not a failure.
 
 The existing proactive checks create a normal-urgency finding immediately for
 needs-attention, or for failed/stale status when success is over an hour old or
@@ -631,9 +638,15 @@ including no-change runs; the most recently changed content timestamp is labeled
 as such and does not establish corpus freshness. A failed sync remains degraded,
 incomplete embedding coverage remains visible, and no verified sync in the
 current backend process—including after restart—remains unknown. Show the latest
-attempt and last success separately. Foundry configuration or catalogue presence
-does not establish runtime health, and a configured runner remains unknown until
-probed. Refreshing Status does not trigger a model request or runner probe.
+attempt and last success separately. PI is the active chat and voice engine.
+Configuration or catalogue presence does not establish runtime health: an
+actual PI turn, brain wake, embedding request or smoke report is healthy only
+for 15 minutes, then becomes unknown with its original evidence time. A
+configured runner remains unknown until a smoke or runtime probe completes.
+Voice remains unknown until a PI voice turn or deploy smoke reports it. The
+last backend error is degraded only for five minutes; later it remains a dated
+historical record with current status OK. Refreshing Status does not trigger a
+model request or runner probe.
 
 ## Azure vault mirror safety boundary (19 October 2026; P14-27)
 
@@ -645,9 +658,10 @@ Obsidian-to-GitHub sync is enabled from the first run. GitHub-to-Obsidian
 write-back defaults to `dry-run`; only the owner may explicitly set it to `on`
 after reviewing runs, and it has been `on` since 22 October 2026. Fresh state,
 conflicts, private policy and partial-pull/mass-deletion guards prevent unsafe
-writes. Unresolved conflicts resolve in Obsidian's favour after 24 hours, never
-by overwriting Obsidian. Whether a change reached a second device is visible only
-on that device.
+write-back. Clean three-way edits merge automatically. An unresolved conflict
+uses Obsidian's version immediately and records the GitHub version in history;
+it never overwrites Obsidian or waits for an owner. Whether a change reached a
+second device is visible only on that device.
 
 ## Shared overlays (18 October 2026; P14-09)
 

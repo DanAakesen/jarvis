@@ -89,20 +89,21 @@ if [[ -f "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/backend-log-preflight.private.json" ]]
   parameters+=("@${RUNNER_TEMP}/backend-log-probe.params.json")
 fi
 vault_mirror_requested="${JARVIS_VAULT_MIRROR_ENABLED:-false}"
-vault_mirror_configuration_valid=true
+vault_mirror_required_failure() {
+  echo "::error title=Vault mirror::$1"
+  exit 1
+}
 if [[ -n "${GITHUB_APP_ID:-}" ]]; then
   if [[ "$GITHUB_APP_ID" =~ ^[1-9][0-9]{0,19}$ ]]; then
     parameters+=(githubAppId="$GITHUB_APP_ID")
   elif [[ "$vault_mirror_requested" == true ]]; then
-    echo "::warning title=Vault mirror::The GitHub App ID is invalid; keeping the mirror disabled and omitting the optional ID."
-    vault_mirror_configuration_valid=false
+    vault_mirror_required_failure "The GitHub App ID is invalid; fix the repository variable before deploying."
   else
     echo "::error::GITHUB_APP_ID must be a positive decimal identifier"
     exit 1
   fi
 elif [[ "$vault_mirror_requested" == true ]]; then
-  echo "::warning title=Vault mirror::The GitHub App ID is missing; keeping the mirror disabled."
-  vault_mirror_configuration_valid=false
+  vault_mirror_required_failure "The GitHub App ID is missing; set it before deploying."
 fi
 if [[ -n "${JARVIS_PC_BRIDGE_CLIENT_ID:-}" ]]; then
   [[ "$JARVIS_PC_BRIDGE_CLIENT_ID" =~ ^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$ ]] || {
@@ -143,37 +144,28 @@ fi
 vault_mirror_enabled="$vault_mirror_requested"
 vault_mirror_image=""
 if [[ "$vault_mirror_enabled" != true && "$vault_mirror_enabled" != false ]]; then
-  echo "::notice title=Vault mirror::JARVIS_VAULT_MIRROR_ENABLED is not true or false; keeping the mirror disabled."
-  vault_mirror_enabled=false
+  vault_mirror_required_failure "JARVIS_VAULT_MIRROR_ENABLED must be exactly true or false."
 fi
 
 vault_mirror_write_back="${JARVIS_VAULT_MIRROR_WRITE_BACK:-dry-run}"
 vault_mirror_max_changed="${JARVIS_VAULT_MIRROR_MAX_CHANGED:-25}"
 vault_mirror_max_deletes="${JARVIS_VAULT_MIRROR_MAX_DELETES:-3}"
-if [[ "$vault_mirror_enabled" == true && "$vault_mirror_configuration_valid" == true ]] &&
+if [[ "$vault_mirror_enabled" == true ]] &&
   { [[ "$vault_mirror_write_back" != dry-run && "$vault_mirror_write_back" != on ]] ||
     [[ ! "$vault_mirror_max_changed" =~ ^[1-9][0-9]{0,2}$ ]] ||
     (( vault_mirror_max_changed > 100 )) ||
     [[ ! "$vault_mirror_max_deletes" =~ ^(0|[1-9][0-9]?)$ ]] ||
     (( vault_mirror_max_deletes > 10 )); }; then
-  echo "::warning title=Vault mirror::The write-back mode or change caps are invalid; keeping the mirror disabled."
-  vault_mirror_configuration_valid=false
-fi
-
-if [[ "$vault_mirror_enabled" == true && "$vault_mirror_configuration_valid" != true ]]; then
-  vault_mirror_enabled=false
+  vault_mirror_required_failure "The write-back mode or change caps are invalid; fix the repository variables before deploying."
 fi
 
 if [[ "$vault_mirror_enabled" == true ]]; then
   if [[ ! -f apps/vault-mirror/Dockerfile ]]; then
-    echo "::notice title=Vault mirror::apps/vault-mirror/Dockerfile is absent; skipping the image build and keeping the mirror disabled."
-    vault_mirror_enabled=false
+    vault_mirror_required_failure "apps/vault-mirror/Dockerfile is absent."
   elif [[ ! "${GITHUB_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-    echo "::notice title=Vault mirror::GITHUB_SHA is unavailable; skipping the image build and keeping the mirror disabled."
-    vault_mirror_enabled=false
+    vault_mirror_required_failure "GITHUB_SHA is unavailable."
   elif [[ ! "${GITHUB_APP_ID:-}" =~ ^[1-9][0-9]{0,19}$ ]]; then
-    echo "::notice title=Vault mirror::JARVIS_GITHUB_APP_ID is unavailable; keeping the mirror disabled."
-    vault_mirror_enabled=false
+    vault_mirror_required_failure "JARVIS_GITHUB_APP_ID is unavailable."
   else
     registry_outputs=$(az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
       --subscription "$SUBSCRIPTION_ID" \
@@ -182,8 +174,7 @@ if [[ "$vault_mirror_enabled" == true ]]; then
     registry=$(jq -r '.name // ""' <<<"$registry_outputs")
     registry_host=$(jq -r '.host // ""' <<<"$registry_outputs")
     if [[ -z "$registry" || -z "$registry_host" ]]; then
-      echo "::notice title=Vault mirror::The existing registry outputs are unavailable; keeping the mirror disabled."
-      vault_mirror_enabled=false
+      vault_mirror_required_failure "The existing registry outputs are unavailable."
     elif az acr login --name "$registry" --subscription "$SUBSCRIPTION_ID" --only-show-errors &&
       docker build --platform linux/amd64 --tag "$registry_host/jarvis-vault-mirror:$GITHUB_SHA" \
         --file apps/vault-mirror/Dockerfile . &&
@@ -194,12 +185,10 @@ if [[ "$vault_mirror_enabled" == true ]]; then
       if [[ "$vault_mirror_digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
         vault_mirror_image="$registry_host/jarvis-vault-mirror@$vault_mirror_digest"
       else
-        echo "::notice title=Vault mirror::The built image digest is unavailable; keeping the mirror disabled."
-        vault_mirror_enabled=false
+        vault_mirror_required_failure "The built image digest is unavailable."
       fi
     else
-      echo "::warning title=Vault mirror::The image build failed; continuing the infrastructure deployment with the mirror disabled."
-      vault_mirror_enabled=false
+      vault_mirror_required_failure "The image build or push failed; no partial infrastructure deployment was attempted."
     fi
   fi
 fi

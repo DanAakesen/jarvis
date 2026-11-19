@@ -174,7 +174,9 @@ import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createNotesFolderOrderModule } from './vault/folder-order.js';
 import { createNotesFolderOrderStore } from './database/notes-folder-order-store.js';
 import { createWeatherModule } from './core/weather.js';
-import { assessVaultIndex, createSystemStatusReader } from './system-status.js';
+import {
+  assessVaultIndex, createSystemStatusReader, type SystemStatusReader,
+} from './system-status.js';
 import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
 import { createProductionModules } from './production-modules.js';
 import { createBackendLogsModule } from './operations/backend-logs.js';
@@ -514,6 +516,11 @@ try {
     ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.embedding.model
     : config.foundryMemoryEmbeddingDeploymentName ?? 'text-embedding-3-small';
   const embeddingClients = new Map<string, MemoryEmbedder>();
+  const statusEvidenceWriter: { current?: Pick<SystemStatusReader, 'recordEvidence'> } = {};
+  const recordStatusEvidence = (
+    id: Parameters<SystemStatusReader['recordEvidence']>[0],
+    result: Parameters<SystemStatusReader['recordEvidence']>[1],
+  ) => statusEvidenceWriter.current?.recordEvidence(id, result);
   const getMemoryEmbedder = async (): Promise<MemoryEmbedder | undefined> => {
     if (!config.foundryProjectEndpoint || !credential) return undefined;
     const model = await embeddingModel();
@@ -566,8 +573,7 @@ try {
           ? metadata.target : null;
       } }
     : undefined;
-  // Test-only PI chat engine. Present and callable only when the Deploy workflow has provisioned the agent and given
-  // the backend its name and MCP secret; even then a chat turn uses it only when the owner's test switch asks for it.
+  // PI is the normal chat and voice engine once the Deploy workflow has provisioned it.
   const piAuth = createPiAuth(config.auth.tenantId, config.pi?.mcpSecret);
   const piRegistry = createPiTurnRegistry();
   const piStore = database ? createPiStore(database.pool) : undefined;
@@ -591,6 +597,24 @@ try {
       recordUsage: usageStore?.recordFoundryUsage
         ? (usage) => usageStore.recordFoundryUsage!({ role: 'chat', ...usage }) : undefined,
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+      onRuntimeTurn: (evidence) => {
+        if (evidence.channel === 'voice') return;
+        recordStatusEvidence('foundry.chat', {
+          status: evidence.outcome === 'ok' ? 'ok'
+            : evidence.outcome === 'cancelled' ? 'unknown'
+              : evidence.reason === 'busy' || evidence.reason === 'budget_exhausted' ? 'degraded' : 'down',
+          checkedAt: evidence.at,
+          details: {
+            configured: true,
+            engine: 'pi',
+            evidence: 'runtime-turn',
+            channel: evidence.channel,
+            outcome: evidence.outcome,
+            source: evidence.source,
+            ...(evidence.reason ? { reason: evidence.reason } : {}),
+          },
+        });
+      },
     }) : undefined;
   const approvalEndpoint = (() => {
     if (!config.foundryProjectEndpoint) return undefined;
@@ -644,7 +668,20 @@ try {
       ...(usageStore ? { usageStore } : {}),
       onUsageRecordFailure: () => logger.warn('usage.embedding_tokens_unavailable'),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
-      logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
+      logEmbedding: (fields) => {
+        logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding');
+        if (fields.outcome === 'cancelled') return;
+        recordStatusEvidence('foundry.embeddings', {
+          status: fields.outcome === 'ok' ? 'ok' : 'degraded',
+          checkedAt: new Date().toISOString(),
+          details: {
+            configured: true,
+            evidence: 'vault-index',
+            outcome: fields.outcome,
+            ...(fields.outcome === 'fallback' ? { reason: 'embedding_request_failed' } : {}),
+          },
+        });
+      },
     })
     : undefined;
   const inboxStore = vaultClient ? createInboxStore({
@@ -1263,10 +1300,10 @@ try {
       const catalogue = await modelCatalogue.read();
       const deploymentAvailable = catalogue.deployments.some(({ capabilities }) => capabilities.includes(capability));
       if (catalogue.source !== 'arm') {
-        return { status: 'degraded' as const, details: { configured: true, deploymentAvailable, catalogue: 'fallback' } };
+        return { status: 'unknown' as const, details: { configured: true, deploymentAvailable, catalogue: 'fallback' } };
       }
       return {
-        status: deploymentAvailable ? 'unknown' as const : 'degraded' as const,
+        status: deploymentAvailable ? 'unknown' as const : 'down' as const,
         details: { configured: true, deploymentAvailable, catalogue: 'live' },
       };
     } catch {
@@ -1321,11 +1358,28 @@ try {
         clearTimeout(timer);
       }
     },
-    'foundry.chat': () => foundryCapabilityStatus(Boolean(conversationAgent), 'chat'),
-    'foundry.voice': () => foundryCapabilityStatus(
-      Boolean(credential && (config.voiceLiveEndpoint || config.foundryProjectEndpoint)),
-      'realtime',
-    ),
+    'foundry.chat': async () => ({
+      status: piGateway ? 'unknown' : 'down',
+      details: {
+        configured: Boolean(piGateway),
+        engine: 'pi',
+        runtimeProbe: 'not_run',
+        ...(piGateway ? {} : { reason: 'active_engine_unconfigured' }),
+      },
+    }),
+    'foundry.voice': async () => {
+      const configured = Boolean(piGateway && credential &&
+        (config.voiceLiveEndpoint || config.foundryProjectEndpoint));
+      return {
+        status: configured ? 'unknown' : 'down',
+        details: {
+          configured,
+          engine: 'pi',
+          runtimeProbe: 'not_run',
+          ...(configured ? {} : { reason: 'active_engine_unconfigured' }),
+        },
+      };
+    },
     'foundry.embeddings': () => foundryCapabilityStatus(
       Boolean(config.foundryProjectEndpoint && credential),
       'embeddings',
@@ -1388,6 +1442,7 @@ try {
       };
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
+  statusEvidenceWriter.current = systemStatusReader;
   // A cold managed-identity token took about 7 s on the first Watch dictation; keep one warm and refreshed.
   const watchSpeechToken = credential && config.foundryEndpoints ? createVoiceCredentialCache(async (scope, signal) => {
     const token = await credential.getToken(scope, { abortSignal: signal });

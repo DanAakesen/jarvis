@@ -28,6 +28,7 @@ describe('readMirrorConfig', () => {
     { ...env, AZURE_CLIENT_ID: '' },
     { ...env, GITHUB_APP_ID: '0' },
     { ...env, VAULT_MIRROR_STORAGE_URL: 'https://example.blob.core.windows.net/path' },
+    { ...env, VAULT_MIRROR_MAX_CHANGED: '0' },
     { ...env, VAULT_MIRROR_MAX_CHANGED: '101' },
     { ...env, VAULT_MIRROR_MAX_DELETES: '-1' },
   ])('rejects invalid or out-of-range configuration', invalid => {

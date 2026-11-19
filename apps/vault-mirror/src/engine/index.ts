@@ -6,7 +6,6 @@ export { validatePolicy, isApprovedPath } from './policy.js';
 export { contentHash, normalizeContent, normalizePath } from './normalize.js';
 export type * from './types.js';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 type Entry = { sourcePath: string; record: BaseRecord };
 type Index = Map<string, Entry>;
 
@@ -19,13 +18,13 @@ export function planReconcile(input: ReconcileInput): Plan {
       skipped: 0, credentialMatches: 0, pendingWriteBack: 0,
       resolvedInObsidianFavor: 0, excluded: 0,
       changedOnG: 0, changedOnO: 0, deletedOnG: 0, deletedOnO: 0,
-      skipReasons: {}, guardReasons: {},
+      deferredOnG: 0, deferredOnO: 0, skipReasons: {}, guardReasons: {},
     },
   };
   const counts = plan.counters;
   const guard = (reason: GuardReason): void => { counts.guardReasons[reason] = 1; };
   if (!Number.isFinite(input.now) || input.now < 0 ||
-    !Number.isInteger(input.limits.maxChanged) || input.limits.maxChanged < 0 || input.limits.maxChanged > 100 ||
+    !Number.isInteger(input.limits.maxChanged) || input.limits.maxChanged < 1 || input.limits.maxChanged > 100 ||
     !Number.isInteger(input.limits.maxDeletes) || input.limits.maxDeletes < 0 || input.limits.maxDeletes > 10 ||
     !['on', 'dry-run'].includes(input.writeBack) || typeof input.baseFreshlyInitialized !== 'boolean') {
     guard('invalid-input');
@@ -98,7 +97,7 @@ export function planReconcile(input: ReconcileInput): Plan {
     hash: contentHash(text), size: contentSize(text), mode: '100644',
   });
   const writeBackEnabled = input.writeBack === 'on' && !input.baseFreshlyInitialized;
-  const candidates: Action[] = [];
+  const candidates: Action[][] = [];
 
   for (const path of paths) {
     if (collisions.has(foldPath(path))) { skip(path, 'path-collision'); continue; }
@@ -114,10 +113,6 @@ export function planReconcile(input: ReconcileInput): Plan {
     if (records.some(({ record }) => record.size > input.policy.maxNoteBytes)) { skip(path, 'oversized'); continue; }
     const equal = (left: Entry | undefined, right: Entry | undefined): boolean =>
       left !== undefined && right !== undefined && left.record.hash === right.record.hash;
-    const firstSeen = input.conflictFirstSeenAt?.get(path) ?? b?.record.conflictFirstSeenAt ?? input.now;
-    if (!Number.isFinite(firstSeen) || firstSeen < 0 || firstSeen > input.now) {
-      skip(path, 'invalid-record'); continue;
-    }
     const pathActions: Action[] = [];
     let resolved = false;
     try {
@@ -133,12 +128,9 @@ export function planReconcile(input: ReconcileInput): Plan {
         pathActions.push({ kind: 'recordBase', path, record, text: normalized });
       };
       const conflict = (): void => {
-        if (o && input.now - firstSeen >= DAY_MS) {
-          propagate(read('O', o), ['G']);
-          resolved = true;
-        } else {
-          skip(path, 'conflict', firstSeen);
-        }
+        if (!o) throw new Error('content-unavailable');
+        propagate(read('O', o), ['G']);
+        resolved = true;
       };
       if (!o && !g) {
         if (b) pathActions.push({ kind: 'forgetBase', path });
@@ -171,22 +163,23 @@ export function planReconcile(input: ReconcileInput): Plan {
       continue;
     }
     if (resolved) counts.resolvedInObsidianFavor++;
-    candidates.push(...pathActions);
+    if (pathActions.length > 0) candidates.push(pathActions);
   }
 
-  for (const action of candidates) {
+  const proposed = candidates.flat();
+  for (const action of proposed) {
     if (action.kind.endsWith('OnG')) counts.changedOnG++;
     if (action.kind.endsWith('OnO')) counts.changedOnO++;
     if (action.kind === 'deleteOnG') counts.deletedOnG++;
     if (action.kind === 'deleteOnO') counts.deletedOnO++;
   }
-  if (counts.changedOnG > input.limits.maxChanged) guard('max-changed-G');
-  if (counts.changedOnO > input.limits.maxChanged) guard('max-changed-O');
-  if (counts.deletedOnG > input.limits.maxDeletes) guard('max-deletes-G');
-  if (counts.deletedOnO > input.limits.maxDeletes) guard('max-deletes-O');
-  const deletions = new Set(candidates.filter(action =>
+  const deletions = new Set(proposed.filter(action =>
     action.kind === 'deleteOnG' || action.kind === 'deleteOnO').map(action => action.path)).size;
   if (B.size > 0 && deletions / B.size > 0.1) guard('base-deletion-ratio');
+  if (input.limits.maxDeletes === 0) {
+    if (counts.deletedOnG > 0) guard('max-deletes-G');
+    if (counts.deletedOnO > 0) guard('max-deletes-O');
+  }
   const tripped = Object.keys(counts.guardReasons).length > 0;
   counts.pendingWriteBack = !writeBackEnabled || tripped ? counts.changedOnO : 0;
   if (tripped) {
@@ -194,8 +187,33 @@ export function planReconcile(input: ReconcileInput): Plan {
     plan.reason = 'guard-tripped';
     return plan;
   }
-  const pendingPaths = new Set(candidates.filter(action => action.kind.endsWith('OnO')).map(action => action.path));
-  plan.actions = candidates.filter(action => writeBackEnabled || (
+  const selected: Action[] = [];
+  let selectedChangesOnG = 0;
+  let selectedChangesOnO = 0;
+  let selectedDeletesOnG = 0;
+  let selectedDeletesOnO = 0;
+  for (const group of candidates) {
+    const changesOnG = group.filter(action => action.kind.endsWith('OnG')).length;
+    const changesOnO = group.filter(action => action.kind.endsWith('OnO')).length;
+    const deletesOnG = group.filter(action => action.kind === 'deleteOnG').length;
+    const deletesOnO = group.filter(action => action.kind === 'deleteOnO').length;
+    if (selectedChangesOnG + changesOnG > input.limits.maxChanged ||
+        selectedChangesOnO + changesOnO > input.limits.maxChanged ||
+        selectedDeletesOnG + deletesOnG > input.limits.maxDeletes ||
+        selectedDeletesOnO + deletesOnO > input.limits.maxDeletes) {
+      continue;
+    }
+    selected.push(...group);
+    selectedChangesOnG += changesOnG;
+    selectedChangesOnO += changesOnO;
+    selectedDeletesOnG += deletesOnG;
+    selectedDeletesOnO += deletesOnO;
+  }
+  counts.deferredOnG = counts.changedOnG - selectedChangesOnG;
+  counts.deferredOnO = counts.changedOnO - selectedChangesOnO;
+  counts.pendingWriteBack = writeBackEnabled ? counts.deferredOnO : counts.changedOnO;
+  const pendingPaths = new Set(selected.filter(action => action.kind.endsWith('OnO')).map(action => action.path));
+  plan.actions = selected.filter(action => writeBackEnabled || (
     !action.kind.endsWith('OnO') &&
     !((action.kind === 'recordBase' || action.kind === 'forgetBase') && pendingPaths.has(action.path))
   ));

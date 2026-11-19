@@ -93,13 +93,19 @@ Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choos
 - Graph tab (#1924, P15-190): no new route or boundary. `JarvisCore/Graph3D` turns the existing `knowledge/graph` response into a deterministic 3D layout,
   camera and motion schedule (pure, Linux-tested); the app's `JarvisNotesGraphView` draws it in a `Canvas` and receives touches through one UIKit gesture layer.
 
-## PI cutover flip (approved, not live) — #1887, P15-176
+## PI cutover flip (live) — #1887, P15-176
 
-With [#1910](https://github.com/DanAakesen/jarvis/pull/1910) released, normal chat without `engine` and `/voice` without an `engine` query use PI. `engine: "current"` in chat and `?engine=current` for voice select the old route. Isolated runtime tests retain their own runtime and reject explicit `pi`. iPhone sends the saved choice explicitly, defaulting to PI; the Watch bridge and web omit the choice. The PI voice relay returns `not_supported` for camera/screen context. The old route and selector remain, with no automatic fallback.
+After [#1910](https://github.com/DanAakesen/jarvis/pull/1910), normal chat without `engine` and `/voice` without an `engine` query use PI. `engine: "current"` in chat and `?engine=current` for voice select the old route. Isolated runtime tests retain their own runtime and reject explicit `pi`. iPhone sends the saved choice explicitly, defaulting to PI; the Watch bridge and web omit the choice. The PI voice relay returns `not_supported` for camera/screen context. The old route and selector remain, with no automatic fallback.
 
-## PI voice (test switch) — 16 November 2026 (#1887, P15-176)
+Because PI is the default, the `pi-agent` Deploy job is a required release
+receipt check. A failed or cancelled provisioning step cannot produce an
+accepted release while the backend still starts on the PI-default route.
 
-Voice Live stays the realtime speech layer. A voice socket opened as `/voice?engine=pi` (the iOS test switch) runs the PI engine; without the query the relay is exactly as before, and any other value closes the socket (1008).
+## PI voice (default) — 16 November 2026 (#1887, P15-176)
+
+Voice Live stays the realtime speech layer. A voice socket opened without an
+engine query runs the PI engine; `/voice?engine=current` selects the old route,
+and any other value closes the socket (1008).
 
 ```mermaid
 sequenceDiagram
@@ -128,7 +134,7 @@ sequenceDiagram
 | Piece | Where | Notes |
 | --- | --- | --- |
 | PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; Dan starting to speak (`speech_started`) or a newer utterance cancels the turn in flight, and the next turn waits for it to release the gateway; 90 s deadline; speaks the first progress note at once and the answer at the end; failures become one honest spoken sentence (`PiGatewayError.userMessage`, never provider text); cancelled and superseded turns say nothing |
-| Relay switch | `apps/backend/src/voice/relay.ts` | `piVoiceRequested` is set from the query; owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). On PI: no tool-budget rung ladder, no partial-speech reflex or speech recognizer, no calendar, food or camera paths, typed `conversation.item.create` or `response.create` from the client closes the socket (1008), camera and screen frames get `jarvis.screen.context.unavailable` with reason `not_supported`, a Voice Live function call closes the socket (it has none). Status announcements for finished tasks and research still speak when no PI turn is in flight |
+| Relay switch | `apps/backend/src/voice/relay.ts` | `piVoiceRequested` is true unless the query explicitly selects `current`; owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). On PI: no tool-budget rung ladder, no partial-speech reflex or speech recognizer, no calendar, food or camera paths, typed `conversation.item.create` or `response.create` from the client closes the socket (1008), camera and screen frames get `jarvis.screen.context.unavailable` with reason `not_supported`, a Voice Live function call closes the socket (it has none). Status announcements for finished tasks and research still speak when no PI turn is in flight |
 | Voice Live session | `voice/realtime.ts` (`capabilityMode: 'pi'`) | Identity kernel plus a short "you are only the voice" prompt; no `tools`, no `tool_choice`. Turn detection is unchanged (the relay still creates every response) |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
 | Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
@@ -256,9 +262,9 @@ flowchart LR
 
 Cost and latency: the Azure container is 0.25 vCPU and 0.5 GiB and scales to zero (about 5 DKK a month in the plan, less when idle). A new conversation lists the servers' tools; a cold container adds its start time to that first turn. Not yet measured.
 
-## PI chat engine (test switch) — 15 November 2026 (#1885, P15-174)
+## PI chat engine (default) — 15 November 2026 (#1885, P15-174)
 
-PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, harness built-ins on: shell, filesystem read and write, web and sub-agents) in the existing Foundry project. A chat turn reaches it only when the app sends `engine: "pi"` (the iOS Settings test switch). The default path is unchanged.
+PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, harness built-ins on: shell, filesystem read and write, web and sub-agents) in the existing Foundry project. It is the default chat engine. A request with `engine: "current"` deliberately selects the compatibility path.
 
 ```mermaid
 sequenceDiagram
@@ -268,7 +274,7 @@ sequenceDiagram
     participant F as Foundry: jarvis-pi
     participant M as /pi/mcp (find_tools, call_tool)
     participant T as /tools/:name (existing guards)
-    A->>B: POST turns {text, engine: "pi"}
+    A->>B: POST turns {text}
     B->>G: stream(input)
     G->>G: budget check, open turn grant (jt- reference)
     G->>F: responses (conversation, stream)
@@ -287,13 +293,13 @@ sequenceDiagram
 | Piece | Where | Notes |
 | --- | --- | --- |
 | Agent definition | `agents/pi/definition.json`, `instructions.md`, `skills/*/SKILL.md`; built by `.github/scripts/provision_pi_agent.py` in the Deploy `pi-agent` job | Persona = identity contract kernel plus product identity plus chat rules. Owner preferences, tone and mode go in a context block with the first turn and whenever they change, keeping the cached prefix stable |
-| Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call, SSE parse, text before a tool call becomes the acknowledgment and commentary events, 180 s turn deadline, cancel closes the stream and the grant. One in-flight request on the conversation: a single-flight lock, claimed synchronously, keeps a warm-up and a chat turn from ever overlapping (a turn waits for a running warm-up; a warm-up yields to a turn) |
+| Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call, SSE parse, text before a tool call becomes the acknowledgment and commentary events, 180 s turn deadline, cancel closes the stream and the grant. One in-flight request on the conversation: a single-flight lock, claimed synchronously, keeps a warm-up and a chat turn from ever overlapping (a turn waits for a running warm-up; a warm-up yields to a turn). Chat, voice and brain results emit bounded status evidence without turn text |
 | Warm conversation | `dbo.pi_conversation` (migration 0086), `POST /pi/warm` | One conversation per owner; a warm-up turn primes the cache when the app opens |
 | Ledger | `dbo.pi_turn`, plus `recordFoundryUsage` (role `chat`) | Per turn: tokens, cached tokens, DKK, first-text ms; the monthly hard stop sums it |
 | MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` (injected by the Foundry project connection `jarvis-pi-mcp`) accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
 | Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role (a test role for the Deploy smoke only) |
 | In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
-| Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
+| Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | Core and voice smoke results feed the System Status runtime evidence. The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
 
 Configuration: `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET` (Container App secret `pi-mcp-secret`), `JARVIS_PI_MONTHLY_CAP_DKK` (default 100). Both of the first two must be set; otherwise a PI turn ends with `pi_not_configured`. Deploy creates the secret once and sets the first two on the backend; a later infrastructure deployment drops them, and the same run's `pi-agent` job restores them, reusing the secret value read back from the agent definition so the agent version does not change (if Foundry redacts that header on readback, a new secret and agent version are created instead). Warm-ups are skipped over the cap, for 10 minutes after a failed warm-up and for 30 minutes after three failed turns in a row (`warm` returns `skipped`). A turn that ends before the provider reports usage but after the model started is charged at an estimate (12k input tokens plus streamed text) so the monthly stop counts it.
 
@@ -967,11 +973,18 @@ Azure storage credential, without provisioning containers or writing mirror
 state. The read has a five-second deadline, a 32 KiB limit, strict
 `vaultMirrorStatusSchema` validation and a single-flight 30-second cache that
 also covers missing/read-error results. Missing container/blob means not set
-up; malformed, oversized, timed-out or denied reads become a fixed read error.
-Neither raw documents nor exception details are logged or returned.
+up as a contract state, but the UI says **No status yet** and explains that this
+alone does not prove the job is off. Malformed, oversized, timed-out or denied
+reads become a fixed read error with a bounded category (`invalid`, `timed-out`,
+`access-denied`, `unavailable`). A backend without storage configuration reports
+`backend-not-configured`. Neither raw documents nor exception details are
+logged or returned.
 
 Authenticated `GET /status` adds a reduced `vaultMirror` view independently of
-the general one-minute probe cache. It omits run identifiers and run timestamps.
+the general one-minute probe cache. It carries the last completed run time,
+outcome, fixed guard predicates, proposed change/delete counts per direction
+and deferred counts, plus the read reason, while still omitting run identifiers,
+start time and other runner-only fields.
 Conflict paths are confined to this owner response and the expanded web row;
 agent status tools, proactive facts and logs do not receive them. Contracts add
 `vaultMirrorStatusViewSchema` without changing the shared runner document.
@@ -997,11 +1010,25 @@ environment every ten minutes, one replica at a time, with an eight-minute
 timeout and no retries. The deploy workflow builds `jarvis-vault-mirror` from
 the repository root only when `JARVIS_VAULT_MIRROR_ENABLED=true`; the job
 receives a digest-pinned image. If its Dockerfile, image digest or required
-non-secret GitHub App ID is unavailable, the workflow logs a notice and does not
-create or update mirror resources in that deployment. A previously deployed job
-is removed only when the repository switch is explicitly turned off. The Bicep
-switch defaults to false and its resource conditions also require a nonempty
-image.
+non-secret GitHub App ID is unavailable while the switch is true, the
+infrastructure run stops before Bicep. It no longer claims a partial core deploy
+while leaving the mirror's state ambiguous. A previously deployed job is removed
+only when the repository switch is explicitly turned off. The Bicep switch
+defaults to false and its resource conditions also require a nonempty image.
+
+The deterministic readiness job runs
+`.github/scripts/vault_mirror_probe.py` whenever the switch is true. It verifies
+the digest-pinned schedule, dedicated user-assigned identity/client ID, ACR
+identity, required runtime setting names, configured write-back/caps and one
+terminal scheduled execution fresh enough for the ten-minute cadence, then
+reads only the runner's allow-listed terminal JSON summary. A completed `needs-attention` is visible as a
+warning unless `reason=guard-tripped`, which fails readiness because every
+action was blocked. Its 1,200-second positive wait covers the ten-minute
+schedule interval, the job's eight-minute replica timeout and a two-minute
+log-read margin; shorter positive waits are rejected. Missing executions, a
+missing summary, config drift, auth failure and other failed outcomes also
+fail readiness. The probe starts no manual job and changes no Azure resource
+or secret.
 
 The job has its own user-assigned identity. It can pull from the existing
 registry, read Key Vault secrets at runtime through the SDK, and read/write only
@@ -1055,9 +1082,16 @@ engine, then applies GitHub changes as one Git Data API commit with a non-force
 ref update. A moved branch is read and planned once more. Obsidian write-back is
 gated by `on`, rechecked against the planned paths, uploaded, and returned to
 `pull-only`; unrelated remote edits pulled in the same sync do not fail
-verification. Unsuccessful paths remain pending and retry before the next plan.
+verification. Clean three-way changes merge automatically; an unclean or
+no-base two-sided difference uses the Obsidian copy immediately, preserving
+the established source precedence without a manual 24-hour wait. Ordinary
+changes are selected as whole-path batches within the per-run caps and remaining
+work is deferred to the next schedule. Only hard state/mass-loss guards stop the
+whole plan. Unsuccessful paths and deferred work retry before or during the
+next plan.
 Since 22 October 2026 the production job runs with write-back `on` and the
-default caps; see the decision log for the go-live record.
+default caps; the status/log carries deferred and proposed counts so partial
+progress is observable. See the decision log for the go-live record.
 
 Since P14-28, the mirror image is built by the infrastructure deployment when
 `JARVIS_VAULT_MIRROR_ENABLED=true`. Its Dockerfile copy inputs and `.dockerignore`
@@ -4820,6 +4854,17 @@ Dan-only `GET /status` returns the shared `SystemStatus` contract with one
 `checkedAt` per subsystem. The backend caches the snapshot for 60 seconds and
 sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
 and combines health counts with the existing Now-feed counts.
+
+Configuration and catalogue checks establish only availability of the
+configured boundary. The active PI runtime records bounded chat/voice/brain
+evidence (channel, outcome, source and timestamp, never text); vault embedding
+calls and the existing research smoke do the same for embeddings and the
+runner. Runtime evidence is current for 15 minutes, then changes the row to
+unknown instead of preserving a green or red verdict. PI brain wakes therefore
+provide chat-runtime evidence without another paid canary; voice remains
+unknown until a voice turn or manual PI voice smoke runs. The Last backend error
+row is degraded for five minutes after a 5xx, then returns to OK while retaining
+the historical occurrence.
 
 The P9-101 web consumer lives at `/status`, reachable from the shell rail,
 phone menu and existing acknowledged workspace navigation. It validates all

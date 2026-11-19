@@ -86,7 +86,7 @@ async function harness(agent: PiVoiceAgent | undefined) {
     sockets[0]!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', item_id: itemId, transcript }));
   };
   const responses = () => upstreamEvents.filter(event => event.type === 'response.create');
-  return { upstreamEvents, sockets, connect, speak, responses };
+  return { app, upstreamEvents, sockets, connect, speak, responses };
 }
 
 describe('voice relay on the PI engine', () => {
@@ -95,7 +95,7 @@ describe('voice relay on the PI engine', () => {
     const agent: PiVoiceAgent = {
       async *stream(input) { inputs.push(input); yield 'You have two meetings today.' as ConversationAgentChunk; },
     };
-    const { connect, speak, responses, upstreamEvents } = await harness(agent);
+    const { app, connect, speak, responses, upstreamEvents } = await harness(agent);
     const { received } = connect('?engine=pi');
     await until(() => responses().length === 1, 'the greeting');
     const update = upstreamEvents.find(event => event.type === 'session.update')!;
@@ -111,6 +111,11 @@ describe('voice relay on the PI engine', () => {
     expect(reply.tool_choice).toBe('none');
     expect(reply.tools).toEqual([]);
     expect(reply.instructions).toContain(JSON.stringify('You have two meetings today.'));
+    const voice = (await app.systemStatusReader.read()).entries.find(entry => entry.id === 'foundry.voice');
+    expect(voice).toMatchObject({
+      status: 'ok',
+      details: { engine: 'pi', evidence: 'voice-turn', outcome: 'ok' },
+    });
   });
 
   it('cancels the PI turn in flight when Dan starts speaking, so no stale answer is spoken over him', async () => {
@@ -151,12 +156,14 @@ describe('voice relay on the PI engine', () => {
       // eslint-disable-next-line require-yield
       async *stream() { throw new PiGatewayError('pi_budget_exhausted', 'PI has used its monthly cap, so it stopped. No other engine was used.'); },
     };
-    const { connect, speak, responses } = await harness(agent);
+    const { app, connect, speak, responses } = await harness(agent);
     connect('?engine=pi');
     await until(() => responses().length === 1, 'the greeting');
     speak('Hello');
     await until(() => responses().length === 2, 'the spoken failure');
     expect(responses()[1]!.response.instructions).toContain('No other engine was used.');
+    expect((await app.systemStatusReader.read()).entries.find(entry => entry.id === 'foundry.voice'))
+      .toMatchObject({ status: 'down', details: { evidence: 'voice-turn', outcome: 'failed' } });
   });
 
   it('refuses typed requests and screen context on the default PI voice path', async () => {

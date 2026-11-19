@@ -6,6 +6,65 @@ The managed instructions read the tool reference from the first line. The normal
 
 Use the existing phone workspace events to populate a local Voice carousel, without changing the backend window contract. A new ID appends and takes focus; an update to an existing ID replaces that page. Close clears the carousel, Collapse returns from full screen, and minimising the call keeps its visual history. Use the existing glass controls over the page and let the HTML document own its heading and authored colours; WebKit gets the active appearance, Jarvis theme variables and readable defaults. Apple compilation, rendering and live call acceptance remain unverified.
 
+## 19 November 2026 — Treat Vault Mirror and Status uncertainty as evidence, not a green/red guess (#1962)
+
+Production Deploy run 44348929578 applied main
+`318b923be74e601719ebd03c839c823dd6d4cbfd` on 18 November with the mirror
+switch `true`, write-back `on`, caps `25/3`, a successful infrastructure job
+and a rebuilt mirror image. That proves the desired job configuration was
+submitted and accepted; it does **not** prove a scheduled execution ran. This
+cloud worktree could not read Container Apps executions through ARM because its
+managed-identity endpoint was unreachable. A missing/stale status blob is not
+used as evidence that the job is off.
+
+Read-only Container Apps evidence subsequently established the live state:
+execution `job-jarvis-vault-mirror-29917610` started at 02:50 UTC on 19
+November; the platform marked it `Failed`, while the runner completed with
+`needs-attention`, `reason=guard-tripped`, 151 approved files, 11 pending
+Obsidian write-backs, one conflict, no pushed/written/deleted files and no
+credential match in 13.686 seconds. The same bounded summary repeated every
+ten minutes for at least six hours. **The job is running.** The planner trips a
+safety guard, returns no actions and exits non-zero, so the platform's
+`Failed` execution is not a stopped schedule. Eleven pending Obsidian changes
+are below the configured change cap of 25; because the old log discarded
+`guardReasons` and proposed per-direction counts, the exact guard cannot be
+named safely from the current execution evidence. The runner now retains and
+logs those fixed enums/counts, and the Status page displays them.
+
+| Choice | Why |
+| --- | --- |
+| An explicitly enabled mirror is fail-closed in `deploy_bicep.sh`: invalid App ID/caps, missing Dockerfile, registry/digest, or image-build failure stops before Bicep | Silent fallback produced a successful release while the one explicitly requested component was ambiguous |
+| Deterministic readiness verifies the scheduled job, its dedicated identity/client ID and required runtime setting names, and waits for one fresh terminal execution, then parses only the allow-listed runner JSON | The job's resource definition is not execution evidence; bounded logs prove outcome and secret usability without vault paths, values or note text |
+| Ordinary `needs-attention` remains a warning; `reason=guard-tripped`, no execution, config drift, `failed` and missing runner evidence fail readiness | A guard trip applies zero actions and is the current blocked state; an isolated conflict still warrants visible attention without claiming the job is off |
+| The mirror contract carries fixed `guardReasons` plus proposed change/delete counts per direction; `GET /status` projects these with `lastRunAt`, `outcome` and safe `readReason`; the UI says **No status yet**, not **Not set up** | A repeated guard trip is diagnosable without a note path or guess; a missing status document does not identify a missing Azure job |
+| PI is the active Foundry chat/voice subject. Bounded chat, voice, brain and embedding runtime results are current for 15 minutes, then unknown/stale | Catalogue or code configuration is not live health, and PI brain/turn evidence is available without adding another paid request |
+| A successful PI agent provisioning job is required for an accepted release receipt | PI is now the normal chat and voice path, so optional-test failure must not become a successful default-engine release |
+| Agent runner remains unknown until a completed runtime or research smoke result exists | Active-session count and configuration do not prove the Foundry runner is healthy |
+| Last backend error is degraded for five minutes, then OK with a retained timestamp | It is an incident marker, not a permanent failure indicator |
+
+The deploy smoke records its requested chat or voice capability as degraded
+with `budget_exhausted` before returning a 409, matching ordinary PI stream
+preflight refusals rather than leaving the status row healthy or unknown.
+
+The readiness wait is 1,200 seconds. That is the ten-minute scheduling
+interval plus the job's eight-minute replica timeout and a two-minute margin
+for terminal log reads; the probe rejects a shorter positive wait. A
+120-second remainder after scheduling was enough to notice the new run but
+not enough for that healthy run to finish.
+
+Dan subsequently made the source-precedence decision explicit: ordinary
+differences must drain without a manual attention backlog. The reconciler now
+uses Obsidian immediately for an unclean/no-base conflict, selects whole paths
+up to the existing per-run change/delete caps and defers the rest to the next
+schedule. Hard empty-side, missing-base and deletion-ratio guards remain, as do
+per-path secret/size/path/content refusal. The current 11 pending Obsidian
+changes and one conflict are therefore next-run work, not an owner checklist.
+No cap, secret, policy or Azure setting is raised or bypassed.
+
+No production setting, secret, policy, state blob, schedule or resource is
+changed by this decision. The exact read-only command is in `infra/README.md`;
+the next qualified Deploy will execute it through the existing OIDC identity.
+
 ## 17 November 2026 — The PI smoke runs as three requests, not one (#1910, P15-209)
 
 After the Azure MCP wake-up fix, `measure_pi` still failed with HTTP 504. The backend log showed the Azure read inside the smoke completing in 7.3 s, so Azure reach worked; the whole smoke (cold turn, warm turns, tool and voice turns, GitHub, Azure and four tool-choice turns, each one to fifteen seconds) now takes about four minutes, and the Container Apps ingress ends one request at 240 s.
@@ -4199,9 +4258,9 @@ allocation is a starting point for the Node process and the contract's 200 MiB
 state-archive limit; it is not a live workload benchmark. The Bicep switch
 defaults off, and the deployment requires both the repository opt-in and a
 digest-pinned image before it creates the job, identity, roles or containers.
-The deploy flow skips visibly when the Dockerfile, image digest or required
-non-secret App ID is unavailable; that does not block the core infrastructure
-deployment.
+The deploy flow fails before Bicep when an explicitly enabled mirror lacks the
+Dockerfile, image digest or required non-secret App ID; it no longer reports a
+partial core success.
 
 Use a dedicated user-assigned identity with exactly `AcrPull` on the registry,
 `Key Vault Secrets User` on the vault, and `Storage Blob Data Contributor`
@@ -4314,25 +4373,25 @@ bytes and no outgoing credential-pattern match. Skips never reveal a match.
 | G only, no B | Create O, subject to write-back gating |
 | G only, equals B | O deletion: delete G |
 | G only, differs from B | Preserve edit: recreate O, subject to write-back gating |
-| Different present O/G, no B | Conflict: skip |
+| Different present O/G, no B | Resolve in Obsidian's favour immediately; write O to G |
 | Different present O/G, B equals O | Write G back to O |
 | Different present O/G, B equals G | Push O to G |
-| Different present O/G, B equals neither | Injected three-way merge; clean writes identical text to both, otherwise skip |
+| Different present O/G, B equals neither | Injected three-way merge; clean writes identical text to both, otherwise use O and write it to G |
 
-Unresolved conflicts never modify O. Persist first-seen conflict times separately
-when no base exists. At 24 hours, a still-conflicting path resolves in O's favour
-by pushing O to G only, counted separately; GitHub retains the other version in
-history. Apply writes before their common-base action, stop on failure and replan
-fresh snapshots after crashes. The injected merge must be lossless/idempotent.
+Unresolved conflicts never modify O. The 19 November 2026 owner decision
+supersedes the original 24-hour wait: use O immediately and count the resolution;
+GitHub retains the other version in history. Apply writes before their
+common-base action, stop on failure and replan fresh snapshots after crashes.
+The injected merge must be lossless/idempotent.
 
-Any per-direction change/delete cap breach, deletions of more than 10% of
-distinct base paths, an empty side against at least ten approved files, or more
-than 20% of base paths missing on either side empties the whole plan, including
-state actions. Proposed changes include deletes and are counted before gating.
-Caps default to 25 changes / 3 deletes; hard maxima are 100 / 10. The owner may
-raise a cap for one complete first-run snapshot, then restore it; ratio/empty
-guards have no override. Per-path invalid/oversized/non-regular/collision/content
-failures skip and count; credential matches flag `needs-attention/secret-match`.
+Per-direction change/delete caps now select whole-path batches and defer the
+rest to a later run. Deletions of more than 10% of distinct base paths, an empty
+side against at least ten approved files, or more than 20% of base paths missing
+on either side still empty the whole plan, including state actions. Proposed
+changes include deletes and are counted before gating. Caps default to 25
+changes / 3 deletes; hard maxima are 100 / 10. Per-path
+invalid/oversized/non-regular/collision/content failures skip and count;
+credential matches flag `needs-attention/secret-match`.
 
 Write-back remains `dry-run` by default, also suppressed for freshly initialized
 state and all guard trips. Pending O writes never advance/forget the base.

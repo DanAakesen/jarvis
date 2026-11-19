@@ -27,6 +27,15 @@ pushing, verifies `ob --version`, and runs the runner against in-memory fakes
 inside the image. Mirror-only changes qualify this component; they do not deploy
 an existing application or the Azure job.
 
+When production enables the job, Deploy fails closed if the digest cannot be
+built or the mirror configuration is incomplete. Deterministic readiness then
+runs `.github/scripts/vault_mirror_probe.py`: it verifies the ten-minute
+schedule, waits for a fresh terminal execution and prints only the runner's
+fixed-count terminal JSON. An ordinary `needs-attention` is a warning, but
+`guard-tripped` is a readiness failure because the all-or-nothing plan applied
+nothing. No execution, configuration drift, `failed` or missing logs also
+fails readiness. It starts no job and changes no secret, policy or state.
+
 ## Runtime
 
 `node apps/vault-mirror/dist/main.js` performs one run and exits. The image
@@ -51,7 +60,9 @@ preflighted before GitHub or Obsidian writes. An oversized or corrupt archive
 reports the existing `state-corrupt` reason with `needs-attention`; the shared
 status schema and Status-page explanation remain unchanged. Status is written
 to `vault-mirror-status/status.json` using the strict shared contract. Logs use
-an explicit allow-list of run ID, outcome, fixed reason, duration and counts.
+an explicit allow-list of run ID, outcome, fixed reason, duration, counts,
+guard-reason enums and proposed changes/deletes per direction. No note path is
+included.
 Conflict paths appear only in private status, never in logs.
 
 The working copy and configuration home use fixed absolute paths below the
@@ -167,7 +178,9 @@ A one-sided deletion propagates only when the survivor equals B; if the survivor
 was edited, the edit wins and recreates the missing side. With two different
 present files, a missing base is a conflict; one unchanged side accepts the
 changed side; two changed sides use the injected three-way merge. A clean merge
-writes identical merged content to both sides. A conflict skips both.
+writes identical merged content to both sides. An unclean merge, including a
+two-sided change with no common base, resolves in Obsidian's favour and writes
+that content to GitHub. A conflicting note therefore never waits for an owner.
 
 The runner's line merge combines only edits separated by at least one unchanged
 base line. Edits that overlap, touch or insert at the same place conflict,
@@ -177,11 +190,11 @@ reported clean only when retrying either side against its result reproduces it,
 because repeated lines can be aligned differently when the merged text is diffed
 again; otherwise it conflicts.
 
-Skipped conflicts carry a first-seen timestamp persisted in the state archive
-without advancing the common content base, including no-base conflicts via
-`conflictFirstSeenAt`. At 24 hours an unresolved conflict pushes O to G only.
-The GitHub version remains in history; count these resolutions separately.
-Clear conflict metadata after successful common-base recording.
+The resolved note advances the common base only after the required side write
+succeeds. Any older `conflictFirstSeenAt` metadata is cleared when the fresh
+snapshot is planned; the GitHub version remains in history. This preserves the
+existing Obsidian-precedence decision while removing the former 24-hour manual
+attention window.
 
 The runner applies GitHub actions as one atomic commit and only then applies
 planned Obsidian writes. It records a common base only after the required side
@@ -193,10 +206,11 @@ tests cover retries and partial completion.
 
 ## Write-back and guards
 
-Writing to Obsidian ships **off**. Every `...OnO` action is suppressed and counted
-as `pendingWriteBack` in `dry-run`, on freshly initialized/lost base, or after a
-guard trip. Do not record/forget that path's base while write-back is pending.
-O → G writes are not mode-gated.
+Write-back defaults to `dry-run`; production has been `on` since 22 October
+2026. Every `...OnO` action is suppressed and counted as `pendingWriteBack` in
+`dry-run`, on freshly initialized/lost base, or after a hard guard trip. Do not
+record/forget that path's base while write-back is pending. O → G writes are
+not mode-gated.
 
 Two acceptance-property wordings conflict with the explicit decision table:
 “no write action in dry-run” means **no Obsidian write**, not no GitHub upload;
@@ -206,16 +220,21 @@ the same content to both. Tests use these explicit semantics.
 `maxChanged` counts all proposed file mutations per direction, including deletes;
 `maxDeletes` counts deletes per direction. Runner configuration defaults them to
 25 / 3 and enforces hard maxima 100 / 10. Limits supplied here must be
-nonnegative integers within those maxima. Exceeding either cap, deleting
-more than 10% of distinct base paths across both directions, an empty side versus
-at least ten approved files, or more than 20% of base paths missing on either
-side empties **all** actions, including base updates. Threshold equality is
-allowed. Proposed mutations are counted before write-back gating.
+nonnegative integers within those maxima. Ordinary work is selected as whole
+paths up to each cap and the rest is deferred to the next ten-minute run; this
+prevents a normal backlog from becoming a permanent `guard-tripped` result.
+Deleting more than 10% of distinct base paths across both directions, an empty
+side versus at least ten approved files, or more than 20% of base paths missing
+on either side still empties **all** actions, including base updates. Threshold
+equality is allowed. Proposed mutations are counted before write-back gating.
+The runner status and production log carry any hard guard reason(s), proposed
+per-direction counts and deferred counts, so an operator can see batching
+separately from real safety protection without exposing a note path.
 
-If a complete first-run snapshot exceeds a change cap, the owner can raise that
-cap **for one run**, within the hard maximum, inspect the result, and restore it.
-This cannot override empty-side or ratio guards: restore/verify complete
-snapshots rather than bypassing partial-pull protection. No bypass is provided.
+Caps no longer need a manual one-run increase for ordinary bounded work. This
+cannot override empty-side, missing-base or ratio guards: restore/verify complete
+snapshots rather than bypassing partial-pull protection. No automatic bypass is
+provided for hard guards or per-path secret failures.
 
 Oversized, invalid, non-regular, colliding, unreadable or mismatched paths skip
 individually. Outgoing credential-pattern matches skip only that path and flag

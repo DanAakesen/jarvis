@@ -90,7 +90,7 @@ export interface RunDependencies {
   readonly afterWriteBack?: (workingCopy: string) => Promise<void>;
   readonly now?: () => number;
   readonly newRunId?: () => string;
-  readonly log?: (entry: Readonly<Record<string, string | number>>) => void;
+  readonly log?: (entry: Readonly<Record<string, string | number | readonly string[]>>) => void;
 }
 
 export interface RunOptions {
