@@ -61,6 +61,31 @@ final class JarvisStatusEvidenceTests: XCTestCase {
         )
     }
 
+    func testRuntimeRefusalAndEmbeddingFailureKeepTheirRealReason() {
+        let refused = JarvisStatusEntry(
+            id: "foundry.chat", status: .down, checkedAt: "2026-11-19T02:00:00Z",
+            details: [
+                "configured": .bool(true), "evidence": .string("runtime-turn"),
+                "outcome": .string("failed"), "reason": .string("budget_exhausted"),
+            ]
+        )
+        XCTAssertEqual(
+            JarvisStatusLogic.reason(for: refused),
+            .key(.statusReasonPiBudgetExhausted)
+        )
+        let embedding = JarvisStatusEntry(
+            id: "foundry.embeddings", status: .degraded, checkedAt: "2026-11-19T02:00:00Z",
+            details: [
+                "configured": .bool(true), "evidence": .string("vault-index"),
+                "outcome": .string("fallback"), "reason": .string("embedding_request_failed"),
+            ]
+        )
+        XCTAssertEqual(
+            JarvisStatusLogic.reason(for: embedding),
+            .key(.statusReasonEmbeddingFailed)
+        )
+    }
+
     func testMirrorDecodingRetainsLastRunOutcomeAndReadReason() throws {
         let data = Data("""
         {

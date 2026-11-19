@@ -101,6 +101,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
                 status: Object.values(report.checks).every(Boolean) ? 'ok' : 'degraded',
                 checkedAt: new Date().toISOString(),
                 details: {
+                  configured: true,
                   engine: 'pi',
                   evidence: 'deploy-smoke',
                   smokePart: report.part,
@@ -117,6 +118,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
                 status: 'down',
                 checkedAt: new Date().toISOString(),
                 details: {
+                  configured: true,
                   engine: 'pi',
                   evidence: 'deploy-smoke',
                   smokePart: request.body.part,

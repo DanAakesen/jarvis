@@ -24,7 +24,7 @@ export function planReconcile(input: ReconcileInput): Plan {
   const counts = plan.counters;
   const guard = (reason: GuardReason): void => { counts.guardReasons[reason] = 1; };
   if (!Number.isFinite(input.now) || input.now < 0 ||
-    !Number.isInteger(input.limits.maxChanged) || input.limits.maxChanged < 0 || input.limits.maxChanged > 100 ||
+    !Number.isInteger(input.limits.maxChanged) || input.limits.maxChanged < 1 || input.limits.maxChanged > 100 ||
     !Number.isInteger(input.limits.maxDeletes) || input.limits.maxDeletes < 0 || input.limits.maxDeletes > 10 ||
     !['on', 'dry-run'].includes(input.writeBack) || typeof input.baseFreshlyInitialized !== 'boolean') {
     guard('invalid-input');
@@ -176,6 +176,10 @@ export function planReconcile(input: ReconcileInput): Plan {
   const deletions = new Set(proposed.filter(action =>
     action.kind === 'deleteOnG' || action.kind === 'deleteOnO').map(action => action.path)).size;
   if (B.size > 0 && deletions / B.size > 0.1) guard('base-deletion-ratio');
+  if (input.limits.maxDeletes === 0) {
+    if (counts.deletedOnG > 0) guard('max-deletes-G');
+    if (counts.deletedOnO > 0) guard('max-deletes-O');
+  }
   const tripped = Object.keys(counts.guardReasons).length > 0;
   counts.pendingWriteBack = !writeBackEnabled || tripped ? counts.changedOnO : 0;
   if (tripped) {

@@ -80,4 +80,18 @@ describe('isApprovedPath', () => {
     });
     expect(plan.actions).toEqual([]);
   });
+
+  it('does not advance success when deletes are disabled but a delete is required', () => {
+    const { input } = fixture();
+    const ours = new Map(input.O);
+    ours.delete('Notes/stable-0.md');
+    const plan = planReconcile({
+      ...input,
+      O: ours,
+      limits: { ...input.limits, maxDeletes: 0 },
+    });
+    expect(plan.verdict).toBe('guard-tripped');
+    expect(plan.counters.guardReasons).toMatchObject({ 'max-deletes-G': 1 });
+    expect(plan.actions).toEqual([]);
+  });
 });

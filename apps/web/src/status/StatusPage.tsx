@@ -54,8 +54,20 @@ function readableKey(key: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function reason(entry: SystemStatusEntry): string | undefined {
+function statusAt(entry: SystemStatusEntry, now: number): SystemStatusValue {
+  const runtime = entry.details?.runtimeProbe === 'runtime';
+  const checkedAt = Date.parse(entry.checkedAt);
+  return runtime && (!Number.isFinite(checkedAt) || checkedAt > now + 30_000 ||
+    now - checkedAt >= runtimeEvidenceStaleAfterMs)
+    ? 'unknown'
+    : entry.status;
+}
+
+function reason(entry: SystemStatusEntry, now: number): string | undefined {
   const details = entry.details;
+  if (statusAt(entry, now) !== entry.status && entry.details?.runtimeProbe === 'runtime') {
+    return 'The last runtime result is older than 15 minutes; this check no longer claims current health.';
+  }
   if (details?.reason === 'active_engine_unconfigured') {
     return 'The active PI engine is not configured; the legacy engine is not treated as a fallback.';
   }
@@ -81,6 +93,18 @@ function reason(entry: SystemStatusEntry): string | undefined {
     if (entry.id.startsWith('foundry.')) {
       return 'The active PI engine is configured, but no recent runtime result is recorded for this capability.';
     }
+  }
+  if (details?.reason === 'embedding_request_failed') {
+    return 'The latest Foundry embedding request failed; vault embedding coverage may be incomplete.';
+  }
+  if (details?.reason === 'budget_exhausted') {
+    return 'PI refused the latest request because its monthly cap is exhausted.';
+  }
+  if (details?.reason === 'busy') {
+    return 'PI refused the latest request because another turn was already active.';
+  }
+  if (details?.reason === 'preflight_failed') {
+    return 'PI could not pass its preflight check, so no model request started.';
   }
   if ((details?.evidence === 'runtime-turn' || details?.evidence === 'voice-turn') && details.outcome !== 'ok') {
     return details.outcome === 'cancelled' || details.outcome === 'superseded'
@@ -273,9 +297,9 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
         {data && <ul className="system-status-list">
           {data.entries.map(entry => <li className="system-status-row" key={entry.id} aria-label={checks[entry.id]}>
             <div className="system-status-row-heading">
-              <strong>{checks[entry.id]}</strong><StatusBadge value={entry.status} />
+              <strong>{checks[entry.id]}</strong><StatusBadge value={statusAt(entry, now)} />
             </div>
-            {reason(entry) && <p className="system-status-reason">{reason(entry)}</p>}
+            {reason(entry, now) && <p className="system-status-reason">{reason(entry, now)}</p>}
             {entry.id === 'pc_bridge' && <p className="system-status-reason">
               {entry.details?.connected === true ? 'Connected at check time.' :
                 entry.details?.connected === false ? 'Disconnected at check time.' : 'Connection state was not reported.'}

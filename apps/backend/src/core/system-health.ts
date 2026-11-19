@@ -94,6 +94,7 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
       entry.details?.healthProbe === 'not_run' ? 'Runner health has not been probed.' :
       entry.details?.runtimeProbe === 'not_run' ? 'No recent runtime check has completed.' :
       entry.details?.runtimeProbe === 'stale' ? 'The last runtime check is stale.' :
+      entry.details?.reason === 'embedding_request_failed' ? 'The latest embedding request failed.' :
       entry.details?.deploymentAvailable === false ? 'Required model deployment is unavailable.' :
       entry.details?.catalogue === 'fallback' ? 'Model catalogue is using fallback configuration.' :
       id === 'pc_bridge' && entry.details?.connected === false ? 'PC bridge is disconnected.' :

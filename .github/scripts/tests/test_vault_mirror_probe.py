@@ -86,6 +86,7 @@ class VaultMirrorProbeTests(unittest.TestCase):
         ]
         self.assertEqual(latest_execution(executions, NOW, 600)["name"], "new")
         self.assertIsNone(latest_execution(executions[:1], NOW, 600))
+        self.assertIsNone(latest_execution(executions, NOW, 600, NOW - timedelta(seconds=30)))
 
     def test_runner_log_parser_keeps_only_bounded_summary(self):
         output = (
@@ -110,8 +111,9 @@ class VaultMirrorProbeTests(unittest.TestCase):
             "name": "run-1",
             "properties": {
                 "status": "Failed",
-                "startTime": "2026-11-19T01:58:00Z",
-                "endTime": "2026-11-19T01:58:10Z",
+                "startTime": "2026-11-19T02:00:00Z",
+                "endTime": "2026-11-19T02:00:10Z",
+                "template": {"containers": [{"image": JOB["properties"]["template"]["containers"][0]["image"]}]},
             },
         }
         attention = (
@@ -119,7 +121,10 @@ class VaultMirrorProbeTests(unittest.TestCase):
             '"conflicts":1}'
         )
         with (
-            patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], execution],
+            ),
             patch("vault_mirror_probe.read_logs", return_value=attention),
         ):
             self.assertEqual(probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)["verdict"], "attention")
@@ -128,20 +133,29 @@ class VaultMirrorProbeTests(unittest.TestCase):
             '"deferredOnGitHub":1}'
         )
         with (
-            patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], execution],
+            ),
             patch("vault_mirror_probe.read_logs", return_value=healthy),
         ):
             self.assertEqual(probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)["verdict"], "healthy")
         failed = '{"outcome":"failed","reason":"auth","durationMs":1}'
         with (
-            patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], execution],
+            ),
             patch("vault_mirror_probe.read_logs", return_value=failed),
             self.assertRaisesRegex(RuntimeError, "run_failed:auth"),
         ):
             probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
         unsafe = '{"outcome":"needs-attention","reason":"state-corrupt","durationMs":1}'
         with (
-            patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], execution],
+            ),
             patch("vault_mirror_probe.read_logs", return_value=unsafe),
             self.assertRaisesRegex(RuntimeError, "needs_attention:state-corrupt"),
         ):
@@ -151,9 +165,34 @@ class VaultMirrorProbeTests(unittest.TestCase):
             '"guardReasons":["max-changed-G"],"changedOnGitHub":26}'
         )
         with (
-            patch("vault_mirror_probe.az", side_effect=[JOB, {"clientId": "client-fixture"}, [execution]]),
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], execution],
+            ),
             patch("vault_mirror_probe.read_logs", return_value=guarded),
             self.assertRaisesRegex(RuntimeError, 'guard_tripped:.*changedOnGitHub.*26.*max-changed-G'),
+        ):
+            probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
+        wrong_image = json.loads(json.dumps(execution))
+        wrong_image["properties"]["template"]["containers"][0]["image"] = "fixture.azurecr.io/old@sha256:" + "b" * 64
+        with (
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], wrong_image],
+            ),
+            self.assertRaisesRegex(RuntimeError, "execution_image_mismatch"),
+        ):
+            probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
+        with (
+            patch(
+                "vault_mirror_probe.az",
+                side_effect=[JOB, {"clientId": "client-fixture"}, [execution], execution],
+            ),
+            patch(
+                "vault_mirror_probe.read_logs",
+                return_value='{"outcome":"skipped-busy","durationMs":1}',
+            ),
+            self.assertRaisesRegex(RuntimeError, "execution_skipped_busy"),
         ):
             probe("sub", "group", "on", 25, 3, 600, 0, clock=lambda: NOW)
 
@@ -164,13 +203,15 @@ class VaultMirrorProbeTests(unittest.TestCase):
                 "status": "Succeeded",
                 "startTime": (NOW + timedelta(minutes=2)).isoformat(),
                 "endTime": (NOW + timedelta(minutes=2, seconds=10)).isoformat(),
+                "template": {"containers": [{"image": JOB["properties"]["template"]["containers"][0]["image"]}]},
             },
         }
         times = iter([NOW, NOW + timedelta(minutes=2, seconds=1)])
+        final_time = NOW + timedelta(minutes=2, seconds=1)
         with (
             patch(
                 "vault_mirror_probe.az",
-                side_effect=[JOB, {"clientId": "client-fixture"}, [], [future]],
+                side_effect=[JOB, {"clientId": "client-fixture"}, [], [future], future],
             ),
             patch(
                 "vault_mirror_probe.read_logs",
@@ -179,7 +220,7 @@ class VaultMirrorProbeTests(unittest.TestCase):
         ):
             result = probe(
                 "sub", "group", "on", 25, 3, 600, 600,
-                clock=lambda: next(times), sleep=lambda _seconds: None,
+                clock=lambda: next(times, final_time), sleep=lambda _seconds: None,
             )
         self.assertEqual(result["execution"]["name"], "run-2")
 

@@ -1302,6 +1302,7 @@ function registerVoiceRoute(
             : turn.outcome === 'failed' || turn.outcome === 'timeout' ? 'down' : 'unknown',
           checkedAt: new Date().toISOString(),
           details: {
+            configured: true,
             engine: 'pi',
             evidence: 'voice-turn',
             outcome: turn.outcome,

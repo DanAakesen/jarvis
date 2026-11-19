@@ -94,6 +94,10 @@
 "insights.statusReasonRuntimeStale" = "The last runtime result is older than 15 minutes; current health is unknown.";
 "insights.statusReasonPiNotProbed" = "The active PI engine is configured, but this capability has no recent runtime result.";
 "insights.statusReasonPiFailed" = "The latest PI runtime turn failed.";
+"insights.statusReasonEmbeddingFailed" = "The latest Foundry embedding request failed; vault coverage may be incomplete.";
+"insights.statusReasonPiBudgetExhausted" = "PI refused the latest request because its monthly cap is exhausted.";
+"insights.statusReasonPiBusy" = "PI refused the latest request because another turn was active.";
+"insights.statusReasonPiPreflightFailed" = "PI failed its preflight check, so no model request started.";
 "insights.statusReasonActiveEngineMissing" = "The active PI engine is not configured; the legacy engine is not a fallback.";
 "insights.statusReasonLastErrorRecent" = "The backend recorded a server error within the last five minutes.";
 "insights.statusReasonLastErrorHistorical" = "An older backend server error is recorded, but it is no longer current.";

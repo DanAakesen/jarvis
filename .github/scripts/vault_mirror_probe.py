@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 JOB_NAME = "job-jarvis-vault-mirror"
 CONTAINER_NAME = "vault-mirror"
@@ -134,12 +134,18 @@ def instant(value: object) -> datetime | None:
         return None
 
 
-def latest_execution(items: list[dict], now: datetime, max_age_seconds: int) -> dict | None:
+def latest_execution(
+    items: list[dict],
+    now: datetime,
+    max_age_seconds: int,
+    not_before: datetime | None = None,
+) -> dict | None:
     candidates = []
     for item in items:
         started = instant((item.get("properties") or {}).get("startTime"))
         age = (now - started).total_seconds() if started is not None else None
-        if age is not None and -60 <= age <= max_age_seconds:
+        after_start = not_before is None or started >= not_before - timedelta(seconds=5)
+        if age is not None and -60 <= age <= max_age_seconds and after_start:
             candidates.append((started, item))
     return max(candidates, default=(None, None), key=lambda pair: pair[0] or datetime.min.replace(tzinfo=UTC))[1]
 
@@ -206,6 +212,7 @@ def probe(
     sleep=time.sleep,
 ) -> dict[str, object]:
     clock = clock or (lambda: datetime.now(UTC))
+    probe_started_at = clock()
     expected = {
         "name": JOB_NAME,
         "provisioningState": "Succeeded",
@@ -235,13 +242,27 @@ def probe(
                    "--name", JOB_NAME, "--resource-group", group)
         if not isinstance(items, list):
             raise ProbeError("vault_mirror_executions_invalid")
-        execution = latest_execution(items, clock(), max_age_seconds)
+        execution = latest_execution(items, clock(), max_age_seconds, probe_started_at)
         if execution and (execution.get("properties") or {}).get("status") in TERMINAL:
             break
         if time.monotonic() >= deadline:
             raise ProbeError("vault_mirror_execution_missing_or_running")
         sleep(15)
+    current_execution = az(
+        subscription,
+        "containerapp", "job", "execution", "show",
+        "--name", JOB_NAME, "--resource-group", group,
+        "--job-execution-name", str(execution.get("name") or ""),
+    )
+    if not isinstance(current_execution, dict):
+        raise ProbeError("vault_mirror_execution_unavailable")
+    execution = current_execution
     execution_result = execution_summary(execution)
+    template = (execution.get("properties") or {}).get("template") or {}
+    containers = template.get("containers") or []
+    execution_image = containers[0].get("image") if len(containers) == 1 else None
+    if execution_image != job_result["image"]:
+        raise ProbeError("vault_mirror_execution_image_mismatch")
     runner = None
     while True:
         try:
@@ -254,7 +275,9 @@ def probe(
             raise ProbeError("vault_mirror_runner_summary_missing")
         sleep(10)
     outcome = runner["outcome"]
-    verdict = "healthy" if outcome in {"ok", "ok-noop", "skipped-busy"} else \
+    if outcome == "skipped-busy":
+        raise ProbeError("vault_mirror_execution_skipped_busy")
+    verdict = "healthy" if outcome in {"ok", "ok-noop"} else \
         "attention" if outcome == "needs-attention" else "failed"
     if outcome == "needs-attention" and runner.get("reason") == "guard-tripped":
         guards = runner.get("guardReasons") or []

@@ -118,4 +118,22 @@ describe('system status evidence', () => {
     expect(entry.details).not.toHaveProperty('reason');
     expect(entry.details).not.toHaveProperty('smokePart');
   });
+
+  it('does not let smoke evidence overwrite an unconfigured component', async () => {
+    const reader = createSystemStatusReader({
+      runner: async () => ({
+        status: 'down',
+        details: { configured: false },
+      }),
+    }, undefined, () => Date.parse(checkAt));
+    reader.recordEvidence('runner', {
+      status: 'ok',
+      checkedAt: checkAt,
+      details: { evidence: 'smoke', smokeCheck: 'research' },
+    });
+    expect((await reader.read()).entries.find(entry => entry.id === 'runner')).toMatchObject({
+      status: 'down',
+      details: { configured: false },
+    });
+  });
 });

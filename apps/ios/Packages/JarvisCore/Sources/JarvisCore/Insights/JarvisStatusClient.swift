@@ -344,6 +344,12 @@ public enum JarvisStatusLogic {
             return .key(.statusReasonNoBackendError)
         }
         if text(details["runtimeProbe"]) == "stale" { return .key(.statusReasonRuntimeStale) }
+        if text(details["reason"]) == "embedding_request_failed" {
+            return .key(.statusReasonEmbeddingFailed)
+        }
+        if text(details["reason"]) == "budget_exhausted" { return .key(.statusReasonPiBudgetExhausted) }
+        if text(details["reason"]) == "busy" { return .key(.statusReasonPiBusy) }
+        if text(details["reason"]) == "preflight_failed" { return .key(.statusReasonPiPreflightFailed) }
         if let reason = text(details["reason"]),
            !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .text(readable(reason))

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SystemStatus } from '@jarvis/contracts';
 import { StatusPage } from './StatusPage';
@@ -123,5 +123,47 @@ describe('StatusPage evidence copy', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vault mirror details' }));
     expect(screen.getByText('Deferred GitHub changes')).not.toBeNull();
     expect(screen.queryByText(/Safety guard:/u)).toBeNull();
+  });
+
+  it('distinguishes PI preflight refusal from an embedding request failure', async () => {
+    const data = snapshot();
+    data.entries = data.entries.map(entry => entry.id === 'foundry.chat' ? {
+      ...entry,
+      status: 'down',
+      details: {
+        configured: true, engine: 'pi', evidence: 'runtime-turn',
+        outcome: 'failed', reason: 'budget_exhausted',
+      },
+    } : entry.id === 'foundry.embeddings' ? {
+      ...entry,
+      status: 'degraded',
+      details: {
+        configured: true, evidence: 'vault-index', outcome: 'fallback',
+        reason: 'embedding_request_failed',
+      },
+    } : entry);
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
+    render(<StatusPage backendUrl="https://api.example.test" getAccessToken={async () => 'token'} />);
+    expect(await screen.findByText('PI refused the latest request because its monthly cap is exhausted.')).not.toBeNull();
+    expect(screen.getByText('The latest Foundry embedding request failed; vault embedding coverage may be incomplete.')).not.toBeNull();
+  });
+
+  it('expires runtime evidence locally while the page remains open', async () => {
+    const data = snapshot();
+    const old = new Date(Date.now() - 16 * 60_000).toISOString();
+    data.entries = data.entries.map(entry => entry.id === 'foundry.chat' ? {
+      ...entry,
+      status: 'ok',
+      checkedAt: old,
+      details: {
+        configured: true, engine: 'pi', evidence: 'runtime-turn',
+        outcome: 'ok', runtimeProbe: 'runtime',
+      },
+    } : entry);
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
+    render(<StatusPage backendUrl="https://api.example.test" getAccessToken={async () => 'token'} />);
+    const chat = await screen.findByLabelText('Foundry chat');
+    expect(within(chat).getByText('Unknown')).not.toBeNull();
+    expect(within(chat).getByText(/older than 15 minutes/u)).not.toBeNull();
   });
 });

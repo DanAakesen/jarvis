@@ -18,6 +18,7 @@ export interface PiRuntimeTurnEvidence {
   readonly outcome: 'ok' | 'failed' | 'cancelled' | 'timeout';
   readonly at: string;
   readonly source: 'turn' | 'brain';
+  readonly reason?: 'budget_exhausted' | 'busy' | 'preflight_failed';
 }
 
 export type PiEvent =
@@ -164,6 +165,18 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   const connectTimeoutMs = options.connectTimeoutMs ?? 60_000;
   const warmFreshMs = options.warmFreshMs ?? 4 * 60_000;
   const base = `${options.projectEndpoint.replace(/\/+$/u, '')}/agents/${options.agentName}/endpoint/protocols/openai`;
+  const reportRuntime = (
+    channel: PiRuntimeTurnEvidence['channel'],
+    outcome: PiRuntimeTurnEvidence['outcome'],
+    source: PiRuntimeTurnEvidence['source'],
+    reason?: PiRuntimeTurnEvidence['reason'],
+  ): void => {
+    try {
+      options.onRuntimeTurn?.({
+        channel, outcome, at: now().toISOString(), source, ...(reason ? { reason } : {}),
+      });
+    } catch { /* Status observation must not change the turn outcome. */ }
+  };
   let ensuring: Promise<string> | null = null;
   // Single-flight lock for the one conversation: a warm-up and a chat turn can never both have a request in flight.
   // It is claimed synchronously (no await between the check and the claim), so two callers cannot both pass it.
@@ -408,14 +421,28 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (input.proactiveContext) notes.push(`[Jarvis recently told Dan this, and he may be replying to it]\n${input.proactiveContext}`);
     if (input.screenContext) notes.push(`[Shared screen context: ${JSON.stringify(input.screenContext)}]`);
 
-    await assertBudget(signal);
+    try {
+      await assertBudget(signal);
+    } catch (error) {
+      reportRuntime(
+        input.channel === 'voice' ? 'voice' : 'chat',
+        'failed',
+        'turn',
+        error instanceof PiGatewayError && error.code === 'pi_budget_exhausted'
+          ? 'budget_exhausted' : 'preflight_failed',
+      );
+      throw error;
+    }
     // A warm-up in flight primes the cache this turn will use; waiting for it is cheaper than racing it.
     while (busy?.kind === 'warm') {
       await Promise.race([busy.done, new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }))]);
       signal.throwIfAborted();
     }
     const releaseTurn = claim('chat');
-    if (!releaseTurn) throw new PiGatewayError('pi_failed', 'PI is already answering. Wait for that reply first.');
+    if (!releaseTurn) {
+      reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', 'failed', 'turn', 'busy');
+      throw new PiGatewayError('pi_failed', 'PI is already answering. Wait for that reply first.');
+    }
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
     let grant: PiTurnGrant | undefined;
     let usage: PiUsage | undefined;
@@ -492,14 +519,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         azureToolsOffered: [...(grant?.discovered ?? [])].filter(name => name.startsWith(azureToolPrefix)).length,
         azureCalls,
       });
-      try {
-        options.onRuntimeTurn?.({
-          channel: input.channel === 'voice' ? 'voice' : 'chat',
-          outcome,
-          at: now().toISOString(),
-          source: 'turn',
-        });
-      } catch { /* Status observation must not change the turn outcome. */ }
+      reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', outcome, 'turn');
     }
   }
 
@@ -547,14 +567,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       outputTokens: billed?.outputTokens ?? 0, costDkk, firstTextMs, totalMs, outcome,
     }, billed, `pi:brain:${input.runId}`);
     log('pi.brain_run', { outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk, tools: toolResults.length });
-    try {
-      options.onRuntimeTurn?.({
-        channel: 'chat',
-        outcome,
-        at: now().toISOString(),
-        source: 'brain',
-      });
-    } catch { /* Status observation must not change the brain result. */ }
+    reportRuntime('chat', outcome, 'brain');
     return {
       ok: outcome === 'ok', text: text.trim(), usage: billed ?? { inputTokens: 0, cachedTokens: 0, outputTokens: 0 }, costDkk,
       estimated: usage === undefined && billed !== undefined, outcome, firstTextMs, totalMs, toolResults, run, ...(failure ? { error: failure } : {}),

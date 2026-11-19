@@ -478,6 +478,7 @@ export function createSystemStatusReader(
   const withEvidence = (entry: SystemStatusEntry): SystemStatusEntry => {
     const observed = evidence.get(entry.id);
     if (!observed) return entry;
+    if (entry.details?.configured === false && observed.details?.configured !== true) return entry;
     const baseDetails = { ...entry.details };
     for (const key of [
       'reason', 'evidence', 'smokeCheck', 'smokePart', 'channel', 'outcome',
@@ -492,7 +493,6 @@ export function createSystemStatusReader(
       checkedAt: observed.checkedAt,
       details: {
         ...baseDetails,
-        configured: true,
         ...observed.details,
         runtimeProbe: stale ? 'stale' : 'runtime',
         lastEvidenceAt: observed.checkedAt,

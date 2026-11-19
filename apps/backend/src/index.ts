@@ -600,14 +600,18 @@ try {
       onRuntimeTurn: (evidence) => {
         if (evidence.channel === 'voice') return;
         recordStatusEvidence('foundry.chat', {
-          status: evidence.outcome === 'ok' ? 'ok' : evidence.outcome === 'cancelled' ? 'unknown' : 'down',
+          status: evidence.outcome === 'ok' ? 'ok'
+            : evidence.outcome === 'cancelled' ? 'unknown'
+              : evidence.reason === 'busy' || evidence.reason === 'budget_exhausted' ? 'degraded' : 'down',
           checkedAt: evidence.at,
           details: {
+            configured: true,
             engine: 'pi',
             evidence: 'runtime-turn',
             channel: evidence.channel,
             outcome: evidence.outcome,
             source: evidence.source,
+            ...(evidence.reason ? { reason: evidence.reason } : {}),
           },
         });
       },
@@ -670,7 +674,12 @@ try {
         recordStatusEvidence('foundry.embeddings', {
           status: fields.outcome === 'ok' ? 'ok' : 'degraded',
           checkedAt: new Date().toISOString(),
-          details: { evidence: 'vault-index', outcome: fields.outcome },
+          details: {
+            configured: true,
+            evidence: 'vault-index',
+            outcome: fields.outcome,
+            ...(fields.outcome === 'fallback' ? { reason: 'embedding_request_failed' } : {}),
+          },
         });
       },
     })
