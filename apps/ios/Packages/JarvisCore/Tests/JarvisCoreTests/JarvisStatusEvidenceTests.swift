@@ -86,6 +86,25 @@ final class JarvisStatusEvidenceTests: XCTestCase {
         )
     }
 
+    func testExpandedDetailUsesEvidenceNotTheRepeatedSubtitleReason() {
+        let entry = JarvisStatusEntry(
+            id: "foundry.chat",
+            status: .down,
+            checkedAt: "2026-11-19T02:00:00Z",
+            details: [
+                "configured": .bool(true),
+                "evidence": .string("runtime-turn"),
+                "outcome": .string("failed"),
+                "reason": .string("budget_exhausted"),
+            ]
+        )
+        XCTAssertEqual(JarvisStatusLogic.detailEvidence(for: entry), "Runtime turn")
+        XCTAssertNotEqual(
+            JarvisStatusLogic.detailEvidence(for: entry),
+            String(describing: JarvisStatusLogic.reason(for: entry))
+        )
+    }
+
     func testMirrorDecodingRetainsLastRunOutcomeAndReadReason() throws {
         let data = Data("""
         {

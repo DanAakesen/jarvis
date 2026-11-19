@@ -1,3 +1,12 @@
+## 19 November 2026 — One PI route and an exact, release-owned backend configuration (#1966)
+
+- **Normal route:** PI is the only Chat and Voice engine. The old saved device selector, test badge and normal-client `engine` parameters are removed. An older Chat client may explicitly send `pi`; `current` and unknown values are refused. Isolated runtime-test sessions keep their separately selected runtime and are not a fallback for normal Chat or Voice.
+- **Release state:** ordinary infrastructure deployment owns preservation, not post-deploy repair. `deploy_bicep.sh` captures the previous complete PI tuple into a private secure parameter; Bicep restores PI core, GitHub, Azure MCP and monthly-cap settings. A missing/mismatched tuple fails closed before deployment instead of becoming a green but stripped backend.
+- **Readiness receipt:** the `pi-agent` job runs before readiness, waits for and returns the exact backend revision it configured, and `release_state.py` records that revision with the PI job attempt. A smoke or receipt based on an older backend revision is not acceptable evidence.
+- **Owner controls:** engine selection is gone. Background PI remains a distinct, off-by-default policy switch in Proactive settings with independent read/save loading and Retry; Status expansion shows checked time and evidence instead of repeating its subtitle.
+- **Scope boundary:** this removes the selector, not the old harness/resources or isolated runtime-test support. That retirement remains behind the separately documented cutover deletion gate.
+- **Evidence:** offline deployment-script, backend, web, contracts, Bicep and Swift checks are required. Live provider, deploy, TestFlight and physical-device verification remain separate owner/Dispatcher evidence.
+
 ## 19 November 2026 — PI situational intelligence uses SQL truth, one grant and one combined slot ledger
 
 - **State:** `dbo.pi_situational_state` is the only compact owner-scoped PI situational state. Its bounded JSON is revision/hash checked and source linked; raw source and conversation archives remain in their current authoritative stores. Foundry/Conversation state is not truth, and Foundry Memory is not a dependency.
@@ -301,9 +310,9 @@ Owner, 16 November 2026, recorded as given: "I dont see a use case where jarvis 
 | No approval, confirmation or safety rule is written into PI's instructions or skills for GitHub or Azure | PI uses its own judgement like any capable model; nothing about what it may or may not do is hard-coded. Kept only: never printing a token, redacting secrets, the existing cost cap |
 | The Deploy summary keeps `not attached: <reason>` when the secret or the Azure variable is missing | Unchanged: a missing input is said, not hidden |
 
-## 18 November 2026 — PI phase 7 default approved, not live (#1887, #1910)
+## 18 November 2026 — PI phase 7 default approved (subsequently hardened and made PI-only by #1966)
 
-[Written owner approval](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174): “Make the flip default on.” A missing `engine` selects PI for normal chat and voice. iPhone defaults to PI and sends its choice explicitly; `current` still selects the old engine. Isolated runtime tests keep their selected runtime and reject explicit PI. Watch and web use the server default; camera and screen sharing remain unsupported on PI web voice. The standalone draft is not merged or deployed. The old harness, PI Brain switch and proactive slots are unchanged. Phase 8 needs separate approval and still has to meet its deletion gate.
+[Written owner approval](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174): “Make the flip default on.” At the time, a missing `engine` selected PI for normal Chat and Voice, while iPhone could still send `current`. Isolated runtime tests kept their selected runtime and rejected explicit PI. Watch and web used the server default; camera and screen sharing remained unsupported on PI web voice. #1966 supersedes the client compatibility selector and makes PI the only normal route, while retaining the old harness for isolated tests and the separate phase-8 gate.
 
 ## 16 November 2026 — PI phase 7: the cutover is prepared as a separate flip, and the deletion waits for his written word (#1887, P15-176)
 

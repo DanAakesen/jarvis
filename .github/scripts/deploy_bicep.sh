@@ -6,6 +6,7 @@
 # RESOURCE_GROUP and INFRA_DEPLOYMENT. IDs come from the committed bootstrap
 # output; the Foundry timestamp from infra/main.parameters.json.
 set -euo pipefail
+umask 077
 
 outputs="$1"
 image="${2:-}"
@@ -23,12 +24,16 @@ if ! jq -e 'length > 0 and all(.[]; test("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:
 fi
 budget_parameters=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-budget-parameters.XXXXXX")
 chmod 600 "$budget_parameters"
-trap 'rm -f "$budget_parameters"; if [[ -n "${RUNNER_TEMP:-}" ]]; then rm -f "$RUNNER_TEMP/backend-log-probe.params.json"; fi' EXIT
+trap 'rm -f "$budget_parameters"; if [[ -n "${RUNNER_TEMP:-}" ]]; then
+  rm -f "$RUNNER_TEMP/backend-log-probe.params.json"; fi
+  for private_file in "${pi_backends:-}" "${pi_secrets:-}" "${pi_parameters:-}"; do
+    [[ -z "$private_file" ]] || rm -f "$private_file"
+  done' EXIT
 jq -n --argjson emails "$budget_emails" \
   '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
 backend_apps=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
-  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,nativePush:properties.template.containers[0].env[?name=='JARVIS_APPROVAL_NOTIFICATIONS_ENABLED'],sandboxes:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_SANDBOX_')],copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY']}" \
+  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,nativePush:properties.template.containers[0].env[?name=='JARVIS_APPROVAL_NOTIFICATIONS_ENABLED'],sandboxes:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_SANDBOX_')],copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY'],pi:properties.template.containers[0].env[?starts_with(name, 'JARVIS_PI_')]}" \
   --output json --only-show-errors)
 if ! jq -e 'type == "array" and length <= 1 and all(.[]; type == "object")' <<<"$backend_apps" >/dev/null; then
   echo "::error::Unable to identify one existing backend configuration."
@@ -82,6 +87,32 @@ native_push_enabled=$(jq -er '.[0].nativePush // [] | if length == 0 then "false
   elif length == 1 and (.[0].value == "true" or .[0].value == "false") then .[0].value
   else error("Invalid native push configuration") end' <<<"$backend_apps")
 parameters+=(nativePushEnabled="$native_push_enabled")
+
+pi_backends="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-pi-backends.json"
+pi_secrets="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-pi-secrets.json"
+pi_parameters="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-pi-backend-parameters.json"
+printf '%s' "$backend_apps" >"$pi_backends"
+chmod 600 "$pi_backends"
+backend_name=$(jq -r '.[0].name // ""' <<<"$backend_apps")
+if [[ -n "$backend_name" ]]; then
+  az containerapp secret list --name "$backend_name" --resource-group "$RESOURCE_GROUP" \
+    --subscription "$SUBSCRIPTION_ID" --show-values --output json --only-show-errors >"$pi_secrets"
+else
+  printf '[]' >"$pi_secrets"
+fi
+chmod 600 "$pi_secrets"
+python .github/scripts/pi_backend_configuration.py \
+  --backends "$pi_backends" --secrets "$pi_secrets" \
+  --agent-name "$(jq -er .agentName agents/pi/definition.json)" \
+  --output "$pi_parameters"
+parameters+=("@$pi_parameters")
+if ! existing_azure_client=$(jq -r '.[0].pi // [] | map(select(.name == "JARVIS_PI_AZURE_MCP_CLIENT_ID")) | .[0].value // ""' <<<"$backend_apps"); then
+  echo "::error::Existing PI Azure MCP configuration is invalid."
+  exit 1
+fi
+if [[ -z "${JARVIS_AZURE_MCP_CLIENT_ID:-}" && -n "$existing_azure_client" ]]; then
+  JARVIS_AZURE_MCP_CLIENT_ID="$existing_azure_client"
+fi
 
 
 if [[ -f "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/backend-log-preflight.private.json" ]]; then

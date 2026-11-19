@@ -163,11 +163,11 @@ describe('PI is the default engine on the chat turn', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
   });
 
-  it('keeps the old engine reachable only by naming it', async () => {
+  it('refuses the obsolete Current engine selection', async () => {
     const { turn, messages } = setup({ piAgent: { stream: async function* () { yield 'from PI'; } } });
     const result = await turn({ text: 'hi', engine: 'current' });
-    expect(result.events[1]!.data.text).toBe('from the current engine');
-    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: null });
+    expect(result.status).toBe(400);
+    expect(messages).toEqual([]);
   });
 
   it('keeps an isolated runtime-test session on its selected runtime and rejects explicit PI', async () => {
@@ -180,7 +180,7 @@ describe('PI is the default engine on the chat turn', () => {
     expect(piCalls).toBe(0);
   });
 
-  it('honours explicit PI and labels the saved reply', async () => {
+  it('accepts an older client that explicitly names PI and labels the saved reply', async () => {
     const seen: Array<{ messageId: string; sessionId?: string }> = [];
     const { turn, messages } = setup({
       piAgent: { stream: async function* (input) { seen.push({ messageId: input.messageId, ...(input.sessionId ? { sessionId: input.sessionId } : {}) }); yield 'from PI'; } },
@@ -209,9 +209,10 @@ describe('PI is the default engine on the chat turn', () => {
     expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: 'PI has used 250.00 of its 250 DKK monthly cap, so it stopped.', code: 'pi_budget_exhausted' } });
   });
 
-  it('rejects any engine other than pi or current', async () => {
+  it('rejects Current and every engine other than PI', async () => {
     const { turn } = setup();
     expect((await turn({ text: 'hi', engine: 'copilot' })).status).toBe(400);
+    expect((await turn({ text: 'hi', engine: 'current' })).status).toBe(400);
   });
 
   it('exposes the unconfigured agent as an error, not as a reply', async () => {

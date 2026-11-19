@@ -139,6 +139,7 @@ class DefinitionTest(unittest.TestCase):
             return {}
 
         with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43), \
+                mock.patch.object(pi, "wait_ready", return_value="ca-jarvis--revision-1"), \
                 mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         # The Jarvis connection is written, and the two old harness connections (GitHub with the token, Azure) are removed.
@@ -269,13 +270,16 @@ class ReachTest(unittest.TestCase):
                                   azure_mcp_url="https://azure-mcp.example", azure_mcp_client_id=self.client, output=None)
         configure = mock.Mock(return_value="S" * 43)
         with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True), mock.patch.object(pi, "Az", Fake), \
-                mock.patch.object(pi, "configure_backend", configure), mock.patch.object(pi, "arm_request", fake_arm):
+                mock.patch.object(pi, "configure_backend", configure), \
+                mock.patch.object(pi, "wait_ready", return_value="ca-jarvis--revision-2"), \
+                mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         self.assertEqual([tool["server_label"] for tool in stored["definition"]["tools"] if tool["type"] == "mcp"], ["jarvis"])
         self.assertEqual(result["reach"], {"github": "attached", "azure": "attached"})
         self.assertEqual(configure.call_args.args[-2:], (self.token, ("https://azure-mcp.example", self.client)))
         self.assertEqual(sorted(deleted), ["jarvis-pi-azure", "jarvis-pi-github"])
         self.assertTrue(result["created"])
+        self.assertEqual(result["backendRevision"], "ca-jarvis--revision-2")
 
 
 class BackendTokenTest(unittest.TestCase):

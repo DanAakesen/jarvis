@@ -493,7 +493,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           if (event.failed && event.server !== PI_MCP_SERVER_LABEL) log('pi.mcp_call_failed', { server: event.server, tool: event.name });
         } else if (event.kind === 'tool') {
           sawTool = true;
-          // Text before a tool call is a progress note, as with the current engine; very long text stays in the answer.
+          // Text before a tool call is a progress note; very long text stays in the answer.
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
             boundaries += 1;

@@ -2,8 +2,7 @@ import Foundation
 import XCTest
 @testable import JarvisCore
 
-// TEST-ONLY chat engine switch: delete with the switch at cutover.
-final class ChatEngineTests: XCTestCase {
+final class PiRuntimeTests: XCTestCase {
     func testDeviceLocationPatchKeepsPermissionAndObservationFreshness() throws {
         let observed = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-19T05:00:00Z"))
         let patch = try XCTUnwrap(DeviceLocationSettings.patch(
@@ -34,36 +33,17 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertFalse(patch.isEmpty)
     }
 
-    func testSelectionDefaultsToPiPersistsAndIgnoresUnknownValues() throws {
-        let suite = "ChatEngineTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        XCTAssertEqual(ChatEngineSelection.load(from: defaults), .pi)
-        ChatEngineSelection.save(.current, to: defaults)
-        XCTAssertEqual(defaults.string(forKey: "jarvis.test.chatEngine"), "current")
-        XCTAssertEqual(ChatEngineSelection.load(from: defaults), .current)
-        defaults.set("something-else", forKey: ChatEngineSelection.key)
-        XCTAssertEqual(ChatEngineSelection.load(from: defaults), .pi)
-    }
-
-    func testVoiceEndpointNamesTheEngineOnlyWhenOneIsChosen() throws {
+    func testVoiceEndpointAlwaysUsesTheSinglePiRoute() throws {
         let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
         XCTAssertEqual(try VoiceEndpoint.url(baseURL: base).absoluteString, "wss://example.invalid/api/voice")
-        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .current).absoluteString, "wss://example.invalid/api/voice?engine=current")
-        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .pi).absoluteString, "wss://example.invalid/api/voice?engine=pi")
     }
 
-    func testVoiceSessionConnectsWithTheChosenEngine() async throws {
+    func testVoiceSessionConnectsOnlyToThePiRoute() async throws {
         let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
-        let current = VoiceRecordingSocket()
-        try await VoiceSessionClient(baseURL: base, engine: .current, transport: current).start(accessToken: "a.b.c")
-        let unnamed = VoiceRecordingSocket()
-        try await VoiceSessionClient(baseURL: base, transport: unnamed).start(accessToken: "a.b.c")
-        let currentURLs = await current.connectedURLs()
-        let unnamedURLs = await unnamed.connectedURLs()
-        XCTAssertEqual(currentURLs.map(\.absoluteString), ["wss://example.invalid/api/voice?engine=current"])
-        XCTAssertEqual(unnamedURLs.map(\.absoluteString), ["wss://example.invalid/api/voice"])
+        let socket = VoiceRecordingSocket()
+        try await VoiceSessionClient(baseURL: base, transport: socket).start(accessToken: "a.b.c")
+        let urls = await socket.connectedURLs()
+        XCTAssertEqual(urls.map(\.absoluteString), ["wss://example.invalid/api/voice"])
     }
 
     func testWarmThrottleAllowsOneAttemptPerInterval() {
@@ -74,57 +54,20 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertTrue(throttle.shouldWarm(now: start.addingTimeInterval(300)))
     }
 
-    func testTurnBodyNamesTheEngineOnlyWhenOneIsChosen() async throws {
+    func testTurnBodyNeverCarriesAnEngineSelector() async throws {
         let transport = RecordingTransport([])
         let chat = JarvisChatClient(client: try makeClient(transport: transport))
 
         _ = try await chat.sendTurn(sessionId: "12", text: "Hello")
-        _ = try await chat.sendTurn(sessionId: "12", text: "Hello", engine: .current)
-        _ = try await chat.sendTurn(sessionId: "12", text: "Hello", engine: .pi)
 
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 3)
+        XCTAssertEqual(requests.count, 1)
         let bodies = try requests.map {
             try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap($0.body)) as? [String: Any])
         }
-        XCTAssertEqual(requests.map(\.url.path), Array(repeating: "/api/conversation/sessions/12/turns", count: 3))
+        XCTAssertEqual(requests.map(\.url.path), ["/api/conversation/sessions/12/turns"])
         XCTAssertNil(bodies[0]["engine"])
-        XCTAssertEqual(bodies[1]["engine"] as? String, "current")
-        XCTAssertEqual(bodies[2]["engine"] as? String, "pi")
-        XCTAssertEqual(bodies[2]["text"] as? String, "Hello")
-    }
-
-    func testPiStatusDecodesFullAndMinimalPayloads() throws {
-        let full = Data(#"""
-        {"enabled":true,"reason":null,
-         "agent":{"name":"Jarvis PI","model":"gpt-test","effort":"medium"},
-         "month":{"spentDkk":1.25,"capDkk":100,"remainingDkk":98.75,"turns":7},
-         "warm":{"state":"warm","warmedAt":"2026-11-15T10:00:00.000Z"},
-         "lastTurn":{"at":"2026-11-15T10:01:00.000Z","firstTextMs":900,"totalMs":4200,
-                     "inputTokens":1200,"cachedTokens":900,"outputTokens":150,"costDkk":0.08}}
-        """#.utf8)
-        let status = try JSONDecoder().decode(PiStatus.self, from: full)
-        XCTAssertTrue(status.enabled)
-        XCTAssertNil(status.reason)
-        XCTAssertEqual(status.agent.name, "Jarvis PI")
-        XCTAssertEqual(status.month.capDkk, 100)
-        XCTAssertEqual(status.month.remaining, 98.75)
-        XCTAssertTrue(status.warm.isWarm)
-        XCTAssertEqual(status.lastTurn?.cachedTokens, 900)
-        XCTAssertEqual(status.lastTurn?.firstTextMs, 900)
-
-        let minimal = Data(#"""
-        {"enabled":false,"reason":"budget_exhausted",
-         "agent":{"name":null,"model":"gpt-test","effort":"low"},
-         "month":{"spentDkk":100,"capDkk":100,"turns":40},
-         "warm":{"state":"cold","warmedAt":null},"lastTurn":null}
-        """#.utf8)
-        let exhausted = try JSONDecoder().decode(PiStatus.self, from: minimal)
-        XCTAssertFalse(exhausted.enabled)
-        XCTAssertEqual(exhausted.month.remaining, 0)
-        XCTAssertEqual(exhausted.reason, "budget_exhausted")
-        XCTAssertFalse(exhausted.warm.isWarm)
-        XCTAssertNil(exhausted.lastTurn)
+        XCTAssertEqual(bodies[0]["text"] as? String, "Hello")
     }
 
     func testPiWarmPostsEmptyObjectAndSurfacesServerFailure() async throws {
@@ -198,9 +141,63 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertEqual(sent.count, 1)
     }
 
-    private func makeClient(transport: RecordingTransport) throws -> JarvisClient {
+    func testPiBrainStatusAndMemoryReadsRemainRetryableAfterUnavailableResponses() async throws {
+        let brainBody = #"""
+        {"available":true,"enabled":false,"updatedAt":null,"paused":false,
+         "budget":{"limitDkk":100,"spentDkk":0,"state":"ok"},
+         "month":{"wakes":0,"costDkk":0},"today":{"messages":0,"usedTurns":0,"allowedTurns":12},
+         "lastWake":null,"logPending":0,
+         "slots":{"used":0,"allowed":12,"remaining":12,"lastAt":null,"nextAllowedAt":null,"quiet":false,
+                  "queue":{"pending":0,"leased":0,"retrying":0}},
+         "situation":{"revision":0,"asOf":null,"updatedAt":null,
+                      "staleSources":[],"missingSources":[],"disabledSources":[]},
+         "cost":{"coldSweepMinDkk":0.14,"coldSweepMaxDkk":0.28,"representativeToolTurnDkk":0.17,"preflightWorstCaseDkk":0.79,
+                 "estimatedDayMinDkk":1.68,"estimatedDayMaxDkk":3.36,"estimatedThirtyDayMinDkk":50.4,"estimatedThirtyDayMaxDkk":100}}
+        """#
+        let memoryBody = #"""
+        {"items":[{"id":"1","type":"memory","title":"Fixture memory","folder":"General","content":"A retained memory"}],
+         "count":1,"limit":50,"offset":0,"hasMore":false}
+        """#
+        let transport = RecordingTransport([
+            HTTPResponse(statusCode: 503),
+            HTTPResponse(statusCode: 200, body: Data(brainBody.utf8)),
+            HTTPResponse(statusCode: 503),
+            HTTPResponse(statusCode: 200, body: Data(memoryBody.utf8)),
+        ])
+        let client = try makeClient(
+            transport: transport,
+            retryPolicy: RetryPolicy(maximumRetries: 0)
+        )
+        let pi = JarvisChatClient(client: client)
+        do {
+            _ = try await pi.piBrainStatus()
+            XCTFail("Expected the first PI read to fail")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .serviceUnavailable)
+        }
+        let brain = try await pi.piBrainStatus()
+        XCTAssertFalse(brain.enabled)
+
+        let settings = JarvisSettingsClient(client: client)
+        do {
+            _ = try await settings.loadMemory()
+            XCTFail("Expected the first Memory read to fail")
+        } catch {
+            XCTAssertEqual(error as? JarvisSettingsClientError, .unavailable)
+        }
+        let memory = try await settings.loadMemory()
+        XCTAssertEqual(memory.items.map(\.title), ["Fixture memory"])
+    }
+
+    private func makeClient(
+        transport: RecordingTransport,
+        retryPolicy: RetryPolicy = RetryPolicy()
+    ) throws -> JarvisClient {
         try JarvisClient(
-            configuration: JarvisClientConfiguration(baseURL: URL(string: "https://api.example.invalid/api")!),
+            configuration: JarvisClientConfiguration(
+                baseURL: URL(string: "https://api.example.invalid/api")!,
+                retryPolicy: retryPolicy
+            ),
             transport: transport,
             tokenStore: StaticTokenStore(),
             accessTokenProvider: StaticTokenProvider()

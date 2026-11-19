@@ -294,13 +294,13 @@ def configure_backend(app: str, group: str, subscription: str, agent_name: str, 
     return secret
 
 
-def wait_ready(app: str, group: str, subscription: str) -> None:
+def wait_ready(app: str, group: str, subscription: str) -> str:
     for _ in range(40):
         state = json.loads(shell("az", "containerapp", "show", "--name", app, "--resource-group", group, "--subscription",
                                  subscription, "--query", "{latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName}",
                                  "--only-show-errors", "--output", "json"))
         if state["latest"] and state["latest"] == state["ready"]:
-            return
+            return state["latest"]
         time.sleep(15)
     raise Blocked("backend_not_ready")
 
@@ -454,7 +454,12 @@ def provision(args: argparse.Namespace) -> dict:
               "skills": {s["name"]: s["version"] for s in skills}, "reach": {"github": github_status, "azure": azure_status},
               "experiment": experiment}
     if unchanged:
-        return {**result, "version": state["pinned"], "created": False}
+        return {
+            **result,
+            "version": state["pinned"],
+            "created": False,
+            "backendRevision": wait_ready(args.backend_app, args.resource_group, args.subscription),
+        }
     definition = build_definition(spec, instructions, server_url, skills)
     metadata = {FINGERPRINT_KEY: wanted}
     # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
@@ -462,7 +467,12 @@ def provision(args: argparse.Namespace) -> dict:
     require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None, "agent_version_unknown")
     verify(wait_active(foundry, name, version), spec, instructions)
     pin(foundry, name, version)
-    return {**result, "version": version, "created": True}
+    return {
+        **result,
+        "version": version,
+        "created": True,
+        "backendRevision": wait_ready(args.backend_app, args.resource_group, args.subscription),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -236,6 +236,8 @@ struct JarvisStatusArea: View {
         let title = entry.check.map { text($0.localizationKey) } ?? JarvisStatusLogic.readable(entry.id)
         let tone = JarvisStatusLogic.displayStatus(for: entry, now: now)
         let reason = JarvisStatusLogic.reason(for: entry, now: now)
+        let checked = checkedText(entry.checkedAt)
+        let evidence = JarvisStatusLogic.detailEvidence(for: entry)
         return JarvisStatusRow(
             title: title,
             tone: tone,
@@ -243,15 +245,26 @@ struct JarvisStatusArea: View {
             isExpanded: expanded.contains(entry.id),
             identifier: "status.row.\(entry.id)",
             language: language,
-            subtitle: reasonText(reason) ?? checkedText(entry.checkedAt)
+            subtitle: reasonText(reason) ?? checked
         ) {
             toggle(entry.id)
         } detail: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(reasonText(reason) ?? text(tone.localizationKey))
-                    .font(.subheadline)
+                if reason != nil, let checked {
+                    Text(checked)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let evidence {
+                    Text(text(.statusEvidence) + ": " + evidence)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(text(tone.localizationKey))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("status.reason.\(entry.id)")
             }
         }
@@ -271,6 +284,7 @@ struct JarvisStatusArea: View {
 
     private func mirrorRow(_ mirror: JarvisVaultMirror) -> some View {
         let displayState = mirror.displayState(now: now)
+        let summary = lastRunText(mirror)
         return JarvisStatusRow(
             title: text(.statusMirror),
             tone: displayState.tone,
@@ -278,23 +292,21 @@ struct JarvisStatusArea: View {
             isExpanded: expanded.contains("vault-mirror"),
             identifier: "status.row.vault-mirror",
             language: language,
-            subtitle: lastRunText(mirror)
+            subtitle: summary
         ) {
             toggle("vault-mirror")
         } detail: {
             VStack(alignment: .leading, spacing: 8) {
-                Text(lastRunText(mirror))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
                 if let lastSuccessAt = mirror.lastSuccessAt.flatMap(JarvisInsightsDates.parse) {
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .statusMirrorLastSuccess, language: language,
-                            JarvisInsightsDates.elapsed(from: lastSuccessAt, now: now, language: language)
-                        )
+                    let line = JarvisInsightsLocalization.format(
+                        .statusMirrorLastSuccess, language: language,
+                        JarvisInsightsDates.elapsed(from: lastSuccessAt, now: now, language: language)
                     )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    if line != summary {
+                        Text(line)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 if let outcome = mirror.outcome {
                     Text(text(.statusMirrorLastOutcome) + ": " + JarvisStatusLogic.readable(outcome))
@@ -469,7 +481,7 @@ struct JarvisStatusArea: View {
                             if let reason = entry.reason { Text(JarvisStatusLogic.readable(reason)).foregroundStyle(.secondary) }
                         }.font(.subheadline)
                     }
-                } else { Text(text(.statusSmokeNone)).font(.subheadline).foregroundStyle(.secondary) }
+                }
             }
     }
 

@@ -1,3 +1,11 @@
+## PI release hardening — 19 November 2026 (#1966)
+
+- Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.
+- Normal Chat and Voice are PI-only. The server accepts explicit `pi` for older clients and rejects `current`/unknown values. iOS no longer has `ChatEngine`, a saved engine preference, the PI test pill or the General-settings test section; isolated runtime-test sessions remain separate.
+- `pi-agent` must run before readiness, wait for the exact backend revision it configured and return that revision to `release_state.py`. A release receipt cannot point at an older agent/backend revision.
+- The only Background PI switch is in Proactive settings. Its read and save are separate operations and both expose recovery; status detail uses evidence and checked time without repeating the row subtitle/reason.
+- Keep all qualification offline. Do not call `measure_pi`, `probe_pi_wake`, a live smoke or provider service.
+
 ## PI situational intelligence — 19 November 2026
 
 - Migration `0090_pi_situational_intelligence.sql` is required before this backend revision. It adds the owner state row, PI activation telemetry and the 1–12 setting; its down script refuses to discard state, non-default policy, Location history or activation evidence. Keep migration checksums immutable.
@@ -21,7 +29,7 @@
 ## PI Azure on iPhone — 18 November 2026 (#1922, Build 113)
 
 - Check with `cd apps/backend && npx vitest run src/pi src/voice/pi-voice.test.ts`. The normal chat regression uses a reused Foundry conversation and fixture Azure data, not a live service.
-- Device acceptance: with Settings → General → Engine set to PI, ask “what's in my Jarvis resource group?” in normal chat. The reply should list actual resources. Match its time to the backend's `pi.turn`: `azureCatalogue` is the state at the last completed search, `azureToolsOffered` counts Azure schemas actually shown, and `azureCalls` counts attempts and recorded outcomes. A ready catalogue with no tools offered indicates no Azure schema made the search result; an offer with zero attempts means PI did not select one. A successful call is separate from a correct reply.
+- Device acceptance: ask “what's in my Jarvis resource group?” in normal chat (there is no Settings engine choice). The reply should list actual resources. Match its time to the backend's `pi.turn`: `azureCatalogue` is the state at the last completed search, `azureToolsOffered` counts Azure schemas actually shown, and `azureCalls` counts attempts and recorded outcomes. A ready catalogue with no tools offered indicates no Azure schema made the search result; an offer with zero attempts means PI did not select one. A successful call is separate from a correct reply.
 
 ## PI smoke parts — 17 November 2026 (#1910, P15-209)
 
@@ -61,14 +69,14 @@
 
 ## PI cutover: flip, roll back, delete (#1887, P15-176)
 
-- [#1910](https://github.com/DanAakesen/jarvis/pull/1910) made PI the chat and voice default. Main Deploy run 44348929578 applied commit `318b923be74e601719ebd03c839c823dd6d4cbfd` on 18 November 2026. Current remains an explicit compatibility choice.
-- Confirm unnamed chat and voice on Watch and web, PI by default on iPhone, the saved Current engine choice on iPhone, isolated runtime tests, and `not_supported` for camera/screen context on PI web voice. Check actual spoken audio, interruption and follow-up on device; the smoke does not exercise audio. If rollback is needed, revert the flip on main or redeploy the previous qualified release; PI never falls back at runtime.
+- [#1910](https://github.com/DanAakesen/jarvis/pull/1910) made PI the chat and voice default. Main Deploy run 44348929578 applied commit `318b923be74e601719ebd03c839c823dd6d4cbfd` on 18 November 2026. #1966 removes Current from the normal route and makes Bicep retain the exact PI configuration.
+- Confirm normal Chat and Voice on Watch, web and iPhone, isolated runtime-test sessions, and `not_supported` for camera/screen context on PI web voice. There is no saved engine choice or normal runtime fallback. Check actual spoken audio, interruption and follow-up on device; the smoke does not exercise audio. If rollback is needed, revert and redeploy the previous qualified release.
 - Before phase 8: repeat the reference scan (the commands are in cutover.md, section 5), run the full backend, Python and Swift suites after each move in section 4.1, and keep the manual Foundry steps (4.7) for last, after a week of zero requests to the old agents.
 
 ## PI voice: test it and measure it (#1887, P15-176)
 
 - Needs PI configured (the Deploy `pi-agent` job) and the Deploy that contains this change, because the agent instructions gained a Voice section (a new agent version).
-- Test: PI is already the default. In iOS Settings, General, use "Engine test switch" only to compare "Current engine"; then start a fresh voice session. The first answer takes a few seconds; later turns are about as fast as warm chat. Say something that needs a tool ("what is on my calendar today") to hear PI's short sentence before the answer. Interrupt it: the newest sentence wins. Roll back by switching to "Current engine" (a new voice session picks it up).
+- Test: start normal Voice; there is no engine control. The first answer takes a few seconds; later turns are about as fast as warm chat. Say something that needs a tool ("what is on my calendar today") to hear PI's short sentence before the answer. Interrupt it: the newest sentence wins. A failure stays a PI failure; rollback requires a reviewed revert and deploy.
 - Measure: Deploy by hand with `measure_pi`; the job summary and log add "voice: plain" and "voice: with a tool" rows, a "fixed prompt, new conversation" row (the base prompt on its own, to read prompt growth against) and the checks `voice_spoken_shape` and `voice_tools_over_mcp`. This is the PI leg only (about 0.3 to 0.5 DKK for the whole smoke). Real audio latency: backend logs `voice.pi_turn` (`transcriptToFirstTextMs`, `transcriptToDoneMs`) and `voice.turn_timing` (`firstAudioDeltaMs`), cost per turn in `pi.turn` (`channel: voice`) or Settings, "Last turn".
 - Local checks: `cd apps/backend && npx vitest run src/voice src/pi src/logging.test.ts`; `npx tsc --noEmit -p tsconfig.json`; `npx eslint src`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux, the `swift:6.2` image). The relay test (`voice/relay-pi.test.ts`) drives the real relay against a local WebSocket standing in for Voice Live; it does not speak audio. SwiftUI changes compile only in the macOS `watch` job.
 - Not verifiable here: Voice Live accepting a session with no `tools` (the relay omits the keys instead of sending an empty list), real audio and echo behaviour with spoken replies, and what a real PI says in voice.

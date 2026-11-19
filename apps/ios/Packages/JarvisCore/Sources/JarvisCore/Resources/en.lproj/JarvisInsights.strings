@@ -72,6 +72,7 @@
 "insights.statusDegraded" = "Degraded";
 "insights.statusDown" = "Failing";
 "insights.statusUnknown" = "Unknown";
+"insights.statusEvidence" = "Evidence";
 "insights.statusNoIssues" = "No issues";
 "insights.statusPartial" = "Showing the last known status";
 "insights.statusCheckDatabase" = "SQL database";

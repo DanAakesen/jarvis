@@ -82,6 +82,7 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case statusDegraded = "insights.statusDegraded"
     case statusDown = "insights.statusDown"
     case statusUnknown = "insights.statusUnknown"
+    case statusEvidence = "insights.statusEvidence"
     case statusNoIssues = "insights.statusNoIssues"
     case statusPartial = "insights.statusPartial"
     case statusCheckDatabase = "insights.statusCheckDatabase"

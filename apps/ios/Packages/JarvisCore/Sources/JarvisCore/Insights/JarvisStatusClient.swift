@@ -403,6 +403,25 @@ public enum JarvisStatusLogic {
         }
     }
 
+    /// A short detail for an expanded row. It describes evidence rather than repeating the row's reason/subtitle.
+    public static func detailEvidence(for entry: JarvisStatusEntry) -> String? {
+        let details = entry.details ?? [:]
+        if let evidence = text(details["evidence"]) {
+            return readable(evidence)
+        }
+        if let runtimeProbe = text(details["runtimeProbe"]),
+           runtimeProbe != "runtime" && runtimeProbe != "stale" && runtimeProbe != "not_run" {
+            return readable(runtimeProbe)
+        }
+        if let syncOutcome = text(details["syncOutcome"]) {
+            return "Vault sync " + syncOutcome
+        }
+        if let healthProbe = text(details["healthProbe"]) {
+            return "Runner health " + readable(healthProbe)
+        }
+        return nil
+    }
+
     private static func flag(_ value: JSONValue?) -> Bool? {
         guard case .bool(let flag)? = value else { return nil }
         return flag
@@ -424,7 +443,7 @@ public enum JarvisStatusLogic {
         var previous: Character?
         for character in key {
             if let previous, previous.isLowercase, character.isUppercase { text.append(" ") }
-            text.append(character == "_" || character == "." ? " " : character)
+            text.append(character == "_" || character == "." || character == "-" ? " " : character)
             previous = character
         }
         return text.prefix(1).uppercased() + text.dropFirst()

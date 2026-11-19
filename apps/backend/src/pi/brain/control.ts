@@ -8,7 +8,7 @@ import type { PiSituationService } from '../situation.js';
 export interface BrainStatus {
   /** True when the brain is wired into this backend (PI configured, proactive path and queue present). */
   readonly available: boolean;
-  /** The owner's test switch. Off until he turns it on; the brain wakes only while it is on. */
+  /** The owner's Background PI switch. Off until he turns it on; the brain wakes only while it is on. */
   readonly enabled: boolean;
   readonly updatedAt: string | null;
   readonly paused: boolean;

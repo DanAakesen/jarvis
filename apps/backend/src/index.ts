@@ -1182,7 +1182,7 @@ try {
       onReminderScheduled: (fireAt: Date) => scheduleOwnerReminderWake(fireAt),
     } : {}),
   });
-  // The PI brain: its own tools (message to Dan, notes in PI's corner of the vault, an inbox trail line), its test switch and its
+  // The PI brain: its own tools (message to Dan, notes in PI's corner of the vault, an inbox trail line), its Proactive switch and its
   // status. The brain itself is built when the event queue exists (registerProactive below); it needs the vault for its decision log.
   const piArea = vaultClient ? createPiArea({ vault: vaultClient }) : undefined;
   let announceBrainMessage: () => void = () => {};
@@ -1726,7 +1726,7 @@ try {
     eventsEnabled: config.proactiveEventsEnabled,
     ...(alertActivityStore ? { nowCardFeed: alertActivityStore } : {}),
     registerEventSink: (sink: ProactiveEventSink) => { proactiveEventSink = sink; },
-    // PI reads the event queue instead of the old one-shot pipeline; the owner's test switch decides whether it wakes.
+    // PI reads the event queue instead of the old one-shot pipeline; the Proactive Background PI switch decides whether it wakes.
     ...(piGateway && piStore && brainComms && piArea && proactiveStore ? {
       brain: (queue: EventQueueStore) => {
         brainHandle = createBrain({

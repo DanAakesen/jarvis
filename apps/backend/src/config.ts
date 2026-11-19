@@ -26,7 +26,7 @@ export interface BackendConfig {
   foundryChatAgentName?: string;
   foundryCopilot?: { agentName: string; version: string; fingerprint: string };
   foundryCopilotPolicyCompatibility?: string;
-  /** PI chat engine (managed Copilot-harness agent). Present only when its agent name and MCP secret are both set; test-selector only. */
+  /** PI chat engine (managed Copilot-harness agent). Present only when its agent name and MCP secret are both set. */
   pi?: { agentName: string; mcpSecret: string; monthlyCapDkk: number; githubToken?: string; azureMcp?: { url: string; clientId: string } };
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;

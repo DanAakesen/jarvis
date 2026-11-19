@@ -1,3 +1,16 @@
+## PI release hardening and selector removal — 19 November 2026 (#1966)
+
+**Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.
+
+| Step | State |
+| --- | --- |
+| Capture prior PI env, secret values and monthly cap into a private secure Bicep parameter; restore all configured PI/Azure/GitHub references in `infra/main.bicep` | Done locally; Bicep 0.44.1 build/lint and script tests pass |
+| Make `pi-agent` precede readiness, wait for its exact configured backend revision and prefer that revision in release evidence | Done locally; 65 Python tests pass |
+| Make normal Chat and Voice PI-only, retain explicit `pi` compatibility and isolated runtime tests, and reject `current` | Done; full backend 650/650 and JarvisCore 212/212 pass |
+| Remove the native selector, saved preference, test badge and PI-only status/settings test UI; keep the Background PI switch only in Proactive with separate load/save retry | Done locally; changed Swift parses |
+| Reconcile `origin/main` and run the full offline matrix | Done: origin/main is the branch base; backend, web 48, contracts 12, scripts 65, SQL 22, Swift 212 and Bicep all pass |
+| Push the new exact head and wait for exact PR/CI review | **Next** |
+
 ## PI situational intelligence — 19 November 2026
 
 **Status: implementation complete; local qualification complete in this worktree, with exact-head PR/CI and physical-device acceptance still pending.** Background PI is off by default and every check in this phase is local or fixture driven; no live model, Foundry, Voice Live, Azure MCP, GitHub MCP or paid canary was run.
@@ -20,7 +33,7 @@ Completion means deterministic backend, web, contracts, script, migration/SQL an
 
 ## iPhone Voice carousel and captions (#1958, P15-210)
 
-**Status: implemented; all 195 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
+**Status: implemented; all 212 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
 The newest visual takes focus while older visuals stay swipeable for the call. Close/expand float over the content, expansion uses the full screen, and HTML visuals follow the active appearance without changing native charts. Captions have more room and fade at both edges.
 
 ## Vault Mirror and Status reliability — 19 November 2026 (#1962)
@@ -198,9 +211,9 @@ Owner's approach, binding: model-driven nudging in instructions and tool descrip
 
 **Status: step 1 (design brief) written; superseded by the approved design and the build in "3D vault graph, Folder clusters" above.** `docs/ui/graph-3d/brief.md` covers what the graph shows, the interactions, the motion language tied to the neural background, a performance budget, the rendering options with a recommendation (projected 3D in `Canvas`, gated by a measured device spike, Metal if it misses the budget; nothing measured yet), and 12 open questions.
 
-## PI phase 7: default flip approved, not live — 18 November 2026 (#1887, P15-176)
+## PI phase 7: PI-only normal Chat and Voice — 18–19 November 2026 (#1887, #1966)
 
-The owner approved only the chat and voice default in [writing on #1887](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174). The change is in standalone draft [#1910](https://github.com/DanAakesen/jarvis/pull/1910), not merged or deployed. Exact-revision CI, native checks and live verification are still needed; the three-part smoke on the earlier release exercises PI, not the new default or device audio. [The cutover checklist](docs/pi/cutover.md#2-the-flip-phase-7-as-one-small-separate-change) records scope and rollback.
+The owner approved the Chat and Voice default in [writing on #1887](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174); [#1910](https://github.com/DanAakesen/jarvis/pull/1910) delivered that default. #1966 removes the normal-route selector and makes every ordinary infrastructure release preserve PI configuration before exact-revision readiness. [The cutover checklist](docs/pi/cutover.md#2-pi-only-normal-route-and-release-receipt-1966) records scope and rollback.
 
 Owner, 16 November 2026: "Just dont delete the old harness." The original cutover prep produced `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, and an approval record). **No deletion is authorised.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
 
@@ -210,16 +223,16 @@ Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so
 
 | Part | State |
 | --- | --- |
-| Voice Live on PI: every spoken turn goes to the one PI agent in the one long conversation shared with chat | **Built, tested offline (relay integration test with a real local WebSocket as Voice Live), not run live.** Selected by the iOS test switch only; the current voice path is untouched |
-| One switch for chat and voice (iOS Settings, "Engine test switch") | **Built.** A voice session reads the choice when it starts |
+| Voice Live on PI: every spoken turn goes to the one PI agent in the one long conversation shared with chat | **Built, tested offline; normal Voice has no engine switch.** An explicit `current` closes instead of selecting the old voice path |
+| Normal Chat/Voice client selection | **PI-only in #1966.** Background PI remains a separate, off-by-default Proactive policy switch |
 | Deploy measurement of the PI leg of a voice turn (first text, total, DKK, speakable-reply check, voice tool turn) | **Built in the `measure_pi` smoke; not yet run.** The numbers go into the pull request when the dispatcher runs Deploy with `measure_pi` |
 | Real audio latency (speech stop to first audio) and per-turn cost with Voice Live | **Open: the owner's phone test.** The relay logs `voice.pi_turn` (transcript to first PI text and to the end of the PI turn) and `voice.turn_timing` (first audio) |
 
 **How a spoken turn runs.** The relay no longer lets the Voice Live model pick among about 150 tools. On the PI engine Voice Live has no tools and a short "voice only" prompt. When the final transcript of an utterance arrives, the relay stores it as Dan's message (as before), starts a PI turn with the voice channel note and the stored message id (so tools still prove the write against Dan's own words), speaks PI's own sentence before a tool call as soon as it exists (the natural acknowledgement; PI writes it), and speaks the answer with `response.create` (tools off) when the turn ends. A newer utterance cancels the turn in flight (the newest wins; the cancel happens when Dan starts speaking, so a stale answer never lands on top of him); a barge-in is Voice Live's own and stops speech as before; the session ending stops the turn. Errors are spoken in PI's honest words ("No other engine was used"). The PI conversation is warmed while Voice Live connects, so the accepted first-turn wait (3.3 s cold, 1.1 to 1.3 s warm, measured 16 November) overlaps the connection.
 
-**Known limits, stated in the pull request.** With PI, voice has no camera or screen sharing yet (the relay answers `not_supported`), no typed requests through the voice socket, and the Watch keeps the current engine. If PI is not set up on the backend or is over its monthly cap, the voice session ends or says so; it never switches engine. The old path stays exactly as it is and is selected by leaving the switch on "Current".
+**Known limits, stated in the pull request.** With PI, voice has no camera or screen sharing yet (the relay answers `not_supported`) and no typed requests through the voice socket. If PI is not set up on the backend or is over its monthly cap, the voice session ends or says so; it never switches engine. The old harness remains for isolated runtime testing and the separately gated phase-8 retirement; it is not a normal-route fallback.
 
-Next: Deploy with `measure_pi`, the owner's phone test of voice on PI, then the cutover pull requests (checklist and deletion inventory in `docs/pi/cutover.md`).
+Next: finish exact-head offline qualification for #1966 and let Dispatcher own any deployment, paid measurement and owner-device acceptance. Broader deletion stays at the gate in `docs/pi/cutover.md`.
 
 ## PI voice measured, and the prompt grew — 16 November 2026 (#1887, P15-176)
 
@@ -305,15 +318,15 @@ Next: owner review of the captures and a TestFlight build.
 ## PI phases 0 to 2 together: PI agent, Jarvis MCP and default chat — 15 November 2026 (#1885, P15-174, PR #1890)
 
 **Status: delivered; PI became the chat and voice default in #1910.** The owner
-asked for phases 0, 1 and 2 as one piece. The Current-engine selector remains a
-deliberate compatibility choice with no automatic fallback.
+asked for phases 0, 1 and 2 as one piece. #1966 removes the Current-engine normal
+selector; isolated runtime tests retain their own runtime with no automatic fallback.
 
 | Part | State |
 | --- | --- |
 | PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, harness built-ins on, Jarvis MCP server, skills from the repository | Deployed; provisioning is now required for an accepted release |
 | Jarvis MCP server (`/pi/mcp`: `find_tools`, `call_tool`) with per-turn authority and the in-process dispatch through the normal tool route | Built; 9 offline tests including forged, closed and smoke grants |
 | Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (100 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
-| Engine selector: default PI, optional `engine: "current"`, Settings compatibility choice, `GET /pi/status`, `POST /pi/warm` | Live |
+| Normal PI route and release readiness | PI-only in #1966; `GET /pi/status` and `POST /pi/warm` remain operational surfaces |
 | Live proof of MCP, streaming, cancellation and first-text times | Manual `measure_pi` remains the paid measurement path |
 
 
@@ -323,12 +336,12 @@ deliberate compatibility choice with no automatic fallback.
 
 | Phase | Issue | State |
 | --- | --- | --- |
-| 0 to 2 Prove, Jarvis MCP, chat in the iOS app behind a test selector | P15-174 (#1885), replaces P15-165 to P15-167 (#1874 to #1876) | Not started; needs Azure access |
+| 0 to 2 Prove, Jarvis MCP, normal PI chat | P15-174 (#1885), replaces P15-165 to P15-167 (#1874 to #1876) | Built and delivered; normal selector removed in #1966 |
 | 3 Reach: GitHub, Azure, Workers | P15-175 (#1886), replaces P15-168 (#1877) | Built, not live (see the section above) |
-| 4 Brain loop: tested by replaying recorded events and by the owner behind the test switch; no shadow run | P15-175 (#1886), replaces P15-169 (#1878) | Built, not live (pull request 2 of the section above) |
-| 5 Standing watches | P15-175 (#1886), replaces P15-170 (#1879) | Built, not live (pull request 3 of the section above) |
-| 6 Voice on the same agent (every turn through the PI agent; start wait accepted) | P15-171 (#1880) | Not started |
-| 7 Cutover: PI is the default | P15-172 (#1881) | Not started |
+| 4 Brain loop: tested by replay and owner controls in Proactive; no shadow run | P15-175 (#1886), replaces P15-169 (#1878) | Built; Background PI remains off by default |
+| 5 Standing watches | P15-175 (#1886), replaces P15-170 (#1879) | Built; live owner acceptance remains separate |
+| 6 Voice on the same agent (every turn through the PI agent; start wait accepted) | P15-171 (#1880) | Built |
+| 7 Cutover: PI is the only normal route | P15-172 (#1881) | Delivered; selector removal/release hardening in #1966 |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |
 
 Latency round 2 numbers are pending in `docs/harness-trial/spike-results.md`; the plan holds a placeholder.

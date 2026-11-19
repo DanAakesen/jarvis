@@ -239,6 +239,8 @@ class ReleaseStateTests(unittest.TestCase):
                     "RESULTS": json.dumps(results), "VERSIONS": json.dumps(VERSIONS),
                     "APPLY_ATTEMPTS": json.dumps(dict.fromkeys(PARTS, "1")),
                     "AGENT_BACKEND_REVISION": "",
+                    "PI_BACKEND_REVISION": "",
+                    "PI_APPLY_ATTEMPT": "",
                     "GITHUB_STEP_SUMMARY": "summary",
                 }), patch("release_state.identity", return_value=CONTEXT)):
                     code = record()
@@ -283,6 +285,35 @@ class ReleaseStateTests(unittest.TestCase):
         results["smoke"]["result"] = "failure"
         self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results)[0], 1)
 
+    def test_pi_revision_is_the_backend_receipt_after_provisioning(self):
+        results = {key: {"result": "success"}
+                   for key in ("plan", *PARTS, "smoke", "pi-agent")}
+        results["acceptance"] = {"result": "skipped"}
+        with tempfile.TemporaryDirectory() as folder:
+            previous_cwd = os.getcwd()
+            os.chdir(folder)
+            try:
+                plan = {
+                    **CONTEXT, "selected": dict.fromkeys(PARTS, True), "inputs": INPUTS,
+                    "superseded": False, "applied_head": CONTEXT["source"],
+                    "previous": None, "qualification": {"pull_request": 9, "run": 40},
+                }
+                Path("release-plan.json").write_text(json.dumps(plan))
+                with patch.dict(os.environ, ENV | {
+                    "RESULTS": json.dumps(results), "VERSIONS": json.dumps(VERSIONS),
+                    "APPLY_ATTEMPTS": json.dumps(dict.fromkeys(PARTS, "1")),
+                    "AGENT_BACKEND_REVISION": "ca-backend--agent",
+                    "PI_BACKEND_REVISION": "ca-backend--pi",
+                    "PI_APPLY_ATTEMPT": "1",
+                    "GITHUB_STEP_SUMMARY": "summary",
+                }), patch("release_state.identity", return_value=CONTEXT):
+                    self.assertEqual(record(), 0)
+                receipt = json.loads(Path("release-evidence.json").read_text())
+                self.assertEqual(receipt["components"]["backend"]["version"]["revision"], "ca-backend--pi")
+                self.assertEqual(receipt["components"]["backend"]["revision_origin"]["job"], "pi-agent")
+            finally:
+                os.chdir(previous_cwd)
+
     def test_known_or_unknown_functional_failure_cannot_become_accepted(self):
         results = {key: {"result": "success"}
                    for key in ("plan", *PARTS, "smoke", "pi-agent", "acceptance")}
@@ -311,12 +342,32 @@ class DeployWorkflowTests(unittest.TestCase):
         selected = deploy.index("run: python .github/scripts/release_state.py select")
         self.assertLess(qualification, readback)
         self.assertLess(readback, selected)
+        pi_start = deploy.index("  pi-agent:")
+        smoke_start = deploy.index("  smoke:")
+        pi_block = deploy[pi_start:deploy.index("  acceptance:")]
+        self.assertIn("needs: [plan, infra, backend, agent]", pi_block)
+        smoke_block = deploy[smoke_start:deploy.index("  managed-chat-comparison:")]
+        self.assertIn("needs: [plan, infra, backend, web, agent, pi-agent]", smoke_block)
+        self.assertIn("Wait for the exact PI-configured backend revision", pi_block)
+        self.assertIn("needs.pi-agent.outputs.backend-revision", deploy)
+        self.assertNotIn("if: ${{ inputs.measure_pi == true }}\n        run: |\n          for _ in $(seq 1 20);", deploy)
 
     def test_enabled_vault_mirror_cannot_silently_fall_back(self):
         script = (ROOT / ".github/scripts/deploy_bicep.sh").read_text()
         self.assertIn("vault_mirror_required_failure", script)
         self.assertNotIn("keeping the mirror disabled", script)
         self.assertNotIn("skipping the image build", script)
+
+    def test_bicep_preserves_pi_configuration_and_secure_secrets(self):
+        script = (ROOT / ".github/scripts/deploy_bicep.sh").read_text()
+        bicep = (ROOT / "infra/main.bicep").read_text()
+        self.assertIn("umask 077", script)
+        self.assertIn("pi_backend_configuration.py", script)
+        self.assertIn("--show-values", script)
+        self.assertIn("piAgentConfiguration", bicep)
+        self.assertIn("@secure()", bicep)
+        self.assertIn("JARVIS_PI_MCP_SECRET", bicep)
+        self.assertIn("JARVIS_PI_AZURE_MCP_URL", bicep)
 
 
 if __name__ == "__main__":

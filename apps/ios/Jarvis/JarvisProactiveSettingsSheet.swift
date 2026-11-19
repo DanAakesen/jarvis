@@ -26,6 +26,7 @@ struct JarvisProactiveSettingsSheet: View {
     @State private var background: PiBrainStatus?
     @State private var backgroundFailure = false
     @State private var backgroundUpdating = false
+    @State private var requestedBackgroundEnabled: Bool?
 
     private func text(_ key: JarvisInsightsLocalizationKey) -> String {
         jarvisInsightsText(key, language)
@@ -68,14 +69,24 @@ struct JarvisProactiveSettingsSheet: View {
         do {
             async let settings = client.settings()
             let loadedSettings = try await settings
-            do { background = try await client.backgroundStatus() }
-            catch { backgroundFailure = true }
+            await loadBackground()
             if Task.isCancelled { return }
             editor = JarvisProactiveSettingsEditor(settings: loadedSettings)
             load = .loaded(())
         } catch {
             if Task.isCancelled { return }
             load = .failed(JarvisInsightsFailure(error))
+        }
+    }
+
+    private func loadBackground() async {
+        guard let client else { return }
+        backgroundFailure = false
+        requestedBackgroundEnabled = nil
+        do {
+            background = try await client.backgroundStatus()
+        } catch {
+            if !Task.isCancelled { backgroundFailure = true }
         }
     }
 
@@ -143,8 +154,29 @@ struct JarvisProactiveSettingsSheet: View {
                         if !background.available {
                             Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.secondary)
                         }
+                        if backgroundFailure, let requestedBackgroundEnabled {
+                            HStack(spacing: 10) {
+                                Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
+                                Spacer(minLength: 0)
+                                JarvisIconButton(
+                                    title: text(.retry),
+                                    systemImage: "arrow.clockwise",
+                                    identifier: "proactive.edit.background.saveRetry",
+                                    isDisabled: backgroundUpdating
+                                ) { Task { await setBackgroundEnabled(requestedBackgroundEnabled) } }
+                            }
+                        }
                     } else if backgroundFailure {
-                        Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
+                        HStack(spacing: 10) {
+                            Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
+                            Spacer(minLength: 0)
+                            JarvisIconButton(
+                                title: text(.retry),
+                                systemImage: "arrow.clockwise",
+                                identifier: "proactive.edit.background.retry",
+                                isDisabled: backgroundUpdating
+                            ) { Task { await loadBackground() } }
+                        }
                     } else {
                         pendingValue(text(.editorBackgroundEnable))
                     }
@@ -350,9 +382,11 @@ struct JarvisProactiveSettingsSheet: View {
         do {
             background = try await client.setBackgroundEnabled(enabled)
             backgroundFailure = false
+            requestedBackgroundEnabled = nil
             onSaved()
         } catch {
             backgroundFailure = true
+            requestedBackgroundEnabled = enabled
         }
     }
 

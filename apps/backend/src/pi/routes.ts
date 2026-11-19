@@ -16,7 +16,7 @@ export interface PiModuleOptions {
   readonly registry: PiTurnRegistry;
   readonly auth: PiAuth;
   readonly monthlyCapDkk: number;
-  /** The owner's test switch and status for the brain; absent when the brain is not wired on this backend. */
+  /** The owner's Background PI switch and status; absent when the brain is not wired on this backend. */
   readonly brain?: BrainControl | undefined;
   /** GitHub's and Azure's tools, reached through the Jarvis MCP door. Each is present only when it is configured. */
   readonly bridges?: readonly RemoteMcpBridge[] | undefined;
@@ -29,7 +29,7 @@ const errorBody = (error: unknown) => error instanceof PiGatewayError
   ? { error: error.userMessage, code: error.code, ...(error.detail ? { detail: error.detail } : {}) }
   : { error: 'PI could not be reached. No other engine was used.', code: 'pi_unavailable' };
 
-/** The test-only PI surface: status for the Settings switch, a warm-up the app calls when it opens, the MCP door, and the deploy smoke. */
+/** The PI surface: status/warm-up, Proactive enablement, the MCP door and manual deploy-only smoke. */
 export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
   return async (app) => {
     app.get('/pi/status', async (request, reply) => {

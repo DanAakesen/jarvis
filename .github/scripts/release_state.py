@@ -293,20 +293,24 @@ def record() -> int:
             and results.get("agent", {}).get("result") != "success"):
         # Activation may already have modified backend identity before failing.
         components["backend"]["state"] = "unknown"
-    backend_revision = os.environ.get("AGENT_BACKEND_REVISION", "")
+    backend_revision = os.environ.get("PI_BACKEND_REVISION") or os.environ.get("AGENT_BACKEND_REVISION", "")
     if backend_revision and components["backend"].get("version"):
-        agent_attempt = attempts.get("agent", "")
+        pi_revision = bool(os.environ.get("PI_BACKEND_REVISION"))
+        revision_attempt = os.environ.get("PI_APPLY_ATTEMPT", "") if pi_revision else attempts.get("agent", "")
+        revision_part = "pi-agent" if pi_revision else "agent"
         if (not re.fullmatch(r"[A-Za-z0-9-]{1,256}", backend_revision)
-                or not str(agent_attempt).isdigit()
-                or not 1 <= int(agent_attempt) <= context["attempt"]):
+                or not str(revision_attempt).isdigit()
+                or not 1 <= int(revision_attempt) <= context["attempt"]):
             raise ValueError("Invalid backend revision")
         components["backend"]["version"] = {
             **components["backend"]["version"], "revision": backend_revision,
         }
         components["backend"]["revision_origin"] = {
-            "run": context["run"], "attempt": int(agent_attempt), "source": context["source"],
+            "run": context["run"], "attempt": int(revision_attempt),
+            "source": context["source"],
+            "job": revision_part,
         }
-        if results.get("agent", {}).get("result") == "success":
+        if results.get(revision_part, {}).get("result") == "success":
             components["backend"]["state"] = "applied"
     expected = {"plan", *PARTS, "smoke", "pi-agent", "acceptance"}
     superseded = bool(plan and plan["superseded"])

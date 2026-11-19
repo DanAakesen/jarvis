@@ -239,11 +239,10 @@ final class JarvisChatModel: ObservableObject {
 
     private static var piWarmThrottle = PiWarmThrottle()
 
-    /// TEST-ONLY. Primes the PI conversation when PI is selected, at most once per throttle interval per app run.
+    /// Primes the PI conversation at most once per throttle interval per app run.
     /// Fire and forget: a failure stays silent here and the next PI send reports the honest error.
     func warmPiIfNeeded() {
-        guard !fixtureMode, let client, ChatEngineSelection.load() == .pi,
-              Self.piWarmThrottle.shouldWarm() else { return }
+        guard !fixtureMode, let client, Self.piWarmThrottle.shouldWarm() else { return }
         Task { _ = try? await client.piWarm() }
     }
 
@@ -715,8 +714,7 @@ final class JarvisChatModel: ObservableObject {
                 sessionId: sessionID,
                 text: text,
                 attachmentIds: attachmentIDs,
-                visualContext: visualContext,
-                engine: fixtureMode ? nil : ChatEngineSelection.load()
+                visualContext: visualContext
             )
             if fromComposer {
                 pendingAttachments = []

@@ -390,14 +390,13 @@ function registerVoiceRoute(
       return;
     }
     const requestedEngine = (request.query as Record<string, unknown> | undefined)?.engine;
-    if (requestedEngine !== undefined && requestedEngine !== 'pi' && requestedEngine !== 'current') {
+    if (requestedEngine !== undefined && requestedEngine !== 'pi') {
       diagnostics.summary('relay', 1008);
       browser.close(1008, 'Unknown voice engine');
       return;
     }
-    // PI is the default engine; `current` selects the old voice path explicitly (test switch, removed with the old path).
-    const piVoiceRequested = requestedEngine !== 'current';
-    const piAgent = piVoiceRequested ? app.piAgent as PiVoiceAgent | null : null;
+    const piVoiceRequested = true;
+    const piAgent = app.piAgent as PiVoiceAgent | null;
     // An unset or unreachable PI ends the session with its own message, even when selected by default.
     if (piVoiceRequested && (!piAgent || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase())) {
       diagnostics.summary('relay', 1011);
