@@ -5,8 +5,10 @@ The newest visual takes focus while older visuals stay swipeable for the call. C
 
 ## Vault Mirror and Status reliability — 19 November 2026 (#1962)
 
-**Status: implemented and locally qualified; exact PR CI for the final review
-head and production-drain evidence remain open.** Production evidence establishes that the mirror is
+**Status: #1963 merged and its exact CI/CodeQL/Apple checks passed. Post-merge
+Deploy 44477956290 applied the services but rejected a valid live mirror
+identity on casing in the ARM resource ID; a focused probe-only follow-up is
+required before production acceptance.** Production evidence establishes that the mirror is
 running every ten minutes. The latest executions finish in about 14 seconds as
 `needs-attention / guard-tripped`, with 11 pending Obsidian write-backs and one
 conflict; no changes are applied. The fix keeps the 25/3 caps as per-run batches:
@@ -25,9 +27,10 @@ state visible without a cap or policy bypass.
 | Use PI chat/voice/brain and embedding evidence with 15-minute freshness; age Last backend error after five minutes | Built |
 | Focused and full local regressions | Broader suites pass; the final review additions pass 15 focused PI/status and 57 GitHub-script tests |
 | Swift model tests and real-browser desktop/phone inspection | Done; 196 JarvisCore tests pass, and the actual web component was checked at 1280×900 and 390×844 |
-| PR CI review and production drain evidence from the next qualified Deploy | Exact PR qualification pending for the final review fixes; current production is proven to be running and blocked by the old all-or-nothing plan; no deployment or merge by this branch |
+| PR CI review and production drain evidence from the next qualified Deploy | #1963 qualified and merged; Deploy 44477956290 applied but readiness stopped on `resourceGroups`/`resourcegroups` casing; follow-up PR pending qualification |
 
-Next: qualify the automatic reconciliation and final review fixes in PR CI, then verify that the
+Next: qualify the identity-normalisation probe fix, then rerun the deterministic
+Deploy readiness and verify that the
 11 pending write-backs and one conflict drain in bounded runs. A cap/policy
 change is not required for this backlog unless a hard guard explicitly remains.
 
