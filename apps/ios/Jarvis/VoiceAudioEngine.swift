@@ -28,6 +28,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var activeMode: AVAudioSession.Mode = .voiceChat
     private var activeTolerateDrops = false
     private var silenceRecovered = false
+    private var generation = WatchCaptureGeneration()
     private var monoFormat: AVAudioFormat?
     private var monoScratch: AVAudioPCMBuffer?
 
@@ -52,6 +53,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     ) throws -> AsyncStream<Data> {
         controlLock.lock()
         defer { controlLock.unlock() }
+        let token = generation.begin()
         let stream = AsyncStream<Data>(bufferingPolicy: tolerateDrops ? .bufferingNewest(16) : .bufferingOldest(16)) { continuation in
             lock.lock()
             captureDropped = false
@@ -65,13 +67,14 @@ final class VoiceAudioEngine: @unchecked Sendable {
         do {
             try attachInput(mode: mode)
         } catch {
+            generation.end()
             lock.lock()
             captureContinuation?.finish()
             captureContinuation = nil
             lock.unlock()
             throw error
         }
-        if let alternateMode { scheduleSilenceCheck(alternate: alternateMode) }
+        if let alternateMode { scheduleSilenceCheck(alternate: alternateMode, token: token) }
         return stream
     }
 
@@ -159,15 +162,17 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return "category=\(session.category.rawValue) mode=\(session.mode.rawValue) input_available=\(session.isInputAvailable) route_inputs=[\(inputs)] hw_rate=\(Int(session.sampleRate)) format_channels=\(inputFormat.channelCount) format_rate=\(Int(inputFormat.sampleRate)) permission=\(permission.rawValue)"
     }
 
-    private func scheduleSilenceCheck(alternate: AVAudioSession.Mode) {
+    private func scheduleSilenceCheck(alternate: AVAudioSession.Mode, token: WatchCaptureGeneration.Token) {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            self?.recoverIfSilent(alternate: alternate)
+            self?.recoverIfSilent(alternate: alternate, token: token)
         }
     }
 
-    private func recoverIfSilent(alternate: AVAudioSession.Mode) {
+    private func recoverIfSilent(alternate: AVAudioSession.Mode, token: WatchCaptureGeneration.Token) {
         controlLock.lock()
         defer { controlLock.unlock() }
+        // A stop or a newer capture owns the engine now; this check belongs to a capture that no longer exists.
+        guard generation.isCurrent(token) else { return }
         lock.lock()
         let live = captureContinuation != nil
         let silent = stats.peak < 0.000_001
@@ -182,6 +187,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         do { try attachInput(mode: alternate) }
         catch {
             log.error("Microphone restart failed: \(String(describing: error), privacy: .public)")
+            generation.end()
             lock.lock()
             captureContinuation?.finish()
             captureContinuation = nil
@@ -261,6 +267,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     func stop() {
         controlLock.lock()
         defer { controlLock.unlock() }
+        generation.end()
         if hasCaptureTap {
             engine.inputNode.removeTap(onBus: 0)
             hasCaptureTap = false

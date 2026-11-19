@@ -13424,6 +13424,8 @@ Build 113's silence check fired for dictation and live voice while Apple's own d
 - The tap's input peak, channel count, rate, route, session mode and permission are logged before conversion, so the next device test shows whether the input or the conversion lost the signal. The silence message no longer tells the owner to uncover the microphone.
 - Chat: the newest message hid behind the composer because a scroll margin is ignored by scroll anchors. The clearance is now real content after the last message (`WatchChatLayout.endClearance`: measured composer height, bottom safe area and a gap), kept pinned when the composer grows, and the reading threshold counts that clearance as the end.
 
+The delayed silence check is bound to its capture (`WatchCaptureGeneration`): `stop()`, a restart and a failed start invalidate earlier tokens, so a check scheduled for a stopped capture cannot restart the engine under a newer one (review finding on #1959).
+
 Open: none of the capture changes is verified on a Watch. Whether the cause is the mode, the channel mixing or something else is not proven; the logs from the next run decide. Build 113 backend logs (18 Nov, no device attribution) show two /voice sockets near the owner's test that reached upstream `session_updated`, played Jarvis's output audio and closed 1006 after about 19 to 23 s with no input speech, commit or transcription, and no dictation upload at all. So socket and upstream setup work and the input audio never carried speech, which matches silence from the Watch capture; it does not prove it. The earlier "no voice socket" lead is superseded.
 
 ## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
