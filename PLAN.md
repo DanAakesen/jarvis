@@ -86,7 +86,7 @@ provider call, APNs delivery, deploy or PR is part of this work.**
 | Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
-| Rebase on `9f777c7b868fb981d63f0d4fe92b7acaa21a8604` and run offline gates | Done; backend build/lint, full 715-test suite, isolated SQL 26-test gate, full JarvisCore 230-test Swift 6.2 suite and Watch source parsing pass |
+| Rebase on `b5627f47269a4df727c8e5163742d3fbaef95630` and run offline gates | Done; backend build/lint, full 727-test suite, isolated SQL 27-test gate, full JarvisCore 236-test Swift 6.2 suite and Watch source parsing pass |
 
 Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live
