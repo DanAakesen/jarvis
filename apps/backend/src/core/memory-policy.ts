@@ -1,8 +1,8 @@
 import type { MemoryRecord } from '../database/memory-store.js';
 
-const credentialTerms = String.raw`(?:password|passphrase|secret|(?:api|auth|authorization|private)[ -]?key|(?:(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token)|credential|seed[ -]?phrase|recovery[ -]?phrase)`;
+const credentialTerms = String.raw`(?:password|passphrase|secret|(?:api|auth|authorization|private)[ -]?key|(?:(?:api|access|auth|authentication|authorization|bearer|refresh|session|client|id|oauth|private|public|personal|service|account|device|csrf|xsrf|jwt)[ -]?token)|credential|seed[ -]?phrase|recovery[ -]?phrase)`;
 const credentialPattern = new RegExp(String.raw`\b${credentialTerms}\b`, 'iu');
-const tokenFamilyPattern = /(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token/iu;
+const tokenFamilyPattern = /(?:api|access|auth|authentication|authorization|bearer|refresh|session|client|id|oauth|private|public|personal|service|account|device|csrf|xsrf|jwt)[ -]?token/iu;
 const sensitivePattern = new RegExp(
   String.raw`\b(?:${credentialTerms}|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b`,
   'iu',
@@ -31,6 +31,15 @@ export function hasCredentialMarker(value: string): boolean {
 
 export function hasSensitiveMarker(value: string): boolean {
   return sensitivePattern.test(normalizeMemoryPolicyText(value));
+}
+
+export function hasCredentialMarkerDeep(value: unknown): boolean {
+  if (typeof value === 'string') return hasCredentialMarker(value);
+  if (Array.isArray(value)) return value.some(hasCredentialMarkerDeep);
+  if (value !== null && typeof value === 'object') {
+    return Object.values(value).some(hasCredentialMarkerDeep);
+  }
+  return false;
 }
 
 export function memoryContainsCredential(

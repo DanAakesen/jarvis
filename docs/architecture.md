@@ -5840,7 +5840,9 @@ exclude quarantined rows, and a corrected safe revision clears the marker.
 
 `pi_situational_state.state_json` is read with a structural parser first. A
 row written under the old token policy may be decoded, checked against its old
-hash, sanitised across summary, refs, facts and follow-ups, then atomically
+hash, and recursively sanitised across every string-bearing nested shape
+(summary, source reason, ref IDs/identity/label, fact IDs/text, and follow-up
+IDs/text), then atomically
 rewritten with a new revision/hash and fresh derived JSON before any Chat,
 Voice or background activation is opened. A normal strict commit still rejects
 new credentials; this read migration is one-time repair, not a permissive

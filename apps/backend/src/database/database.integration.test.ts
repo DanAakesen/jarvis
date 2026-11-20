@@ -416,22 +416,41 @@ describe('real SQL Server migration contract', () => {
 
         const legacy = structuredClone(situation);
         legacy.summary = 'Legacy bearerToken=fixture-secret';
-        legacy.summaryRefIds = ['memory:legacy'];
+        legacy.summaryRefIds = ['memory:fact-ref'];
         legacy.sources.find(({ id }) => id === 'memory')!.state = 'fresh';
         legacy.sources.find(({ id }) => id === 'memory')!.observedAt = at.toISOString();
-        legacy.sources.find(({ id }) => id === 'memory')!.refIds = ['memory:legacy'];
+        legacy.sources.find(({ id }) => id === 'memory')!.reason = 'provider api_token=fixture-secret';
+        legacy.sources.find(({ id }) => id === 'memory')!.refIds = [
+          'memory:unsafe-ref',
+          'memory:fact-ref',
+          'memory:follow-ref',
+        ];
         legacy.refs.push({
-          id: 'memory:legacy',
+          id: 'memory:unsafe-ref',
           source: 'memory',
-          identity: 'memory:legacy',
+          identity: 'memory:unsafe-ref',
           label: 'githubApiTokenValue',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        }, {
+          id: 'memory:fact-ref',
+          source: 'memory',
+          identity: 'memory:fact-ref',
+          label: 'Appointment preference',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        }, {
+          id: 'memory:follow-ref',
+          source: 'memory',
+          identity: 'memory:follow-ref',
+          label: 'Appointment follow-up',
           observedAt: at.toISOString(),
           expiresAt: null,
         });
         legacy.facts.push({
           id: 'fact:legacy-memory',
           source: 'memory',
-          refIds: ['memory:legacy'],
+          refIds: ['memory:fact-ref'],
           text: 'auth_token=fixture-secret',
           observedAt: at.toISOString(),
           expiresAt: null,
@@ -441,7 +460,7 @@ describe('real SQL Server migration contract', () => {
           id: 'follow:legacy-memory',
           text: 'Remember the api_token=fixture-secret.',
           dueAt: null,
-          refIds: ['memory:legacy'],
+          refIds: ['memory:follow-ref'],
         });
         const legacyHash = piSituationHash(legacy);
         await pool.request()
@@ -491,7 +510,9 @@ describe('real SQL Server migration contract', () => {
         expect(Number(migratedRow.recordset[0]!.revision)).toBe(2);
         expect(migratedRow.recordset[0]!.content_hash.trim()).toBe(piSituationHash(migratedState));
         expect(migratedState.summary).toBe('');
-        expect(migratedState.refs.some(({ source }) => source === 'memory')).toBe(false);
+        expect(migratedState.sources.find(({ id }) => id === 'memory')?.reason).toBeNull();
+        expect(migratedState.refs.map(({ id }) => id)).not.toContain('memory:unsafe-ref');
+        expect(migratedState.refs.filter(({ source }) => source === 'memory')).toHaveLength(2);
         expect(migratedState.facts.some(({ source }) => source === 'memory')).toBe(false);
         expect(migratedState.followUps.some(({ id }) => id === 'follow:legacy-memory')).toBe(false);
         await expect(situations.commit({

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryProactiveStore } from '../proactive/store.js';
 import { sourceIds, type ProactiveSource } from '../proactive/types.js';
+import { hasCredentialMarkerDeep } from '../core/memory-policy.js';
 import {
   createMemoryPiSituationStore,
   createPiSituationService,
   parsePiSituationState,
   piSituationHash,
+  sanitizeLegacyPiSituationState,
   PiSituationError,
   type PiSituationState,
 } from './situation.js';
@@ -90,6 +92,48 @@ describe('PI situational state', () => {
         stale: false,
       }],
     })).toThrow(PiSituationError);
+  });
+
+  it.each([
+    ['summary', (value: PiSituationState) => { value.summary = 'Legacy api_token=one'; }],
+    ['source reason', (value: PiSituationState) => {
+      value.sources.find(({ id }) => id === 'mail')!.reason = 'Legacy authToken=two';
+    }],
+    ['ref identity', (value: PiSituationState) => {
+      value.refs[0]!.identity = 'mail:bearer_token=three';
+    }],
+    ['ref label', (value: PiSituationState) => {
+      value.refs[0]!.label = 'Legacy privateTokenValue';
+    }],
+    ['fact id', (value: PiSituationState) => {
+      value.facts[0]!.id = 'fact:accessTokenValue';
+    }],
+    ['fact text', (value: PiSituationState) => {
+      value.facts[0]!.text = 'Legacy oauth_token=four';
+    }],
+    ['follow-up id', (value: PiSituationState) => {
+      value.followUps[0]!.id = 'follow:refreshTokenValue';
+    }],
+    ['follow-up text', (value: PiSituationState) => {
+      value.followUps[0]!.text = 'Legacy session_token=five';
+    }],
+    ['reference IDs', (value: PiSituationState) => {
+      const oldId = value.refs[0]!.id;
+      const newId = 'mail:githubApiTokenValue';
+      value.refs[0]!.id = newId;
+      value.sources.find(({ id }) => id === 'mail')!.refIds = [newId];
+      value.summaryRefIds = value.summaryRefIds.map((id) => id === oldId ? newId : id);
+      for (const item of [...value.facts, ...value.followUps]) {
+        item.refIds = item.refIds.map((id) => id === oldId ? newId : id);
+      }
+    }],
+  ] as const)('sanitizes a credential-like legacy %s before strict parse', (_name, mutate) => {
+    const legacy = state();
+    mutate(legacy);
+    const sanitized = sanitizeLegacyPiSituationState(legacy);
+    expect(sanitized.changed).toBe(true);
+    expect(hasCredentialMarkerDeep(sanitized.state)).toBe(false);
+    expect(() => parsePiSituationState(sanitized.state)).not.toThrow();
   });
 
   it('commits revision-checked state and rejects a stale hash without overwriting it', async () => {

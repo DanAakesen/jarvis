@@ -5,7 +5,7 @@ import type { ProactiveStore } from '../proactive/store.js';
 import {
   sourceIds, type ProactiveSettings, type ProactiveSource, type SourceId, type SourceStatus,
 } from '../proactive/types.js';
-import { hasCredentialMarker } from '../core/memory-policy.js';
+import { hasCredentialMarkerDeep } from '../core/memory-policy.js';
 
 export const PI_SITUATION_SCHEMA_VERSION = 1 as const;
 export const PI_SITUATION_MAX_BYTES = 8 * 1024;
@@ -180,7 +180,7 @@ function parsePiSituationStructure(value: unknown): PiSituationState {
 
 export function parsePiSituationState(value: unknown): PiSituationState {
   const state = parsePiSituationStructure(value);
-  if (hasCredentialMarker(JSON.stringify(state))) {
+  if (hasCredentialMarkerDeep(state)) {
     throw new PiSituationError('redacted', 'Secrets and credentials cannot be stored in situational state.');
   }
   return state;
@@ -228,9 +228,9 @@ function clone<T>(value: T): T {
 }
 
 function credentialSafeState(state: PiSituationState): PiSituationState {
-  const refs = state.refs.filter((ref) => !hasCredentialMarker(JSON.stringify(ref)));
+  const refs = state.refs.filter((ref) => !hasCredentialMarkerDeep(ref));
   const refIds = new Set(refs.map(({ id: value }) => value));
-  const summarySafe = !hasCredentialMarker(state.summary);
+  const summarySafe = !hasCredentialMarkerDeep(state.summary);
   const summaryRefIds = summarySafe
     ? state.summaryRefIds.filter((value) => refIds.has(value))
     : [];
@@ -240,14 +240,15 @@ function credentialSafeState(state: PiSituationState): PiSituationState {
     summaryRefIds: summarySafe ? summaryRefIds : [],
     sources: state.sources.map((source) => ({
       ...source,
+      reason: hasCredentialMarkerDeep(source.reason) ? null : source.reason,
       refIds: source.refIds.filter((value) => refIds.has(value)),
     })),
     refs,
     facts: state.facts.filter((fact) =>
-      !hasCredentialMarker(JSON.stringify(fact)) &&
+      !hasCredentialMarkerDeep(fact) &&
       fact.refIds.every((value) => refIds.has(value))),
     followUps: state.followUps.filter((followUp) =>
-      !hasCredentialMarker(JSON.stringify(followUp)) &&
+      !hasCredentialMarkerDeep(followUp) &&
       followUp.refIds.every((value) => refIds.has(value))),
   };
 }
@@ -542,7 +543,7 @@ export function createPiSituationService(options: {
         text: fact.text, observedAt: fact.observedAt, dueAt: fact.dueAt ?? null,
         startsAt: fact.startsAt ?? null, endsAt: fact.endsAt ?? null,
       };
-      if (hasCredentialMarker(JSON.stringify(value))) {
+      if (hasCredentialMarkerDeep(value)) {
         throw new PiSituationError('redacted', 'That source record contains a credential and is not returned here.');
       }
       return boundedResult(value);
