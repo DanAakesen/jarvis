@@ -75,3 +75,32 @@ describe('conversation blocks in the message store', () => {
     await expect(store.addMessage({ sessionId: session.id, role: 'jarvis', text: 'hi', model: null, blocks: [{ ...block, type: 'html' } as never] })).rejects.toThrow('Invalid message blocks');
   });
 });
+
+describe('voice usage finalization in the conversation store', () => {
+  it('does not invent minutes for abandoned sessions and retains provider-only duration', async () => {
+    const store = createConversationStore(pool);
+    const abandoned = await store.createSession({ channel: 'voice', language: 'en' });
+    expect(await store.endSession(abandoned.id, { allowWallClockFallback: false })).toBe(true);
+    expect((await store.getSession(abandoned.id))?.endedAt).not.toBeNull();
+    const abandonedUsage = await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(abandoned.id))
+      .query('SELECT source, metric, quantity FROM dbo.usage WHERE jarvis_session_id = @sessionId;');
+    expect(abandonedUsage.recordset).toEqual([]);
+
+    const providerEnded = await store.createSession({ channel: 'voice', language: 'en' });
+    expect(await store.endSession(providerEnded.id, {
+      providerVoiceSeconds: 15,
+      allowWallClockFallback: false,
+    })).toBe(true);
+    const providerUsage = await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(providerEnded.id))
+      .query<{ source: string; metric: string; quantity: number }>(
+        'SELECT source, metric, quantity FROM dbo.usage WHERE jarvis_session_id = @sessionId;',
+      );
+    expect(providerUsage.recordset).toEqual([{
+      source: 'voice',
+      metric: 'minutes',
+      quantity: 0.25,
+    }]);
+  });
+});

@@ -190,6 +190,10 @@ function registerVoiceRoute(
     const queuedProviderEvents: Record<string, unknown>[] = [];
     const seenEventTypes = new Set<string>();
     const providerUsage = new LiveVoiceUsageTracker();
+    const voiceSessionUsage = (allowWallClockFallback: boolean) => ({
+      allowWallClockFallback,
+      ...(providerUsage.seconds === undefined ? {} : { providerVoiceSeconds: providerUsage.seconds }),
+    });
     let unregisterVisionVoice: (() => void) | undefined;
     let activityFinished = false;
     let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
@@ -253,7 +257,10 @@ function registerVoiceRoute(
       },
       async (lateSessionId) => {
         try {
-          await endLateVoiceSession(lateSessionId, async (sessionId) => await store.endSession(sessionId));
+          await endLateVoiceSession(
+            lateSessionId,
+            async (sessionId) => await store.endSession(sessionId, voiceSessionUsage(false)),
+          );
           log.warn('voice.late_session_ended');
         } catch {
           log.warn('voice.late_session_cleanup_failed');
@@ -708,10 +715,7 @@ function registerVoiceRoute(
         const transcriptsPersisted = !persistenceFailed;
         if (!sessionId || !await store.endSession(
           sessionId,
-          {
-            allowWallClockFallback: allowWallClockFallback && transcriptsPersisted,
-            ...(providerUsage.seconds === undefined ? {} : { providerVoiceSeconds: providerUsage.seconds }),
-          },
+          voiceSessionUsage(allowWallClockFallback && transcriptsPersisted),
         )) throw new Error('Voice session was not ended');
         if (!transcriptsPersisted) throw new Error('Voice transcripts were not fully stored');
       })();

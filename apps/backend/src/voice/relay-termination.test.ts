@@ -402,4 +402,79 @@ describe('GPT-Live graceful termination', () => {
     expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
     expect(endedUsage).toEqual({ allowWallClockFallback: false });
   });
+
+  it('ends an abandoned late session without wall-clock voice usage', async () => {
+    let resolveSession!: (session: {
+      id: string;
+      channel: 'voice';
+      language: 'en';
+      startedAt: Date;
+      endedAt: null;
+    }) => void;
+    const creation = new Promise<{
+      id: string;
+      channel: 'voice';
+      language: 'en';
+      startedAt: Date;
+      endedAt: null;
+    }>(resolve => { resolveSession = resolve; });
+    let cleanupUsage: { providerVoiceSeconds?: number; allowWallClockFallback: boolean } | undefined;
+    const store = {
+      createSession: async () => await creation,
+      endSession: async (
+        _sessionId: string,
+        usage?: { providerVoiceSeconds?: number; allowWallClockFallback: boolean },
+      ) => {
+        cleanupUsage = usage;
+        return true;
+      },
+    } as unknown as ConversationStore;
+    const app = buildApp(
+      config,
+      createLogger({ ...config, logLevel: 'silent' } as typeof config),
+      {
+        auth: async () => ({
+          objectId: config.auth.ownerObjectId,
+          tenantId: config.auth.tenantId,
+          displayName: 'Dan',
+        }),
+        conversationStore: store,
+        piAgent: { warm: async () => undefined, async *stream() { yield 'unused'; } },
+        modules: [createVoiceRelayModule({
+          getToken: () => new Promise<string>(() => undefined),
+          connect: () => new WebSocket('ws://127.0.0.1:1'),
+          drainTimeoutMs: 20,
+        })],
+      },
+    );
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as AddressInfo).port;
+    const browser = new WebSocket(
+      `ws://127.0.0.1:${port}/voice`,
+      [VOICE_SUBPROTOCOL, 'jarvis.auth.aaa.bbb.ccc'],
+    );
+    const received: Record<string, unknown>[] = [];
+    browser.on('message', data => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    cleanups.push(async () => {
+      browser.terminate();
+      await app.close();
+    });
+    await new Promise<void>(resolve => browser.once('open', resolve));
+    browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+    await sleep(20);
+    resolveSession({
+      id: 'late-10',
+      channel: 'voice',
+      language: 'en',
+      startedAt: new Date(),
+      endedAt: null,
+    });
+    await until(
+      () => cleanupUsage !== undefined &&
+        received.some(event => event.type === 'jarvis.session.failed' && event.retryable === true),
+      'late session cleanup failure',
+    );
+    expect(cleanupUsage).toEqual({ allowWallClockFallback: false });
+    expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
+  });
 });
