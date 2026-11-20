@@ -119,6 +119,38 @@ describe('PI MCP server', () => {
     expect(recorded).toHaveLength(1);
   });
 
+  it('returns local matches without starting or waiting for an unrelated remote catalogue', async () => {
+    let loads = 0;
+    const stalled: RemoteMcpBridge = {
+      prefix: 'az_', label: 'Azure', status: () => ({ state: 'starting' }), warm: () => { loads += 1; },
+      tools: async () => { loads += 1; await new Promise(() => {}); return []; },
+      call: async () => ({ outcome: 'ok', result: {} }),
+    };
+    const { registry, tool } = setup([stalled]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'probe echo' });
+    expect(found.body?.result.tools.map((entry: { name: string }) => entry.name)).toContain('probe_echo');
+    expect(found.body?.result.connections).toContainEqual({ name: 'Azure', state: 'starting' });
+    expect(loads).toBe(0);
+  });
+
+  it('executes an eligible exact tool shown in otherMatches without repeating discovery', async () => {
+    const extras: JarvisTool[] = Array.from({ length: 5 }, (_, index) => ({
+      name: `probe_${index}`,
+      description: `Probe catalogue entry ${index}.`,
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => ({ index }),
+    }));
+    const { registry, tool, recorded } = setup([], { tools: extras });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'probe' });
+    const exact = (found.body?.result.otherMatches[0] as { name: string }).name;
+    expect(grant.discovered.has(exact)).toBe(true);
+    const called = await tool('call_tool', { turn: grant.turn, name: exact, arguments: {} });
+    expect(called.body).toMatchObject({ tool: exact, outcome: 'ok' });
+    expect(recorded).toContainEqual({ messageId: '42', tool: exact });
+  });
+
   it('says a remote server is still loading, or could not be reached, instead of leaving the model to call it not attached', async () => {
     let status: ReturnType<RemoteMcpBridge['status']> = { state: 'starting' };
     const azure: RemoteMcpBridge = { prefix: 'az_', label: 'Azure', status: () => status, warm: () => {}, tools: async () => [], call: async () => ({ outcome: 'ok', result: {} }) };

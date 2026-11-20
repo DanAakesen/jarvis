@@ -62,7 +62,13 @@
 - Never send a real APNs push or call Apple/Foundry/Voice/Azure/GitHub for this
   feature. Linux cannot compile/render SwiftUI; the Mac job and a signed
   iPhone/Watch remain the live tap/lock-screen checks.
+## PI execution integrity — 20 November 2026 (#1967)
 
+- `apps/backend/src/pi` now treats provider listing, tool evidence and foreground spend as explicit preconditions for PI completion. Local discovery never starts or awaits GitHub/Azure; `find_tools` starts only the named provider catalogue asynchronously.
+- English/Danish aliases and exact-name ranking are shared by PI MCP and lazy voice discovery. A schema or compact `otherMatches` name returned in the current turn can be called once; call-time visibility/source checks still apply.
+- PI foreground completion evidence is server recorded: retrieved result, committed action receipt, or durable job/task handle. Structured progress is not final text. Budget/status reads are database-only, and an unavailable foreground ledger fails as `pi_budget_unavailable`.
+- Voice barge-in sends `response.cancel` to GPT-Live playback but does not abort valid PI work. Exact owner message authority survives concurrent proactive assistant messages.
+- Offline checks for this change: `npm run build --workspace @jarvis/backend`, `npm test --workspace @jarvis/backend`, and `npm run lint --workspace @jarvis/backend`. Run no `measure_pi`, live model/provider smoke, deploy, paid call or external message.
 ## PI release hardening — 19 November 2026 (#1966)
 
 - Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.

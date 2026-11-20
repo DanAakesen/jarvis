@@ -46,9 +46,9 @@ export interface PiVoiceTurnsOptions {
 }
 
 export interface PiVoiceTurns {
-  /** Starts a turn. A turn still in flight is cancelled first: the newest utterance wins. */
+  /** Starts a turn. Earlier valid work may finish, but its answer is silenced when a newer utterance arrives. */
   start(turn: PiVoiceTurn): void;
-  /** Dan started speaking: the turn in flight is cancelled and says nothing more, so no stale answer lands on top of him. */
+  /** Dan started speaking: stop stale speech delivery without cancelling committed PI work. */
   cancel(): void;
   /** Primes the shared conversation when the voice session opens, so the first turn does not pay the cold start alone. */
   warm(): void;
@@ -62,15 +62,18 @@ export interface PiVoiceTurns {
 export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
   const now = options.now ?? (() => performance.now());
   const deadlineMs = options.deadlineMs ?? PI_VOICE_TURN_DEADLINE_MS;
-  let current: { readonly cancel: () => void; readonly done: Promise<void> } | undefined;
+  let current: { readonly silence: () => void; readonly done: Promise<void> } | undefined;
   let running = 0;
 
-  async function run(turn: PiVoiceTurn, previous: Promise<void> | undefined, controller: AbortController): Promise<void> {
-    // The gateway allows one request at a time on the conversation: let the cancelled turn finish closing first.
+  async function run(
+    turn: PiVoiceTurn,
+    previous: Promise<void> | undefined,
+    delivery: { silenced: boolean },
+  ): Promise<void> {
+    // The gateway allows one request at a time. Earlier work is allowed to reach a durable result, then this turn runs.
     await previous;
-    const superseded = () => controller.signal.aborted && !options.signal.aborted;
     const deadline = AbortSignal.timeout(deadlineMs);
-    const signal = AbortSignal.any([options.signal, controller.signal, deadline]);
+    const signal = AbortSignal.any([options.signal, deadline]);
     let outcome: PiVoiceTurnLog['outcome'];
     let firstTextMs: number | null = null;
     let acknowledged = false;
@@ -92,7 +95,8 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
         const note = chunk.text.trimStart();
         const at = partial.indexOf(note);
         if (at >= 0) partial = partial.slice(0, at) + partial.slice(at + note.length);
-        if (chunk.type === 'acknowledgment' && !acknowledged && chunk.text.trim() && !signal.aborted && at >= 0) {
+        if (chunk.type === 'acknowledgment' && !acknowledged && chunk.text.trim() &&
+            !signal.aborted && !delivery.silenced) {
           acknowledged = true;
           options.speak(chunk.text.trim(), turn.delegationId);
         }
@@ -100,31 +104,34 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       reply = partial.trim();
       outcome = 'ok';
     } catch (error) {
-      outcome = options.signal.aborted ? 'cancelled' : superseded() ? 'superseded' : deadline.aborted ? 'timeout' : 'failed';
+      outcome = options.signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
       if (outcome === 'timeout') reply = timeoutReply;
       else if (outcome === 'failed') reply = error instanceof PiGatewayError ? error.userMessage : failedReply;
     }
-    if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = emptyReply; }
-    // A cancelled or superseded turn says nothing: the session ended, or Dan has already moved on.
-    if (reply && !options.signal.aborted && !superseded()) options.speak(reply, turn.delegationId);
+    if (outcome === 'ok' && delivery.silenced) outcome = 'superseded';
+    else if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = emptyReply; }
+    // Silencing interrupts playback only. The request and any committed work keep their own authority and receipt.
+    if (reply && !options.signal.aborted && !delivery.silenced) {
+      options.speak(reply, turn.delegationId);
+    }
     options.log({ outcome, transcriptToFirstTextMs: firstTextMs, transcriptToDoneMs: Math.round(now() - turn.startedAt), acknowledged });
   }
 
   return {
     start(turn) {
       const previous = current;
-      previous?.cancel();
-      const controller = new AbortController();
+      previous?.silence();
+      const delivery = { silenced: false };
       running += 1;
       options.busy(true);
-      const done = run(turn, previous?.done, controller).catch(() => undefined).finally(() => {
+      const done = run(turn, previous?.done, delivery).catch(() => undefined).finally(() => {
         running -= 1;
         if (current?.done === done) current = undefined;
         if (running === 0) options.busy(false);
       });
-      current = { cancel: () => controller.abort(), done };
+      current = { silence: () => { delivery.silenced = true; }, done };
     },
-    cancel() { current?.cancel(); },
+    cancel() { current?.silence(); },
     warm() {
       const warm = options.agent.warm;
       if (!warm) return;

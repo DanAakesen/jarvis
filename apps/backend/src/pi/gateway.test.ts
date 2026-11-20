@@ -98,7 +98,9 @@ describe('PI gateway', () => {
     expect(responses[0]!.body).toMatchObject({ conversation: 'conv_1', stream: true });
     const first = (responses[0]!.body!.input as Array<{ content: string }>)[0]!.content;
     const second = (responses[1]!.body!.input as Array<{ content: string }>)[0]!.content;
-    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\nhi$/u);
+    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\n/u);
+    expect(first).toContain('Foreground PI budget');
+    expect(first).toMatch(/\n\nhi$/u);
     expect(second).not.toContain('CONTEXT BLOCK');
     expect(store.turns.map(turn => [turn.kind, turn.outcome, turn.inputTokens, turn.cachedTokens, turn.outputTokens])).toEqual([
       ['chat', 'ok', 11_000, 9_000, 20], ['chat', 'ok', 11_100, 11_000, 10],
@@ -120,9 +122,72 @@ describe('PI gateway', () => {
     const { gateway, calls } = setup([() => sse(delta('x'), completed(1, 0, 1)), () => sse(delta('y'), completed(1, 0, 1))]);
     const input = () => (calls.at(-1)!.body!.input as Array<{ content: string }>)[0]!.content;
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'hi', channel: 'voice' }, '', new AbortController().signal)) void chunk;
-    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]\n\nhi$/u);
+    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]/u);
+    expect(input()).toContain('Foreground PI budget');
+    expect(input()).toMatch(/\n\nhi$/u);
     for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'again' }, '', new AbortController().signal)) void chunk;
     expect(input()).not.toContain('Channel: voice');
+  });
+
+  it('adds the connected capability inventory to every activation', async () => {
+    const { run, calls } = setup(
+      [() => sse(delta('Hello.'), completed(1, 0, 1))],
+      { activationCapabilities: () => 'Jarvis=ready; GitHub=starting; Azure=not_configured' },
+    );
+    await run('hello');
+    const sent = (calls.find(call => call.url.includes('/responses'))!.body!.input as Array<{ content: string }>)[0]!.content;
+    expect(sent).toContain('Jarvis=ready; GitHub=starting; Azure=not_configured');
+  });
+
+  it('does not deliver a current-data answer without successful retrieval evidence', async () => {
+    const { gateway, store } = setup([() => sse(
+      delta('Your calendar is clear.'),
+      completed(1, 0, 1),
+    )]);
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'what is on my calendar today?' }, '', new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(chunks).toEqual([]);
+    expect(store.turns.at(-1)).toMatchObject({ outcome: 'failed' });
+  });
+
+  it('accepts retrieved, committed and durable-job evidence only for the matching request', async () => {
+    const retrieved = setup([() => sse(delta('Two meetings.'), completed(1, 0, 1))]);
+    const openRead = retrieved.registry.open.bind(retrieved.registry);
+    retrieved.registry.open = (input) => {
+      const grant = openRead(input);
+      grant.evidence.push({ tool: 'calendar_list', kind: 'retrieved' });
+      return grant;
+    };
+    await expect(retrieved.run('what is on my calendar?')).resolves.toEqual(['Two meetings.']);
+
+    const committed = setup([() => sse(delta('Created it.'), completed(1, 0, 1))]);
+    const openWrite = committed.registry.open.bind(committed.registry);
+    committed.registry.open = (input) => {
+      const grant = openWrite(input);
+      grant.evidence.push({ tool: 'vault_task_create', kind: 'committed' });
+      return grant;
+    };
+    await expect(committed.run('create a task')).resolves.toEqual(['Created it.']);
+
+    const job = setup([() => sse(delta('Task started.'), completed(1, 0, 1))]);
+    const openJob = job.registry.open.bind(job.registry);
+    job.registry.open = (input) => {
+      const grant = openJob(input);
+      grant.evidence.push({ tool: 'create_task', kind: 'durable_job' });
+      return grant;
+    };
+    await expect(job.run('implement issue 1967 in the background')).resolves.toEqual(['Task started.']);
+  });
+
+  it('fails visibly when foreground spend cannot be read and never substitutes the Proactive budget', async () => {
+    const { run, store, calls } = setup([]);
+    store.spendSince = async () => { throw new Error('database unavailable'); };
+    await expect(run('hello')).rejects.toMatchObject({ code: 'pi_budget_unavailable' });
+    expect(calls).toEqual([]);
   });
 
   it('records only bounded runtime evidence for chat and voice turns', async () => {
@@ -151,9 +216,17 @@ describe('PI gateway', () => {
   });
 
   it('marks text before a tool call as an acknowledgment, then commentary', async () => {
-    const { run } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
-    expect(await run('look')).toEqual([
-      'Checking.', { type: 'acknowledgment', text: 'Checking.' }, 'Still on it.', { type: 'commentary', text: 'Still on it.' }, 'Done.',
+    const { run, registry } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
+    const open = registry.open.bind(registry);
+    registry.open = (input) => {
+      const grant = open(input);
+      grant.evidence.push({ tool: 'fixture_read', kind: 'retrieved' });
+      return grant;
+    };
+    expect(await run('look up the calendar')).toEqual([
+      { type: 'acknowledgment', text: 'Checking.' },
+      { type: 'commentary', text: 'Still on it.' },
+      'Done.',
     ]);
   });
 
@@ -164,7 +237,7 @@ describe('PI gateway', () => {
     const failed = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'github', name: 'get_issue', error: { code: 'x' } } });
     const odd = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'bad label with spaces', name: 'x', error: null } });
     const { run } = setup([() => sse(listed, listFailed, tool, failed, odd, delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
-    expect(await run('look')).toEqual(['ok']);
+    expect(await run('hello')).toEqual(['ok']);
     expect(logs.filter(([event]) => event !== 'pi.turn')).toEqual([
       ['pi.mcp_list_failed', { server: 'azure' }], ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue' }],
     ]);
@@ -210,6 +283,13 @@ describe('PI gateway', () => {
     expect(result.costDkk).toBeGreaterThan(0);
     expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'failed' });
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+  });
+
+  it('treats a completed deliberate quiet brain outcome as success', async () => {
+    const { gateway, store } = setup([() => sse(completed(1, 0, 0))]);
+    const result = await gateway.runBrain({ runId: 'quiet-1', body: 'Stay quiet if there is nothing useful.' }, new AbortController().signal);
+    expect(result).toMatchObject({ ok: true, text: '', outcome: 'ok' });
+    expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'ok' });
   });
 
   it('stops before sending anything once the monthly cap is reached', async () => {

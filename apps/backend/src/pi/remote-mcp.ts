@@ -30,7 +30,11 @@ export interface GithubCallResult {
 }
 
 export type RemoteMcpStatus =
+  /** Configured but not loaded until a request names this provider. */
+  | { readonly state: 'idle' }
   | { readonly state: 'ready' }
+  /** A last catalogue is usable, but refreshing it failed; callers must not present it as freshly verified. */
+  | { readonly state: 'stale'; readonly reason: string }
   /** The first list is still loading, for example because the server scales from zero. */
   | { readonly state: 'starting' }
   /** The last attempt failed and there is no list to use. `reason` names the failure and never repeats server text. */
@@ -43,7 +47,7 @@ export interface RemoteMcpBridge {
   readonly label: string;
   /** Whether the catalogue is loaded, still loading, or could not be loaded; a search tells the model so. */
   status(): RemoteMcpStatus;
-  /** Starts loading the catalogue without waiting for it, so a server that scales from zero wakes before anyone asks. */
+  /** Starts a catalogue refresh without waiting; production activates bridges only from provider-specific discovery. */
   warm(): void;
   /** The remote server's tools as catalogue entries named `<prefix><tool>`; empty when it cannot be reached. */
   tools(signal: AbortSignal, waitMs?: number): Promise<readonly RegisteredTool[]>;
@@ -171,8 +175,9 @@ export function createRemoteMcpBridge(options: {
     prefix: options.prefix,
     label: options.label,
     status() {
-      if (listed) return { state: 'ready' };
-      return failure !== undefined && !refreshing ? { state: 'unreachable', reason: failure } : { state: 'starting' };
+      if (listed) return failure !== undefined ? { state: 'stale', reason: failure } : { state: 'ready' };
+      if (refreshing) return { state: 'starting' };
+      return failure !== undefined ? { state: 'unreachable', reason: failure } : { state: 'idle' };
     },
     warm() { if (!listed || now() - listed.at >= listTtlMs) void refresh(); },
     async tools(signal, waitMs = searchWaitMs) {

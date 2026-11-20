@@ -98,13 +98,17 @@ describe('PI voice turns', () => {
     expect(logs[0]).toMatchObject({ outcome: 'timeout' });
   });
 
-  it('cancels the turn in flight when Dan says something new, and answers only the newest', async () => {
+  it('lets valid work finish when Dan says something new, while speaking only the newest answer', async () => {
     const aborted: boolean[] = [];
+    let releaseFirst!: () => void;
+    const firstReady = new Promise<void>(resolve => { releaseFirst = resolve; });
     const agent: PiVoiceAgent = {
       async *stream(input, _authorization, signal) {
         if (input.text === 'first') {
-          await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted.push(true); resolve(); }, { once: true }));
-          throw signal.reason;
+          signal.addEventListener('abort', () => aborted.push(true), { once: true });
+          await firstReady;
+          yield 'First result.';
+          return;
         }
         yield 'Second answer.';
       },
@@ -113,23 +117,26 @@ describe('PI voice turns', () => {
     turns.start({ ...turn, text: 'first' });
     await new Promise(resolve => setTimeout(resolve, 1));
     turns.start({ ...turn, text: 'second' });
+    releaseFirst();
     await settled();
-    expect(aborted).toEqual([true]);
+    expect(aborted).toEqual([]);
     expect(spoken).toEqual(['Second answer.']);
     expect(logs.map(entry => entry.outcome)).toEqual(['superseded', 'ok']);
     expect(busy).toEqual([true, true, false]);
   });
 
-  it('runs the new turn only after the cancelled one has released the conversation', async () => {
+  it('runs the new turn only after the earlier work has released the conversation', async () => {
     const events: string[] = [];
+    let releaseFirst!: () => void;
+    const firstReady = new Promise<void>(resolve => { releaseFirst = resolve; });
     const agent: PiVoiceAgent = {
-      async *stream(input, _authorization, signal) {
+      async *stream(input) {
         events.push(`start ${input.text}`);
         if (input.text === 'first') {
-          await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
-          await new Promise(resolve => setTimeout(resolve, 5));
+          await firstReady;
           events.push('first released');
-          throw signal.reason;
+          yield 'first result';
+          return;
         }
         yield 'ok';
       },
@@ -138,16 +145,19 @@ describe('PI voice turns', () => {
     turns.start({ ...turn, text: 'first' });
     await new Promise(resolve => setTimeout(resolve, 1));
     turns.start({ ...turn, text: 'second' });
+    releaseFirst();
     await settled();
     expect(events).toEqual(['start first', 'first released', 'start second']);
   });
 
   it('says nothing more when Dan starts speaking while PI is still working', async () => {
     let aborted = false;
+    let release!: () => void;
+    const ready = new Promise<void>(resolve => { release = resolve; });
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {
-        await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true }));
-        if (signal.aborted) throw signal.reason;
+        signal.addEventListener('abort', () => { aborted = true; }, { once: true });
+        await ready;
         yield 'Too late.';
       },
     };
@@ -155,8 +165,9 @@ describe('PI voice turns', () => {
     turns.start(turn);
     await new Promise(resolve => setTimeout(resolve, 1));
     turns.cancel();
+    release();
     await settled();
-    expect(aborted).toBe(true);
+    expect(aborted).toBe(false);
     expect(spoken).toEqual([]);
     expect(logs[0]).toMatchObject({ outcome: 'superseded' });
   });
