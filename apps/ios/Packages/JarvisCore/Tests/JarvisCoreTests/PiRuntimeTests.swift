@@ -46,6 +46,54 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(urls.map(\.absoluteString), ["wss://example.invalid/api/voice"])
     }
 
+    func testVoiceEndWaitsForTheServerTerminalBeforeClosing() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket,
+            endAcknowledgementTimeout: .milliseconds(500)
+        )
+        try await client.start(accessToken: "a.b.c")
+        await socket.emit(#"{"type":"jarvis.session.ready","sessionId":"42"}"#)
+        let ending = Task { try await client.end() }
+        var sentEnd = false
+        for _ in 0..<50 {
+            sentEnd = await socket.sentTexts().contains(#"{"type":"jarvis.session.end"}"#)
+            if sentEnd { break }
+            await Task.yield()
+        }
+        XCTAssertTrue(sentEnd)
+        let closedBeforeAcknowledgement = await socket.wasClosed()
+        let stateBeforeAcknowledgement = await client.state()
+        XCTAssertFalse(closedBeforeAcknowledgement)
+        XCTAssertNotEqual(stateBeforeAcknowledgement, .ended)
+
+        await socket.emit(#"{"type":"jarvis.session.ended"}"#)
+        try await ending.value
+        let endedState = await client.state()
+        let closedAfterAcknowledgement = await socket.wasClosed()
+        XCTAssertEqual(endedState, .ended)
+        XCTAssertTrue(closedAfterAcknowledgement)
+    }
+
+    func testVoiceEndTimesOutInsteadOfClaimingAnUnacknowledgedEnd() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket,
+            endAcknowledgementTimeout: .milliseconds(20)
+        )
+        try await client.start(accessToken: "a.b.c")
+        do {
+            try await client.end()
+            XCTFail("Expected the missing terminal acknowledgement to time out")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endTimedOut)
+        }
+        let closed = await socket.wasClosed()
+        XCTAssertTrue(closed)
+    }
+
     func testWarmThrottleAllowsOneAttemptPerInterval() {
         var throttle = PiWarmThrottle(interval: 300)
         let start = Date(timeIntervalSince1970: 1_000)
@@ -256,6 +304,42 @@ private actor VoiceRecordingSocket: WebSocketTransport {
     func close(code: UInt16) async {}
 
     func connectedURLs() -> [URL] { urls }
+}
+
+private actor VoiceEndSocket: WebSocketTransport {
+    private var continuation: AsyncThrowingStream<String, any Error>.Continuation?
+    private var pending: [String] = []
+    private var sent: [String] = []
+    private var closed = false
+
+    func connect(url: URL, subprotocols: [String]) async throws {}
+
+    func send(text: String) async throws {
+        sent.append(text)
+    }
+
+    func receive() async -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            self.continuation = continuation
+            for text in self.pending { continuation.yield(text) }
+            self.pending.removeAll()
+        }
+    }
+
+    func close(code: UInt16) async {
+        closed = true
+    }
+
+    func emit(_ text: String) {
+        if let continuation {
+            continuation.yield(text)
+        } else {
+            pending.append(text)
+        }
+    }
+
+    func sentTexts() -> [String] { sent }
+    func wasClosed() -> Bool { closed }
 }
 
 private actor RecordingTransport: HTTPTransport {

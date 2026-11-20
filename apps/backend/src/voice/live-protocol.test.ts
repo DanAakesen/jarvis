@@ -4,6 +4,7 @@ import {
   isCompatibleLiveSessionFormat,
   LiveVoiceUsageTracker,
   MAX_COMMENTARY_UTF8_BYTES,
+  settleVoiceSessionCreation,
 } from './live-protocol.js';
 
 describe('GPT-Live protocol boundaries', () => {
@@ -39,5 +40,23 @@ describe('GPT-Live protocol boundaries', () => {
     expect(usage.seconds).toBe(15.5);
     expect(() => usage.accept({ type: 'session.usage.updated', event_id: 'bad', usage: { seconds: -1 } }))
       .toThrowError('Invalid provider voice usage');
+  });
+
+  it('ends a SQL session that resolves after startup was cancelled', async () => {
+    let resolve!: (session: { id: string }) => void;
+    const creation = new Promise<{ id: string }>((done) => { resolve = done; });
+    const controller = new AbortController();
+    const ended: string[] = [];
+    const settled = settleVoiceSessionCreation(
+      creation,
+      controller.signal,
+      () => false,
+      () => { throw new Error('cancelled session must not become active'); },
+      async (sessionId) => { ended.push(sessionId); },
+    );
+    controller.abort(new Error('startup stopped'));
+    resolve({ id: 'late-7' });
+    await expect(settled).rejects.toThrow('startup stopped');
+    expect(ended).toEqual(['late-7']);
   });
 });

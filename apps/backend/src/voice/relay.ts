@@ -12,6 +12,7 @@ import { createPiVoiceTurns, type PiVoiceAgent } from './pi-voice.js';
 import {
   commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
   LiveVoiceUsageTracker, parseVoiceEvent,
+  settleVoiceSessionCreation,
   validPcm24Base64, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
   type VoiceConnectionFactory,
 } from './live-protocol.js';
@@ -179,6 +180,7 @@ function registerVoiceRoute(
     let pendingDelegationGroup: InputGroup | undefined;
     let lastCommentaryDelegation: string | null = null;
     let endTimer: ReturnType<typeof setTimeout> | undefined;
+    let gracefulEnd: { code: number; reason: string; notifyClient: boolean } | undefined;
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
     const seenInputEventIds = new Set<string>();
@@ -239,14 +241,27 @@ function registerVoiceRoute(
       }
     };
 
-    const sessionReady = diagnostics.bound('session_creation', 10_000, () =>
-      store.createSession({ channel: 'voice', language }).then((session) => {
+    let sessionStartupAbandoned = false;
+    const sessionCreation = settleVoiceSessionCreation(
+      store.createSession({ channel: 'voice', language }),
+      controller.signal,
+      () => sessionStartupAbandoned,
+      (session) => {
         sessionId = session.id;
         diagnostics.stage('session_created');
-      }));
+      },
+      async (lateSessionId) => {
+        if (!await store.endSession(lateSessionId)) {
+          log.warn('voice.late_session_cleanup_failed');
+          throw new Error('Late voice session could not be ended');
+        }
+        log.warn('voice.late_session_ended');
+      },
+    );
+    const sessionReady = diagnostics.bound('session_creation', 10_000, () => sessionCreation);
     // Startup work begins before the first awaited stage (proactive context). Consume a possible rejection now;
     // the original promise is still awaited below and its error remains a session failure.
-    void sessionReady.catch(() => undefined);
+    void sessionReady.catch(() => { sessionStartupAbandoned = true; });
 
     const finishOutputGroup = (group: OutputGroup, terminal: 'completed' | 'cancelled' = 'completed') => {
       if (group.completed) return;
@@ -388,6 +403,22 @@ function registerVoiceRoute(
       pendingDelegation = undefined;
       pendingDelegationGroup = undefined;
       piTurns.cancel();
+    };
+
+    const requestGracefulEnd = (code: number, reason: string, notifyClient = true) => {
+      if (closing || gracefulEnd) return;
+      gracefulEnd = { code, reason, notifyClient };
+      endRequested = true;
+      pendingDelegation?.abort();
+      piTurns.cancel();
+      statusAnnouncer?.close();
+      if (activeOutput) finishOutputGroup(activeOutput, code === 1000 ? 'completed' : 'cancelled');
+      if (upstream?.readyState === WebSocket.OPEN && sendUpstream({ type: 'session.close' })) {
+        endTimer = setTimeout(() => closeSession(code, reason, notifyClient), CLEAN_END_TIMEOUT_MS);
+        endTimer.unref();
+      } else {
+        closeSession(code, reason, notifyClient);
+      }
     };
 
     const newInputGroup = (): InputGroup => {
@@ -603,7 +634,11 @@ function registerVoiceRoute(
         }
         if (type === 'session.usage.updated') return;
         if (activeOutput) finishOutputGroup(activeOutput);
-        closeSession(endRequested ? 1000 : 1011, 'Voice session ended', true);
+        if (gracefulEnd) {
+          closeSession(gracefulEnd.code, gracefulEnd.reason, gracefulEnd.notifyClient);
+        } else {
+          closeSession(1011, 'Voice session ended', true);
+        }
         return;
       }
       if (!providerReady) {
@@ -687,6 +722,7 @@ function registerVoiceRoute(
       closing = true;
       endRequested = true;
       clearTimeout(endTimer);
+      gracefulEnd = undefined;
       diagnostics.summary('relay', code);
       const retryable = code === VOICE_STARTUP_CLOSE_CODE || code === 1011 || code === 1012;
       let failureNotified = false;
@@ -746,7 +782,7 @@ function registerVoiceRoute(
       const reason: SessionEndReason | undefined = limits.due(piBusy || pendingDelegation !== undefined);
       if (reason) {
         diagnostics.endReason(reason);
-        closeSession(1000, 'Voice session time limit reached');
+        requestGracefulEnd(1000, 'Voice session time limit reached');
       }
     }, SESSION_LIMIT_CHECK_MS);
     limitTimer.unref();
@@ -774,13 +810,7 @@ function registerVoiceRoute(
       }
       if (event.type === 'jarvis.session.end') {
         if (endRequested) return;
-        endRequested = true;
-        if (providerReady && upstream?.readyState === WebSocket.OPEN) {
-          if (sendUpstream({ type: 'session.close' })) {
-            endTimer = setTimeout(() => closeSession(1000, 'Voice session ended'), CLEAN_END_TIMEOUT_MS);
-            endTimer.unref();
-          } else closeSession(1000, 'Voice session ended');
-        } else closeSession(1000, 'Voice session ended');
+        requestGracefulEnd(1000, 'Voice session ended');
         return;
       }
       if (endRequested) return;
@@ -838,10 +868,10 @@ function registerVoiceRoute(
 
     browser.once('close', (code) => {
       diagnostics.summary('browser', code);
-      if (!closing) closeSession(code === 1000 ? 1000 : 1011, 'Browser disconnected', false);
+      if (!closing) requestGracefulEnd(1000, 'Browser disconnected', false);
     });
     browser.once('error', () => {
-      if (!closing) closeSession(1011, 'Voice connection failed', false);
+      if (!closing) requestGracefulEnd(1000, 'Browser disconnected', false);
     });
 
     const shutdown = async () => {

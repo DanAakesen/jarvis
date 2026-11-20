@@ -13,6 +13,13 @@ public enum VoiceSessionState: Equatable, Sendable {
     public var canStartSession: Bool {
         self == .idle || self == .ended || self == .failed
     }
+
+}
+
+private enum EndAcknowledgementResult: Sendable {
+    case acknowledged
+    case failed
+    case timedOut
 }
 
 public enum VoiceConnectionPresentationState: Equatable, Sendable {
@@ -124,7 +131,9 @@ public struct VoiceSessionStateMachine: Sendable {
             state = .connecting
         case .reconnectExhausted where isReconnecting:
             state = .failed
-        case .sessionEnded, .endRequested:
+        case .endRequested:
+            break
+        case .sessionEnded:
             state = .ended
             responseID = nil
             responseHasAudio = false
@@ -205,12 +214,16 @@ public actor VoiceSessionClient {
     private var isMuted = false
     private var cameraState: Bool?
     private var userEnded = false
+    private var endWaiter: CheckedContinuation<EndAcknowledgementResult, Never>?
+    private var pendingEndResult: EndAcknowledgementResult?
+    private let endAcknowledgementTimeout: Duration
 
     public init(
         baseURL: URL,
         transport: any WebSocketTransport,
         clock: any ChatClock = ContinuousChatClock(),
         reconnectPolicy: VoiceReconnectPolicy = VoiceReconnectPolicy(),
+        endAcknowledgementTimeout: Duration = .seconds(6),
         onMessage: @escaping @Sendable (VoiceServerMessage) -> Void = { _ in },
         onStateChange: @escaping @Sendable (VoiceSessionState) -> Void = { _ in }
     ) {
@@ -218,6 +231,7 @@ public actor VoiceSessionClient {
         self.transport = transport
         self.clock = clock
         self.reconnectPolicy = reconnectPolicy
+        self.endAcknowledgementTimeout = endAcknowledgementTimeout
         self.onMessage = onMessage
         self.onStateChange = onStateChange
     }
@@ -295,16 +309,23 @@ public actor VoiceSessionClient {
     public func end() async throws {
         guard !userEnded else { return }
         userEnded = true
+        pendingEndResult = nil
         apply(.endRequested)
-        receiveTask?.cancel()
-        receiveTask = nil
         var sendError: (any Error)?
+        var sentSessionEnd = false
         if isConnected {
             do {
                 try await send(.sessionEnd)
+                sentSessionEnd = true
             } catch {
                 sendError = error
             }
+        }
+        let acknowledgement = sentSessionEnd ? await waitForEndAcknowledgement() : .acknowledged
+        receiveTask?.cancel()
+        receiveTask = nil
+        if !sentSessionEnd {
+            apply(sendError == nil ? .sessionEnded : .failed)
         }
         isConnected = false
         await transport.close(code: 1000)
@@ -314,6 +335,16 @@ public actor VoiceSessionClient {
         cameraState = nil
         reconnectAttempts = 0
         if let sendError { throw sendError }
+        switch acknowledgement {
+        case .acknowledged:
+            break
+        case .failed:
+            apply(.failed)
+            throw VoiceProtocolError.endFailed
+        case .timedOut:
+            apply(.failed)
+            throw VoiceProtocolError.endTimedOut
+        }
     }
 
     private func receiveMessages() async {
@@ -350,10 +381,16 @@ public actor VoiceSessionClient {
         case .sessionEnded:
             apply(.sessionEnded)
             isConnected = false
+            finishEndWait(.acknowledged)
             await transport.close(code: 1000)
             clearCredentials()
         case .sessionFailed(let retryable, _):
-            if retryable {
+            if userEnded {
+                apply(.failed)
+                isConnected = false
+                finishEndWait(.failed)
+                clearCredentials()
+            } else if retryable {
                 isConnected = false
                 apply(.connectionDropped)
             } else {
@@ -375,12 +412,42 @@ public actor VoiceSessionClient {
         }
     }
 
+    private func waitForEndAcknowledgement() async -> EndAcknowledgementResult {
+        if let pendingEndResult {
+            self.pendingEndResult = nil
+            return pendingEndResult
+        }
+        return await withCheckedContinuation { continuation in
+            endWaiter = continuation
+            let timeout = endAcknowledgementTimeout
+            Task { [weak self, clock] in
+                try? await clock.sleep(for: timeout)
+                await self?.timeoutEndWait()
+            }
+        }
+    }
+
+    private func finishEndWait(_ result: EndAcknowledgementResult) {
+        if let endWaiter {
+            self.endWaiter = nil
+            endWaiter.resume(returning: result)
+        } else {
+            pendingEndResult = result
+        }
+    }
+
+    private func timeoutEndWait() {
+        guard endWaiter != nil else { return }
+        finishEndWait(.timedOut)
+    }
+
     private func reconnect() async {
         guard !userEnded, isLive,
               let endpoint,
               reconnectPolicy.maximumAttempts > 0 else {
             if isLive {
                 apply(.failed)
+                      if userEnded { finishEndWait(.failed) }
                 clearCredentials()
             }
             return

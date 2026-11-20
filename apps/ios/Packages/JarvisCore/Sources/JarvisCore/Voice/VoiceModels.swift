@@ -185,6 +185,8 @@ public enum VoiceProtocolError: Error, Equatable, Sendable {
     case invalidToken
     case invalidState
     case invalidScreenContext
+    case endFailed
+    case endTimedOut
 }
 
 private struct SessionReadyPayload: Decodable {

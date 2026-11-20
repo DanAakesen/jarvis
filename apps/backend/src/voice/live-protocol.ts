@@ -124,6 +124,22 @@ export class LiveVoiceUsageTracker {
   }
 }
 
+export async function settleVoiceSessionCreation<T extends { id: string }>(
+  creation: Promise<T>,
+  signal: AbortSignal,
+  isAbandoned: () => boolean,
+  onReady: (session: T) => void,
+  endLateSession: (sessionId: string) => Promise<void>,
+): Promise<T> {
+  const session = await creation;
+  if (signal.aborted || isAbandoned()) {
+    await endLateSession(session.id);
+    throw signal.reason ?? new Error('Voice startup was cancelled');
+  }
+  onReady(session);
+  return session;
+}
+
 export function normalizeFoundryProjectEndpoint(endpoint: string): string {
   let url: URL;
   try {
