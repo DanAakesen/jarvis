@@ -104,7 +104,7 @@ remain outside this change.
 | Put `dueAt` follow-ups, updates and cancellations in the existing `proactive_events` queue with future eligibility and identity/material dedupe | Done |
 | Persist exact outgoing text, evidence, follow-up IDs and Chat session/message IDs for Chat/Voice continuation | Done |
 | Reserve owner settings, allowance, spacing, quiet-hours and `proactive_event_batches` atomically in SQL | Done |
-| Add migration `0091` and reverse guard; run focused/backend/SQL checks and update product/architecture/decisions | Done locally |
+| Add migrations `0091`/`0092` and reverse guards; make state+follow-up outbox and Chat+receipt atomic; add policy-evidence/clock/Voice/cache hardening from independent review | Done locally |
 
 Completion means the existing PI activation envelope and one background queue own the whole path; no parallel brain, shadow scheduler, Personal Memory copy or push transport was introduced. Live provider behaviour and owner judgement remain outside this offline implementation.
 

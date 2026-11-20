@@ -69,7 +69,6 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
   if (!options.enabled && !options.brain) return undefined;
   const queue = options.pool
     ? createProactiveEventStore(options.pool, options.ownerObjectId) : createMemoryEventQueueStore();
-  options.situation?.attachEvents(queue);
   let outreach: OutreachStore | undefined;
   let pipeline: EventConsumer;
   if (options.brain) {
@@ -104,6 +103,7 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
       ...(options.logger ? { logger: options.logger } : {}),
     });
   }
+  options.situation?.attachEvents(queue, () => pipeline.wake());
   const sink: ProactiveEventSink = {
     async enqueue(event) {
       const result = await queue.enqueue(event, options.now());
@@ -128,7 +128,11 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
   const unsubscribe = options.store.settings.subscribePreferencesChanged(() => pipeline.wake());
   return {
     sink, outreach, runScheduled: pipeline.runScheduled,
-    tick: (signal) => pipeline.tick(signal),
+    tick: async (signal) => {
+      const reconciled = await options.situation?.synchronizeFollowUps(signal);
+      if (reconciled?.changed) pipeline.wake();
+      return pipeline.tick(signal);
+    },
     async start() {
       await options.situation?.synchronizeFollowUps(AbortSignal.timeout(30_000));
       await pipeline.start();

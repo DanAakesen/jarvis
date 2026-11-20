@@ -26,7 +26,7 @@ function setup(options: {
   const conversations = memoryConversations();
   const pushes: Array<{ sessionId: string; messageId: string; text: string }> = [];
   const comms = createBrainComms({
-    conversations: conversations.store, store: piStore, ownerObjectId: owner, push: (message) => pushes.push(message), announce: () => {}, now,
+    conversations: conversations.store, ownerObjectId: owner, push: (message) => pushes.push(message), announce: () => {}, now,
   });
   const gateway = scriptedGateway(options.decide ?? (async () => ({ text: 'Nothing needs Dan.' })));
   const brain = createBrain({

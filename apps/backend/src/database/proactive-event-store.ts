@@ -7,6 +7,16 @@ import {
   type EventQueueStore,
 } from '../proactive/events/event-queue.js';
 import type { QueuedEvent } from '../proactive/events/types.js';
+import {
+  PI_SITUATION_SCHEMA_VERSION,
+  currentSituationFollowUpActions,
+  parsePiSituationState,
+  piSituationHash,
+  type PiSituationFollowUpAction,
+} from '../pi/situation.js';
+import { proactiveSettingsFromRow, type ProactiveSettingsRow } from './proactive-store.js';
+import { defaultProactiveSettings } from '../proactive/store.js';
+import { LOCATION_FRESHNESS_MS } from '../proactive/sources/location.js';
 
 interface EventRow {
   id: string;
@@ -46,111 +56,343 @@ function isUniqueViolation(error: unknown): boolean {
     (error.number === 2601 || error.number === 2627);
 }
 
+async function enqueueInTransaction(
+  transaction: sql.Transaction,
+  owner: string,
+  input: Parameters<EventQueueStore['enqueue']>[0],
+  now: Date,
+): Promise<{ id: string; inserted: boolean }> {
+  const event = normalizeEvent(input);
+  const id = randomUUID();
+  const lock = await new sql.Request(transaction)
+    .input('owner', sql.UniqueIdentifier, owner)
+    .input('identity', sql.NVarChar(200), event.identity)
+    .query<{ id: string; material_hash: string | null }>(`DECLARE @lockResult int;
+      DECLARE @resource nvarchar(255) =
+        CONCAT(N'jarvis.proactive.event:', LOWER(CONVERT(nvarchar(36), @owner)), N':', @identity);
+      EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
+        @LockOwner = 'Transaction', @LockTimeout = 10000;
+      IF @lockResult < 0 THROW 51001, 'Could not acquire proactive event identity lock', 1;
+      SELECT id, material_hash FROM dbo.proactive_events WITH (UPDLOCK, HOLDLOCK)
+        WHERE owner_object_id = @owner AND identity_key = @identity AND processed_at IS NULL;`);
+  const active = lock.recordset[0];
+  if (active?.material_hash?.trim() === event.materialHash) {
+    return { id: active.id.toLowerCase(), inserted: false };
+  }
+  const existing = await new sql.Request(transaction)
+    .input('owner', sql.UniqueIdentifier, owner)
+    .input('key', sql.NVarChar(200), event.dedupeKey)
+    .query<{ id: string; identity_key: string | null; material_hash: string | null; outcome: string | null }>(
+      `SELECT id, identity_key, material_hash, outcome FROM dbo.proactive_events
+        WHERE owner_object_id = @owner AND dedupe_key = @key;`,
+    );
+  const previous = existing.recordset[0];
+  const reopensCancelled = previous?.outcome?.startsWith('follow-up cancelled') === true;
+  const reopensSuperseded = previous?.outcome === 'superseded by material change';
+  if (previous?.identity_key === event.identity &&
+      previous.material_hash?.trim() === event.materialHash &&
+      (reopensCancelled || reopensSuperseded)) {
+    if (active) {
+      await new sql.Request(transaction)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('active', sql.UniqueIdentifier, active.id)
+        .input('now', sql.DateTime2, now)
+        .query(`UPDATE dbo.proactive_events
+          SET processed_at = @now, claimed_until = NULL, outcome = N'superseded by material change'
+          WHERE owner_object_id = @owner AND id = @active AND processed_at IS NULL;`);
+    }
+    await new sql.Request(transaction)
+      .input('owner', sql.UniqueIdentifier, owner)
+      .input('id', sql.UniqueIdentifier, previous.id)
+      .input('now', sql.DateTime2, now)
+      .input('notBeforeAt', sql.DateTime2, event.notBeforeAt)
+      .query(`UPDATE dbo.proactive_events
+        SET processed_at = NULL, outcome = NULL, received_at = @now,
+          claimed_until = NULL, retry_at = NULL, attempts = 0, not_before_at = @notBeforeAt
+        WHERE owner_object_id = @owner AND id = @id;`);
+    return { id: previous.id.toLowerCase(), inserted: true };
+  }
+  const collidesWithActive = active && previous?.id.toLowerCase() === active.id.toLowerCase();
+  if (previous && !collidesWithActive) {
+    return { id: previous.id.toLowerCase(), inserted: false };
+  }
+  const dedupeKey = collidesWithActive
+    ? `${event.dedupeKey.slice(0, 175)}:${event.materialHash.slice(0, 24)}`
+    : event.dedupeKey;
+  if (active) {
+    await new sql.Request(transaction)
+      .input('owner', sql.UniqueIdentifier, owner)
+      .input('active', sql.UniqueIdentifier, active.id)
+      .input('now', sql.DateTime2, now)
+      .query(`UPDATE dbo.proactive_events
+        SET processed_at = @now, claimed_until = NULL, outcome = N'superseded by material change'
+        WHERE owner_object_id = @owner AND id = @active AND processed_at IS NULL;`);
+  }
+  const { recordset } = await new sql.Request(transaction)
+    .input('owner', sql.UniqueIdentifier, owner)
+    .input('source', sql.NVarChar(64), event.source)
+    .input('kind', sql.NVarChar(96), event.kind)
+    .input('id', sql.UniqueIdentifier, id)
+    .input('key', sql.NVarChar(200), dedupeKey)
+    .input('summary', sql.NVarChar(400), event.summary)
+    .input('detail', sql.NVarChar(sql.MAX), JSON.stringify(event.detail))
+    .input('occurredAt', sql.DateTime2, event.occurredAt)
+    .input('identity', sql.NVarChar(200), event.identity)
+    .input('material', sql.Char(64), event.materialHash)
+    .input('notBeforeAt', sql.DateTime2, event.notBeforeAt)
+    .input('now', sql.DateTime2, now)
+    .input('processedAt', sql.DateTime2, event.baseline ? now : null)
+    .input('outcome', sql.NVarChar(400), event.baseline ? 'baseline' : null)
+    .query<{ id: string }>(`INSERT dbo.proactive_events
+        (id, owner_object_id, source, kind, dedupe_key, summary, detail_json, occurred_at, received_at,
+          processed_at, outcome, identity_key, material_hash, not_before_at)
+      OUTPUT inserted.id
+      VALUES (
+        @id, @owner, @source, @kind, @key, @summary, @detail, @occurredAt, @now,
+        @processedAt, @outcome, @identity, @material, @notBeforeAt
+      );`);
+  return { id: recordset[0]!.id.toLowerCase(), inserted: true };
+}
+
+async function cancelInTransaction(
+  transaction: sql.Transaction,
+  owner: string,
+  identity: string,
+  now: Date,
+  reason: string,
+): Promise<boolean> {
+  const identityValue = normalizeEvent({
+    source: 'queue', kind: 'cancel', dedupeKey: identity, identity,
+    summary: 'cancel', occurredAt: now,
+  }).identity;
+  const { rowsAffected } = await new sql.Request(transaction)
+    .input('owner', sql.UniqueIdentifier, owner)
+    .input('identity', sql.NVarChar(200), identityValue)
+    .input('now', sql.DateTime2, now)
+    .input('outcome', sql.NVarChar(400), reason.slice(0, 400))
+    .query(`UPDATE dbo.proactive_events
+      SET processed_at = @now, claimed_until = NULL, outcome = @outcome
+      WHERE owner_object_id = @owner AND identity_key = @identity AND processed_at IS NULL;`);
+  return (rowsAffected[0] ?? 0) > 0;
+}
+
 export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectId: string): EventQueueStore {
   const owner = ownerObjectId.toLowerCase();
   const dueClause = `processed_at IS NULL AND (retry_at IS NULL OR retry_at <= @now)
     AND (claimed_until IS NULL OR claimed_until <= @now)
     AND (not_before_at IS NULL OR not_before_at <= @now)`;
   return {
+    supportsSituationOutbox: true,
+    async reconcileSituationOutbox(at, signal) {
+      signal.throwIfAborted();
+      const transaction = new sql.Transaction(pool);
+      let activeRequest: sql.Request | undefined;
+      const cancel = () => activeRequest?.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        await transaction.begin();
+        activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, owner);
+        await activeRequest.query(`DECLARE @lockResult int;
+          DECLARE @resource nvarchar(255) =
+            CONCAT(N'jarvis.pi.situation-outbox:', LOWER(CONVERT(nvarchar(36), @owner)));
+          EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction', @LockTimeout = 10000;
+          IF @lockResult < 0 THROW 51001, 'Could not acquire PI situation outbox lock', 1;`);
+        activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, owner);
+        const settingsRow = await activeRequest.query<ProactiveSettingsRow>(`
+          SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json,
+            categories_json, suggestion_scope, news_feeds_json, guidance
+          FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
+          WHERE owner_object_id = @owner;`);
+        const settings = settingsRow.recordset[0]
+          ? proactiveSettingsFromRow(settingsRow.recordset[0])
+          : defaultProactiveSettings();
+        activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, owner);
+        const state = await activeRequest.query<{
+          schema_version: number;
+          revision: string | number;
+          state_json: string;
+          content_hash: string;
+        }>(`
+          SELECT schema_version, revision, state_json, content_hash
+          FROM dbo.pi_situational_state WITH (UPDLOCK, HOLDLOCK)
+          WHERE owner_object_id = @owner;`);
+        const currentRevision = state.recordset[0] ? Number(state.recordset[0].revision) : null;
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('now', sql.DateTime2, at)
+          .input('current', sql.BigInt, currentRevision);
+        await activeRequest.query(`UPDATE dbo.pi_situation_outbox
+          SET applied_at = @now, outcome = CASE
+            WHEN @current IS NULL OR situation_revision < @current THEN N'superseded_revision'
+            ELSE outcome END
+          WHERE owner_object_id = @owner AND applied_at IS NULL
+            AND (@current IS NULL OR situation_revision < @current);`);
+        if (currentRevision === null) {
+          await transaction.commit();
+          return { changed: false, pending: false };
+        }
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('revision', sql.BigInt, currentRevision);
+        const pending = await activeRequest.query<{ actions_json: string }>(`
+          SELECT actions_json FROM dbo.pi_situation_outbox WITH (UPDLOCK, HOLDLOCK)
+          WHERE owner_object_id = @owner AND situation_revision = @revision
+            AND applied_at IS NULL;`);
+        let pendingLater = false;
+        if (!pending.recordset[0]) {
+          const later = await transaction.request()
+            .input('owner', sql.UniqueIdentifier, owner)
+            .input('revision', sql.BigInt, currentRevision)
+            .query<{ count: number }>(`SELECT COUNT(*) AS count
+              FROM dbo.pi_situation_outbox
+              WHERE owner_object_id = @owner AND applied_at IS NULL
+                AND situation_revision > @revision;`);
+          pendingLater = Number(later.recordset[0]?.count ?? 0) > 0;
+        }
+        const stateValue = parsePiSituationState(JSON.parse(state.recordset[0]!.state_json));
+        if (state.recordset[0]!.schema_version !== PI_SITUATION_SCHEMA_VERSION ||
+            state.recordset[0]!.content_hash.trim() !== piSituationHash(stateValue)) {
+          throw new Error('PI situation outbox state hash is invalid');
+        }
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner);
+        const sourceStatuses = await activeRequest.query<{
+          source_id: keyof typeof settings.sources;
+          state: 'ok' | 'unavailable' | 'stale';
+          observed_at: Date | string | null;
+        }>(`SELECT source_id, state, observed_at
+          FROM dbo.proactive_source_status
+          WHERE owner_object_id = @owner;`);
+        const statusBySource = new Map(sourceStatuses.recordset.map((row) =>
+          [row.source_id, row] as const));
+        const currentState = {
+          ...stateValue,
+          sources: stateValue.sources.map((source) => {
+            const status = statusBySource.get(source.id);
+            if (!settings.sources[source.id]) return { ...source, state: 'disabled' as const };
+            if (!status) return source;
+            const observedAt = status.observed_at
+              ? (status.observed_at instanceof Date
+                ? status.observed_at
+                : new Date(status.observed_at))
+              : null;
+            const locationStale = source.id === 'location' && observedAt !== null &&
+              at.getTime() - observedAt.getTime() > LOCATION_FRESHNESS_MS;
+            return {
+              ...source,
+              state: status.state === 'stale' || locationStale ? 'stale' as const
+                : status.state === 'ok' && observedAt !== null ? 'fresh' as const
+                  : 'missing' as const,
+              observedAt: observedAt?.toISOString() ?? null,
+            };
+          }),
+        };
+        const desiredActions = currentSituationFollowUpActions(currentState, settings, at);
+        const desiredIdentities = new Set(desiredActions.map((action) =>
+          action.operation === 'upsert' ? action.event.identity : action.identity));
+        let parsed: unknown;
+        if (pending.recordset[0]) {
+          try { parsed = JSON.parse(pending.recordset[0].actions_json); }
+          catch { throw new Error('PI situation outbox is not valid JSON'); }
+        } else parsed = [];
+        if (!Array.isArray(parsed) || parsed.length > 32) {
+          throw new Error('PI situation outbox actions are invalid');
+        }
+        let changed = false;
+        for (const raw of parsed) {
+          signal.throwIfAborted();
+          const action = raw as PiSituationFollowUpAction;
+          if (!action || typeof action !== 'object' ||
+              (action.operation !== 'upsert' && action.operation !== 'cancel')) {
+            throw new Error('PI situation outbox action is invalid');
+          }
+          if (action.operation === 'cancel') {
+            changed = await cancelInTransaction(
+              transaction,
+              owner,
+              action.identity,
+              at,
+              'follow-up cancelled or invalidated',
+            ) || changed;
+            continue;
+          }
+          const evidenceSources = Array.isArray(action.event.detail.evidenceSources)
+            ? action.event.detail.evidenceSources.filter((value): value is keyof typeof settings.sources =>
+              typeof value === 'string' && Object.hasOwn(settings.sources, value))
+            : [];
+          if (evidenceSources.some((source) => !settings.sources[source])) {
+            changed = await cancelInTransaction(
+              transaction,
+              owner,
+              action.event.identity,
+              at,
+              'follow-up source disabled',
+            ) || changed;
+            continue;
+          }
+          const queued = await enqueueInTransaction(transaction, owner, {
+            source: action.event.source,
+            kind: action.event.kind,
+            identity: action.event.identity,
+            material: action.event.material,
+            dedupeKey: action.event.dedupeKey,
+            summary: action.event.summary,
+            detail: action.event.detail,
+            occurredAt: new Date(action.event.occurredAt),
+            notBeforeAt: new Date(action.event.notBeforeAt),
+          }, at);
+          changed ||= queued.inserted;
+        }
+        for (const desired of desiredActions) {
+          if (desired.operation !== 'upsert') continue;
+          const queued = await enqueueInTransaction(transaction, owner, {
+            ...desired.event,
+            occurredAt: new Date(desired.event.occurredAt),
+            notBeforeAt: new Date(desired.event.notBeforeAt),
+          }, at);
+          changed ||= queued.inserted;
+        }
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner);
+        const activeFollowUps = await activeRequest.query<{ id: string; identity_key: string }>(`
+          SELECT id, identity_key FROM dbo.proactive_events
+          WHERE owner_object_id = @owner AND source = N'followup' AND processed_at IS NULL;`);
+        for (const row of activeFollowUps.recordset) {
+          if (desiredIdentities.has(row.identity_key)) continue;
+          changed = await cancelInTransaction(
+            transaction,
+            owner,
+            row.identity_key,
+            at,
+            'follow-up no longer in current situation',
+          ) || changed;
+        }
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('revision', sql.BigInt, currentRevision)
+          .input('now', sql.DateTime2, at);
+        await activeRequest.query(`UPDATE dbo.pi_situation_outbox
+          SET applied_at = @now, outcome = N'applied'
+          WHERE owner_object_id = @owner AND situation_revision = @revision
+            AND applied_at IS NULL;`);
+        await transaction.commit();
+        return { changed, pending: pendingLater };
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve reconciliation error. */ }
+        throw error;
+      } finally {
+        signal.removeEventListener('abort', cancel);
+      }
+    },
     async enqueue(input, now) {
       const event = normalizeEvent(input);
-      const id = randomUUID();
       const transaction = new sql.Transaction(pool);
       try {
         await transaction.begin();
-        const lock = await new sql.Request(transaction)
-          .input('owner', sql.UniqueIdentifier, owner)
-          .input('identity', sql.NVarChar(200), event.identity)
-          .input('id', sql.UniqueIdentifier, id)
-          .query<{ id: string; material_hash: string | null }>(`DECLARE @lockResult int;
-            DECLARE @resource nvarchar(255) =
-              CONCAT(N'jarvis.proactive.event:', LOWER(CONVERT(nvarchar(36), @owner)), N':', @identity);
-            EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
-              @LockOwner = 'Transaction', @LockTimeout = 10000;
-            IF @lockResult < 0 THROW 51001, 'Could not acquire proactive event identity lock', 1;
-            SELECT id, material_hash FROM dbo.proactive_events WITH (UPDLOCK, HOLDLOCK)
-              WHERE owner_object_id = @owner AND identity_key = @identity AND processed_at IS NULL;`);
-        const active = lock.recordset[0];
-        const activeMatches = active?.material_hash?.trim() === event.materialHash;
-        if (activeMatches) {
-          await transaction.commit();
-          return { id: active.id.toLowerCase(), inserted: false };
-        }
-        const existing = await new sql.Request(transaction)
-          .input('owner', sql.UniqueIdentifier, owner)
-          .input('key', sql.NVarChar(200), event.dedupeKey)
-          .query<{ id: string; identity_key: string | null; material_hash: string | null; outcome: string | null }>(`SELECT id, identity_key, material_hash, outcome FROM dbo.proactive_events
-            WHERE owner_object_id = @owner AND dedupe_key = @key;`);
-        const previous = existing.recordset[0];
-        const reopensCancelled = previous?.outcome?.startsWith('follow-up cancelled') === true;
-        const reopensSuperseded = active !== undefined &&
-          previous?.outcome === 'superseded by material change';
-        if (previous?.identity_key === event.identity &&
-            previous.material_hash?.trim() === event.materialHash &&
-            (reopensCancelled || reopensSuperseded)) {
-          if (active) {
-            await new sql.Request(transaction)
-              .input('owner', sql.UniqueIdentifier, owner)
-              .input('active', sql.UniqueIdentifier, active.id)
-              .input('now', sql.DateTime2, now)
-              .query(`UPDATE dbo.proactive_events
-                SET processed_at = @now, claimed_until = NULL, outcome = N'superseded by material change'
-                WHERE owner_object_id = @owner AND id = @active AND processed_at IS NULL;`);
-          }
-          await new sql.Request(transaction)
-            .input('owner', sql.UniqueIdentifier, owner)
-            .input('id', sql.UniqueIdentifier, previous.id)
-            .input('now', sql.DateTime2, now)
-            .input('notBeforeAt', sql.DateTime2, event.notBeforeAt)
-            .query(`UPDATE dbo.proactive_events
-              SET processed_at = NULL, outcome = NULL, received_at = @now,
-                claimed_until = NULL, retry_at = NULL, attempts = 0, not_before_at = @notBeforeAt
-              WHERE owner_object_id = @owner AND id = @id;`);
-          await transaction.commit();
-          return { id: previous.id.toLowerCase(), inserted: true };
-        }
-        const collidesWithActive = active && existing.recordset[0]?.id.toLowerCase() === active.id.toLowerCase();
-        if (existing.recordset[0] && !collidesWithActive) {
-          await transaction.commit();
-          return { id: existing.recordset[0].id.toLowerCase(), inserted: false };
-        }
-        const dedupeKey = collidesWithActive
-          ? `${event.dedupeKey.slice(0, 175)}:${event.materialHash.slice(0, 24)}`
-          : event.dedupeKey;
-        if (active) {
-          await new sql.Request(transaction)
-            .input('owner', sql.UniqueIdentifier, owner)
-            .input('active', sql.UniqueIdentifier, active.id)
-            .input('now', sql.DateTime2, now)
-            .query(`UPDATE dbo.proactive_events
-              SET processed_at = @now, claimed_until = NULL, outcome = N'superseded by material change'
-              WHERE owner_object_id = @owner AND id = @active AND processed_at IS NULL;`);
-        }
-        const { recordset } = await new sql.Request(transaction)
-          .input('owner', sql.UniqueIdentifier, owner)
-          .input('source', sql.NVarChar(64), event.source)
-          .input('kind', sql.NVarChar(96), event.kind)
-          .input('id', sql.UniqueIdentifier, id)
-          .input('key', sql.NVarChar(200), dedupeKey)
-          .input('summary', sql.NVarChar(400), event.summary)
-          .input('detail', sql.NVarChar(sql.MAX), JSON.stringify(event.detail))
-          .input('occurredAt', sql.DateTime2, event.occurredAt)
-          .input('identity', sql.NVarChar(200), event.identity)
-          .input('material', sql.Char(64), event.materialHash)
-          .input('notBeforeAt', sql.DateTime2, event.notBeforeAt)
-          .input('now', sql.DateTime2, now)
-          .input('processedAt', sql.DateTime2, event.baseline ? now : null)
-          .input('outcome', sql.NVarChar(400), event.baseline ? 'baseline' : null)
-          .query<{ id: string }>(`INSERT dbo.proactive_events
-              (id, owner_object_id, source, kind, dedupe_key, summary, detail_json, occurred_at, received_at,
-                processed_at, outcome, identity_key, material_hash, not_before_at)
-            OUTPUT inserted.id
-            VALUES (
-              @id, @owner, @source, @kind, @key, @summary, @detail, @occurredAt, @now,
-              @processedAt, @outcome, @identity, @material, @notBeforeAt
-            );`);
+        const result = await enqueueInTransaction(transaction, owner, input, now);
         await transaction.commit();
-        return { id: recordset[0]!.id.toLowerCase(), inserted: true };
+        return result;
       } catch (error) {
         try { await transaction.rollback(); } catch { /* Preserve the enqueue error. */ }
         if (isUniqueViolation(error)) {
@@ -166,19 +408,16 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
     },
 
     async cancel(identity, now, reason) {
-      const identityValue = normalizeEvent({
-        source: 'queue', kind: 'cancel', dedupeKey: identity, identity,
-        summary: 'cancel', occurredAt: now,
-      }).identity;
-      const { rowsAffected } = await pool.request()
-        .input('owner', sql.UniqueIdentifier, owner)
-        .input('identity', sql.NVarChar(200), identityValue)
-        .input('now', sql.DateTime2, now)
-        .input('outcome', sql.NVarChar(400), reason.slice(0, 400))
-        .query(`UPDATE dbo.proactive_events
-          SET processed_at = @now, claimed_until = NULL, outcome = @outcome
-          WHERE owner_object_id = @owner AND identity_key = @identity AND processed_at IS NULL;`);
-      return (rowsAffected[0] ?? 0) > 0;
+      const transaction = new sql.Transaction(pool);
+      try {
+        await transaction.begin();
+        const changed = await cancelInTransaction(transaction, owner, identity, now, reason);
+        await transaction.commit();
+        return changed;
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve cancel error. */ }
+        throw error;
+      }
     },
 
     async hasWork(now) {
@@ -192,16 +431,20 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
     async nextDueAt() {
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
-        .query<{ received_at: Date | string; retry_at: Date | string | null; claimed_until: Date | string | null; not_before_at: Date | string | null }>(
-          `SELECT TOP (200) received_at, retry_at, claimed_until, not_before_at FROM dbo.proactive_events
-            WHERE owner_object_id = @owner AND processed_at IS NULL ORDER BY received_at;`);
-      const times = recordset.map((row) => Math.max(
-        date(row.received_at).getTime(),
-        row.not_before_at ? date(row.not_before_at).getTime() : 0,
-        row.retry_at ? date(row.retry_at).getTime() : 0,
-        row.claimed_until ? date(row.claimed_until).getTime() : 0,
-      ));
-      return times.length ? new Date(Math.min(...times)) : null;
+        .query<{ due_at: Date | string }>(`SELECT TOP (1) due.due_at
+          FROM dbo.proactive_events AS e
+          CROSS APPLY (
+            SELECT MAX(value) AS due_at FROM (
+              VALUES
+                (e.received_at),
+                (COALESCE(e.not_before_at, e.received_at)),
+                (COALESCE(e.retry_at, e.received_at)),
+                (COALESCE(e.claimed_until, e.received_at))
+            ) AS times(value)
+          ) AS due
+          WHERE e.owner_object_id = @owner AND e.processed_at IS NULL
+          ORDER BY due.due_at, e.id;`);
+      return recordset[0] ? date(recordset[0].due_at) : null;
     },
 
     async claim(now, limit, leaseMs) {
@@ -263,16 +506,28 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
       const transaction = new sql.Transaction(pool);
       try {
         await transaction.begin();
+        await new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query(`DECLARE @lockResult int;
+            DECLARE @resource nvarchar(255) =
+              CONCAT(N'jarvis.pi.background:', LOWER(CONVERT(nvarchar(36), @owner)));
+            EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
+              @LockOwner = 'Transaction', @LockTimeout = 10000;
+            IF @lockResult < 0 THROW 51001, 'Could not acquire PI background slot lock', 1;`);
+        const sampled = input.sampleTime();
+        if (!Number.isFinite(sampled.at.getTime()) || !Number.isFinite(sampled.dayStart.getTime())) {
+          throw new RangeError('Invalid PI background reservation time');
+        }
         const { recordset } = await new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, owner)
           .input('id', sql.UniqueIdentifier, input.batchId)
-          .input('at', sql.DateTime2, input.at)
-          .input('dayStart', sql.DateTime2, input.dayStart)
+          .input('at', sql.DateTime2, sampled.at)
+          .input('dayStart', sql.DateTime2, sampled.dayStart)
           .input('count', sql.Int, input.eventCount)
           .input('activationType', sql.VarChar(10), input.activationType)
-          .input('satisfiedSlot', sql.NVarChar(16), input.satisfiedSlot)
+          .input('satisfiedSlot', sql.NVarChar(16), sampled.satisfiedSlot)
           .input('allowQuiet', sql.Bit, input.allowQuiet)
-          .input('quiet', sql.Bit, input.quiet)
+          .input('quiet', sql.Bit, sampled.quiet)
           .input('minimumGapMs', sql.Int, input.minimumGapMs)
           .input('fallbackAllowed', sql.Int, input.fallbackAllowed)
           .query<{
@@ -283,14 +538,7 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
             last_at: Date | string | null;
             activation_type: 'event' | 'scheduled' | null;
             satisfied_slot: string | null;
-          }>(`DECLARE @lockResult int;
-            DECLARE @resource nvarchar(255) =
-              CONCAT(N'jarvis.pi.background:', LOWER(CONVERT(nvarchar(36), @owner)));
-            EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
-              @LockOwner = 'Transaction', @LockTimeout = 10000;
-            IF @lockResult < 0 THROW 51001, 'Could not acquire PI background slot lock', 1;
-
-            DECLARE @paused bit = 0;
+          }>(`DECLARE @paused bit = 0;
             DECLARE @allowedTurns int = @fallbackAllowed;
             SELECT @paused = paused, @allowedTurns = background_turns_per_day
               FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)

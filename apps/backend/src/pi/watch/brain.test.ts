@@ -23,7 +23,7 @@ function setup(decide: (wake: ScriptedWake, t: ReturnType<typeof setup>) => Prom
   const area = createPiArea({ vault });
   const conversations = memoryConversations();
   const pushes: Array<{ text: string }> = [];
-  const comms = createBrainComms({ conversations: conversations.store, store: piStore, ownerObjectId: owner, push: (m) => pushes.push(m), announce: () => {}, now });
+  const comms = createBrainComms({ conversations: conversations.store, ownerObjectId: owner, push: (m) => pushes.push(m), announce: () => {}, now });
   const hint: { brain?: { wake(): void } } = {};
   const watches = createWatches({ area, store: piStore, now, changed: () => hint.brain?.wake() });
   const gateway = scriptedGateway((wake) => decide(wake, t));

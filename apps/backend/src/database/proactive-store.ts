@@ -124,6 +124,34 @@ function parseCategories(value: string | null, defaults: ProactiveSettings['cate
   ])) as ProactiveSettings['categories'];
 }
 
+export interface ProactiveSettingsRow {
+  paused: boolean;
+  monthly_budget_dkk: number;
+  background_turns_per_day: number;
+  sources_json: string;
+  categories_json: string | null;
+  suggestion_scope: ProactiveSettings['suggestionScope'] | null;
+  news_feeds_json: string;
+  guidance: string;
+}
+
+export function proactiveSettingsFromRow(
+  row: ProactiveSettingsRow,
+  defaults: ProactiveSettings = defaultProactiveSettings(),
+): ProactiveSettings {
+  return {
+    paused: row.paused,
+    monthlyBudgetDkk: row.monthly_budget_dkk,
+    backgroundTurnsPerDay: row.background_turns_per_day,
+    sources: { ...defaults.sources, ...parseJson<Partial<ProactiveSettings['sources']>>(row.sources_json, {}) },
+    categories: parseCategories(row.categories_json, defaults.categories),
+    suggestionScope: row.suggestion_scope === 'personal' || row.suggestion_scope === 'work' || row.suggestion_scope === 'all'
+      ? row.suggestion_scope : defaults.suggestionScope,
+    newsFeeds: parseJson<string[]>(row.news_feeds_json, [...defaults.newsFeeds]),
+    guidance: row.guidance,
+  };
+}
+
 const itemColumns = [
   'id', 'kind', 'title', 'body', 'category', 'owner_requested', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
   'snoozed_until', 'feedback', 'run_id', 'todo_added', 'created_at',
@@ -136,42 +164,13 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
   const owner = ownerObjectId.toLowerCase();
   const defaults = defaultProactiveSettings();
   const preferenceListeners = new Set<() => void>();
-  const settingsFromRow = (row: {
-    paused: boolean;
-    monthly_budget_dkk: number;
-    background_turns_per_day: number;
-    sources_json: string;
-    categories_json: string | null;
-    suggestion_scope: ProactiveSettings['suggestionScope'] | null;
-    news_feeds_json: string;
-    guidance: string;
-  }): ProactiveSettings => ({
-    paused: row.paused,
-    monthlyBudgetDkk: row.monthly_budget_dkk,
-    backgroundTurnsPerDay: row.background_turns_per_day,
-    sources: { ...defaults.sources, ...parseJson<Partial<ProactiveSettings['sources']>>(row.sources_json, {}) },
-    categories: parseCategories(row.categories_json, defaults.categories),
-    suggestionScope: row.suggestion_scope === 'personal' || row.suggestion_scope === 'work' || row.suggestion_scope === 'all'
-      ? row.suggestion_scope : defaults.suggestionScope,
-    newsFeeds: parseJson<string[]>(row.news_feeds_json, [...defaults.newsFeeds]),
-    guidance: row.guidance,
-  });
   const readSettings = async (): Promise<ProactiveSettings> => {
     const { recordset } = await databaseReadRequest(pool)
       .input('owner', sql.UniqueIdentifier, owner)
-      .query<{
-        paused: boolean;
-        monthly_budget_dkk: number;
-        background_turns_per_day: number;
-        sources_json: string;
-        categories_json: string | null;
-        suggestion_scope: ProactiveSettings['suggestionScope'] | null;
-        news_feeds_json: string;
-        guidance: string;
-      }>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
+      .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
           news_feeds_json, guidance
         FROM dbo.proactive_settings WHERE owner_object_id = @owner;`);
-    return recordset[0] ? settingsFromRow(recordset[0]) : {
+    return recordset[0] ? proactiveSettingsFromRow(recordset[0], defaults) : {
       ...defaults,
       sources: { ...defaults.sources },
       categories: { ...defaults.categories },
@@ -207,20 +206,11 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
         try {
           const read = await new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, owner)
-            .query<{
-              paused: boolean;
-              monthly_budget_dkk: number;
-              background_turns_per_day: number;
-              sources_json: string;
-              categories_json: string | null;
-              suggestion_scope: ProactiveSettings['suggestionScope'] | null;
-              news_feeds_json: string;
-              guidance: string;
-            }>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
+            .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
                 news_feeds_json, guidance
               FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const row = read.recordset[0];
-          const current: ProactiveSettings = row ? settingsFromRow(row) : defaults;
+          const current: ProactiveSettings = row ? proactiveSettingsFromRow(row, defaults) : defaults;
           if (expectedRevision !== undefined && proactiveSettingsRevision(current) !== expectedRevision) {
             throw new ProactiveSettingsConflictError();
           }
@@ -410,7 +400,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               news_feeds_json, guidance
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const latest = currentSettings.recordset[0]
-            ? settingsFromRow(currentSettings.recordset[0]) : defaults;
+            ? proactiveSettingsFromRow(currentSettings.recordset[0], defaults) : defaults;
           if (input.ownerRequested !== true &&
               !findingAllowed(latest, input.category, input.suggestionScope ?? 'unknown', input.relatedCategories)) {
             throw new Error('finding_not_allowed');

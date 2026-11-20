@@ -1,28 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { createMemoryPiStore } from '../store.js';
 import { memoryConversations } from './brain.testkit.js';
 import { BrainCommsRefusal, MAX_BRAIN_MESSAGES_PER_DAY, createBrainComms } from './comms.js';
 
 const signal = new AbortController().signal;
-const run = () => ({ runId: 'r1', sent: [] as { title: string | null; text: string; messageId: string }[], wrote: [] as string[], looked: [] as string[] });
+let runSequence = 0;
+const run = (id = `r${++runSequence}`) => ({
+  runId: id,
+  sent: [] as { title: string | null; text: string; messageId: string }[],
+  wrote: [] as string[],
+  looked: [] as string[],
+});
 
 function setup(options: { empty?: boolean; announce?: () => void; pushEnabled?: boolean } = {}) {
   const now = () => new Date('2026-11-16T10:00:00Z');
   const conversations = memoryConversations(options.empty === true ? { empty: true } : {});
-  const store = createMemoryPiStore(now);
   const pushes: unknown[] = [];
   const comms = createBrainComms({
-    conversations: conversations.store, store, ownerObjectId: 'o',
+    conversations: conversations.store, ownerObjectId: 'o',
     pushEnabled: options.pushEnabled,
     push: (message) => pushes.push(message), announce: options.announce ?? (() => {}), now,
   });
-  return { comms, conversations, store, pushes };
+  return { comms, conversations, pushes };
 }
 
 describe('the brain\'s chat message', () => {
   it('is stored in the owner\'s chat feed, announced to an open app, and pushed exactly once', async () => {
     let announced = 0;
-    const { comms, conversations, pushes, store } = setup({ announce: () => { announced += 1; } });
+    const { comms, conversations, pushes } = setup({ announce: () => { announced += 1; } });
     const r = run();
     const sent = await comms.send({
       text: '  The deploy failed.  ',
@@ -37,7 +41,7 @@ describe('the brain\'s chat message', () => {
     });
     expect(announced).toBe(1);
     expect(r.sent).toHaveLength(1);
-    expect((await store.messagesSince(new Date('2026-11-16T00:00:00Z'), signal)).count).toBe(1);
+    expect(conversations.proactiveReceipts.size).toBe(1);
   });
 
   it('opens a chat session when the owner has none yet', async () => {
@@ -55,7 +59,7 @@ describe('the brain\'s chat message', () => {
   });
 
   it('persists exact outgoing evidence and pending follow-ups with the chat IDs', async () => {
-    const { comms, store } = setup();
+    const { comms, conversations } = setup();
     await comms.send({
       text: 'Would you like me to move the departure reminder?',
       evidence: [{
@@ -67,11 +71,7 @@ describe('the brain\'s chat message', () => {
       }],
       followUpIds: ['follow:flight'],
     }, run(), signal);
-    expect(await store.latestProactiveMessage(
-      'o',
-      new Date('2026-11-16T00:00:00.000Z'),
-      signal,
-    )).toMatchObject({
+    expect([...conversations.proactiveReceipts.values()][0]).toMatchObject({
       sessionId: '7',
       messageId: '2',
       text: 'Would you like me to move the departure reminder?',
@@ -106,18 +106,35 @@ describe('the brain\'s chat message', () => {
     expect(pushes).toHaveLength(MAX_BRAIN_MESSAGES_PER_DAY);
   });
 
+  it('returns the existing receipt for a retry of the same run without writing or pushing twice', async () => {
+    const { comms, conversations, pushes } = setup();
+    const retry = run('same-run');
+    const [first, second] = await Promise.all([
+      comms.send({ text: 'Check the build.', evidence: [], followUpIds: [] }, retry, signal),
+      comms.send({ text: 'Check the build.', evidence: [], followUpIds: [] }, retry, signal),
+    ]);
+    expect(second).toEqual(first);
+    expect(conversations.messages.filter(({ role }) => role === 'jarvis')).toHaveLength(1);
+    expect(conversations.proactiveReceipts.size).toBe(1);
+    expect(pushes).toHaveLength(1);
+  });
+
   it('does not push a message the chat could not store', async () => {
     const { comms, conversations, pushes } = setup();
-    (conversations.store as { addMessage: () => Promise<null> }).addMessage = async () => null;
-    await expect(comms.send({ text: 'Lost.' }, run(), signal)).rejects.toThrow('could not store');
+    (conversations.store as { addProactiveMessage: unknown }).addProactiveMessage =
+      async () => ({ status: 'session_missing', message: null });
+    await expect(comms.send({ text: 'Lost.' }, run(), signal)).rejects.toThrow('could not be found');
+    expect(conversations.messages).toHaveLength(1);
     expect(pushes).toEqual([]);
   });
 
   it('does not push when the durable continuation receipt fails', async () => {
-    const { comms, store, pushes } = setup();
-    (store as { recordMessage: unknown }).recordMessage = async () => { throw new Error('sql down'); };
+    const { comms, conversations, pushes } = setup();
+    (conversations.store as { addProactiveMessage: unknown }).addProactiveMessage =
+      async () => { throw new Error('sql down'); };
     await expect(comms.send({ text: 'Saved but not attested.' }, run(), signal))
-      .rejects.toThrow('no push was sent');
+      .rejects.toThrow('sql down');
+    expect(conversations.messages).toHaveLength(1);
     expect(pushes).toEqual([]);
   });
 });

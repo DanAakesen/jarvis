@@ -73,6 +73,7 @@ export function createBrainTools(options: {
       'Tell Dan something, as a chat message from Jarvis that always pushes to his phone and Watch. Only for a background wake; in a chat turn I answer in the reply instead.',
       `Send it only when it is worth interrupting him: something he would want to know now or soon, a decision he has to make, or a result he asked to be kept updated on. Say it in his language, plainly and briefly (at most ${MAX_BRAIN_MESSAGE_CHARACTERS} characters), with what, why it matters and what he can do. Do not repeat what he was already told, and do not send greetings or status noise.`,
       'Name the one category and Personal/Work/unknown suggestion scope, and list every Proactive source used (GitHub and Worker evidence use factory). The server enforces the current Proactive categories, scope and source switches before delivery; declare Travel as a related category when the message contains travel or booking context.',
+      'Evidence is required. For a wake event, use the event ID from the wake as ref, its source identity from detail when available and the printed observed instant. For a source lookup, use the exact current situation ref, identity and observation time. The server refuses any evidence tuple it did not provide for this wake or current state.',
       'There is a daily limit and exact repeats are refused; the result says so. Report success only from the result.',
     ].join(' '),
     execution: { defaultEffect: 'action' },
@@ -201,13 +202,34 @@ export function createBrainTools(options: {
         } else {
           throw new ToolRefusal('Exact source evidence is required for a proactive message. Nothing was sent.');
         }
-        const view = followUpIds.length > 0
+        const needsSituation = followUpIds.length > 0 || evidence.length > 0;
+        const view = needsSituation
           ? options.situation
             ? await options.situation.read(signal)
             : undefined
           : undefined;
         if (followUpIds.length > 0 && !view) {
           throw new ToolRefusal('The pending follow-ups could not be verified. Nothing was sent.');
+        }
+        const authoritativeEvidence: PiProactiveEvidence[] = [
+          ...(grant.brain!.evidence ?? []),
+          ...(view?.state?.refs.map((ref) => ({
+            source: ref.source,
+            ref: ref.id,
+            identity: ref.identity,
+            label: ref.label,
+            observedAt: ref.observedAt,
+          })) ?? []),
+        ];
+        if (evidence.some((claimed) => !authoritativeEvidence.some((known) =>
+          known.source === claimed.source &&
+          (known.observedAt !== null && claimed.observedAt !== null &&
+            Date.parse(known.observedAt) === Date.parse(claimed.observedAt)) &&
+          (claimed.ref === null || known.ref === claimed.ref) &&
+          (claimed.identity === null || known.identity === claimed.identity)))) {
+          throw new ToolRefusal(
+            'The evidence source, identity or observation does not match this wake or the current situation. Nothing was sent.',
+          );
         }
         if (followUpIds.length > 0 && view) {
           const available = new Set(view.state?.followUps.map(({ id }) => id) ?? []);

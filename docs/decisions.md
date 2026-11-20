@@ -140,6 +140,7 @@
 - **Continuation context:** `message_dan` stores the exact outgoing text, evidence references, pending follow-up IDs and Chat session/message IDs in the owner-scoped `pi_message` ledger. `proactiveConversationContext` exposes that bounded receipt to both Chat and Voice so "do that" resolves to the suggestion Dan received. This does not change Personal Memory or the push sender.
 - **Dedupe:** queue admission and source refresh compare stable source/provider identity plus material content, not prose or list position. Repeated identical material is quiet; a genuine material change is eligible once.
 - **Evidence/limits:** qualification is offline only (unit/replay/build/lint plus isolated loopback SQL and migration down). Gateway completion, GPT-Live transport, Personal Memory and the push sender remain owned elsewhere. No live model/provider, deployment or paid call is part of this decision.
+- **Independent-review corrections:** composition must pass the situation service into the event path; the event consumer reconciles a transactional revisioned outbox before claiming work and is woken after a commit. Slot time/day/quiet is sampled after the owner lock. `message_dan` evidence is matched to server-known wake/situation records. Chat text and the continuation receipt are one idempotent SQL transaction. Policy CAS, due-ordering, Watch content/SHA pairing and per-turn Voice context are part of the acceptance contract, not follow-up debt.
 
 ## 19 November 2026 — One PI route and an exact, release-owned backend configuration (#1966)
 

@@ -1,5 +1,8 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import { proactiveSettingsFromRow, type ProactiveSettingsRow } from './proactive-store.js';
+import { defaultProactiveSettings } from '../proactive/store.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
 import {
   PI_SITUATION_SCHEMA_VERSION,
   freshnessFor,
@@ -218,6 +221,18 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
       signal.addEventListener('abort', cancel, { once: true });
       try {
         await transaction.begin();
+        const policy = await new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, input.owner)
+          .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day,
+              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance
+            FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
+            WHERE owner_object_id=@owner;`);
+        const settings = policy.recordset[0]
+          ? proactiveSettingsFromRow(policy.recordset[0])
+          : defaultProactiveSettings();
+        if (proactiveSettingsRevision(settings) !== input.policyRevision) {
+          throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before committing.');
+        }
         activeRequest = new sql.Request(transaction);
         const current = await activeRequest
           .input('owner', sql.UniqueIdentifier, input.owner)
@@ -278,6 +293,14 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
               CASE WHEN @activationId IS NULL THEN NULL ELSE @updated END, @asOf, @updated
             );`);
         }
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, input.owner)
+          .input('revision', sql.BigInt, revision)
+          .input('actions', sql.NVarChar(sql.MAX), JSON.stringify(input.followUpActions))
+          .input('createdAt', sql.DateTime2, updatedAt);
+        await activeRequest.query(`INSERT dbo.pi_situation_outbox (
+            owner_object_id, situation_revision, actions_json, created_at
+          ) VALUES (@owner, @revision, @actions, @createdAt);`);
         activeRequest = undefined;
         await transaction.commit();
         return {

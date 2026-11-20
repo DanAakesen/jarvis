@@ -17,6 +17,7 @@ import type {
   ConversationStore,
   ConversationToolCall,
   ConversationAttachmentReference,
+  AddProactiveMessageResult,
 } from '../core/conversation-store.js';
 import { InvalidConversationAttachmentsError } from '../core/conversation-store.js';
 import { chatBlockLimits, isChatBlock, type ChatBlock } from '@jarvis/contracts';
@@ -444,6 +445,187 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       const result = input.signal ? await execute(request, input.signal, write) : await write();
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
+    },
+
+    async addProactiveMessage(input): Promise<AddProactiveMessageResult> {
+      input.signal?.throwIfAborted();
+      const delivery = input.replyNotification;
+      if (delivery &&
+          (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(delivery.ownerObjectId) ||
+            delivery.ownerObjectId.toLowerCase() !== input.ownerObjectId.toLowerCase() ||
+            delivery.turnMessageId !== undefined &&
+              (!/^[1-9]\d{0,18}$/u.test(delivery.turnMessageId) ||
+                BigInt(delivery.turnMessageId) > 9_223_372_036_854_775_807n))) {
+        throw new TypeError('Invalid proactive reply notification');
+      }
+      const transaction = new sql.Transaction(pool);
+      let activeRequest: sql.Request | undefined;
+      const cancel = () => activeRequest?.cancel();
+      input.signal?.addEventListener('abort', cancel, { once: true });
+      try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, input.ownerObjectId)
+          .input('run', sql.Char(36), input.runId)
+          .input('hash', sql.Char(64), input.textHash)
+          .input('dayStart', sql.DateTime2, input.dayStart)
+          .input('sessionId', sql.BigInt, BigInt(input.sessionId));
+        const existing = await activeRequest.query<MessageRow>(`DECLARE @lockResult int;
+          DECLARE @resource nvarchar(255) =
+            CONCAT(N'jarvis.pi.message:', LOWER(CONVERT(nvarchar(36), @owner)));
+          EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
+            @LockOwner = 'Transaction', @LockTimeout = 10000;
+          IF @lockResult < 0 THROW 51001, 'Could not acquire PI message admission lock', 1;
+          SELECT CONVERT(varchar(20), receipt.message_id) AS id,
+            CONVERT(varchar(20), receipt.session_id) AS session_id,
+            message.role, message.text, message.model, message.at, message.metadata
+          FROM dbo.pi_message AS receipt
+          INNER JOIN dbo.messages AS message ON message.id = receipt.message_id
+          WHERE receipt.owner_object_id = @owner
+            AND receipt.run_id = @run AND receipt.text_hash = @hash;
+
+          SELECT COUNT(*) AS sent_today,
+            MAX(CASE WHEN text_hash = @hash THEN 1 ELSE 0 END) AS duplicate_today
+          FROM dbo.pi_message
+          WHERE owner_object_id = @owner AND at >= @dayStart;
+
+          SELECT CONVERT(bit, CASE WHEN EXISTS (
+            SELECT 1 FROM dbo.jarvis_sessions
+            WHERE id = @sessionId
+          ) THEN 1 ELSE 0 END) AS session_exists;`);
+        const existingRecord = existing.recordsets[0] as MessageRow[] | undefined;
+        if (existingRecord?.[0]) {
+          input.signal?.throwIfAborted();
+          await transaction.commit();
+          return { status: 'existing', message: messageFromRow(existingRecord[0]) };
+        }
+        const counts = (existing.recordsets[1] as Array<{
+          sent_today: number;
+          duplicate_today: number | null;
+        }> | undefined)?.[0];
+        const session = (existing.recordsets[2] as Array<{ session_exists: boolean }> | undefined)?.[0];
+        if (!session?.session_exists) {
+          input.signal?.throwIfAborted();
+          await transaction.commit();
+          return { status: 'session_missing', message: null };
+        }
+        if ((counts?.duplicate_today ?? 0) === 1) {
+          input.signal?.throwIfAborted();
+          await transaction.commit();
+          return { status: 'duplicate', message: null };
+        }
+        if (Number(counts?.sent_today ?? 0) >= input.maxMessages) {
+          input.signal?.throwIfAborted();
+          await transaction.commit();
+          return { status: 'daily_limit', message: null };
+        }
+        activeRequest = new sql.Request(transaction)
+          .input('sessionId', sql.BigInt, BigInt(input.sessionId))
+          .input('text', sql.NVarChar(sql.MAX), input.text)
+          .input('model', sql.NVarChar(100), input.model)
+          .input('language', sql.NVarChar(8), input.language)
+          .input('at', sql.DateTime2, input.at);
+        const inserted = await activeRequest.query<MessageRow>(`INSERT INTO dbo.messages
+            (jarvis_session_id, role, text, model, language, interrupted, at)
+          OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
+            CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
+            INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
+          SELECT @sessionId, N'jarvis', @text, @model, @language, 0, @at
+          FROM dbo.jarvis_sessions
+          WHERE id = @sessionId;`);
+        const message = inserted.recordset[0];
+        if (!message) {
+          await transaction.commit();
+          return { status: 'session_missing', message: null };
+        }
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, input.ownerObjectId)
+          .input('at', sql.DateTime2, input.at)
+          .input('run', sql.Char(36), input.runId)
+          .input('session', sql.BigInt, BigInt(input.sessionId))
+          .input('message', sql.BigInt, BigInt(message.id))
+          .input('hash', sql.Char(64), input.textHash)
+          .input('text', sql.NVarChar(1500), input.text)
+          .input('evidence', sql.NVarChar(sql.MAX), JSON.stringify(input.evidence))
+          .input('followUps', sql.NVarChar(sql.MAX), JSON.stringify(input.followUpIds));
+        await activeRequest.query(`INSERT dbo.pi_message (
+            at, run_id, session_id, message_id, text_hash,
+            owner_object_id, message_text, evidence_json, follow_up_ids_json
+          ) VALUES (
+            @at, @run, @session, @message, @hash,
+            @owner, @text, @evidence, @followUps
+          );`);
+        if (delivery) {
+          if (delivery.turnMessageId !== undefined) {
+            activeRequest = new sql.Request(transaction)
+              .input('owner', sql.UniqueIdentifier, delivery.ownerObjectId)
+              .input('turnMessageId', sql.BigInt, BigInt(delivery.turnMessageId));
+            await activeRequest.query(`DECLARE @lockResult int;
+              DECLARE @resource nvarchar(255) = CONCAT(
+                N'jarvis.reply-notification-turn:',
+                LOWER(CONVERT(nvarchar(36), @owner)),
+                N':',
+                CONVERT(nvarchar(20), @turnMessageId)
+              );
+              EXEC @lockResult = sys.sp_getapplock
+                @Resource=@resource, @LockMode='Exclusive',
+                @LockOwner='Transaction', @LockTimeout=5000;
+              IF @lockResult < 0 THROW 51002, 'Reply notification turn unavailable', 1;`);
+          }
+          activeRequest = new sql.Request(transaction)
+            .input('owner', sql.UniqueIdentifier, delivery.ownerObjectId)
+            .input('turnMessageId', sql.BigInt,
+              delivery.turnMessageId === undefined ? null : BigInt(delivery.turnMessageId))
+            .input('session', sql.BigInt, BigInt(input.sessionId))
+            .input('message', sql.BigInt, BigInt(message.id))
+            .input('preview', sql.NVarChar(160), safeReplyNotificationPreview(input.text))
+            .input('evidence', sql.NVarChar(sql.MAX),
+              serializeReplyNotificationEvidence(delivery.evidence));
+          await activeRequest.query(`INSERT dbo.reply_notification_deliveries (
+              id, owner_object_id, jarvis_session_id, message_id, turn_message_id,
+              registration_id, device_reference, notification_id, preview, state, last_result,
+              next_attempt_at, expires_at, completed_at, evidence_json
+            )
+            SELECT NEWID(), @owner, @session, @message, @turnMessageId,
+              r.registration_id, CONVERT(char(36), r.registration_id),
+              CONCAT(N'reply-', CONVERT(nvarchar(20), @message)),
+              CASE WHEN r.show_actions = 1 THEN @preview ELSE N'New reply from Jarvis' END,
+              CASE WHEN a.state = N'accepted' THEN N'suppressed' ELSE N'pending' END,
+              CASE WHEN a.state = N'accepted' THEN N'approval_delivered' ELSE NULL END,
+              SYSUTCDATETIME(), DATEADD(hour, 1, SYSUTCDATETIME()),
+              CASE WHEN a.state = N'accepted' THEN SYSUTCDATETIME() ELSE NULL END,
+              @evidence
+            FROM dbo.approval_notification_registrations r
+            OUTER APPLY (
+              SELECT TOP (1) a.state
+              FROM dbo.reply_notification_approval_claims c
+              INNER JOIN dbo.reply_notification_approval_deliveries a
+                ON a.confirmation_id = c.confirmation_id
+                AND a.device_reference = CONVERT(char(36), r.registration_id)
+              WHERE c.owner_object_id = @owner AND c.turn_message_id = @turnMessageId
+                AND a.state = N'accepted'
+              ORDER BY c.created_at DESC
+            ) a
+            WHERE r.owner_object_id = @owner AND r.expires_at > SYSUTCDATETIME()
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.approval_notification_token_tombstones tombstone
+                WHERE tombstone.owner_object_id = r.owner_object_id
+                  AND tombstone.device_token_hash = CONVERT(
+                    char(64),
+                    HASHBYTES(N'SHA2_256', CONVERT(varbinary(512), LOWER(r.device_token))),
+                    2
+                  )
+              );`);
+        }
+        input.signal?.throwIfAborted();
+        await transaction.commit();
+        return { status: 'stored', message: messageFromRow(message) };
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve the message write failure. */ }
+        throw error;
+      } finally {
+        input.signal?.removeEventListener('abort', cancel);
+      }
     },
 
     async setVisualContext({ sessionId, messageId, visualContext }) {

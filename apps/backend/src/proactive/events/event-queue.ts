@@ -20,13 +20,16 @@ export interface EventBatchReservation {
 
 export interface EventBatchReserveInput {
   readonly batchId: string;
-  readonly at: Date;
-  readonly dayStart: Date;
+  /** Called by the store after it has acquired the exact owner reservation lock. */
+  readonly sampleTime: () => {
+    readonly at: Date;
+    readonly dayStart: Date;
+    readonly quiet: boolean;
+    readonly satisfiedSlot: string | null;
+  };
   readonly eventCount: number;
   readonly activationType: 'event' | 'scheduled';
-  readonly satisfiedSlot: string | null;
   readonly allowQuiet: boolean;
-  readonly quiet: boolean;
   readonly minimumGapMs: number;
   /** Memory-store fallback; SQL reads the owner setting inside the reservation transaction. */
   readonly fallbackAllowed: number;
@@ -44,6 +47,11 @@ export interface EventBatchReserveResult {
 
 /** The queue is a table read by the existing ticker. State is derived from columns, never an enum. */
 export interface EventQueueStore {
+  readonly supportsSituationOutbox: boolean;
+  reconcileSituationOutbox(at: Date, signal: AbortSignal): Promise<{
+    readonly changed: boolean;
+    readonly pending: boolean;
+  }>;
   enqueue(input: ProactiveEventInput, now: Date): Promise<{ id: string; inserted: boolean }>;
   /** Cancels one stable identity without deleting its evidence. */
   cancel(identity: string, now: Date, reason: string): Promise<boolean>;
@@ -162,6 +170,8 @@ export function createMemoryEventQueueStore(): EventQueueStore {
     (row.notBeforeAt == null || row.notBeforeAt <= now) &&
     (row.retryAt === null || row.retryAt <= now) && (row.claimedUntil === null || row.claimedUntil <= now);
   return {
+    supportsSituationOutbox: false,
+    async reconcileSituationOutbox() { return { changed: false, pending: false }; },
     async enqueue(input, now) {
       const event = normalizeEvent(input);
       const active = [...rows.values()].find((row) =>
@@ -170,8 +180,7 @@ export function createMemoryEventQueueStore(): EventQueueStore {
       const existing = byKey.get(event.dedupeKey);
       const existingRow = existing ? rows.get(existing) : undefined;
       const reopensCancelled = existingRow?.outcome?.startsWith('follow-up cancelled') === true;
-      const reopensSuperseded = active !== undefined &&
-        existingRow?.outcome === 'superseded by material change';
+      const reopensSuperseded = existingRow?.outcome === 'superseded by material change';
       if (existingRow?.identity === event.identity &&
           existingRow.materialHash === event.materialHash &&
           existingRow.processedAt !== null &&
@@ -271,7 +280,9 @@ export function createMemoryEventQueueStore(): EventQueueStore {
     async reserveBatch(input) {
       const existing = batchIds.get(input.batchId);
       const last = batches.at(-1) ?? null;
-      const used = batches.filter(({ at }) => at >= input.dayStart).length;
+      const sampled = input.sampleTime();
+      const { at, dayStart, quiet, satisfiedSlot } = sampled;
+      const used = batches.filter(({ at: createdAt }) => createdAt >= dayStart).length;
       if (existing) {
         return {
           allowed: true,
@@ -283,13 +294,13 @@ export function createMemoryEventQueueStore(): EventQueueStore {
         reason,
         status: { used, allowed: input.fallbackAllowed, last },
       });
-      if (input.quiet && !input.allowQuiet) return denied('quiet_hours');
+      if (quiet && !input.allowQuiet) return denied('quiet_hours');
       if (used >= input.fallbackAllowed) return denied('daily_cap');
-      if (last && input.at.getTime() - last.at.getTime() < input.minimumGapMs) return denied('spaced');
+      if (last && at.getTime() - last.at.getTime() < input.minimumGapMs) return denied('spaced');
       const reservation = {
-        at: new Date(input.at),
+        at: new Date(at),
         activationType: input.activationType,
-        satisfiedSlot: input.satisfiedSlot,
+        satisfiedSlot,
       } as const;
       batches.push(reservation);
       batchIds.set(input.batchId, reservation);

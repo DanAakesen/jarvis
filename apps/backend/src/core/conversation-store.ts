@@ -27,6 +27,19 @@ export interface ConversationMessage {
   readonly blocks?: readonly ChatBlock[];
 }
 
+export interface ProactiveConversationEvidence {
+  readonly source: string;
+  readonly ref: string | null;
+  readonly identity: string | null;
+  readonly label: string;
+  readonly observedAt: string | null;
+}
+
+export type AddProactiveMessageResult =
+  | { readonly status: 'stored'; readonly message: ConversationMessage }
+  | { readonly status: 'existing'; readonly message: ConversationMessage }
+  | { readonly status: 'daily_limit' | 'duplicate' | 'session_missing'; readonly message: null };
+
 export interface ConversationToolCall {
   readonly id: string;
   readonly tool: string;
@@ -107,6 +120,27 @@ export interface ConversationStore {
       readonly evidence?: Readonly<Record<string, unknown>>;
     };
   }): Promise<ConversationMessage | null>;
+  /** Atomically stores a proactive chat message and its durable continuation receipt. */
+  addProactiveMessage?(input: {
+    readonly signal?: AbortSignal;
+    readonly sessionId: string;
+    readonly text: string;
+    readonly model: string;
+    readonly language: ConversationLanguage;
+    readonly ownerObjectId: string;
+    readonly runId: string;
+    readonly textHash: string;
+    readonly evidence: readonly ProactiveConversationEvidence[];
+    readonly followUpIds: readonly string[];
+    readonly replyNotification?: {
+      readonly ownerObjectId: string;
+      readonly turnMessageId?: string;
+      readonly evidence?: Readonly<Record<string, unknown>>;
+    };
+    readonly at: Date;
+    readonly dayStart: Date;
+    readonly maxMessages: number;
+  }): Promise<AddProactiveMessageResult>;
   setVisualContext?(input: {
     readonly sessionId: string;
     readonly messageId: string;

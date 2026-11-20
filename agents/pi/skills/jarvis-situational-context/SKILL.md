@@ -24,6 +24,6 @@ The situational state is a compact, revisioned working model. It is not the sour
 - Every material fact links to one or more raw refs with a source and observation time. A non-empty summary also names its `summaryRefIds`; if one becomes disabled or stale, the summary is withheld rather than copied as an unqualified claim.
 - Retain prior facts only with an explicit stale label and reason. Disabled-source facts must not be used proactively and are excluded from a new automatic contribution. A failed refresh or activation only invalidates the facts tied to that source.
 - A follow-up with `dueAt` and raw refs is scheduled by the server in the existing event queue. Update or remove that one follow-up through a patch instead of recreating it in another note or timer.
-- When `message_dan` carries a suggestion that Dan may accept later, include the exact current evidence refs and any pending follow-up IDs. Chat and Voice recover that same bounded receipt for "do that".
+- When `message_dan` carries a suggestion that Dan may accept later, include only server-current evidence refs/identities and observation times, plus any pending follow-up IDs. Chat and Voice recover that same bounded receipt for "do that". A follow-up is queued durably with the state revision; the model never needs a second timer or a duplicate note.
 - Never put secrets, credentials, raw credentials, tokens or unnecessary personal detail in state.
 - A tool or commit failure is a failure. Report it as such; do not describe the old state as freshly confirmed.

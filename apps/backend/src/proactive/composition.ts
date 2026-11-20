@@ -201,7 +201,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     ...options,
     store,
     sources,
-    ...(options.situation ? { situation: options.situation } : {}),
     model,
     now,
     onFindingsStored: [
@@ -218,6 +217,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     pool: options.pool,
     store,
     sources,
+    ...(options.situation ? { situation: options.situation } : {}),
     modelCatalogue: options.modelCatalogue,
     getCredentialToken: options.getCredentialToken,
     foundryProjectEndpoint: options.foundryProjectEndpoint,

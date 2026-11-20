@@ -8,7 +8,9 @@ import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT }
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
-import { chatTurnKinds, type PiStore, type PiStoredTurn, type PiTurnRecord } from './store.js';
+import {
+  chatTurnKinds, type PiProactiveEvidence, type PiStore, type PiStoredTurn, type PiTurnRecord,
+} from './store.js';
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
 import type { PiActivationType } from './situation.js';
@@ -105,6 +107,7 @@ export interface PiGateway extends ConversationAgent {
     readonly activationType?: PiActivationType;
     readonly activationSource?: string | null;
     readonly slotKey?: string | null;
+    readonly evidence?: readonly PiProactiveEvidence[] | undefined;
   }, signal: AbortSignal): Promise<PiBrainRunResult>;
   /** Never spends when over the cap or after failures: it then returns `skipped` instead of calling the model. */
   warm(signal: AbortSignal): Promise<PiWarmResult>;
@@ -575,10 +578,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     readonly activationType?: PiActivationType;
     readonly activationSource?: string | null;
     readonly slotKey?: string | null;
+    readonly evidence?: readonly PiProactiveEvidence[] | undefined;
   }, signal: AbortSignal): Promise<PiBrainRunResult> {
     const started = performance.now();
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(options.brainTimeoutMs ?? 240_000)]);
-    const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [], looked: [] };
+    const run: PiBrainRun = {
+      runId: input.runId,
+      sent: [],
+      wrote: [],
+      looked: [],
+      evidence: input.evidence ? [...input.evidence] : [],
+    };
     let grant: PiTurnGrant | undefined;
     let usage: PiUsage | undefined;
     let firstTextMs: number | null = null;

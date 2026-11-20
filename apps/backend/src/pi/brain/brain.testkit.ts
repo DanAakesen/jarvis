@@ -36,6 +36,17 @@ export function memoryVault(options: { failWrites?: () => boolean } = {}): PiVau
 export function memoryConversations(options: { empty?: boolean } = {}) {
   const messages: ConversationMessage[] = [];
   const addMessageInputs: Parameters<ConversationStore['addMessage']>[0][] = [];
+  const proactiveReceipts = new Map<string, {
+    ownerObjectId: string;
+    runId: string;
+    sessionId: string;
+    messageId: string;
+    textHash: string;
+    text: string;
+    evidence: readonly import('../core/conversation-store.js').ProactiveConversationEvidence[];
+    followUpIds: readonly string[];
+    at: Date;
+  }>();
   const sessions: ConversationSession[] = options.empty ? [] : [{ id: '7', channel: 'chat', language: 'en', startedAt: new Date('2026-11-01T00:00:00Z'), endedAt: new Date('2026-11-02T00:00:00Z') }];
   if (!options.empty) messages.push({ id: '1', sessionId: '7', role: 'dan', text: 'hi', model: null, at: new Date('2026-11-01T00:00:01Z') });
   const store = {
@@ -57,8 +68,60 @@ export function memoryConversations(options: { empty?: boolean } = {}) {
       messages.push(message);
       return message;
     },
-  } as unknown as Pick<ConversationStore, 'getHistory' | 'getSession' | 'createSession' | 'addMessage'>;
-  return { store, messages, sessions, addMessageInputs };
+  } as unknown as Pick<ConversationStore, 'getHistory' | 'getSession' | 'createSession' | 'addMessage'> & {
+    addProactiveMessage: NonNullable<ConversationStore['addProactiveMessage']>;
+  };
+  const atomic = async (input: Parameters<NonNullable<ConversationStore['addProactiveMessage']>>[0]) => {
+    const key = `${input.ownerObjectId.toLowerCase()}:${input.runId}:${input.textHash}`;
+    const existing = proactiveReceipts.get(key);
+    if (existing) {
+      const message = messages.find((candidate) => candidate.id === existing.messageId);
+      return message ? { status: 'existing' as const, message } : { status: 'session_missing' as const, message: null };
+    }
+    const today = [...proactiveReceipts.values()].filter((receipt) =>
+      receipt.ownerObjectId.toLowerCase() === input.ownerObjectId.toLowerCase() &&
+      receipt.at >= input.dayStart);
+    if (today.some((receipt) => receipt.textHash === input.textHash)) {
+      return { status: 'duplicate' as const, message: null };
+    }
+    if (today.length >= input.maxMessages) return { status: 'daily_limit' as const, message: null };
+    const session = sessions.find((candidate) => candidate.id === input.sessionId);
+    if (!session) return { status: 'session_missing' as const, message: null };
+    if (input.replyNotification) {
+      addMessageInputs.push({
+        sessionId: input.sessionId,
+        role: 'jarvis',
+        text: input.text,
+        model: input.model,
+        language: input.language,
+        allowEndedSession: true,
+        replyNotification: input.replyNotification,
+      });
+    }
+    const message = {
+      id: String(messages.length + 1),
+      sessionId: input.sessionId,
+      role: 'jarvis' as const,
+      text: input.text,
+      model: input.model,
+      at: input.at,
+    };
+    messages.push(message);
+    proactiveReceipts.set(key, {
+      ownerObjectId: input.ownerObjectId,
+      runId: input.runId,
+      sessionId: input.sessionId,
+      messageId: message.id,
+      textHash: input.textHash,
+      text: input.text,
+      evidence: input.evidence,
+      followUpIds: input.followUpIds,
+      at: input.at,
+    });
+    return { status: 'stored' as const, message };
+  };
+  Object.assign(store, { addProactiveMessage: atomic });
+  return { store, messages, sessions, addMessageInputs, proactiveReceipts };
 }
 
 export interface ScriptedWake {
@@ -78,7 +141,10 @@ export function scriptedGateway(
   return {
     wakes,
     async runBrain(input) {
-      const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [], looked: [] };
+      const run: PiBrainRun = {
+        runId: input.runId, sent: [], wrote: [], looked: [],
+        evidence: input.evidence ? [...input.evidence] : [],
+      };
       const wake = { runId: input.runId, body: input.body, run };
       wakes.push(wake);
       const decision = await decide(wake);

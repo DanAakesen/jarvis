@@ -1181,7 +1181,7 @@ try {
   let brainHandle: Brain | undefined;
   const brainComms = piGateway && piStore && conversationStore && piArea
     ? createBrainComms({
-      conversations: conversationStore, store: piStore, ownerObjectId: config.auth.ownerObjectId,
+      conversations: conversationStore, ownerObjectId: config.auth.ownerObjectId,
       pushEnabled: notifyReply !== undefined,
       push: (message) => notifyReply?.(message), announce: () => announceBrainMessage(), now: () => new Date(),
     }) : undefined;

@@ -21,6 +21,7 @@ import { createPiTurnRegistry } from '../pi/turns.js';
 import { createProactiveEventStore } from './proactive-event-store.js';
 import { createProactiveStore } from './proactive-store.js';
 import { createPiBackgroundSlotService } from '../pi/activation-slots.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -336,6 +337,8 @@ describe('real SQL Server migration contract', () => {
       const situationDown = await readFile(new URL('../../../../db/migrations/down/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
       const integritySchema = await readFile(new URL('../../../../db/migrations/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
       const integrityDown = await readFile(new URL('../../../../db/migrations/down/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
+      const outboxSchema = await readFile(new URL('../../../../db/migrations/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
+      const outboxDown = await readFile(new URL('../../../../db/migrations/down/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
       await pool.request().batch(proactiveSchema);
       await pool.request().batch(foundationSchema);
       await pool.request().batch(preferencesSchema);
@@ -345,6 +348,7 @@ describe('real SQL Server migration contract', () => {
       await pool.request().batch(watchSchema);
       await pool.request().batch(situationSchema);
       await pool.request().batch(integritySchema);
+      await pool.request().batch(outboxSchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -464,6 +468,7 @@ describe('real SQL Server migration contract', () => {
         const activation = {
           id: randomUUID(), type: 'event' as const, source: 'timer', at,
         };
+        const policyRevision = proactiveSettingsRevision(await proactive.settings.read());
         const initialized = await Promise.all([
           situations.initialize(owner, situation, at, signal),
           situations.initialize(owner, situation, at, signal),
@@ -475,6 +480,8 @@ describe('real SQL Server migration contract', () => {
           expectedHash: initialized[0].hash,
           state: situation,
           activation,
+          policyRevision,
+          followUpActions: [],
         }, signal);
         expect(await situations.read(owner, signal)).toMatchObject({
           revision: 2, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
@@ -584,13 +591,130 @@ describe('real SQL Server migration contract', () => {
         await expect(situations.commit({
           owner, expectedRevision: 1, expectedHash: initialized[0].hash, state: situation,
           activation: { ...activation, id: randomUUID() },
+          policyRevision,
+          followUpActions: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        await proactive.settings.patch({ guidance: 'changed after the situation was read' });
+        await expect(situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: situation,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision,
+          followUpActions: [],
+        }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        const currentPolicy = proactiveSettingsRevision(await proactive.settings.read());
+        const dueAt = new Date(at.getTime() + 60_000);
+        const followUpState = parsePiSituationState({
+          ...situation,
+          sources: situation.sources.map((entry) => entry.id === 'calendar' ? {
+            ...entry,
+            state: 'fresh',
+            observedAt: at.toISOString(),
+            reason: null,
+            refIds: ['calendar-event:flight'],
+          } : entry),
+          refs: [{
+            id: 'calendar-event:flight',
+            source: 'calendar',
+            identity: 'calendar-event:flight',
+            label: 'Flight',
+            observedAt: at.toISOString(),
+            expiresAt: null,
+          }],
+          followUps: [{
+            id: 'follow:flight',
+            text: 'Check in.',
+            dueAt: dueAt.toISOString(),
+            refIds: ['calendar-event:flight'],
+          }],
+        });
+        const queued = await situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { text: 'Check in.', dueAt: dueAt.toISOString() },
+              dedupeKey: 'pi-followup:follow:flight:v1',
+              summary: 'Check in.',
+              detail: { followUpId: 'follow:flight', evidenceSources: ['calendar'] },
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+        }, signal);
+        const reconciled = await Promise.all([
+          queue.reconcileSituationOutbox(at, signal),
+          queue.reconcileSituationOutbox(at, signal),
+        ]);
+        expect(reconciled.filter(({ changed }) => changed)).toHaveLength(1);
+        expect(reconciled.every(({ pending }) => !pending)).toBe(true);
+        expect(await queue.nextDueAt()).toEqual(dueAt);
+        const cancelled = await situations.commit({
+          owner,
+          expectedRevision: queued.revision,
+          expectedHash: queued.hash,
+          state: situation,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'cancel',
+            followUpId: 'follow:flight',
+            identity: 'pi-followup:follow:flight',
+          }],
+        }, signal);
+        await expect(queue.reconcileSituationOutbox(
+          new Date(at.getTime() + 1),
+          signal,
+        )).resolves.toMatchObject({ changed: true, pending: false });
+        expect(await queue.nextDueAt()).toBeNull();
+        expect(cancelled.revision).toBe(4);
+        const reactivated = await situations.commit({
+          owner,
+          expectedRevision: cancelled.revision,
+          expectedHash: cancelled.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { text: 'Check in.', dueAt: dueAt.toISOString() },
+              dedupeKey: 'pi-followup:follow:flight:v1',
+              summary: 'Check in.',
+              detail: { followUpId: 'follow:flight', evidenceSources: ['calendar'] },
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+        }, signal);
+        await expect(queue.reconcileSituationOutbox(
+          new Date(at.getTime() + 2),
+          signal,
+        )).resolves.toMatchObject({ changed: true, pending: false });
+        expect(await queue.nextDueAt()).toEqual(dueAt);
+        expect(reactivated.revision).toBe(5);
       } finally {
         await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
         await pool.request().batch(
           'DELETE FROM dbo.proactive_events; DELETE FROM dbo.proactive_event_batches; ' +
           'DELETE FROM dbo.pi_message; DELETE FROM dbo.proactive_settings;',
         );
+        await pool.request().batch(outboxDown);
         await pool.request().batch(integrityDown);
         await pool.request().batch(situationDown);
         await pool.request().batch(watchDown);

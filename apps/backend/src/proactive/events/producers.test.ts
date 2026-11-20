@@ -258,4 +258,26 @@ describe('event identity and scheduling', () => {
       { id: first.id, summary: 'Original time' },
     ]);
   });
+
+  it('queues a material reversion after the intermediate version was already processed', async () => {
+    const queue = createMemoryEventQueueStore();
+    const original = {
+      source: 'calendar', kind: 'event.new_or_changed', identity: 'calendar-event:processed-revert',
+      material: { startsAt: 'A' }, dedupeKey: 'calendar:processed-revert:a',
+      summary: 'Original time', occurredAt: NOW, notBeforeAt: NOW,
+    } as const;
+    const changed = {
+      ...original, material: { startsAt: 'B' }, dedupeKey: 'calendar:processed-revert:b',
+      summary: 'New time',
+    };
+    const first = await queue.enqueue(original, NOW);
+    const updated = await queue.enqueue(changed, new Date(NOW.getTime() + 1));
+    const claimed = await queue.claim(NOW, 10, 60_000);
+    expect(claimed).toMatchObject([{ id: updated.id }]);
+    await queue.settle([{ id: updated.id, outcome: 'delivered' }], new Date(NOW.getTime() + 2));
+    expect(await queue.enqueue(original, new Date(NOW.getTime() + 3)))
+      .toEqual({ id: first.id, inserted: true });
+    expect(await queue.claim(new Date(NOW.getTime() + 3), 10, 60_000))
+      .toMatchObject([{ id: first.id, summary: 'Original time' }]);
+  });
 });

@@ -154,7 +154,31 @@ export interface PiSituationCommit {
   readonly expectedHash: string | null;
   readonly state: PiSituationState;
   readonly activation: PiSituationActivation | null;
+  readonly policyRevision: string;
+  readonly followUpActions: readonly PiSituationFollowUpAction[];
 }
+
+export type PiSituationFollowUpAction =
+  | {
+    readonly operation: 'cancel';
+    readonly identity: string;
+    readonly followUpId: string;
+  }
+  | {
+    readonly operation: 'upsert';
+    readonly followUpId: string;
+    readonly event: {
+      readonly source: string;
+      readonly kind: string;
+      readonly identity: string;
+      readonly material: unknown;
+      readonly dedupeKey: string;
+      readonly summary: string;
+      readonly detail: Record<string, unknown>;
+      readonly occurredAt: string;
+      readonly notBeforeAt: string;
+    };
+  };
 
 export interface PiSituationStore {
   read(owner: string, signal: AbortSignal): Promise<PiSituationRecord | null>;
@@ -221,8 +245,8 @@ export interface PiSituationService {
     readonly changed: boolean;
     readonly baseline: boolean;
   }>;
-  attachEvents(queue: EventQueueStore): void;
-  synchronizeFollowUps(signal: AbortSignal): Promise<void>;
+  attachEvents(queue: EventQueueStore, wake?: (() => void) | undefined): void;
+  synchronizeFollowUps(signal: AbortSignal): Promise<{ changed: boolean; pending: boolean }>;
   lookup(input: { readonly source: SourceId; readonly ref: string }, signal: AbortSignal): Promise<Record<string, unknown>>;
 }
 
@@ -370,6 +394,58 @@ function boundedResult(value: Record<string, unknown>): Record<string, unknown> 
   };
 }
 
+export function currentSituationFollowUpActions(
+  state: PiSituationState,
+  settings: ProactiveSettings,
+  at: Date,
+): PiSituationFollowUpAction[] {
+  const refs = new Map(state.refs.map((ref) => [ref.id, ref]));
+  const sources = new Map(state.sources.map((source) => [source.id, source]));
+  return state.followUps.flatMap((followUp) => {
+    if (followUp.dueAt === null || followUp.refIds.length === 0 ||
+        !followUp.refIds.every((id) => {
+          const ref = refs.get(id);
+          return ref !== undefined && settings.sources[ref.source] &&
+            sources.get(ref.source)?.state === 'fresh' &&
+            (ref.expiresAt === null || Date.parse(ref.expiresAt) > at.getTime());
+        })) {
+      return [];
+    }
+    const dueAt = new Date(followUp.dueAt);
+    if (!Number.isFinite(dueAt.getTime())) return [];
+    const identity = `pi-followup:${followUp.id}`;
+    const material = {
+      text: followUp.text,
+      dueAt: followUp.dueAt,
+      refIds: [...followUp.refIds],
+    };
+    const materialHash = createHash('sha256').update(JSON.stringify(material)).digest('hex');
+    return [{
+      operation: 'upsert' as const,
+      followUpId: followUp.id,
+      event: {
+        source: 'followup',
+        kind: 'commitment.due',
+        identity,
+        material,
+        dedupeKey: `${identity}:${materialHash}`,
+        summary: followUp.text,
+        detail: {
+          followUpId: followUp.id,
+          dueAt: followUp.dueAt,
+          refIds: [...followUp.refIds],
+          evidenceSources: [...new Set(followUp.refIds.flatMap((id) => {
+            const ref = refs.get(id);
+            return ref ? [ref.source] : [];
+          }))],
+        },
+        occurredAt: dueAt.toISOString(),
+        notBeforeAt: dueAt.toISOString(),
+      },
+    }];
+  });
+}
+
 export function createPiSituationService(options: {
   readonly owner: string;
   readonly store: PiSituationStore;
@@ -379,6 +455,8 @@ export function createPiSituationService(options: {
 }): PiSituationService {
   const now = options.now ?? (() => new Date());
   let events: EventQueueStore | undefined;
+  let wakeEvents: (() => void) | undefined;
+  let memoryFollowUpSnapshot: PiSituationState | null = null;
 
   async function currentPolicy(signal: AbortSignal): Promise<{
     readonly settings: ProactiveSettings;
@@ -597,22 +675,33 @@ export function createPiSituationService(options: {
     return `pi-followup:${followUpId}`;
   }
 
-  function eligibleFollowUps(
-    state: PiSituationState,
+  function followUpActions(
+    previous: PiSituationState | null,
+    next: PiSituationState,
     policy: { readonly settings: ProactiveSettings },
     at: Date,
-  ): PiSituationState['followUps'] {
-    const refs = new Map(state.refs.map((ref) => [ref.id, ref]));
-    const states = new Map(state.sources.map((source) => [source.id, source]));
-    return state.followUps.filter((followUp) => followUp.dueAt !== null &&
-      followUp.refIds.length > 0 && followUp.refIds.every((id) => {
-        const ref = refs.get(id);
-        return ref !== undefined && policy.settings.sources[ref.source] &&
-          states.get(ref.source)?.state !== 'disabled' &&
-          states.get(ref.source)?.state !== 'stale' &&
-          states.get(ref.source)?.state === 'fresh' &&
-          (ref.expiresAt === null || Date.parse(ref.expiresAt) > at.getTime());
-      }));
+  ): PiSituationFollowUpAction[] {
+    const desired = currentSituationFollowUpActions(next, policy.settings, at);
+    const eligible = new Map(desired.map((entry) =>
+      [entry.followUpId, entry] as const));
+    const ids = new Set([
+      ...(previous?.followUps.map(({ id: value }) => value) ?? []),
+      ...next.followUps.map(({ id: value }) => value),
+    ]);
+    const actions: PiSituationFollowUpAction[] = [];
+    for (const followUpId of ids) {
+      const desiredAction = eligible.get(followUpId);
+      if (!desiredAction) {
+        actions.push({
+          operation: 'cancel',
+          identity: followUpIdentity(followUpId),
+          followUpId,
+        });
+        continue;
+      }
+      actions.push(desiredAction);
+    }
+    return actions;
   }
 
   async function syncFollowUps(
@@ -620,46 +709,27 @@ export function createPiSituationService(options: {
     next: PiSituationState,
     policy: { readonly settings: ProactiveSettings },
     at: Date,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const queue = events;
-    if (!queue) return;
-    const eligible = new Map(eligibleFollowUps(next, policy, at).map((entry) => [entry.id, entry]));
-    const priorIds = new Set(previous?.followUps.map(({ id: value }) => value) ?? []);
-    for (const priorId of priorIds) {
-      if (!eligible.has(priorId)) {
-        await queue.cancel(followUpIdentity(priorId), at, 'follow-up cancelled or invalidated');
+    if (!queue) return false;
+    let changed = false;
+    for (const action of followUpActions(previous, next, policy, at)) {
+      if (action.operation === 'cancel') {
+        changed = await queue.cancel(
+          action.identity,
+          at,
+          'follow-up cancelled or invalidated',
+        ) || changed;
+        continue;
       }
-    }
-    for (const followUp of eligible.values()) {
-      const dueAt = new Date(followUp.dueAt!);
-      if (!Number.isFinite(dueAt.getTime())) continue;
-      const identity = followUpIdentity(followUp.id);
-      const material = {
-        text: followUp.text,
-        dueAt: followUp.dueAt,
-        refIds: [...followUp.refIds],
-      };
-      const materialHash = createHash('sha256').update(JSON.stringify(material)).digest('hex');
-      await queue.enqueue({
-        source: 'followup',
-        kind: 'commitment.due',
-        identity,
-        material,
-        dedupeKey: `${identity}:${materialHash}`,
-        summary: followUp.text,
-        detail: {
-          followUpId: followUp.id,
-          dueAt: followUp.dueAt,
-          refIds: [...followUp.refIds],
-          evidenceSources: followUp.refIds.flatMap((id) => {
-            const ref = next.refs.find((entry) => entry.id === id);
-            return ref ? [ref.source] : [];
-          }),
-        },
-        occurredAt: dueAt,
-        notBeforeAt: dueAt,
+      const result = await queue.enqueue({
+        ...action.event,
+        occurredAt: new Date(action.event.occurredAt),
+        notBeforeAt: new Date(action.event.notBeforeAt),
       }, at);
+      changed ||= result.inserted;
     }
+    return changed;
   }
 
   function sourceRef(source: SourceId, fact: SourceResult['facts'][number]): PiSituationState['refs'][number] {
@@ -791,15 +861,18 @@ export function createPiSituationService(options: {
       });
       const prepared = applyPolicy(next, current, policy);
       if (piSituationHash(prepared.state) === current.hash) return { changed: false, baseline };
+      const actions = followUpActions(previous, prepared.state, policy, now());
       try {
-        const record = await options.store.commit({
+        await options.store.commit({
           owner: options.owner,
           expectedRevision: current.revision,
           expectedHash: current.hash,
           state: prepared.state,
           activation: null,
+          policyRevision: policy.revision,
+          followUpActions: actions,
         }, signal);
-        await syncFollowUps(previous, record.state, policy, now());
+        if (actions.length > 0) wakeEvents?.();
         return { changed: affectedRefs.size > 0 || freshnessChanged, baseline };
       } catch (error) {
         if (error instanceof PiSituationError && error.code === 'conflict' && attempt < 3) continue;
@@ -843,14 +916,24 @@ export function createPiSituationService(options: {
     async markActivation(activation, signal) {
       await options.store.recordActivation(options.owner, activation, signal);
     },
-    attachEvents(queue) {
+    attachEvents(queue, wake) {
       events = queue;
+      wakeEvents = wake;
+      memoryFollowUpSnapshot = null;
     },
     async synchronizeFollowUps(signal) {
+      if (events?.supportsSituationOutbox) {
+        const result = await events.reconcileSituationOutbox(now(), signal);
+        if (result.changed) wakeEvents?.();
+        return result;
+      }
       const policy = await currentPolicy(signal);
       const record = await options.store.read(options.owner, signal);
-      if (!record) return;
-      await syncFollowUps(record.state, record.state, policy, now());
+      if (!record) return { changed: false, pending: false };
+      const changed = await syncFollowUps(memoryFollowUpSnapshot, record.state, policy, now());
+      memoryFollowUpSnapshot = clone(record.state);
+      if (changed) wakeEvents?.();
+      return { changed, pending: false };
     },
     async observe(source, result, signal) {
       return observeResult(source, result, signal);
@@ -885,14 +968,17 @@ export function createPiSituationService(options: {
       if (beforeWrite.revision !== input.policyRevision) {
         throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before committing.');
       }
+      const actions = followUpActions(current?.state ?? null, prepared.state, policy, input.activation.at);
       const record = await options.store.commit({
         owner: options.owner,
         expectedRevision: input.expectedRevision,
         expectedHash: input.expectedHash,
         state: prepared.state,
         activation: input.activation,
+        policyRevision: policy.revision,
+        followUpActions: actions,
       }, signal);
-      await syncFollowUps(current?.state ?? null, record.state, policy, input.activation.at);
+      if (actions.length > 0) wakeEvents?.();
       return { record, excluded: prepared.excluded };
     },
     async patch(input, signal) {
@@ -922,14 +1008,17 @@ export function createPiSituationService(options: {
       if (beforeWrite.revision !== input.policyRevision) {
         throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before patching.');
       }
+      const actions = followUpActions(current.state, prepared.state, policy, input.activation.at);
       const record = await options.store.commit({
         owner: options.owner,
         expectedRevision: current.revision,
         expectedHash: current.hash,
         state: prepared.state,
         activation: input.activation,
+        policyRevision: policy.revision,
+        followUpActions: actions,
       }, signal);
-      await syncFollowUps(current.state, record.state, policy, input.activation.at);
+      if (actions.length > 0) wakeEvents?.();
       return { record, excluded: prepared.excluded, changed: true };
     },
     async markFailed(input, signal) {
@@ -954,15 +1043,18 @@ export function createPiSituationService(options: {
       }
       state.asOf = current.asOf.toISOString();
       const next = parsePiSituationState(state);
-      const record = await options.store.commit({
+      const policy = await currentPolicy(signal);
+      const actions = followUpActions(current.state, next, policy, input.activation.at);
+      await options.store.commit({
         owner: options.owner,
         expectedRevision: current.revision,
         expectedHash: current.hash,
         state: next,
         activation: input.activation,
+        policyRevision: policy.revision,
+        followUpActions: actions,
       }, signal);
-      const policy = await currentPolicy(signal);
-      await syncFollowUps(current.state, record.state, policy, input.activation.at);
+      if (actions.length > 0) wakeEvents?.();
     },
     async lookup(input, signal) {
       const { settings } = await currentPolicy(signal);

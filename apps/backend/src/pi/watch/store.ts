@@ -72,7 +72,12 @@ export function createWatches(options: {
           continue;
         }
         const file = await area.read(entry.path, signal);
-        if (file) found.set(name, parseWatch(entry.path, file.content));
+        if (file) {
+          found.set(name, parseWatch(entry.path, file.content));
+          currentRevisions.set(entry.path, file.sha);
+        } else {
+          currentRevisions.delete(entry.path);
+        }
       }
     }));
     open.clear();

@@ -7,7 +7,6 @@ import type { JarvisTool } from '../../core/tool-registry.js';
 import { createPiArea } from '../area.js';
 import type { RemoteMcpBridge } from '../remote-mcp.js';
 import { createPiRoutes } from '../routes.js';
-import { createMemoryPiStore } from '../store.js';
 import { createPiTurnRegistry } from '../turns.js';
 import { memoryConversations, memoryVault } from './brain.testkit.js';
 import { createBrainComms } from './comms.js';
@@ -36,9 +35,8 @@ function setup(...bridges: RemoteMcpBridge[]) {
   const vault = memoryVault();
   const conversations = memoryConversations();
   const pushes: unknown[] = [];
-  const store = createMemoryPiStore();
   const proactive = createMemoryProactiveStore(config.auth.ownerObjectId);
-  const comms = createBrainComms({ conversations: conversations.store, store, ownerObjectId: config.auth.ownerObjectId, push: (m) => pushes.push(m), announce: () => {}, now: () => new Date('2026-11-16T10:00:00Z') });
+  const comms = createBrainComms({ conversations: conversations.store, ownerObjectId: config.auth.ownerObjectId, push: (m) => pushes.push(m), announce: () => {}, now: () => new Date('2026-11-16T10:00:00Z') });
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: probes, registerRoutes: async () => {} },
       { id: 'pi', tools: createBrainTools({
@@ -66,7 +64,34 @@ function setup(...bridges: RemoteMcpBridge[]) {
     const text = JSON.parse(line.slice(5)).result.content[0].text as string;
     return JSON.parse(text) as { outcome: string; result: Record<string, unknown> };
   }
-  const wake = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', brain: { runId: 'run-1', sent: [], wrote: [], looked: [] }, signal: live() });
+  const wake = () => registry.open({
+    ownerObjectId: config.auth.ownerObjectId,
+    sessionId: '',
+    messageId: '',
+    brain: {
+      runId: 'run-1',
+      sent: [],
+      wrote: [],
+      looked: [],
+      evidence: [
+        {
+          source: 'factory',
+          ref: 'github:workflow_run:42',
+          identity: 'github:workflow_run:42',
+          label: 'Deploy 42',
+          observedAt: '2026-11-16T09:58:00.000Z',
+        },
+        {
+          source: 'mail',
+          ref: 'gmail-message:9',
+          identity: 'gmail-message:9',
+          label: 'Work travel mail',
+          observedAt: '2026-11-16T09:00:00.000Z',
+        },
+      ],
+    },
+    signal: live(),
+  });
   const chat = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '41', signal: live() });
   return { app, registry, tool, wake, chat, vault, pushes, conversations, proactive };
 }
@@ -150,6 +175,74 @@ describe('a brain wake over the Jarvis MCP server', () => {
       },
     });
     expect(refused).toMatchObject({ outcome: 'refused' });
+    expect(pushes).toEqual([]);
+  });
+
+  it('refuses fabricated evidence that is not present in the wake authority', async () => {
+    const { tool, wake, pushes } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The unrelated deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:999',
+          identity: 'github:workflow_run:999',
+          label: 'Invented deploy',
+          observedAt: '2026-11-16T09:58:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('does not match') },
+    });
+    expect(pushes).toEqual([]);
+  });
+
+  it.each([
+    {
+      ref: 'github:workflow_run:42',
+      identity: 'github:workflow_run:999',
+    },
+    {
+      ref: 'github:workflow_run:999',
+      identity: 'github:workflow_run:42',
+    },
+  ])('refuses evidence that combines a known identifier with a fabricated field: $ref / $identity', async ({
+    ref,
+    identity,
+  }) => {
+    const { tool, wake, pushes } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The unrelated deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref,
+          identity,
+          label: 'Deploy 42',
+          observedAt: '2026-11-16T09:58:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('does not match') },
+    });
     expect(pushes).toEqual([]);
   });
 

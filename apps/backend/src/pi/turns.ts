@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { RemoteMcpStatus } from './remote-mcp.js';
 import type { PiActivationType } from './situation.js';
+import type { PiProactiveEvidence } from './store.js';
 
 /**
  * Per-turn authority for the PI agent.
@@ -20,6 +21,8 @@ export interface PiBrainRun {
   readonly wrote: string[];
   /** Standing watches this run recorded a look at. */
   readonly looked: string[];
+  /** Server-derived wake and fresh-state evidence the background tools may cite. */
+  evidence?: PiProactiveEvidence[];
 }
 
 export interface PiTurnGrant {

@@ -150,6 +150,44 @@ describe('proactive event queue on SQL Server', () => {
     expect(await queue.enqueue(changedInput, new Date(dueAt.getTime() + 1_000)))
       .toEqual({ id: changed.id, inserted: true });
   });
+
+  it('reactivates an earlier material version after the newer version has settled', async () => {
+    await pool.request().query('DELETE dbo.proactive_events');
+    const original = {
+      ...event('reactivate-a'),
+      identity: 'calendar-event:reactivate',
+      material: { startsAt: 'A' },
+      notBeforeAt: now,
+    };
+    const changed = {
+      ...event('reactivate-b'),
+      identity: 'calendar-event:reactivate',
+      material: { startsAt: 'B' },
+      notBeforeAt: now,
+    };
+    const first = await queue.enqueue(original, now);
+    const changedRow = await queue.enqueue(changed, now);
+    const changedClaim = await queue.claim(now, 10, 60_000);
+    expect(changedClaim).toMatchObject([{ id: changedRow.id }]);
+    await queue.settle([{ id: changedRow.id, outcome: 'brain wake delivered' }], now);
+    expect(await queue.enqueue(original, new Date(now.getTime() + 1_000)))
+      .toEqual({ id: first.id, inserted: true });
+    expect(await queue.claim(now, 10, 60_000)).toMatchObject([{ id: first.id }]);
+  });
+
+  it('computes the first due instant across the whole owner queue before truncating', async () => {
+    await pool.request().query('DELETE dbo.proactive_events');
+    const future = new Date(now.getTime() + 2 * 60 * 60_000);
+    for (let index = 0; index < 205; index += 1) {
+      await queue.enqueue({
+        ...event(`order-${index}`),
+        notBeforeAt: future,
+      }, new Date(now.getTime() + index));
+    }
+    const earlier = new Date(now.getTime() + 1_000);
+    await queue.enqueue({ ...event('order-due') }, earlier);
+    expect(await queue.nextDueAt()).toEqual(earlier);
+  });
 });
 
 describe('event pipeline on SQL Server', () => {

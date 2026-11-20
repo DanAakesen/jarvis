@@ -78,19 +78,25 @@ export function createPiBackgroundSlotService(options: {
   return {
     status,
     async reserve(input) {
-      const at = options.now();
       const current = await status();
       const settings = await options.proactive.settings.read();
       if (settings.paused) return { allowed: false, reason: 'paused', status: current };
       const reservation = await options.queue.reserveBatch({
         batchId: input.runId,
-        at,
-        dayStart: copenhagenDayStart(at),
+        sampleTime: () => {
+          const sampledAt = options.now();
+          return {
+            at: sampledAt,
+            dayStart: copenhagenDayStart(sampledAt),
+            quiet: isQuietHour(sampledAt),
+            satisfiedSlot: input.activationType === 'event'
+              ? nextSlotAfter(sampledAt).key
+              : input.satisfiedSlot ?? null,
+          };
+        },
         eventCount: input.eventCount,
         activationType: input.activationType,
-        satisfiedSlot: input.satisfiedSlot ?? null,
         allowQuiet: input.allowQuiet === true,
-        quiet: current.quiet,
         minimumGapMs: MIN_WAKE_GAP_MS,
         fallbackAllowed: Math.min(DEFAULT_BACKGROUND_TURNS_PER_DAY, settings.backgroundTurnsPerDay),
       });

@@ -430,7 +430,8 @@ describe('PI situational state', () => {
   it('schedules, updates and cancels evidence-linked dueAt follow-ups through the event queue', async () => {
     const { service } = setup();
     const queue = createMemoryEventQueueStore();
-    service.attachEvents(queue);
+    let wakes = 0;
+    service.attachEvents(queue, () => { wakes += 1; });
     const first = await service.read(signal());
     const dueAt = new Date(at.getTime() + 30 * 60_000);
     const firstState = state({
@@ -441,6 +442,9 @@ describe('PI situational state', () => {
       state: firstState,
       activation: { id: '00000000-0000-4000-8000-000000000020', type: 'chat', source: 'chat', at },
     }, signal());
+    expect(wakes).toBe(1);
+    expect(await queue.nextDueAt()).toBeNull();
+    await service.synchronizeFollowUps(signal());
     expect(await queue.nextDueAt()).toEqual(dueAt);
     expect(await queue.claim(at, 10, 60_000)).toEqual([]);
     const movedAt = new Date(dueAt.getTime() + 15 * 60_000);
@@ -458,6 +462,7 @@ describe('PI situational state', () => {
       },
       activation: { id: '00000000-0000-4000-8000-000000000022', type: 'chat', source: 'chat', at },
     }, signal());
+    await service.synchronizeFollowUps(signal());
     expect(moved.changed).toBe(true);
     expect(await queue.nextDueAt()).toEqual(movedAt);
     const cancelled = await service.patch({
@@ -467,6 +472,7 @@ describe('PI situational state', () => {
       patch: { removeFollowUpIds: ['follow:trip'] },
       activation: { id: '00000000-0000-4000-8000-000000000021', type: 'chat', source: 'chat', at },
     }, signal());
+    await service.synchronizeFollowUps(signal());
     expect(cancelled.changed).toBe(true);
     expect(await queue.nextDueAt()).toBeNull();
   });

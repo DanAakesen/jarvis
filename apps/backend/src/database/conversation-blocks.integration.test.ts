@@ -31,6 +31,60 @@ afterAll(async () => {
 });
 
 describe('conversation blocks in the message store', () => {
+  it('stores a proactive message and continuation receipt atomically and idempotently', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'chat', language: 'en' });
+    const owner = randomUUID();
+    const runId = randomUUID();
+    const input = {
+      sessionId: session.id,
+      text: 'I can move the reminder. Shall I?',
+      model: 'pi',
+      language: 'en' as const,
+      ownerObjectId: owner,
+      runId,
+      textHash: 'a'.repeat(64),
+      evidence: [{
+        source: 'calendar',
+        ref: 'calendar:42',
+        identity: 'calendar-event:42',
+        label: 'Flight',
+        observedAt: '2026-11-16T09:00:00.000Z',
+      }],
+      followUpIds: ['follow:flight'],
+      at: new Date('2026-11-16T10:00:00.000Z'),
+      dayStart: new Date('2026-11-15T23:00:00.000Z'),
+      maxMessages: 8,
+    };
+    const [first, retry] = await Promise.all([
+      store.addProactiveMessage!(input),
+      store.addProactiveMessage!(input),
+    ]);
+    expect([first.status, retry.status].sort()).toEqual(['existing', 'stored']);
+    expect(retry.message?.id).toBe(first.message?.id);
+    const duplicate = await store.addProactiveMessage!({
+      ...input,
+      runId: randomUUID(),
+    });
+    expect(duplicate).toMatchObject({ status: 'duplicate', message: null });
+    await expect(store.addProactiveMessage!({
+      ...input,
+      runId: randomUUID(),
+      textHash: 'b'.repeat(64),
+      evidence: [{
+        ...input.evidence[0]!,
+        label: 'x'.repeat(9_000),
+      }],
+    })).rejects.toThrow();
+    const rows = await pool.request()
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query<{ messages: number; receipts: number }>(`SELECT
+        (SELECT COUNT(*) FROM dbo.messages WHERE jarvis_session_id = ${Number(session.id)}
+          AND role = N'jarvis' AND text = N'I can move the reminder. Shall I?') AS messages,
+        (SELECT COUNT(*) FROM dbo.pi_message WHERE owner_object_id = @owner) AS receipts;`);
+    expect(rows.recordset[0]).toEqual({ messages: 1, receipts: 1 });
+  });
+
   it('keeps each block with its own reply through history reads, in order, unchanged', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'chat', language: 'en' });

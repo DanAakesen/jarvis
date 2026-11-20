@@ -13,7 +13,7 @@ import { sourceIds, type SourceId } from '../../proactive/types.js';
 import { PI_MODEL } from '../definition.js';
 import type { PiBrainRun } from '../turns.js';
 import type { PiGateway } from '../gateway.js';
-import type { PiStore } from '../store.js';
+import type { PiProactiveEvidence, PiStore } from '../store.js';
 import { BrainCommsRefusal, type BrainComms } from './comms.js';
 import type { DecisionLog, DecisionRecord } from './decision-log.js';
 import { MAX_WAKE_EVENTS, formatWake } from './wake.js';
@@ -101,6 +101,14 @@ export function createBrain(options: BrainOptions) {
       : [];
     return [...new Set([...(direct ? [direct] : []), ...evidence])];
   };
+  const activationEvidence = (events: readonly QueuedEvent[]): PiProactiveEvidence[] =>
+    events.flatMap((event) => eventSources(event).map((source) => ({
+      source,
+      ref: event.id,
+      identity: event.identity ?? event.dedupeKey,
+      label: event.summary,
+      observedAt: event.occurredAt.toISOString(),
+    })));
   const policyNote = (settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>): string => {
     const enabledCategories = Object.entries(settings.categories)
       .filter(([, enabled]) => enabled).map(([category]) => category);
@@ -269,6 +277,7 @@ export function createBrain(options: BrainOptions) {
       activationType,
       activationSource,
       slotKey,
+      evidence: activationEvidence(survivors),
       body: formatWake({
         runId, activationType, activationSource,
         now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections,

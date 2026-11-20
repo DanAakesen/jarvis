@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { ConversationStore } from '../../core/conversation-store.js';
-import type { PiProactiveEvidence, PiStore } from '../store.js';
+import type { PiProactiveEvidence } from '../store.js';
 import { copenhagenDayStart } from '../../proactive/time.js';
 import { shouldRedact } from '../../vault/index.js';
 import type { PiBrainRun } from '../turns.js';
@@ -18,8 +18,9 @@ export class BrainCommsRefusal extends Error {
 }
 
 export interface BrainCommsOptions {
-  readonly conversations: Pick<ConversationStore, 'getHistory' | 'getSession' | 'createSession' | 'addMessage'>;
-  readonly store: Pick<PiStore, 'recordMessage' | 'messagesSince'>;
+  readonly conversations: Pick<ConversationStore, 'getHistory' | 'getSession' | 'createSession' | 'addMessage'> & {
+    readonly addProactiveMessage?: ConversationStore['addProactiveMessage'];
+  };
   readonly ownerObjectId: string;
   readonly pushEnabled?: boolean;
   /** The one push path of a finished chat message (iOS push, mirrored to the Watch by the phone). Called exactly once per message. */
@@ -45,22 +46,17 @@ export function createBrainComms(options: BrainCommsOptions) {
     readonly followUpIds?: readonly string[];
     readonly notificationEvidence?: Readonly<Record<string, unknown>>;
   }, run: PiBrainRun, signal: AbortSignal): Promise<{ messageId: string; sessionId: string }> {
+    const at = options.now();
     const text = input.text.trim();
     if (!text) throw new BrainCommsRefusal('The message is empty. Nothing was sent.');
     if (Array.from(text).length > MAX_BRAIN_MESSAGE_CHARACTERS) {
       throw new BrainCommsRefusal(`The message is longer than ${MAX_BRAIN_MESSAGE_CHARACTERS} characters. Say less. Nothing was sent.`);
     }
     if (shouldRedact(text)) throw new BrainCommsRefusal('Secrets and credentials are never sent. Nothing was sent.');
-    const day = await options.store.messagesSince(
-      copenhagenDayStart(options.now()),
-      signal,
-      options.ownerObjectId,
-    );
-    if (day.count >= MAX_BRAIN_MESSAGES_PER_DAY) {
-      throw new BrainCommsRefusal(`I have already messaged Dan ${MAX_BRAIN_MESSAGES_PER_DAY} times today, which is the limit. Nothing was sent; put it in a note for tomorrow.`);
-    }
     const textHash = hash(text);
-    if (day.textHashes.includes(textHash)) throw new BrainCommsRefusal('Dan was already told exactly this today. Nothing was sent.', 'duplicate');
+    if (!options.conversations.addProactiveMessage) {
+      throw new BrainCommsRefusal('The chat continuation ledger is unavailable, so nothing was sent.');
+    }
 
     // The owner has one chat feed: the message goes into the session of the latest message, or into a new one when there is none.
     const latest = (await options.conversations.getHistory({ limit: 1, excludeRuntimeTests: true })).messages[0];
@@ -68,39 +64,54 @@ export function createBrainComms(options: BrainCommsOptions) {
       ? await options.conversations.getSession(latest.sessionId)
       : await options.conversations.createSession({ channel: 'chat', language: 'en', ownerObjectId: options.ownerObjectId });
     if (!session) throw new BrainCommsRefusal('The chat session could not be found. Nothing was sent.');
+    let message: Awaited<ReturnType<ConversationStore['addMessage']>>;
+    let newlyStored: boolean;
     const notificationEvidence: Readonly<Record<string, unknown>> | undefined =
       input.notificationEvidence ??
       (input.evidence !== undefined && !Array.isArray(input.evidence)
         ? input.evidence as Readonly<Record<string, unknown>>
         : undefined);
-    const message = await options.conversations.addMessage({
-      signal, sessionId: session.id, role: 'jarvis', text, model: 'pi', language: session.language, allowEndedSession: true,
-      ...(options.pushEnabled === false ? {} : { replyNotification: {
-        ownerObjectId: options.ownerObjectId,
-        ...(notificationEvidence === undefined ? {} : { evidence: notificationEvidence }),
-      } }),
-    });
-    if (!message) throw new BrainCommsRefusal('The chat could not store the message. Nothing was sent.');
-    try {
-      await options.store.recordMessage({
+    {
+      const atomic = await options.conversations.addProactiveMessage({
+        signal,
+        sessionId: session.id,
+        text,
+        model: 'pi',
+        language: session.language,
         ownerObjectId: options.ownerObjectId,
         runId: run.runId,
-        sessionId: session.id,
-        messageId: message.id,
         textHash,
-        text,
         evidence: Array.isArray(input.evidence) ? input.evidence : [],
         followUpIds: input.followUpIds ?? [],
-      }, options.now(), AbortSignal.timeout(10_000));
-    } catch {
-      throw new BrainCommsRefusal(
-        'The message was saved in Chat, but its continuation evidence could not be saved, so no push was sent. Check Chat before trying again.',
-      );
+        ...(options.pushEnabled === false ? {} : {
+          replyNotification: {
+            ownerObjectId: options.ownerObjectId,
+            ...(notificationEvidence === undefined ? {} : { evidence: notificationEvidence }),
+          },
+        }),
+        at,
+        dayStart: copenhagenDayStart(at),
+        maxMessages: MAX_BRAIN_MESSAGES_PER_DAY,
+      });
+      if (atomic.status === 'daily_limit') {
+        throw new BrainCommsRefusal(`I have already messaged Dan ${MAX_BRAIN_MESSAGES_PER_DAY} times today, which is the limit. Nothing was sent; put it in a note for tomorrow.`);
+      }
+      if (atomic.status === 'duplicate') {
+        throw new BrainCommsRefusal('Dan was already told exactly this today. Nothing was sent.', 'duplicate');
+      }
+      if (atomic.status === 'session_missing') {
+        throw new BrainCommsRefusal('The chat session could not be found. Nothing was sent.');
+      }
+      message = atomic.message;
+      newlyStored = atomic.status === 'stored';
     }
-    run.sent.push({ title: null, text, messageId: message.id });
-    options.announce();
-    if (options.pushEnabled !== false) {
-      options.push({ sessionId: session.id, messageId: message.id, text });
+    if (!message) throw new BrainCommsRefusal('The chat could not store the message. Nothing was sent.');
+    if (newlyStored) {
+      run.sent.push({ title: null, text, messageId: message.id });
+      options.announce();
+      if (options.pushEnabled !== false) {
+        options.push({ sessionId: session.id, messageId: message.id, text });
+      }
     }
     return { messageId: message.id, sessionId: session.id };
   }

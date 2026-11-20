@@ -199,4 +199,28 @@ describe('standing watches in the vault', () => {
     expect(t.vault.files.get(path)).toContain('Dan revision 3');
     expect(t.vault.files.get(path)).not.toContain('changed: new cadence');
   });
+
+  it('pairs cached watch content with the SHA read for that exact content snapshot', async () => {
+    let reads = 0;
+    const area = {
+      async list() {
+        return [{ path: 'PI/Watches/Changed.md', sha: 'a'.repeat(40) }];
+      },
+      async read() {
+        reads += 1;
+        return {
+          content: '# Changed\n\nDan wrote this revision.\n\n## Trail\n',
+          sha: 'b'.repeat(40),
+        };
+      },
+    } as never;
+    const watches = createWatches({
+      area,
+      store: createMemoryPiStore(() => new Date('2026-11-16T10:00:00Z')),
+      now: () => new Date('2026-11-16T10:00:00Z'),
+    });
+    await watches.list(signal);
+    await watches.list(signal);
+    expect(reads).toBe(2);
+  });
 });
