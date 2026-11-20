@@ -122,7 +122,7 @@
 
 ## Azure MCP cold start — 17 November 2026 (#1910, P15-208)
 
-- Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text changed: deploy the PI agent, then run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.
+- Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text is edited in the Foundry portal (it is not deployed from the repo); after a Foundry edit run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.
 - Not verifiable here: the Azure MCP container's own logs (no Azure access from the build environment).
 
 ## iPhone Voice carousel — 18 November 2026 (#1958, P15-210)
@@ -132,7 +132,7 @@
 ## Voice visuals and chat blocks — 17 November 2026 (#1939, P15-205)
 
 - Checks: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run` (`src/pi/show-in-chat-route.test.ts` runs `show_in_chat` through the real PI door); `cd packages/contracts && node --test`; `cd apps/ios/Packages/JarvisCore && swift test` (a Swift 6.2 Linux toolchain works). The SwiftUI compiles only in the macOS `watch` job.
-- Instruction text changed (`agents/pi/instructions.md`, `voiceChannelNote`, `workspace_command` description, `capability-instructions.ts`): deploy the PI agent for it to take effect, and run `measure_pi` to see the voice smoke still passes.
+- Instruction text changed (`voiceChannelNote`, `workspace_command` description, `capability-instructions.ts`): deploy for it to take effect. The `jarvis-pi` instructions are different: edit them in the Foundry portal (`agents/pi/instructions.md` only seeds version 1 when the agent does not exist, and editing it later changes nothing). Keep the `KEEP THIS BLOCK: backend tool contract` section there, or tool use breaks. Run `measure_pi` to see the voice smoke still passes.
 - The backend log lines for a failing tool are `tool.invalid_arguments` (the refused field) and `pi.stream_failed` (the provider code).
 
 ## Voice bottom panel — 17 November 2026 (#1925, P15-191)
@@ -216,7 +216,7 @@ Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .githu
 
 ## PI chat engine: deploy and test (#1885, P15-174)
 
-- The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when `agents/pi/**`, the secret or the backend URL changed), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.
+- The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when a code-owned part changed: skills, the MCP URL or tool, `definition.json` settings; the instructions text is Foundry's and never triggers one), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.
 - `pi-agent` also creates the Foundry project connection `jarvis-pi-mcp` (custom keys, holds the MCP secret) through ARM before the agent version; it needs the deploy identity to write project connections (`Microsoft.CognitiveServices/accounts/projects/connections/write`). The MCP tool refers to it by `project_connection_id`.
 - If `pi-agent` fails, its error line carries Foundry's sanitized `code`, `param` and `message` (never the request body or any credential). The agent is created with `POST /agents/jarvis-pi/versions` (versions first; no separate `POST /agents`).
 - Live proof: run Deploy by hand (`workflow_dispatch`) with `measure_pi` on a main commit. It calls `POST /pi/smoke` and writes first-text bars, tokens and DKK to the job summary. It spends about 0.5 DKK and never runs automatically.
