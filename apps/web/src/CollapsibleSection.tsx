@@ -17,7 +17,7 @@ function readOpen(key: string, initiallyOpen: boolean): boolean {
   }
 }
 
-export function CollapsibleSection({ storageKey, title, headingId, summary, id, className, headerAside, toggleRef, initiallyOpen, persist = true, children }: {
+export function CollapsibleSection({ storageKey, title, headingId, summary, id, className, headerAside, toggleRef, initiallyOpen, persist = true, unmountWhenClosed = false, children }: {
   /** Stable name for remembering the open state, e.g. `settings.voice`. */
   storageKey: string;
   title: string;
@@ -34,6 +34,8 @@ export function CollapsibleSection({ storageKey, title, headingId, summary, id, 
   initiallyOpen?: boolean;
   /** Sensitive sections can keep fold state in memory without writing a UI preference to storage. */
   persist?: boolean;
+  /** Mount live content only while the section is open. */
+  unmountWhenClosed?: boolean;
   children: ReactNode;
 }) {
   const generated = useId();
@@ -60,7 +62,7 @@ export function CollapsibleSection({ storageKey, title, headingId, summary, id, 
         </button>
       </h2>
       <div id={bodyId} className="collapsible-body" inert={!open}>
-        <div className="collapsible-inner">{children}</div>
+        <div className="collapsible-inner">{(open || !unmountWhenClosed) && children}</div>
       </div>
     </section>
   );

@@ -66,6 +66,9 @@ public final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
         for (name, value) in request.headers {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
+        if urlRequest.value(forHTTPHeaderField: "Cache-Control") == "no-cache, no-store" {
+            urlRequest.cachePolicy = .reloadIgnoringLocalCacheData
+        }
         return urlRequest
     }
 

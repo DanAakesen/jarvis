@@ -822,7 +822,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           {settings.memory
             ? <RetrievalSection memory={settings.memory} problems={problems} disabled={saving}
               onChange={(key, value) => updateArea('memory', key, value)}>{memory}</RetrievalSection>
-            : memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
+            : memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory" unmountWhenClosed>{memory}</CollapsibleSection>}
           {settings.timeouts && <TimeoutsSection timeouts={settings.timeouts} problems={problems} disabled={saving}
             onChange={(key, value) => updateArea('timeouts', key, value)} />}
 
@@ -917,7 +917,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       {healthUpload && <CollapsibleSection storageKey="settings.health-upload" id="health-upload" headingId="health-upload-heading"
         title="Health upload" initiallyOpen={healthUploadAnchor} persist={!healthUploadAnchor}>{healthUpload}</CollapsibleSection>}
       {proactive}
-      {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
+      {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory" unmountWhenClosed>{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
       {account && (
         <section className="settings-section" aria-labelledby="account-settings-heading">

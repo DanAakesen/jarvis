@@ -470,6 +470,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         ownerObjectId: options.owner,
         sessionId: input.sessionId ?? '',
         messageId: input.messageId,
+        ownerText: input.text,
         signal: deadline,
       });
       grant = activation.grant;

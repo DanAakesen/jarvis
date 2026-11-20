@@ -9,6 +9,7 @@ import { createInboxIndexStore } from './inbox-index-store.js';
 import { createInboxOpsStore } from './inbox-ops-store.js';
 import { createPiStore } from './pi-store.js';
 import { createNotesFolderOrderStore } from './notes-folder-order-store.js';
+import { createMemoryStore, MemoryConflictError } from './memory-store.js';
 import { createPiSituationStore } from './pi-situation-store.js';
 import { parsePiSituationState } from '../pi/situation.js';
 import { sourceIds } from '../proactive/types.js';
@@ -43,6 +44,40 @@ afterAll(async () => {
 });
 
 describe('real SQL Server migration contract', () => {
+  it('commits Personal Memory once, rejects conflicts, and preserves owner-message history', async () => {
+    for (const name of ['0001_core_tables.sql', '0016_long_term_memory.sql']) {
+      await pool.request().batch(await readFile(new URL(`../../../../db/migrations/${name}`, import.meta.url), 'utf8'));
+    }
+    await pool.request().batch(`ALTER TABLE dbo.memories ADD embedding_model nvarchar(128) NULL;
+      INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en'), (N'voice', N'en');
+      INSERT dbo.messages (jarvis_session_id, role, text) VALUES
+        (1, N'dan', N'I prefer afternoon appointments.'),
+        (2, N'dan', N'I changed that; I prefer mornings.'),
+        (2, N'dan', N'Forget it.');`);
+    const store = createMemoryStore(pool);
+    await store.initialize();
+    const signal = AbortSignal.timeout(10_000);
+    const base = {
+      category: 'preference', key: 'appointment-time', content: 'Afternoon appointments',
+      sourceMessageId: '1', embedding: null, embeddingModel: null,
+    } as const;
+    const { memory } = await store.save({ ...base, createOnly: true }, signal);
+    await expect(store.save({ ...base, sourceMessageId: '2', createOnly: true }, signal))
+      .resolves.toMatchObject({ changed: false, memory: { id: memory.id, sourceMessageId: '1' } });
+    const correction = { ...base, sourceMessageId: '2', content: 'Morning appointments' };
+    await expect(store.save({ ...correction, createOnly: true }, signal)).rejects.toBeInstanceOf(MemoryConflictError);
+    await expect(store.correct(memory.id, { ...correction, expectedRevision: 1 }, signal))
+      .resolves.toMatchObject({ changed: true, memory: { id: memory.id, revision: 2, sourceMessageId: '2' } });
+    await expect(store.correct(memory.id, { ...base, expectedRevision: 1 }, signal)).rejects.toBeInstanceOf(MemoryConflictError);
+    expect(await store.history(memory.id, 2, signal)).toMatchObject([
+      { revision: 2, content: 'Morning appointments', sourceMessageId: '2' },
+      { revision: 1, content: 'Afternoon appointments', sourceMessageId: '1' },
+    ]);
+    expect(await store.forget(memory.id, '3', signal)).toMatchObject({ key: base.key });
+    expect(await store.history(memory.id, 2, signal)).toEqual([]);
+    expect(await store.getSourceMessage('1', signal)).toMatchObject({ text: 'I prefer afternoon appointments.' });
+  });
+
   it('serializes concurrent backend replicas and applies the same migration exactly once', async () => {
     const other = new sql.ConnectionPool({ ...configuration, database });
     try {

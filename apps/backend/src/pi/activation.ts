@@ -10,6 +10,7 @@ export interface PiActivationStart {
   readonly ownerObjectId: string;
   readonly sessionId: string;
   readonly messageId: string;
+  readonly ownerText?: string;
   readonly brain?: PiBrainRun;
   readonly signal: AbortSignal;
 }
@@ -42,11 +43,15 @@ const metadata = (grant: PiTurnGrant): PiSituationCommit['activation'] => {
 export function createPiActivationService(options: {
   readonly registry: PiTurnRegistry;
   readonly situation: PiSituationService;
+  readonly recall?: (query: string, signal: AbortSignal) => Promise<string>;
 }): PiActivationService {
   return {
     situation: options.situation,
     async begin(input) {
-      const { text, view } = await options.situation.context(input.signal);
+      const [{ text, view }, memory] = await Promise.all([
+        options.situation.context(input.signal),
+        !input.brain && input.ownerText && options.recall ? options.recall(input.ownerText, input.signal) : '',
+      ]);
       const id = activationId(input.id);
       const at = new Date();
       const grant = options.registry.open({
@@ -74,7 +79,7 @@ export function createPiActivationService(options: {
           source: input.source,
           at,
         }, input.signal);
-        return { grant, situation: view, context: text };
+        return { grant, situation: view, context: [text, memory].filter(Boolean).join('\n\n') };
       } catch (error) {
         options.registry.close(grant.turn);
         throw error;

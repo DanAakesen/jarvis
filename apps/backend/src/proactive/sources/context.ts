@@ -163,7 +163,8 @@ export function createContextSources(dependencies: ContextDependencies): Proacti
     source('memory', 'Memory', Boolean(dependencies.memoryStore), async (now, signal) => {
       const page = await dependencies.memoryStore!.list(25, signal);
       return page.memories.map(row => fact('memory', `memory:${row.id}`, { category: row.category, key: row.key,
-        content: row.content, revision: row.revision, updatedAt: stamp(row.updatedAt), partial: page.hasMore }, now.toISOString(), false));
+        content: row.content, revision: row.revision, sourceMessageId: row.sourceMessageId,
+        updatedAt: stamp(row.updatedAt), partial: page.hasMore }, now.toISOString(), false));
     }),
   ];
 }

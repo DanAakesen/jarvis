@@ -164,6 +164,7 @@ export interface BuildAppOptions {
 declare module 'fastify' {
   interface FastifyRequest {
     requestStartedAt: number;
+    jarvisMemorySourceMessageId?: string;
   }
   interface FastifyInstance {
     ownerObjectId: string;

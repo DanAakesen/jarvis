@@ -3775,11 +3775,13 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .settings-page > .settings-save .settings-feedback { margin: 0; }
 /* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
 .settings-subheading { margin: var(--space-5) 0 var(--space-3); color: var(--text); font-size: var(--type-body); font-weight: 650; }
-.memory-settings .memory-search { margin: 0 0 var(--space-3); }
+.memory-settings .memory-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); }
 .memory-settings .memory-search input { width: 100%; margin: 0; }
+.memory-settings .memory-result-pane { min-width: 0; }
 .memory-settings .memory-browser { grid-template-columns: minmax(0, 1fr); }
 .memory-settings .memory-browser:has(.memory-detail) { grid-template-columns: minmax(220px, 1fr) minmax(0, 1.3fr); }
 .memory-settings .memory-results { max-height: 360px; }
+.memory-settings .memory-pagination { margin-top: var(--space-3); }
 .memory-settings .memory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 @media (max-width: 900px) { .memory-settings .memory-browser:has(.memory-detail) { grid-template-columns: minmax(0, 1fr); } }
 /* Wake word status (P9-17): the last detection and what happened, in words; a red tone only when it did not start. */

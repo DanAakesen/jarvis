@@ -35,7 +35,11 @@ export interface MemorySaveInput {
   readonly sourceMessageId: string;
   readonly embedding: readonly number[] | null;
   readonly embeddingModel: string | null;
+  readonly createOnly?: boolean;
+  readonly expectedRevision?: number;
 }
+
+export class MemoryConflictError extends Error {}
 
 export interface MemorySaveResult {
   readonly memory: MemoryRecord;
@@ -298,6 +302,8 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
     const targetId = memoryId === undefined ? null : toSqlId(memoryId);
     const embeddingModel = vectorSearchAvailable || jsonEmbeddingAvailable ? input.embeddingModel : null;
     const transaction = new sql.Transaction(pool);
+    let rolledBack = false;
+    transaction.on('rollback', () => { rolledBack = true; });
     await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
     let committed = false;
     try {
@@ -307,6 +313,8 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         .input('content', sql.NVarChar(2000), input.content)
         .input('sourceMessageId', sql.BigInt, sourceMessageId)
         .input('targetId', sql.BigInt, targetId)
+        .input('createOnly', sql.Bit, input.createOnly ?? false)
+        .input('expectedRevision', sql.Int, input.expectedRevision ?? null)
         .input('embedding', sql.NVarChar(sql.MAX), input.embedding === null ? null : JSON.stringify(input.embedding))
         .input('embeddingModel', sql.NVarChar(128), input.embedding === null ? null : embeddingModel);
       const embeddingColumn = vectorSearchAvailable ? ', embedding' : jsonEmbeddingAvailable ? ', embedding_json' : '';
@@ -351,6 +359,11 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
             AND (category <> @category OR memory_key <> @memoryKey))
           THROW 51001, 'Memory identity cannot be changed.', 1;
 
+        IF @expectedRevision IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM dbo.memories WHERE id = @memoryId AND revision = @expectedRevision
+        )
+          THROW 51003, 'Memory revision conflict.', 1;
+
         IF @memoryId IS NULL
         BEGIN
           IF @targetId IS NOT NULL
@@ -368,7 +381,9 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
           SET @contentChanged = CASE WHEN
             @oldContent COLLATE Latin1_General_100_BIN2 <> @content COLLATE Latin1_General_100_BIN2
             THEN 1 ELSE 0 END;
-          IF @contentChanged = 1 OR @oldSourceMessageId <> @sourceMessageId
+          IF @createOnly = 1 AND @contentChanged = 1
+            THROW 51003, 'Memory already exists.', 1;
+          IF @contentChanged = 1 OR (@createOnly = 0 AND @oldSourceMessageId <> @sourceMessageId)
           BEGIN
             INSERT INTO dbo.memory_history
               (memory_id, revision, category, memory_key, content, source_message_id)
@@ -404,7 +419,10 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         FROM dbo.memories AS m
         ${sourceJoin}
         WHERE m.id = @memoryId;`;
-      const result = await execute(request, signal, () => request.query(statement));
+      const result = await execute(request, signal, () => request.query(statement)).catch((error: unknown) => {
+        if (error instanceof sql.RequestError && error.number === 51003) throw new MemoryConflictError();
+        throw error;
+      });
       const row = result.recordset[0] as ({
         created: boolean;
         changed: boolean;
@@ -414,7 +432,11 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
       committed = true;
       return { memory: recordFromRow(row), created: row.created, changed: row.changed };
     } finally {
-      if (!committed) await transaction.rollback();
+      if (!committed && !rolledBack) {
+        await transaction.rollback().catch((error: unknown) => {
+          if (!(error instanceof sql.TransactionError) || error.code !== 'EABORT') throw error;
+        });
+      }
     }
   }
 

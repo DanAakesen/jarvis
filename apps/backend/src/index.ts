@@ -38,6 +38,7 @@ import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
 import { createConversationModule } from './core/conversation.js';
+import { createMemoryModule, retrievePersonalMemory } from './core/personal-memory.js';
 import { FrameStore } from './vision/frame-store.js';
 import { createJevReflexClassifier } from './core/reflex.js';
 import {
@@ -106,7 +107,7 @@ import type { MemoryEmbedder } from './core/memory-embeddings.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { buildAgentSettingsPayload, readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_REPOSITORY } from './vault/github-client.js';
-import { createVaultModule } from './vault/index.js';
+import { createMemoryApiModule, createVaultModule } from './vault/index.js';
 import { createInboxModule } from './inbox/module.js';
 import { createInboxRoutes } from './inbox/routes.js';
 import { createInboxMcpRoutes } from './inbox/mcp.js';
@@ -597,7 +598,11 @@ try {
     })
     : undefined;
   const piActivations = piSituationService
-    ? createPiActivationService({ registry: piRegistry, situation: piSituationService })
+    ? createPiActivationService({
+      registry: piRegistry,
+      situation: piSituationService,
+      recall: (query, signal) => retrievePersonalMemory(memoryStore, query, signal),
+    })
     : undefined;
   const piEnvironment = buildPiEnvironment(process.env);
   const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore && piActivations
@@ -1261,6 +1266,15 @@ try {
     factory: factoryModule,
     sleep: createSleepModule(containerAppScaler),
     recipes: createRecipeModule(recipeStore),
+    memory: createMemoryModule({
+      ...(memoryStore ? { store: memoryStore } : {}),
+      automaticCapture: async () => settingsStore ? (await readSettings(settingsStore)).memory.automaticCapture : false,
+      getEmbedder: getMemoryEmbedder,
+      ...(usageStore ? { usageStore } : {}),
+    }),
+    memoryApi: vaultModule ? undefined : createMemoryApiModule({
+      store: memoryStore, getEmbedder: getMemoryEmbedder, getEmbeddingModel: embeddingModel,
+    }),
     vault: vaultModule,
     inbox: inboxModule,
     pi: piModule,

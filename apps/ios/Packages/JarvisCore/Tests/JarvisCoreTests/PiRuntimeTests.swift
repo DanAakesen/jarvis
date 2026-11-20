@@ -189,6 +189,55 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(memory.items.map(\.title), ["Fixture memory"])
     }
 
+    func testPersonalMemoryReadsStayFreshAndAdvancePastExcludedEntries() async throws {
+        let current = #"{"id":"7","type":"memory","content":"Current memory"}"#
+        let vault = #"{"id":"9","type":"vault_note","content":"Vault only"}"#
+        let written = #"{"id":"8","type":"memory","content":"Written by PI"}"#
+        func page(_ item: String, offset: Int, hasMore: Bool) -> HTTPResponse {
+            HTTPResponse(statusCode: 200, body: Data("""
+            {"items":[\(item)],"count":1,"limit":1,"offset":\(offset),"hasMore":\(hasMore)}
+            """.utf8))
+        }
+        let transport = RecordingTransport([
+            page(vault, offset: 0, hasMore: true),
+            page(current, offset: 1, hasMore: false),
+            page(written, offset: 0, hasMore: true),
+            HTTPResponse(statusCode: 200, body: Data(vault.utf8)),
+            HTTPResponse(statusCode: 200, body: Data(written.utf8)),
+            HTTPResponse(statusCode: 200),
+            HTTPResponse(statusCode: 202),
+        ])
+        let client = JarvisSettingsClient(client: try makeClient(transport: transport))
+        let first = try await client.loadMemory(query: "fixture", limit: 1)
+        XCTAssertTrue(first.items.isEmpty)
+        XCTAssertEqual(first.nextOffset, 1)
+        let second = try await client.loadMemory(query: "fixture", offset: try XCTUnwrap(first.nextOffset), limit: 1)
+        XCTAssertEqual(second.items.map(\.text), ["Current memory"])
+        XCTAssertNil(second.nextOffset)
+        let fresh = try await client.loadMemory(query: "fixture", limit: 1)
+        XCTAssertEqual(fresh.items.map(\.text), ["Written by PI"])
+        do {
+            _ = try await client.readMemory(id: "9")
+            XCTFail("Vault detail must not be shown in Memory")
+        } catch {
+            XCTAssertEqual(error as? JarvisSettingsClientError, .invalidResponse)
+        }
+        let detail = try await client.readMemory(id: "8")
+        XCTAssertEqual(detail.text, "Written by PI")
+        try await client.updateMemory(id: "8", text: "Corrected")
+        let pending = try await client.deleteMemory(id: "8")
+        XCTAssertTrue(pending)
+
+        let requests = await transport.recordedRequests()
+        let queries = requests.map { request in
+            URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        }
+        XCTAssertTrue(queries.allSatisfy { $0.contains(URLQueryItem(name: "scope", value: "personal")) })
+        XCTAssertFalse(queries.joined().contains { $0.name == "folder" })
+        XCTAssertEqual(queries.compactMap { $0.first { $0.name == "offset" }?.value }, ["0", "1", "0"])
+        XCTAssertTrue(requests.filter { $0.method == .get }.allSatisfy { $0.headers["Cache-Control"] == "no-cache, no-store" })
+    }
+
     private func makeClient(
         transport: RecordingTransport,
         retryPolicy: RetryPolicy = RetryPolicy()

@@ -1602,6 +1602,11 @@ non-colour cues described in the current shell guidance below.
 
 ## Settings (P1-11)
 
+Memory keeps its existing list and detail layout. Opening it refreshes the
+first Personal Memory page; pagination, refresh and retry use the shared
+Settings controls. Vault notes belong in Notes and the Knowledge graph, not in
+the Memory list.
+
 Keep the Settings route within the shell's neutral foundation. Use one page
 headline and distinct form sections for Appearance, Jarvis, Voice, Coding agents, Global,
 Projects, and Credentials. The Projects section contains the managed-project list,

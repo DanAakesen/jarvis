@@ -1,3 +1,8 @@
+## Personal Memory — 20 November 2026 (#1968)
+
+- Use `npm test -w @jarvis/backend -- src/pi/mcp.test.ts src/vault/memory-api.test.ts` for offline Memory tool/API checks. The revision and deduplication contract is covered by `npm run test:database -w @jarvis/backend` against isolated loopback SQL Server, as in Database CI.
+- Do not use the paid PI or Voice smoke to qualify this change. Dan owns live natural-language and iPhone acceptance.
+
 ## PI release hardening — 19 November 2026 (#1966)
 
 - Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.

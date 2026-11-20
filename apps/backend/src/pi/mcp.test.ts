@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
+import { createMemoryModule, retrievePersonalMemory } from '../core/personal-memory.js';
 import type { JarvisTool } from '../core/tool-registry.js';
+import type { MemoryRecord, MemoryStore } from '../database/memory-store.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { RemoteMcpBridge } from './remote-mcp.js';
@@ -87,6 +89,59 @@ const initialize = { protocolVersion: '2025-06-18', capabilities: {}, clientInfo
 const live = () => new AbortController().signal;
 
 describe('PI MCP server', () => {
+  it('uses the live Memory tool catalogue, exact owner source and committed results', async () => {
+    const updatedAt = new Date('2026-11-20T08:00:00Z');
+    let memory: MemoryRecord = {
+      id: '90', key: 'appointment-time', category: 'preference', content: 'Afternoon appointments',
+      sourceMessageId: '42', sourceText: 'Remember that I prefer afternoon appointments.',
+      sourceTextTruncated: false, revision: 1, updatedAt,
+    };
+    const getSourceMessage = vi.fn(async (id: string) => ({ messageId: id, text: memory.sourceText }));
+    const save = vi.fn<MemoryStore['save']>().mockRejectedValueOnce(new Error('database unavailable'))
+      .mockResolvedValue({ memory, created: true, changed: true });
+    const correct = vi.fn<MemoryStore['correct']>().mockImplementation(async (_id, input) => {
+      memory = { ...memory, content: input.content, revision: 2, sourceMessageId: input.sourceMessageId };
+      return { memory, created: false, changed: true };
+    });
+    const forget = vi.fn<MemoryStore['forget']>().mockResolvedValue(memory);
+    const store = {
+      getSourceMessage, save, correct, forget,
+      supportsVectorSearch: () => false,
+      history: async () => [{ ...memory, changedAt: updatedAt }],
+      searchByFullText: async () => ({ method: 'fulltext', memories: [memory] }),
+    } as MemoryStore;
+    const { app, registry, tool } = setup([], { tools: [...createMemoryModule({ store, automaticCapture: async () => false }).tools] });
+    const catalogue = await app.inject({ method: 'GET', url: '/tools', headers: { authorization: bearer(ownerToken) } });
+    expect(catalogue.statusCode).toBe(200);
+    for (const suffix of ['remember', 'search', 'list', 'history', 'correct', 'forget']) expect(catalogue.body).toContain(`memory_${suffix}`);
+
+    const first = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const execute = async (turn: string, name: string, args: Record<string, unknown>) => {
+      const found = await tool('find_tools', { turn, query: name });
+      expect(found.body?.result.tools.map((entry: { name: string }) => entry.name)).toContain(name);
+      return (await tool('call_tool', { turn, name, arguments: args })).body;
+    };
+    const args = { category: memory.category, key: memory.key, content: memory.content };
+    expect(await execute(first.turn, 'memory_remember', { ...args, sourceIntent: 'automatic' })).toMatchObject({ outcome: 'refused' });
+    expect(save).not.toHaveBeenCalled();
+    expect(await execute(first.turn, 'memory_remember', { ...args, sourceIntent: 'requested' })).toMatchObject({ outcome: 'error' });
+    expect(await execute(first.turn, 'memory_remember', { ...args, sourceIntent: 'requested' })).toMatchObject({ outcome: 'ok', result: { id: '90', revision: 1 } });
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ sourceMessageId: '42', createOnly: true }), expect.anything());
+    registry.close(first.turn);
+
+    const fresh = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '8', messageId: '43', signal: live() });
+    expect(await execute(fresh.turn, 'memory_search', { query: 'appointments' })).toMatchObject({
+      outcome: 'ok', result: { memories: [{ source: { messageId: '42' } }] },
+    });
+    const correction = { memoryId: '90', revision: 1, content: 'Morning appointments', sourceIntent: 'requested' };
+    expect(await execute(fresh.turn, 'memory_correct', correction)).toMatchObject({ outcome: 'ok', result: { id: '90', revision: 2 } });
+    expect(correct).toHaveBeenCalledWith('90', expect.objectContaining({ sourceMessageId: '43', expectedRevision: 1 }), expect.anything());
+    expect(await execute(fresh.turn, 'memory_correct', correction)).toMatchObject({ outcome: 'refused' });
+    expect(await retrievePersonalMemory(store, 'When should we schedule appointments?', live())).toContain('"sourceMessageId":"43"');
+    expect(await execute(fresh.turn, 'memory_forget', { memoryId: '90' })).toMatchObject({ outcome: 'ok', result: { id: '90' } });
+    expect(forget).toHaveBeenCalledWith('90', '43', expect.anything());
+  });
+
   it('opens only to the static PI credential, and only on its own route', async () => {
     const { rpc, app } = setup();
     expect((await rpc(undefined, 'initialize', initialize)).status).toBe(401);

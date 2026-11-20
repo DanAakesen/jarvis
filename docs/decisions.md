@@ -1,3 +1,7 @@
+## 20 November 2026 — Personal Memory stays in SQL (#1968)
+
+Keep the existing source-linked records and revision history rather than copying owner facts into Vault notes. Use PI's existing per-turn authority, one bounded SQL recall step for Chat and Voice, and the same store for proactive reads. Use stable keys and revision checks to prevent duplicate capture or stale corrections. The Memory screens request personal-only pages; Vault search, write and graph remain Knowledge operations. Live natural-language and device acceptance remain separate from offline route and database checks.
+
 ## 19 November 2026 — One PI route and an exact, release-owned backend configuration (#1966)
 
 - **Normal route:** PI is the only Chat and Voice engine. The old saved device selector, test badge and normal-client `engine` parameters are removed. An older Chat client may explicitly send `pi`; `current` and unknown values are refused. Isolated runtime-test sessions keep their separately selected runtime and are not a fallback for normal Chat or Voice.

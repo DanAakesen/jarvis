@@ -266,6 +266,11 @@ public struct JarvisMemoryPage: Codable, Equatable, Sendable {
     public let limit: Int
     public let offset: Int
     public let hasMore: Bool
+
+    public var nextOffset: Int? {
+        let (next, overflow) = offset.addingReportingOverflow(limit)
+        return hasMore && !overflow && JarvisSettingsLogic.validMemoryPage(offset: next, limit: limit) ? next : nil
+    }
 }
 
 public struct JarvisRoutine: Codable, Equatable, Sendable, Identifiable {
@@ -403,19 +408,22 @@ public struct JarvisSettingsClient: Sendable {
         return try await send(.patch, path: ["proactive", "settings"], body: body)
     }
 
+    private static let personalMemoryScope = URLQueryItem(name: "scope", value: "personal")
+    private static let freshMemoryHeaders = ["Cache-Control": "no-cache, no-store"]
+
     public func loadMemory(query: String = "", offset: Int = 0, limit: Int = JarvisSettingsLogic.memoryPageSize) async throws -> JarvisMemoryPage {
         guard JarvisSettingsLogic.validMemoryPage(offset: offset, limit: limit),
               query.utf8.count <= JarvisSettingsLogic.maximumMemoryQueryBytes else {
             throw JarvisSettingsClientError.invalidRequest
         }
         var items = [
-            URLQueryItem(name: "folder", value: "General"),
+            Self.personalMemoryScope,
             URLQueryItem(name: "limit", value: String(limit)),
             URLQueryItem(name: "offset", value: String(offset)),
         ]
         if !query.isEmpty { items.append(URLQueryItem(name: "query", value: query)) }
         let page: JarvisMemoryPage = try await send(
-            .get, path: ["memory"], queryItems: items, idempotent: true
+            .get, path: ["memory"], queryItems: items, headers: Self.freshMemoryHeaders, idempotent: true
         )
         guard page.count == page.items.count, page.items.count <= limit,
               page.limit == limit, page.offset == offset,
@@ -437,7 +445,12 @@ public struct JarvisSettingsClient: Sendable {
 
     public func readMemory(id: String) async throws -> JarvisMemoryItem {
         guard JarvisSettingsLogic.validMemoryID(id) else { throw JarvisSettingsClientError.invalidRequest }
-        return try await send(.get, path: ["memory", id], idempotent: true)
+        let item: JarvisMemoryItem = try await send(
+            .get, path: ["memory", id], queryItems: [Self.personalMemoryScope],
+            headers: Self.freshMemoryHeaders, idempotent: true
+        )
+        guard item.kind == "memory", item.id == id else { throw JarvisSettingsClientError.invalidResponse }
+        return item
     }
 
     public func updateMemory(id: String, text: String) async throws {
@@ -446,12 +459,12 @@ public struct JarvisSettingsClient: Sendable {
             throw JarvisSettingsClientError.invalidRequest
         }
         let body = try JSONEncoder().encode(MemoryPatch(text: text))
-        try await sendNoContent(.patch, path: ["memory", id], body: body)
+        _ = try await perform(.patch, path: ["memory", id], queryItems: [Self.personalMemoryScope], body: body, idempotent: false)
     }
 
     public func deleteMemory(id: String) async throws -> Bool {
         guard JarvisSettingsLogic.validMemoryID(id) else { throw JarvisSettingsClientError.invalidRequest }
-        let response = try await perform(.delete, path: ["memory", id], idempotent: false)
+        let response = try await perform(.delete, path: ["memory", id], queryItems: [Self.personalMemoryScope], idempotent: false)
         return response.statusCode == 202
     }
 
@@ -493,11 +506,12 @@ public struct JarvisSettingsClient: Sendable {
         _ method: HTTPMethod,
         path: [String],
         queryItems: [URLQueryItem] = [],
+        headers: [String: String] = [:],
         body: Data? = nil,
         idempotent: Bool = false
     ) async throws -> Response {
         let response = try await perform(
-            method, path: path, queryItems: queryItems, body: body, idempotent: idempotent
+            method, path: path, queryItems: queryItems, headers: headers, body: body, idempotent: idempotent
         )
         do {
             return try JSONDecoder().decode(Response.self, from: response.body)
@@ -518,6 +532,7 @@ public struct JarvisSettingsClient: Sendable {
         _ method: HTTPMethod,
         path: [String],
         queryItems: [URLQueryItem] = [],
+        headers: [String: String] = [:],
         body: Data? = nil,
         idempotent: Bool
     ) async throws -> HTTPResponse {
@@ -526,6 +541,7 @@ public struct JarvisSettingsClient: Sendable {
                 method: method,
                 path: path,
                 queryItems: queryItems,
+                headers: headers,
                 body: body,
                 idempotent: idempotent,
                 additionalSuccessStatuses: [202, 204]

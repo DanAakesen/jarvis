@@ -4,7 +4,8 @@ import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
-import type { PiActivationService } from './activation.js';
+import { createPiActivationService, type PiActivationService } from './activation.js';
+import type { PiSituationService, PiSituationView } from './situation.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -76,6 +77,42 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
 }
 
 describe('PI gateway', () => {
+  it('passes fresh Chat and Voice queries to the same bounded Memory activation', async () => {
+    const registry = createPiTurnRegistry();
+    const view: PiSituationView = {
+      state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
+      staleSources: [], missingSources: [], disabledSources: [], freshSources: [], asOf: null, updatedAt: null, lastActivation: null,
+    };
+    const queries: string[] = [];
+    const activations = createPiActivationService({
+      registry,
+      situation: {
+        context: async () => ({ text: 'SITUATION', view }),
+        markActivation: async () => {},
+      } as unknown as PiSituationService,
+      recall: async (query) => {
+        queries.push(query);
+        return `CURRENT MEMORY: revision ${queries.length}`;
+      },
+    });
+    const { gateway, calls } = setup([
+      () => sse(delta('Afternoons'), completed(1, 0, 1)),
+      () => sse(delta('Mornings'), completed(1, 0, 1)),
+    ], { registry, activations });
+    const signal = AbortSignal.timeout(10_000);
+    for (const [channel, messageId] of [['chat', '42'], ['voice', '43']] as const) {
+      for await (const chunk of gateway.stream({
+        channel, messageId, sessionId: messageId, text: `When are my ${channel} appointments?`,
+      }, 'fixture', signal)) {
+        expect(chunk).toBeDefined();
+      }
+    }
+    expect(queries).toEqual(['When are my chat appointments?', 'When are my voice appointments?']);
+    const prompts = calls.filter((call) => call.url.includes('/responses')).map((call) => JSON.stringify(call.body));
+    expect(prompts[0]).toContain('CURRENT MEMORY: revision 1');
+    expect(prompts[1]).toContain('CURRENT MEMORY: revision 2');
+  });
+
   it('puts the environment note on a smoke turn only when asked, so measured turns stay comparable', () => {
     const { gateway } = setup([], { environment: 'ENV NOTE' });
     const kit = gateway.smokeKit;

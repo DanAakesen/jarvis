@@ -1,3 +1,10 @@
+## Personal Memory — 20 November 2026 (#1968)
+
+- Conversation history is session context. `dbo.memories` and `dbo.memory_history` are the authority for durable owner facts; Vault Markdown is the authority for Knowledge. The Vault index and graph are retrieval aids, not a second Memory store.
+- Chat and Voice use one PI activation service. For an owner turn, it performs a bounded SQL term lookup and returns at most three current matches with the source message ID, revision and timestamp. PI can use `memory_search` for a rephrased query. Background PI reads from the same store using the Memory tools and the existing proactive source policy; it has no owner message to authorize a write.
+- PI discovers `memory_remember`, `memory_search`, `memory_list`, `memory_history`, `memory_correct` and `memory_forget` through the usual MCP door and `/tools` catalogue. The activation grant supplies the stored owner message. `memory_remember` is idempotent for the same key and content; changed facts require `memory_correct` with the current revision. Writes acknowledge only after SQL commits.
+- iPhone and web Settings use the no-store `/memory?scope=personal` contract and existing detail/edit/delete routes. This request never queries Vault and does not depend on Vault configuration. The older unscoped API remains available for legacy callers; Notes and graph use their existing Knowledge routes.
+
 ## PI-only release path — 19 November 2026 (#1966)
 
 ```mermaid
@@ -5810,11 +5817,10 @@ embedding-based knowledge-graph edges in both the application and SQL candidate
 query; `graphTextSimilarityThreshold` defaults to `0.12` for the TF-IDF fallback.
 `searchTopK` defaults to five and caps vault search and graph-search results at
 the configured value (1–8). `automaticCapture` defaults on and is included in
-`/agent/settings` and voice-session instructions. The shared `vault_write` tool
-marks automatic captures separately from Dan-requested writes; the backend
-refuses marked automatic writes when capture is off, while direct requests remain
-available. Default thresholds, the vault-search result count and capture
-behavior match the existing values.
+`/agent/settings` and PI's trusted activation context. It governs automatic
+Personal Memory capture only; explicit remember requests still save when it is
+off. `vault_write` refuses automatic capture; intentional Knowledge writes
+remain available.
 
 P9-11 adds bounded `timeouts` settings to the existing global `dbo.settings`
 store and shared contracts; no migration or web change is needed. Defaults are

@@ -288,7 +288,7 @@ export function RetrievalSection({ memory, problems, disabled, onChange, childre
   children?: ReactNode;
 }) {
   return (
-    <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory"
+    <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory" unmountWhenClosed
       summary={memory.automaticCapture ? 'Remembers automatically' : 'Remembers on request'}>
       <Toggle id="memory-capture" label="Remember things automatically"
         checked={memory.automaticCapture} disabled={disabled} onChange={(value) => onChange('automaticCapture', value)} />
