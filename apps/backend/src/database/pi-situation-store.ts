@@ -527,7 +527,11 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         let authoritativeRefs = refreshedAuthority.recordset.map(authorityRef);
         const authority = new Map(authoritativeRefs.map((ref) =>
           [authorityKey(ref), ref] as const));
-        let state = canonicalizePiSituationState(input.state, authoritativeRefs);
+        let state = canonicalizePiSituationState(
+          input.state,
+          authoritativeRefs,
+          input.observations.length > 0,
+        );
         for (const ref of state.refs) {
           const receipt = ref.verifiedAt
             ? authority.get(authorityKey({

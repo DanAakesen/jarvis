@@ -544,6 +544,15 @@ describe('PI situational state', () => {
     await service.synchronizeFollowUps(signal());
     expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
     await proactive.settings.patch({ sources: { mail: false } });
+    const stored = store.records.get(owner)!;
+    store.records.set(owner, {
+      ...stored,
+      authoritativeRefs: stored.authoritativeRefs.map((ref) =>
+        ref.source === 'mail'
+          ? { ...ref, invalidatedAt: at.toISOString(), staleReason: 'source_disabled' }
+          : ref),
+    });
+    store.authorities.set(owner, [...store.records.get(owner)!.authoritativeRefs]);
     await service.synchronizeFollowUps(signal());
     expect(await queue.nextDueAt()).toBeNull();
     await proactive.settings.patch({ sources: { mail: true } });
@@ -564,12 +573,19 @@ describe('PI situational state', () => {
     clock.current = new Date(at.getTime() + 1);
     await service.refresh('mail', signal());
     await service.synchronizeFollowUps(signal());
-    expect((await service.read(signal())).state?.refs.some(({ source }) => source === 'mail')).toBe(true);
-    expect((await service.read(signal())).state?.refs.find(({ source }) => source === 'mail'))
+    const restored = await service.read(signal());
+    expect(restored.state?.refs.some(({ source }) => source === 'mail')).toBe(true);
+    expect(restored.state?.refs.find(({ source }) => source === 'mail'))
       .toMatchObject({
         observedAt: at.toISOString(),
         verifiedAt: clock.current.toISOString(),
       });
+    expect(restored.state?.facts).toContainEqual(expect.objectContaining({
+      id: 'fact:epoch',
+      stale: false,
+    }));
+    expect(restored.state?.summary).toBe('Mail matters.');
+    expect(restored.state?.followUps.map(({ id }) => id)).toContain('follow:epoch');
     expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
   });
 

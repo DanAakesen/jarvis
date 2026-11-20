@@ -335,11 +335,13 @@ function stateRef(authority: PiSituationAuthorityRef): PiSituationState['refs'][
 export function canonicalizePiSituationState(
   state: PiSituationState,
   authoritativeRefs: readonly PiSituationAuthorityRef[],
+  allowInvalidated = false,
 ): PiSituationState {
   const authority = new Map(authoritativeRefs.map((ref) => [authorityKey(ref), structuredClone(ref)]));
   const refs = state.refs.map((ref) => {
     const canonical = authority.get(authorityKey(ref));
-    if (!canonical || canonical.invalidatedAt !== null) {
+    if (!canonical ||
+        (!allowInvalidated && canonical.invalidatedAt !== null)) {
       throw new PiSituationError(
         'invalid',
         'A situational reference was not observed by a provider or verified by a live lookup.',
@@ -353,11 +355,13 @@ export function canonicalizePiSituationState(
 export function retainAuthoritativePiSituationState(
   state: PiSituationState,
   authoritativeRefs: readonly PiSituationAuthorityRef[],
+  includeInvalidated = false,
 ): PiSituationState {
   const authority = new Map(authoritativeRefs.map((ref) => [authorityKey(ref), structuredClone(ref)]));
   const refs = state.refs.flatMap((ref) => {
     const canonical = authority.get(authorityKey(ref));
-    return canonical && canonical.activatedAt !== null && canonical.invalidatedAt === null
+    return canonical && canonical.activatedAt !== null &&
+      (includeInvalidated || canonical.invalidatedAt === null)
       ? [stateRef(canonical)]
       : [];
   });
@@ -866,9 +870,17 @@ export function createPiSituationService(options: {
       .slice(0, 24);
     const followUps = next.followUps.filter(({ refIds: values }) =>
       values.every((value) => refIds.has(value))).slice(0, 16);
-    const filteredSummaryRefs = next.summaryRefIds.filter((value) => activeRefIds.has(value));
-    const summary = filteredSummaryRefs.length === next.summaryRefIds.length &&
-      filteredSummaryRefs.length > 0 ? next.summary : '';
+    const retainedSummaryRefs = next.summaryRefIds.filter((value) => refIds.has(value));
+    const unchangedStoredSummary = current !== null &&
+      next.summary === current.state.summary &&
+      next.summaryRefIds.length === current.state.summaryRefIds.length &&
+      next.summaryRefIds.every((value, index) => value === current.state.summaryRefIds[index]);
+    const summaryIsActive = retainedSummaryRefs.length === next.summaryRefIds.length &&
+      retainedSummaryRefs.length > 0 &&
+      next.summaryRefIds.every((value) => activeRefIds.has(value));
+    const summary = retainedSummaryRefs.length === next.summaryRefIds.length &&
+      retainedSummaryRefs.length > 0 &&
+      (summaryIsActive || unchangedStoredSummary) ? next.summary : '';
     for (const entry of next.sources) {
       const status = sourceById.get(entry.id);
       const invalidated = status?.invalidatedAt !== null && status?.invalidatedAt !== undefined &&
@@ -894,7 +906,7 @@ export function createPiSituationService(options: {
       state: parsePiSituationState({
         ...next,
         summary,
-        summaryRefIds: summary ? filteredSummaryRefs : [],
+        summaryRefIds: summary ? retainedSummaryRefs : [],
         refs,
         facts,
         followUps,
@@ -1035,6 +1047,7 @@ export function createPiSituationService(options: {
       const previous = retainAuthoritativePiSituationState(
         current.state,
         current.authoritativeRefs,
+        true,
       );
       const oldRefs = previous.refs.filter((ref) => ref.source === source);
       const baseline = oldRefs.length === 0 && !previous.sources.some((entry) =>
@@ -1060,6 +1073,10 @@ export function createPiSituationService(options: {
       for (const fresh of freshRefs) {
         if (!oldById.has(fresh.id)) affectedRefs.add(fresh.id);
       }
+      const remappedRefs = new Set(oldRefs.filter((entry) => {
+        const fresh = freshRefs.find(({ id: value }) => value === entry.id);
+        return fresh !== undefined && fresh.materialHash === entry.materialHash;
+      }).map(({ id: value }) => value));
       const retainedRefs = oldRefs.filter((entry) => !nextMaterial.has(entry.id) &&
         (previous.facts.some((fact) => fact.refIds.includes(entry.id)) ||
           previous.followUps.some((followUp) => followUp.refIds.includes(entry.id))))
@@ -1073,16 +1090,36 @@ export function createPiSituationService(options: {
         ...retainedRefs,
       ].slice(0, 48);
       const validRefIds = new Set(refs.map(({ id }) => id));
-      const facts = previous.facts.map((fact) =>
-        fact.source === source && (result.state !== 'ok' || fact.refIds.some((id) => affectedRefs.has(id)))
-          ? {
+      const facts = previous.facts.map((fact) => {
+        if (fact.source === source &&
+            fact.refIds.some((id) => affectedRefs.has(id))) {
+          return {
             ...fact,
             stale: true,
-            staleReason: result.state === 'ok' ? 'source_material_changed' : result.reason ?? 'source_unavailable',
-          }
-          : fact).filter((fact) => fact.refIds.every((id) => validRefIds.has(id)));
+            staleReason: result.state === 'ok'
+              ? 'source_material_changed'
+              : result.reason ?? 'source_unavailable',
+          };
+        }
+        if (fact.source === source && result.state === 'ok' &&
+            !observationInvalidated &&
+            fact.refIds.every((id) => remappedRefs.has(id))) {
+          const current = { ...fact, stale: false };
+          delete current.staleReason;
+          return current;
+        }
+        if (fact.source === source && result.state !== 'ok') {
+          return {
+            ...fact,
+            stale: true,
+            staleReason: result.reason ?? 'source_unavailable',
+          };
+        }
+        return fact;
+      }).filter((fact) => fact.refIds.every((id) => validRefIds.has(id)));
       const followUps = previous.followUps.filter((entry) =>
-        entry.refIds.every((id) => validRefIds.has(id)));
+        entry.refIds.every((id) => validRefIds.has(id)) &&
+        !entry.refIds.some((id) => affectedRefs.has(id)));
       const summaryAffected = previous.summaryRefIds.some((id) =>
         affectedRefs.has(id) || !validRefIds.has(id));
       const sourceEntry = previous.sources.find((entry) => entry.id === source)!;
@@ -1134,7 +1171,7 @@ export function createPiSituationService(options: {
         summaryRefIds: summaryAffected ? [] : previous.summaryRefIds,
       });
       const prepared = applyPolicy(next, { ...current, state: previous }, effectivePolicy);
-      const canonicalState = canonicalizePiSituationState(prepared.state, knownAuthority);
+      const canonicalState = canonicalizePiSituationState(prepared.state, knownAuthority, true);
       const stateChanged = piSituationHash(canonicalState) !== current.hash;
       const actions = followUpActions(previous, canonicalState, effectivePolicy, now());
       const observations: PiSituationSourceObservation[] = [{
@@ -1510,7 +1547,11 @@ export function createMemoryPiSituationStore(
         throw new PiSituationError('conflict', 'Situational state changed. Read the current revision before committing.');
       }
       let known = authority(input.owner, input.authoritativeRefs);
-      const state = canonicalizePiSituationState(input.state, known);
+      const state = canonicalizePiSituationState(
+        input.state,
+        known,
+        input.observations.length > 0,
+      );
       for (const ref of state.refs) {
         const receipt = known.find((entry) =>
           authorityKey(entry) === authorityKey(ref));
