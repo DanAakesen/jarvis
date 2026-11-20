@@ -124,6 +124,7 @@ final class JarvisChatModel: ObservableObject {
     @Published private(set) var isReconnecting = false
     @Published private var toolActivities: [ChatToolActivity] = []
     private var turnMessageIDs = Set<String>()
+    private var observedMemoryWriteIDs = Set<String>()
 
     var liveTools: [ChatToolActivity] { toolActivities.filter { turnMessageIDs.contains($0.messageId) } }
     @Published var nowFeed: JarvisNowFeed?
@@ -525,7 +526,8 @@ final class JarvisChatModel: ObservableObject {
                 try Task.checkCancellation()
                 switch event {
                 case .chatToolActivity(let tool):
-                    guard isSending else { continue }
+                    observePersonalMemoryWrite(tool)
+                    guard isSending, tool.source == "chat" else { continue }
                     recordToolActivity(tool)
                 case .pendingConfirmationsChanged:
                     await refreshActivity()
@@ -811,6 +813,17 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
+    private func observePersonalMemoryWrite(_ tool: ChatToolActivity) {
+        guard tool.changesPersonalMemory, observedMemoryWriteIDs.insert(tool.id).inserted else { return }
+        if observedMemoryWriteIDs.count > 256 {
+            observedMemoryWriteIDs.remove(observedMemoryWriteIDs.first!)
+        }
+        Task {
+            await JarvisAppCache.invalidateAll(.settings)
+            NotificationCenter.default.post(name: .jarvisMemoryChanged, object: nil)
+        }
+    }
+
     private func consume(_ events: AsyncThrowingStream<ChatEvent, any Error>) async throws {
         for try await event in events {
             try Task.checkCancellation()
@@ -851,6 +864,7 @@ final class JarvisChatModel: ObservableObject {
                 progressUpdates = []
                 isReconnecting = false
             case .toolActivity(let tool):
+                observePersonalMemoryWrite(tool)
                 recordToolActivity(tool)
             case .progress(let progress):
                 statusLine = JarvisChatLocalization.string(

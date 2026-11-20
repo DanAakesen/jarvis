@@ -11,6 +11,7 @@ import { WorkoutEntriesStore } from '../../health/gym/workouts-store.js';
 import { LiftEntriesStore } from '../../health/lifts/lifts-store.js';
 import { createHealthChanges } from '../../health/revisions.js';
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
+import { memoryContainsCredential } from '../../core/memory-policy.js';
 import { dayKey } from '../time.js';
 import type { ProactiveSource, SourceFact, SourceId } from '../types.js';
 
@@ -162,8 +163,10 @@ export function createContextSources(dependencies: ContextDependencies): Proacti
     }),
     source('memory', 'Memory', Boolean(dependencies.memoryStore), async (now, signal) => {
       const page = await dependencies.memoryStore!.list(25, signal);
-      return page.memories.map(row => fact('memory', `memory:${row.id}`, { category: row.category, key: row.key,
-        content: row.content, revision: row.revision, updatedAt: stamp(row.updatedAt), partial: page.hasMore }, now.toISOString(), false));
+      const safe = page.memories.filter((row) => !memoryContainsCredential(row));
+      return safe.map(row => fact('memory', `memory:${row.id}`, { category: row.category, key: row.key,
+        content: row.content, revision: row.revision, updatedAt: stamp(row.updatedAt),
+        partial: page.hasMore || safe.length !== page.memories.length }, now.toISOString(), false));
     }),
   ];
 }

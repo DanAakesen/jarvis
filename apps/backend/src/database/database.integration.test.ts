@@ -13,6 +13,11 @@ import { createPiSituationStore } from './pi-situation-store.js';
 import { parsePiSituationState } from '../pi/situation.js';
 import { sourceIds } from '../proactive/types.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
+import { createMemoryStore } from './memory-store.js';
+import { createMemoryProactiveStore } from '../proactive/store.js';
+import { createPiActivationService } from '../pi/activation.js';
+import { createPiSituationService, piSituationHash } from '../pi/situation.js';
+import { createPiTurnRegistry } from '../pi/turns.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -53,6 +58,139 @@ describe('real SQL Server migration contract', () => {
       expect(rows.recordset).toEqual([{ id: 1, value: 'original' }]);
       expect((await pool.request().query('SELECT name FROM dbo.schema_migrations')).recordset).toEqual([{ name: first.name }]);
     } finally { await other.close(); }
+  });
+
+  it('stores Settings corrections and deletion audits as Settings actions, never as the capture message', async () => {
+    const core = await readFile(new URL('../../../../db/migrations/0001_core_tables.sql', import.meta.url), 'utf8');
+    const memory = await readFile(new URL('../../../../db/migrations/0016_long_term_memory.sql', import.meta.url), 'utf8');
+    const provenance = await readFile(new URL('../../../../db/migrations/0091_memory_action_provenance.sql', import.meta.url), 'utf8');
+    const quarantine = await readFile(new URL('../../../../db/migrations/0092_memory_embedding_quarantine.sql', import.meta.url), 'utf8');
+    const coreDown = await readFile(new URL('../../../../db/migrations/down/0001_core_tables.sql', import.meta.url), 'utf8');
+    const memoryDown = await readFile(new URL('../../../../db/migrations/down/0016_long_term_memory.sql', import.meta.url), 'utf8');
+    const provenanceDown = await readFile(new URL('../../../../db/migrations/down/0091_memory_action_provenance.sql', import.meta.url), 'utf8');
+    const quarantineDown = await readFile(new URL('../../../../db/migrations/down/0092_memory_embedding_quarantine.sql', import.meta.url), 'utf8');
+    await pool.request().batch(core);
+    await pool.request().batch(memory);
+    await pool.request().batch('ALTER TABLE dbo.memories ADD embedding_model nvarchar(128) NULL;');
+    await pool.request().batch(provenance);
+    await pool.request().batch(quarantine);
+    let stage = 'schema verification';
+    try {
+      const columns = await pool.request().query<{
+        quarantinedAt: number | null;
+        quarantineReason: number | null;
+      }>(`SELECT COL_LENGTH(N'dbo.memories', N'embedding_quarantined_at') AS quarantinedAt,
+        COL_LENGTH(N'dbo.memories', N'embedding_quarantine_reason') AS quarantineReason;`);
+      expect(columns.recordset[0]).toMatchObject({
+        quarantinedAt: expect.any(Number),
+        quarantineReason: expect.any(Number),
+      });
+      const session = await pool.request().query<{ id: string }>(
+        "INSERT dbo.jarvis_sessions (channel, language) OUTPUT CONVERT(varchar(20), inserted.id) AS id VALUES (N'chat', N'en');",
+      );
+      const message = await pool.request()
+        .input('sessionId', sql.BigInt, BigInt(session.recordset[0]!.id))
+        .query<{ id: string }>(`INSERT dbo.messages (jarvis_session_id, role, text)
+          OUTPUT CONVERT(varchar(20), inserted.id) AS id
+          VALUES (@sessionId, N'dan', N'Remember that I prefer afternoons.');`);
+      const messageId = message.recordset[0]!.id;
+      const store = createMemoryStore(pool);
+      stage = 'initialization';
+      await store.initialize();
+      stage = 'save';
+      const saved = await store.save({
+        category: 'preference',
+        key: 'appointments.time',
+        content: 'Prefers afternoon appointments.',
+        source: { kind: 'conversation', messageId },
+        embedding: null,
+        embeddingModel: null,
+      }, AbortSignal.timeout(10_000));
+      const settingsRequestId = randomUUID();
+      const ownerObjectId = randomUUID();
+      stage = 'correction';
+      const corrected = await store.correct(saved.memory.id, {
+        category: 'preference',
+        key: 'appointments.time',
+        content: 'Prefers morning appointments.',
+        source: { kind: 'settings', requestId: settingsRequestId, ownerObjectId },
+        embedding: null,
+        embeddingModel: null,
+      }, AbortSignal.timeout(10_000));
+      expect(corrected.memory).toMatchObject({
+        sourceMessageId: null,
+        settingsAction: { requestId: settingsRequestId, ownerObjectId },
+        sourceText: '',
+      });
+      const history = await store.history(saved.memory.id, 10, AbortSignal.timeout(10_000));
+      expect(history).toHaveLength(2);
+      expect(history[0]).toMatchObject({ settingsAction: { requestId: settingsRequestId }, sourceMessageId: null });
+      expect(history[1]).toMatchObject({ sourceMessageId: messageId, settingsAction: null });
+
+      await expect(store.quarantineEmbedding(
+        saved.memory.id,
+        corrected.memory.revision,
+        'credential',
+        AbortSignal.timeout(10_000),
+      )).resolves.toBe(true);
+      await expect(pool.request().batch(quarantineDown)).rejects.toThrow(/durable policy evidence/u);
+      const safeCorrection = await store.correct(saved.memory.id, {
+        category: 'preference',
+        key: 'appointments.time',
+        content: 'Prefers an approved morning appointment.',
+        source: { kind: 'settings', requestId: randomUUID(), ownerObjectId },
+        embedding: null,
+        embeddingModel: null,
+      }, AbortSignal.timeout(10_000));
+      const quarantineState = await pool.request()
+        .input('memoryId', sql.BigInt, BigInt(safeCorrection.memory.id))
+        .query<{
+          embedding_quarantined_at: Date | null;
+          embedding_quarantine_reason: string | null;
+        }>(`SELECT embedding_quarantined_at, embedding_quarantine_reason
+          FROM dbo.memories WHERE id = @memoryId;`);
+      expect(quarantineState.recordset).toEqual([{
+        embedding_quarantined_at: null,
+        embedding_quarantine_reason: null,
+      }]);
+
+      const deleteRequestId = randomUUID();
+      stage = 'forget';
+      await expect(store.forget(saved.memory.id, {
+        kind: 'settings',
+        requestId: deleteRequestId,
+        ownerObjectId,
+      }, AbortSignal.timeout(10_000))).resolves.toMatchObject({ key: 'appointments.time' });
+      const audit = await pool.request().query<{
+        source_kind: string;
+        request_message_id: string | null;
+        action_request_id: string | null;
+        action_owner_id: string | null;
+      }>(`SELECT source_kind, CONVERT(varchar(20), request_message_id) AS request_message_id,
+          LOWER(CONVERT(char(36), action_request_id)) AS action_request_id,
+          LOWER(CONVERT(char(36), action_owner_id)) AS action_owner_id
+        FROM dbo.memory_deletions;`);
+      expect(audit.recordset).toEqual([{
+        source_kind: 'settings',
+        request_message_id: null,
+        action_request_id: deleteRequestId,
+        action_owner_id: ownerObjectId,
+      }]);
+      stage = 'down guard';
+      await expect(pool.request().batch(provenanceDown)).rejects.toThrow(/durable audit evidence/u);
+      stage = 'cleanup';
+    } catch (error) {
+      throw new Error(`Memory provenance SQL gate failed during ${stage}`, { cause: error });
+    } finally {
+      await pool.request().query(`IF OBJECT_ID(N'dbo.memory_deletions', N'U') IS NOT NULL
+          DELETE FROM dbo.memory_deletions;
+        IF OBJECT_ID(N'dbo.memories', N'U') IS NOT NULL
+          DELETE FROM dbo.memories;`);
+      await pool.request().batch(quarantineDown);
+      await pool.request().batch(provenanceDown);
+      await pool.request().batch(memoryDown);
+      await pool.request().batch(coreDown);
+    }
   });
 
   describe('persistent Watch-only credentials', () => {
@@ -275,6 +413,108 @@ describe('real SQL Server migration contract', () => {
         expect(await situations.read(owner, signal)).toMatchObject({
           revision: 1, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
         });
+
+        const legacy = structuredClone(situation);
+        legacy.summary = 'Legacy bearerToken=fixture-secret';
+        legacy.summaryRefIds = ['memory:fact-ref'];
+        legacy.sources.find(({ id }) => id === 'memory')!.state = 'fresh';
+        legacy.sources.find(({ id }) => id === 'memory')!.observedAt = at.toISOString();
+        legacy.sources.find(({ id }) => id === 'memory')!.reason = 'provider api_token=fixture-secret';
+        legacy.sources.find(({ id }) => id === 'memory')!.refIds = [
+          'memory:unsafe-ref',
+          'memory:fact-ref',
+          'memory:follow-ref',
+        ];
+        legacy.refs.push({
+          id: 'memory:unsafe-ref',
+          source: 'memory',
+          identity: 'memory:unsafe-ref',
+          label: 'githubApiTokenValue',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        }, {
+          id: 'memory:fact-ref',
+          source: 'memory',
+          identity: 'memory:fact-ref',
+          label: 'Appointment preference',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        }, {
+          id: 'memory:follow-ref',
+          source: 'memory',
+          identity: 'memory:follow-ref',
+          label: 'Appointment follow-up',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        });
+        legacy.facts.push({
+          id: 'fact:legacy-memory',
+          source: 'memory',
+          refIds: ['memory:fact-ref'],
+          text: 'auth_token=fixture-secret',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+          stale: false,
+        });
+        legacy.followUps.push({
+          id: 'follow:legacy-memory',
+          text: 'Remember the api_token=fixture-secret.',
+          dueAt: null,
+          refIds: ['memory:follow-ref'],
+        });
+        const legacyHash = piSituationHash(legacy);
+        await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('state', sql.NVarChar(sql.MAX), JSON.stringify(legacy))
+          .input('hash', sql.Char(64), legacyHash)
+          .query(`UPDATE dbo.pi_situational_state
+            SET state_json=@state, content_hash=@hash
+            WHERE owner_object_id=@owner;`);
+
+        const proactive = createMemoryProactiveStore(owner);
+        const situationService = createPiSituationService({
+          owner,
+          store: situations,
+          proactive,
+          sources: [],
+          now: () => at,
+        });
+        const registry = createPiTurnRegistry();
+        const activations = createPiActivationService({ registry, situation: situationService });
+        for (const [type, source] of [
+          ['chat', 'chat'],
+          ['voice', 'voice'],
+          ['scheduled', 'timer'],
+        ] as const) {
+          const started = await activations.begin({
+            type,
+            source,
+            ownerObjectId: owner,
+            sessionId: `session-${type}`,
+            messageId: type === 'scheduled' ? '' : `message-${type}`,
+            signal,
+          });
+          expect(started.context).not.toContain('api_token');
+          expect(started.context).not.toContain('auth_token');
+          expect(started.context).not.toContain('bearerToken');
+          expect(started.context).not.toContain('githubApiTokenValue');
+          registry.close(started.grant.turn);
+        }
+        const migratedRow = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ revision: string; state_json: string; content_hash: string }>(
+            `SELECT revision, state_json, content_hash
+              FROM dbo.pi_situational_state WHERE owner_object_id=@owner;`,
+          );
+        const migratedState = JSON.parse(migratedRow.recordset[0]!.state_json) as ReturnType<typeof parsePiSituationState>;
+        expect(Number(migratedRow.recordset[0]!.revision)).toBe(2);
+        expect(migratedRow.recordset[0]!.content_hash.trim()).toBe(piSituationHash(migratedState));
+        expect(migratedState.summary).toBe('');
+        expect(migratedState.sources.find(({ id }) => id === 'memory')?.reason).toBeNull();
+        expect(migratedState.refs.map(({ id }) => id)).not.toContain('memory:unsafe-ref');
+        expect(migratedState.refs.filter(({ source }) => source === 'memory')).toHaveLength(2);
+        expect(migratedState.facts.some(({ source }) => source === 'memory')).toBe(false);
+        expect(migratedState.followUps.some(({ id }) => id === 'follow:legacy-memory')).toBe(false);
         await expect(situations.commit({
           owner, expectedRevision: 0, expectedHash: null, state: situation,
           activation: { ...activation, id: randomUUID() },

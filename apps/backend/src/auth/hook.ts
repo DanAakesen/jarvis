@@ -33,6 +33,8 @@ declare module 'fastify' {
     healthConnectorPrincipal: HealthConnectorPrincipal | null;
     // Set only when the request authenticated with an owner session token instead of an Entra token.
     ownerSession: OwnerSessionContext | null;
+    /** Stored Dan message used to attribute and authorize Personal Memory writes. */
+    jarvisMemorySourceMessageId?: string;
   }
   // Service identities may call only the routes that explicitly opt in.
   interface FastifyContextConfig {

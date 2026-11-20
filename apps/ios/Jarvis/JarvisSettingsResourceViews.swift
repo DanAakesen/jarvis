@@ -338,7 +338,7 @@ struct JarvisMemorySettingsView: View {
 
     @State private var memories: [JarvisMemoryItem] = []
     @State private var query = ""
-    @State private var offset = 0
+    @State private var nextOffset = 0
     @State private var hasMore = false
     @State private var hasLoaded = false
     @State private var loading = true
@@ -409,6 +409,9 @@ struct JarvisMemorySettingsView: View {
             selectedMemory = nil
         }
         .refreshable { await load(reset: true, force: true) }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisMemoryChanged)) { _ in
+            Task { await load(reset: true, force: true) }
+        }
         .task(id: query) {
             if hasLoaded {
                 do {
@@ -459,7 +462,7 @@ struct JarvisMemorySettingsView: View {
         loadGeneration += 1
         let generation = loadGeneration
         let requestedQuery = currentQuery
-        let requestedOffset = reset ? 0 : offset + JarvisSettingsLogic.memoryPageSize
+        let requestedOffset = reset ? 0 : nextOffset
         let previousItems = reset ? [] : memories
         defer {
             if loadGeneration == generation {
@@ -476,7 +479,11 @@ struct JarvisMemorySettingsView: View {
             loading = true
         }
         let repository: JarvisRepository<JarvisMemoryPage> = await JarvisAppCache.repository(
-            .settings, scope: "memory:\(settingsCacheDigest(requestedQuery)):\(requestedOffset)"
+            .settings,
+            scope: JarvisSettingsLogic.memoryCacheScope(
+                queryDigest: settingsCacheDigest(requestedQuery),
+                offset: requestedOffset
+            )
         ) { _ in
             .modified(try await client.loadMemory(query: requestedQuery, offset: requestedOffset), validator: nil)
         }
@@ -487,7 +494,7 @@ struct JarvisMemorySettingsView: View {
             switch update {
             case .cached(let page, _), .fresh(let page):
                 memories = previousItems + page.items
-                offset = page.offset
+                nextOffset = page.nextOffset
                 loadedQuery = requestedQuery
                 hasMore = page.hasMore
                 hasLoaded = true

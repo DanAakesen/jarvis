@@ -6,7 +6,11 @@ public struct ChatToolActivity: Decodable, Equatable, Sendable, Identifiable {
     public let messageId: String
     public let toolName: String
     public let outcome: ChatToolOutcome?
+    public let source: String
     public var id: String { activityId }
+    public var changesPersonalMemory: Bool {
+        outcome == .ok && ["memory_remember", "memory_correct", "memory_forget"].contains(toolName)
+    }
 
     private enum CodingKeys: String, CodingKey { case type, source, activityId, messageId, toolName, outcome }
 
@@ -18,7 +22,8 @@ public struct ChatToolActivity: Decodable, Equatable, Sendable, Identifiable {
         messageId = try values.decode(String.self, forKey: .messageId)
         toolName = try values.decode(String.self, forKey: .toolName)
         outcome = try values.decodeIfPresent(ChatToolOutcome.self, forKey: .outcome)
-        guard source == "chat",
+        self.source = source
+        guard ["chat", "voice"].contains(source),
               ["tool-call-started", "tool-call-finished"].contains(type),
               activityId.range(of: #"^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"#, options: .regularExpression) != nil,
               messageId.range(of: #"^[1-9][0-9]{0,18}$"#, options: .regularExpression) != nil,

@@ -5,7 +5,7 @@ import type { ProactiveStore } from '../proactive/store.js';
 import {
   sourceIds, type ProactiveSettings, type ProactiveSource, type SourceId, type SourceStatus,
 } from '../proactive/types.js';
-import { shouldRedact } from '../vault/index.js';
+import { hasCredentialMarkerDeep } from '../core/memory-policy.js';
 
 export const PI_SITUATION_SCHEMA_VERSION = 1 as const;
 export const PI_SITUATION_MAX_BYTES = 8 * 1024;
@@ -170,15 +170,20 @@ export interface PiSituationService {
 
 const jsonBytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value), 'utf8');
 
-export function parsePiSituationState(value: unknown): PiSituationState {
+function parsePiSituationStructure(value: unknown): PiSituationState {
   const result = schema.safeParse(value);
-  if (!result.success || jsonBytes(result.data) > PI_SITUATION_MAX_BYTES || shouldRedact(JSON.stringify(result.data))) {
-    const code = shouldRedact(typeof value === 'string' ? value : JSON.stringify(value)) ? 'redacted' : 'invalid';
-    throw new PiSituationError(code, code === 'redacted'
-      ? 'Secrets and credentials cannot be stored in situational state.'
-      : 'The situational state did not match the bounded schema.');
+  if (!result.success || jsonBytes(result.data) > PI_SITUATION_MAX_BYTES) {
+    throw new PiSituationError('invalid', 'The situational state did not match the bounded schema.');
   }
   return result.data;
+}
+
+export function parsePiSituationState(value: unknown): PiSituationState {
+  const state = parsePiSituationStructure(value);
+  if (hasCredentialMarkerDeep(state)) {
+    throw new PiSituationError('redacted', 'Secrets and credentials cannot be stored in situational state.');
+  }
+  return state;
 }
 
 export function piSituationHash(state: PiSituationState): string {
@@ -220,6 +225,43 @@ function emptyState(now: Date): PiSituationState {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function credentialSafeState(state: PiSituationState): PiSituationState {
+  const refs = state.refs.filter((ref) => !hasCredentialMarkerDeep(ref));
+  const refIds = new Set(refs.map(({ id: value }) => value));
+  const summarySafe = !hasCredentialMarkerDeep(state.summary);
+  const summaryRefIds = summarySafe
+    ? state.summaryRefIds.filter((value) => refIds.has(value))
+    : [];
+  return {
+    ...state,
+    summary: summarySafe && summaryRefIds.length === state.summaryRefIds.length ? state.summary : '',
+    summaryRefIds: summarySafe ? summaryRefIds : [],
+    sources: state.sources.map((source) => ({
+      ...source,
+      reason: hasCredentialMarkerDeep(source.reason) ? null : source.reason,
+      refIds: source.refIds.filter((value) => refIds.has(value)),
+    })),
+    refs,
+    facts: state.facts.filter((fact) =>
+      !hasCredentialMarkerDeep(fact) &&
+      fact.refIds.every((value) => refIds.has(value))),
+    followUps: state.followUps.filter((followUp) =>
+      !hasCredentialMarkerDeep(followUp) &&
+      followUp.refIds.every((value) => refIds.has(value))),
+  };
+}
+
+/** One-time read adapter for rows written before the stricter Memory credential classifier. */
+export function sanitizeLegacyPiSituationState(value: unknown): {
+  readonly original: PiSituationState;
+  readonly state: PiSituationState;
+  readonly changed: boolean;
+} {
+  const original = parsePiSituationStructure(value);
+  const state = parsePiSituationState(credentialSafeState(original));
+  return { original, state, changed: JSON.stringify(original) !== JSON.stringify(state) };
 }
 
 function sourceState(status: SourceStatus | undefined, now: Date, settings: ProactiveSettings):
@@ -283,7 +325,7 @@ export function createPiSituationService(options: {
   }
 
   function visible(record: PiSituationRecord | null, settings: ProactiveSettings, statuses: readonly SourceStatus[], at: Date): PiSituationView {
-    const raw = record?.state ?? emptyState(at);
+    const raw = credentialSafeState(record?.state ?? emptyState(at));
     const byStatus = new Map(statuses.map((status) => [status.id, status]));
     const states = raw.sources.map((entry) => {
       const status = byStatus.get(entry.id);
@@ -466,7 +508,7 @@ export function createPiSituationService(options: {
       const current = await options.store.read(options.owner, signal);
       if (!current) return;
       if (current.revision !== input.expectedRevision || current.hash !== input.expectedHash) return;
-      const state = clone(current.state);
+      const state = credentialSafeState(clone(current.state));
       state.sources = state.sources.map((source) => source.state === 'disabled'
         ? source
         : { ...source, state: 'stale', reason: 'activation_failed' });
@@ -501,7 +543,7 @@ export function createPiSituationService(options: {
         text: fact.text, observedAt: fact.observedAt, dueAt: fact.dueAt ?? null,
         startsAt: fact.startsAt ?? null, endsAt: fact.endsAt ?? null,
       };
-      if (shouldRedact(JSON.stringify(value))) {
+      if (hasCredentialMarkerDeep(value)) {
         throw new PiSituationError('redacted', 'That source record contains a credential and is not returned here.');
       }
       return boundedResult(value);

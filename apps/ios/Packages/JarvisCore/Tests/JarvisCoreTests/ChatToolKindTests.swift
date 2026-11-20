@@ -50,4 +50,15 @@ final class ChatToolKindTests: XCTestCase {
         XCTAssertEqual(group.status, .running)
         XCTAssertEqual(group.calls.map(\.status), [.succeeded, .running])
     }
+
+    func testSuccessfulVoiceMemoryWriteIsSafeToUseForCacheInvalidation() throws {
+        let json = """
+        {"type":"tool-call-finished","source":"voice",
+         "activityId":"00000000-0000-4000-8000-000000000101","messageId":"42",
+         "toolName":"memory_remember","outcome":"ok"}
+        """
+        let activity = try JSONDecoder().decode(ChatToolActivity.self, from: Data(json.utf8))
+        XCTAssertEqual(activity.source, "voice")
+        XCTAssertTrue(activity.changesPersonalMemory)
+    }
 }

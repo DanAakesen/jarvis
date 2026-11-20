@@ -3393,7 +3393,7 @@ remains omitted from the Dashboard; no iOS-specific route or payload is added.
 - **Chat dock.** `JarvisPage` (conversation, composer and voice) stays mounted in the shell for every signed-in page. `.app-shell[data-home]` and `[data-chat="home|out|rail"]` drive its placement; `chat-flight.ts` animates the bar into and out of the rail orb. Starting voice off the home page navigates home.
 - **History loading (local, 12 October).** The shell conversation view is available before its history request finishes. Its existing portal hosts loading placeholders, messages, empty text and initial error/Retry without replacing the window. Phone minimisation and voice lifecycle remain shell-owned. Workspace-pin GET requests use bounded transient retries; failed loads retry on online/visible events, without replaying pin writes or overriding owner cancellation. Token-acquisition failures retain explicit sign-in guidance.
 - **Presence (#468).** `presence-store.ts` shares one state for the top-bar chip and Settings: `GET /presence` on first use and every minute while visible, `PUT /presence { mode }` to switch, and `mode_changed` (or `mode`) events from `/now/events` applied live through `now-feed.ts`. Contract: Presence modes (P6-23), live since 6 October. 404/405/501 still read as "not available yet". Instructions per mode are read from and patched to `personality.modeInstructions` through `/settings`.
-- **Memory (#469).** `MemorySettings` uses `GET /memory/status`, `GET /memory?query&folder&limit`, `GET /memory/{id}`, `PATCH /memory/{id} { text }` and `DELETE /memory/{id}` as documented under GitHub vault memory (P7-40). It shows commit links for vault edits and distinguishes 204 (forgotten), 202 (approval pending in Jarvis), 409 (away) and 503 (web approval unavailable).
+- **Memory (#469, #1968).** `MemorySettings` uses SQL-only `GET /memory?query&folder=General&limit&offset`, `GET /memory/{id}`, `PATCH /memory/{id} { text }` and `DELETE /memory/{id}`. Vault notes are read through the separate Notes API. Successful Chat/Voice writes reset the visible first page and invalidate older pagination caches; failed or unavailable operations remain explicit errors.
 ## Runtime overview
 
 The backend factory is separate from the process entrypoint. `/health` returns
@@ -5655,6 +5655,10 @@ tool overview is in [features.md](features.md).
 
 ### GitHub vault memory (P7-40)
 
+This historical heading names Vault Knowledge, not Personal Memory. Personal
+Memory is the separate live SQL boundary described in the P7-42 follow-up
+below.
+
 Dan's private `DanAakesen/vault` repository on `master` is the source of truth
 for durable knowledge. The existing GitHub App issues an installation token
 scoped to that repository with Contents write permission (which includes read);
@@ -5666,7 +5670,7 @@ files, chunks notes by heading, embeds them with the selected
 embedding role deployment when available, and removes deleted notes.
 `dbo.vault_chunks` in migration `0021_vault_memory_index.sql` is only a derived
 index/cache keyed by path and blob SHA. Migration `0028_json_embeddings_without_vector.sql`
-stores nullable JSON vectors for both vault chunks and legacy SQL memories when
+stores nullable JSON vectors for both Vault chunks and SQL Personal Memories when
 SQL Server has no `vector` type. Migration `0031_embedding_model_identity.sql`
 stores the deployment name beside every memory and vault vector. Vector search
 and graph similarity use only rows from the active model; vectors with another
@@ -5730,9 +5734,9 @@ write logs contain only outcome and folder, never note content. A successful
 write invalidates the graph cache and queues index synchronization after any
 existing sync; the signed `master` push webhook also synchronizes the index.
 Graph and search cover every indexed directory within the existing 2,000-node,
-8,000-edge and search-result bounds. `/memory/status` counts actual top-level
-folders plus the empty-string root key. Note content is untrusted data, never
-instructions. No migration is needed.
+8,000-edge and search-result bounds. Notes inventory comes from `/notes` and
+the Knowledge graph, not the Personal Memory API. Note content is untrusted
+data, never instructions. No migration is needed.
 
 P9-77 implements the Notes web client locally against these routes. Read/write
 responses, paths, UTF-8 size, revision tokens and GitHub links are validated;
@@ -5780,41 +5784,88 @@ and expands nested directories; no live note writes were used for verification.
 After #699, reopening a blank draft loads the refreshed live inventory and
 last-sync time. Full-vault write acceptance remains unverified.
 
-P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
-/memory` returns durable SQL memories followed by indexed vault notes, with
-`query`, `folder` (`People`, `Work`, `Personal`, `General`), `limit` (1–50) and
-`offset` (0–10,000) filters. Durable memories are grouped under General. Search
-uses the existing vector retrieval and falls back to full-text/term search.
-Memory IDs are their decimal SQL IDs; vault IDs are opaque `vault_`-prefixed
-base64url paths, and each vault result also includes its validated `path`.
-Conversation sources link to authenticated conversation history; vault sources
-link to the GitHub blob on `master`.
+P7-42's original mixed Memory/Vault adapter is superseded by #1968. The live
+`core/memory.ts` module owns `memory_remember`, `memory_search`, `memory_list`,
+`memory_history`, `memory_correct` and `memory_forget`, plus the Dan-only
+`/memory` API. Production registers that one module with the shared tool
+registry, `/tools` and the existing PI MCP door; foreground turns and
+background PI read the same `dbo.memories` store.
 
-`GET /memory/{id}` returns the current item and up to ten versions. `PATCH
-/memory/{id}` accepts only `{ "text": ... }`; durable-memory edits use the
-existing SQL history, while vault-note edits commit to `master` with a clear
-Jarvis commit message and return `commitUrl`. `DELETE /memory/{id}` immediately
-forgets a durable SQL memory (204); vault-note deletion returns 202 with
-`approval pending in Jarvis`, then waits for the existing browser `runConfirmed`
-approval before deleting the GitHub file. Vault deletion is refused while Jarvis
-is away, when approval is unavailable, or for any path outside the four note
-folders. `GET /memory/status` reports the latest sync attempt, indexed note
-counts per folder, and the last `vault.index` outcome. API responses are
-uncached, bounded, and redact credential-like text; no database migration is
-needed. Durable-memory edits are capped at 2,000 characters; vault-note edits
-are capped at 256 KiB, and note history is response-size bounded.
+`GET /memory` returns SQL Personal Memory only, with `query`, compatibility
+`folder=General`, `limit` (1–50) and `offset` (0–10,000). IDs are decimal SQL
+IDs, every item has `type: "memory"`, and every result carries the exact
+conversation source or verified Settings-action source. Search uses the existing vector
+retrieval and falls back to full-text/substring search; it never consults the
+Vault index. An absent match is bounded and explicitly not proof of absence.
+
+`GET /memory/{id}` returns the current item and up to ten source-linked
+versions. `PATCH /memory/{id}` accepts only `{ "text": ... }` and preserves SQL
+history; its new revision is sourced to the server-generated request UUID and
+authenticated owner object ID, never to the original capture. `DELETE
+/memory/{id}` records the same explicit Settings provenance and returns 204.
+Migration `0091_memory_action_provenance.sql` makes conversation source fields
+nullable only when a complete Settings action source is present, and refuses
+rollback while such durable audit evidence exists. Vault note
+reads and edits remain on `/notes/note`, and Knowledge/graph reads use that
+Notes contract. There is no `vault_note` branch in `/memory` and no
+`/memory/status`. Responses are uncached, bounded and redact credential-like
+text. Durable-memory edits remain capped at
+2,000 characters.
+
+The authenticated owner message is the write authority. Explicit remember
+language (including "remember this" and "don't forget") bypasses the
+automatic-capture switch; a model-supplied `sourceIntent` is only descriptive.
+Automatic capture is allowed only while `memory.automaticCapture` is on and
+never accepts inferred facts, secrets, credentials or sensitive health and
+financial details. Before embedding or persistence, `memory_remember`,
+`memory_correct` and Settings edits validate the combined category, stable
+key, source text and content for secrets after normalising `.`, `_` and `-`
+key separators to spaces. Token families such as API, access, auth,
+authorization, bearer, refresh, session, client, ID and OAuth tokens use the
+same normalised forms, including camel case. The same classifier gates PI `memory_search`,
+`memory_list` and `memory_history`; credential-like legacy rows are withheld
+from their serialized key, content and source rather than relying on Settings
+redaction. Successful Chat/Voice tool completion invalidates iPhone
+and web Memory pagination so a newly committed preference is visible from a
+fresh page; failures remain visible and are never represented as a remembered
+confirmation.
+
+The same `memory-policy.ts` classifier is mandatory at every model-facing and
+provider boundary. Proactive Memory source facts and PI situation commit,
+lookup and legacy read paths discard credential-like rows before they enter
+context. Legacy embedding backfill receives full source-linked records, skips
+unsafe rows before the embedding call and persists a `credential` quarantine
+through migration `0092_memory_embedding_quarantine.sql`; subsequent passes
+exclude quarantined rows, and a corrected safe revision clears the marker.
+
+`pi_situational_state.state_json` is read with a structural parser first. A
+row written under the old token policy may be decoded, checked against its old
+hash, and recursively sanitised across every string-bearing nested shape
+(summary, source reason, ref IDs/identity/label, fact IDs/text, and follow-up
+IDs/text), then atomically
+rewritten with a new revision/hash and fresh derived JSON before any Chat,
+Voice or background activation is opened. A normal strict commit still rejects
+new credentials; this read migration is one-time repair, not a permissive
+runtime fallback.
+
+Settings corrections are explicit owner actions, so sensitive health or
+financial text is allowed subject to the credential rule; only automatic
+capture applies the broader sensitive-data restriction. On iOS, Memory page
+cache scopes are versioned independently of `.settings` freshness. A v2 page
+retains the raw API count and next offset, while old filtered-count cache pages
+stay unread and cannot advance a new load-more cursor.
 
 P9-10 adds bounded `memory` settings to the existing global settings store; no
 migration is needed. `similarityThreshold` defaults to `0.35` and controls
 embedding-based knowledge-graph edges in both the application and SQL candidate
 query; `graphTextSimilarityThreshold` defaults to `0.12` for the TF-IDF fallback.
-`searchTopK` defaults to five and caps vault search and graph-search results at
-the configured value (1–8). `automaticCapture` defaults on and is included in
-`/agent/settings` and voice-session instructions. The shared `vault_write` tool
-marks automatic captures separately from Dan-requested writes; the backend
-refuses marked automatic writes when capture is off, while direct requests remain
-available. Default thresholds, the vault-search result count and capture
-behavior match the existing values.
+`searchTopK` defaults to five and caps Vault search and graph-search results at
+the configured value (1–8). `automaticCapture` defaults on and is present in
+`/agent/settings`, Voice capability instructions and PI's trusted activation
+context. The Personal Memory module enforces it for model-selected automatic
+captures. Vault `vault_write` keeps its separate note-capture flag and never
+promotes note content into Personal Memory. Default thresholds and retrieval
+limits remain unchanged.
 
 P9-11 adds bounded `timeouts` settings to the existing global `dbo.settings`
 store and shared contracts; no migration or web change is needed. Defaults are
@@ -5833,8 +5884,8 @@ P9-74 keeps tooling out of the graph and displayed note counts using the
 documented `KNOWLEDGE_NOTE_EXCLUSIONS` constant in
 `apps/backend/src/vault/index.ts`: `**/skills/**`, `**/*.template.md`, and
 `.github/**` (case-insensitive). Filtering happens before the graph node cap
-and before `/memory/status` folder counts. Indexing and Jarvis vault search
-are unchanged; excluded indexed files remain searchable.
+and displayed note counts. Indexing and Jarvis Vault search are unchanged;
+excluded indexed files remain searchable.
 
 The web reader hides a delimited front-matter block after leading whitespace,
 BOMs or HTML comments, without parsing YAML, so malformed properties are also

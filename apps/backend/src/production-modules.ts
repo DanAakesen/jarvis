@@ -2,6 +2,7 @@ import type { BackendModule } from './modules.js';
 
 export interface ProductionModules {
   readonly core: BackendModule;
+  readonly memory?: BackendModule | undefined;
   readonly conversation: BackendModule;
   readonly factory: BackendModule;
   readonly sleep: BackendModule;
@@ -34,6 +35,7 @@ export interface ProductionModules {
 export function createProductionModules(modules: ProductionModules): BackendModule[] {
   return [
     modules.core,
+    ...(modules.memory ? [modules.memory] : []),
     modules.conversation,
     modules.factory,
     modules.sleep,

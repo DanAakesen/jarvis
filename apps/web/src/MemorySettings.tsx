@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useJarvisActivity } from './activity-context';
 import { backendFetch } from './backend-request';
 import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 
-// Only memories Jarvis keeps from conversations are shown here; vault notes live in Knowledge (Dan, 8 October).
-// The memory API files them under General and lists them before vault notes (docs/architecture.md, P7-40/P7-42).
-
-interface MemoryItem { id: string; kind: 'memory' | 'vault_note'; title: string; folder: string; text: string; updatedAt: string | null; githubUrl: string | null }
+interface MemoryItem { id: string; kind: 'memory'; title: string; folder: string; text: string; updatedAt: string | null; githubUrl: string | null }
 interface MemoryDetail extends MemoryItem { history: { at: string | null; text: string; url: string | null }[] }
+interface MemoryPage { items: MemoryItem[]; offset: number; nextOffset: number; limit: number; hasMore: boolean }
 
 type Load<T> = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; value: T };
 
@@ -30,14 +29,14 @@ async function errorMessage(response: Response, fallback: string) {
 
 function readItem(value: unknown): MemoryItem | null {
   const item = record(value);
-  if (!item) return null;
+  if (!item || item.type !== 'memory') return null;
   const id = typeof item.id === 'string' || typeof item.id === 'number' ? String(item.id) : '';
   if (!id || id.length > 200) return null;
   const body = text(item.content ?? item.snippet);
   const source = record(item.source);
   return {
     id,
-    kind: item.type === 'vault_note' ? 'vault_note' : 'memory',
+    kind: 'memory',
     title: text(item.title ?? item.key ?? item.path, 200) || body.slice(0, 80) || `Memory ${id}`,
     folder: text(item.folder, 40) || 'General',
     text: body,
@@ -46,18 +45,34 @@ function readItem(value: unknown): MemoryItem | null {
   };
 }
 
-function readList(value: unknown): MemoryItem[] {
+function readPage(value: unknown): MemoryPage {
   const container = record(value);
   const list = container && Array.isArray(container.items) ? container.items : null;
   if (!list) throw new Error('Memory returned an unexpected list.');
-  return list.slice(0, 200).flatMap((entry) => { const item = readItem(entry); return item ? [item] : []; });
+  const offset = typeof container?.offset === 'number' ? container.offset : -1;
+  const limit = typeof container?.limit === 'number' ? container.limit : -1;
+  const count = typeof container?.count === 'number' ? container.count : -1;
+  const rawItems = list.slice(0, limit);
+  if (!Number.isInteger(offset) || offset < 0 ||
+      !Number.isInteger(limit) || limit < 1 || limit > 50 ||
+      !Number.isInteger(count) || count < 0 || count > limit ||
+      count !== list.length || rawItems.length !== list.length) {
+    throw new Error('Memory returned an invalid page.');
+  }
+  return {
+    items: rawItems.flatMap((entry) => { const item = readItem(entry); return item ? [item] : []; }),
+    offset,
+    nextOffset: offset + count,
+    limit,
+    hasMore: container?.hasMore === true,
+  };
 }
 
 function readDetail(value: unknown): MemoryDetail {
   const container = record(value);
   const item = readItem(value);
   if (!item) throw new Error('Memory returned an unexpected entry.');
-  // Durable memories report revisions; vault notes report their GitHub commits.
+  // Durable memories report source-linked SQL revisions.
   const history = Array.isArray(container?.history) ? container.history.slice(0, 10).flatMap((entry) => {
     const change = record(entry);
     if (!change) return [];
@@ -67,12 +82,12 @@ function readDetail(value: unknown): MemoryDetail {
   return { ...item, history };
 }
 
-/** Settings → Memory: search, read, correct and forget what Jarvis remembers about Dan. Contracts: #469 (P7-42). */
+/** Settings → Memory: search, read, correct and forget what Jarvis remembers about Dan. Contracts: #469/#1968. */
 export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: string | null; getAccessToken: () => Promise<string> }) {
   const ids = useId();
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [list, setList] = useState<Load<MemoryItem[]>>({ status: 'loading' });
+  const [list, setList] = useState<Load<MemoryPage>>({ status: 'loading' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Load<MemoryDetail> | null>(null);
   const [draft, setDraft] = useState('');
@@ -80,6 +95,10 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const listGeneration = useRef(0);
+  const lastMemoryWrite = useRef<string | null>(null);
+  const { latestActivity } = useJarvisActivity();
 
   const call = useCallback(async (path: string, init?: { method: 'PATCH' | 'DELETE'; body?: unknown }) => {
     if (!backendUrl) throw new Unavailable();
@@ -98,26 +117,64 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     return response;
   }, [backendUrl, getAccessToken]);
 
+  const loadPage = useCallback(async (search: string, offset: number) => {
+    const params = new URLSearchParams({
+      folder: 'General',
+      limit: '50',
+      offset: String(offset),
+    });
+    if (search) params.set('query', search);
+    const response = await call(`/memory?${params}`);
+    if (!response.ok) throw new Error(await errorMessage(response, 'Memories could not be loaded. Try again.'));
+    const page = readPage(await response.json());
+    if (page.offset !== offset || page.limit !== 50) throw new Error('Memory returned the wrong page. Try again.');
+    if (page.hasMore && page.nextOffset <= offset) throw new Error('Memory pagination did not advance. Try again.');
+    return page;
+  }, [call]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(query.trim().slice(0, 200)), 250);
     return () => window.clearTimeout(timer);
   }, [query]);
 
   useEffect(() => {
-    let active = true;
-    const params = new URLSearchParams();
-    if (debounced) params.set('query', debounced);
-    params.set('folder', 'General');
-    params.set('limit', '50');
-    void call(`/memory?${params}`).then(async (response) => {
-      if (!response.ok) throw new Error(await errorMessage(response, 'Memories could not be loaded. Try again.'));
-      const value = readList(await response.json()).filter((item) => item.kind === 'memory');
-      if (active) setList({ status: 'ready', value });
+    const generation = ++listGeneration.current;
+    void loadPage(debounced, 0).then((value) => {
+      if (listGeneration.current === generation) setList({ status: 'ready', value });
     }).catch((reason: unknown) => {
-      if (active) setList(reason instanceof Unavailable ? { status: 'unavailable' } : { status: 'error', message: reason instanceof Error ? reason.message : 'Memories could not be loaded. Try again.' });
+      if (listGeneration.current !== generation) return;
+      setList(reason instanceof Unavailable
+        ? { status: 'unavailable' }
+        : { status: 'error', message: reason instanceof Error ? reason.message : 'Memories could not be loaded. Try again.' });
     });
-    return () => { active = false; };
-  }, [call, debounced, reload]);
+    return () => { listGeneration.current += 1; };
+  }, [debounced, loadPage, reload]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (!document.hidden) setReload((value) => value + 1);
+    };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
+
+  const memoryWrite = latestActivity?.type === 'tool-call-finished' &&
+    latestActivity.outcome === 'ok' &&
+    ['memory_remember', 'memory_correct', 'memory_forget'].includes(latestActivity.toolName)
+    ? latestActivity.activityId : null;
+  useEffect(() => {
+    if (!memoryWrite || lastMemoryWrite.current === memoryWrite) return;
+    lastMemoryWrite.current = memoryWrite;
+    setSelectedId(null);
+    setDetail(null);
+    setReload((value) => value + 1);
+  }, [memoryWrite]);
 
   useEffect(() => {
     let active = true;
@@ -157,7 +214,11 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
       const body = record(await response.json().catch(() => null));
       const value = { ...current, text: draft.trim(), updatedAt: date(record(body?.item)?.updatedAt) ?? current.updatedAt };
       setDetail({ status: 'ready', value });
-      setList((items) => items.status === 'ready' ? { status: 'ready', value: items.value.map((item) => item.id === value.id ? { ...item, text: value.text.slice(0, 240) } : item) } : items);
+      setList((items) => items.status === 'ready'
+        ? { status: 'ready', value: { ...items.value, items: items.value.items.map((item) =>
+          item.id === value.id ? { ...item, text: value.text.slice(0, 240), updatedAt: value.updatedAt } : item) } }
+        : items);
+      setReload((count) => count + 1);
       setNotice('Correction saved. Jarvis uses it from the next reply.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The correction could not be saved. Try again.');
@@ -180,9 +241,12 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
       } else if (response.status === 503) {
         throw new Error('Memory deletion is unavailable right now. Try again shortly.');
       } else if (response.ok) {
-        setList((items) => items.status === 'ready' ? { status: 'ready', value: items.value.filter((item) => item.id !== current.id) } : items);
+        setList((items) => items.status === 'ready'
+          ? { status: 'ready', value: { ...items.value, items: items.value.items.filter((item) => item.id !== current.id) } }
+          : items);
         setSelectedId(null);
         setDetail(null);
+        setReload((count) => count + 1);
         setNotice('Memory forgotten.');
       } else {
         throw new Error('Jarvis could not forget this memory. Try again.');
@@ -191,6 +255,37 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
       setError(reason instanceof Error ? reason.message : 'Jarvis could not forget this memory. Try again.');
     } finally {
       setBusy('');
+    }
+  }
+
+  async function loadMore() {
+    if (list.status !== 'ready' || !list.value.hasMore || loadingMore) return;
+    const generation = listGeneration.current;
+    const offset = list.value.nextOffset;
+    setLoadingMore(true);
+    setError('');
+    try {
+      const next = await loadPage(debounced, offset);
+      if (listGeneration.current !== generation) return;
+      setList((currentList) => {
+        if (currentList.status !== 'ready') return currentList;
+        const seen = new Set(currentList.value.items.map((item) => item.id));
+        return {
+          status: 'ready',
+          value: {
+            ...next,
+            items: [...currentList.value.items, ...next.items.filter((item) => !seen.has(item.id))],
+            offset: currentList.value.offset,
+            nextOffset: next.nextOffset,
+          },
+        };
+      });
+    } catch (reason) {
+      if (listGeneration.current === generation) {
+        setError(reason instanceof Error ? reason.message : 'More memories could not be loaded. Try again.');
+      }
+    } finally {
+      if (listGeneration.current === generation) setLoadingMore(false);
     }
   }
 
@@ -205,7 +300,13 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
           <div className="settings-field memory-search">
             <label className="visually-hidden" htmlFor={`${ids}-query`}>Search memory</label>
             <input id={`${ids}-query`} type="search" placeholder="Search what Jarvis remembers…" value={query} maxLength={200}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setList({ status: 'loading' });
+                setLoadingMore(false);
+                setSelectedId(null);
+                setDetail(null);
+              }}
               onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault(); }} />
           </div>
           <div className="memory-browser">
@@ -213,13 +314,13 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
               {list.status === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading memories" />}
               {list.status === 'error' && <StateMessage variant="error" className="settings-feedback" message="Memories could not be loaded."
                 actionLabel="Retry" onAction={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }} />}
-              {list.status === 'ready' && list.value.length === 0 && (
+              {list.status === 'ready' && list.value.items.length === 0 && (
                 <StateMessage variant="empty" className="settings-explanation"
                   message={debounced ? 'No matches' : 'No memories'} />
               )}
-              {list.status === 'ready' && list.value.length > 0 && (
+              {list.status === 'ready' && list.value.items.length > 0 && (
                 <ul className="memory-list" aria-label="Memories">
-                  {list.value.map((item) => (
+                  {list.value.items.map((item) => (
                     <li key={item.id}>
                       <button type="button" className="memory-item" aria-pressed={selectedId === item.id} onClick={() => openMemory(item.id)}>
                         <span className="memory-item-text">{item.text.slice(0, 160) || item.title}</span>
@@ -228,6 +329,12 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                     </li>
                   ))}
                 </ul>
+              )}
+              {list.status === 'ready' && list.value.hasMore && (
+                <div className="button-group button-group--space-3">
+                  <button className="secondary-button" type="button" disabled={loadingMore}
+                    onClick={() => { void loadMore(); }}>{loadingMore ? 'Loading…' : 'Load more'}</button>
+                </div>
               )}
             </div>
             {detail && (
