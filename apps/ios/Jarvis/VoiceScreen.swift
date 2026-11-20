@@ -474,7 +474,7 @@ struct VoiceScreenView: View {
                 title: JarvisVoiceLocalization.string(.add),
                 systemImage: "plus",
                 identifier: "voice.add",
-                isDisabled: !model.canUseControls
+                isDisabled: !model.canUseControls || model.visualInputUnavailable
             ) {
                 if model.cameraPermissionDenied {
                     Button(JarvisVoiceLocalization.string(.cameraSettings), systemImage: "gearshape") {

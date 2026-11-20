@@ -30,12 +30,12 @@ const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 interface InputGroup {
   readonly id: string;
   text: string;
-  readonly createdAt: number;
   lastDeltaAt: number;
+  lastTimelineEndMs?: number;
   quietSent: boolean;
   locked: boolean;
-  timer?: ReturnType<typeof setTimeout>;
   delegationId?: string;
+  delegationOffsetMs?: number;
   persisted?: ConversationMessage;
 }
 
@@ -195,10 +195,12 @@ function registerVoiceRoute(
     let currentInput: InputGroup | undefined;
     let activeOutput: OutputGroup | undefined;
     let pendingDelegation: AbortController | undefined;
+    let pendingDelegationGroup: InputGroup | undefined;
     let lastCommentaryDelegation: string | null = null;
     let endTimer: ReturnType<typeof setTimeout> | undefined;
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
+    const seenInputEventIds = new Set<string>();
     let persistedOutputGroups = 0;
     let persistenceFailed = false;
     const seenDelegations = new Set<string>();
@@ -289,7 +291,12 @@ function registerVoiceRoute(
       persistenceQueue = persistenceQueue.then(async () => {
         if (!sessionId) throw new Error('Voice session was not created');
         if (group.messageId && store.updateMessage) {
-          const updated = await store.updateMessage(group.messageId, text);
+          const updated = await store.updateMessage({
+            messageId: group.messageId,
+            sessionId,
+            role: 'jarvis',
+            text,
+          });
           if (!updated) throw new Error('Voice transcript was not updated');
         } else {
           if (persistedOutputGroups >= MAX_TRANSCRIPTS_PER_SESSION) {
@@ -394,6 +401,7 @@ function registerVoiceRoute(
     const cancelPendingDelegation = () => {
       pendingDelegation?.abort();
       pendingDelegation = undefined;
+      pendingDelegationGroup = undefined;
       piTurns.cancel();
     };
 
@@ -406,7 +414,6 @@ function registerVoiceRoute(
       const group: InputGroup = {
         id: `input_${randomUUID().replaceAll('-', '')}`,
         text: '',
-        createdAt: performance.now(),
         lastDeltaAt: performance.now(),
         quietSent: false,
         locked: false,
@@ -416,7 +423,7 @@ function registerVoiceRoute(
     };
 
     const sendInputCompletion = (group: InputGroup) => {
-      if (group.quietSent || group !== currentInput || !group.text.trim()) return;
+      if (group.quietSent || !group.text.trim()) return;
       group.quietSent = true;
       sendClient({
         type: 'jarvis.voice.input_transcript.completed',
@@ -431,15 +438,47 @@ function registerVoiceRoute(
         closeSession(1008, 'Invalid voice transcript');
         return;
       }
+      const eventId = typeof event.event_id === 'string' &&
+        /^[A-Za-z0-9_-]{1,128}$/u.test(event.event_id) ? event.event_id : undefined;
+      if (eventId && seenInputEventIds.has(eventId)) return;
+      const startMs = typeof event.start_ms === 'number' && Number.isSafeInteger(event.start_ms) && event.start_ms >= 0
+        ? event.start_ms : undefined;
+      const endMs = typeof event.end_ms === 'number' && Number.isSafeInteger(event.end_ms) && event.end_ms >= 0
+        ? event.end_ms : undefined;
+      if ((event.start_ms !== undefined && startMs === undefined) ||
+          (event.end_ms !== undefined && endMs === undefined) ||
+          startMs !== undefined && endMs !== undefined && endMs < startMs) {
+        closeSession(1008, 'Invalid voice transcript timeline');
+        return;
+      }
+      if (eventId) {
+        if (seenInputEventIds.size >= MAX_TRANSCRIPTS_PER_SESSION) {
+          const oldest = seenInputEventIds.values().next().value;
+          if (oldest) seenInputEventIds.delete(oldest);
+        }
+        seenInputEventIds.add(eventId);
+      }
       let group = currentInput;
-      if (!group || group.persisted || group.locked ||
-          (group.quietSent && !group.delegationId)) group = newInputGroup();
+      const timelineEnd = endMs ?? startMs;
+      const belongsToPending = pendingDelegationGroup && !pendingDelegationGroup.locked &&
+        (timelineEnd === undefined || pendingDelegationGroup.delegationOffsetMs === undefined ||
+          timelineEnd <= pendingDelegationGroup.delegationOffsetMs);
+      if (belongsToPending) group = pendingDelegationGroup;
+      else if (pendingDelegationGroup && timelineEnd !== undefined &&
+          pendingDelegationGroup.delegationOffsetMs !== undefined &&
+          timelineEnd > pendingDelegationGroup.delegationOffsetMs) {
+        group = newInputGroup();
+      } else if (!group || group.persisted || group.locked) group = newInputGroup();
+      if (!group) group = newInputGroup();
       group.text += delta;
       if (group.text.length > MAX_TRANSCRIPT_CHARACTERS) {
         closeSession(1009, 'Voice transcript too large');
         return;
       }
       group.lastDeltaAt = performance.now();
+      if (timelineEnd !== undefined) {
+        group.lastTimelineEndMs = Math.max(group.lastTimelineEndMs ?? 0, timelineEnd);
+      }
       limits.touch();
       if (group.text === delta) piTurns.cancel();
       sendClient({
@@ -447,9 +486,6 @@ function registerVoiceRoute(
         itemId: group.id,
         delta,
       });
-      if (group.timer) clearTimeout(group.timer);
-      group.timer = setTimeout(() => sendInputCompletion(group), VOICE_INPUT_QUIET_MS);
-      group.timer.unref();
     };
 
     const persistDelegatedTurn = async (group: InputGroup, delegationId: string, signal: AbortSignal) => {
@@ -483,7 +519,7 @@ function registerVoiceRoute(
       if (!message) throw new Error('Voice owner message was not stored');
       group.persisted = message;
       app.nowEventHub.publish({ type: 'refresh' });
-      if (signal.aborted || controller.signal.aborted || endRequested || currentInput !== group) return;
+      if (signal.aborted || controller.signal.aborted || endRequested || pendingDelegationGroup !== group) return;
       piTurns.start({
         text: turnText,
         messageId: message.id,
@@ -509,9 +545,15 @@ function registerVoiceRoute(
       seenDelegations.add(value.id);
       const group = currentInput && !currentInput.persisted ? currentInput : newInputGroup();
       group.delegationId = value.id;
+      const offsetMs = typeof event.offset_ms === 'number' &&
+        Number.isSafeInteger(event.offset_ms) && event.offset_ms >= 0
+        ? event.offset_ms : undefined;
+      if (offsetMs !== undefined) group.delegationOffsetMs = offsetMs;
+      currentInput = undefined;
       const pending = new AbortController();
       pendingDelegation?.abort();
       pendingDelegation = pending;
+      pendingDelegationGroup = group;
       const work = persistDelegatedTurn(group, value.id, AbortSignal.any([controller.signal, pending.signal]))
         .catch((error: unknown) => {
           if (controller.signal.aborted || pending.signal.aborted) return;
@@ -521,7 +563,10 @@ function registerVoiceRoute(
       delegationTasks.add(work);
       void work.finally(() => {
         delegationTasks.delete(work);
-        if (pendingDelegation === pending) pendingDelegation = undefined;
+        if (pendingDelegation === pending) {
+          pendingDelegation = undefined;
+          pendingDelegationGroup = undefined;
+        }
       });
     };
 
@@ -659,7 +704,6 @@ function registerVoiceRoute(
       statusAnnouncer?.close();
       unregisterVisionVoice?.();
       unregisterVisionVoice = undefined;
-      if (currentInput?.timer) clearTimeout(currentInput.timer);
       if (activeOutput) finishOutputGroup(activeOutput, code === 1000 ? 'completed' : 'cancelled');
       controller.abort();
       unregisterSessionConnection();
@@ -757,7 +801,6 @@ function registerVoiceRoute(
           closeSession(1008, 'Invalid voice audio');
           return;
         }
-        limits.touch();
         const providerEvent = { type: 'session.input_audio.append', audio: event.audio };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent, Buffer.byteLength(event.audio, 'base64'));

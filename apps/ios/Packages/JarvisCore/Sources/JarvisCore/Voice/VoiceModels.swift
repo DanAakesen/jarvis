@@ -1,7 +1,7 @@
 import Foundation
 
 public enum VoiceEndpoint {
-    public static let subprotocol = "jarvis.voice.v1"
+    public static let subprotocol = "jarvis.voice.v2"
 
     /// Normal voice always connects to the PI route; isolated runtime tests use their separate endpoints.
     public static func url(baseURL: URL) throws -> URL {

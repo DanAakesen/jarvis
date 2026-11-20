@@ -47,6 +47,7 @@ export interface VoiceClientOptions {
   onVisionLimit?: (limit: { itemId: string; code: 'frame_rate_limited' | 'daily_limit' | 'budget_exhausted' | 'budget_unavailable'; retryAfterMs?: number }) => void;
   onVisualResult?: (result: VisualResult & { itemId?: string }) => void;
   onVisualResultError?: (itemId?: string) => void;
+  onVisualUnsupported?: (source: 'camera' | 'screen' | undefined, itemId?: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -479,6 +480,8 @@ export class BrowserVoiceClient {
   private stopOpenHandler: (() => void) | undefined;
   private screenSessionReady = false;
   private cameraState: boolean | undefined;
+  private readonly visionSourceByItem = new Map<string, 'camera' | 'screen'>();
+  private latestVisionSource: 'camera' | 'screen' | undefined;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.audio = options.createAudio?.() ?? browserAudio();
@@ -734,7 +737,7 @@ export class BrowserVoiceClient {
             return;
           }
           const url = voiceUrl(this.options.backendUrl);
-          socket = this.makeSocket(url, ['jarvis.voice.v1', `jarvis.auth.${token}`]);
+          socket = this.makeSocket(url, ['jarvis.voice.v2', `jarvis.auth.${token}`]);
           this.socket = socket;
           socket.addEventListener('message', this.receiveBound);
           await waitForSocketEvent(socket, 'open', signal, CONNECTION_TIMEOUT_MS);
@@ -802,6 +805,8 @@ export class BrowserVoiceClient {
     if (!event || typeof event.type !== 'string') return;
     if (event.type === 'jarvis.session.ready') {
       if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
+        this.visionSourceByItem.clear();
+        this.latestVisionSource = undefined;
         this.screenSessionReady = true;
         this.sendCameraState();
         this.options.onSessionReady?.(event.sessionId);
@@ -823,6 +828,13 @@ export class BrowserVoiceClient {
         ...result, ...(itemId === undefined ? {} : { itemId }),
       });
       else this.options.onVisualResultError?.(itemId);
+    } else if (event.type === 'jarvis.screen.context.unavailable' && event.reason === 'not_supported') {
+      const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
+      const source = (itemId ? this.visionSourceByItem.get(itemId) : undefined) ??
+        (this.cameraState === true ? 'camera' : this.latestVisionSource);
+      if (itemId) this.visionSourceByItem.delete(itemId);
+      this.latestVisionSource = undefined;
+      this.options.onVisualUnsupported?.(source, itemId);
     } else if (event.type === 'jarvis.screen.context.unavailable' && this.cameraState === true &&
         isTranscriptionItemId(event.itemId) &&
         (event.reason === 'frame_rate_limited' || event.reason === 'daily_limit' ||
@@ -844,6 +856,14 @@ export class BrowserVoiceClient {
       const source = this.cameraState === true ? 'camera'
         : this.cameraState === false && requestedSource === 'camera' ? undefined : requestedSource;
       if (source) {
+        this.latestVisionSource = source;
+        if (itemId) {
+          this.visionSourceByItem.set(itemId, source);
+          if (this.visionSourceByItem.size > 64) {
+            const oldest = this.visionSourceByItem.keys().next().value;
+            if (oldest) this.visionSourceByItem.delete(oldest);
+          }
+        }
         if (itemId === undefined) this.options.onVisionRequest?.(source, event.transcript);
         else this.options.onVisionRequest?.(source, event.transcript, itemId);
       }

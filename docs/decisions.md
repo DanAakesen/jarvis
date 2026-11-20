@@ -13,6 +13,24 @@
 - **UI freshness:** committed `memory_remember`, `memory_correct` and `memory_forget` activity invalidates Memory pagination. Web reloads page zero and supports Load more using the raw server page count, while filtering any legacy Vault records only for display; iPhone invalidates Settings caches and reloads an open Memory screen. No unavailable or failed operation is represented as a successful write.
 - **Evidence:** deterministic backend, web and Swift checks only. No live provider/model call, deployment, paid smoke or physical-device acceptance is authorized by this decision.
 
+## 20 November 2026 — GPT-Live review corrections (post-2db2a87)
+
+- Model activation is read from ARM, matching the Foundry deployment resource
+  schema; the project data-plane session API is not treated as the deployment
+  source of truth.
+- Long assistant transcripts update only the matching message/session/role row.
+  The client protocol is `jarvis.voice.v2`; v1 is explicitly refused with no
+  alias.
+- Native transcript deltas remain in one candidate across silence. `event_id`
+  deduplicates delivery, and `start_ms`/`end_ms` plus delegation `offset_ms`
+  associate the owner turn. Raw PCM never refreshes inactivity; transcript and
+  explicit control activity do.
+- Bicep does not configure `JARVIS_VOICE_AGENT_NAME`. The provisioner sets it
+  only after the voice agent is active/pinned and then waits for the backend.
+- Camera/screen rejection is visible and terminal for that session's visual
+  controls: clients stop capture and disable retries instead of continuing an
+  unacknowledged audio-only upload flow.
+
 ## 20 November 2026 — Replace direct Voice Live with one PI-delegated GPT-Live agent
 
 - **Model:** the Sweden Central Foundry account has one voice deployment,
@@ -1592,7 +1610,9 @@ deployment remains unverified.
 ## 30 October 2026 — keep the voice protocol in JarvisCore (P15-06 / #1391)
 
 Use the web client's `/voice` and `/voice/da` routes and its
-`jarvis.voice.v1` plus `jarvis.auth.TOKEN` subprotocols. Keep the WebSocket
+Historical v1 decision: the client then used `jarvis.voice.v1` plus
+`jarvis.auth.TOKEN`. The 20 November GPT-Live wire cutover supersedes this with
+v2 and explicitly rejects v1. Keep the WebSocket
 replaceable for Linux tests; do not add an iOS backend route or Apple framework
 to `JarvisCore`. The core models known client/server messages, retains unknown
 server JSON, and owns only protocol state and PCM16/base64 conversion—not audio

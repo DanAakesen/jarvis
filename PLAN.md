@@ -28,7 +28,7 @@ No live model/provider smoke, deployment or spending is authorized. Physical Cha
 | Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, `marin`, client delegation, through `provision_pi_agent.py` | Done in source |
 | Replace the direct model WebSocket with the exact Foundry agent Live route and backend-only Entra/preview headers | Done in source |
 | Preserve native full duplex and the existing `/voice` client route; normalise provider events to `jarvis.voice.*` and use native mute/unmute | Done in source |
-| Group native transcript deltas on 0.6-second quiet (max three seconds), persist Dan first, then run the exact turn through PI and return delegated commentary | Done in source |
+| Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, use 0.6-second quiet (max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source |
 | Remove the external STT role/selector and old reply/barge-in controls; make the voice catalogue and role only `gpt-live-1` | Done in source |
 | In Deploy, wait for the active voice agent and configured ready backend, then idempotently delete both replaced deployments through ARM | Done in source |
 | Update product/design/architecture/context/decision references and keep older direct-path records explicitly historical | Done |
@@ -44,6 +44,13 @@ Static commands run: `npm run build --workspace @jarvis/contracts`; backend
 `build` and `lint`; web `build` and `lint`; Swift 6.2 `swift build` for
 JarvisCore plus `swiftc -frontend -parse` for changed app files; Python
 `py_compile`; Node YAML/JSON parse; and Bicep 0.44.1 `build` plus `lint`.
+
+Post-commit review fixes on the same branch replace ARM/project readback
+confusion, make assistant transcript updates role/session scoped, cut to
+`jarvis.voice.v2`, retain transcript fragments through pauses by event/timeline
+correlation, remove infra-time voice targeting, stop raw-silence inactivity
+refresh, and make visual rejection stop/disable capture visibly. These fixes are
+committed separately and do not amend `2db2a87`.
 
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 

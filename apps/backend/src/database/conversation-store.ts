@@ -326,16 +326,18 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.rowsAffected[0] === 1;
     },
 
-    async updateMessage(messageId, text) {
+    async updateMessage({ messageId, sessionId, role, text }) {
       const result = await pool.request()
         .input('messageId', sql.BigInt, BigInt(messageId))
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input('role', sql.NVarChar(16), role)
         .input('text', sql.NVarChar(sql.MAX), text)
         .query<MessageRow>(`UPDATE dbo.messages
           SET text = @text
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
             INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
-          WHERE id = @messageId AND role = N'dan';`);
+          WHERE id = @messageId AND jarvis_session_id = @sessionId AND role = @role;`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
     },

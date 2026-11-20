@@ -101,7 +101,12 @@ export interface ConversationStore {
     readonly messageId: string;
     readonly visualContext: VisualContext;
   }): Promise<boolean>;
-  updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
+  updateMessage?(input: {
+    readonly messageId: string;
+    readonly sessionId: string;
+    readonly role: ConversationRole;
+    readonly text: string;
+  }): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
   getMessageSessionId?(messageId: string): Promise<string | null>;
   getLatestDanMessageText?(sessionId: string): Promise<string | null>;

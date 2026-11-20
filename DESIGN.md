@@ -4,7 +4,7 @@ Voice keeps the existing screen composition, orb, captions, microphone/plus/CC/
 End controls and responsive states. The provider change is not exposed as a
 new visual concept: the backend normalises native GPT-Live readiness, caption
 deltas, output audio and bounded response completion into Jarvis's existing
-`jarvis.voice.v1` boundary. Listening, thinking and speaking remain labelled in
+`jarvis.voice.v2` boundary. Listening, thinking and speaking remain labelled in
 text; GPT-Live may listen and speak concurrently, so the UI never claims the
 microphone was disabled by speaking.
 
@@ -14,6 +14,12 @@ currently **Minimise windows when Voice starts**. Models exposes exactly one
 voice-role option, `gpt-live-1`; it is not a fallback selector. Web, iPhone and
 Watch keep `/voice`; physical-device audio, captions, barge-in and rendering
 remain owner acceptance items.
+
+Camera and screen requests are refused by this voice backend. On the first
+`not_supported` response, the client stops active capture, disables the visual
+actions for the rest of that session and shows an explicit audio-only notice.
+The control state, notification and capture teardown are part of the product
+contract; silence after a rejected upload is not accepted.
 
 ## Background PI in Proactive — 19 November 2026
 

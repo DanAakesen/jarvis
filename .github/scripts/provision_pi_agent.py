@@ -83,6 +83,8 @@ def load_voice_spec() -> tuple[dict, str, dict]:
     spec = json.loads((PI / "voice-definition.json").read_text(encoding="utf-8"))
     require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", spec["agentName"]) is not None, "voice_agent_name_invalid")
     require(spec["model"] == "gpt-live-1", "voice_model_invalid")
+    require(spec["modelVersion"] == "2026-09-10", "voice_model_version_invalid")
+    require(spec["sku"] == "GlobalStandard" and spec["capacity"] == 10, "voice_deployment_sku_invalid")
     require(spec["delegation"] == {"type": "client"}, "voice_delegation_invalid")
     require(spec["store"] is False, "voice_store_invalid")
     audio = spec["audio"]
@@ -530,17 +532,36 @@ def verify_voice_agent(readback: dict, definition: dict) -> None:
         require(actual.get(key) == definition[key], f"voice_readback_{key}_mismatch")
 
 
-def provision_voice_agent(azure: Az, spec: dict, definition: dict) -> dict:
-    name = spec["agentName"]
-    deployment = azure.rest(
-        "GET",
-        f"/deployments/{quote(spec['model'], safe='')}",
-        features=VOICE_FEATURES,
-    )
-    require(deployment.get("name") == spec["model"], "voice_deployment_missing")
+def verify_voice_deployment(deployment: dict | None, spec: dict) -> None:
+    require(deployment is not None and deployment.get("name") == spec["model"], "voice_deployment_missing")
+    properties = deployment.get("properties") or {}
+    model = properties.get("model") or {}
+    sku = deployment.get("sku") or {}
+    require(properties.get("provisioningState") == "Succeeded", "voice_deployment_not_active")
     require(
-        (deployment.get("properties") or {}).get("provisioningState") == "Succeeded",
-        "voice_deployment_not_active",
+        model.get("format") == "OpenAI"
+        and model.get("name") == spec["model"]
+        and model.get("version") == spec["modelVersion"],
+        "voice_deployment_model_mismatch",
+    )
+    require(
+        sku.get("name") == spec["sku"] and sku.get("capacity") == spec["capacity"],
+        "voice_deployment_sku_mismatch",
+    )
+
+
+def provision_voice_agent(
+    azure: Az,
+    spec: dict,
+    definition: dict,
+    account: str,
+    group: str,
+    subscription: str,
+) -> dict:
+    name = spec["agentName"]
+    verify_voice_deployment(
+        arm_deployment_request("GET", account, spec["model"], group, subscription),
+        spec,
     )
     wanted = sha256(canonical(definition))
     state = current_state(azure, name, VOICE_FEATURES)
@@ -621,7 +642,14 @@ def provision(args: argparse.Namespace) -> dict:
         verify(wait_active(foundry, name, version), spec, instructions)
         pin(foundry, name, version)
         created = True
-    voice = provision_voice_agent(foundry, voice_spec, voice_definition)
+    voice = provision_voice_agent(
+        foundry,
+        voice_spec,
+        voice_definition,
+        args.foundry_account,
+        args.resource_group,
+        args.subscription,
+    )
     backend_revision = configure_voice_backend(
         args.backend_app,
         args.resource_group,

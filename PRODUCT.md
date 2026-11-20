@@ -274,10 +274,13 @@ Foundry agent `jarvis-pi-live`, which runs native GPT-Live full duplex on
 `gpt-live-1` with 24 kHz PCM and the built-in `marin` voice. GPT-Live follows
 the spoken language, owns listening and barge-in, and delegates owner turns to
 the existing PI gateway. The browser, iPhone and Watch keep Jarvis's
-`jarvis.voice.v1` boundary; provider events stay inside the backend. No
+`jarvis.voice.v2` boundary; provider events stay inside the backend. No
 separate speech-to-text model or voice language is stored.
-Camera inspection and screen sharing reuse the web app's existing vision and
-voice-context routes. Denied microphone permission offers a path to Settings.
+Voice currently sends camera/screen requests only through the existing context
+contract. The backend returns `not_supported`; web and iPhone stop active
+capture, disable the visual controls for that session and show that Voice is
+audio-only. Chat retains its separate visual-input paths. Denied microphone
+permission offers a path to Settings.
 Face ID locking is separate; background audio, Bluetooth and route changes, call
 interruption and lock/call microphone recovery are not part of this screen.
 Follow-ups to file separately: background audio; Bluetooth; audio route changes;
@@ -1173,10 +1176,11 @@ existing budget alerts with USD 20/month authorized for Terra; no new spending
 guard or other role change is part of this work.
 
 Voice sessions use `jarvis-pi-live` as the native speech layer. GPT-Live never
-receives Jarvis's tool catalogue. When it creates a client delegation, the relay
-groups the current native transcript after a 0.6-second quiet period, bounded by
-three seconds, stores Dan's exact owner message, and only then starts the same PI
-gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
+receives Jarvis's tool catalogue. The relay keeps transcript fragments together
+through pauses and uses native event/timeline identities to associate the client
+delegation. After that assignment it waits for 0.6-second quiet, bounded by
+three seconds, stores Dan's exact owner message, and only then starts the same
+PI gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
 final speakable answer return through the matching delegation ID. This preserves
 `find_tools -> call_tool`, grants, receipts, monthly cap and single-flight.
 GPT-Live has no transcript-done or output-audio-done event: the relay explicitly
@@ -1198,7 +1202,10 @@ Screen sharing uses the browser's explicit screen/window picker. Sharing status 
 Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video at its actual aspect ratio, fitted to available workspace space without a surrounding frame, plus overlaid Switch/Close controls without visible Live or direction badges; Switch appears only on mobile touch input, not a narrow desktop window. Switch retains an accessible directional name when the browser reports facing direction. Observation notices and playback recovery stay over the video with retry reachable without scrolling the camera controls away. The larger phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow. Pending photos appear as compact preview pills above the text input inside the composer; sent photos show their image preview in the message.
 With a screen share active and the camera off, generic visual questions in text chat such as **What do you see?** inspect the shared screen and send its context with the message. Camera-specific questions still require the camera; camera-conversation mode keeps its existing priority while the camera is on.
 
-Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames. Issue #1317 supersedes the old turn-only behavior: enabling video also starts automatic sampled-frame delivery. There is no Look now button and there is no separate camera-watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
+Dan's 11 October decision applies to the Chat path: while the camera is on,
+each chat turn captures a fresh bounded frame. The GPT-Live voice path does not
+advertise supported visual input; on the first `not_supported` response, clients
+stop capture and disable the voice visual controls. Camera off sends no frames.
 
 On 12 October Dan rejected the slow snapshot-per-turn experience and requires
 a natural conversation about what is on camera, alongside faster general chat.
@@ -1294,7 +1301,12 @@ mode and Stop sharing screen remain available.
 
 Camera access stops when Dan closes or turns off video, when voice or the signed-in app session ends, when its owner unmounts, when permission is lost, on fatal capture/delivery failure, or when the spending budget is exhausted. Dan approved removing the ten-minute no-message cutoff on 26 October 2026 at 14:21:24 UTC: active video and requested narration continue during silence. Browser/device restrictions still apply; background iPhone capture is not promised. Raw frames remain in memory only and never enter transcripts, logs or task events. Capture/connection failures and local-preview playback failures remain visible with recovery. Jarvis can start or stop the same video through acknowledged workspace commands when Dan asks; startup requires existing browser permission, otherwise instruct Dan to enable it himself.
 
-Issue #1317 unifies Enable video and camera watching. Permission-granted camera capture automatically sends fresh JPEG samples, including during silence or an unchanged scene, at a 2.6-second delay after each completed request. Typing mode creates a session when needed. There is no separate Watch the camera or Look at camera action. Camera delivery is confirmed only after backend acceptance; local preview alone is not confirmation. Jarvis stays quiet by default; a typed or spoken keep-describing request sets a standing continuous-description instruction, producing brief current observations without another user prompt. Stop describing clears that instruction; camera off, unmount, session transition, capture failure and exhausted budget cancel delivery. Busy voice narration is dropped rather than queued. Screen sharing/watching keeps its independent controls and unchanged-frame suppression. The shared vision budget and image authorization remain. There is no user-inactivity cutoff for active video; user-requested start/stop uses the same permission-checked workspace camera controls. Raw frames remain memory-only and there is no raw video streaming or recording.
+Issue #1317 unifies Enable video and camera watching for Chat/typing.
+Permission-granted capture automatically sends fresh JPEG samples after
+acceptance; local preview alone is not confirmation. GPT-Live Voice stops and
+disables camera/screen capture on the explicit backend rejection instead of
+quietly continuing audio-only. Raw frames remain memory-only and there is no
+raw video streaming or recording.
 
 ### Status
 
@@ -1899,7 +1911,11 @@ The same task makes the persistent cyan orb/open amber core visibly awaken and g
 
 ### Voice UI hotfix (#435)
 
-The voice More menu can start screen sharing or camera access through the native browser permission prompt, then inspect a frame on request or stop capture. Sharing alone never sends a frame. Session end retains existing capture cleanup. Transient sharing/inspection guidance, permission failures and terminal voice failures use dismissible bottom-right notifications outside the conversation layout; they never become chat messages or inline composer content.
+The voice More menu can attempt screen sharing or camera access. GPT-Live
+`not_supported` stops both, disables their menu entries for the session and
+shows a visible audio-only notice. Sharing alone never sends a frame. Session
+end retains capture cleanup. Transient failures use dismissible notifications
+outside the conversation layout.
 
 Under-orb status uses bright white text with a soft glow and contrast shadow, without a badge background or colored glyph. Accessible live announcements and readable recovery detail remain. Dormancy keeps a gentle cyan pulse, visible amber network and slow core motion; awakening increases core movement and retains the existing ignition/wave/surge sequence. Real activity and audible playback still determine active states. Reduced motion remains steady and dormancy never opens the microphone.
 

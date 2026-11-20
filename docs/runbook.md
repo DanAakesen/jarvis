@@ -86,8 +86,10 @@ owner message and provider-spoken reply. The first PI commentary and final
 answer carry the same delegation identifier upstream. An input transcript that
 arrives while PI is running cancels that stale turn.
 
-The 0.6-second quiet grouping window is bounded by three seconds. GPT-Live has
-no transcript-done or output-audio-done event, so later output is split/persisted
+Transcript pauses do not split an owner turn. Native event IDs and timeline
+offsets stay in one candidate until client delegation; the 0.6-second quiet
+settlement then runs with a three-second bound. GPT-Live has no
+transcript-done or output-audio-done event, so later output is split/persisted
 on 0.6-second quiet or a three-second persistence bound. If no provider audio
 was exercised, none of this is provider or acoustic acceptance.
 

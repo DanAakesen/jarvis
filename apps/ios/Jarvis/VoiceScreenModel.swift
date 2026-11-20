@@ -18,6 +18,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
     @Published private(set) var isScreenSharing = false
+    @Published private(set) var visualInputUnavailable = false
     @Published private(set) var captions = VoiceCaptions()
     var userCaption: String { captions.user }
     var assistantCaption: String { captions.assistant }
@@ -86,6 +87,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     + "The newest line stays readable while earlier lines fade at the top."
                 ))
                 errorMessage = nil
+                visualInputUnavailable = false
             }
 #endif
         }
@@ -209,6 +211,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         liveActivitySessionID = UUID()
         VoiceLiveActivityActions.session = self
         errorMessage = nil
+        visualInputUnavailable = false
         microphoneDenied = false
         signInRequired = false
         voiceState = .connecting
@@ -407,6 +410,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        visualInputUnavailable = false
         updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
@@ -429,7 +433,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     func startCamera() async {
-        guard canUseControls, !isCameraEnabled else { return }
+        guard canUseControls, !visualInputUnavailable, !isCameraEnabled else { return }
         let generation = sessionGeneration
         let cameraAllowed = await VoiceCameraCapture.requestAccess()
         guard sessionGeneration == generation, canUseControls else { return }
@@ -463,7 +467,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     /// Camera for a single photo while live video is off. Nothing is streamed and the session is not told that
     /// video is on; `endPhotoSession` releases the camera again.
     func beginPhotoSession() async -> Bool {
-        guard canUseControls else { return false }
+        guard canUseControls, !visualInputUnavailable else { return false }
         if camera != nil { return true }
         let generation = sessionGeneration
         let allowed = await VoiceCameraCapture.requestAccess()
@@ -523,6 +527,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     func setScreenSharing(_ enabled: Bool) async {
+        guard !visualInputUnavailable || !enabled else { return }
         guard enabled != isScreenSharing else { return }
         let generation = sessionGeneration
         if enabled, isCameraEnabled {
@@ -633,7 +638,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             // The caption path is a working fallback, not a failure.
             break
         case .screenContextUnavailable(_, let reason):
-            if let reason, let message = Self.visualFailure(reason) { errorMessage = message }
+            if reason == "not_supported" {
+                disableVisualInput()
+            } else if let reason, let message = Self.visualFailure(reason) {
+                errorMessage = message
+            }
         case .unknown:
             break
         }
@@ -890,6 +899,23 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return JarvisVoiceLocalization.string(.imageUnavailable)
         default:
             return nil
+        }
+    }
+
+    private func disableVisualInput() {
+        guard !visualInputUnavailable else { return }
+        visualInputUnavailable = true
+        camera?.stop()
+        camera = nil
+        isCameraEnabled = false
+        photoForNextTurn = nil
+        photoIsReady = false
+        isScreenSharing = false
+        screenShareBridge.requestStop()
+        updateLiveStream()
+        errorMessage = JarvisVoiceLocalization.string(.visualUnavailable)
+        Task {
+            try? await sessionClient?.setCameraState(on: false)
         }
     }
 }

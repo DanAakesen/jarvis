@@ -1003,10 +1003,6 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'JARVIS_OWNER_SESSION_ENABLED'
               value: 'true'
             }
-            {
-              name: 'JARVIS_VOICE_AGENT_NAME'
-              value: 'jarvis-pi-live'
-            }
           ], piAgentConfigured ? [
             {
               name: 'JARVIS_PI_AGENT_NAME'

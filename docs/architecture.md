@@ -144,7 +144,7 @@ provisioning result cannot produce an accepted release.
 
 ## PI voice on GPT-Live — 20 November 2026 (P0 cutover)
 
-The normal client remains `/voice` with the authenticated `jarvis.voice.v1`
+The normal client remains `/voice` with the authenticated `jarvis.voice.v2`
 subprotocol. The backend derives one Foundry agent route from the project
 endpoint:
 `/agents/jarvis-pi-live/endpoint/protocols/voice/live/sessions?api-version=v1`.
@@ -186,7 +186,7 @@ sequenceDiagram
 | PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; a newer transcript input cancels the turn in flight, and the next waits for it to release the gateway. It keeps the 90-second deadline, sends the first progress note immediately and the answer at completion; failures become one honest spoken sentence, while cancelled/superseded turns say nothing. |
 | Relay route | `apps/backend/src/voice/relay.ts` | Owner only; maps `jarvis.voice.input_audio.append` to `session.input_audio.append`, maps native deltas to Jarvis events, and translates client microphone state to native mute/unmute. Camera/screen context returns `not_supported`. |
 | Voice-agent definition | `agents/pi/voice-definition.json`, `.github/scripts/provision_pi_agent.py` | Immutable `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, model `gpt-live-1`, PCM 24 kHz and output voice `marin`; `delegation: { type: "client" }`. No Foundry-managed prompt conversation is used. |
-| Turn boundary | `apps/backend/src/voice/relay.ts` | GPT-Live supplies transcript deltas but no transcript-done/output-done events. A current transcript is grouped on 0.6-second quiet and at most three seconds, then persisted before PI. Output grouping/persistence follows the same bounded rule. |
+| Turn boundary | `apps/backend/src/voice/relay.ts` | GPT-Live supplies transcript deltas but no transcript-done/output-done events. Native `event_id` and `start_ms`/`end_ms` keep fragments in the same candidate through pauses; delegation `offset_ms` assigns the exact owner turn. After assignment, 0.6-second quiet (max three seconds) closes and persists it before PI. Output grouping/persistence follows the bounded rule. |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
 | Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
@@ -2415,7 +2415,7 @@ PCM16/base64 helpers, session state machine, and bounded reconnect coordinator.
 `WebSocketTransport` remains an abstract seam; the app supplies the platform
 adapter. Both spoken languages connect to `/voice`, preserving the configured
 backend base path and sending the supplied access token through the same
-`jarvis.voice.v1` and `jarvis.auth.TOKEN` subprotocols as the web client.
+`jarvis.voice.v2` and `jarvis.auth.TOKEN` subprotocols as the web client.
 Speech-start events interrupt the current response immediately and report
 playback completion as inaudible. Microphone activation, mute, end, and
 reconnection are handled without capturing or playing audio in this package.
@@ -7856,7 +7856,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica; external HTTPS ingress to port 3000. It receives `FOUNDRY_PROJECT_ENDPOINT` and fixed `JARVIS_VOICE_AGENT_NAME=jarvis-pi-live` alongside the existing Foundry, PI, SQL and integration settings. |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica; external HTTPS ingress to port 3000. Bicep supplies `FOUNDRY_PROJECT_ENDPOINT`; the PI provisioner adds `JARVIS_VOICE_AGENT_NAME=jarvis-pi-live` only after active/pinned-agent evidence. |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |

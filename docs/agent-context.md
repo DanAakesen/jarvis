@@ -5672,8 +5672,10 @@ and SQL selection/admission with
 `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher.integration.test.ts`
 only under the isolated loopback SQL Server configuration.
 
-`FOUNDRY_PROJECT_ENDPOINT` plus the Bicep-pinned
-`JARVIS_VOICE_AGENT_NAME=jarvis-pi-live` enables `/voice`. The backend derives
+`FOUNDRY_PROJECT_ENDPOINT` plus the provisioner-set
+`JARVIS_VOICE_AGENT_NAME=jarvis-pi-live` enables `/voice`. Bicep deliberately
+leaves the voice name absent; the `pi-agent` phase adds it only after the agent
+is active and pinned. The backend derives
 the exact
 `/agents/jarvis-pi-live/endpoint/protocols/voice/live/sessions?api-version=v1`
 route, gets the `https://ai.azure.com/.default` token with
@@ -6271,9 +6273,11 @@ speech-to-text role, model selector, language pin, provider-session override,
 direct tool catalogue or response-creation path. App copy is English; Danish and English
 speech remain native model input.
 
-At `session.delegation.created`, the relay waits for 0.6 seconds of transcript
-quiet (at most three seconds), stores Dan's message, then invokes the existing
-PI gateway with that exact message ID and the shared `dbo.pi_conversation`.
+Native `event_id` and transcript timeline offsets keep one owner-turn candidate
+through pauses. At `session.delegation.created`, the relay uses `offset_ms` to
+associate it, waits for 0.6 seconds of transcript quiet (at most three seconds),
+stores Dan's message, then invokes the existing PI gateway with that exact
+message ID and the shared `dbo.pi_conversation`.
 `session.commentary.append` returns PI's acknowledgement/final answer under the
 delegation ID. New transcript input cancels stale PI work. Output deltas are
 grouped and persisted on 0.6-second quiet with a three-second persistence bound.
