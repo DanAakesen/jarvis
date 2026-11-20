@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Entry point for the hosted Jarvis voice agent."""
+"""Historical voice-bridge entry point retained for isolated hosted-runtime use, not normal GPT-Live voice."""
 
 from __future__ import annotations
 

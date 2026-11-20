@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Model backend contract for the Voice Live Bridge sample."""
+"""Historical model contract for the isolated hosted bridge sample."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class ConversationSummarizer(Protocol):
 
 
 class StreamingModelClient(Protocol):
-    """Response backend consumed by the Voice Live Bridge runtime."""
+    """Response backend consumed by the historical isolated bridge runtime."""
 
     model_name: str
     server_address: str

@@ -55,17 +55,12 @@ public struct VoiceConnectionPresentationStateMachine: Sendable {
     }
 }
 
-public enum VoiceSessionAction: Equatable, Sendable {
-    case interruptPlayback(responseID: String)
-}
-
 public enum VoiceSessionEvent: Equatable, Sendable {
     case start
     case connected
     case sessionReady
     case microphoneActive
     case microphoneMuted
-    case speechStarted
     case responseCreated(id: String?)
     case audioDelta
     case responseFinished
@@ -87,8 +82,7 @@ public struct VoiceSessionStateMachine: Sendable {
 
     public init() {}
 
-    @discardableResult
-    public mutating func apply(_ event: VoiceSessionEvent) -> [VoiceSessionAction] {
+    public mutating func apply(_ event: VoiceSessionEvent) {
         switch event {
         case .start where state == .idle:
             state = .connecting
@@ -99,19 +93,6 @@ public struct VoiceSessionStateMachine: Sendable {
             state = .listening
         case .microphoneActive, .microphoneMuted:
             break
-        case .speechStarted where state == .speaking:
-            defer {
-                state = .listening
-                responseID = nil
-                responseHasAudio = false
-            }
-            if let responseID {
-                return [.interruptPlayback(responseID: responseID)]
-            }
-        case .speechStarted where isLive:
-            state = .listening
-            responseID = nil
-            responseHasAudio = false
         case .responseCreated(let id) where isLive:
             responseID = id
             responseHasAudio = false
@@ -154,7 +135,6 @@ public struct VoiceSessionStateMachine: Sendable {
         default:
             break
         }
-        return []
     }
 
     private var isReconnecting: Bool {
@@ -215,7 +195,6 @@ public actor VoiceSessionClient {
     private let clock: any ChatClock
     private let reconnectPolicy: VoiceReconnectPolicy
     private let onMessage: @Sendable (VoiceServerMessage) -> Void
-    private let onAction: @Sendable (VoiceSessionAction) -> Void
     private let onStateChange: @Sendable (VoiceSessionState) -> Void
     private var machine = VoiceSessionStateMachine()
     private var endpoint: URL?
@@ -233,7 +212,6 @@ public actor VoiceSessionClient {
         clock: any ChatClock = ContinuousChatClock(),
         reconnectPolicy: VoiceReconnectPolicy = VoiceReconnectPolicy(),
         onMessage: @escaping @Sendable (VoiceServerMessage) -> Void = { _ in },
-        onAction: @escaping @Sendable (VoiceSessionAction) -> Void = { _ in },
         onStateChange: @escaping @Sendable (VoiceSessionState) -> Void = { _ in }
     ) {
         self.baseURL = baseURL
@@ -241,7 +219,6 @@ public actor VoiceSessionClient {
         self.clock = clock
         self.reconnectPolicy = reconnectPolicy
         self.onMessage = onMessage
-        self.onAction = onAction
         self.onStateChange = onStateChange
     }
 
@@ -375,14 +352,6 @@ public actor VoiceSessionClient {
             isConnected = false
             await transport.close(code: 1000)
             clearCredentials()
-        case .speechStarted:
-            let actions = apply(.speechStarted)
-            for action in actions {
-                onAction(action)
-                if case .interruptPlayback(let responseID) = action {
-                    try await send(.playbackCompleted(responseID: responseID, audible: false))
-                }
-            }
         case .responseCreated(let responseID):
             apply(.responseCreated(id: responseID))
         case .audioDelta:
@@ -458,11 +427,9 @@ public actor VoiceSessionClient {
         subprotocols.removeAll(keepingCapacity: false)
     }
 
-    @discardableResult
-    private func apply(_ event: VoiceSessionEvent) -> [VoiceSessionAction] {
-        let actions = machine.apply(event)
+    private func apply(_ event: VoiceSessionEvent) {
+        machine.apply(event)
         onStateChange(machine.state)
-        return actions
     }
 
     private var isLive: Bool {

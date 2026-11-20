@@ -30,7 +30,7 @@ REACH_CHECKS = {
 }
 
 
-# Present only when the report carries the voice turns (the PI leg of a voice turn: Voice Live's own audio time is not in it).
+# Present only when the report carries the voice turns (the PI leg of a voice turn; native GPT-Live audio time is not in it).
 VOICE_CHECKS = {
     "voice_spoken_shape": "voice-channel replies read as speech (plain words, no markdown or lists, short)",
     "voice_tools_over_mcp": "a voice turn ran a Jarvis tool through the MCP server and its own result was ok",

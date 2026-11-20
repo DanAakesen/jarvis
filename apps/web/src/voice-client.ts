@@ -665,7 +665,7 @@ export class BrowserVoiceClient {
       await this.audio.open((audio) => {
         if (this.running && !this.stopping && this.microphoneOpen && socket === this.socket &&
             socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
+          socket.send(JSON.stringify({ type: 'jarvis.voice.input_audio.append', audio }));
         }
       });
       if (!this.running || this.stopping || !this.sessionReady || socket !== this.socket ||
@@ -738,7 +738,7 @@ export class BrowserVoiceClient {
           this.socket = socket;
           socket.addEventListener('message', this.receiveBound);
           await waitForSocketEvent(socket, 'open', signal, CONNECTION_TIMEOUT_MS);
-          await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
+          await waitForVoiceEvent(socket, ['jarvis.session.ready'], signal, WARMUP_TIMEOUT_MS);
           if (!this.running || signal.aborted) break;
           if (this.stopping) {
             await waitForClose(socket, signal);
@@ -834,10 +834,10 @@ export class BrowserVoiceClient {
         itemId: event.itemId, code: event.reason,
         ...(typeof retryAfterMs === 'number' ? { retryAfterMs } : {}),
       });
-    } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
+    } else if (event.type === 'jarvis.voice.input_transcript.completed' &&
         typeof event.transcript === 'string') {
       if (!event.transcript.trim()) return;
-      const itemId = isTranscriptionItemId(event.item_id) ? event.item_id : undefined;
+      const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
       if (itemId === undefined) this.options.onUserTurn?.(event.transcript);
       else this.options.onUserTurn?.(event.transcript, itemId);
       const requestedSource = requestedVisionSource(event.transcript);
@@ -847,32 +847,25 @@ export class BrowserVoiceClient {
         if (itemId === undefined) this.options.onVisionRequest?.(source, event.transcript);
         else this.options.onVisionRequest?.(source, event.transcript, itemId);
       }
-    } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
-      this.sendPlaybackCompletion(false);
-      this.audio.stopPlayback();
-      this.playbackAllowed = false;
-      this.responseFinished = false;
-      if (this.running && this.microphoneOpen) this.publish('listening', 'Listening for your voice.');
-    } else if (event.type === 'response.created') {
-      const response = event.response as { id?: unknown } | undefined;
-      this.responseId = typeof response?.id === 'string' ? response.id : undefined;
+    } else if (event.type === 'jarvis.voice.response.started') {
+      this.responseId = typeof event.responseId === 'string' ? event.responseId : undefined;
       this.responseAudioQueued = false;
       this.responseAudioDrained = false;
       this.playbackCompletionSent = false;
       this.playbackAllowed = true;
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
-    } else if (event.type === 'response.audio.delta' || event.type === 'response.output_audio.delta') {
+    } else if (event.type === 'jarvis.voice.audio.delta') {
       if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
         // Speaking is published by the audio adapter when this chunk actually becomes audible.
         this.audio.play(event.delta);
         this.responseAudioQueued = true;
         this.responseAudioDrained = false;
       }
-    } else if ((event.type === 'response.done' || event.type === 'response.cancelled') &&
+    } else if ((event.type === 'jarvis.voice.response.completed' || event.type === 'jarvis.voice.response.cancelled') &&
                this.running && this.microphoneOpen) {
       this.responseFinished = true;
-      if (event.type === 'response.cancelled') {
+      if (event.type === 'jarvis.voice.response.cancelled') {
         this.audio.stopPlayback();
         this.sendPlaybackCompletion(false);
       } else if (!this.audio.hasPlayback()) {

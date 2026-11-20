@@ -1,7 +1,7 @@
 import { isRoleModelSupported, type ModelCatalogueReader } from '../core/model-catalog.js';
 import { readSettings, type SettingsStore } from '../core/settings.js';
 import { FOUNDRY_SCOPE } from '../foundry/client.js';
-import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+import { normalizeFoundryProjectEndpoint } from '../voice/live-protocol.js';
 import { estimateCost } from './budget.js';
 import { buildProactivePrompt, PROACTIVE_SYSTEM_PROMPT } from './prompt.js';
 import type { Item, SourceFact } from './types.js';

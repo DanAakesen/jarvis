@@ -1,7 +1,7 @@
 import { createOutboundAudioData } from '@azure/communication-call-automation';
 import WebSocket, { type RawData } from 'ws';
 import type { FastifyRequest } from 'fastify';
-import { parseVoiceEvent } from '../voice/realtime.js';
+import { parseVoiceEvent, validPcm24Base64 } from '../voice/live-protocol.js';
 
 const MAX_MEDIA_MESSAGE_BYTES = 1_048_576;
 const MAX_PCM_BYTES = 512_000;
@@ -36,24 +36,6 @@ function close(socket: WebSocket, code: number, reason: string): void {
   else if (socket.readyState === WebSocket.CONNECTING) socket.terminate();
 }
 
-function validBase64(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= MAX_PCM_BYTES * 4 / 3 + 4 &&
-    value.length % 4 === 0 &&
-    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value);
-}
-
-export function createPhoneVoiceSessionStart(sessionId: string) {
-  if (!/^[1-9]\d{0,18}$/u.test(sessionId) ||
-      BigInt(sessionId) > 9_223_372_036_854_775_807n) {
-    throw new TypeError('Invalid phone session');
-  }
-  return {
-    type: 'session.start',
-    protocol_version: '1.0',
-    caller: { phoneSessionId: sessionId },
-  };
-}
-
 function getAudioData(data: RawData, binary: boolean): string | undefined {
   if (binary || size(data) > MAX_MEDIA_MESSAGE_BYTES) return undefined;
   let parsed: unknown;
@@ -64,7 +46,7 @@ function getAudioData(data: RawData, binary: boolean): string | undefined {
   if (event.kind !== 'AudioData' || event.audioData === null ||
       typeof event.audioData !== 'object' || Array.isArray(event.audioData)) return undefined;
   const audio = (event.audioData as Record<string, unknown>).data;
-  return validBase64(audio) ? audio : undefined;
+  return validPcm24Base64(audio, MAX_PCM_BYTES) ? audio : undefined;
 }
 
 export function bridgePhoneMedia({
@@ -84,6 +66,10 @@ export function bridgePhoneMedia({
   const savedUserItems = new Set<string>();
   const savedAssistantItems = new Set<string>();
   let transcriptQueue = Promise.resolve();
+  let inputText = '';
+  let inputTimer: ReturnType<typeof setTimeout> | undefined;
+  let outputText = '';
+  let outputTimer: ReturnType<typeof setTimeout> | undefined;
 
   const sendUpstream = (event: unknown) => {
     if (upstream?.readyState === WebSocket.OPEN) upstream.send(JSON.stringify(event));
@@ -91,6 +77,8 @@ export function bridgePhoneMedia({
   const end = (code: number, reason: string) => {
     if (closed) return;
     closed = true;
+    clearTimeout(inputTimer);
+    clearTimeout(outputTimer);
     controller.abort();
     if (upstream) close(upstream, code, reason);
     close(browser, code, reason);
@@ -152,7 +140,7 @@ export function bridgePhoneMedia({
         return;
       }
       if (upstreamReady) {
-        sendUpstream({ type: 'input_audio_buffer.append', audio });
+        sendUpstream({ type: 'session.input_audio.append', audio });
       } else {
         queuedAudioBytes += Buffer.byteLength(audio, 'base64');
         if (queuedAudioBytes > MAX_PCM_BYTES) {
@@ -174,9 +162,6 @@ export function bridgePhoneMedia({
       const token = await getToken('https://ai.azure.com/.default', controller.signal);
       if (closed) return;
       upstream = connect(token, controller.signal, `phone_${access.sessionId}`);
-      upstream.once('open', () => {
-        sendUpstream(createPhoneVoiceSessionStart(access.sessionId));
-      });
       upstream.on('message', (data, binary) => {
         if (closed || size(data) > MAX_MEDIA_MESSAGE_BYTES) {
           end(1009, 'Voice response too large');
@@ -184,49 +169,43 @@ export function bridgePhoneMedia({
         }
         const event = parseVoiceEvent(data as Buffer, binary);
         if (!event) return;
-        if (event.type === 'session.ready') {
+        if (event.type === 'session.started') {
           upstreamReady = true;
           for (const audio of queuedAudio.splice(0)) {
             queuedAudioBytes -= Buffer.byteLength(audio, 'base64');
-            sendUpstream({ type: 'input_audio_buffer.append', audio });
+            sendUpstream({ type: 'session.input_audio.append', audio });
           }
           return;
         }
-        if (event.type === 'user.message' && Array.isArray(event.content)) {
-          const transcript = event.content.flatMap((part) =>
-            part !== null && typeof part === 'object' && !Array.isArray(part) &&
-            (part as Record<string, unknown>).type === 'input_text' &&
-            typeof (part as Record<string, unknown>).text === 'string'
-              ? [(part as Record<string, unknown>).text as string]
-              : []).join('');
-          saveTranscript('dan', event.item_id, transcript);
+        if (event.type === 'session.input_transcript.delta' && typeof event.delta === 'string') {
+          inputText += event.delta;
+          clearTimeout(inputTimer);
+          inputTimer = setTimeout(() => {
+            const text = inputText;
+            inputText = '';
+            saveTranscript('dan', `phone_input_${access.sessionId}_${Date.now()}`, text);
+          }, 600);
+          inputTimer.unref();
           return;
         }
-        if (event.type === 'conversation.item.input_audio_transcription.completed' &&
-            typeof event.transcript === 'string') {
-          saveTranscript('dan', event.item_id, event.transcript);
-        }
-        if (event.type === 'assistant.message' && Array.isArray(event.content)) {
-          const transcript = event.content.flatMap((part) =>
-            part !== null && typeof part === 'object' && !Array.isArray(part) &&
-            (part as Record<string, unknown>).type === 'output_text' &&
-            typeof (part as Record<string, unknown>).text === 'string'
-              ? [(part as Record<string, unknown>).text as string]
-              : []).join('');
-          saveTranscript('jarvis', event.item_id, transcript);
+        if (event.type === 'session.output_transcript.delta' && typeof event.delta === 'string') {
+          outputText += event.delta;
+          clearTimeout(outputTimer);
+          outputTimer = setTimeout(() => {
+            const text = outputText;
+            outputText = '';
+            saveTranscript('jarvis', `phone_output_${access.sessionId}_${Date.now()}`, text);
+          }, 600);
+          outputTimer.unref();
           return;
         }
-        if ((event.type === 'response.output_text.done' ||
-             event.type === 'response.audio_transcript.done' ||
-             event.type === 'response.output_audio_transcript.done') &&
-            (typeof event.text === 'string' || typeof event.transcript === 'string')) {
-          saveTranscript('jarvis', event.item_id, event.text ?? event.transcript);
-        }
-        if ((event.type === 'response.audio.delta' || event.type === 'response.output_audio.delta') &&
-            validBase64(event.delta) && browser.readyState === WebSocket.OPEN) {
+        if (event.type === 'session.output_audio.delta' &&
+            validPcm24Base64(event.delta, MAX_PCM_BYTES) && browser.readyState === WebSocket.OPEN) {
           browser.send(createOutboundAudioData(event.delta));
         }
-        if (event.type === 'session.rejected' || event.type === 'error') end(1011, 'Voice session failed');
+        if (event.type === 'session.delegation.created') end(1011, 'Phone client delegation is unavailable');
+        if (event.type === 'session.closed') end(1000, 'Voice session ended');
+        if (event.type === 'error') end(1011, 'Voice session failed');
       });
       upstream.once('error', () => {
         if (closed) return;

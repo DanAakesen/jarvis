@@ -7,13 +7,10 @@ public struct VoiceCaptions {
 
     public mutating func receive(_ message: VoiceServerMessage) {
         switch message {
-        case .speechStarted:
-            user = ""
-            assistant = ""
-            userItemID = nil
         case .transcriptionDelta(let delta, let itemID):
             if itemID != userItemID {
                 user = ""
+                assistant = ""
                 userItemID = itemID
             }
             user += delta

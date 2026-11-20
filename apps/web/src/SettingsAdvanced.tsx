@@ -8,7 +8,7 @@ import { Loader } from './Loader';
 import {
   bounds, capabilityLabels, effortLabels, effortsFor, modelRoles, researchDepths, roleLabels,
   type MemorySettings, type ModelCatalogue, type ModelRole, type ResearchSettings, type RoleOptions, type RoleSettings,
-  type TimeoutSettings, type VoiceTuningSettings,
+  type TimeoutSettings,
 } from './settings-advanced-data';
 
 type Problems = Record<string, string>;
@@ -227,24 +227,6 @@ function Deployments({ catalogue, error, call, onChanged }: {
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-export function VoiceTuningFields({ voice, problems, disabled, onChange }: {
-  voice: VoiceTuningSettings; problems: Problems; disabled: boolean;
-  onChange: <Key extends keyof VoiceTuningSettings>(key: Key, value: VoiceTuningSettings[Key]) => void;
-}) {
-  return (
-    <div className="advanced-group">
-      <h3>Listening and replies</h3>
-      <div className="settings-grid">
-        <NumberField id="voice-reply-tokens" label="Longest spoken reply" unit="tokens" value={voice.maxSpokenReplyTokens}
-          min={bounds.voice.maxSpokenReplyTokens.minimum} max={bounds.voice.maxSpokenReplyTokens.maximum}
-          problem={problems['voice.maxSpokenReplyTokens']} disabled={disabled} onChange={(value) => onChange('maxSpokenReplyTokens', value)} />
-      </div>
-      <Toggle id="voice-barge-in" label="Interrupt Jarvis by speaking"
-        checked={voice.bargeInEnabled} disabled={disabled} onChange={(value) => onChange('bargeInEnabled', value)} />
     </div>
   );
 }

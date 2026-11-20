@@ -64,6 +64,39 @@ session tokens or hashes.
 
 ## Voice startup diagnosis
 
+The current route is Foundry GPT-Live agent `jarvis-pi-live` behind the
+authenticated `/voice` socket. `voice.session_stage` reports request start,
+SQL session creation, credential acquisition, upstream open and
+`session_started`. One exactly-once `voice.session_summary` records the
+allowlisted native GPT-Live event names, first closer, close code and durations;
+it contains no transcript, instructions or audio.
+
+Startup has one route and no tool-budget rung or representation fallback. A
+token failure, upstream error, invalid PCM negotiation or missing
+`session.started` closes with a visible error and the existing client retry
+backoff. Do not infer readiness from a WebSocket open alone. The next event must
+be the service-owned `session.started`, after which Jarvis sends
+`jarvis.session.ready` to the phone/browser.
+
+At a client delegation, expect this source-only sequence in logs: native input
+transcript deltas, one stored owner message, `voice.pi_turn` and the PI
+turn/receipt logs, then native output audio/transcript deltas. `voice.pi_turn`
+includes no text; use the matching conversation history to inspect the saved
+owner message and provider-spoken reply. The first PI commentary and final
+answer carry the same delegation identifier upstream. An input transcript that
+arrives while PI is running cancels that stale turn.
+
+The 0.6-second quiet grouping window is bounded by three seconds. GPT-Live has
+no transcript-done or output-audio-done event, so later output is split/persisted
+on 0.6-second quiet or a three-second persistence bound. If no provider audio
+was exercised, none of this is provider or acoustic acceptance.
+
+The physical/provider acceptance is intentionally open. Dan must make the real
+voice attempt on a device after a future Deploy; this coding session did not
+connect to Foundry, open a voice session, invoke a model or run a paid smoke.
+
+## Historical pre-GPT-Live diagnosis (superseded; do not use as runtime guidance)
+
 After deployment, the owner should make one voice attempt, end it, and find its
 `voice.session_summary` by `reqId`. `voice.session_stage` records each stage with
 milliseconds since `request.started`: session creation, credential, settings,
@@ -129,7 +162,7 @@ combined-context limit was verified for the deployed API version in this change.
 The harmless `connection.upgrade_failed` duplicate-registration noise is tracked
 separately and is not a voice-stage failure.
 
-## Live partial-transcription diagnosis
+## Historical parallel-transcription diagnosis (removed with the 2.1 path)
 
 For the separately authorized live acceptance, speak once with the microphone
 active, end the session, and inspect that session's `voice.partials_unavailable`

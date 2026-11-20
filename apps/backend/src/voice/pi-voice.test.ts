@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk, ConversationAgentInput } from '../core/chat-agent.js';
 import { PiGatewayError } from '../pi/errors.js';
-import { createRealtimeSessionUpdate } from './realtime.js';
 import { createPiVoiceTurns, type PiVoiceAgent, type PiVoiceTurnLog } from './pi-voice.js';
-import { createToolRegistry } from '../core/tool-registry.js';
 
 const turn = { text: 'what is next', messageId: '42', sessionId: '7', startedAt: 0 };
 
@@ -186,16 +184,5 @@ describe('PI voice turns', () => {
     await settled();
     expect(warmed).toBe(1);
     expect(spoken).toEqual([]);
-  });
-});
-
-describe('Voice Live session on the PI engine', () => {
-  it('has no tools and no catalogue text, only the speech-layer instructions', () => {
-    const update = createRealtimeSessionUpdate(createToolRegistry([]), undefined, undefined, [], undefined, undefined, undefined, 'full', undefined, 'pi');
-    expect(update.session).not.toHaveProperty('tools');
-    expect(update.session).not.toHaveProperty('tool_choice');
-    expect(update.session.instructions).toContain('You are only the voice of Jarvis');
-    expect(update.session.instructions).not.toContain('find_tools');
-    expect(update.session.turn_detection.create_response).toBe(false);
   });
 });

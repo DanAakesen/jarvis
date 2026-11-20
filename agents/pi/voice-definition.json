@@ -1,0 +1,18 @@
+{
+  "agentName": "jarvis-pi-live",
+  "model": "gpt-live-1",
+  "instructionsFile": "voice-instructions.md",
+  "audio": {
+    "format": {
+      "type": "audio/pcm",
+      "rate": 24000
+    },
+    "output": {
+      "voice": "marin"
+    }
+  },
+  "delegation": {
+    "type": "client"
+  },
+  "store": false
+}

@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Application-owned Voice Live Bridge Protocol 1.0 runtime."""
+"""Historical application-owned bridge runtime; normal voice uses the separate GPT-Live agent."""
 
 from __future__ import annotations
 

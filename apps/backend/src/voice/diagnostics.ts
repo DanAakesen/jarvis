@@ -2,32 +2,19 @@ import type { FastifyBaseLogger } from 'fastify';
 
 export const voiceStages = new Set([
   'request_started', 'session_created', 'proactive_context_loaded', 'proactive_context_unavailable',
-  'credential_loaded', 'credential_unavailable', 'settings_loaded',
-  'away_mode_loaded', 'project_context_loaded', 'upstream_connecting', 'upstream_open',
-  'session_update_sent', 'session_created_received', 'session_updated',
+  'credential_loaded', 'credential_unavailable', 'upstream_connecting', 'upstream_open',
+  'session_started',
 ]);
-export type VoiceStage = 'session_creation' | 'proactive_context' | 'credential' | 'settings' | 'away_mode' | 'project_context' |
-  'upstream_connecting' | 'upstream_ready';
+export type VoiceStage = 'session_creation' | 'proactive_context' | 'credential' | 'upstream_connecting' | 'upstream_ready';
 export const voiceTimeoutStages = new Set<VoiceStage>([
-  'session_creation', 'proactive_context', 'credential', 'settings', 'away_mode', 'project_context',
-  'upstream_connecting', 'upstream_ready',
+  'session_creation', 'proactive_context', 'credential', 'upstream_connecting', 'upstream_ready',
 ]);
 export const voiceEventTypes = new Set([
-  'error', 'session.created', 'session.updated', 'session.expired',
-  'conversation.created', 'conversation.item.created', 'conversation.item.deleted',
-  'conversation.item.truncated', 'conversation.item.input_audio_transcription.delta',
-  'conversation.item.input_audio_transcription.completed', 'conversation.item.input_audio_transcription.failed',
-  'input_audio_buffer.committed', 'input_audio_buffer.cleared',
-  'input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped',
-  'response.created', 'response.done', 'response.cancelled',
-  'response.output_item.added', 'response.output_item.done',
-  'response.content_part.added', 'response.content_part.done',
-  'response.text.delta', 'response.text.done', 'response.output_text.delta', 'response.output_text.done',
-  'response.audio.delta', 'response.audio.done', 'response.output_audio.delta', 'response.output_audio.done',
-  'response.audio_transcript.delta', 'response.audio_transcript.done',
-  'response.output_audio_transcript.delta', 'response.output_audio_transcript.done',
-  'response.function_call_arguments.delta', 'response.function_call_arguments.done',
-  'rate_limits.updated', 'user.message',
+  'error', 'session.started', 'session.closed',
+  'session.input_audio.muted', 'session.input_audio.unmuted',
+  'session.input_transcript.delta', 'session.output_transcript.delta',
+  'session.output_audio.delta', 'session.delegation.created',
+  'session.commentary.appended',
 ]);
 
 export const VOICE_STARTUP_CLOSE_CODE = 4010;
@@ -45,22 +32,7 @@ export function createVoiceDiagnostics(
   const events = new Set<string>();
   let summaryLogged = false;
   let watchdog: ReturnType<typeof setTimeout> | undefined;
-  let update = { toolCount: 0, totalBytes: 0, largestTools: [] as { name: string; bytes: number }[] };
-  let toolBudget: { toolBudgetRung: string | null; toolBudgetAttempts: number } | undefined;
   let endReason: 'inactivity' | 'max_duration' | undefined;
-  const measure = (message: unknown, serialized: string) => {
-    const session = (message as { session?: { instructions?: unknown; tools?: { name?: unknown }[] } }).session;
-    const tools = session?.tools ?? [];
-    return {
-      toolCount: tools.length, totalBytes: Buffer.byteLength(serialized),
-      toolBytes: Buffer.byteLength(JSON.stringify(tools)),
-      instructionsBytes: typeof session?.instructions === 'string' ? Buffer.byteLength(session.instructions) : 0,
-      largestTools: tools.flatMap((tool) => typeof tool.name === 'string' &&
-        /^[A-Za-z0-9_-]{1,64}$/u.test(tool.name)
-        ? [{ name: tool.name, bytes: Buffer.byteLength(JSON.stringify(tool)) }] : [])
-        .sort((left, right) => right.bytes - left.bytes).slice(0, 5),
-    };
-  };
   const stage = (name: string) => {
     if (summaryLogged || stages.some((entry) => entry.stage === name)) return;
     stages.push({ stage: name, elapsedMs: elapsed() });
@@ -77,22 +49,6 @@ export function createVoiceDiagnostics(
     event(type: unknown) {
       if (typeof type === 'string' && voiceEventTypes.has(type)) events.add(type);
     },
-    update(message: unknown, serialized: string) {
-      if (update.totalBytes !== 0) return;
-      const { toolCount, totalBytes, largestTools } = measure(message, serialized);
-      update = { toolCount, totalBytes, largestTools };
-    },
-    /** Records one startup frame (the summary keeps the latest) and returns its content-free sizes. */
-    attempt(message: unknown, serialized: string) {
-      const { toolCount, totalBytes, largestTools, toolBytes, instructionsBytes } = measure(message, serialized);
-      update = { toolCount, totalBytes, largestTools };
-      return { toolCount, toolBytes, instructionsBytes, frameBytes: totalBytes };
-    },
-    measure(message: unknown, serialized: string) {
-      const { toolCount, totalBytes, toolBytes, instructionsBytes } = measure(message, serialized);
-      return { toolCount, toolBytes, instructionsBytes, frameBytes: totalBytes };
-    },
-    toolBudget(rung: string | null, attempts: number) { toolBudget = { toolBudgetRung: rung, toolBudgetAttempts: attempts }; },
     endReason(reason: 'inactivity' | 'max_duration') { endReason = reason; },
     watchdog(name: 'upstream_connecting' | 'upstream_ready', fail: () => void) {
       clearWatchdog();
@@ -129,7 +85,7 @@ export function createVoiceDiagnostics(
       signal.removeEventListener('abort', clearWatchdog);
       log.info({
         language, closedBy, closeCode, durationMs: elapsed(), stages,
-        events: [...events], ...update, ...toolBudget, ...(endReason ? { endReason } : {}),
+        events: [...events], ...(endReason ? { endReason } : {}),
       }, 'voice.session_summary');
     },
   };

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Run a model-free Voice Live Bridge Protocol 1.0 smoke test."""
+"""Run a model-free smoke of the historical isolated bridge; it is not the normal GPT-Live route."""
 
 from __future__ import annotations
 

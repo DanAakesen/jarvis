@@ -130,9 +130,7 @@ enum JarvisFixtureScenario {
               "homeBrief": {"instruction": "Synthetic grounded Home brief instruction", "maxVisibleLines": 3},
               "identity": {"description": "Synthetic assistant identity"},
               "presentation": {"showWork": true},
-              "voice": {
-                "speechToTextModel": "azure-speech"
-              },
+              "voice": {"minimizeWindowsOnVoiceStart": false},
               "research": {"depth": "standard", "maxSources": 5},
               "jarvis": {"model": "fixture-model", "reasoning": "medium"},
               "decisions": {"provider": "jev"},
@@ -141,7 +139,6 @@ enum JarvisFixtureScenario {
                 "vision": {"model": "fixture-vision", "reasoningEffort": "none"},
                 "research": {"model": "fixture-research", "reasoningEffort": "medium"},
                 "voice": {"model": "fixture-voice", "reasoningEffort": "none"},
-                "transcription": {"model": "fixture-transcription", "reasoningEffort": "none"},
                 "embedding": {"model": "fixture-embedding", "reasoningEffort": "none"},
                 "codex": {"model": "fixture-codex", "reasoningEffort": "medium"},
                 "copilot": {"model": "fixture-copilot", "reasoningEffort": "none"}
@@ -162,7 +159,6 @@ enum JarvisFixtureScenario {
               "themes": ["light", "dark", "system"],
               "personalityTones": ["british_butler", "warm", "direct", "playful"],
               "personalityResponseStyles": ["concise", "balanced", "detailed"],
-              "speechToTextModels": ["azure-speech"],
               "researchDepths": ["quick", "standard", "deep"],
               "jarvisModels": ["fixture-model"],
               "reasoningEfforts": ["none", "low", "medium", "high"],
@@ -172,7 +168,6 @@ enum JarvisFixtureScenario {
                 "vision": {"models": ["fixture-vision"], "reasoningEffortsByModel": {"fixture-vision": ["none"]}},
                 "research": {"models": ["fixture-research"], "reasoningEffortsByModel": {"fixture-research": ["medium"]}},
                 "voice": {"models": ["fixture-voice"], "reasoningEffortsByModel": {"fixture-voice": ["none"]}},
-                "transcription": {"models": ["fixture-transcription"], "reasoningEffortsByModel": {"fixture-transcription": ["none"]}},
                 "embedding": {"models": ["fixture-embedding"], "reasoningEffortsByModel": {"fixture-embedding": ["none"]}},
                 "codex": {"models": ["fixture-codex"], "reasoningEffortsByModel": {"fixture-codex": ["medium"]}},
                 "copilot": {"models": ["fixture-copilot"], "reasoningEffortsByModel": {"fixture-copilot": ["none"]}}

@@ -2,7 +2,7 @@ import { FOUNDRY_SCOPE } from '../foundry/client.js';
 import { DKK_PER_USD, foundryTokenCosts } from '../core/usage-pricing.js';
 import { defaultSettings } from '../core/settings.js';
 import type { PcActVisionModel } from '../pc-bridge/pc-act.js';
-import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+import { normalizeFoundryProjectEndpoint } from '../voice/live-protocol.js';
 import { normalizeScreenQuestion, type ScreenVisionModel, type ScreenVisionResult } from './screen.js';
 
 const MAX_RESPONSE_BYTES = 1_048_576;

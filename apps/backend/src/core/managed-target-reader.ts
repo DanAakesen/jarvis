@@ -1,4 +1,4 @@
-import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+import { normalizeFoundryProjectEndpoint } from '../voice/live-protocol.js';
 import { FOUNDRY_AGENT_SCOPE } from './chat-agent.js';
 import type { ManagedSessionTarget } from './runtime-session.js';
 

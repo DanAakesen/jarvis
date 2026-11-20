@@ -1,14 +1,14 @@
-# Jarvis agent
+# Jarvis hosted chat agent
 
-The Foundry hosted Jarvis agent (P4-01). It is ported from the read-only
-[voice prototype](../../docs/reference/voice-prototype/agent/): the Voice Live
-Bridge runtime, response coordinator and strict action rules are unchanged. The
-prototype's fake tools are gone: every tool comes from the backend's tool registry.
+The Foundry hosted Jarvis agent (P4-01) remains available to the isolated
+managed-chat/runtime path. It is not the normal PI Chat or Voice route. The
+GPT-Live P0 cutover provisions `jarvis-pi-live` separately; this image no longer
+advertises a WebSocket voice protocol in Deploy.
 
 | File | Role |
 | --- | --- |
-| `main.py` | Entry point: Voice Live Bridge host on port 8088 (`/invocations_ws`) |
-| `voice_runtime.py`, `response_coordinator.py`, `state.py`, `response_telemetry.py` | Voice turn handling, as in the prototype, including model-free test commands such as `/help` |
+| `main.py` | Agent host for the isolated hosted runtime |
+| `voice_runtime.py`, `response_coordinator.py`, `state.py`, `response_telemetry.py` | Historical bridge code retained for isolated prototype/runtime compatibility; not a normal voice route |
 | `model_client.py` | Per-session configured model and reasoning effort for the Responses API |
 | `jarvis_tools.py` | Instructions and `BackendToolClient` for the backend tool registry |
 | `chat_runtime.py`, `chat_telemetry.py` | Verified chat history, incremental SSE and content-free stage timings |

@@ -14,12 +14,8 @@ const fallback: ModelDeployment[] = [
     capacity: 100, capabilities: ['chat', 'responses'], reasoningEfforts: ['none', 'low', 'medium', 'high'],
   },
   {
-    name: 'gpt-realtime-2.1', model: 'gpt-realtime-2.1', version: '2026-07-07', sku: 'GlobalStandard',
-    capacity: 10, capabilities: ['realtime', 'transcription'], reasoningEfforts: ['none'],
-  },
-  {
-    name: 'gpt-realtime-2.1-mini', model: 'gpt-realtime-2.1-mini', version: '2026-07-07', sku: 'GlobalStandard',
-    capacity: 10, capabilities: ['realtime', 'transcription'], reasoningEfforts: ['none'],
+    name: 'gpt-live-1', model: 'gpt-live-1', version: '2026-09-10', sku: 'GlobalStandard',
+    capacity: 10, capabilities: ['realtime'], reasoningEfforts: ['none'],
   },
   {
     name: 'text-embedding-3-small', model: 'text-embedding-3-small', version: '1', sku: 'GlobalStandard',
@@ -97,9 +93,8 @@ function inferCapabilities(model: string, raw: unknown): ModelCapability[] {
     capabilities.add('chat');
     capabilities.add('responses');
   }
-  if (/realtime/u.test(key)) {
+  if (/^gpt-live(?:[.-]|$)/u.test(key) || /realtime/u.test(key)) {
     capabilities.add('realtime');
-    capabilities.add('transcription');
   }
   if (/embedding/u.test(key)) capabilities.add('embeddings');
   if (/vision|image|gpt-6/u.test(key)) capabilities.add('image');
@@ -110,7 +105,6 @@ function inferCapabilities(model: string, raw: unknown): ModelCapability[] {
       if (['chat', 'chatcompletion', 'chatcompletions'].includes(normalized)) capabilities.add('chat');
       if (['responses', 'responsesapi', 'responseapi'].includes(normalized)) capabilities.add('responses');
       if (['realtime', 'realtimeapi', 'realtimespeech'].includes(normalized)) capabilities.add('realtime');
-      if (['transcription', 'transcriptions', 'speechrecognition'].includes(normalized)) capabilities.add('transcription');
       if (['embedding', 'embeddings'].includes(normalized)) capabilities.add('embeddings');
       if (['image', 'images', 'vision', 'visioninput'].includes(normalized)) capabilities.add('image');
     }
@@ -270,8 +264,7 @@ export const defaultRoleModels: Readonly<Record<ModelRole, string>> = Object.fre
   chat: 'gpt-6.1-terra',
   vision: 'gpt-6-luna',
   research: 'gpt-5.6-luna',
-  voice: 'gpt-realtime-2.1',
-  transcription: 'azure-speech',
+  voice: 'gpt-live-1',
   embedding: 'text-embedding-3-small',
   codex: 'default',
   copilot: 'default',
@@ -295,7 +288,7 @@ export const copilotModels = [
 ] as const;
 const copilotReasoningEfforts: readonly ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
 
-export const voiceLiveModels = ['gpt-realtime-2.1', 'gpt-realtime-2.1-mini'] as const;
+export const gptLiveModels = ['gpt-live-1'] as const;
 export const visionModelRatesDkkPerMillionTokens: ReadonlyMap<string, { input: number; output: number }> = new Map([
   ['gpt-5.6-luna', { input: 1.3157, output: 7.8941 }],
   ['gpt-6-luna', { input: 0.6579, output: 3.2893 }],
@@ -306,16 +299,14 @@ const roleCapabilities: Partial<Record<ModelRole, readonly ModelCapability[]>> =
   vision: ['image'],
   research: ['chat', 'responses'],
   voice: ['realtime'],
-  transcription: ['transcription'],
   embedding: ['embeddings'],
 };
 
 export function modelsForRole(catalogue: ModelCatalogue, role: ModelRole): string[] {
   if (role === 'codex') return [...codexModels];
   if (role === 'copilot') return [...copilotModels];
-  if (role === 'transcription') return ['azure-speech'];
   if (role === 'voice') {
-    return voiceLiveModels.filter((model) =>
+    return gptLiveModels.filter((model) =>
       catalogue.deployments.some((deployment) => deployment.name === model && deployment.capabilities.includes('realtime')));
   }
   if (role === 'vision') {
@@ -343,7 +334,7 @@ export function reasoningForModel(
   if (role === 'copilot') {
     return copilotModels.includes(model as typeof copilotModels[number]) ? copilotReasoningEfforts : [];
   }
-  if (role === 'voice' || role === 'transcription' || role === 'embedding') return ['none'];
+  if (role === 'voice' || role === 'embedding') return ['none'];
   return catalogue.deployments.find((deployment) => deployment.name === model)?.reasoningEfforts ?? [];
 }
 

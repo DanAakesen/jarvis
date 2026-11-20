@@ -16,11 +16,11 @@ export const systemSmokeCheckIds = Object.freeze([
   'chat_navigation', 'chat_no_timestamp', 'chat_plain_approval',
 ]);
 export const modelRoles = Object.freeze([
-  'chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot',
+  'chat', 'vision', 'research', 'voice', 'embedding', 'codex', 'copilot',
 ]);
 export const reasoningEfforts = Object.freeze(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 export const modelCapabilities = Object.freeze([
-  'chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image',
+  'chat', 'responses', 'realtime', 'embeddings', 'image',
 ]);
 export const clipboardTextMaxBytes = 20 * 1024;
 
@@ -37,18 +37,6 @@ export function isClipboardWriteResult(value) {
   return isObject(value) && Object.keys(value).length === 1 && value.written === true;
 }
 
-export const voiceTuningSettingsBounds = Object.freeze({
-  maxSpokenReplyTokens: Object.freeze({ minimum: 1, maximum: 4_096 }),
-});
-export const voiceTuningSettingsSchema = Object.freeze({
-  type: 'object',
-  minProperties: 1,
-  additionalProperties: false,
-  properties: Object.freeze({
-    bargeInEnabled: Object.freeze({ type: 'boolean' }),
-    maxSpokenReplyTokens: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.maxSpokenReplyTokens }),
-  }),
-});
 export const researchDepths = Object.freeze(['quick', 'standard', 'deep']);
 export const researchSettingsBounds = Object.freeze({
   maxSources: Object.freeze({ minimum: 1, maximum: 50 }),

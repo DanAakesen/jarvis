@@ -551,9 +551,6 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 onMessage: { [weak self] message in
                     Task { @MainActor in self?.receiveVoice(message, id: id) }
                 },
-                onAction: { [weak self] _ in
-                    Task { @MainActor in self?.emit(.init(.interrupt, requestID: id)) }
-                },
                 onStateChange: { [weak self] state in
                     Task { @MainActor in
                         guard let self, self.voiceID == id else { return }
@@ -766,7 +763,6 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .sessionReady:
             voiceCaptionResponseID = UUID().uuidString
             emit(.init(.voiceState, requestID: id, text: "Listening"))
-        case .speechStarted: voiceUserTranscriptID = UUID().uuidString
         case .responseCreated(let response):
             voiceResponseID = response
             voiceCaptionResponseID = response ?? UUID().uuidString
@@ -797,6 +793,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                            requestID: id, text: chunk, responseID: itemID ?? voiceUserTranscriptID))
             }
         case .responseDone: emit(.init(.voiceState, requestID: id, text: "Playback finished", responseID: voiceResponseID))
+        case .responseCancelled:
+            emit(.init(.interrupt, requestID: id, responseID: voiceResponseID))
+            voiceResponseID = nil
         case .sessionEnded:
             Task {
                 guard voiceID == id else { return }

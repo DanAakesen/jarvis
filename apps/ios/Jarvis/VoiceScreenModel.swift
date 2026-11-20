@@ -246,9 +246,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                         self.receive(message)
                     }
                 },
-                onAction: { action in
-                    if case .interruptPlayback = action { audio.stopPlayback() }
-                },
                 onStateChange: { [weak self] state in
                     Task { @MainActor in
                         guard let self, self.sessionGeneration == generation else { return }
@@ -598,7 +595,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     private func receive(_ message: VoiceServerMessage) {
         switch message {
-        case .speechStarted, .transcriptionDelta, .assistantTranscriptDelta:
+        case .transcriptionDelta, .assistantTranscriptDelta:
             captions.receive(message)
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)

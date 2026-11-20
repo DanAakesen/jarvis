@@ -8,11 +8,11 @@ import { Loader } from './Loader';
 import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { useWakeStatus } from './wake-store';
-import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
+import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection } from './SettingsAdvanced';
 import { revealWhenReady } from './page-navigation';
 import {
   advancedProblems, isRoleOptions, isRoleSettings,
-  type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings, type VoiceTuningSettings,
+  type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings,
 } from './settings-advanced-data';
 import { formatDateTime, formatTimeOnly } from './format/date-time';
 
@@ -28,10 +28,9 @@ interface Settings {
   };
   homeBrief?: { instruction: string; maxVisibleLines: number };
   voice: {
-    speechToTextModel: string;
     minimizeWindowsOnVoiceStart: boolean;
-  } & Partial<VoiceTuningSettings>;
-  /** Present on backends with role-based models and tuning (P9-13); older backends omit them. */
+  };
+  /** Present on backends with role-based models (P9-13); older backends omit them. */
   roles?: RoleSettings;
   research?: ResearchSettings;
   memory?: MemorySettings;
@@ -60,7 +59,6 @@ interface SettingsOptions {
   reasoningEfforts: string[];
   personalityTones: Settings['personality']['tone'][];
   personalityResponseStyles: Settings['personality']['responseStyle'][];
-  speechToTextModels: string[];
   codexModels: string[];
   codexReasoningEfforts: string[];
   copilotModels: string[];
@@ -151,7 +149,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
     'themes', 'jarvisModels', 'reasoningEfforts', 'personalityTones', 'personalityResponseStyles',
-    'speechToTextModels', 'codexModels',
+    'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
   ];
@@ -180,7 +178,6 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.personality.customInstructions === 'string' &&
     settings.personality.customInstructions.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.personality.customInstructions) &&
-    typeof settings.voice.speechToTextModel === 'string' &&
     typeof settings.voice.minimizeWindowsOnVoiceStart === 'boolean' &&
     typeof settings.codex.model === 'string' && typeof settings.codex.reasoning === 'string' &&
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
@@ -509,7 +506,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
     !hasUnsupportedControlCharacters(settings.identity.description);
   // Role-based models replace the older per-area model menus when the backend provides them.
   const roleModels = settings && options && isRoleSettings(settings.roles) && isRoleOptions(options.roles) ? options.roles : null;
-  const hasVoiceTuning = settings !== null && typeof settings.voice.maxSpokenReplyTokens === 'number';
   const problems = settings ? advancedProblems(settings) : {};
   const advancedValid = Object.keys(problems).length === 0;
   const personalityIsDefault = settings !== null &&
@@ -790,13 +786,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.voice" headingId="voice-settings-heading" title="Voice">
-            <div className="settings-grid">
-              {!roleModels && <>
-              <SelectField id="speech-model" label="Speech-to-text model" value={settings.voice.speechToTextModel}
-                options={options.speechToTextModels} disabled={saving}
-                onChange={(value) => update('voice', 'speechToTextModel', value)} />
-              </>}
-            </div>
             <label className="choice" htmlFor="minimize-windows-on-voice-start">
               <input
                 id="minimize-windows-on-voice-start"
@@ -813,8 +802,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 ? `Last heard ${formatTimeOnly(wakeStatus.at)}. ${wakeStatus.message}`
                 : 'Not heard'}</span>
             </p>
-            {hasVoiceTuning && <VoiceTuningFields voice={settings.voice as VoiceTuningSettings} problems={problems} disabled={saving}
-              onChange={(key, value) => update('voice', key, value as never)} />}
           </CollapsibleSection>
 
           {settings.research && <ResearchSection research={settings.research} problems={problems} disabled={saving}

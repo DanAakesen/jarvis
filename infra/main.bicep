@@ -489,41 +489,21 @@ resource gpt56LunaDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   }
 }
 
-resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource gptLive1Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
-  name: 'gpt-realtime-2.1'
+  name: 'gpt-live-1'
   dependsOn: [
     gpt56LunaDeployment
   ]
   sku: {
     name: 'GlobalStandard'
-    // Regional quota maximum for gpt-realtime-2.1 Global Standard (L91).
     capacity: 10
   }
   properties: {
     model: {
       format: 'OpenAI'
-      name: 'gpt-realtime-2.1'
-      version: '2026-07-07'
-    }
-  }
-}
-
-resource gptRealtime21MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
-  parent: foundryAccount
-  name: 'gpt-realtime-2.1-mini'
-  dependsOn: [
-    gptRealtime21Deployment
-  ]
-  sku: {
-    name: 'GlobalStandard'
-    capacity: 10
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: 'gpt-realtime-2.1-mini'
-      version: '2026-07-07'
+      name: 'gpt-live-1'
+      version: '2026-09-10'
     }
   }
 }
@@ -532,7 +512,7 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   parent: foundryAccount
   name: 'text-embedding-3-small'
   dependsOn: [
-    gptRealtime21MiniDeployment
+    gptLive1Deployment
   ]
   sku: {
     name: 'GlobalStandard'
@@ -1024,9 +1004,8 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'true'
             }
             {
-              // English voice route; without it /voice is never registered (L102).
-              name: 'VOICE_LIVE_ENDPOINT'
-              value: 'wss://${foundryAccount.name}.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15'
+              name: 'JARVIS_VOICE_AGENT_NAME'
+              value: 'jarvis-pi-live'
             }
           ], piAgentConfigured ? [
             {

@@ -1,4 +1,4 @@
-"""Provision the PI agent (managed Microsoft Copilot harness) from the files in agents/pi.
+"""Provision PI and its GPT-Live voice front end from the files in agents/pi.
 
 Runs in the Deploy workflow with the deployment identity. It creates the Jarvis skills, a Foundry project connection
 that holds the MCP secret (Foundry refuses credentials in an MCP tool's own headers), then one prompt agent version
@@ -27,12 +27,14 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 PI = ROOT / "agents" / "pi"
 # The harness needs MicrosoftCopilot; skills need Skills. A skill reference in an agent definition needs both.
 AGENT_FEATURES = "MicrosoftCopilot=V1Preview,Skills=V1Preview"
 SKILL_FEATURES = "Skills=V1Preview"
+VOICE_FEATURES = "VoiceAgents=V1Preview"
 # Values that must never reach a log, even when Foundry echoes part of the request back in its error message.
 REDACT: list[str] = []
 SECRET_NAME = "pi-mcp-secret"
@@ -44,6 +46,9 @@ CONNECTIONS_API = "2025-04-01-preview"
 FINGERPRINT_KEY = "jarvis_pi_fingerprint"
 GITHUB_TOKEN_PATTERN = re.compile(r"github_pat_[A-Za-z0-9_]{50,255}")
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
+VOICE_FINGERPRINT_KEY = "jarvis_pi_voice_fingerprint"
+DEPLOYMENTS_API = "2024-10-01"
+REPLACED_VOICE_DEPLOYMENTS = ("gpt-realtime-2.1", "gpt-realtime-2.1-mini")
 
 
 class Blocked(Exception):
@@ -72,6 +77,33 @@ def load_spec() -> dict:
     require(spec["github"]["url"].startswith("https://") and re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", spec["github"]["tokenEnv"]) is not None, "github_spec_invalid")
     require(re.fullmatch(r"[a-z][a-z0-9_]{0,31}", spec["mcp"]["serverLabel"]) is not None, "mcp_label_invalid")
     return spec
+
+
+def load_voice_spec() -> tuple[dict, str, dict]:
+    spec = json.loads((PI / "voice-definition.json").read_text(encoding="utf-8"))
+    require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", spec["agentName"]) is not None, "voice_agent_name_invalid")
+    require(spec["model"] == "gpt-live-1", "voice_model_invalid")
+    require(spec["delegation"] == {"type": "client"}, "voice_delegation_invalid")
+    require(spec["store"] is False, "voice_store_invalid")
+    audio = spec["audio"]
+    require(audio == {
+        "format": {"type": "audio/pcm", "rate": 24000},
+        "output": {"voice": "marin"},
+    }, "voice_audio_invalid")
+    instructions_file = spec["instructionsFile"]
+    require(re.fullmatch(r"[A-Za-z0-9._-]+\.md", instructions_file) is not None, "voice_instructions_file_invalid")
+    instructions = (PI / instructions_file).read_text(encoding="utf-8").strip() + "\n"
+    definition = {
+        "kind": "voice",
+        "sub_protocol": "live",
+        "model_type": "self_deployed",
+        "model": spec["model"],
+        "instructions": instructions,
+        "audio": audio,
+        "delegation": spec["delegation"],
+        "store": spec["store"],
+    }
+    return spec, instructions, definition
 
 
 def instructions_text() -> str:
@@ -143,10 +175,18 @@ class Az:
         self.endpoint = endpoint.rstrip("/")
         self.deadline = time.monotonic() + 600
 
-    def rest(self, method: str, path: str, body: dict | None = None, *, content_type: str = "application/json") -> dict:
+    def rest(
+        self,
+        method: str,
+        path: str,
+        body: dict | None = None,
+        *,
+        content_type: str = "application/json",
+        features: str | None = None,
+    ) -> dict:
         require(time.monotonic() < self.deadline, "provision_budget_exhausted")
         url = self.endpoint + path + ("&" if "?" in path else "?") + "api-version=v1"
-        features = SKILL_FEATURES if path.startswith("/skills") else AGENT_FEATURES
+        features = features or (SKILL_FEATURES if path.startswith("/skills") else AGENT_FEATURES)
         command = ["az", "rest", "--method", method, "--url", url, "--resource", "https://ai.azure.com",
                    "--only-show-errors", "--output", "json", "--headers", "Foundry-Features=" + features]
         with tempfile.TemporaryDirectory(prefix="jarvis-pi-") as directory:
@@ -305,6 +345,58 @@ def wait_ready(app: str, group: str, subscription: str) -> str:
     raise Blocked("backend_not_ready")
 
 
+def configure_voice_backend(app: str, group: str, subscription: str, voice_agent_name: str) -> str:
+    env = json.loads(shell("az", "containerapp", "show", "--name", app, "--resource-group", group, "--subscription", subscription,
+                           "--query", "properties.template.containers[0].env", "--only-show-errors", "--output", "json"))
+    current = {item["name"]: item.get("value") for item in env}
+    if current.get("JARVIS_VOICE_AGENT_NAME") != voice_agent_name:
+        shell(
+            "az", "containerapp", "update", "--name", app, "--resource-group", group, "--subscription", subscription,
+            "--set-env-vars", f"JARVIS_VOICE_AGENT_NAME={voice_agent_name}", "--only-show-errors", "--output", "none",
+        )
+    return wait_ready(app, group, subscription)
+
+
+def arm_deployment_request(method: str, account: str, name: str, group: str, subscription: str) -> dict | None:
+    path = (
+        f"/subscriptions/{subscription}/resourceGroups/{group}/providers/"
+        f"Microsoft.CognitiveServices/accounts/{account}/deployments/{quote(name, safe='')}"
+    )
+    url = f"{ARM}{path}?api-version={DEPLOYMENTS_API}"
+    result = subprocess.run(
+        [
+            "az", "rest", "--method", method, "--url", url, "--resource", ARM,
+            "--only-show-errors", "--output", "json",
+        ],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        if classify(result.stderr) == "not_found":
+            return None
+        raise Blocked(
+            f"arm_{method.lower()}_failed:{name}:{classify(result.stderr)}" + describe_error(result.stderr),
+        )
+    return json.loads(result.stdout) if result.stdout.strip() else {}
+
+
+def delete_replaced_voice_deployments(account: str, group: str, subscription: str) -> list[str]:
+    removed: list[str] = []
+    for name in REPLACED_VOICE_DEPLOYMENTS:
+        if arm_deployment_request("GET", account, name, group, subscription) is None:
+            continue
+        arm_deployment_request("DELETE", account, name, group, subscription)
+        for _ in range(60):
+            if arm_deployment_request("GET", account, name, group, subscription) is None:
+                removed.append(name)
+                break
+            time.sleep(5)
+        else:
+            raise Blocked(f"arm_delete_incomplete:{name}")
+    return removed
+
+
 def ensure_skills(azure: Az, skills: list[dict], existing_fingerprint_matches: bool, versions: dict[str, str]) -> None:
     for skill in skills:
         if existing_fingerprint_matches and skill["name"] in versions:
@@ -323,9 +415,10 @@ def as_version(value: object) -> object:
     return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
 
-def current_state(azure: Az, name: str) -> dict | None:
+def current_state(azure: Az, name: str, features: str | None = None) -> dict | None:
+    options = {} if features is None else {"features": features}
     try:
-        agent = azure.rest("GET", f"/agents/{name}")
+        agent = azure.rest("GET", f"/agents/{name}", **options)
     except Blocked as error:
         if ":not_found" in str(error):
             return None
@@ -334,20 +427,25 @@ def current_state(azure: Az, name: str) -> dict | None:
     pinned = rules[0].get("agent_version") if rules and isinstance(rules[0], dict) else None
     if not pinned:
         return {"pinned": None, "metadata": {}, "skills": {}}
-    version = azure.rest("GET", f"/agents/{name}/versions/{pinned}")
+    version = azure.rest("GET", f"/agents/{name}/versions/{pinned}", **options)
     skills = {item["name"]: item["version"] for item in (version.get("definition") or {}).get("skills") or []
               if isinstance(item, dict) and "name" in item and "version" in item}
     return {"pinned": pinned, "metadata": version.get("metadata") or {}, "skills": skills, "status": version.get("status")}
 
 
-def pin(azure: Az, name: str, version: str) -> None:
+def pin(azure: Az, name: str, version: str, features: str | None = None) -> None:
     selector = {"version_selection_rules": [{"type": "FixedRatio", "agent_version": version, "traffic_percentage": 100}]}
-    azure.rest("PATCH", f"/agents/{name}", {"agent_endpoint": {"version_selector": selector}}, content_type="application/merge-patch+json")
+    options = {} if features is None else {"features": features}
+    azure.rest(
+        "PATCH", f"/agents/{name}", {"agent_endpoint": {"version_selector": selector}},
+        content_type="application/merge-patch+json", **options,
+    )
 
 
-def wait_active(azure: Az, name: str, version: str) -> dict:
+def wait_active(azure: Az, name: str, version: str, features: str | None = None) -> dict:
+    options = {} if features is None else {"features": features}
     for _ in range(60):
-        readback = azure.rest("GET", f"/agents/{name}/versions/{version}")
+        readback = azure.rest("GET", f"/agents/{name}/versions/{version}", **options)
         if readback.get("status") == "active":
             return readback
         require(readback.get("status") == "creating", "agent_version_not_active")
@@ -426,8 +524,60 @@ def verify(readback: dict, spec: dict, expected: str) -> None:
         require(mcp[label].get("project_connection_id") == connection and not mcp[label].get("headers"), "readback_mcp_connection_mismatch")
 
 
+def verify_voice_agent(readback: dict, definition: dict) -> None:
+    actual = readback.get("definition") or {}
+    for key in ("kind", "sub_protocol", "model_type", "model", "instructions", "audio", "delegation", "store"):
+        require(actual.get(key) == definition[key], f"voice_readback_{key}_mismatch")
+
+
+def provision_voice_agent(azure: Az, spec: dict, definition: dict) -> dict:
+    name = spec["agentName"]
+    deployment = azure.rest(
+        "GET",
+        f"/deployments/{quote(spec['model'], safe='')}",
+        features=VOICE_FEATURES,
+    )
+    require(deployment.get("name") == spec["model"], "voice_deployment_missing")
+    require(
+        (deployment.get("properties") or {}).get("provisioningState") == "Succeeded",
+        "voice_deployment_not_active",
+    )
+    wanted = sha256(canonical(definition))
+    state = current_state(azure, name, VOICE_FEATURES)
+    unchanged = bool(
+        state and state["pinned"] and state["metadata"].get(VOICE_FINGERPRINT_KEY) == wanted
+        and state.get("status") == "active"
+    )
+    if unchanged:
+        verify_voice_agent(
+            azure.rest("GET", f"/agents/{name}/versions/{state['pinned']}", features=VOICE_FEATURES),
+            definition,
+        )
+        return {"agent": name, "version": state["pinned"], "created": False, "model": spec["model"]}
+    version = as_version(azure.rest(
+        "POST",
+        f"/agents/{name}/versions",
+        {"metadata": {VOICE_FINGERPRINT_KEY: wanted}, "definition": definition},
+        features=VOICE_FEATURES,
+    ).get("version"))
+    require(
+        isinstance(version, str)
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
+        "voice_agent_version_unknown",
+    )
+    verify_voice_agent(wait_active(azure, name, version, VOICE_FEATURES), definition)
+    pin(azure, name, version, VOICE_FEATURES)
+    pinned = current_state(azure, name, VOICE_FEATURES)
+    require(
+        bool(pinned and pinned["pinned"] == version and pinned.get("status") == "active"),
+        "voice_agent_not_pinned",
+    )
+    return {"agent": name, "version": version, "created": True, "model": spec["model"]}
+
+
 def provision(args: argparse.Namespace) -> dict:
     spec = load_spec()
+    voice_spec, _voice_instructions, voice_definition = load_voice_spec()
     name = spec["agentName"]
     instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
@@ -454,24 +604,42 @@ def provision(args: argparse.Namespace) -> dict:
               "skills": {s["name"]: s["version"] for s in skills}, "reach": {"github": github_status, "azure": azure_status},
               "experiment": experiment}
     if unchanged:
-        return {
-            **result,
-            "version": state["pinned"],
-            "created": False,
-            "backendRevision": wait_ready(args.backend_app, args.resource_group, args.subscription),
-        }
-    definition = build_definition(spec, instructions, server_url, skills)
-    metadata = {FINGERPRINT_KEY: wanted}
-    # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
-    version = as_version(foundry.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version"))
-    require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None, "agent_version_unknown")
-    verify(wait_active(foundry, name, version), spec, instructions)
-    pin(foundry, name, version)
+        version = state["pinned"]
+        created = False
+    else:
+        definition = build_definition(spec, instructions, server_url, skills)
+        metadata = {FINGERPRINT_KEY: wanted}
+        # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
+        version = as_version(foundry.rest("POST", f"/agents/{name}/versions", {
+            "metadata": metadata, "definition": definition,
+        }).get("version"))
+        require(
+            isinstance(version, str)
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
+            "agent_version_unknown",
+        )
+        verify(wait_active(foundry, name, version), spec, instructions)
+        pin(foundry, name, version)
+        created = True
+    voice = provision_voice_agent(foundry, voice_spec, voice_definition)
+    backend_revision = configure_voice_backend(
+        args.backend_app,
+        args.resource_group,
+        args.subscription,
+        voice_spec["agentName"],
+    )
+    removed = delete_replaced_voice_deployments(
+        args.foundry_account,
+        args.resource_group,
+        args.subscription,
+    )
     return {
         **result,
         "version": version,
-        "created": True,
-        "backendRevision": wait_ready(args.backend_app, args.resource_group, args.subscription),
+        "created": created,
+        "voiceAgent": voice,
+        "replacedVoiceDeploymentsDeleted": removed,
+        "backendRevision": backend_revision,
     }
 
 

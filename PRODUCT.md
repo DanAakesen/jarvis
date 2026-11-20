@@ -269,11 +269,13 @@ cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
 more actively when listening or speaking, without overlapping the status.
 Voice status, controls and recovery copy are English-only; Reduced
 Motion keeps the centre still.
-Voice uses the single authenticated `/voice` route with the `gpt-realtime-2.1`
-model, English prompt and Azure Speech automatic language detection. The model
-follows the language Dan speaks; no chat- or voice-language choice is stored. Microphone
-capture and speaker playback use the existing voice socket contract; speaking
-over playback interrupts it immediately.
+Voice uses the single authenticated `/voice` route. The backend connects it to
+Foundry agent `jarvis-pi-live`, which runs native GPT-Live full duplex on
+`gpt-live-1` with 24 kHz PCM and the built-in `marin` voice. GPT-Live follows
+the spoken language, owns listening and barge-in, and delegates owner turns to
+the existing PI gateway. The browser, iPhone and Watch keep Jarvis's
+`jarvis.voice.v1` boundary; provider events stay inside the backend. No
+separate speech-to-text model or voice language is stored.
 Camera inspection and screen sharing reuse the web app's existing vision and
 voice-context routes. Denied microphone permission offers a path to Settings.
 Face ID locking is separate; background audio, Bluetooth and route changes, call
@@ -997,8 +999,8 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Parallel work** | Dan controls concurrency across projects, up to 100 simultaneously executing agents. Provision isolated workers on demand and release idle compute. A larger workspace must preserve this capability; one worker serially draining a queue is not an acceptable replacement. Actual capacity depends on qualified compute and provider limits. |
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Coding tasks and image generation use Dan's ChatGPT/Codex subscription through the Jarvis-only login; Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. Codex usage is shared with Dan's use; no per-image API billing or fallback is allowed. |
-| **Voice** | An open browser is enough. Danish and English, chosen from the shared More → Language menu in the composer and voice bar; status requests and follow-ups. During English sessions, Jarvis announces selected task, pull-request, and deployment status changes in fixed short wording, merging bursts and waiting until the current voice turn is idle. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
-| **Reflex layer** | Jev evaluates stable streaming voice clauses as they arrive, with the per-turn ledger of prior actions, so high-confidence, complete, reversible open/navigation/pause actions can run before Dan finishes speaking. English and Danish Voice Live keep streaming the final transcript to Jarvis; the relay replaces any early partial message with the final text and gives the ledger to Jarvis to prevent repeats. Submit, send, buy, delete, merge, uncertain, and confirmation-requiring actions wait for the final turn and required confirmation. If the final transcript contradicts an early action, Jarvis attempts an available undo and reports success, refusal, failure, or an unavailable undo honestly. |
+| **Voice** | An authenticated `/voice` WebSocket keeps Danish and English on one native GPT-Live full-duplex session. GPT-Live owns recognition, speaking and barge-in; client delegation sends every owner turn through PI. Credentials stay on the backend, and selected Now status updates wait for a safe quiet point. |
+| **Reflex layer** | Voice requests use the same PI gateway, owner-message grant, MCP tool discovery and receipts as Chat. Safe or sensitive action policy is enforced by the existing backend tools; the native speech model never receives the tool catalogue or executes a provider-side function call. |
 | **Phone workspace** | At phone width or short coarse-pointer landscape, one content view is foreground. New views open directly as foreground sheets; there is no inline view-tab bar. Switch by horizontal swipe, the Open windows picker, or the existing workspace focus/restore command; hidden views retain their local state. The top bar remains visible while scrolling. The persistent stage orb stays subdued behind content, while the small composer orb remains the explicit voice-start control. Active voice docks the orb and its separate status above a compact glass bar (More, End voice) below foreground content, and returns to the main space when all content is closed or minimised. Agent-delivered views and requests remain P8-15. |
 | **Presence modes** | The owner can choose Present, Away, or On the move by saying or typing it. A phone or desktop may set its device mode, but a manual change takes precedence for two hours. No Graph or Teams presence is read. Active use of the authenticated Jarvis browser app returns the owner to Present; background feed refreshes do not. The persisted mode appears in the header presence control. Each chat and voice turn states the mode and its built-in behavior: On the move is voice-first, very brief and hands-free, never asking the owner to paste, type, copy, open, read or look at a screen; details can be saved for later. Away uses tools for routine requests and queues screen-dependent work for a return summary. Present allows richer answers and windows/reports. In every mode, Jarvis fetches available content with tools or names missing permissions rather than requesting a paste; manual sharing is optional only when present. Custom mode preferences remain supported; empty saved text uses built-in behavior without a destructive migration. Mode changes refresh active instructions, preserving the approval rules. Pending browser approvals appear in the header attention popover in every mode, and active English browser voice sessions announce concise status. |
 | **Local PC bridge** | A Windows tray companion signs in as the workspace owner with Entra and keeps an outbound authenticated WebSocket to Jarvis. Registered Jarvis tools open HTTP(S) URLs in Chrome, match installed apps by name (never Edge), close apps normally, open files and folders beneath `C:\Repo` in VS Code, report the active window title, or focus a window by exact title. `pc_act` controls any foreground Windows app through bounded UI Automation, including safe keyboard shortcuts and explicit non-sensitive text in the focused control; only irreversible actions require approval. The owner can pause Jarvis control from the tray; the bridge blocks control actions and reports pause state through the authenticated feed. No inbound ports are opened. |
@@ -1145,12 +1147,12 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 | Area | Setting | Default |
 | --- | --- | --- |
-| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat); voice role `gpt-realtime-2.1` for both languages |
+| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat); the only voice-role model is `gpt-live-1` |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
-| Voice | Speech to text | Azure Speech with automatic language detection |
-| Voice | Spoken voice | Ryan HD (British English); the realtime model follows the spoken language |
+| Voice | Speech and playback | Native GPT-Live 24 kHz PCM; no separate speech-to-text selector |
+| Voice | Spoken voice | GPT-Live built-in `marin`; the model follows the spoken language |
 | Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
 | Codex | Model and reasoning effort | Codex default |
@@ -1170,34 +1172,26 @@ path; actual allocation and live acceptance remain unverified. Dan accepts the
 existing budget alerts with USD 20/month authorized for Terra; no new spending
 guard or other role change is part of this work.
 
-Voice sessions use Ryan HD and the shared persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
-
-Browser voice uses the same canonical backend tool registry and execution policy
-for either spoken language. Voice Live first advertises every configured tool with
-its validated schema. If that bounded startup attempt fails, a second attempt
-advertises only paged capability discovery and execution functions; discovery
-reads the same registry, and dispatch still enters the existing validator,
-authorization and approval path. This representation does not remove Daily or
-proactive capabilities. The model must discover a capability before using it;
-an undiscovered or unregistered call is rejected. Large discovery responses
-fail explicitly rather than silently truncating the catalogue.
-
-Each Voice Live startup attempt uses a fresh socket and a six-second
-`session.updated` deadline. The process remembers the last acknowledged
-representation for reconnects. If both attempts fail, the relay closes with
-code 4010 and the browser uses its existing retry backoff. No hosted voice-agent
-fallback or background tool-budget probes run. Provider acceptance and real
-browser audio still require an owner attempt after deployment.
+Voice sessions use `jarvis-pi-live` as the native speech layer. GPT-Live never
+receives Jarvis's tool catalogue. When it creates a client delegation, the relay
+groups the current native transcript after a 0.6-second quiet period, bounded by
+three seconds, stores Dan's exact owner message, and only then starts the same PI
+gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
+final speakable answer return through the matching delegation ID. This preserves
+`find_tools -> call_tool`, grants, receipts, monthly cap and single-flight.
+GPT-Live has no transcript-done or output-audio-done event: the relay explicitly
+groups native deltas and emits bounded Jarvis readiness, caption, activity and
+playback events. New input cancels stale PI work; GPT-Live owns acoustic
+barge-in and continuous listening/speaking.
 
 During voice sessions, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 
-English and Danish speech use the authenticated backend `/voice` WebSocket,
-the `gpt-realtime-2.1` deployment, Ryan HD and the shared prompt. Azure Speech
-transcription does not pin a language. A voice session opens with a brief
-greeting in the app language (Danish for `da`, English otherwise), then follows
-the spoken language. The former hosted agent
-`jarvis-voice-mai`, MAI Transcribe and MAI Voice deployments are unused; they
-are not deleted by this code change and require later manual Azure cleanup.
+English and Danish speech use the authenticated backend `/voice` WebSocket and
+the GPT-Live voice agent. Its immutable definition pins `gpt-live-1`, 24 kHz
+PCM and `marin`, while Jarvis remains the sole tool and action authority.
+Provider transcript deltas are normalised for the iPhone, web and Watch UI. A
+normal Deploy provisions the voice agent before deleting the two replaced 2.1
+model deployments; no runtime fallback is retained.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
@@ -1254,12 +1248,9 @@ preserves the current caption-first caller. The UI opt-in remains held until
 Dan accepts the camera UI release; deployment alone neither authorises
 activation nor proves actual image delivery.
 Deployed #706 (P9-83, closing #705) adds budget-admitted original images to
-English and Danish realtime voice before the single item-correlated reply.
-Acknowledged delivery or caption fallback is reported per turn; hosted Danish
-fallback remains caption-only. Actual `gpt-6.1-sol` and `gpt-realtime-2.1`
-image acceptance remains unverified: Dan's 12 October live chat turns reported
-caption fallback because the image budget could not be checked. Voice image
-acceptance has not been exercised. Content-free `visual.path { path, reason, channel, latencyMs }`
+English and Danish GPT-Live before the single client-delegated reply. Camera and
+screen requests currently return a visible `not_supported` result; no image path
+or physical-device voice acceptance is claimed by this cutover. Content-free `visual.path { path, reason, channel, latencyMs }`
 diagnostics support subsequent live verification. #703 remains open until
 that evidence exists. No UI release is authorised.
 
@@ -1412,7 +1403,9 @@ The Jarvis typing/voice page keeps a subdued transparent cyan exterior and visib
 
 The orb follows typed, transient runtime activity delivered over the authenticated event stream and decoded response-playback PCM; the HTML voice status retains its text label and detail beneath the orb. Listening requires a ready relay and live, unmuted microphone following explicit Start voice. Speaking and its energy follow audio actually playing; microphone input only modulates listening. Transport and microphone recovery take precedence over runtime activity. Unknown states are unavailable, and reduced motion uses steady state forms.
 
-English and Danish voice keep Voice Live as the final-transcript source. While the microphone is active and unmuted, a parallel Azure Speech stream can provide interim clauses to the existing safe reflex path; mute, voice end, or disconnect stops that recognizer. If Speech is unavailable, voice continues with final-transcript reflexes.
+English and Danish voice use GPT-Live's native input transcript deltas. The
+client-delegation turn begins only after the bounded quiet grouping described
+above; there is no parallel speech-to-text model or partial-STT turn path.
 
 P7-27 lets Jev control currently open Jarvis workspace windows by title in chat and voice, including stable partial speech: show, focus, minimise, restore, close, enlarge, tile/layer and open/close the context panel. These reversible UI actions need no confirmation; creating new generated views stays with the main agent. The agent receives the reflex outcome and must not repeat it. Each classification logs bounded decision metadata and latency without transcript text. Live acceptance: “tile my windows” changes the layout within 1.5 seconds of chat send.
 
@@ -1677,7 +1670,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Identity and role: shared description (up to 2,000 characters), distinct from tone/style | Change; apply to active voice after provider acknowledgement, otherwise reconnect |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset; preserves the separate identity description |
-| Voice: speech-to-text model, shared voice, minimise windows on voice start (off by default) | Change supported preferences |
+| Voice: minimise windows on voice start (off by default) | Change; the speech model, STT selector and barge-in controls are fixed/owned by GPT-Live |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | Projects: defaults for new projects (owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch) | Change in the Projects section. The policy default only pre-fills projects Jarvis registers later; every project keeps its own policy and can be changed any time. |
@@ -1718,7 +1711,7 @@ The separate daily web-research count includes successful, refused, and failed c
 - **Azure:** subscription "Dan Aakesen", tenant Novaro, region Sweden Central. Details in [docs/agent-context.md](docs/agent-context.md).
 - **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
 - **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.
-- **English voice:** `gpt-realtime-2.1` with Ryan HD; tool calls execute through the backend's registered tools. After a successful write, voice and chat give one short confirmation with at most a count, not a recap of approved details; those remain in the written/on-screen record and are read only when requested. Failures and unverified outcomes stay explicit.
+- **Voice:** GPT-Live `gpt-live-1` on Foundry agent `jarvis-pi-live`; PI is the only tool and action engine. After a successful write, voice and chat give one short confirmation with at most a count, not a recap of approved details; failures and unverified outcomes stay explicit.
 - **PC bridge:** the hosted agent and browser never connect to the PC directly. The backend accepts only Dan's delegated token from the configured bridge app on the bridge route, bounds and correlates commands, and reports an offline bridge warning in Now. Online/recovery and Jarvis-control pause changes stay quiet; live status remains available to the existing status/tools path. Fixed local open/focus/read actions and the separately gated Chrome actions are allowed; there are no arbitrary shell commands. With Chrome automation on, HTTP(S) URLs open as active tabs in Dan's connected Chrome profile and its window is brought forward; if the extension is disconnected, the current bridge launches Chrome directly, never the Windows default browser. `pc_act` uses Windows UI Automation on any foreground app, with one Jev decision per fresh snapshot, sensitive-field blocking, and confirmation only for irreversible control actions. It can send at most four key chords or type an explicit, quoted, non-sensitive value into the focused control; Windows input is sent only after rechecking the foreground app, and Win+L/Ctrl+Alt+Delete are refused while Alt+F4 requires an explicit close request. The tray's persisted Pause Jarvis control toggle blocks PC control actions. Launched apps are granted Windows foreground permission.
 - **Chrome browser executor:** When Dan explicitly enables the tray toggle, the authenticated PC bridge drives the Chrome profile Dan normally uses through the installed Jarvis MV3 extension and native messaging; if that transport is disconnected, it retains the loopback CDP fallback for browser automation. Website URLs open in a new active tab through the extension, and Chrome's window is focused and asked for attention. If the extension is disconnected, the current bridge launches Chrome directly; if the extension is connected but the toggle is off, Chrome routing is refused. The extension is registered for Dan's Windows user, accepts no external messages, and introduces no network listener. Jarvis may list tabs, take one snapshot of visible actionable elements, and click, type, select, scroll, wait, send a bounded keyboard sequence, or type explicit text into the focused control. Before keyboard input, the bridge rechecks the focused tab and blocks sensitive fields; Win+L/Ctrl+Alt+Delete are refused and Alt+F4 requires an explicit close request. No model-provided selectors, coordinates, scripts, or shell commands are accepted; irreversible keyboard actions and irreversible clicks require Dan's P7-03 confirmation.
 - **Ultrafast browser agent:** `browser_do` uses one Jev decision per observed browser step to choose a fixed operation and indexed target. Foundry writes text only for TYPE actions; only send, delete, pay/purchase, post, push, or overwrite actions retain P7-03 confirmation, and Jarvis stops rather than entering passwords, card numbers, or one-time codes. The bounded run reports its step and result in the workspace and independently checks completion.
@@ -2169,11 +2162,11 @@ complete a capability. Reuse existing general tools where they provide the
 equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
-Both Danish and English Voice Live start with the configured Daily tools in R1;
-the capability-preserving R2 discovery transport is used if the direct schema
-frame does not become ready. R2 preserves catalogue access but does not bypass
-the existing server-side permissions or review requirements. Passing CI is not
-production acceptance for Health parity or proof of live provider responsiveness.
+Both Danish and English voice turns use the same PI MCP door after GPT-Live
+delegation. The speech model receives no tool schema; PI discovers only the
+allowed capabilities through `find_tools` and executes through `call_tool`.
+Passing CI is not production acceptance for Health parity or proof of live
+provider responsiveness.
 
 Health and nutrition history (#1201) must be traversable beyond the first
 page. Each Health call reads at most 93 inclusive Copenhagen dates and 100

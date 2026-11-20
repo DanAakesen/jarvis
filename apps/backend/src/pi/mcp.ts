@@ -8,7 +8,7 @@ import {
   type RegisteredTool, type ToolRegistry,
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
-import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
+import { searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
@@ -32,7 +32,7 @@ function text(value: unknown, isError = false): CallToolResult {
   return { ...(isError ? { isError: true } : {}), content: [{ type: 'text', text: body }] };
 }
 
-/** Chat never shows the capability-discovery operation selector; the voice and chat catalogues stay aligned. */
+/** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. */
 function shapeSchema(tool: RegisteredTool): unknown {
   if (tool.name !== 'get_system_health') return tool.inputSchema;
   const { properties, ...rest } = tool.inputSchema as { properties?: Record<string, unknown> };
@@ -145,7 +145,7 @@ export function createPiMcpRoutes(options: {
           : isCurrentAssistantTool(name) || isSituationActivationTool(name);
         return local && (!grant.brain || sourceAllowed(name, {}, disabled));
       };
-      const matches = searchVoiceTools(catalogue, input.query, visible);
+      const matches = searchJarvisTools(catalogue, input.query, visible);
       // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
       // reports a server it simply has not heard from yet as "not attached".
       const notes = (noMatch: boolean) => {
@@ -165,7 +165,7 @@ export function createPiMcpRoutes(options: {
         tool: 'find_tools', outcome: 'ok', result: {
           tools: full.map(tool => ({ name: tool.name, description: tool.description, parameters: shapeSchema(tool) })),
           otherMatches: matches.slice(maxFullResults, maxFullResults + maxOtherResults)
-            .map(tool => ({ name: tool.name, description: shortenVoiceDescription(tool.description) })),
+            .map(tool => ({ name: tool.name, description: shortenToolDescription(tool.description) })),
           ...notes(matches.length === 0),
         },
       });
