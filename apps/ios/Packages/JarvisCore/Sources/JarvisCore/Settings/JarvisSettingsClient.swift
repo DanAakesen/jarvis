@@ -266,6 +266,56 @@ public struct JarvisMemoryPage: Codable, Equatable, Sendable {
     public let limit: Int
     public let offset: Int
     public let hasMore: Bool
+    public let rawCount: Int
+    public let nextOffset: Int
+
+    public init(
+        items: [JarvisMemoryItem],
+        count: Int,
+        limit: Int,
+        offset: Int,
+        hasMore: Bool,
+        rawCount: Int? = nil,
+        nextOffset: Int? = nil
+    ) {
+        let rawCount = rawCount ?? count
+        self.items = items
+        self.count = count
+        self.limit = limit
+        self.offset = offset
+        self.hasMore = hasMore
+        self.rawCount = rawCount
+        self.nextOffset = nextOffset ?? offset + rawCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case items, count, limit, offset, hasMore, rawCount, nextOffset
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let count = try container.decode(Int.self, forKey: .count)
+        let offset = try container.decode(Int.self, forKey: .offset)
+        let rawCount = try container.decodeIfPresent(Int.self, forKey: .rawCount) ?? count
+        items = try container.decode([JarvisMemoryItem].self, forKey: .items)
+        self.count = count
+        limit = try container.decode(Int.self, forKey: .limit)
+        self.offset = offset
+        hasMore = try container.decode(Bool.self, forKey: .hasMore)
+        self.rawCount = rawCount
+        nextOffset = try container.decodeIfPresent(Int.self, forKey: .nextOffset) ?? offset + rawCount
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(items, forKey: .items)
+        try container.encode(count, forKey: .count)
+        try container.encode(limit, forKey: .limit)
+        try container.encode(offset, forKey: .offset)
+        try container.encode(hasMore, forKey: .hasMore)
+        try container.encode(rawCount, forKey: .rawCount)
+        try container.encode(nextOffset, forKey: .nextOffset)
+    }
 }
 
 public struct JarvisRoutine: Codable, Equatable, Sendable, Identifiable {
@@ -420,6 +470,8 @@ public struct JarvisSettingsClient: Sendable {
         let visibleItems = page.items.filter { $0.kind == "memory" }
         guard page.count == page.items.count, page.items.count <= limit,
               page.limit == limit, page.offset == offset,
+              page.rawCount == page.count, page.nextOffset == offset + page.rawCount,
+              (!page.hasMore || page.nextOffset > offset),
               visibleItems.allSatisfy({
                   JarvisSettingsLogic.validMemoryID($0.id) && $0.text.utf8.count <= 20_000
               }) else {
@@ -430,7 +482,9 @@ public struct JarvisSettingsClient: Sendable {
             count: visibleItems.count,
             limit: page.limit,
             offset: page.offset,
-            hasMore: page.hasMore
+            hasMore: page.hasMore,
+            rawCount: page.rawCount,
+            nextOffset: page.nextOffset
         )
     }
 

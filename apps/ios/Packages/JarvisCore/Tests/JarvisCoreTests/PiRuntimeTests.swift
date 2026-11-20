@@ -189,6 +189,28 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(memory.items.map(\.title), ["Fixture memory"])
     }
 
+    func testMemoryClientAdvancesByRawCountWhenLegacyVaultItemsAreFiltered() async throws {
+        let memoryBody = #"""
+        {"items":[
+          {"id":"vault_UGVvc29uYWwvUHJlZmVyZW5jZXMubWQ","type":"vault_note","title":"Legacy note","folder":"Personal","content":"A vault note"},
+          {"id":"2","type":"memory","title":"Fixture memory","folder":"General","content":"A retained memory"}
+         ],
+         "count":2,"limit":50,"offset":0,"hasMore":true}
+        """#
+        let transport = RecordingTransport([
+            HTTPResponse(statusCode: 200, body: Data(memoryBody.utf8)),
+        ])
+        let settings = JarvisSettingsClient(
+            client: try makeClient(transport: transport, retryPolicy: RetryPolicy(maximumRetries: 0))
+        )
+        let page = try await settings.loadMemory()
+        XCTAssertEqual(page.items.map(\.id), ["2"])
+        XCTAssertEqual(page.count, 1)
+        XCTAssertEqual(page.rawCount, 2)
+        XCTAssertEqual(page.nextOffset, 2)
+        XCTAssertTrue(page.hasMore)
+    }
+
     private func makeClient(
         transport: RecordingTransport,
         retryPolicy: RetryPolicy = RetryPolicy()

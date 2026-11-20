@@ -21,9 +21,16 @@ const MAX_MEMORY_API_HISTORY = 10;
 const MAX_SQL_BIGINT = 9_223_372_036_854_775_807n;
 const idPattern = /^[1-9]\d{0,18}$/u;
 const categories = new Set<MemoryCategory>(['preference', 'project_fact', 'decision', 'unfinished_task']);
-const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
-const sensitivePattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
-const secretValuePattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
+const credentialTerms = String.raw`(?:password|passphrase|secret|(?:api|auth|authorization|private)[ -]?key|(?:(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token)|credential|seed[ -]?phrase|recovery[ -]?phrase)`;
+const credentialPattern = new RegExp(String.raw`\b${credentialTerms}\b`, 'iu');
+const sensitivePattern = new RegExp(
+  String.raw`\b(?:${credentialTerms}|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b`,
+  'iu',
+);
+const secretValuePattern = new RegExp(
+  String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|${credentialTerms})\s*[:=]\s*["']?[^\s"']{8,}`,
+  'iu',
+);
 const explicitCapturePattern = [
   /^\s*(?:please\s+)?(?:remember|memorise|memorize)\b/iu,
   /\b(?:remember|memorise|memorize)\s+(?:that|this|it|i\b|my\b|me\b|we\b)/iu,

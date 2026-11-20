@@ -232,7 +232,21 @@ describe('Personal Memory', () => {
       embedder: { model: 'fixture-embedding', embed },
     });
 
-    for (const key of ['password', 'api_key', 'access.token', 'private_key', 'seed_phrase', 'recovery.phrase']) {
+    for (const key of [
+      'password',
+      'api_key',
+      'access.token',
+      'auth_token',
+      'bearer-token',
+      'refreshToken',
+      'session_token',
+      'id.token',
+      'oauthToken',
+      'client_token',
+      'private_key',
+      'seed_phrase',
+      'recovery.phrase',
+    ]) {
       await expect(tool(module, 'memory_remember').execute({
         category: 'preference',
         key,
@@ -274,6 +288,15 @@ describe('Personal Memory', () => {
       }, '3'),
       sourceText: 'The access_token=fixture-secret appears in this old source.',
     });
+    fixture.records.set('4', {
+      ...record({
+        category: 'preference',
+        key: 'appointments.auth',
+        content: 'Appointment bearerToken=fixture-secret.',
+        source: { kind: 'conversation', messageId: '42' },
+      }, '4'),
+      sourceText: 'Another old appointment source.',
+    });
     const module = createMemoryModule({ store: fixture.store });
     const request = ownerRequest('42');
     const listed = await tool(module, 'memory_list').execute({}, request, AbortSignal.timeout(1_000));
@@ -287,13 +310,14 @@ describe('Personal Memory', () => {
       request,
       AbortSignal.timeout(1_000),
     );
-    expect(listed).toMatchObject({ count: 1, withheldCredentialRecords: 2 });
-    expect(searched).toMatchObject({ count: 1, withheldCredentialRecords: 2 });
+    expect(listed).toMatchObject({ count: 1, withheldCredentialRecords: 3 });
+    expect(searched).toMatchObject({ count: 1, withheldCredentialRecords: 3 });
     expect(history).toMatchObject({ versions: [], withheldCredentialVersions: 1 });
     for (const result of [listed, searched, history]) {
       const serialized = JSON.stringify(result);
       expect(serialized).not.toContain('api_key');
       expect(serialized).not.toContain('access_token');
+      expect(serialized).not.toContain('bearerToken');
       expect(serialized).not.toContain('fixture-secret');
       expect(serialized).not.toContain('Appointment provider value');
     }

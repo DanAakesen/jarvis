@@ -5820,7 +5820,9 @@ never accepts inferred facts, secrets, credentials or sensitive health and
 financial details. Before embedding or persistence, `memory_remember`,
 `memory_correct` and Settings edits validate the combined category, stable
 key, source text and content for secrets after normalising `.`, `_` and `-`
-key separators to spaces. The same classifier gates PI `memory_search`,
+key separators to spaces. Token families such as API, access, auth,
+authorization, bearer, refresh, session, client, ID and OAuth tokens use the
+same normalised forms, including camel case. The same classifier gates PI `memory_search`,
 `memory_list` and `memory_history`; credential-like legacy rows are withheld
 from their serialized key, content and source rather than relying on Settings
 redaction. Successful Chat/Voice tool completion invalidates iPhone
