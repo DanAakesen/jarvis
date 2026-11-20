@@ -126,6 +126,12 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
         .query<ClaimedApprovalDeliveryRow>(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
           DECLARE @lockResult int;
+          DECLARE @registrationResource nvarchar(255) =
+            CONCAT(N'jarvis.approval-notifications:', CONVERT(nvarchar(36), @owner));
+          EXEC @lockResult = sys.sp_getapplock
+            @Resource=@registrationResource, @LockMode='Exclusive',
+            @LockOwner='Transaction', @LockTimeout=5000;
+          IF @lockResult < 0 THROW 51001, 'Approval notification registration unavailable', 1;
           DECLARE @resource nvarchar(255) = CONCAT(
             N'jarvis.reply-notification-turn:',
             LOWER(CONVERT(nvarchar(36), @owner)),
@@ -155,7 +161,19 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
             SELECT @confirmationId, CONVERT(char(36), registration_id), registration_id,
               N'sending', DATEADD(second, 8, SYSUTCDATETIME())
             FROM dbo.approval_notification_registrations
-            WHERE owner_object_id = @owner AND expires_at > SYSUTCDATETIME();
+            WHERE owner_object_id = @owner AND expires_at > SYSUTCDATETIME()
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.approval_notification_token_tombstones tombstone
+                WHERE tombstone.owner_object_id = dbo.approval_notification_registrations.owner_object_id
+                  AND tombstone.device_token_hash = CONVERT(
+                    char(64),
+                    HASHBYTES(
+                      N'SHA2_256',
+                      CONVERT(varbinary(512), LOWER(dbo.approval_notification_registrations.device_token))
+                    ),
+                    2
+                  )
+              );
           END;
           SELECT @claimed AS claimed, c.confirmation_id,
             CONVERT(nvarchar(36), r.registration_id) AS registration_id,
@@ -229,15 +247,27 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
               );`);
     },
 
-    async approvalInvalidToken(owner, confirmationId, registrationId, deviceToken, statusCode) {
+    async approvalInvalidToken(owner, _confirmationId, _registrationId, deviceToken, statusCode) {
       await pool.request()
         .input('owner', sql.UniqueIdentifier, owner)
-        .input('confirmationId', sql.Char(43), confirmationId)
-        .input('registrationId', sql.UniqueIdentifier, registrationId)
+        .input('token', sql.VarChar(512), deviceToken.toLowerCase())
         .input('tokenHash', sql.Char(64), deviceTokenHash(deviceToken))
         .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
+          DECLARE @lockResult int;
+          DECLARE @resource nvarchar(255) = CONCAT(N'jarvis.approval-notifications:', CONVERT(nvarchar(36), @owner));
+          EXEC @lockResult = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive',
+            @LockOwner='Transaction', @LockTimeout=5000;
+          IF @lockResult < 0 THROW 51001, 'Approval notification registration unavailable', 1;
+          DECLARE @invalid TABLE (
+            registration_id uniqueidentifier NOT NULL,
+            device_reference char(36) COLLATE Latin1_General_100_BIN2 NOT NULL
+          );
+          INSERT @invalid (registration_id, device_reference)
+          SELECT registration_id, CONVERT(char(36), registration_id)
+            FROM dbo.approval_notification_registrations
+            WHERE owner_object_id = @owner AND device_token = @token;
           MERGE dbo.approval_notification_token_tombstones WITH (HOLDLOCK) AS target
           USING (SELECT @owner AS owner_object_id, @tokenHash AS device_token_hash) AS source
             ON target.owner_object_id = source.owner_object_id
@@ -256,18 +286,20 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           FROM dbo.reply_notification_approval_deliveries a
           INNER JOIN dbo.reply_notification_approval_claims c
             ON c.confirmation_id = a.confirmation_id
+          INNER JOIN @invalid invalid
+            ON invalid.device_reference = a.device_reference
           WHERE c.owner_object_id = @owner
-            AND a.device_reference = CONVERT(char(36), @registrationId)
             AND a.state = N'sending';
-          UPDATE dbo.reply_notification_deliveries
+          UPDATE d
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
                 updated_at = SYSUTCDATETIME(), lease_owner = NULL, lease_until = NULL
-            WHERE owner_object_id = @owner
-              AND device_reference = CONVERT(char(36), @registrationId)
-              AND state IN (N'pending', N'sending');
-          DELETE FROM dbo.approval_notification_registrations
-            WHERE owner_object_id = @owner AND registration_id = @registrationId;
+          FROM dbo.reply_notification_deliveries d
+          INNER JOIN @invalid invalid ON invalid.device_reference = d.device_reference
+          WHERE d.owner_object_id = @owner AND d.state IN (N'pending', N'sending');
+          DELETE registration
+          FROM dbo.approval_notification_registrations registration
+          INNER JOIN @invalid invalid ON invalid.registration_id = registration.registration_id;
           COMMIT TRANSACTION;`);
     },
 
@@ -301,6 +333,11 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
         .query<ClaimedDeliveryRow>(`SET XACT_ABORT ON;
           SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
           BEGIN TRANSACTION;
+          DECLARE @lockResult int;
+          DECLARE @resource nvarchar(255) = CONCAT(N'jarvis.approval-notifications:', CONVERT(nvarchar(36), @owner));
+          EXEC @lockResult = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive',
+            @LockOwner='Transaction', @LockTimeout=5000;
+          IF @lockResult < 0 THROW 51001, 'Approval notification registration unavailable', 1;
           DELETE FROM dbo.reply_notification_deliveries
             WHERE owner_object_id = @owner
               AND state IN (N'accepted', N'failed', N'expired', N'invalid_token', N'suppressed')
@@ -358,6 +395,15 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
               ON r.registration_id = d.registration_id
             WHERE d.owner_object_id = @owner AND r.owner_object_id = @owner
               AND r.expires_at > @now
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.approval_notification_token_tombstones tombstone
+                WHERE tombstone.owner_object_id = r.owner_object_id
+                  AND tombstone.device_token_hash = CONVERT(
+                    char(64),
+                    HASHBYTES(N'SHA2_256', CONVERT(varbinary(512), LOWER(r.device_token))),
+                    2
+                  )
+              )
               AND d.attempt_count < @maxAttempts
               AND d.expires_at > @now
               AND NOT EXISTS (
@@ -458,16 +504,27 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           WHERE id = @id AND state = N'sending' AND lease_owner = @claimToken;`);
     },
 
-    async invalidateRegistration(owner, registrationId, deliveryId, claimToken, deviceToken, statusCode) {
+    async invalidateRegistration(owner, _registrationId, _deliveryId, _claimToken, deviceToken, statusCode) {
       await pool.request()
         .input('owner', sql.UniqueIdentifier, owner)
-        .input('registrationId', sql.UniqueIdentifier, registrationId)
-        .input('deliveryId', sql.UniqueIdentifier, deliveryId)
-        .input('claimToken', sql.UniqueIdentifier, claimToken)
+        .input('token', sql.VarChar(512), deviceToken.toLowerCase())
         .input('tokenHash', sql.Char(64), deviceTokenHash(deviceToken))
         .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
+          DECLARE @lockResult int;
+          DECLARE @resource nvarchar(255) = CONCAT(N'jarvis.approval-notifications:', CONVERT(nvarchar(36), @owner));
+          EXEC @lockResult = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive',
+            @LockOwner='Transaction', @LockTimeout=5000;
+          IF @lockResult < 0 THROW 51001, 'Approval notification registration unavailable', 1;
+          DECLARE @invalid TABLE (
+            registration_id uniqueidentifier NOT NULL,
+            device_reference char(36) COLLATE Latin1_General_100_BIN2 NOT NULL
+          );
+          INSERT @invalid (registration_id, device_reference)
+          SELECT registration_id, CONVERT(char(36), registration_id)
+            FROM dbo.approval_notification_registrations
+            WHERE owner_object_id = @owner AND device_token = @token;
           MERGE dbo.approval_notification_token_tombstones WITH (HOLDLOCK) AS target
           USING (SELECT @owner AS owner_object_id, @tokenHash AS device_token_hash) AS source
             ON target.owner_object_id = source.owner_object_id
@@ -486,22 +543,21 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           FROM dbo.reply_notification_approval_deliveries a
           INNER JOIN dbo.reply_notification_approval_claims c
             ON c.confirmation_id = a.confirmation_id
+          INNER JOIN @invalid invalid
+            ON invalid.device_reference = a.device_reference
           WHERE c.owner_object_id = @owner
-            AND a.device_reference = CONVERT(char(36), @registrationId)
             AND a.state = N'sending';
-          UPDATE dbo.reply_notification_deliveries
+          UPDATE d
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode,
                 completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
                 lease_owner = NULL, lease_until = NULL
-            WHERE owner_object_id = @owner
-              AND device_reference = CONVERT(char(36), @registrationId)
-              AND (
-                state IN (N'pending', N'sending')
-                OR id = @deliveryId AND lease_owner = @claimToken
-              );
-          DELETE FROM dbo.approval_notification_registrations
-            WHERE owner_object_id = @owner AND registration_id = @registrationId;
+          FROM dbo.reply_notification_deliveries d
+          INNER JOIN @invalid invalid ON invalid.device_reference = d.device_reference
+          WHERE d.owner_object_id = @owner AND d.state IN (N'pending', N'sending');
+          DELETE registration
+          FROM dbo.approval_notification_registrations registration
+          INNER JOIN @invalid invalid ON invalid.registration_id = registration.registration_id;
           COMMIT TRANSACTION;`);
     },
 

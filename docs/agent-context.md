@@ -33,6 +33,11 @@
 - Every registration deletion/expiry/unregister path must update in-flight rows
   by immutable `device_reference` before deleting the registration. Keep the
   delete trigger and SQL race checks; FK `SET NULL` is never a cleanup strategy.
+- Tombstone invalidation and foreground upsert use the same
+  `jarvis.approval-notifications:<owner>` application lock. Resolve all current
+  registrations for the exact token inside that transaction; never trust only a
+  stale claimed registration ID. Recipient list/claim/outbox queries must
+  exclude tombstoned token hashes.
 - Permanent APNs rejection must insert/update the owner/token-hash tombstone in
   the same transaction as terminalization/deletion. Registration upsert rejects
   that hash and only a different token can re-register.

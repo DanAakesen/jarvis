@@ -38,6 +38,11 @@ flowchart LR
   direct delete update approval/reply rows by immutable `device_reference`
   before deleting the registration. An `INSTEAD OF DELETE` trigger is the
   final atomic backstop so FK `SET NULL` cannot strand a `sending` row.
+- Foreground registration upsert, invalidation and expired-recipient claiming
+  take the same owner application lock. Invalidation resolves every current
+  registration for the exact owner/token while holding it, not the stale
+  registration ID that initiated the APNs claim. List, approval-claim and reply
+  recipient queries also exclude tombstoned token hashes defensively.
 - Permanent APNs rejection writes an owner/token-hash tombstone before
   registration deletion. Registration upsert returns `invalid_token` for the
   same tombstone across refreshes/restarts while allowing a genuinely new token.

@@ -106,6 +106,10 @@
   `SET NULL` can only observe an already-terminal row. Permanent invalid-token
   rejection also stores an owner/token-hash tombstone; the same token cannot
   re-register after foreground refresh or restart, while a new token can.
+  Upsert, invalidation and expiry claiming serialize on the same owner lock and
+  resolve every current registration for the exact token, so a stale claim cannot
+  miss a replacement registration. Recipient reads defensively exclude
+  tombstoned hashes even if a stale row is written.
 - **Privacy:** only a bounded, one-line preview is stored per device. Preview
   opt-out, credentials, health/medical, diagnosis/medication, banking,
   account, OTP/one-time/verification/security code, CVV/CVC, identity and

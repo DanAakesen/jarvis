@@ -82,6 +82,7 @@ of this work.**
 | Retry accepted approval outcomes idempotently and keep unresolved accepted/sending rows conservatively blocked | Done |
 | Retain accepted turn/device outcomes past confirmation expiry and add `0095` atomic registration terminalization | Done |
 | Persist APNs invalid-token tombstones and preserve newer Watch taps when abandoning an exact-target open | Done |
+| Serialize tombstone invalidation/upsert/expiry on the owner lock, resolve stale replacements by exact token and exclude tombstoned recipients | Done |
 | Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
 | Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
 | Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |

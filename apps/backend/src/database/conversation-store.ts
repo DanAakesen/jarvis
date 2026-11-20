@@ -296,7 +296,16 @@ async function addMessageWithReplyNotification(
             AND a.state = N'accepted'
           ORDER BY c.created_at DESC
         ) a
-        WHERE r.owner_object_id = @owner AND r.expires_at > SYSUTCDATETIME();
+        WHERE r.owner_object_id = @owner AND r.expires_at > SYSUTCDATETIME()
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.approval_notification_token_tombstones tombstone
+            WHERE tombstone.owner_object_id = r.owner_object_id
+              AND tombstone.device_token_hash = CONVERT(
+                char(64),
+                HASHBYTES(N'SHA2_256', CONVERT(varbinary(512), LOWER(r.device_token))),
+                2
+              )
+          );
       END;
       SELECT CONVERT(varchar(20), id) AS id, CONVERT(varchar(20), session_id) AS session_id,
         role, text, model, at, metadata

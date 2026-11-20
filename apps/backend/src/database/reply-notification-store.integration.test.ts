@@ -369,6 +369,49 @@ describe('durable reply notification store', () => {
         WHERE owner_object_id = @owner`)).recordset).toEqual([
       { reason: 'apns_invalid_token' },
     ]);
+    const staleRegistrationId = randomUUID();
+    await pool.request()
+      .input('registrationId', sql.UniqueIdentifier, staleRegistrationId)
+      .input('owner', sql.UniqueIdentifier, invalidApproval.owner)
+      .input('token', sql.VarChar(512), invalidApproval.token)
+      .query(`INSERT dbo.approval_notification_registrations
+          (registration_id, owner_object_id, device_token, language, show_actions, time_zone, expires_at)
+        VALUES (
+          @registrationId, @owner, @token, 'en', 1, 'Europe/Copenhagen',
+          DATEADD(day, 30, SYSUTCDATETIME())
+        );`);
+    expect(await restartedRegistrations.list(invalidApproval.owner)).toEqual([]);
+    const tombstonedSource = await conversations.addMessage({
+      sessionId: invalidApproval.session.id,
+      role: 'dan',
+      text: 'A stale replacement must not receive delivery.',
+      model: null,
+    });
+    const tombstonedClaim = await deliveries.claimApproval({
+      owner: invalidApproval.owner,
+      confirmationId: randomBytes(32).toString('base64url'),
+      turnMessageId: tombstonedSource!.id,
+      expiresAt: new Date(Date.now() + 300_000),
+    });
+    expect(tombstonedClaim.deliveries).toEqual([]);
+    const tombstonedReply = await conversations.addMessage({
+      sessionId: invalidApproval.session.id,
+      role: 'jarvis',
+      text: 'No stale device receives this.',
+      model: 'pi',
+      replyNotification: {
+        ownerObjectId: invalidApproval.owner,
+        turnMessageId: tombstonedSource!.id,
+      },
+    });
+    expect((await pool.request()
+      .input('messageId', sql.BigInt, BigInt(tombstonedReply!.id))
+      .query<{ count: number }>(
+        'SELECT COUNT(*) AS count FROM dbo.reply_notification_deliveries WHERE message_id = @messageId',
+      )).recordset[0]?.count).toBe(0);
+    await pool.request()
+      .input('registrationId', sql.UniqueIdentifier, staleRegistrationId)
+      .query('DELETE FROM dbo.approval_notification_registrations WHERE registration_id = @registrationId;');
 
     const proactiveInvalid = await setup('60');
     await registrations.invalidate(proactiveInvalid.owner, proactiveInvalid.token);
@@ -379,6 +422,93 @@ describe('durable reply notification store', () => {
     );
     expect(await createApprovalNotificationStore(pool).upsert(proactiveInvalid.owner, {
       deviceToken: proactiveInvalid.token,
+      showActions: true,
+      timeZone: 'Europe/Copenhagen',
+    })).toBe('invalid_token');
+
+    const raced = await setup('70');
+    await registrations.remove(raced.owner, raced.token);
+    await assertTerminal(
+      raced, 'failed', 'registration_removed', 'failed', 'registration_removed',
+    );
+    expect(await registrations.upsert(raced.owner, {
+      deviceToken: raced.token,
+      showActions: true,
+      timeZone: 'Europe/Copenhagen',
+    })).toBe('saved');
+    const replacement = (await registrations.list(raced.owner))[0]!;
+    expect(replacement.registrationId).not.toBe(raced.registration.registrationId);
+    const replacementSource = await conversations.addMessage({
+      sessionId: raced.session.id,
+      role: 'dan',
+      text: 'A replacement registration turn.',
+      model: null,
+    });
+    const replacementConfirmation = randomBytes(32).toString('base64url');
+    const replacementClaim = await deliveries.claimApproval({
+      owner: raced.owner,
+      confirmationId: replacementConfirmation,
+      turnMessageId: replacementSource!.id,
+      expiresAt: new Date(Date.now() + 300_000),
+    });
+    expect(replacementClaim.deliveries.map(({ registrationId }) => registrationId))
+      .toEqual([replacement.registrationId]);
+    const replacementReply = await conversations.addMessage({
+      sessionId: raced.session.id,
+      role: 'jarvis',
+      text: 'Replacement reply.',
+      model: 'pi',
+      replyNotification: {
+        ownerObjectId: raced.owner,
+        turnMessageId: replacementSource!.id,
+      },
+    });
+    const lock = new sql.Transaction(pool);
+    await lock.begin();
+    let racingUpsert: ReturnType<typeof registrations.upsert> | undefined;
+    let racingInvalidation: ReturnType<typeof deliveries.approvalInvalidToken> | undefined;
+    try {
+      const lockRequest = lock.request().input('owner', sql.UniqueIdentifier, raced.owner);
+      const lockResult = await lockRequest.query<{ result: number }>(`DECLARE @result int;
+        DECLARE @resource nvarchar(255) =
+          CONCAT(N'jarvis.approval-notifications:', CONVERT(nvarchar(36), @owner));
+        EXEC @result = sys.sp_getapplock
+          @Resource=@resource, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000;
+        SELECT @result AS result;`);
+      expect(lockResult.recordset[0]?.result).toBeGreaterThanOrEqual(0);
+      racingUpsert = registrations.upsert(raced.owner, {
+        deviceToken: raced.token,
+        showActions: true,
+        timeZone: 'Europe/Copenhagen',
+      });
+      racingInvalidation = deliveries.approvalInvalidToken(
+        raced.owner,
+        replacementConfirmation,
+        raced.registration.registrationId,
+        raced.token,
+        410,
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    } finally {
+      await lock.commit();
+    }
+    expect(racingUpsert).toBeDefined();
+    expect(racingInvalidation).toBeDefined();
+    const [racingOutcome] = await Promise.all([racingUpsert!, racingInvalidation!]);
+    expect(['saved', 'invalid_token']).toContain(racingOutcome);
+    await assertTerminal(
+      {
+        ...raced,
+        registration: replacement,
+        source: replacementSource!,
+        confirmationId: replacementConfirmation,
+        reply: replacementReply!,
+      },
+      'invalid_token', 'apns_invalid_token',
+      'invalid_token', 'apns_invalid_token',
+    );
+    expect(await createApprovalNotificationStore(pool).upsert(raced.owner, {
+      deviceToken: raced.token,
       showActions: true,
       timeZone: 'Europe/Copenhagen',
     })).toBe('invalid_token');
