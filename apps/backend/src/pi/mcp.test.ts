@@ -667,6 +667,10 @@ describe('PI MCP server', () => {
     expect(calls).toBe(1);
     expect(grant.evidence).toHaveLength(1);
 
+    await tool('find_tools', {
+      turn: grant.turn,
+      query: 'github create or update file',
+    });
     await tool('call_tool', {
       turn: grant.turn,
       name: 'gh_create_or_update_file',
