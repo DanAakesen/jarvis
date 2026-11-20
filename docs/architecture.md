@@ -56,10 +56,14 @@ flowchart LR
   reset or timeout transport is transient; an APNs-result write failure leaves
   the current sending lease/state intact rather than rewriting it as a
   permanent provider rejection.
-- Preview privacy uses the shared owner-sensitive classifier from the vault/
-  memory boundary, including identity and financial forms such as card number,
-  CVV/CVC, OTP/one-time/verification/security code, SSN/social security,
-  passport number, account and date of birth.
+- Reply previews are useful by default. `safeReplyNotificationPreview` removes
+  control characters, collapses whitespace and truncates by Unicode character
+  count to 160. Both transactional outbox insert paths store the same `@preview`
+  for every registration; `show_actions` controls approval actions only. The
+  preview no longer uses the broad health/financial/identity classifier from
+  Memory and Vault. The established `shouldRedact` credential/secret guard
+  remains in force and returns the generic body only when that source-bound
+  protection fires.
 - Terminal Apple invalid-token rejection deletes the native registration and
   invalidates all pending rows for that stable device reference. The old
   `push-ledger.ts` process-local timestamp suppression and every dual reply path
