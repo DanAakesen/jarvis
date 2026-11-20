@@ -14,6 +14,7 @@ import { memoryConversations, memoryVault } from './brain.testkit.js';
 import { BrainCommsRefusal, createBrainComms } from './comms.js';
 import { createBrainTools } from './tools.js';
 import { createMemoryProactiveStore } from '../../proactive/store.js';
+import { completionPlan } from '../completion.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -457,7 +458,17 @@ describe('a brain wake over the Jarvis MCP server', () => {
 });
 
 describe('GitHub through the Jarvis door', () => {
-  const ghTool = { name: 'gh_issue_write', description: 'GitHub: Create or update an issue', inputSchema: { type: 'object' }, moduleId: 'github', execute: async () => ({}) };
+  const ghTool = {
+    name: 'gh_issue_update',
+    description: 'GitHub: Update an issue',
+    inputSchema: {
+      type: 'object',
+      properties: { number: { type: 'integer' }, title: { type: 'string' } },
+      additionalProperties: false,
+    },
+    moduleId: 'github',
+    execute: async () => ({}),
+  };
   const bridge = () => {
     const called: string[] = [];
     const github: RemoteMcpBridge = {
@@ -472,13 +483,19 @@ describe('GitHub through the Jarvis door', () => {
     const { github, called } = bridge();
     const { tool, chat, wake } = setup(github);
     for (const grant of [chat(), wake()]) {
-      const found = await tool('find_tools', { turn: grant.turn, query: 'github issue write' });
-      expect((found.result.tools as Array<{ name: string }>).map(({ name }) => name)).toContain('gh_issue_write');
-      const done = await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: { title: 'x' } });
+      grant.completion = completionPlan('Update GitHub issue 7.');
+      const found = await tool('find_tools', { turn: grant.turn, query: 'github issue update' });
+      expect((found.result.tools as Array<{ name: string }>).map(({ name }) => name)).toContain('gh_issue_update');
+      const done = await tool('call_tool', {
+        turn: grant.turn, name: 'gh_issue_update', arguments: { number: 7, title: 'x' },
+      });
       expect(done).toMatchObject({ outcome: 'ok', result: { number: 7 } });
-      expect(grant.results).toEqual([{ tool: 'gh_issue_write', outcome: 'ok' }]);
+      expect(grant.results).toEqual([{ tool: 'gh_issue_update', outcome: 'ok' }]);
     }
-    expect(called).toEqual(['gh_issue_write:{"title":"x"}', 'gh_issue_write:{"title":"x"}']);
+    expect(called).toEqual([
+      'gh_issue_update:{"number":7,"title":"x"}',
+      'gh_issue_update:{"number":7,"title":"x"}',
+    ]);
   });
 
   it('routes each remote tool to its own server by prefix', async () => {
@@ -488,24 +505,24 @@ describe('GitHub through the Jarvis door', () => {
       tools: async () => [{ name: `${prefix}${name}`, description: `${prefix} tool ${name}`, inputSchema: { type: 'object' }, moduleId: 'remote', execute: async () => ({}) }],
       call: async (called) => { calls.push(called); return { outcome: 'ok', result: { from: prefix } }; },
     });
-    const { tool, wake } = setup(make('gh_', 'issue_write'), make('az_', 'group_list'));
+    const { tool, wake } = setup(make('gh_', 'issue_update'), make('az_', 'group_list'));
     const grant = wake();
-    await tool('find_tools', { turn: grant.turn, query: 'github issue_write azure group_list' });
+    await tool('find_tools', { turn: grant.turn, query: 'github issue_update azure group_list' });
     expect(await tool('call_tool', { turn: grant.turn, name: 'az_group_list', arguments: {} })).toMatchObject({ outcome: 'ok', result: { from: 'az_' } });
-    expect(await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: {} })).toMatchObject({ result: { from: 'gh_' } });
-    expect(calls).toEqual(['az_group_list', 'gh_issue_write']);
+    expect(await tool('call_tool', { turn: grant.turn, name: 'gh_issue_update', arguments: {} })).toMatchObject({ result: { from: 'gh_' } });
+    expect(calls).toEqual(['az_group_list', 'gh_issue_update']);
   });
 
   it('refuses a GitHub tool that was not looked up first, and is absent without a token', async () => {
     const { github, called } = bridge();
     const { tool, chat } = setup(github);
     const grant = chat();
-    expect((await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: {} })).outcome).toBe('refused');
+    expect((await tool('call_tool', { turn: grant.turn, name: 'gh_issue_update', arguments: {} })).outcome).toBe('refused');
     expect(called).toEqual([]);
     const without = setup();
     const other = without.chat();
-    const found = await without.tool('find_tools', { turn: other.turn, query: 'github issue write' });
-    expect(JSON.stringify(found.result)).not.toContain('gh_issue_write');
+    const found = await without.tool('find_tools', { turn: other.turn, query: 'github issue update' });
+    expect(JSON.stringify(found.result)).not.toContain('gh_issue_update');
   });
 });
 

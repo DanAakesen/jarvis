@@ -216,7 +216,7 @@ const domainPatterns: readonly [PiCompletionDomain, RegExp][] = [
   ['factory', /\b(?:issue|issues|software factory|worker|workers|factory task|my code|your code|repo bug|min kode)\b/iu],
   ['pc', /\b(?:my pc|on my pc|windows|chrome|spotify|computer|clipboard|min pc|computeren)\b/iu],
   ['workspace', /\b(?:workspace|screen|window|view|panel|arbejdsomrade|arbejdsområde|skærm|vindue|visning)\b/iu],
-  ['jobs', /\b(?:job|jobs|background task|background work|baggrundsjob|lang opgave)\b/iu],
+  ['jobs', /\b(?:job|jobs|watch|watches|deploy|deployment|background task|background work|baggrundsjob|lang opgave|overvågning)\b/iu],
   ['settings', /\b(?:setting|settings|preference|preferences|mode|theme|credential|credentials|login|finding|findings|suggestion|suggestions|indstilling|indstillinger|præference|tema|forslag)\b/iu],
 ];
 
@@ -245,7 +245,7 @@ const ignoredTargetWords = new Set([
   'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag',
   'januar', 'februar', 'marts', 'maj', 'juni', 'juli', 'august', 'oktober', 'november', 'december',
   'add', 'archive', 'book', 'cancel', 'capture', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
-  'implement', 'inspect', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember',
+  'implement', 'inspect', 'keep', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember',
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
   'merge', 'approve', 'review', 'forward',
   'click', 'type', 'select', 'pin', 'unpin', 'rename', 'dispatch', 'deploy', 'trigger', 'scale', 'restart',
@@ -260,7 +260,7 @@ const ignoredTargetWords = new Set([
   'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'about',
   'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated', 'teach',
   'saying', 'says', 'tell', 'telling', 'called', 'named',
-  'worker', 'workers', 'background', 'long-running',
+  'worker', 'workers', 'background', 'long-running', 'watch', 'watches', 'deploy', 'deployment', 'overvågning',
   'down', 'up', 'slow', 'offline', 'online', 'outage', 'unavailable', 'available', 'healthy', 'unhealthy',
   'working', 'broken', 'failed', 'failing', 'failure', 'changed', 'missing', 'stopped', 'pending', 'stale',
   'nede', 'oppe', 'nedbrud', 'utilgængelig', 'tilgængelig', 'virker', 'fejler', 'fejlet', 'fejl', 'ændret',
@@ -273,15 +273,17 @@ const ignoredTargetWords = new Set([
 
 function targetTerms(text: string): { readonly term: string; readonly at: number }[] {
   const terms: { readonly term: string; readonly at: number }[] = [];
+  const readCueTerm = /^(?:(?:[\p{L}\p{N}]+-)?status(?:en|er|et|erne)?|star|stå|stået|viser|vise|viste|vist|forklar|forklare|forklarer|forklaret|fortæl|fortælle|fortæller|fortalt)$/iu;
   const quoted = /["“”'‘’]([^"“”'‘’]{1,300})["“”'‘’]/gu;
   for (const match of text.matchAll(quoted)) {
     const value = targetTerm(match[1] ?? '');
-    if (value) terms.push({ term: value, at: match.index ?? 0 });
+    if (value && !readCueTerm.test(value)) terms.push({ term: value, at: match.index ?? 0 });
   }
   const wordPattern = /[\p{L}\p{N}]+(?:[._/@:-][\p{L}\p{N}-]+)*/gu;
   for (const match of text.matchAll(wordPattern)) {
     const value = targetTerm(match[0]);
     if (!value || ignoredTargetWords.has(value) ||
+        readCueTerm.test(value) ||
         value.length < 2 && !/^\d$/u.test(value)) continue;
     terms.push({ term: value, at: match.index ?? 0 });
   }
@@ -445,7 +447,7 @@ function actionDomainsFor(matches: readonly DomainMatch[], text: string): readon
     factory: /\b(?:implement|fix|build|review and fix|start work|start issue|create an issue|start en opgave|implementer|ret koden)\b/iu,
     pc: /\b(?:open|close|play|pause|click|type|copy|paste|launch|abn|abne|luk|klik|afspil)\b[^\n.!?]{0,50}\b(?:pc|computer|chrome|spotify|window|clipboard|app|musik)\b/iu,
     workspace: /\b(?:open|show|close|minimise|minimize|focus|move|resize|pin|unpin|abn|abne|vis|luk|flyt|fokuser)\b[^\n.!?]{0,60}\b(?:workspace|screen|window|view|panel|skærm|vindue|visning)\b/iu,
-    jobs: /\b(?:start|run|retry|cancel|pause|resume|research|undersøg|start|genoptag|aflys)\b[^\n.!?]{0,60}\b(?:job|background|research|baggrund)\b/iu,
+    jobs: /\b(?:start|run|retry|cancel|pause|resume|research|create|keep|watch|undersøg|start|genoptag|aflys|overvåg|opret)\b[^\n.!?]{0,60}\b(?:job|watch|deploy|deployment|background|research|baggrund|overvågning)\b/iu,
     settings: /\b(?:change|set|enable|disable|turn on|turn off|update|dismiss|snooze|rate|issue|revoke|skift|sæt|aktiver|deaktiver|afvis|udsæt)\b[^\n.!?]{0,60}\b(?:setting|preference|mode|theme|credential|login|finding|suggestion|indstilling|tilstand|tema|forslag)\b/iu,
     generic: /$^/u,
   };
@@ -608,7 +610,8 @@ export function completionPlan(text: string): PiCompletionPlan {
       requirements,
       ...(contextual ? { contextual: true } : {}),
       ...(requirements.some(requirement => requirement.kind === 'committed' &&
-        requirement.targetHashes.length === 0) || contextual ? { requiresTrustedContext: true } : {}),
+        requirement.targetHashes.length === 0 && requirement.operation !== 'create') ||
+        contextual ? { requiresTrustedContext: true } : {}),
     };
   }
 
@@ -631,6 +634,48 @@ export function completionRequirement(text: string): PiCompletionKind {
 
 function committedReceipt(tool: CompletionTool, args: Record<string, unknown>, result: unknown): boolean {
   return tool.completion?.evaluate(args, result) === true;
+}
+
+export function completionDispatchAllowed(
+  plan: PiCompletionPlan,
+  tool: CompletionTool,
+  args: Record<string, unknown>,
+  previous: readonly PiCompletionEvidence[],
+): boolean {
+  if (toolEffect(tool, args) !== 'action') return true;
+  const operation = receiptOperation(tool, args);
+  const domain = toolDomain(tool, args);
+  const identities = targetHashes([...bindingIdentities(args)]);
+  const linked = previous.flatMap(candidate =>
+    candidate.kind !== 'retrieved' || candidate.domain !== domain
+      ? []
+      : candidate.identityTargets
+        .filter(binding => identities.includes(binding.identityHash))
+        .map(binding => ({ candidate, binding })));
+  const runtimeTargets = plan.runtimeTargetHashes ?? [];
+  const trustedLinkedContext = linked.some(({ candidate, binding }) =>
+    candidate.identityTargets.length === 1 ||
+    runtimeTargets.length > 0 && runtimeTargets.every(target => binding.targetHashes.includes(target)));
+  const linkedTargets = linked.flatMap(({ binding }) => binding.targetHashes);
+  const requestTargets = targetHashes([...toolTargetTokens(tool, args, undefined)]);
+  const targetSet = [...new Set([...requestTargets, ...linkedTargets])];
+  const matchesOperation = (requirement: PiCompletionRequirement) =>
+    requirement.operation === 'generic' ||
+    requirement.operation === operation ||
+    (tool.completion?.acceptedRequestOperations ?? []).includes(requirement.operation);
+  if (plan.kind === 'conversation') {
+    const operationMatches = plan.runtimeOperation !== undefined &&
+      (plan.runtimeOperation === 'generic' || plan.runtimeOperation === operation);
+    if (!operationMatches) return false;
+    if (plan.contextual || plan.requiresTrustedContext) return trustedLinkedContext;
+    return runtimeTargets.every(target => targetSet.includes(target));
+  }
+  return plan.requirements.some(requirement =>
+    (requirement.kind === 'committed' || requirement.kind === 'durable_job') &&
+    requirement.domain === domain &&
+    matchesOperation(requirement) &&
+    requirement.targetHashes.every(target => targetSet.includes(target)) &&
+    (!plan.requiresTrustedContext || trustedLinkedContext));
 }
 
 function idConsistent(args: Record<string, unknown>, result: Record<string, unknown>): boolean {

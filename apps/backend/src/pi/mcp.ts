@@ -5,17 +5,18 @@ import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import {
   createToolRegistry, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, toolSchemaFieldNames,
-  type JarvisTool, type RegisteredTool, type ToolCompletionContract, type ToolRegistry,
+  type JarvisTool, type RegisteredTool, type ToolCompletionContract, type ToolCompletionOperation,
+  type ToolRegistry,
 } from '../core/tool-registry.js';
 import {
-  normalizeCompletionText, remoteTerminalReceipt, semanticOperation,
+  normalizeCompletionText, remoteTerminalReceipt,
 } from '../core/tool-completion.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
-import { completionEvidence, toolEffect } from './completion.js';
+import { completionDispatchAllowed, completionEvidence, toolEffect } from './completion.js';
 import { piConnectionInventory } from './capabilities.js';
 
 const maxFullResults = 3;
@@ -37,55 +38,135 @@ function text(value: unknown, isError = false): CallToolResult {
   return { ...(isError ? { isError: true } : {}), content: [{ type: 'text', text: body }] };
 }
 
-function remoteOperation(
+class AmbiguousRemoteTool extends Error {}
+
+const remoteReadVerbs = new Set([
+  'check', 'compare', 'diff', 'download', 'find', 'get', 'list', 'lookup', 'read', 'search', 'status', 'view',
+]);
+const remoteActionVerbs = new Map<string, ToolCompletionOperation>([
+  ['add', 'create'], ['archive', 'delete'], ['approve', 'update'], ['assign', 'update'],
+  ['cancel', 'delete'], ['close', 'delete'], ['comment', 'send'], ['create', 'create'],
+  ['delete', 'delete'], ['dispatch', 'start'], ['dismiss', 'update'], ['edit', 'update'],
+  ['fork', 'create'], ['label', 'update'], ['mark', 'update'], ['merge', 'update'],
+  ['modify', 'update'], ['move', 'update'], ['open', 'open'], ['pin', 'update'],
+  ['publish', 'send'], ['ready', 'update'], ['remove', 'delete'], ['rename', 'update'],
+  ['reopen', 'update'], ['reply', 'send'], ['rerun', 'start'], ['resolve', 'update'],
+  ['restore', 'open'], ['resume', 'start'], ['retry', 'start'], ['revoke', 'delete'],
+  ['run', 'start'], ['send', 'send'], ['set', 'update'], ['start', 'start'],
+  ['stop', 'delete'], ['submit', 'send'], ['trigger', 'start'], ['unassign', 'update'],
+  ['unpin', 'update'], ['update', 'update'], ['upload', 'create'],
+]);
+const selectorFields = ['method', 'operation', 'action'] as const;
+
+function remoteOperationFromWords(words: readonly string[]): ToolCompletionOperation | undefined {
+  if (words.includes('write') ||
+      words.includes('create') && words.includes('update')) return undefined;
+  const firstAction = words.find(word => remoteActionVerbs.has(word));
+  if (firstAction) {
+    if (firstAction === 'add' && words.some(word => word === 'comment' || word === 'reply')) return 'send';
+    return remoteActionVerbs.get(firstAction);
+  }
+  return words.some(word => remoteReadVerbs.has(word)) ? 'read' : undefined;
+}
+
+function remoteSelector(schema: unknown, staticOperation?: ToolCompletionOperation): {
+  readonly field: typeof selectorFields[number];
+  readonly choices: ReadonlyMap<string, ToolCompletionOperation>;
+} | undefined {
+  let result: { field: typeof selectorFields[number]; values: Set<string> } | undefined;
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 8 || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    const record = value as Record<string, unknown>;
+    const properties = record.properties;
+    if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
+      for (const field of selectorFields) {
+        const definition = (properties as Record<string, unknown>)[field];
+        if (!definition || typeof definition !== 'object' || Array.isArray(definition)) continue;
+        const candidate = definition as Record<string, unknown>;
+        const values = new Set<string>();
+        if (typeof candidate.const === 'string') values.add(normalizeCompletionText(candidate.const));
+        if (Array.isArray(candidate.enum)) {
+          for (const entry of candidate.enum) {
+            if (typeof entry === 'string') values.add(normalizeCompletionText(entry));
+          }
+        }
+        if (result && result.field !== field) throw new AmbiguousRemoteTool('multiple operation selectors');
+        const merged = result?.values ?? new Set<string>();
+        for (const entry of values) merged.add(entry);
+        result = { field, values: merged };
+      }
+    }
+    for (const keyword of ['allOf', 'anyOf', 'oneOf'] as const) {
+      const branches = record[keyword];
+      if (Array.isArray(branches)) for (const branch of branches) visit(branch, depth + 1);
+    }
+  };
+  visit(schema);
+  if (!result) return undefined;
+  if (result.values.size === 0) throw new AmbiguousRemoteTool(`${result.field} has no closed choices`);
+  const choices = new Map<string, ToolCompletionOperation>();
+  for (const value of result.values) {
+    const normalizedValue = normalizeCompletionText(value);
+    const direct = normalizedValue === 'post' && staticOperation
+      ? staticOperation
+      : remoteOperationFromWords(normalizedValue.split(/[\s_-]+/u));
+    if (!direct) throw new AmbiguousRemoteTool(`${result.field} value ${value} is ambiguous`);
+    choices.set(value, direct);
+  }
+  return { field: result.field, choices };
+}
+
+function remoteOperationFromSchema(
   bridge: RemoteMcpBridge,
-  name: string,
-  args: Record<string, unknown>,
-) {
-  const words = normalizeCompletionText(name.slice(bridge.prefix.length)).split(/[_-]+/u).filter(Boolean);
-  if (words.some(word => ['delete', 'remove', 'cancel', 'close', 'archive'].includes(word))) return 'delete' as const;
-  if (words.some(word => ['send', 'comment', 'reply'].includes(word))) return 'send' as const;
-  if (words.some(word => ['dispatch', 'run', 'start', 'trigger', 'retry', 'rerun'].includes(word))) return 'start' as const;
-  if (words.includes('write')) {
-    return ['id', 'number', 'issue', 'issueNumber', 'issue_number', 'pullNumber',
-      'pull_number', 'sha', 'path'].some(field => args[field] !== undefined)
-      ? 'update' as const : 'create' as const;
+  tool: RegisteredTool,
+): (args: Record<string, unknown>) => ToolCompletionOperation {
+  const words = normalizeCompletionText(tool.name.slice(bridge.prefix.length)).split(/[_-]+/u).filter(Boolean);
+  const staticOperation = remoteOperationFromWords(words);
+  const selector = remoteSelector(tool.inputSchema, staticOperation);
+  if (!selector) {
+    if (!staticOperation || words.includes('write') && !staticOperation && words.length > 1) {
+      throw new AmbiguousRemoteTool(`${tool.name} has no exact operation selector`);
+    }
+    return () => staticOperation;
   }
-  if (words.includes('create') && words.includes('update')) {
-    return args.sha !== undefined || args.id !== undefined || args.number !== undefined
-      ? 'update' as const : 'create' as const;
-  }
-  if (words.some(word => ['update', 'edit', 'move', 'merge', 'approve', 'ready', 'label',
-    'assign', 'mark', 'reopen', 'pause', 'resume', 'pin', 'unpin'].includes(word))) return 'update' as const;
-  if (words.some(word => ['create', 'add'].includes(word))) return 'create' as const;
-  if (words.some(word => ['open', 'show', 'restore'].includes(word))) return 'open' as const;
-  return semanticOperation(name.slice(bridge.prefix.length));
+  return (args) => {
+    const selected = normalizeCompletionText(String(args[selector.field] ?? ''));
+    return selector.choices.get(selected) ?? 'generic';
+  };
 }
 
 function compileRemoteTools(
   bridge: RemoteMcpBridge,
   tools: readonly RegisteredTool[],
-): readonly RegisteredTool[] {
+): { readonly tools: readonly RegisteredTool[]; readonly rejected: number } {
   const domain = bridge.prefix === githubToolPrefix ? 'github' as const
     : bridge.prefix === azureToolPrefix ? 'azure' as const : 'generic' as const;
-  const contracted: JarvisTool[] = tools.map(tool => {
-    const operation = (args: Record<string, unknown>) => remoteOperation(bridge, tool.name, args);
-    const completion: ToolCompletionContract = {
-      domain,
-      operation,
-      requestTargetFields: [...toolSchemaFieldNames(tool.inputSchema)],
-      resultTargetFields: [
-        'id', 'number', 'issueNumber', 'issue_number', 'pullNumber', 'pull_number', 'repository',
-        'repo', 'owner', 'resourceId', 'resource_id', 'resourceGroup', 'resourceName', 'url',
-        'html_url', 'path', 'sha', 'commit', 'branch', 'ref', 'runId', 'jobId',
-        'title', 'name', 'status', 'state', 'outcome', 'created', 'updated', 'deleted', 'merged',
-        'sent', 'commented', 'closed', 'archived', 'accepted', 'opened', 'dispatched',
-      ],
-      evaluate: (args, result) => remoteTerminalReceipt(operation(args), args, result),
-    };
-    return { ...tool, completion };
-  });
-  return createToolRegistry([{ id: `remote:${bridge.prefix}`, tools: contracted }]).list();
+  const compiled: RegisteredTool[] = [];
+  let rejected = 0;
+  for (const tool of tools) {
+    try {
+      const operation = remoteOperationFromSchema(bridge, tool);
+      const completion: ToolCompletionContract = {
+        domain,
+        operation,
+        requestTargetFields: [...toolSchemaFieldNames(tool.inputSchema)],
+        resultTargetFields: [
+          'id', 'number', 'issueNumber', 'issue_number', 'pullNumber', 'pull_number', 'repository',
+          'repo', 'owner', 'resourceId', 'resource_id', 'resourceGroup', 'resourceName', 'url',
+          'html_url', 'path', 'sha', 'commit', 'branch', 'ref', 'runId', 'jobId',
+          'title', 'name', 'status', 'state', 'outcome', 'created', 'updated', 'deleted', 'merged',
+          'sent', 'commented', 'closed', 'archived', 'accepted', 'opened', 'dispatched',
+        ],
+        evaluate: (args, result) => remoteTerminalReceipt(operation(args), args, result),
+      };
+      const contracted: JarvisTool = { ...tool, completion };
+      compiled.push(...createToolRegistry([{ id: `remote:${bridge.prefix}`, tools: [contracted] }]).list());
+    } catch (error) {
+      if (!(error instanceof AmbiguousRemoteTool)) throw error;
+      rejected += 1;
+    }
+  }
+  return { tools: compiled, rejected };
 }
 
 /** Chat never shows the capability-discovery operation selector; the voice and chat catalogues stay aligned. */
@@ -178,6 +259,13 @@ export function createPiMcpRoutes(options: {
       grant.results.push({ tool: name, outcome: 'refused' });
       return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
     }
+    if (!grant.brain && !completionDispatchAllowed(grant.completion, tool, args, grant.bindings)) {
+      grant.results.push({ tool: name, outcome: 'refused' });
+      return text({
+        tool: name, outcome: 'refused',
+        result: { refused: 'This action does not match the exact requested operation and trusted target. Nothing was sent.' },
+      });
+    }
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     if (done.outcome === 'ok') {
@@ -228,7 +316,12 @@ export function createPiMcpRoutes(options: {
           providerPrefixNeeded(input.query, azureToolPrefix)) {
         grant.azure.catalogue = 'not_configured';
       }
-      const remoteTools = catalogues.flatMap(({ bridge, tools }) => compileRemoteTools(bridge, tools));
+      const compiledRemote = catalogues.map(({ bridge, tools }) => ({
+        bridge,
+        ...compileRemoteTools(bridge, tools),
+      }));
+      const remoteTools = compiledRemote.flatMap(({ tools }) => tools);
+      const rejectedRemoteTools = compiledRemote.reduce((total, { rejected }) => total + rejected, 0);
       for (const tool of remoteTools) grant.remoteTools.set(tool.name, tool);
       const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
@@ -246,6 +339,9 @@ export function createPiMcpRoutes(options: {
       const notes = (noMatch: boolean) => {
         const lines = [
           ...(noMatch ? ['No matching tool. Say so plainly.'] : []),
+          ...(rejectedRemoteTools > 0
+            ? [`${rejectedRemoteTools} provider tool${rejectedRemoteTools === 1 ? '' : 's'} had no unambiguous operation selector and were not offered.`]
+            : []),
           ...catalogues.flatMap(({ bridge, status }) => {
             if (status.state === 'starting') return [`${bridge.label} tools are still loading (the server wakes from sleep and can take a minute or two). Search again shortly; ${bridge.label} is attached, just not loaded yet.`];
             if (status.state === 'stale') return [`${bridge.label} is using its last loaded tool list because the refresh failed (${status.reason}). Do not present it as freshly verified; retry if the needed tool is missing.`];
@@ -318,6 +414,14 @@ export function createPiMcpRoutes(options: {
       if (!tool || !visible || !grant.discovered.has(tool.name)) {
         if (azureRequested) grant.azure.undiscoveredRefusals += 1;
         return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
+      }
+      if (!grant.brain &&
+          !completionDispatchAllowed(grant.completion, tool, input.arguments, grant.bindings)) {
+        grant.results.push({ tool: tool.name, outcome: 'refused' });
+        return text({
+          tool: tool.name, outcome: 'refused',
+          result: { refused: 'This action does not match the exact requested operation and trusted target. Nothing was changed.' },
+        });
       }
       const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
       try {

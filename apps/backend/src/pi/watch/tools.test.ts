@@ -10,6 +10,7 @@ import { createMemoryPiStore } from '../store.js';
 import { createPiTurnRegistry } from '../turns.js';
 import { createWatchTools } from './tools.js';
 import { createWatches } from './store.js';
+import { completionPlan } from '../completion.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -57,13 +58,22 @@ describe('watch tools: chat quotes Dan, a wake acts on its own', () => {
   it('opens a watch from Dan\'s stored message, quoting his words, and lists and changes it', async () => {
     const t = setup();
     const grant = t.chat();
+    grant.completion = completionPlan('Please keep me updated on the deploy of main, every half hour.');
     const created = await t.run(grant, 'watch_create', { title: 'Deploy of main', text: 'Tell me when green. Look every half hour.', nextLook: '2026-11-16T10:30:00Z' });
     expect(created).toMatchObject({ outcome: 'ok', result: { created: true, name: 'Deploy of main' } });
     expect(t.vault.files.get('PI/Watches/Deploy of main.md')).toContain('keep me updated on the deploy of main');
     const listed = await t.run(grant, 'watch_list', {});
     expect((listed.result.watches as Array<{ name: string }>).map(({ name }) => name)).toEqual(['Deploy of main']);
+    grant.completion = completionPlan('Update the Deploy of main watch to every hour.');
+    expect(grant.completion.requirements).toEqual([
+      expect.objectContaining({ domain: 'jobs', operation: 'update', kind: 'committed' }),
+    ]);
     expect((await t.run(grant, 'watch_update', { name: 'Deploy of main', change: 'every hour instead', nextLook: '2026-11-16T11:00:00Z' })).outcome).toBe('ok');
     expect(t.vault.files.get('PI/Watches/Deploy of main.md')).toContain('changed: every hour instead');
+    grant.completion = completionPlan('Stop the Deploy of main watch.');
+    expect(grant.completion.requirements).toEqual([
+      expect.objectContaining({ domain: 'jobs', operation: 'delete', kind: 'committed' }),
+    ]);
     expect((await t.run(grant, 'watch_stop', { name: 'Deploy of main', reason: 'Dan said stop' })).outcome).toBe('ok');
     expect(t.vault.files.has('PI/Watches/Closed/Deploy of main.md')).toBe(true);
   });

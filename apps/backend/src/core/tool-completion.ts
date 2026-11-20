@@ -34,16 +34,28 @@ export function terminalFailure(value: unknown, depth = 0): boolean {
 
 export function semanticOperation(value: unknown): ToolCompletionOperation {
   const text = normalizeCompletionText(String(value ?? '')).replaceAll('_', ' ').replaceAll('-', ' ');
-  if (/\b(?:delete|cancel|close|archive|remove|forget|discard|slet|aflys|luk|fjern)\b/iu.test(text)) return 'delete';
   if (/^(?:(?:please|can you|could you|would you|will you|vil du|kan du)\s+)?(?:draft|prepare a draft|create a draft)\b/iu.test(text)) return 'create';
-  if (/\b(?:send|sende|email|forward|reply|comment|mail|svar|besvar)\b/iu.test(text)) return 'send';
-  if (/\b(?:open|launch|focus|show|activate|abn|abne|vis|fokus)\b/iu.test(text)) return 'open';
-  if (/\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|start|kør)\b/iu.test(text)) return 'start';
-  if (/^issue\b/iu.test(text) ||
-      /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|draft|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu.test(text)) return 'create';
-  if (/\b(?:update|change|edit|move|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu.test(text)) return 'update';
-  if (/\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu.test(text)) return 'read';
-  return 'generic';
+  if (/^(?:keep|watch)\b.*\b(?:updated|watch|deploy|deployment)\b/iu.test(text)) return 'create';
+  if (/^issue\b/iu.test(text)) return 'create';
+  const operations: readonly [ToolCompletionOperation, RegExp][] = [
+    ['delete', /\b(?:delete|cancel|close|archive|remove|forget|discard|stop|slet|aflys|luk|fjern)\b/iu],
+    ['send', /\b(?:send|sende|email|forward|reply|comment|svar|besvar)\b/iu],
+    ['open', /\b(?:open|launch|focus|show|activate|abn|abne|fokus)\b/iu],
+    ['start', /\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|kør)\b/iu],
+    ['create', /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu],
+    ['update', /\b(?:update|change|edit|move|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu],
+    ['read', /\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu],
+  ];
+  let selected: ToolCompletionOperation = 'generic';
+  let firstAt = text.length;
+  for (const [operation, pattern] of operations) {
+    const match = pattern.exec(text);
+    if (match?.index !== undefined && match.index < firstAt) {
+      selected = operation;
+      firstAt = match.index;
+    }
+  }
+  return selected;
 }
 
 export function completed(result: unknown): boolean {

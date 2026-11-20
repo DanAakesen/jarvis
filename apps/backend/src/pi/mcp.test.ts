@@ -266,7 +266,80 @@ describe('PI MCP server', () => {
     }]);
   });
 
+  it('withholds an ambiguous consolidated remote tool without a declared selector', async () => {
+    let calls = 0;
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [{
+        name: 'gh_issue_write',
+        description: 'Create or update an issue.',
+        inputSchema: {
+          type: 'object',
+          properties: { title: { type: 'string' }, number: { type: 'integer' } },
+          additionalProperties: false,
+        },
+        moduleId: 'github',
+        execute: async () => ({}),
+      }],
+      call: async () => {
+        calls += 1;
+        return { outcome: 'ok', result: { number: 1967 } };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'github issue write' });
+    expect(JSON.stringify(found.body?.result)).not.toContain('gh_issue_write');
+    expect(found.body?.result.note).toContain('no unambiguous operation selector');
+    expect(grant.remoteTools.has('gh_issue_write')).toBe(false);
+    await tool('call_tool', {
+      turn: grant.turn, name: 'gh_issue_write', arguments: { number: 1967, title: 'Updated' },
+    });
+    expect(calls).toBe(0);
+  });
+
+  it('uses a declared provider selector instead of inferring from common argument presence', async () => {
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [{
+        name: 'gh_issue',
+        description: 'Run a declared issue operation.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            operation: { type: 'string', enum: ['create', 'update'] },
+            number: { type: 'integer' },
+            title: { type: 'string' },
+          },
+          required: ['operation'],
+          additionalProperties: false,
+        },
+        moduleId: 'github',
+        execute: async () => ({}),
+      }],
+      call: async (_name, args) => ({
+        outcome: 'ok',
+        result: { number: args.number ?? 1967, status: args.operation === 'create' ? 'created' : 'updated' },
+      }),
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Update GitHub issue 1967.');
+    await tool('find_tools', { turn: grant.turn, query: 'github issue' });
+    const remote = grant.remoteTools.get('gh_issue');
+    expect(typeof remote?.completion?.operation === 'function'
+      ? remote.completion.operation({ operation: 'update', number: 1967 })
+      : remote?.completion?.operation).toBe('update');
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_issue',
+      arguments: { operation: 'update', number: 1967, title: 'Updated' },
+    });
+    expect(grant.evidence.at(-1)).toMatchObject({ operation: 'update', domain: 'github' });
+  });
+
   it('binds remote delete receipts to the exact requested target', async () => {
+    let calls = 0;
     const bridge: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [{
@@ -281,10 +354,10 @@ describe('PI MCP server', () => {
         moduleId: 'github',
         execute: async () => ({}),
       }],
-      call: async (_name, args) => ({
-        outcome: 'ok',
-        result: { deleted: true, number: args.number },
-      }),
+      call: async (_name, args) => {
+        calls += 1;
+        return { outcome: 'ok', result: { deleted: true, number: args.number } };
+      },
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
@@ -293,6 +366,7 @@ describe('PI MCP server', () => {
     await tool('call_tool', {
       turn: grant.turn, name: 'gh_issue_delete', arguments: { number: 42 },
     });
+    expect(calls).toBe(1);
     expect(grant.evidence).toMatchObject([{
       executionId: 'remote:gh_:gh_issue_delete',
       operation: 'delete',
@@ -301,11 +375,56 @@ describe('PI MCP server', () => {
     await tool('call_tool', {
       turn: grant.turn, name: 'gh_issue_delete', arguments: { number: 43 },
     });
+    expect(calls).toBe(1);
     expect(grant.evidence).toHaveLength(1);
-    expect(grant.unverified.count).toBe(1);
+    expect(grant.unverified.count).toBe(0);
+  });
+
+  it('refuses an unresolved contextual delete before the local executor is called', async () => {
+    let deletes = 0;
+    const workspace: JarvisTool = {
+      name: 'workspaces_manage',
+      description: 'Delete one saved workspace item by exact id.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          action: { type: 'string', const: 'delete' },
+        },
+        required: ['id', 'action'],
+        additionalProperties: false,
+      },
+      execution: {
+        defaultEffect: 'action',
+        operation: { field: 'action', effects: { delete: 'action' } },
+      },
+      completion: {
+        domain: 'workspace',
+        operation: 'delete',
+        requestTargetFields: ['id', 'action'],
+        resultTargetFields: ['id', 'deleted'],
+        evaluate: receipt.workspaceManage,
+      },
+      execute: async () => {
+        deletes += 1;
+        return { id: '77', deleted: true };
+      },
+    };
+    const { registry, tool } = setup([], { tools: [workspace] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Delete it.');
+    await tool('find_tools', { turn: grant.turn, query: 'workspaces manage' });
+    const result = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'workspaces_manage',
+      arguments: { id: '77', action: 'delete' },
+    });
+    expect(result.body).toMatchObject({ outcome: 'refused' });
+    expect(deletes).toBe(0);
   });
 
   it('records only a terminal receipt bound to the classified tool arguments and target', async () => {
+    let sends = 0;
     const mail: JarvisTool = {
       name: 'mail_send',
       description: 'Send one email.',
@@ -324,7 +443,10 @@ describe('PI MCP server', () => {
         domain: 'mail', operation: 'send', requestTargetFields: ['to', 'subject'],
         resultTargetFields: ['id', 'messageId'], evaluate: receipt.completed,
       },
-      execute: async () => ({ status: 'completed', messageId: 'mail-1' }),
+      execute: async () => {
+        sends += 1;
+        return { status: 'completed', messageId: 'mail-1' };
+      },
     };
     const { registry, tool } = setup([], { tools: [mail] });
     const grant = registry.open({
@@ -336,6 +458,7 @@ describe('PI MCP server', () => {
       turn: grant.turn, name: 'mail_send',
       arguments: { to: ['alice@example.com'], subject: 'Build', body: 'The build is green.' },
     });
+    expect(sends).toBe(1);
     expect(grant.evidence).toHaveLength(1);
     expect(grant.evidence[0]).toMatchObject({
       executionId: 'probe:mail_send', tool: 'mail_send', kind: 'committed', domain: 'mail',
@@ -344,6 +467,7 @@ describe('PI MCP server', () => {
       turn: grant.turn, name: 'mail_send',
       arguments: { to: ['bob@example.com'], subject: 'Another item', body: 'Unrelated.' },
     });
+    expect(sends).toBe(1);
     expect(grant.evidence).toHaveLength(1);
   });
 

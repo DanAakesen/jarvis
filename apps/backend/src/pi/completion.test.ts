@@ -627,6 +627,30 @@ describe('PI completion receipts', () => {
     expect(missingCompletionEvidence(plan, { evidence: [] }))
       .toMatchObject({ kind: 'retrieved', domain: 'generic', operation: 'read' });
   });
+
+  it('binds Danish read grammar to retrieved evidence without hashing cue words as targets', () => {
+    const mailPlan = completionPlan('Kan du fortælle mig hvad der står i e-mailen fra Alice?');
+    expect(mailPlan.requirements[0]).toMatchObject({
+      kind: 'retrieved', domain: 'mail', operation: 'read',
+    });
+    expect(completionEvidence(
+      mailPlan,
+      action('mail_search', 'read'),
+      { query: 'from:alice@example.com' },
+      { messages: [{ id: 'mail-1', from: 'Alice <alice@example.com>', subject: 'Build' }] },
+    )).toMatchObject({ kind: 'retrieved', domain: 'mail' });
+
+    const azurePlan = completionPlan('Kan du forklare hvorfor Azure-statusen er nede?');
+    expect(azurePlan.requirements[0]).toMatchObject({
+      kind: 'retrieved', domain: 'azure', operation: 'read', targetHashes: [],
+    });
+    expect(completionEvidence(
+      azurePlan,
+      action('az_group_list', 'read'),
+      {},
+      { status: 'down', resources: [] },
+    )).toMatchObject({ kind: 'retrieved', domain: 'azure' });
+  });
 });
 
 describe('durable work completion', () => {
