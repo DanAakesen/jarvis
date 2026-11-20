@@ -90,21 +90,27 @@
   retired, with no dual or fallback path.
 - **Recovery:** Chat awaits or reconciles the same-turn approval before storing
   the reply outbox. Accepted APNs cancels only that registration's pending
-  duplicate; failed transport/provider delivery leaves it eligible. A leased
-  SQL worker retries only transient reply APNs failures at 1/5/20/60 seconds,
+  duplicate; failed transport/provider delivery leaves it eligible. An
+  APNs-accepted result is retried idempotently in SQL. The turn remains blocked
+  on an unresolved sending row rather than ageing a known/uncertain acceptance
+  into failure. Separately, the leased SQL worker retries only transient reply
+  APNs failures at 1/5/20/60 seconds,
   at most five attempts, until one-hour expiry. State-write failures preserve
   the sending lease instead of becoming provider rejection. A stable
   message-derived collapse ID covers the crash window after Apple accepted but
   before SQL recorded that result. Permanent invalid-token responses remove the
   registration and invalidate its pending rows.
 - **Privacy:** only a bounded, one-line preview is stored per device. Preview
-  opt-out, credentials, health/medical, diagnosis/medication, banking and
-  account content use a generic body. Logs and status expose no body, IDs or
-  token; terminal counts are diagnostic evidence.
+  opt-out, credentials, health/medical, diagnosis/medication, banking,
+  account, identity and financial content use the shared
+  `containsSensitiveOwnerData` policy and a generic body. Logs and status
+  expose no body, IDs or token; terminal counts are diagnostic evidence.
 - **Routing:** `jarvis.reply` is a dedicated iPhone/Watch tap branch carrying
   exact `sessionID`/`messageID`. Watch keeps the target pending across active
-  chat, voice and dictation instead of discarding it. Proactive findings and
-  approval actions keep their existing categories and handlers.
+  chat, voice and dictation instead of discarding it. Once opened, active
+  scope is retained separately and scopes history/reconnect/foreground refresh
+  until leave/send/sign-out. Proactive findings and approval actions keep their
+  existing categories and handlers.
 - **Continuity:** the same server-side outbox envelope accepts optional source
   evidence for #1969. Proactive scheduling, GPT-Live and voice protocol code
   remain untouched.

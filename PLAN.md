@@ -79,11 +79,13 @@ of this work.**
 | Reconcile accepted approval delivery separately per device in migration `0094`, await same-turn work and cancel only unsent duplicates | Done |
 | Add bounded transient retry, stable APNs collapse identity, token invalidation and sanitized diagnostics | Done |
 | Keep APNs transport failures separate from SQL result-write failures and preserve lease recovery | Done |
+| Retry accepted approval outcomes idempotently and keep unresolved accepted/sending rows conservatively blocked | Done |
 | Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
 | Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
+| Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
-| Run available offline gates and publish the reviewed branch head | Backend build/lint and full 676-test suite pass; isolated SQL 24-test gate and full JarvisCore 221-test Swift 6.2 suite pass; final rebase, commit and force-with-lease verification pending |
+| Run available offline gates and publish the reviewed branch head | Backend build/lint and full 683-test suite pass; isolated SQL 24-test gate and full JarvisCore 224-test Swift 6.2 suite pass; final rebase, commit and force-with-lease verification pending |
 
 Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live

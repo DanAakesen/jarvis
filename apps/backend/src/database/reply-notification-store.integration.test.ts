@@ -81,23 +81,27 @@ describe('durable reply notification store', () => {
     });
     expect(approvedTurnReply).not.toBeNull();
     const blockedAt = new Date(Date.now() + 1_000);
-    expect(await deliveries.reconciliationComplete(
-      owner, sourceA!.id, blockedAt,
-    )).toBe(false);
+    expect(await deliveries.reconciliationComplete(owner, sourceA!.id)).toBe(false);
     expect(await deliveries.claimDue(
       owner, randomUUID(), blockedAt, new Date(blockedAt.getTime() + 20_000), 10,
+    )).toEqual([]);
+    const staleAt = new Date(Date.now() + 60_000);
+    expect(await deliveries.reconciliationComplete(owner, sourceA!.id)).toBe(false);
+    expect(await deliveries.claimDue(
+      owner, randomUUID(), staleAt, new Date(staleAt.getTime() + 20_000), 10,
     )).toEqual([]);
     const acceptedApproval = claimedApproval.deliveries.find(({ showActions }) => showActions)!;
     const failedApproval = claimedApproval.deliveries.find(({ showActions }) => !showActions)!;
     await deliveries.approvalAccepted(
       owner, confirmationId, acceptedApproval.registrationId, 200,
     );
+    await deliveries.approvalAccepted(
+      owner, confirmationId, acceptedApproval.registrationId, 200,
+    );
     await deliveries.approvalFailed(
       owner, confirmationId, failedApproval.registrationId, 'provider_rejected', 403,
     );
-    expect(await deliveries.reconciliationComplete(
-      owner, sourceA!.id, new Date(Date.now() + 1_000),
-    )).toBe(true);
+    expect(await deliveries.reconciliationComplete(owner, sourceA!.id)).toBe(true);
     const reconciledTurnReply = await conversations.addMessage({
       sessionId: session.id,
       role: 'jarvis',

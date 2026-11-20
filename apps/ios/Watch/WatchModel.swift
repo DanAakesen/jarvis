@@ -75,6 +75,7 @@ final class WatchModel: ObservableObject {
             self.replyRoute.clear()
             self.replyTargetMessageID = nil
             JarvisReplyNotificationTarget.pending()?.clear()
+            JarvisReplyNotificationTarget.active()?.clearActive()
             let active = self.dictationState != .idle
             self.cancelDictation()
             if active { self.error = WatchFailure.signInRequired.message + " Tap Message to type." }
@@ -105,6 +106,10 @@ final class WatchModel: ObservableObject {
         #endif
         guard !busy, !startingVoice, voiceID == nil, connection.reachable else { return }
         if await routePendingReplyIfPossible() || replyRoute.pending != nil { return }
+        if let active = replyRoute.active {
+            _ = await loadReplyTarget(active)
+            return
+        }
         _ = await loadHistory()
     }
 
@@ -130,7 +135,7 @@ final class WatchModel: ObservableObject {
         let opened = await loadReplyTarget(target)
         if opened {
             replyRoute.opened(target)
-            target.clear()
+            target.activate()
         } else {
             replyRoute.failed(target)
         }
@@ -138,6 +143,12 @@ final class WatchModel: ObservableObject {
             Task { await routePendingReplyIfPossible() }
         }
         return opened
+    }
+
+    func leaveReplyDeepLink() {
+        replyRoute.active?.clearActive()
+        replyRoute.leaveActive()
+        replyTargetMessageID = nil
     }
 
     private func loadReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
@@ -148,6 +159,7 @@ final class WatchModel: ObservableObject {
             guard let reply, let decoded = try? JSONDecoder().decode([WatchHistoryMessage].self, from: reply) else {
                 throw WatchFailure.failed
             }
+            guard replyRoute.isCurrent(target) else { return false }
             messages = decoded.map { Message(id: $0.id, user: $0.user, text: $0.text) }
             guard decoded.contains(where: { $0.id == target.messageID }) else {
                 historyError = "This exact reply is no longer available. Open Jarvis on your iPhone."
@@ -188,6 +200,7 @@ final class WatchModel: ObservableObject {
 
     func send() async {
         guard !busy, !startingVoice, voiceID == nil, dictationState == .idle, let text = composer.beginSend() else { return }
+        leaveReplyDeepLink()
         historyRequest = UUID(); historyError = nil
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id

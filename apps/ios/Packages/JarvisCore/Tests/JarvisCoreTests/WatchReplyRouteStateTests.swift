@@ -18,6 +18,7 @@ final class WatchReplyRouteStateTests: XCTestCase {
         ), target)
         state.opened(target)
         XCTAssertNil(state.pending)
+        XCTAssertEqual(state.active, target)
     }
 
     func testTapRemainsPendingAcrossBusyDictationAndConnectionLoss() {
@@ -59,6 +60,7 @@ final class WatchReplyRouteStateTests: XCTestCase {
         state.receive(target)
         state.clear()
         XCTAssertNil(state.pending)
+        XCTAssertNil(state.active)
     }
 
     func testLatestTapWaitsBehindAnInFlightTargetWithoutBeingDiscarded() {
@@ -78,5 +80,41 @@ final class WatchReplyRouteStateTests: XCTestCase {
             reachable: true, busy: false, startingVoice: false, voiceActive: false, dictating: false
         ), latest)
         XCTAssertEqual(state.pending, latest)
+    }
+
+    func testOpenedTargetRemainsActiveWhileAnotherNotificationIsPending() {
+        let latest = JarvisReplyNotificationTarget(sessionID: "71", messageID: "72")!
+        var state = WatchReplyRouteState()
+        state.receive(target)
+        _ = state.takeWhenAvailable(
+            reachable: true, busy: false, startingVoice: false, voiceActive: false, dictating: false
+        )
+        state.opened(target)
+        state.receive(latest)
+
+        XCTAssertEqual(state.active, target)
+        XCTAssertEqual(state.pending, latest)
+        XCTAssertNil(state.takeWhenAvailable(
+            reachable: true, busy: true, startingVoice: false, voiceActive: false, dictating: false
+        ))
+        state.leaveActive()
+        XCTAssertNil(state.active)
+        XCTAssertEqual(state.pending, latest)
+        XCTAssertFalse(state.isCurrent(target))
+    }
+
+    func testLeavingDuringOpenInvalidatesItsLateResult() {
+        var state = WatchReplyRouteState()
+        state.receive(target)
+        _ = state.takeWhenAvailable(
+            reachable: true, busy: false, startingVoice: false, voiceActive: false, dictating: false
+        )
+        XCTAssertTrue(state.isCurrent(target))
+
+        state.leaveActive()
+
+        XCTAssertFalse(state.isCurrent(target))
+        XCTAssertNil(state.pending)
+        XCTAssertNil(state.active)
     }
 }

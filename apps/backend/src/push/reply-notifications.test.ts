@@ -8,6 +8,7 @@ import type {
   ReplyNotificationStore,
 } from '../database/reply-notification-store.js';
 import type { ApprovalNotificationSender } from './approval-notifications.js';
+import { containsSensitiveOwnerData } from '../vault/index.js';
 import { createApprovalNotificationDispatcher } from './approval-notifications.js';
 import {
   createReplyNotificationWorker,
@@ -220,10 +221,22 @@ describe('reply notification contract', () => {
     'Your banking balance changed',
     'Your account settings changed',
     'The account number is available',
+    'Card number 4242 4242 4242 4242',
+    'SSN 123-45-6789',
+    'Your social security number is available',
+    'Passport number AB123456',
+    'The date of birth is 12 May 1985',
     'Your medicin needs renewal',
     'Bankkontoens saldo er opdateret',
   ])('uses a private lock-screen fallback for sensitive preview %s', (text) => {
     expect(safeReplyNotificationPreview(text)).toBe('New reply from Jarvis');
+    expect(containsSensitiveOwnerData(text)).toBe(true);
+  });
+
+  it('does not privatise ordinary work/accounting language without a restricted account pattern', () => {
+    expect(containsSensitiveOwnerData('The accounting model is ready for review.')).toBe(false);
+    expect(safeReplyNotificationPreview('The accounting model is ready for review.'))
+      .toBe('The accounting model is ready for review.');
   });
 
   it('carries the exact session and message identity', () => {
@@ -389,6 +402,8 @@ describe('reply notification contract', () => {
         replyNotifications: store,
       },
       log,
+      Date.now,
+      { persistenceRetryDelaysMs: [0], reconciliationAttempts: 1 },
     );
 
     await dispatch({
@@ -399,8 +414,54 @@ describe('reply notification contract', () => {
       turnMessageId: '41',
     });
     expect(failedWrite).not.toHaveBeenCalled();
+    expect(store.approvalAccepted).toHaveBeenCalledTimes(2);
     expect(log.warn).toHaveBeenCalledWith('approval_notification.persistence_unavailable');
     expect(store.approvalResults.get(`${confirmationId}:${registrationId}`)).toBe('sending');
+    await expect(dispatch.waitForTurn('41')).rejects.toThrow('Approval notification outcome');
+    expect(log.warn).toHaveBeenCalledWith('approval_notification.accepted_outcome_unavailable');
+  });
+
+  it('idempotently retries accepted outcome persistence before unblocking the turn', async () => {
+    const confirmationId = 'e'.repeat(43);
+    const registrationId = randomUUID();
+    const duplicateReply = delivery({ registrationId, turnMessageId: '41' });
+    const store = new DurableReplyStoreFixture([duplicateReply], [{
+      confirmationId,
+      registrationId,
+      deviceToken: 'ab'.repeat(32),
+      showActions: true,
+      timeZone: 'Europe/Copenhagen',
+    }]);
+    const accepted = store.approvalAccepted.bind(store);
+    const acceptedWrite = vi.spyOn(store, 'approvalAccepted')
+      .mockRejectedValueOnce(new Error('temporary sql failure'))
+      .mockImplementation(accepted);
+    const dispatch = createApprovalNotificationDispatcher(
+      randomUUID(),
+      {
+        store: { upsert: async () => true, list: async () => [], remove: async () => undefined },
+        sender: { send: async () => ({
+          accepted: true, invalidToken: false, statusCode: 200,
+        }) },
+        replyNotifications: store,
+      },
+      logger(),
+      Date.now,
+      { persistenceRetryDelaysMs: [0], reconciliationAttempts: 1 },
+    );
+
+    const confirmation = {
+      id: confirmationId,
+      actionKind: 'calendar_change' as const,
+      summary: 'Move design review',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      turnMessageId: '41',
+    };
+    await dispatch(confirmation);
+    await dispatch.waitForTurn('41');
+    expect(acceptedWrite).toHaveBeenCalledTimes(2);
+    expect(store.approvalResults.get(`${confirmationId}:${registrationId}`)).toBe('accepted');
+    expect(duplicateReply.state).toBe('suppressed');
   });
 
   it('survives a worker restart and sends the stable identity only until accepted', async () => {

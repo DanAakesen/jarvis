@@ -41,4 +41,19 @@ final class ReplyNotificationTargetTests: XCTestCase {
         second.clear(in: defaults)
         XCTAssertNil(JarvisReplyNotificationTarget.pending(in: defaults))
     }
+
+    func testMovesOpenedTargetFromPendingToActiveWithoutLosingExactIdentity() throws {
+        let suiteName = "ReplyNotificationTargetTests.active.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let target = try XCTUnwrap(JarvisReplyNotificationTarget(sessionID: "41", messageID: "42"))
+
+        target.store(in: defaults)
+        target.activate(in: defaults)
+
+        XCTAssertNil(JarvisReplyNotificationTarget.pending(in: defaults))
+        XCTAssertEqual(JarvisReplyNotificationTarget.active(in: defaults), target)
+        target.clearActive(in: defaults)
+        XCTAssertNil(JarvisReplyNotificationTarget.active(in: defaults))
+    }
 }

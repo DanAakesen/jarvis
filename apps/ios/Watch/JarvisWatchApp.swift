@@ -198,7 +198,10 @@ struct WatchRoot: View {
     }
     /// Menu page: one Chat row and Factory, the menu button bottom right. The top right stays free for the system time.
     private func openPendingReplyNotification() {
-        guard let target = JarvisReplyNotificationTarget.pending() else { return }
+        guard let target = JarvisReplyNotificationTarget.pending()
+            ?? JarvisReplyNotificationTarget.active() else {
+            return
+        }
         page = 0
         path = [.chat]
         Task { await model.openReplyTarget(target) }

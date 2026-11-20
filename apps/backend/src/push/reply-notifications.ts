@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
-import { shouldRedact } from '../vault/index.js';
+import { containsSensitiveOwnerData, shouldRedact } from '../vault/index.js';
 import type {
   ClaimedReplyNotificationDelivery,
   ReplyNotificationStore,
@@ -11,7 +11,6 @@ const replyCategory = 'jarvis.reply';
 const privateReply = 'New reply from Jarvis';
 const retryBackoffMs = [1_000, 5_000, 20_000, 60_000] as const;
 export const replyNotificationMaxAttempts = 5;
-const privatePreviewPattern = /\b(?:health|healthcare|medical|medicine|medication|medications|diagnosis|diagnoses|symptom|symptoms|patient|clinic|therapy|prescription|prescriptions|bank|banking|account|accounts|credit[ -]?card|debit[ -]?card|iban|routing[ -]?number|swift[ -]?code|sundhed|medicin|diagnose|sygehus|bankkonto|kontonummer|kreditkort|saldo)\b/iu;
 
 export interface ReplyNotificationInput {
   readonly sessionId: string;
@@ -39,7 +38,7 @@ export function safeReplyNotificationPreview(text: string): string {
     const codePoint = character.codePointAt(0);
     return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
   }).join('').replace(/\s+/gu, ' ').trim();
-  if (shouldRedact(line) || privatePreviewPattern.test(line)) return privateReply;
+  if (containsSensitiveOwnerData(line)) return privateReply;
   const characters = [...line];
   if (characters.length <= 160) return characters.join('') || privateReply;
   return `${characters.slice(0, 157).join('').trimEnd()}...`;

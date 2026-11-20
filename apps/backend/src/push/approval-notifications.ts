@@ -43,6 +43,12 @@ export interface ApprovalNotificationDispatcher {
   waitForTurn(turnMessageId: string): Promise<void>;
 }
 
+export interface ApprovalNotificationDispatcherOptions {
+  readonly persistenceRetryDelaysMs?: readonly number[];
+  readonly reconciliationAttempts?: number;
+  readonly reconciliationPollMs?: number;
+}
+
 export interface ApprovalNotificationPayloadInput extends BrowserConfirmation {
   showActions: boolean;
   timeZone: string;
@@ -215,8 +221,29 @@ export function createApprovalNotificationDispatcher(
   services: ApprovalNotificationServices,
   logger: Pick<FastifyBaseLogger, 'warn'>,
   now: () => number = Date.now,
+  options: ApprovalNotificationDispatcherOptions = {},
 ): ApprovalNotificationDispatcher {
   const inFlightByTurn = new Map<string, Set<Promise<void>>>();
+  const acceptedPendingPersistence = new Map<string, Set<string>>();
+  const persistenceRetryDelaysMs = options.persistenceRetryDelaysMs ?? [0, 50, 200, 750];
+  const reconciliationAttempts = options.reconciliationAttempts ?? 90;
+  const reconciliationPollMs = options.reconciliationPollMs ?? 100;
+
+  const persist = async (write: () => Promise<void>): Promise<boolean> => {
+    for (let attempt = 0; attempt <= persistenceRetryDelaysMs.length; attempt += 1) {
+      try {
+        await write();
+        return true;
+      } catch {
+        logger.warn('approval_notification.persistence_unavailable');
+        const delay = persistenceRetryDelaysMs[attempt];
+        if (delay !== undefined) {
+          await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, delay)));
+        }
+      }
+    }
+    return false;
+  };
 
   const deliver = async (confirmation: BrowserConfirmation): Promise<void> => {
     try {
@@ -245,40 +272,52 @@ export function createApprovalNotificationDispatcher(
           );
         } catch {
           logger.warn('approval_notification.push_unavailable');
-          try {
-            await services.replyNotifications.approvalFailed(
+          await persist(() =>
+            services.replyNotifications.approvalFailed(
               owner,
               confirmation.id,
               registration.registrationId,
               'transport_unavailable',
               null,
-            );
-          } catch {
-            logger.warn('approval_notification.persistence_unavailable');
-          }
+            ),
+          );
           return;
         }
-        try {
-          if (result.invalidToken) {
-            await services.replyNotifications.approvalInvalidToken(
+        if (result.invalidToken) {
+          await persist(() =>
+            services.replyNotifications.approvalInvalidToken(
               owner, confirmation.id, registration.registrationId, result.statusCode ?? null,
-            );
-          } else if (result.accepted) {
-            await services.replyNotifications.approvalAccepted(
+            ),
+          );
+        } else if (result.accepted) {
+          const acceptedTurn = confirmation.turnMessageId;
+          const persistenceKey = `${confirmation.id}:${registration.registrationId}`;
+          if (acceptedTurn !== undefined) {
+            const pending = acceptedPendingPersistence.get(acceptedTurn) ?? new Set<string>();
+            pending.add(persistenceKey);
+            acceptedPendingPersistence.set(acceptedTurn, pending);
+          }
+          const saved = await persist(() =>
+            services.replyNotifications.approvalAccepted(
               owner, confirmation.id, registration.registrationId, result.statusCode ?? null,
-            );
-          } else {
-            await services.replyNotifications.approvalFailed(
+            ),
+          );
+          if (saved && acceptedTurn !== undefined) {
+            const pending = acceptedPendingPersistence.get(acceptedTurn);
+            pending?.delete(persistenceKey);
+            if (pending?.size === 0) acceptedPendingPersistence.delete(acceptedTurn);
+          }
+        } else {
+          await persist(() =>
+            services.replyNotifications.approvalFailed(
               owner,
               confirmation.id,
               registration.registrationId,
               'provider_rejected',
               result.statusCode ?? null,
-            );
-            logger.warn('approval_notification.push_not_accepted');
-          }
-        } catch {
-          logger.warn('approval_notification.persistence_unavailable');
+            ),
+          );
+          logger.warn('approval_notification.push_not_accepted');
         }
       }));
     } catch {
@@ -302,23 +341,28 @@ export function createApprovalNotificationDispatcher(
   }) as ApprovalNotificationDispatcher;
 
   dispatch.waitForTurn = async (turnMessageId: string): Promise<void> => {
-    for (let attempt = 0; attempt < 90; attempt += 1) {
+    for (let attempt = 0; attempt < reconciliationAttempts; attempt += 1) {
       const operations = inFlightByTurn.get(turnMessageId);
       if (operations?.size) {
         await Promise.allSettled([...operations]);
         continue;
       }
+      if (acceptedPendingPersistence.has(turnMessageId)) {
+        logger.warn('approval_notification.accepted_outcome_unavailable');
+        throw new Error('Approval notification outcome could not be reconciled');
+      }
       try {
         if (await services.replyNotifications.reconciliationComplete(
-          owner, turnMessageId, new Date(now()),
+          owner, turnMessageId,
         )) return;
       } catch {
         logger.warn('approval_notification.persistence_unavailable');
-        return;
+        throw new Error('Approval notification reconciliation is unavailable');
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      await new Promise<void>((resolve) => setTimeout(resolve, reconciliationPollMs));
     }
     logger.warn('approval_notification.reconciliation_timeout');
+    throw new Error('Approval notification reconciliation timed out');
   };
 
   return dispatch;

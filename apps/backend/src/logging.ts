@@ -53,6 +53,7 @@ const failureEvents = new Set([
   'approval_notification.push_not_accepted', 'approval_notification.push_unavailable',
   'approval_notification.delivery_unavailable', 'approval_notification.registration_unavailable',
   'approval_notification.persistence_unavailable', 'approval_notification.reconciliation_timeout',
+  'approval_notification.accepted_outcome_unavailable',
   'reply_notification.delivery_unavailable',
   'reply_notification.delivery_outcome', 'reply_notification.persistence_unavailable',
   'folio.update_failed', 'github.delivery_policy_evaluation_failed', 'github.installation_token_failed',

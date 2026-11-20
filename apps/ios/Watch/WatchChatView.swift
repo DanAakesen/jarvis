@@ -57,7 +57,10 @@ struct WatchChatView: View {
             if phase == .active { Task { await model.history() } }
             else if phase == .background { model.interruptDictation() }
         }
-        .onDisappear { model.interruptDictation() }
+        .onDisappear {
+            model.interruptDictation()
+            model.leaveReplyDeepLink()
+        }
         .onChange(of: connection.reachable) { _, reachable in if reachable && !model.busy { Task { await model.history() } } }
     }
 

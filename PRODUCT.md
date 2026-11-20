@@ -14,11 +14,16 @@ assistant message, so a restart cannot lose a pending push. A staged approval
 is reconciled per device before the exact turn's reply becomes deliverable:
 only an Apple-accepted approval cancels that device's pending duplicate.
 Failed or timed-out approval delivery leaves that reply available;
-approval work in another turn cannot suppress an unrelated reply.
+approval work in another turn cannot suppress an unrelated reply. If Apple
+accepts an approval but SQL cannot yet record that result, persistence retries
+idempotently and the corresponding turn stays blocked rather than risking a
+duplicate reply.
 
 The lock-screen alert contains a single-line preview bounded to 160 characters.
 Credential-like, health, medical, medication/diagnosis, banking or account
-content uses **New reply from Jarvis**.
+content uses **New reply from Jarvis**. The same shared classifier also covers
+identity and financial fields such as card numbers, SSNs/social-security
+numbers, passport numbers and dates of birth.
 Transient APNs responses retry per device with bounded backoff until expiry.
 Apple's terminal invalid-device responses remove that registration and stop all
 pending deliveries for it. APNs collapse identity is stable per stored message,
@@ -28,7 +33,9 @@ after recovery.
 Tapping an ordinary reply opens Chat at the exact stored `sessionID` and
 `messageID`, including a Voice-origin message already present in conversation
 history. A Watch tap received during Chat work, dictation or Voice stays durable
-and opens when that activity ends. iPhone and Watch keep this route separate
+and opens when that activity ends. Once open, Watch retains that exact active
+session/message scope across foreground and reconnect history refresh until the
+owner leaves, sends or signs out. iPhone and Watch keep this route separate
 from proactive-item and approval-action routes. No GPT-Live protocol or
 proactive scheduler behaviour is changed. Proactive `message_dan` can attach its
 existing category, scope and evidence-source fields to the same server-side

@@ -25,8 +25,11 @@ flowchart LR
   Approval and reply paths take the same owner/turn application lock, and Chat
   awaits the in-process approval result before that exact turn becomes
   deliverable. Accepted APNs cancels only that registration's pending duplicate;
-  a failed or stale approval attempt leaves the reply eligible. Unrelated
-  concurrent turns are unaffected.
+  a known failed approval attempt leaves the reply eligible. An accepted result
+  is persisted with bounded idempotent SQL retries. If that outcome still cannot
+  be saved, the turn remains blocked; an unresolved sending row is never aged
+  into failure merely because its lease elapsed. Unrelated concurrent turns
+  are unaffected.
 - `push/reply-notifications.ts` is the only ordinary reply sender. The worker
   recovers `pending` and expired leases after restart, retries only transient
   APNs outcomes (`429`, `5xx` or transport timeout), caps attempts at five with
@@ -37,6 +40,9 @@ flowchart LR
   reset or timeout transport is transient; an APNs-result write failure leaves
   the current sending lease/state intact rather than rewriting it as a
   permanent provider rejection.
+- Preview privacy uses the shared owner-sensitive classifier from the vault/
+  memory boundary, including identity and financial forms such as card number,
+  SSN/social security, passport number, account and date of birth.
 - Terminal Apple invalid-token rejection deletes the native registration and
   invalidates all pending rows for that stable device reference. The old
   `push-ledger.ts` process-local timestamp suppression and every dual reply path
@@ -44,9 +50,11 @@ flowchart LR
 - The payload carries `sessionID`, `messageID` and a bounded preview. iPhone and
   Watch first select the ordinary-reply tap branch and load the exact session
   page. Watch retains the target through active chat, voice or dictation and
-  routes when idle; proactive-item and approval branches retain their existing
-  payloads and routes. Evidence remains server-side and shares the message
-  identity reserved by #1969; the proactive scheduler is unchanged.
+  routes when idle. Once open, the exact session/message remains the active
+  history scope across foreground and reconnect until leave/send/sign-out;
+  proactive-item and approval branches retain their existing routes. Evidence
+  remains server-side and shares the identity reserved by #1969; the proactive
+  scheduler is unchanged.
 - `/status` database diagnostics expose only aggregate pending/accepted/failed/
   expired/invalid-token/suppressed counts and latest sanitized failure time.
   Logs contain outcome, attempt and HTTP status, never preview/message content

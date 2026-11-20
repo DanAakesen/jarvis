@@ -68,7 +68,7 @@ export interface ReplyNotificationStore {
     registrationId: string,
     statusCode: number | null,
   ): Promise<void>;
-  reconciliationComplete(owner: string, turnMessageId: string, at: Date): Promise<boolean>;
+  reconciliationComplete(owner: string, turnMessageId: string): Promise<boolean>;
   claimDue(owner: string, claimToken: string, now: Date, leaseUntil: Date, limit?: number): Promise<ClaimedReplyNotificationDelivery[]>;
   accepted(id: string, claimToken: string, statusCode: number | null): Promise<void>;
   retry(id: string, claimToken: string, nextAttemptAt: Date, statusCode: number | null): Promise<void>;
@@ -253,31 +253,18 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           COMMIT TRANSACTION;`);
     },
 
-    async reconciliationComplete(owner, turnMessageId, at) {
+    async reconciliationComplete(owner, turnMessageId) {
       const { recordset } = await pool.request()
         .input('owner', sql.UniqueIdentifier, owner)
         .input('turnMessageId', sql.BigInt, BigInt(turnMessageId))
-        .input('at', sql.DateTime2(3), at)
-        .query<{ complete: boolean }>(`SET XACT_ABORT ON;
-          BEGIN TRANSACTION;
-          UPDATE d
-            SET state = N'failed', last_result = N'reconciliation_timeout',
-                completed_at = @at, updated_at = SYSUTCDATETIME()
+        .query<{ complete: boolean }>(`SELECT CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1
           FROM dbo.reply_notification_approval_deliveries d
           INNER JOIN dbo.reply_notification_approval_claims c
             ON c.confirmation_id = d.confirmation_id
           WHERE c.owner_object_id = @owner AND c.turn_message_id = @turnMessageId
-            AND d.state = N'sending' AND d.lease_until <= @at;
-          DECLARE @complete bit = CONVERT(bit, CASE WHEN EXISTS (
-            SELECT 1
-            FROM dbo.reply_notification_approval_deliveries d
-            INNER JOIN dbo.reply_notification_approval_claims c
-              ON c.confirmation_id = d.confirmation_id
-            WHERE c.owner_object_id = @owner AND c.turn_message_id = @turnMessageId
-              AND c.expires_at > @at AND d.state = N'sending'
-          ) THEN 0 ELSE 1 END);
-          COMMIT TRANSACTION;
-          SELECT @complete AS complete;`);
+            AND d.state = N'sending'
+        ) THEN 0 ELSE 1 END) AS complete;`);
       return recordset[0]?.complete === true;
     },
 
@@ -300,13 +287,6 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
             WHERE owner_object_id = @owner
               AND state IN (N'accepted', N'failed', N'expired', N'invalid_token', N'suppressed')
               AND completed_at < DATEADD(day, -30, @now);
-          UPDATE a
-            SET state = N'failed', last_result = N'reconciliation_timeout',
-                completed_at = @now, updated_at = SYSUTCDATETIME()
-          FROM dbo.reply_notification_approval_deliveries a
-          INNER JOIN dbo.reply_notification_approval_claims c
-            ON c.confirmation_id = a.confirmation_id
-          WHERE c.owner_object_id = @owner AND a.state = N'sending' AND a.lease_until <= @now;
           UPDATE dbo.reply_notification_deliveries
             SET state = N'expired', last_result = N'expired', completed_at = @now,
                 updated_at = SYSUTCDATETIME(), lease_owner = NULL, lease_until = NULL
@@ -345,7 +325,6 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
                   ON a.confirmation_id = c.confirmation_id
                 WHERE c.owner_object_id = d.owner_object_id
                   AND c.turn_message_id = d.turn_message_id
-                  AND c.expires_at > @now
                   AND a.device_reference = d.device_reference
                   AND a.state = N'sending'
               )

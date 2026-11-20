@@ -3,6 +3,7 @@ import Foundation
 /// Exact stored conversation identity carried by an ordinary Jarvis reply notification.
 public struct JarvisReplyNotificationTarget: Codable, Equatable, Sendable {
     public static let pendingDefaultsKey = "jarvis.reply.pendingTarget"
+    public static let activeDefaultsKey = "jarvis.reply.activeTarget"
 
     private enum CodingKeys: String, CodingKey {
         case sessionID, messageID
@@ -57,6 +58,24 @@ public struct JarvisReplyNotificationTarget: Codable, Equatable, Sendable {
     public func clear(in defaults: UserDefaults = .standard) {
         guard Self.pending(in: defaults) == self else { return }
         defaults.removeObject(forKey: Self.pendingDefaultsKey)
+    }
+
+    public func activate(in defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        defaults.set(data, forKey: Self.activeDefaultsKey)
+        if Self.pending(in: defaults) == self {
+            defaults.removeObject(forKey: Self.pendingDefaultsKey)
+        }
+    }
+
+    public static func active(in defaults: UserDefaults = .standard) -> Self? {
+        guard let data = defaults.data(forKey: activeDefaultsKey), data.count <= 256 else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
+    }
+
+    public func clearActive(in defaults: UserDefaults = .standard) {
+        guard Self.active(in: defaults) == self else { return }
+        defaults.removeObject(forKey: Self.activeDefaultsKey)
     }
 
     private static func validID(_ value: String) -> Bool {

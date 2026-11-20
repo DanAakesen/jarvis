@@ -24,11 +24,18 @@
   ID)`, while reply cancellation is a separate per-registration outcome. Keep
   `withConfirmationTurn` and `awaitReplyNotificationApproval` around tool
   execution/final reply storage; cancel only pending rows after accepted APNs
-  and never reinterpret a state-write failure as provider rejection.
+  and never reinterpret a state-write failure as provider rejection. Retry
+  accepted-outcome persistence idempotently and fail the turn rather than
+  unblocking a potentially duplicated reply.
 - iPhone and Watch route `jarvis.reply` using `JarvisReplyNotificationTarget`.
   Watch keeps that target pending through busy chat, voice and dictation, and
-  routes at idle. Do not fold reply taps into the `jarvis.proactive` item route
-  or approval action handling.
+  routes at idle. Keep active exact scope separately so history/foreground/
+  reconnect refreshes stay on that session/message until leave/send/sign-out.
+  Do not fold reply taps into the `jarvis.proactive` item route or approval
+  action handling.
+- `containsSensitiveOwnerData` is the shared preview/memory/vault boundary.
+  Do not add a notification-only sensitive regex; extend the shared classifier
+  for new identity or financial forms and cover each with a table case.
 - Offline checks:
   - `npm test --workspace @jarvis/backend -- src/push/reply-notifications.test.ts src/database/migrations.test.ts src/pi/brain/comms.test.ts`
   - `npm run build --workspace @jarvis/backend`
