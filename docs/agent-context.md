@@ -6273,6 +6273,11 @@ speech-to-text role, model selector, language pin, provider-session override,
 direct tool catalogue or response-creation path. App copy is English; Danish and English
 speech remain native model input.
 
+The provisioned agent pins PCM 24 kHz; an omitted `session.started` format echo
+is valid, while an explicit conflict fails. Commentary is split at most 256
+UTF-8 bytes per append, and cumulative provider audio seconds replace wall-clock
+voice minutes when present.
+
 Native `event_id` and transcript timeline offsets keep one owner-turn candidate
 through pauses. At `session.delegation.created`, the relay uses `offset_ms` to
 associate it, waits for 0.6 seconds of transcript quiet (at most three seconds),

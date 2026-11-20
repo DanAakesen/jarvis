@@ -78,7 +78,10 @@ export interface ConversationStore {
     readonly ownerObjectId?: string;
   }): Promise<ConversationSession>;
   getSession(sessionId: string): Promise<ConversationSession | null>;
-  endSession(sessionId: string): Promise<boolean>;
+  endSession(sessionId: string, voiceUsage?: {
+    /** Cumulative provider-reported live audio duration; wall-clock duration remains the fallback. */
+    readonly providerVoiceSeconds: number;
+  }): Promise<boolean>;
   addMessage(input: {
     /** Cancels an uncommitted plain-text write; already committed messages remain history. */
     readonly signal?: AbortSignal;

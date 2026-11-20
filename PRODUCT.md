@@ -1183,10 +1183,15 @@ three seconds, stores Dan's exact owner message, and only then starts the same
 PI gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
 final speakable answer return through the matching delegation ID. This preserves
 `find_tools -> call_tool`, grants, receipts, monthly cap and single-flight.
+Every commentary append is split at UTF-8 boundaries of at most 256 bytes, a
+conservative bound below the provider's 500-token append limit.
 GPT-Live has no transcript-done or output-audio-done event: the relay explicitly
 groups native deltas and emits bounded Jarvis readiness, caption, activity and
 playback events. New input cancels stale PI work; GPT-Live owns acoustic
 barge-in and continuous listening/speaking.
+Provider `usage.updated` and final closed usage are cumulative: the relay keeps
+the maximum deduplicated `usage.seconds` value and writes it as voice minutes
+instead of counting the wall-clock sitting time when real usage exists.
 
 During voice sessions, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 

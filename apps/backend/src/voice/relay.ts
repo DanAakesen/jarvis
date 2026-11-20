@@ -10,7 +10,8 @@ import { createSessionLimits, SESSION_LIMIT_CHECK_MS, type SessionEndReason } fr
 import { createVoiceStatusAnnouncer } from './status-updates.js';
 import { createPiVoiceTurns, type PiVoiceAgent } from './pi-voice.js';
 import {
-  dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, parseVoiceEvent,
+  commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
+  LiveVoiceUsageTracker, parseVoiceEvent,
   validPcm24Base64, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
   type VoiceConnectionFactory,
 } from './live-protocol.js';
@@ -20,7 +21,6 @@ const MAX_CLIENT_MESSAGE_BYTES = 1_048_576;
 const MAX_QUEUED_AUDIO_BYTES = 512_000;
 const MAX_TRANSCRIPT_CHARACTERS = 20_000;
 const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
-const MAX_COMMENTARY_CHARACTERS = 1_600;
 const OUTPUT_QUIET_MS = VOICE_INPUT_QUIET_MS;
 const OUTPUT_PERSIST_BOUND_MS = VOICE_TRANSCRIPT_MAX_WAIT_MS;
 const TOKEN_TIMEOUT_MS = 10_000;
@@ -67,25 +67,6 @@ function safeFailure(error: unknown): string {
   return error instanceof Error
     ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown'
     : 'unknown';
-}
-
-function commentaryParts(text: string): string[] {
-  const parts: string[] = [];
-  let remaining = text.trim();
-  while (remaining.length > MAX_COMMENTARY_CHARACTERS) {
-    const searchStart = Math.max(0, MAX_COMMENTARY_CHARACTERS - 320);
-    const boundary = Math.max(
-      remaining.lastIndexOf('. ', MAX_COMMENTARY_CHARACTERS),
-      remaining.lastIndexOf('! ', MAX_COMMENTARY_CHARACTERS),
-      remaining.lastIndexOf('? ', MAX_COMMENTARY_CHARACTERS),
-      remaining.lastIndexOf('\n', MAX_COMMENTARY_CHARACTERS),
-    );
-    const end = boundary >= searchStart ? boundary + 1 : MAX_COMMENTARY_CHARACTERS;
-    parts.push(remaining.slice(0, end).trim());
-    remaining = remaining.slice(end).trim();
-  }
-  if (remaining) parts.push(remaining);
-  return parts;
 }
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -207,6 +188,7 @@ function registerVoiceRoute(
     let queuedAudioBytes = 0;
     const queuedProviderEvents: Record<string, unknown>[] = [];
     const seenEventTypes = new Set<string>();
+    const providerUsage = new LiveVoiceUsageTracker();
     let unregisterVisionVoice: (() => void) | undefined;
     let activityFinished = false;
     let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
@@ -590,19 +572,13 @@ function registerVoiceRoute(
       const type = event.type;
       if (seenEventTypes.size < 40) seenEventTypes.add(type);
       diagnostics.event(type);
+      if ((type === 'session.start' || type === 'session.started') &&
+          !isCompatibleLiveSessionFormat(event)) {
+        closeSession(1011, 'Voice audio format conflicted with the provisioned format');
+        return;
+      }
+      if (type === 'session.start') return;
       if (type === 'session.started') {
-        const audio = event.session && typeof event.session === 'object' && !Array.isArray(event.session)
-          ? (event.session as Record<string, unknown>).audio
-          : undefined;
-        const format = audio && typeof audio === 'object' && !Array.isArray(audio)
-          ? (audio as Record<string, unknown>).format
-          : undefined;
-        if (!format || typeof format !== 'object' || Array.isArray(format) ||
-            (format as Record<string, unknown>).type !== 'audio/pcm' ||
-            (format as Record<string, unknown>).rate !== VOICE_SAMPLE_RATE) {
-          closeSession(1011, 'Voice audio format was not negotiated');
-          return;
-        }
         providerReady = true;
         diagnostics.clearWatchdog();
         diagnostics.stage('session_started');
@@ -616,6 +592,18 @@ function registerVoiceRoute(
         }
         statusAnnouncer?.flush();
         piTurns.warm();
+        return;
+      }
+      if (type === 'session.usage.updated' || type === 'session.closed') {
+        try {
+          providerUsage.accept(event);
+        } catch {
+          closeSession(1011, 'Voice provider usage was invalid');
+          return;
+        }
+        if (type === 'session.usage.updated') return;
+        if (activeOutput) finishOutputGroup(activeOutput);
+        closeSession(endRequested ? 1000 : 1011, 'Voice session ended', true);
         return;
       }
       if (!providerReady) {
@@ -668,11 +656,6 @@ function registerVoiceRoute(
         scheduleOutputPersistence(group);
         return;
       }
-      if (type === 'session.closed') {
-        if (activeOutput) finishOutputGroup(activeOutput);
-        closeSession(endRequested ? 1000 : 1011, 'Voice session ended', true);
-        return;
-      }
       if (type === 'error') {
         log.warn({ failure: 'provider_error', language }, 'voice.upstream_event_error');
         closeSession(1011, 'Voice connection failed');
@@ -690,7 +673,10 @@ function registerVoiceRoute(
         await sessionReady;
         await Promise.allSettled([...delegationTasks]);
         await persistenceQueue;
-        if (!sessionId || !await store.endSession(sessionId)) throw new Error('Voice session was not ended');
+        if (!sessionId || !await store.endSession(
+          sessionId,
+          providerUsage.seconds === undefined ? undefined : { providerVoiceSeconds: providerUsage.seconds },
+        )) throw new Error('Voice session was not ended');
         if (persistenceFailed) throw new Error('Voice transcripts were not fully stored');
       })();
       return finalization;

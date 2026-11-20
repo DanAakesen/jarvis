@@ -52,6 +52,11 @@ correlation, remove infra-time voice targeting, stop raw-silence inactivity
 refresh, and make visual rejection stop/disable capture visibly. These fixes are
 committed separately and do not amend `2db2a87`.
 
+Final protocol hardening accepts an omitted optional format echo but rejects an
+explicit 24 kHz conflict, caps every commentary append at 256 UTF-8 bytes, and
+retains/deduplicates cumulative provider audio seconds in voice usage. Focused
+offline protocol tests cover all three boundaries.
+
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

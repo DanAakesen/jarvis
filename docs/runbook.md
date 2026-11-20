@@ -77,6 +77,8 @@ token failure, upstream error, invalid PCM negotiation or missing
 backoff. Do not infer readiness from a WebSocket open alone. The next event must
 be the service-owned `session.started`, after which Jarvis sends
 `jarvis.session.ready` to the phone/browser.
+The pinned agent owns PCM 24 kHz. The optional `session.audio.format` echo may
+be absent; omission is accepted, while an explicit type/rate conflict fails.
 
 `jarvis.session.ended` is terminal and is sent only for a clean owner/time-limit
 end. A retryable failure (startup, provider disconnect, service restart) sends
@@ -100,6 +102,11 @@ settlement then runs with a three-second bound. GPT-Live has no
 transcript-done or output-audio-done event, so later output is split/persisted
 on 0.6-second quiet or a three-second persistence bound. If no provider audio
 was exercised, none of this is provider or acoustic acceptance.
+Each delegated commentary append is at most 256 UTF-8 bytes, a conservative
+below-500-token bound. Native `session.usage.updated` events and
+`session.closed.usage.seconds` are cumulative: event IDs are deduplicated, the
+largest value is retained, and the final provider audio seconds become the
+voice-minutes usage row.
 
 The physical/provider acceptance is intentionally open. Dan must make the real
 voice attempt on a device after a future Deploy; this coding session did not

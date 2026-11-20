@@ -249,9 +249,18 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return row ? sessionFromRow(row) : null;
     },
 
-    async endSession(sessionId) {
+    async endSession(sessionId, voiceUsage) {
+      if (voiceUsage && (!Number.isFinite(voiceUsage.providerVoiceSeconds) ||
+          voiceUsage.providerVoiceSeconds < 0 || voiceUsage.providerVoiceSeconds > 24 * 60 * 60)) {
+        throw new RangeError('Provider voice usage is invalid');
+      }
       const result = await pool.request()
         .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input(
+          'providerVoiceMinutes',
+          sql.Decimal(19, 6),
+          voiceUsage === undefined ? null : voiceUsage.providerVoiceSeconds / 60,
+        )
         .query<{ session_exists: number }>(`DECLARE @ended TABLE (
             id bigint NOT NULL,
             channel nvarchar(16) NOT NULL,
@@ -268,7 +277,8 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
             INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, source_event_id, at)
             SELECT id, N'voice', N'minutes',
-              CONVERT(decimal(19,6), DATEDIFF_BIG(MILLISECOND, started_at, ended_at)) / 60000.0,
+              COALESCE(@providerVoiceMinutes,
+                CONVERT(decimal(19,6), DATEDIFF_BIG(MILLISECOND, started_at, ended_at)) / 60000.0),
               CONVERT(nvarchar(300), id), ended_at
             FROM @ended
             WHERE channel = N'voice';

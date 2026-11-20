@@ -33,6 +33,11 @@
 - SQL startup rejection is consumed immediately. Only clean completion emits
   `jarvis.session.ended`; provider/restart/startup failures emit an explicit
   retryable/non-retryable failure and reconnect only when the event allows it.
+- Optional Live format echoes are not readiness proof or a rejection when
+  absent; an explicit conflict is rejected against provisioned PCM 24 kHz.
+  Commentary chunks are at most 256 UTF-8 bytes, below 500 tokens even at one
+  token per byte. Provider cumulative audio seconds are retained, deduplicated
+  and written as the session's voice minutes.
 
 ## 20 November 2026 — Replace direct Voice Live with one PI-delegated GPT-Live agent
 

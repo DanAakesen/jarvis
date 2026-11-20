@@ -10,7 +10,7 @@ export const voiceTimeoutStages = new Set<VoiceStage>([
   'session_creation', 'proactive_context', 'credential', 'upstream_connecting', 'upstream_ready',
 ]);
 export const voiceEventTypes = new Set([
-  'error', 'session.started', 'session.closed',
+  'error', 'session.start', 'session.started', 'session.closed', 'session.usage.updated',
   'session.input_audio.muted', 'session.input_audio.unmuted',
   'session.input_transcript.delta', 'session.output_transcript.delta',
   'session.output_audio.delta', 'session.delegation.created',
