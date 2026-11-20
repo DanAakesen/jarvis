@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Historical bridge state for the isolated hosted runtime; normal voice uses GPT-Live client delegation."""
+"""Historical bridge state for the isolated hosted runtime; normal voice uses
+GPT-Live client delegation."""
 
 from __future__ import annotations
 

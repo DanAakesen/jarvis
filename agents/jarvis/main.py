@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Historical voice-bridge entry point retained for isolated hosted-runtime use, not normal GPT-Live voice."""
+"""Historical voice-bridge entry point retained for isolated hosted-runtime
+use, not normal GPT-Live voice."""
 
 from __future__ import annotations
 
