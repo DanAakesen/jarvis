@@ -36,11 +36,38 @@ export const chatTurnKinds: readonly PiTurnKind[] = ['chat', 'warm', 'smoke'];
 export const brainTurnKinds: readonly PiTurnKind[] = ['brain'];
 
 export interface PiMessageRecord {
+  readonly ownerObjectId?: string;
   readonly runId: string;
   readonly sessionId: string;
   readonly messageId: string;
   /** SHA-256 of the text, so a repeat can be refused without keeping a second copy of Dan's chat. */
   readonly textHash: string;
+  readonly text?: string;
+  readonly evidence?: readonly PiProactiveEvidence[];
+  readonly followUpIds?: readonly string[];
+}
+
+export interface PiProactiveEvidence {
+  readonly source: string;
+  readonly ref: string | null;
+  readonly identity: string | null;
+  readonly label: string;
+  readonly observedAt: string | null;
+  readonly verifiedAt: string;
+  readonly origin?: 'event' | 'situation';
+  readonly materialHash?: string | null;
+}
+
+export interface PiProactiveMessageContext {
+  readonly ownerObjectId: string;
+  readonly runId: string;
+  readonly sessionId: string;
+  readonly messageId: string;
+  readonly textHash: string;
+  readonly text: string;
+  readonly evidence: readonly PiProactiveEvidence[];
+  readonly followUpIds: readonly string[];
+  readonly at: Date;
 }
 
 export interface PiStore {
@@ -62,7 +89,11 @@ export interface PiStore {
   writeBrainSwitch(owner: string, enabled: boolean, at: Date, signal: AbortSignal): Promise<void>;
   /** A chat message the brain sent: the daily limit and the repeat check read these. */
   recordMessage(message: PiMessageRecord, at: Date, signal: AbortSignal): Promise<void>;
-  messagesSince(from: Date, signal: AbortSignal): Promise<{ readonly count: number; readonly textHashes: readonly string[] }>;
+  messagesSince(from: Date, signal: AbortSignal, ownerObjectId?: string): Promise<{
+    readonly count: number;
+    readonly textHashes: readonly string[];
+  }>;
+  latestProactiveMessage(owner: string, since: Date, signal: AbortSignal): Promise<PiProactiveMessageContext | undefined>;
   /** One look at a standing watch, recorded when the wake records it. The cost is filled in when the wake ends. */
   recordLook(watch: string, runId: string, at: Date, signal: AbortSignal): Promise<void>;
   /** Gives every look of a wake its share of what the wake cost. */
@@ -105,9 +136,22 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
     },
     async writeBrainSwitch(owner, enabled, at) { switches.set(owner, { enabled, updatedAt: at }); },
     async recordMessage(message, at) { messages.push({ ...message, at }); },
-    async messagesSince(from) {
-      const inRange = messages.filter(message => message.at >= from);
+    async messagesSince(from, _signal, ownerObjectId) {
+      const inRange = messages.filter(message =>
+        message.at >= from && (ownerObjectId === undefined ||
+          message.ownerObjectId?.toLowerCase() === ownerObjectId.toLowerCase()));
       return { count: inRange.length, textHashes: inRange.map(message => message.textHash) };
+    },
+    async latestProactiveMessage(owner, since) {
+      const record = [...messages].reverse().find((message) =>
+        message.ownerObjectId?.toLowerCase() === owner.toLowerCase() && message.at >= since);
+      return record ? {
+        ...structuredClone(record),
+        ownerObjectId: owner.toLowerCase(),
+        text: record.text ?? '',
+        evidence: [...(record.evidence ?? [])],
+        followUpIds: [...(record.followUpIds ?? [])],
+      } : undefined;
     },
     async recordLook(watch, runId, at) { looks.push({ watch, runId, at, costDkk: 0 }); },
     async allocateRunCost(runId, perLookDkk) { for (const look of looks) if (look.runId === runId) look.costDkk = perLookDkk; },

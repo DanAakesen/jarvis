@@ -199,6 +199,27 @@ function registerVoiceRoute(
     let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
     const termination = new VoiceTerminationStateMachine();
     let terminalTeardownStarted = false;
+    const refreshProactiveContext = async (): Promise<string | undefined> => {
+      if (!app.proactiveConversationContext) {
+        proactiveContext = undefined;
+        return undefined;
+      }
+      try {
+        proactiveContext = await diagnostics.bound(
+          'proactive_context',
+          1_500,
+          () => app.proactiveConversationContext!.read(request.principal!.objectId),
+        );
+        return proactiveContext;
+      } catch (error) {
+        proactiveContext = undefined;
+        diagnostics.stage('proactive_context_unavailable');
+        if (!controller.signal.aborted) {
+          log.warn({ failure: safeFailure(error), language }, 'voice.proactive_context_unavailable');
+        }
+        return undefined;
+      }
+    };
 
     const publishActivity = (
       type: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | 'failed' | 'ended',
@@ -544,12 +565,15 @@ function registerVoiceRoute(
       app.nowEventHub.publish({ type: 'refresh' });
       if (signal.aborted || controller.signal.aborted || !termination.isActive ||
           pendingDelegationGroup !== group) return;
+      const turnProactiveContext = await refreshProactiveContext();
+      if (signal.aborted || controller.signal.aborted || !termination.isActive ||
+          pendingDelegationGroup !== group) return;
       piTurns.start({
         text: turnText,
         messageId: message.id,
         sessionId,
         delegationId,
-        proactiveContext,
+        ...(turnProactiveContext ? { proactiveContext: turnProactiveContext } : {}),
         startedAt: performance.now(),
       });
     };
@@ -941,16 +965,7 @@ function registerVoiceRoute(
 
     void (async () => {
       try {
-        if (app.proactiveConversationContext) {
-          proactiveContext = await diagnostics.bound(
-            'proactive_context',
-            1_500,
-            () => app.proactiveConversationContext!.read(request.principal!.objectId),
-          ).catch(() => {
-            diagnostics.stage('proactive_context_unavailable');
-            return undefined;
-          });
-        }
+        await refreshProactiveContext();
         const [, token] = await Promise.all([
           sessionReady,
           diagnostics.bound('credential', TOKEN_TIMEOUT_MS, () => credential(getToken, controller.signal)),

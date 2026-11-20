@@ -26,7 +26,7 @@ function setup(options: {
   const conversations = memoryConversations();
   const pushes: Array<{ sessionId: string; messageId: string; text: string }> = [];
   const comms = createBrainComms({
-    conversations: conversations.store, store: piStore, ownerObjectId: owner, push: (message) => pushes.push(message), announce: () => {}, now,
+    conversations: conversations.store, ownerObjectId: owner, push: (message) => pushes.push(message), announce: () => {}, now,
   });
   const gateway = scriptedGateway(options.decide ?? (async () => ({ text: 'Nothing needs Dan.' })));
   const brain = createBrain({
@@ -277,6 +277,28 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     await t.enqueue({ source: 'timer', kind: 'review', dedupeKey: 'timer:1', summary: 'Periodic review', occurredAt: t.now() });
     expect((await t.tick()).outcome).toBe('filtered');
     expect(t.gateway.wakes).toEqual([]);
+  });
+
+  it('defers a due follow-up through quiet hours and then wakes once', async () => {
+    const t = setup({ start: '2026-11-16T01:00:00Z' });
+    await t.enqueue({
+      source: 'followup',
+      kind: 'commitment.due',
+      identity: 'pi-followup:flight',
+      material: { dueAt: '2026-11-16T01:00:00.000Z' },
+      dedupeKey: 'followup:flight:v1',
+      summary: 'Check the departure.',
+      detail: { followUpId: 'flight', evidenceSources: ['calendar'] },
+      occurredAt: t.now(),
+      notBeforeAt: t.now(),
+    });
+    expect((await t.tick()).outcome).toBe('filtered');
+    expect(t.gateway.wakes).toEqual([]);
+    const next = await t.queue.nextDueAt();
+    expect(next).not.toBeNull();
+    t.advance(next!.getTime() - t.now().getTime());
+    expect((await t.tick()).outcome).toBe('done');
+    expect(t.gateway.wakes).toHaveLength(1);
   });
 
   it('stays silent when the model decides nothing is worth saying: no message, no push', async () => {

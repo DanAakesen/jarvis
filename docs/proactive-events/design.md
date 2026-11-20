@@ -12,7 +12,7 @@ flowchart LR
     GH[GitHub webhook<br/>workflow and deploy results]:::exists
     AL[Activity alerts<br/>budget, deploy, sandbox, credential]:::exists
     TM[Timer review every 6 h<br/>plus cost-spike check]:::new
-    ML[Mail and calendar poll<br/>every 15 min]:::new
+    ML[Enabled source observations<br/>every 15 min]:::new
   end
   Q[(proactive_events<br/>Azure SQL table)]:::new
   T[Existing proactive ticker<br/>30 s, DB-quiet when idle]:::exists
@@ -55,7 +55,7 @@ Green exists today, purple is new, orange is model judgement, grey is not built,
 
 | Part | Where (`apps/backend/src/`) | Notes |
 | --- | --- | --- |
-| Queue | `proactive/events/event-queue.ts`, `database/proactive-event-store.ts`, migration `0080` | One row per event. `source`, `kind` and `summary` are free text; there is no status enum. A row is waiting while `processed_at` is null; a lease (`claimed_until`) and `retry_at` make claims safe across restarts; `outcome` is free text. Unique per owner and `dedupe_key`, so replays never queue twice. Processed rows are purged after 45 days. |
+| Queue | `proactive/events/event-queue.ts`, `database/proactive-event-store.ts`, migrations `0080`/`0091` | One row per event. `source`, `kind` and `summary` are free text; there is no status enum. A row is waiting while `processed_at` is null and `not_before_at` has passed; a lease (`claimed_until`) and `retry_at` make claims safe across restarts; `outcome` is free text. The owner, stable `identity_key`, material hash and dedupe key distinguish a genuine source change from a replay or wording-only change. Processed rows are purged after 45 days. |
 | Ticker | `proactive/scheduler.ts` (`onTick`) | The existing 30-second tick also asks the pipeline. The pipeline keeps the next due time in memory and reads SQL only when something is due, so serverless SQL can still pause. |
 | Rules | `proactive/events/rules.ts` | Exact checks, no model: too many attempts, source switched off, stale (24 h; timer 1 h), routine success or in-flight results, calendar entries that are over or more than 14 days away, a per-source hourly cap. A timer review is also skipped when the vault, memory, todo, calendar and factory facts are unchanged since the last one. |
 | Reasoner | `proactive/events/reasoner.ts`, `event-prompt.ts` | One tool-less JSON call per batch of up to 10 events to `gpt-6.1-terra` at low reasoning effort. At most 32 KB in and a 4 096-token completion. The answer is validated as a whole; a half-valid answer is retried, never partly delivered. |
@@ -71,7 +71,9 @@ Green exists today, purple is new, orange is model judgement, grey is not built,
 | GitHub | The existing signed webhook's `onMapping`: finished workflow runs and deployment results | Pull request, push and check events are not queued: failed workflows already cover broken builds, and stalled repositories are noticed by the timer review. |
 | Cost and budget alerts | `AlertActivityStore.record` queues every new alert (budget 80 %, deployment failure, sandbox crash, credential expiry, task start failure) | Outreach cards are written through the same store and are skipped, so there is no loop. |
 | Build and deploy results | The GitHub rows above and the deployment-failure alerts | |
-| Mail and calendar | A poll of the existing read-only mail and calendar sources every 15 minutes. A new or changed entry has a new fingerprint, hence a new event. The first poll of a source is a baseline | Gmail push needs Google Pub/Sub, a new cloud service, so it is not used. Calendar watch channels need a public receiver and renewal; not built. Polling is what is possible without a new service. |
+| Enabled PI sources | When the PI brain is enabled, the existing 15-minute poller refreshes enabled sources independently of model work. Mail/calendar material changes still use their own events; other material observations become bounded source events only after the first baseline. The first poll never floods PI. | Gmail push needs Google Pub/Sub, a new cloud service, so it is not used. Calendar watch channels need a public receiver and renewal; not built. Polling is what is possible without a new service. |
+| Situational follow-ups | A source-linked `followUps[].dueAt` and its state revision commit together with `pi_situation_outbox`; the event consumer reconciles that exact latest revision into this same queue with `not_before_at`. Material updates supersede an active identity, explicit policy/state invalidation marks it reopenable, and a returning valid version gets a new event ID. Delivered material stays deduped. | There is no separate follow-up scheduler, timer or brain. State and outbox never commit independently; queue application is idempotent and retryable from the durable revision. Old workers can settle only their retired ID, never a reopened generation. |
+| Observation generations | Provider original `observedAt` is separate from server `verifiedAt`. Source status, canonical authority, state and outbox update in one SQL transaction. A disabled source retains stale authority generations and requires a newer server verification before its state/queue can return. | A failed transaction cannot advance status without state; a lookup receipt cannot revive old state until its exact verified generation is committed. |
 | Health and Watch | Health and nutrition facts join the model's context on each batch | Health values change all day, so they never queue events. A Watch-specific event is not built. |
 | Banking | Out of scope (future Chrome extension) | |
 

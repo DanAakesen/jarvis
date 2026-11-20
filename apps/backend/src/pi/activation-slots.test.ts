@@ -83,4 +83,43 @@ describe('combined PI background slots', () => {
       allowQuiet: true,
     })).resolves.toMatchObject({ allowed: false, reason: 'spaced' });
   });
+
+  it('gives two simultaneous activations only one final owner slot', async () => {
+    const now = new Date('2026-11-19T09:00:00.000Z');
+    const queue = createMemoryEventQueueStore();
+    const proactive = createMemoryProactiveStore(owner);
+    await proactive.settings.patch({ backgroundTurnsPerDay: 1 });
+    const slots = createPiBackgroundSlotService({ queue, proactive, now: () => now });
+    const results = await Promise.all([
+      slots.reserve({
+        runId: '00000000-0000-4000-8000-000000000011', eventCount: 1,
+        activationType: 'event', allowQuiet: true,
+      }),
+      slots.reserve({
+        runId: '00000000-0000-4000-8000-000000000012', eventCount: 1,
+        activationType: 'event', allowQuiet: true,
+      }),
+    ]);
+    expect(results.filter(({ allowed }) => allowed)).toHaveLength(1);
+    expect(results.find(({ allowed }) => !allowed)).toMatchObject({ reason: 'daily_cap' });
+    expect(await slots.status()).toMatchObject({ used: 1, remaining: 0 });
+  });
+
+  it('samples time and quiet hours after the reservation lock is acquired', async () => {
+    let now = new Date('2026-11-19T09:00:00.000Z');
+    const queue = createMemoryEventQueueStore();
+    const reserve = queue.reserveBatch.bind(queue);
+    queue.reserveBatch = async (input) => {
+      now = new Date('2026-11-19T00:30:00.000Z');
+      return reserve(input);
+    };
+    const proactive = createMemoryProactiveStore(owner);
+    const slots = createPiBackgroundSlotService({ queue, proactive, now: () => now });
+    await expect(slots.reserve({
+      runId: '00000000-0000-4000-8000-000000000013',
+      eventCount: 0,
+      activationType: 'scheduled',
+      satisfiedSlot: '2026-11-19T07:00',
+    })).resolves.toMatchObject({ allowed: false, reason: 'quiet_hours' });
+  });
 });

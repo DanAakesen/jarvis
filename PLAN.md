@@ -93,6 +93,21 @@ patch review for leaked content or fallback senders, and a local commit. Live
 APNs delivery, Apple compilation/rendering and physical iPhone/Watch acceptance
 remain outside this change.
 
+## PI situational state integrity — 20 November 2026 (#1969)
+
+**Status: implementation complete; local offline unit, replay, build, lint and isolated SQL qualification complete.** No live model/provider, deploy, push or paid operation was used.
+
+| Step | State |
+| --- | --- |
+| Server-initialise valid owner state; add bounded evidence-linked patches; refresh stable provider observations; retain unrelated evidence on scoped failures | Done |
+| Re-read and transform the latest Watch note revision; refresh the watch index after Vault changes; make repeated looks idempotent | Done |
+| Put `dueAt` follow-ups, updates and cancellations in the existing `proactive_events` queue with future eligibility and identity/material dedupe | Done |
+| Persist exact outgoing text, evidence, follow-up IDs and Chat session/message IDs for Chat/Voice continuation | Done |
+| Reserve owner settings, allowance, spacing, quiet-hours and `proactive_event_batches` atomically in SQL | Done |
+| Add migrations `0091` through `0095` and reverse guards; make state+follow-up outbox, source authority/status, Chat+receipt and budget reservation atomic; bind evidence to retained/pending verifiedAt generations, refuse stale or mid-wake supersession, and remap stale links on ordinary refresh | Done locally |
+
+Completion means the existing PI activation envelope and one background queue own the whole path; no parallel brain, shadow scheduler, Personal Memory copy or push transport was introduced. Live provider behaviour and owner judgement remain outside this offline implementation.
+
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

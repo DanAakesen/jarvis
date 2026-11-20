@@ -38,6 +38,7 @@ import type { EventQueueStore } from './events/event-queue.js';
 import type { ProactiveEventSink } from './events/types.js';
 import type { BrainControl } from '../pi/brain/control.js';
 import { readSettings } from '../core/settings.js';
+import type { PiSituationService } from '../pi/situation.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -80,6 +81,7 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   /** Hands producers outside this module (webhook, alerts) the queue's entrance. */
   registerEventSink?: (sink: ProactiveEventSink) => void;
   background?: BrainControl;
+  situation?: PiSituationService;
 }
 
 export function registerProactive<Logger extends FastifyBaseLogger>(
@@ -215,6 +217,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     pool: options.pool,
     store,
     sources,
+    ...(options.situation ? { situation: options.situation } : {}),
     modelCatalogue: options.modelCatalogue,
     getCredentialToken: options.getCredentialToken,
     foundryProjectEndpoint: options.foundryProjectEndpoint,

@@ -93,7 +93,7 @@ function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null 
         !finiteNumber(amount) || amount < 0 || !finiteNumber(wind) || wind < 0) return [];
     const period = index === 0 ? 'Today' : 'Tomorrow';
     return [{
-      ref: `weather:${index + 1}`,
+      ref: `home-forecast:${date}`,
       identity: `home-forecast:${date}`,
       taskScope: 'personal',
       kind: 'weather',

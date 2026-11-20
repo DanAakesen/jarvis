@@ -249,4 +249,43 @@ describe('switch', () => {
     expect(createEventPath({ ...base, enabled: false })).toBeUndefined();
     expect(createEventPath({ ...base, enabled: true })).toBeUndefined();
   });
+
+  it('attaches situation observations/outbox reconciliation to the actual event consumer', async () => {
+    const store = createMemoryProactiveStore(OWNER);
+    const wake = vi.fn();
+    const start = vi.fn(async () => {});
+    const synchronize = vi.fn(async () => ({ changed: false, pending: false }));
+    let attachedQueue: EventQueueStore | undefined;
+    let outboxWake: (() => void) | undefined;
+    const situation = {
+      attachEvents(queue: EventQueueStore, wakeConsumer?: () => void) {
+        attachedQueue = queue;
+        outboxWake = wakeConsumer;
+      },
+      synchronizeFollowUps: synchronize,
+    } as never;
+    const path = createEventPath({
+      ownerObjectId: OWNER,
+      store,
+      sources: [],
+      now: () => NOW,
+      enabled: false,
+      situation,
+      brain: () => ({
+        wake,
+        start,
+        tick: async () => ({ outcome: 'idle' }),
+      }),
+    })!;
+    expect(attachedQueue).toBeDefined();
+    expect(outboxWake).toBeTypeOf('function');
+    outboxWake!();
+    expect(wake).toHaveBeenCalledTimes(1);
+    await path.start();
+    expect(synchronize).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+    await path.tick(new AbortController().signal);
+    expect(synchronize).toHaveBeenCalledTimes(2);
+    await path.stop();
+  });
 });

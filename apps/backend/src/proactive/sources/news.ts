@@ -124,9 +124,14 @@ export function createNewsSource(
           seenTitles.add(normalizedTitle);
 
           const titleLimit = Math.min(200, Math.max(0, 297 - item.hostname.length));
+          const identity = item.identity
+            ? `news-item:${item.hostname}:${item.identity}`
+            : `news-item:${item.hostname}:${createHash('sha256').update(JSON.stringify([
+              normalizedTitle, item.publishedAt.toISOString(),
+            ])).digest('hex').slice(0, 32)}`;
           facts.push({
-            ref: `news:${facts.length + 1}`,
-            ...(item.identity ? { identity: `news-item:${item.hostname}:${item.identity}` } : {}),
+            ref: identity,
+            identity,
             kind: 'news',
             label: 'News',
             observedAt: item.publishedAt.toISOString(),
@@ -148,3 +153,4 @@ export function createNewsSource(
     },
   };
 }
+import { createHash } from 'node:crypto';

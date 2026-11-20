@@ -17,6 +17,7 @@ import { createSourceChangePoller, createTimerProducer } from './scheduled-produ
 import { ConfigurationError } from '../../configuration-error.js';
 import type { EventQueueStore } from './event-queue.js';
 import type { OutreachChannel, ProactiveEventSink } from './types.js';
+import type { PiSituationService } from '../../pi/situation.js';
 
 /** What reads the queue: the old one-shot pipeline, or the PI brain. */
 export interface EventConsumer {
@@ -39,6 +40,7 @@ export interface EventPathOptions {
   pool?: sql.ConnectionPool | undefined;
   store: ProactiveStore;
   sources: readonly ProactiveSource[];
+  situation?: PiSituationService | undefined;
   modelCatalogue?: ModelCatalogueReader | undefined;
   getCredentialToken?: ((scope: string, signal?: AbortSignal) => Promise<string | undefined>) | undefined;
   foundryProjectEndpoint?: string | undefined;
@@ -101,6 +103,7 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
       ...(options.logger ? { logger: options.logger } : {}),
     });
   }
+  options.situation?.attachEvents(queue, () => pipeline.wake());
   const sink: ProactiveEventSink = {
     async enqueue(event) {
       const result = await queue.enqueue(event, options.now());
@@ -113,17 +116,25 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
     ...(pipeline.enabled ? { allowed: () => pipeline.enabled!(AbortSignal.timeout(5_000)).catch(() => false) } : {}),
   });
   const poller = createSourceChangePoller({
-    sources: options.sources.filter(({ id }) => id === 'mail' || id === 'calendar'),
+    sources: options.sources,
     sink, queue, now: options.now,
     settings: () => options.store.settings.read(),
+    ...(options.situation ? {
+      observe: (source, result, signal) => options.situation!.observe(source, result, signal),
+    } : {}),
     ...(pipeline.enabled ? { allowed: () => pipeline.enabled!(AbortSignal.timeout(5_000)).catch(() => false) } : {}),
     ...(options.logger ? { logger: options.logger } : {}),
   });
   const unsubscribe = options.store.settings.subscribePreferencesChanged(() => pipeline.wake());
   return {
     sink, outreach, runScheduled: pipeline.runScheduled,
-    tick: (signal) => pipeline.tick(signal),
+    tick: async (signal) => {
+      const reconciled = await options.situation?.synchronizeFollowUps(signal);
+      if (reconciled?.changed) pipeline.wake();
+      return pipeline.tick(signal);
+    },
     async start() {
+      await options.situation?.synchronizeFollowUps(AbortSignal.timeout(30_000));
       await pipeline.start();
       timer.start();
       poller.start();

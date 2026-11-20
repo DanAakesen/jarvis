@@ -43,7 +43,7 @@ export function createTravelSource(google?: GoogleApiClient): ProactiveSource {
           state: 'ok',
           reason: null,
           facts: selected.slice(0, TRAVEL_MAX_FACTS)
-            .map((event, index) => calendarFact(event, `travel:${index + 1}`, 'Travel', observedAt)),
+            .map((event) => calendarFact(event, 'Travel', observedAt)),
           observedAt,
         };
       } catch (error) {

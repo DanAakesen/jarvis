@@ -1,4 +1,5 @@
 import type { EventQueueStore } from '../proactive/events/event-queue.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
 import type { ProactiveStore } from '../proactive/store.js';
 import { copenhagenDayStart, isQuietHour, nextSlotAfter } from '../proactive/time.js';
 
@@ -25,7 +26,7 @@ export type PiBackgroundReservation =
   | { readonly allowed: true; readonly status: PiBackgroundSlotStatus }
   | {
     readonly allowed: false;
-    readonly reason: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap';
+    readonly reason: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap' | 'policy_changed' | 'budget_exhausted';
     readonly status: PiBackgroundSlotStatus;
   };
 
@@ -37,6 +38,8 @@ export interface PiBackgroundSlotService {
     readonly activationType: 'event' | 'scheduled';
     readonly satisfiedSlot?: string | null;
     readonly allowQuiet?: boolean;
+    readonly policyRevision?: string;
+    readonly worstCaseDkk?: number;
   }): Promise<PiBackgroundReservation>;
 }
 
@@ -78,21 +81,41 @@ export function createPiBackgroundSlotService(options: {
   return {
     status,
     async reserve(input) {
-      const at = options.now();
       const current = await status();
       const settings = await options.proactive.settings.read();
+      const policyRevision = input.policyRevision ?? proactiveSettingsRevision(settings);
+      if (proactiveSettingsRevision(settings) !== policyRevision) {
+        return { allowed: false, reason: 'policy_changed', status: current };
+      }
       if (settings.paused) return { allowed: false, reason: 'paused', status: current };
-      if (current.quiet && input.allowQuiet !== true) {
-        return { allowed: false, reason: 'quiet_hours', status: current };
-      }
-      if (current.used >= current.allowed) return { allowed: false, reason: 'daily_cap', status: current };
-      if (current.lastAt && at.getTime() - Date.parse(current.lastAt) < MIN_WAKE_GAP_MS) {
-        return { allowed: false, reason: 'spaced', status: current };
-      }
-      await options.queue.startBatch(input.runId, at, input.eventCount, {
+      const reservation = await options.queue.reserveBatch({
+        batchId: input.runId,
+        sampleTime: () => {
+          const sampledAt = options.now();
+          return {
+            at: sampledAt,
+            dayStart: copenhagenDayStart(sampledAt),
+            quiet: isQuietHour(sampledAt),
+            satisfiedSlot: input.activationType === 'event'
+              ? nextSlotAfter(sampledAt).key
+              : input.satisfiedSlot ?? null,
+          };
+        },
+        eventCount: input.eventCount,
         activationType: input.activationType,
-        satisfiedSlot: input.satisfiedSlot ?? null,
+        allowQuiet: input.allowQuiet === true,
+        minimumGapMs: MIN_WAKE_GAP_MS,
+        fallbackAllowed: Math.min(DEFAULT_BACKGROUND_TURNS_PER_DAY, settings.backgroundTurnsPerDay),
+        expectedPolicyRevision: policyRevision,
+        worstCaseDkk: input.worstCaseDkk ?? 0,
       });
+      if (!reservation.allowed) {
+        return {
+          allowed: false,
+          reason: reservation.reason ?? 'paused',
+          status: await status(),
+        };
+      }
       const updated = await status();
       return { allowed: true, status: updated };
     },

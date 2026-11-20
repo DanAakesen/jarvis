@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryProactiveStore } from '../proactive/store.js';
+import { createMemoryEventQueueStore } from '../proactive/events/event-queue.js';
 import { sourceIds, type ProactiveSource } from '../proactive/types.js';
 import { hasCredentialMarkerDeep } from '../core/memory-policy.js';
 import {
@@ -33,11 +34,12 @@ function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
     refs: [
       {
         id: 'mail:42', source: 'mail', identity: 'mail:42', label: 'Travel confirmation',
-        observedAt: at.toISOString(), expiresAt: null,
+        observedAt: at.toISOString(), expiresAt: null, verifiedAt: at.toISOString(),
       },
       {
         id: 'location:device', source: 'location', identity: 'location:device', label: 'Near Copenhagen',
         observedAt: at.toISOString(), expiresAt: new Date(at.getTime() + 3_600_000).toISOString(),
+        verifiedAt: at.toISOString(),
       },
     ],
     facts: [
@@ -56,8 +58,14 @@ function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
 }
 
 function setup(sources: readonly ProactiveSource[] = []) {
-  const store = createMemoryPiSituationStore();
-  const proactive = createMemoryProactiveStore(owner);
+  const store = createMemoryPiSituationStore(state().refs.map((ref) => ({
+    ...ref,
+    verifiedAt: ref.verifiedAt!,
+    activatedAt: ref.verifiedAt!,
+    invalidatedAt: null,
+    staleReason: null,
+  })));
+  const proactive = createMemoryProactiveStore(owner, () => at);
   const service = createPiSituationService({
     owner,
     store,
@@ -69,6 +77,15 @@ function setup(sources: readonly ProactiveSource[] = []) {
 }
 
 describe('PI situational state', () => {
+  it('initializes and persists a valid source-complete state on first read', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    expect(first.revision).toBe(1);
+    expect(first.state?.sources).toHaveLength(sourceIds.length);
+    expect(first.state?.facts).toEqual([]);
+    expect(store.records.get(owner)?.state).toEqual(first.state);
+  });
+
   it('requires the bounded schema and refuses credentials', () => {
     expect(() => parsePiSituationState({ ...state(), summary: 'token ghp_' + 'A'.repeat(36) }))
       .toThrow(PiSituationError);
@@ -140,21 +157,95 @@ describe('PI situational state', () => {
     const { service, store } = setup();
     const first = await service.read(signal());
     const committed = await service.commit({
-      expectedRevision: 0,
-      expectedHash: null,
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
       policyRevision: first.policyRevision,
       state: state(),
       activation: { id: '00000000-0000-4000-8000-000000000001', type: 'chat', source: 'chat', at },
     }, signal());
-    expect(committed.record).toMatchObject({ revision: 1 });
+    expect(committed.record).toMatchObject({ revision: 2 });
     await expect(service.commit({
-      expectedRevision: 0,
-      expectedHash: null,
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
       policyRevision: first.policyRevision,
       state: state(),
       activation: { id: '00000000-0000-4000-8000-000000000002', type: 'chat', source: 'chat', at },
     }, signal())).rejects.toMatchObject({ code: 'conflict' });
-    expect(store.records.get(owner)?.revision).toBe(1);
+    expect(store.records.get(owner)?.revision).toBe(2);
+  });
+
+  it('refuses model-minted references that were never observed or verified by a provider', async () => {
+    const store = createMemoryPiSituationStore();
+    const proactive = createMemoryProactiveStore(owner, () => at);
+    const service = createPiSituationService({
+      owner,
+      store,
+      proactive,
+      sources: [],
+      now: () => at,
+    });
+    const first = await service.read(signal());
+    await expect(service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000024', type: 'chat', source: 'chat', at },
+    }, signal())).rejects.toMatchObject({ code: 'invalid' });
+    expect(store.records.get(owner)?.state.refs).toEqual([]);
+  });
+
+  it('canonicalizes reference identity, label and observation from provider authority', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    const submitted = state();
+    submitted.refs[0] = {
+      ...submitted.refs[0]!,
+      identity: 'invented-identity',
+      label: 'Invented label',
+      observedAt: new Date(at.getTime() - 1_000).toISOString(),
+    };
+    await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: submitted,
+      activation: { id: '00000000-0000-4000-8000-000000000026', type: 'chat', source: 'chat', at },
+    }, signal());
+    expect(store.records.get(owner)?.state.refs[0]).toMatchObject({
+      identity: 'mail:42',
+      label: 'Travel confirmation',
+      observedAt: at.toISOString(),
+    });
+  });
+
+  it('applies a bounded patch without replacing unrelated source facts', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    const initial = await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000014', type: 'chat', source: 'chat', at },
+    }, signal());
+    const patched = await service.patch({
+      expectedRevision: initial.record.revision,
+      expectedHash: initial.record.hash,
+      policyRevision: first.policyRevision,
+      patch: {
+        upsertFacts: [{
+          ...state().facts[0]!,
+          text: 'Flight departure moved to 17:30.',
+        }],
+      },
+      activation: { id: '00000000-0000-4000-8000-000000000015', type: 'chat', source: 'chat', at },
+    }, signal());
+    expect(patched).toMatchObject({ changed: true });
+    expect(store.records.get(owner)?.state.facts).toEqual([
+      expect.objectContaining({ id: 'fact:mail', text: 'Flight departure moved to 17:30.' }),
+      expect.objectContaining({ id: 'fact:location', text: 'Coarse position near Copenhagen.' }),
+    ]);
   });
 
   it('excludes disabled-source contributions while retaining explicit stale storage', async () => {
@@ -164,8 +255,8 @@ describe('PI situational state', () => {
     withExpiredMail.sources.find(({ id }) => id === 'mail')!.expiresAt =
       new Date(at.getTime() - 60_000).toISOString();
     await service.commit({
-      expectedRevision: 0,
-      expectedHash: null,
+      expectedRevision: initial.revision,
+      expectedHash: initial.hash,
       policyRevision: initial.policyRevision,
       state: withExpiredMail,
       activation: { id: '00000000-0000-4000-8000-000000000003', type: 'event', source: 'mail', at },
@@ -192,6 +283,185 @@ describe('PI situational state', () => {
     expect((await service.read(signal())).state?.facts.some(({ source }) => source === 'mail')).toBe(false);
   });
 
+  it('rejects an unrelated commit rather than truncating preserved stale facts', async () => {
+    const { service, store, proactive } = setup();
+    const first = await service.read(signal());
+    await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: {
+        id: '00000000-0000-4000-8000-000000000030',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    await proactive.settings.patch({ sources: { mail: false } });
+    const before = structuredClone(store.records.get(owner)!);
+    const disabled = await service.read(signal());
+    const submitted = structuredClone(disabled.state!);
+    submitted.facts.push(...Array.from({ length: 23 }, (_, index) => ({
+      id: `fact:limit:${index}`,
+      source: 'location' as const,
+      refIds: ['location:device'],
+      text: 'L',
+      observedAt: at.toISOString(),
+      expiresAt: null,
+      stale: false,
+    })));
+    await expect(service.commit({
+      expectedRevision: disabled.revision,
+      expectedHash: disabled.hash,
+      policyRevision: disabled.policyRevision,
+      state: submitted,
+      activation: {
+        id: '00000000-0000-4000-8000-000000000031',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal())).rejects.toThrow(/24-fact limit/u);
+    expect(store.records.get(owner)).toEqual(before);
+  });
+
+  it('fails a source refresh before truncating a 49-ref reconciliation graph', async () => {
+    const compactAt = '2026-11-19T05:00:00Z';
+    const refs = Array.from({ length: 48 }, (_, index) => ({
+      id: String(index),
+      source: 'x' as const,
+      identity: 'x',
+      label: 'x',
+      observedAt: compactAt,
+      expiresAt: null,
+      verifiedAt: compactAt,
+    }));
+    const authority = refs.map((ref) => ({
+      ...ref,
+      activatedAt: ref.verifiedAt,
+      invalidatedAt: null,
+      staleReason: null,
+    }));
+    const store = createMemoryPiSituationStore(authority);
+    const proactive = createMemoryProactiveStore(owner, () => at);
+    const raw = {
+      version: 1,
+      asOf: compactAt,
+      summary: '',
+      summaryRefIds: [],
+      sources: sourceIds.map((id) => ({
+        id,
+        state: 'fresh',
+        observedAt: null,
+        expiresAt: null,
+        reason: null,
+        refIds: [],
+      })),
+      refs,
+      facts: [],
+      followUps: [],
+    } as PiSituationState;
+    store.records.set(owner, {
+      owner,
+      revision: 1,
+      state: raw,
+      hash: 'a'.repeat(64),
+      asOf: at,
+      updatedAt: at,
+      authoritativeRefs: authority,
+      lastActivation: null,
+    });
+    const service = createPiSituationService({
+      owner,
+      store,
+      proactive,
+      sources: [{
+        id: 'mail',
+        label: 'Mail',
+        async read() {
+          return {
+            source: 'mail' as const,
+            state: 'ok' as const,
+            reason: null,
+            observedAt: at.toISOString(),
+            facts: [{
+              ref: 'mail:new',
+              identity: 'mail:new',
+              kind: 'mail',
+              label: 'New',
+              text: 'New mail',
+              observedAt: at.toISOString(),
+            }],
+          };
+        },
+      }],
+      now: () => at,
+    });
+    const before = structuredClone(store.records.get(owner)!);
+    await expect(service.refresh('mail', signal())).rejects.toThrow(/48-ref limit/u);
+    expect(store.records.get(owner)).toEqual(before);
+  });
+
+  it('honors explicit fact and ref removals inside disabled-source retention', async () => {
+    const { service, store, proactive } = setup();
+    const first = await service.read(signal());
+    const initial = state();
+    initial.facts.push({
+      id: 'fact:mail:extra',
+      source: 'mail',
+      refIds: ['mail:42'],
+      text: 'A second mail fact.',
+      observedAt: at.toISOString(),
+      expiresAt: null,
+      stale: false,
+    });
+    const committed = await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: initial,
+      activation: {
+        id: '00000000-0000-4000-8000-000000000032',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    await proactive.settings.patch({ sources: { mail: false } });
+    const disabled = await service.read(signal());
+    const factRemoved = await service.patch({
+      expectedRevision: committed.record.revision,
+      expectedHash: committed.record.hash,
+      policyRevision: disabled.policyRevision,
+      patch: { removeFactIds: ['fact:mail:extra'] },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000033',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    expect(store.records.get(owner)?.state.facts.some(({ id }) => id === 'fact:mail:extra'))
+      .toBe(false);
+    const refRemoved = await service.patch({
+      expectedRevision: factRemoved.record.revision,
+      expectedHash: factRemoved.record.hash,
+      policyRevision: disabled.policyRevision,
+      patch: { removeRefIds: ['mail:42'] },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000034',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    const stored = refRemoved.record.state;
+    expect(stored.refs.some(({ id }) => id === 'mail:42')).toBe(false);
+    expect(stored.facts.some(({ refIds }) => refIds.includes('mail:42'))).toBe(false);
+    expect(stored.followUps.some(({ refIds }) => refIds.includes('mail:42'))).toBe(false);
+  });
+
   it('keeps location available when Weather is off and refuses a disabled source lookup', async () => {
     const location: ProactiveSource = {
       id: 'location',
@@ -208,9 +478,13 @@ describe('PI situational state', () => {
     };
     const { service, proactive } = setup([location]);
     const initial = await service.read(signal());
-    expect(initial.freshSources).toContain('location');
+    expect(initial.freshSources).not.toContain('location');
+    await expect(service.refresh('location', signal())).resolves.toMatchObject({ changed: true });
+    expect((await service.read(signal())).freshSources).toContain('location');
     await service.commit({
-      expectedRevision: 0, expectedHash: null, policyRevision: initial.policyRevision, state: state(),
+      expectedRevision: (await service.read(signal())).revision,
+      expectedHash: (await service.read(signal())).hash,
+      policyRevision: initial.policyRevision, state: state(),
       activation: { id: '00000000-0000-4000-8000-000000000005', type: 'chat', source: 'chat', at },
     }, signal());
     await proactive.settings.patch({ sources: { weather: false, location: true, mail: false } });
@@ -275,11 +549,11 @@ describe('PI situational state', () => {
       .rejects.toMatchObject({ code: 'redacted' });
   });
 
-  it('marks prior state stale after a failed activation without inventing a replacement', async () => {
-    const { service, store } = setup();
+  it('marks only the failed source stale and keeps unrelated verified facts usable', async () => {
+    const { service, store, proactive } = setup();
     const initial = await service.read(signal());
     await service.commit({
-      expectedRevision: 0, expectedHash: null, policyRevision: initial.policyRevision, state: state(),
+      expectedRevision: initial.revision, expectedHash: initial.hash, policyRevision: initial.policyRevision, state: state(),
       activation: { id: '00000000-0000-4000-8000-000000000006', type: 'scheduled', source: 'timer', at },
     }, signal());
     const baseline = store.records.get(owner)!;
@@ -292,19 +566,77 @@ describe('PI situational state', () => {
       },
       expectedRevision: baseline.revision,
       expectedHash: baseline.hash,
+      sources: ['mail'],
     }, signal());
-    expect(store.records.get(owner)?.state.facts.every(({ stale }) => stale)).toBe(true);
+    expect(store.records.get(owner)?.state.facts.find(({ source }) => source === 'mail')?.stale).toBe(true);
+    expect(store.records.get(owner)?.state.facts.find(({ source }) => source === 'location')?.stale).toBe(false);
     const failed = await service.read(signal());
-    expect(failed.staleSources.length).toBeGreaterThan(0);
+    expect(failed.staleSources).not.toContain('location');
+    expect(store.records.get(owner)?.state.summary).toBe('One compact cross-source model.');
+    expect((await proactive.sources.list()).find(({ id }) => id === 'mail'))
+      .toMatchObject({ state: 'stale', reason: 'activation_failed' });
     expect(failed.state?.summary).toBe('');
     expect(failed.state?.summaryRefIds).toEqual([]);
+  });
+
+  it('refreshes one source observation and invalidates only facts tied to changed evidence', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    await service.commit({
+      expectedRevision: first.revision, expectedHash: first.hash, policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000019', type: 'chat', source: 'chat', at },
+    }, signal());
+    await expect(service.observe('mail', {
+      source: 'mail',
+      state: 'ok',
+      reason: null,
+      observedAt: at.toISOString(),
+      facts: [{
+        ref: 'mail:42',
+        identity: 'gmail-message:42',
+        kind: 'mail',
+        label: 'Travel confirmation',
+        text: 'The itinerary now leaves at 17:30.',
+        observedAt: at.toISOString(),
+      }],
+    }, signal())).resolves.toMatchObject({ changed: true, baseline: false });
+    const facts = store.records.get(owner)!.state.facts;
+    expect(facts.find(({ source }) => source === 'mail')).toMatchObject({
+      stale: true,
+      staleReason: 'source_material_changed',
+    });
+    expect(facts.find(({ source }) => source === 'location')).toMatchObject({ stale: false });
+  });
+
+  it('keeps a verified mail summary when a calendar refresh fails', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    await service.commit({
+      expectedRevision: first.revision, expectedHash: first.hash, policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000023', type: 'chat', source: 'chat', at },
+    }, signal());
+    await service.observe('calendar', {
+      source: 'calendar',
+      state: 'unavailable',
+      reason: 'read_failed',
+      observedAt: at.toISOString(),
+      facts: [],
+    }, signal());
+    const stored = store.records.get(owner)!;
+    expect(stored.state.summary).toBe('One compact cross-source model.');
+    expect(stored.state.facts.find(({ source }) => source === 'mail')).toMatchObject({ stale: false });
+    expect(stored.state.sources.find(({ id }) => id === 'calendar')).toMatchObject({
+      state: 'missing',
+    });
   });
 
   it('does not stale a newer successful state from an older failed activation', async () => {
     const { service, store } = setup();
     const firstView = await service.read(signal());
     const first = await service.commit({
-      expectedRevision: 0, expectedHash: null, policyRevision: firstView.policyRevision, state: state(),
+      expectedRevision: firstView.revision, expectedHash: firstView.hash, policyRevision: firstView.policyRevision, state: state(),
       activation: { id: '00000000-0000-4000-8000-000000000011', type: 'chat', source: 'chat', at },
     }, signal());
     const secondState = state();
@@ -323,8 +655,203 @@ describe('PI situational state', () => {
       },
       expectedRevision: first.record.revision,
       expectedHash: first.record.hash,
+      sources: ['mail'],
     }, signal());
-    expect(store.records.get(owner)).toMatchObject({ revision: 2 });
+    expect(store.records.get(owner)).toMatchObject({ revision: 3 });
     expect(store.records.get(owner)?.state.facts.every(({ stale }) => !stale)).toBe(true);
+  });
+
+  it('persists a disable epoch and requires a newer provider observation before evidence returns', async () => {
+    const clock = { current: at };
+    const provider: ProactiveSource = {
+      id: 'mail',
+      label: 'Mail',
+      async read() {
+        return {
+          source: 'mail',
+          state: 'ok',
+          reason: null,
+          observedAt: at.toISOString(),
+          facts: [{
+            ref: 'message:epoch',
+            identity: 'gmail-message:epoch',
+            kind: 'mail',
+            label: 'Epoch mail',
+            text: 'Authoritative mail.',
+            observedAt: at.toISOString(),
+          }],
+        };
+      },
+    };
+    const store = createMemoryPiSituationStore();
+    const proactive = createMemoryProactiveStore(owner, () => clock.current);
+    const service = createPiSituationService({
+      owner,
+      store,
+      proactive,
+      sources: [provider],
+      now: () => clock.current,
+    });
+    const queue = createMemoryEventQueueStore();
+    service.attachEvents(queue);
+    await service.refresh('mail', signal());
+    let view = await service.read(signal());
+    const refId = view.state!.refs.find(({ source }) => source === 'mail')!.id;
+    await service.patch({
+      expectedRevision: view.revision,
+      expectedHash: view.hash,
+      policyRevision: view.policyRevision,
+      patch: {
+        summary: { text: 'Mail matters.', refIds: [refId] },
+        upsertFacts: [{
+          id: 'fact:epoch',
+          source: 'mail',
+          refIds: [refId],
+          text: 'The provider confirms the mail.',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+          stale: false,
+        }],
+        upsertFollowUps: [{
+          id: 'follow:epoch',
+          text: 'Follow the mail.',
+          dueAt: new Date(at.getTime() + 30 * 60_000).toISOString(),
+          refIds: [refId],
+        }],
+      },
+      activation: { id: '00000000-0000-4000-8000-000000000025', type: 'chat', source: 'chat', at },
+    }, signal());
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
+    await proactive.settings.patch({ sources: { mail: false } });
+    const stored = store.records.get(owner)!;
+    store.records.set(owner, {
+      ...stored,
+      authoritativeRefs: stored.authoritativeRefs.map((ref) =>
+        ref.source === 'mail'
+          ? { ...ref, invalidatedAt: at.toISOString(), staleReason: 'source_disabled' }
+          : ref),
+    });
+    store.authorities.set(owner, [...store.records.get(owner)!.authoritativeRefs]);
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toBeNull();
+    const disabledView = await service.read(signal());
+    const unrelatedCommit = await service.commit({
+      expectedRevision: disabledView.revision,
+      expectedHash: disabledView.hash,
+      policyRevision: disabledView.policyRevision,
+      state: disabledView.state!,
+      activation: {
+        id: '00000000-0000-4000-8000-000000000027',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    const unrelatedPatch = await service.patch({
+      expectedRevision: unrelatedCommit.record.revision,
+      expectedHash: unrelatedCommit.record.hash,
+      policyRevision: disabledView.policyRevision,
+      patch: { asOf: new Date(at.getTime() + 1).toISOString() },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000028',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    await service.markFailed({
+      expectedRevision: unrelatedPatch.record.revision,
+      expectedHash: unrelatedPatch.record.hash,
+      sources: ['calendar'],
+      activation: {
+        id: '00000000-0000-4000-8000-000000000029',
+        type: 'scheduled',
+        source: 'timer',
+        at: new Date(at.getTime() + 2),
+      },
+    }, signal());
+    await proactive.settings.patch({ sources: { mail: true } });
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toBeNull();
+    view = await service.read(signal());
+    expect(view.state?.refs.some(({ source }) => source === 'mail')).toBe(false);
+    expect(view.state?.facts.some(({ source }) => source === 'mail')).toBe(false);
+    expect(view.state?.followUps.some(({ refIds }) => refIds.includes(refId))).toBe(false);
+    expect(view.state?.summary).toBe('');
+
+    await expect(service.lookup({ source: 'mail', ref: 'message:epoch' }, signal()))
+      .rejects.toMatchObject({ code: 'invalid' });
+    await service.observe('mail', await provider.read({ now: clock.current, signal: signal(), settings: await proactive.settings.read() }), signal());
+    await service.synchronizeFollowUps(signal());
+    expect((await service.read(signal())).state?.refs.some(({ source }) => source === 'mail')).toBe(false);
+
+    clock.current = new Date(at.getTime() + 1);
+    await service.refresh('mail', signal());
+    await service.synchronizeFollowUps(signal());
+    const restored = await service.read(signal());
+    expect(restored.state?.refs.some(({ source }) => source === 'mail')).toBe(true);
+    expect(restored.state?.refs.find(({ source }) => source === 'mail'))
+      .toMatchObject({
+        observedAt: at.toISOString(),
+        verifiedAt: clock.current.toISOString(),
+      });
+    expect(restored.state?.facts).toContainEqual(expect.objectContaining({
+      id: 'fact:epoch',
+      stale: false,
+    }));
+    expect(restored.state?.summary).toBe('Mail matters.');
+    expect(restored.state?.followUps.map(({ id }) => id)).toContain('follow:epoch');
+    expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
+  });
+
+  it('schedules, updates and cancels evidence-linked dueAt follow-ups through the event queue', async () => {
+    const { service } = setup();
+    const queue = createMemoryEventQueueStore();
+    let wakes = 0;
+    service.attachEvents(queue, () => { wakes += 1; });
+    const first = await service.read(signal());
+    const dueAt = new Date(at.getTime() + 30 * 60_000);
+    const firstState = state({
+      followUps: [{ id: 'follow:trip', text: 'Check in before departure.', dueAt: dueAt.toISOString(), refIds: ['mail:42'] }],
+    });
+    const committed = await service.commit({
+      expectedRevision: first.revision, expectedHash: first.hash, policyRevision: first.policyRevision,
+      state: firstState,
+      activation: { id: '00000000-0000-4000-8000-000000000020', type: 'chat', source: 'chat', at },
+    }, signal());
+    expect(wakes).toBe(1);
+    expect(await queue.nextDueAt()).toBeNull();
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toEqual(dueAt);
+    expect(await queue.claim(at, 10, 60_000)).toEqual([]);
+    const movedAt = new Date(dueAt.getTime() + 15 * 60_000);
+    const moved = await service.patch({
+      expectedRevision: committed.record.revision,
+      expectedHash: committed.record.hash,
+      policyRevision: first.policyRevision,
+      patch: {
+        upsertFollowUps: [{
+          id: 'follow:trip',
+          text: 'Check in before the revised departure.',
+          dueAt: movedAt.toISOString(),
+          refIds: ['mail:42'],
+        }],
+      },
+      activation: { id: '00000000-0000-4000-8000-000000000022', type: 'chat', source: 'chat', at },
+    }, signal());
+    await service.synchronizeFollowUps(signal());
+    expect(moved.changed).toBe(true);
+    expect(await queue.nextDueAt()).toEqual(movedAt);
+    const cancelled = await service.patch({
+      expectedRevision: moved.record.revision,
+      expectedHash: moved.record.hash,
+      policyRevision: first.policyRevision,
+      patch: { removeFollowUpIds: ['follow:trip'] },
+      activation: { id: '00000000-0000-4000-8000-000000000021', type: 'chat', source: 'chat', at },
+    }, signal());
+    await service.synchronizeFollowUps(signal());
+    expect(cancelled.changed).toBe(true);
+    expect(await queue.nextDueAt()).toBeNull();
   });
 });

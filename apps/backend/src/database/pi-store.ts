@@ -1,5 +1,7 @@
 import sql from 'mssql';
-import type { PiConversationRow, PiStore, PiStoredTurn, PiTurnKind } from '../pi/store.js';
+import type {
+  PiConversationRow, PiProactiveMessageContext, PiStore, PiStoredTurn, PiTurnKind,
+} from '../pi/store.js';
 import { databaseReadRequest } from './wake-retry.js';
 
 async function query<T>(request: sql.Request, statement: string, signal: AbortSignal): Promise<sql.IResult<T>> {
@@ -8,6 +10,18 @@ async function query<T>(request: sql.Request, statement: string, signal: AbortSi
   signal.addEventListener('abort', cancel, { once: true });
   try { return await request.query<T>(statement); }
   finally { signal.removeEventListener('abort', cancel); }
+}
+
+function proactiveEvidence(value: unknown): value is PiProactiveMessageContext['evidence'][number] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.source === 'string' &&
+    (entry.ref === null || typeof entry.ref === 'string') &&
+    (entry.identity === null || typeof entry.identity === 'string') &&
+    typeof entry.label === 'string' &&
+    (entry.observedAt === null || typeof entry.observedAt === 'string') &&
+    typeof entry.verifiedAt === 'string' &&
+    Number.isFinite(Date.parse(entry.verifiedAt));
 }
 
 interface ConversationRecord {
@@ -158,8 +172,17 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
     },
     async recordMessage(message, at, signal) {
       await query(pool.request().input('at', sql.DateTime2, at).input('run', sql.Char(36), message.runId)
-        .input('session', sql.BigInt, message.sessionId).input('message', sql.BigInt, message.messageId).input('hash', sql.Char(64), message.textHash),
-      `INSERT dbo.pi_message (at, run_id, session_id, message_id, text_hash) VALUES (@at, @run, @session, @message, @hash);`, signal);
+        .input('owner', sql.UniqueIdentifier, message.ownerObjectId ?? null)
+        .input('session', sql.BigInt, message.sessionId).input('message', sql.BigInt, message.messageId)
+        .input('hash', sql.Char(64), message.textHash)
+        .input('text', sql.NVarChar(1500), message.text ?? null)
+        .input('evidence', sql.NVarChar(sql.MAX), JSON.stringify(message.evidence ?? []))
+        .input('followUps', sql.NVarChar(sql.MAX), JSON.stringify(message.followUpIds ?? [])),
+      `INSERT dbo.pi_message (
+          at, run_id, session_id, message_id, text_hash, owner_object_id, message_text, evidence_json, follow_up_ids_json
+        ) VALUES (
+          @at, @run, @session, @message, @hash, @owner, @text, @evidence, @followUps
+        );`, signal);
     },
     async recordLook(watch, runId, at, signal) {
       await query(pool.request().input('watch', sql.NVarChar(120), watch).input('run', sql.Char(36), runId).input('at', sql.DateTime2, at),
@@ -174,10 +197,49 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
         `SELECT watch, COUNT(*) AS looks, COALESCE(SUM(cost_dkk), 0) AS cost, MAX(at) AS last FROM dbo.pi_watch_look WHERE at >= @from GROUP BY watch;`, signal);
       return result.recordset.map(row => ({ watch: row.watch, looks: Number(row.looks), costDkk: Number(row.cost), lastLookAt: row.last }));
     },
-    async messagesSince(from, signal) {
-      const result = await query<{ text_hash: string }>(databaseReadRequest(pool).input('from', sql.DateTime2, from),
-        `SELECT text_hash FROM dbo.pi_message WHERE at >= @from;`, signal);
+    async messagesSince(from, signal, ownerObjectId) {
+      const result = await query<{ text_hash: string }>(databaseReadRequest(pool)
+        .input('from', sql.DateTime2, from)
+        .input('owner', sql.UniqueIdentifier, ownerObjectId ?? null),
+        `SELECT text_hash FROM dbo.pi_message
+          WHERE at >= @from AND (@owner IS NULL OR owner_object_id = @owner);`
+          , signal);
       return { count: result.recordset.length, textHashes: result.recordset.map(row => row.text_hash.trim()) };
+    },
+    async latestProactiveMessage(owner, since, signal) {
+      const result = await query<{
+        run_id: string; session_id: string | number; message_id: string | number; text_hash: string;
+        message_text: string | null; evidence_json: string; follow_up_ids_json: string; at: Date;
+      }>(databaseReadRequest(pool)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('since', sql.DateTime2, since),
+      `SELECT TOP (1) run_id, CONVERT(varchar(19), session_id) AS session_id,
+          CONVERT(varchar(19), message_id) AS message_id, text_hash, message_text, evidence_json,
+          follow_up_ids_json, at
+        FROM dbo.pi_message
+        WHERE owner_object_id = @owner AND at >= @since
+        ORDER BY at DESC, id DESC;`, signal);
+      const row = result.recordset[0];
+      if (!row) return undefined;
+      let evidence: unknown = [];
+      let followUpIds: unknown = [];
+      try { evidence = JSON.parse(row.evidence_json); } catch { /* Invalid JSON cannot make a delivery current. */ }
+      try { followUpIds = JSON.parse(row.follow_up_ids_json); } catch { /* Same for follow-up identities. */ }
+      return {
+        ownerObjectId: owner.toLowerCase(),
+        runId: row.run_id.trim(),
+        sessionId: String(row.session_id),
+        messageId: String(row.message_id),
+        textHash: row.text_hash.trim(),
+        text: row.message_text ?? '',
+        evidence: Array.isArray(evidence)
+          ? evidence.filter(proactiveEvidence).slice(0, 8)
+          : [],
+        followUpIds: Array.isArray(followUpIds)
+          ? followUpIds.filter((value): value is string => typeof value === 'string').slice(0, 16)
+          : [],
+        at: row.at,
+      };
     },
   };
 }

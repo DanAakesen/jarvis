@@ -4,6 +4,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
 import { createConversationStore } from './conversation-store.js';
+import { createPiSituationStore } from './pi-situation-store.js';
+import { createProactiveStore } from './proactive-store.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
+import { sourceIds } from '../proactive/types.js';
+import { parsePiSituationState } from '../pi/situation.js';
 import { finalizeChatBlock } from '../core/chat-blocks.js';
 
 const configuration = loadDatabaseConfig();
@@ -31,6 +36,195 @@ afterAll(async () => {
 });
 
 describe('conversation blocks in the message store', () => {
+  it('stores a proactive message and continuation receipt atomically and idempotently', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'chat', language: 'en' });
+    const owner = randomUUID();
+    const runId = randomUUID();
+    const input = {
+      sessionId: session.id,
+      text: 'I can move the reminder. Shall I?',
+      model: 'pi',
+      language: 'en' as const,
+      ownerObjectId: owner,
+      runId,
+      textHash: 'a'.repeat(64),
+      evidence: [{
+        source: 'calendar',
+        ref: 'calendar:42',
+        identity: 'calendar-event:42',
+        label: 'Flight',
+        observedAt: '2026-11-16T09:00:00.000Z',
+        verifiedAt: '2026-11-16T09:01:00.000Z',
+      }],
+      followUpIds: ['follow:flight'],
+      at: new Date('2026-11-16T10:00:00.000Z'),
+      dayStart: new Date('2026-11-15T23:00:00.000Z'),
+      maxMessages: 8,
+    };
+    const [first, retry] = await Promise.all([
+      store.addProactiveMessage!(input),
+      store.addProactiveMessage!(input),
+    ]);
+    expect([first.status, retry.status].sort()).toEqual(['existing', 'stored']);
+    expect(retry.message?.id).toBe(first.message?.id);
+    const duplicate = await store.addProactiveMessage!({
+      ...input,
+      runId: randomUUID(),
+    });
+    expect(duplicate).toMatchObject({ status: 'duplicate', message: null });
+    await expect(store.addProactiveMessage!({
+      ...input,
+      runId: randomUUID(),
+      textHash: 'b'.repeat(64),
+      evidence: [{
+        ...input.evidence[0]!,
+        label: 'x'.repeat(9_000),
+      }],
+    })).rejects.toThrow();
+    const rows = await pool.request()
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query<{ messages: number; receipts: number }>(`SELECT
+        (SELECT COUNT(*) FROM dbo.messages WHERE jarvis_session_id = ${Number(session.id)}
+          AND role = N'jarvis' AND text = N'I can move the reminder. Shall I?') AS messages,
+        (SELECT COUNT(*) FROM dbo.pi_message WHERE owner_object_id = @owner) AS receipts;`);
+    expect(rows.recordset[0]).toEqual({ messages: 1, receipts: 1 });
+  });
+
+  it('refuses grant-held situation evidence after its authority generation advances', async () => {
+    const owner = randomUUID();
+    const proactive = createProactiveStore(pool, owner);
+    const situations = createPiSituationStore(pool);
+    const conversations = createConversationStore(pool);
+    const signal = new AbortController().signal;
+    const observedAt = new Date('2026-11-16T09:00:00.000Z');
+    const firstVerification = new Date('2026-11-16T10:00:00.000Z');
+    const secondVerification = new Date('2026-11-16T10:01:00.000Z');
+    const state = (materialHash: string, verifiedAt: Date) => parsePiSituationState({
+      version: 1,
+      asOf: verifiedAt.toISOString(),
+      summary: '',
+      summaryRefIds: [],
+      sources: sourceIds.map((id) => ({
+        id,
+        state: id === 'calendar' ? 'fresh' : 'missing',
+        observedAt: id === 'calendar' ? observedAt.toISOString() : null,
+        verifiedAt: id === 'calendar' ? verifiedAt.toISOString() : undefined,
+        expiresAt: null,
+        reason: id === 'calendar' ? null : 'not_observed',
+        refIds: id === 'calendar' ? ['calendar:flight'] : [],
+      })),
+      refs: [{
+        id: 'calendar:flight',
+        source: 'calendar',
+        identity: 'calendar-event:flight',
+        label: 'Flight',
+        observedAt: observedAt.toISOString(),
+        expiresAt: null,
+        materialHash,
+        verifiedAt: verifiedAt.toISOString(),
+      }],
+      facts: [],
+      followUps: [],
+    });
+    const initial = await situations.initialize(
+      owner,
+      parsePiSituationState({
+        ...state('0'.repeat(64), firstVerification),
+        sources: sourceIds.map((id) => ({
+          id,
+          state: 'missing',
+          observedAt: null,
+          expiresAt: null,
+          reason: 'not_observed',
+          refIds: [],
+        })),
+        refs: [],
+      }),
+      observedAt,
+      signal,
+    );
+    const policyRevision = proactiveSettingsRevision(await proactive.settings.read());
+    const first = await situations.commit({
+      owner,
+      expectedRevision: initial.revision,
+      expectedHash: initial.hash,
+      state: state('a'.repeat(64), firstVerification),
+      activation: null,
+      policyRevision,
+      followUpActions: [],
+      authoritativeRefs: [{
+        ...state('a'.repeat(64), firstVerification).refs[0]!,
+        verifiedAt: firstVerification.toISOString(),
+        activatedAt: firstVerification.toISOString(),
+        invalidatedAt: null,
+        staleReason: null,
+      }],
+      observations: [{
+        source: 'calendar',
+        state: 'ok',
+        reason: null,
+        observedAt: observedAt.toISOString(),
+        verifiedAt: firstVerification.toISOString(),
+      }],
+    }, signal);
+    const second = await situations.commit({
+      owner,
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      state: state('b'.repeat(64), secondVerification),
+      activation: null,
+      policyRevision,
+      followUpActions: [],
+      authoritativeRefs: [{
+        ...state('b'.repeat(64), secondVerification).refs[0]!,
+        verifiedAt: secondVerification.toISOString(),
+        activatedAt: secondVerification.toISOString(),
+        invalidatedAt: null,
+        staleReason: null,
+      }],
+      observations: [{
+        source: 'calendar',
+        state: 'ok',
+        reason: null,
+        observedAt: observedAt.toISOString(),
+        verifiedAt: secondVerification.toISOString(),
+      }],
+    }, signal);
+    expect(second.state.refs[0]?.materialHash).toBe('b'.repeat(64));
+    const session = await conversations.createSession({ channel: 'chat', language: 'en' });
+    await expect(conversations.addProactiveMessage!({
+      sessionId: session.id,
+      text: 'The old flight generation changed.',
+      model: 'pi',
+      language: 'en',
+      ownerObjectId: owner,
+      runId: randomUUID(),
+      textHash: 'c'.repeat(64),
+      evidence: [{
+        source: 'calendar',
+        ref: 'calendar:flight',
+        identity: 'calendar-event:flight',
+        label: 'Flight',
+        observedAt: observedAt.toISOString(),
+        verifiedAt: firstVerification.toISOString(),
+        origin: 'situation',
+        materialHash: 'a'.repeat(64),
+      }],
+      followUpIds: [],
+      at: secondVerification,
+      dayStart: new Date('2026-11-15T23:00:00.000Z'),
+      maxMessages: 8,
+    })).rejects.toThrow(/generation changed/u);
+    const rows = await pool.request()
+      .input('owner', sql.UniqueIdentifier, owner)
+      .query<{ messages: number; receipts: number }>(`SELECT
+        (SELECT COUNT(*) FROM dbo.messages
+          WHERE jarvis_session_id = ${Number(session.id)} AND role = N'jarvis') AS messages,
+        (SELECT COUNT(*) FROM dbo.pi_message WHERE owner_object_id = @owner) AS receipts;`);
+    expect(rows.recordset[0]).toEqual({ messages: 0, receipts: 0 });
+  });
+
   it('keeps each block with its own reply through history reads, in order, unchanged', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'chat', language: 'en' });

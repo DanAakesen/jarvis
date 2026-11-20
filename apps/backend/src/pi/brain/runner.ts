@@ -10,10 +10,11 @@ import {
   copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
 } from '../../proactive/time.js';
 import { sourceIds, type SourceId } from '../../proactive/types.js';
+import { proactiveSettingsRevision } from '../../proactive/preferences.js';
 import { PI_MODEL } from '../definition.js';
 import type { PiBrainRun } from '../turns.js';
 import type { PiGateway } from '../gateway.js';
-import type { PiStore } from '../store.js';
+import type { PiProactiveEvidence, PiStore } from '../store.js';
 import { BrainCommsRefusal, type BrainComms } from './comms.js';
 import type { DecisionLog, DecisionRecord } from './decision-log.js';
 import { MAX_WAKE_EVENTS, formatWake } from './wake.js';
@@ -88,11 +89,30 @@ export function createBrain(options: BrainOptions) {
   const notified = new Set<string>();
 
   const wake = (at: Date) => { if (nextWorkAt === null || at < nextWorkAt) nextWorkAt = at; };
-  const eventSource = (value: string): SourceId | undefined => {
-    if ((sourceIds as readonly string[]).includes(value)) return value as SourceId;
-    if (value === 'github' || value === 'worker') return 'factory';
-    return undefined;
+  const eventSources = (event: QueuedEvent): SourceId[] => {
+    const fromName = (value: string): SourceId | undefined => {
+      if ((sourceIds as readonly string[]).includes(value)) return value as SourceId;
+      if (value === 'github' || value === 'worker') return 'factory';
+      return undefined;
+    };
+    const direct = fromName(event.source);
+    const evidence = Array.isArray(event.detail.evidenceSources)
+      ? event.detail.evidenceSources.filter((value): value is SourceId =>
+        typeof value === 'string' && (sourceIds as readonly string[]).includes(value))
+      : [];
+    return [...new Set([...(direct ? [direct] : []), ...evidence])];
   };
+  const activationEvidence = (events: readonly QueuedEvent[]): PiProactiveEvidence[] =>
+    events.flatMap((event) => eventSources(event).map((source) => ({
+      source,
+      ref: event.id,
+      identity: event.identity ?? event.dedupeKey,
+      label: event.summary,
+      observedAt: event.occurredAt.toISOString(),
+      verifiedAt: event.receivedAt.toISOString(),
+      origin: 'event',
+      materialHash: event.materialHash ?? null,
+    })));
   const policyNote = (settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>): string => {
     const enabledCategories = Object.entries(settings.categories)
       .filter(([, enabled]) => enabled).map(([category]) => category);
@@ -124,7 +144,19 @@ export function createBrain(options: BrainOptions) {
     const text = state === 'warn'
       ? `PI has used ${spent.toFixed(0)} of its ${limit.toFixed(0)} DKK proactive budget this month. I will be more sparing.`
       : `PI has used its ${limit.toFixed(0)} DKK proactive budget for this month, so it has stopped looking on its own. Chat still works. You can raise the budget in the proactive settings, or it starts again next month.`;
-    try { await options.comms.send({ text }, { runId: 'budget', sent: [], wrote: [], looked: [] }, signal); } catch (error) {
+    try { await options.comms.send({
+      text,
+      evidence: [{
+        source: 'proactive-budget',
+        ref: `budget:${monthKey(now())}`,
+        identity: `proactive-budget:${monthKey(now())}`,
+        label: 'Proactive budget ledger',
+        observedAt: now().toISOString(),
+        verifiedAt: now().toISOString(),
+        origin: 'event',
+      }],
+      followUpIds: [],
+    }, { runId: 'budget', sent: [], wrote: [], looked: [] }, signal); } catch (error) {
       // Kept only once Dan has it (or already had exactly this today); any other refusal or failure is tried again on a later tick.
       if (!(error instanceof BrainCommsRefusal && error.reason === 'duplicate')) notified.delete(key);
       log('warn', { reason: 'budget_notice_failed' });
@@ -180,14 +212,16 @@ export function createBrain(options: BrainOptions) {
     const claimed = queueDue ? await queue.claim(current, MAX_WAKE_EVENTS, LEASE_MS) : [];
     if (claimed.length === MAX_WAKE_EVENTS) wake(current);
     const survivors: QueuedEvent[] = [];
-    const settled: { id: string; outcome: string }[] = [];
+    const settled: { id: string; outcome: string; reopenable?: boolean }[] = [];
     for (const event of claimed) {
       const maxAge = event.source === 'timer' ? timerMaxAgeMs : defaultMaxAgeMs;
       if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
-      else if (eventSource(event.source) && !settings.sources[eventSource(event.source)!]) {
-        settled.push({ id: event.id, outcome: 'source disabled' });
+      else if (eventSources(event).some((source) => !settings.sources[source])) {
+        settled.push({ id: event.id, outcome: 'source disabled', reopenable: true });
       }
-      else if (current.getTime() - event.occurredAt.getTime() > maxAge) settled.push({ id: event.id, outcome: 'stale' });
+      else if (current.getTime() - event.occurredAt.getTime() > maxAge) {
+        settled.push({ id: event.id, outcome: 'stale', reopenable: true });
+      }
       else survivors.push(event);
     }
     // A timer review alone is not worth waking at night; the evening or morning one covers it.
@@ -195,6 +229,18 @@ export function createBrain(options: BrainOptions) {
     if (timerOnly && isQuietHour(current) && !extraNow) {
       settled.push(...survivors.map(({ id }) => ({ id, outcome: 'timer review skipped in quiet hours' })));
       survivors.length = 0;
+    }
+    const deferredFollowUps = isQuietHour(current) && !extraNow
+      ? survivors.filter((event) => event.source === 'followup')
+      : [];
+    if (deferredFollowUps.length > 0) {
+      const retryAt = nextSlotAfter(current).at;
+      await queue.retryLater(deferredFollowUps.map(({ id }) => id), retryAt);
+      for (const event of deferredFollowUps) {
+        const index = survivors.findIndex(({ id }) => id === event.id);
+        if (index >= 0) survivors.splice(index, 1);
+      }
+      wake(retryAt);
     }
     if (settled.length > 0) await queue.settle(settled, current);
     if (survivors.length === 0 && !extraNow) return result('filtered', claimed.length);
@@ -224,6 +270,8 @@ export function createBrain(options: BrainOptions) {
       activationType,
       satisfiedSlot: slotKey,
       allowQuiet: activationType === 'event',
+      policyRevision: proactiveSettingsRevision(settings),
+      worstCaseDkk: worstCase,
     });
     if (!reservation.allowed) {
       const retryAt = reservation.status.nextAllowedAt
@@ -239,6 +287,7 @@ export function createBrain(options: BrainOptions) {
       activationType,
       activationSource,
       slotKey,
+      evidence: activationEvidence(survivors),
       body: formatWake({
         runId, activationType, activationSource,
         now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections,
@@ -246,13 +295,11 @@ export function createBrain(options: BrainOptions) {
       }),
     }, signal);
     const at = now();
-    if (outcome.usage.inputTokens > 0 || outcome.usage.outputTokens > 0) {
-      // Spent is spent, whether or not the answer was usable: the tokens were billed.
-      await proactive.spend.record({
-        runId, month: monthKey(at), inputTokens: outcome.usage.inputTokens, outputTokens: outcome.usage.outputTokens,
-        estimatedDkk: outcome.costDkk, createdAt: at,
-      }).catch(() => log('warn', { reason: 'spend_record_failed' }));
-    }
+    // Reconcile the provisional worst case even when the provider returned zero tokens.
+    await proactive.spend.record({
+      runId, month: monthKey(at), inputTokens: outcome.usage.inputTokens, outputTokens: outcome.usage.outputTokens,
+      estimatedDkk: outcome.costDkk, createdAt: at,
+    }).catch(() => log('warn', { reason: 'spend_record_failed' }));
     await options.extras?.afterRun({ runId, costDkk: outcome.costDkk, events: survivors.length, run: outcome.run, due: extra.due }, signal)
       .catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));
     if (outcome.ok) {
@@ -331,6 +378,8 @@ export function createBrain(options: BrainOptions) {
       activationType: 'scheduled',
       satisfiedSlot: claim.run.slot,
       allowQuiet: claim.run.trigger === 'manual',
+      policyRevision: proactiveSettingsRevision(settings),
+      worstCaseDkk: worstCase,
     });
     if (!reservation.allowed) {
       await finish('skipped', reservation.reason === 'spaced'
@@ -356,16 +405,14 @@ export function createBrain(options: BrainOptions) {
       }),
     }, signal);
     const at = now();
-    if (outcome.usage.inputTokens > 0 || outcome.usage.outputTokens > 0) {
-      await options.proactive.spend.record({
-        runId: claim.run.id,
-        month: monthKey(at),
-        inputTokens: outcome.usage.inputTokens,
-        outputTokens: outcome.usage.outputTokens,
-        estimatedDkk: outcome.costDkk,
-        createdAt: at,
-      });
-    }
+    await options.proactive.spend.record({
+      runId: claim.run.id,
+      month: monthKey(at),
+      inputTokens: outcome.usage.inputTokens,
+      outputTokens: outcome.usage.outputTokens,
+      estimatedDkk: outcome.costDkk,
+      createdAt: at,
+    });
     await options.extras?.afterRun({
       runId: claim.run.id, costDkk: outcome.costDkk, events: 0, run: outcome.run, due: extra.due,
     }, signal).catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));

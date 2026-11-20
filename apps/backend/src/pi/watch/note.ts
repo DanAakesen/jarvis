@@ -11,7 +11,7 @@ export const MAX_WATCH_TEXT = 8_000;
 export const MAX_QUOTE = 1_500;
 
 export class WatchError extends Error {
-  constructor(readonly code: 'invalid' | 'refused' | 'not_found' | 'unavailable', message: string) {
+  constructor(readonly code: 'invalid' | 'refused' | 'not_found' | 'unavailable' | 'conflict', message: string) {
     super(message);
     this.name = 'WatchError';
   }
@@ -83,6 +83,7 @@ export function appendTrailLine(content: string, line: string, at: Date): string
   const body = withoutMarker(content);
   const entry = `- ${stamp(at)}: ${oneLine(cleaned(line, 'trail line', 700))}`;
   const lastHeading = [...body.matchAll(/^##[ \t]+(.+?)[ \t]*$/gmu)].at(-1);
+  if (body.split('\n').at(-1) === entry) return withNextLook(body, next);
   const grown = lastHeading && /^trail$/iu.test(lastHeading[1]!) ? `${body}\n${entry}` : `${body}\n\n## Trail\n${entry}`;
   if (shouldRedact(grown)) throw new WatchError('refused', 'Secrets and credentials can never be saved to the vault. Nothing was written.');
   return withNextLook(grown, next);

@@ -18,6 +18,10 @@ import { createMemoryProactiveStore } from '../proactive/store.js';
 import { createPiActivationService } from '../pi/activation.js';
 import { createPiSituationService, piSituationHash } from '../pi/situation.js';
 import { createPiTurnRegistry } from '../pi/turns.js';
+import { createProactiveEventStore } from './proactive-event-store.js';
+import { createProactiveStore } from './proactive-store.js';
+import { createPiBackgroundSlotService } from '../pi/activation-slots.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -319,6 +323,8 @@ describe('real SQL Server migration contract', () => {
       const proactiveDown = await readFile(new URL('../../../../db/migrations/down/0054_proactive_push.sql', import.meta.url), 'utf8');
       const foundationSchema = await readFile(new URL('../../../../db/migrations/0055_proactive_foundation.sql', import.meta.url), 'utf8');
       const foundationDown = await readFile(new URL('../../../../db/migrations/down/0055_proactive_foundation.sql', import.meta.url), 'utf8');
+      const preferencesSchema = await readFile(new URL('../../../../db/migrations/0063_proactive_suggestion_preferences.sql', import.meta.url), 'utf8');
+      const preferencesDown = await readFile(new URL('../../../../db/migrations/down/0063_proactive_suggestion_preferences.sql', import.meta.url), 'utf8');
       const eventsSchema = await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8');
       const eventsDown = await readFile(new URL('../../../../db/migrations/down/0080_proactive_events.sql', import.meta.url), 'utf8');
       const schema = await readFile(new URL('../../../../db/migrations/0086_pi_chat.sql', import.meta.url), 'utf8');
@@ -329,13 +335,29 @@ describe('real SQL Server migration contract', () => {
       const watchDown = await readFile(new URL('../../../../db/migrations/down/0088_pi_watch_look.sql', import.meta.url), 'utf8');
       const situationSchema = await readFile(new URL('../../../../db/migrations/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
       const situationDown = await readFile(new URL('../../../../db/migrations/down/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
+      const integritySchema = await readFile(new URL('../../../../db/migrations/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
+      const integrityDown = await readFile(new URL('../../../../db/migrations/down/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
+      const outboxSchema = await readFile(new URL('../../../../db/migrations/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
+      const outboxDown = await readFile(new URL('../../../../db/migrations/down/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
+      const reviewSchema = await readFile(new URL('../../../../db/migrations/0099_pi_review_integrity.sql', import.meta.url), 'utf8');
+      const reviewDown = await readFile(new URL('../../../../db/migrations/down/0099_pi_review_integrity.sql', import.meta.url), 'utf8');
+      const generationSchema = await readFile(new URL('../../../../db/migrations/0100_pi_observation_generations.sql', import.meta.url), 'utf8');
+      const generationDown = await readFile(new URL('../../../../db/migrations/down/0100_pi_observation_generations.sql', import.meta.url), 'utf8');
+      const pendingAuthoritySchema = await readFile(new URL('../../../../db/migrations/0101_pi_pending_lookup_authority.sql', import.meta.url), 'utf8');
+      const pendingAuthorityDown = await readFile(new URL('../../../../db/migrations/down/0101_pi_pending_lookup_authority.sql', import.meta.url), 'utf8');
       await pool.request().batch(proactiveSchema);
       await pool.request().batch(foundationSchema);
+      await pool.request().batch(preferencesSchema);
       await pool.request().batch(eventsSchema);
       await pool.request().batch(schema);
       await pool.request().batch(brainSchema);
       await pool.request().batch(watchSchema);
       await pool.request().batch(situationSchema);
+      await pool.request().batch(integritySchema);
+      await pool.request().batch(outboxSchema);
+      await pool.request().batch(reviewSchema);
+      await pool.request().batch(generationSchema);
+      await pool.request().batch(pendingAuthoritySchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -380,9 +402,193 @@ describe('real SQL Server migration contract', () => {
         expect((await store.readBrainSwitch(owner, signal)).enabled).toBe(false);
 
         const day = new Date(Date.now() - 60_000);
-        await store.recordMessage({ runId: randomUUID(), sessionId: '7', messageId: '9', textHash: 'b'.repeat(64) }, new Date(), signal);
-        expect(await store.messagesSince(day, signal)).toEqual({ count: 1, textHashes: ['b'.repeat(64)] });
-        expect(await store.messagesSince(new Date(Date.now() + 60_000), signal)).toEqual({ count: 0, textHashes: [] });
+        await store.recordMessage({
+          ownerObjectId: owner,
+          runId: randomUUID(),
+          sessionId: '7',
+          messageId: '9',
+          textHash: 'b'.repeat(64),
+          text: 'Would you like me to move the task?',
+          evidence: [{
+            source: 'calendar', ref: 'calendar-event:42', identity: 'calendar-event:42',
+            label: 'Flight', observedAt: at.toISOString(), verifiedAt: at.toISOString(),
+          }],
+          followUpIds: ['follow:flight'],
+        }, new Date(), signal);
+        expect(await store.messagesSince(day, signal, owner)).toEqual({ count: 1, textHashes: ['b'.repeat(64)] });
+        expect(await store.messagesSince(day, signal, randomUUID())).toEqual({ count: 0, textHashes: [] });
+        expect(await store.messagesSince(new Date(Date.now() + 60_000), signal, owner)).toEqual({ count: 0, textHashes: [] });
+        expect(await store.latestProactiveMessage(owner, day, signal)).toMatchObject({
+          sessionId: '7',
+          messageId: '9',
+          text: 'Would you like me to move the task?',
+          followUpIds: ['follow:flight'],
+          evidence: [expect.objectContaining({ ref: 'calendar-event:42' })],
+        });
+
+        const proactive = createProactiveStore(pool, owner);
+        await proactive.settings.patch({ backgroundTurnsPerDay: 1 });
+        const queue = createProactiveEventStore(pool, owner);
+        const slots = createPiBackgroundSlotService({
+          queue,
+          proactive,
+          now: () => new Date('2026-11-15T10:00:00.000Z'),
+        });
+        const reservations = await Promise.all([
+          slots.reserve({
+            runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
+          }),
+          slots.reserve({
+            runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
+          }),
+        ]);
+        expect(reservations.filter(({ allowed }) => allowed)).toHaveLength(1);
+        expect(reservations.find(({ allowed }) => !allowed)).toMatchObject({ reason: 'daily_cap' });
+        const otherOwner = randomUUID();
+        const otherSlots = createPiBackgroundSlotService({
+          queue: createProactiveEventStore(pool, otherOwner),
+          proactive: createProactiveStore(pool, otherOwner),
+          now: () => new Date('2026-11-15T10:00:00.000Z'),
+        });
+        await expect(otherSlots.reserve({
+          runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
+        })).resolves.toMatchObject({ allowed: true });
+
+        const budgetOwner = randomUUID();
+        const budgetStore = createProactiveStore(pool, budgetOwner);
+        await budgetStore.settings.patch({ monthlyBudgetDkk: 1 });
+        let budgetAt = new Date('2026-11-15T10:00:00.000Z');
+        const budgetQueue = createProactiveEventStore(pool, budgetOwner);
+        const budgetSlots = createPiBackgroundSlotService({
+          queue: budgetQueue,
+          proactive: budgetStore,
+          now: () => budgetAt,
+        });
+        const budgetPolicy = proactiveSettingsRevision(await budgetStore.settings.read());
+        const reserved = await Promise.all([
+          budgetQueue.reserveBatch({
+            batchId: randomUUID(),
+            sampleTime: () => ({
+              at: budgetAt,
+              dayStart: new Date('2026-11-14T23:00:00.000Z'),
+              quiet: false,
+              satisfiedSlot: null,
+            }),
+            eventCount: 1,
+            activationType: 'event',
+            allowQuiet: true,
+            minimumGapMs: 0,
+            fallbackAllowed: 12,
+            expectedPolicyRevision: budgetPolicy,
+            worstCaseDkk: 0.6,
+          }),
+          budgetQueue.reserveBatch({
+            batchId: randomUUID(),
+            sampleTime: () => ({
+              at: budgetAt,
+              dayStart: new Date('2026-11-14T23:00:00.000Z'),
+              quiet: false,
+              satisfiedSlot: null,
+            }),
+            eventCount: 1,
+            activationType: 'event',
+            allowQuiet: true,
+            minimumGapMs: 0,
+            fallbackAllowed: 12,
+            expectedPolicyRevision: budgetPolicy,
+            worstCaseDkk: 0.6,
+          }),
+        ]);
+        expect(reserved.filter(({ allowed }) => allowed)).toHaveLength(1);
+        expect(reserved.find(({ allowed }) => !allowed))
+          .toMatchObject({ reason: 'budget_exhausted' });
+        const admittedBatch = await pool.request()
+          .input('owner', sql.UniqueIdentifier, budgetOwner)
+          .query<{ id: string; reserved_dkk: number; actual_dkk: number | null }>(`
+            SELECT id, reserved_dkk, actual_dkk
+            FROM dbo.proactive_event_batches
+            WHERE owner_object_id = @owner;`);
+        expect(admittedBatch.recordset).toMatchObject([{
+          reserved_dkk: 0.6,
+          actual_dkk: null,
+        }]);
+        await budgetStore.spend.record({
+          runId: admittedBatch.recordset[0]!.id,
+          month: '2026-11',
+          inputTokens: 1,
+          outputTokens: 1,
+          estimatedDkk: 0.1,
+          createdAt: budgetAt,
+        });
+        expect((await pool.request()
+          .input('owner', sql.UniqueIdentifier, budgetOwner)
+          .query<{ reserved_dkk: number; actual_dkk: number }>(`
+            SELECT reserved_dkk, actual_dkk
+            FROM dbo.proactive_event_batches
+            WHERE owner_object_id = @owner;`)).recordset[0])
+          .toEqual(expect.objectContaining({ reserved_dkk: 0.6, actual_dkk: 0.1 }));
+        budgetAt = new Date(budgetAt.getTime() + 11 * 60_000);
+        await expect(budgetSlots.reserve({
+          runId: randomUUID(),
+          eventCount: 1,
+          activationType: 'event',
+          allowQuiet: true,
+          policyRevision: budgetPolicy,
+          worstCaseDkk: 0.85,
+        })).resolves.toMatchObject({ allowed: true });
+        const stalePolicy = budgetPolicy;
+        await budgetStore.settings.patch({ sources: { x: true } });
+        budgetAt = new Date(budgetAt.getTime() + 11 * 60_000);
+        await expect(budgetQueue.reserveBatch({
+          batchId: randomUUID(),
+          sampleTime: () => ({
+            at: budgetAt,
+            dayStart: new Date('2026-11-14T23:00:00.000Z'),
+            quiet: false,
+            satisfiedSlot: null,
+          }),
+          eventCount: 1,
+          activationType: 'event',
+          allowQuiet: true,
+          minimumGapMs: 10 * 60_000,
+          fallbackAllowed: 12,
+          expectedPolicyRevision: stalePolicy,
+          worstCaseDkk: 0.01,
+        })).resolves.toMatchObject({ allowed: false, reason: 'policy_changed' });
+        await budgetStore.settings.patch({ sources: { mail: false } });
+        await budgetStore.settings.patch({ sources: { mail: true } });
+        const disabled = (await budgetStore.sources.list()).find(({ id }) => id === 'mail')!;
+        expect(disabled).toMatchObject({
+          state: 'stale',
+          reason: 'source_disabled',
+        });
+        const invalidatedAt = new Date(disabled.invalidatedAt!);
+        await budgetStore.sources.upsert({
+          id: 'mail',
+          label: 'Mail',
+          enabled: true,
+          state: 'ok',
+          reason: null,
+          observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+          verifiedAt: invalidatedAt.toISOString(),
+        });
+        expect((await budgetStore.sources.list()).find(({ id }) => id === 'mail'))
+          .toMatchObject({ state: 'stale' });
+        await budgetStore.sources.upsert({
+          id: 'mail',
+          label: 'Mail',
+          enabled: true,
+          state: 'ok',
+          reason: null,
+          observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+          verifiedAt: new Date(invalidatedAt.getTime() + 1).toISOString(),
+        });
+        expect((await budgetStore.sources.list()).find(({ id }) => id === 'mail'))
+          .toMatchObject({
+            state: 'ok',
+            observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+            verifiedAt: new Date(invalidatedAt.getTime() + 1).toISOString(),
+          });
 
         // Standing-watch looks: counted per watch and day, with the wake's cost shared out afterwards.
         const dayStart = new Date(Date.now() - 3_600_000);
@@ -407,13 +613,29 @@ describe('real SQL Server migration contract', () => {
         const activation = {
           id: randomUUID(), type: 'event' as const, source: 'timer', at,
         };
+        const policyRevision = proactiveSettingsRevision(await proactive.settings.read());
+        const initialized = await Promise.all([
+          situations.initialize(owner, situation, at, signal),
+          situations.initialize(owner, situation, at, signal),
+        ]);
+        expect(initialized.map(({ revision }) => revision)).toEqual([1, 1]);
         const stored = await situations.commit({
-          owner, expectedRevision: 0, expectedHash: null, state: situation, activation,
+          owner,
+          expectedRevision: initialized[0].revision,
+          expectedHash: initialized[0].hash,
+          state: situation,
+          activation,
+          policyRevision,
+          followUpActions: [],
+          authoritativeRefs: [],
+          observations: [],
         }, signal);
         expect(await situations.read(owner, signal)).toMatchObject({
-          revision: 1, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
+          revision: 2, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
         });
 
+        const legacyOwner = randomUUID();
+        await situations.initialize(legacyOwner, situation, at, signal);
         const legacy = structuredClone(situation);
         legacy.summary = 'Legacy bearerToken=fixture-secret';
         legacy.summaryRefIds = ['memory:fact-ref'];
@@ -464,18 +686,18 @@ describe('real SQL Server migration contract', () => {
         });
         const legacyHash = piSituationHash(legacy);
         await pool.request()
-          .input('owner', sql.UniqueIdentifier, owner)
+          .input('owner', sql.UniqueIdentifier, legacyOwner)
           .input('state', sql.NVarChar(sql.MAX), JSON.stringify(legacy))
           .input('hash', sql.Char(64), legacyHash)
           .query(`UPDATE dbo.pi_situational_state
             SET state_json=@state, content_hash=@hash
             WHERE owner_object_id=@owner;`);
 
-        const proactive = createMemoryProactiveStore(owner);
+        const memoryProactive = createMemoryProactiveStore(legacyOwner);
         const situationService = createPiSituationService({
-          owner,
+          owner: legacyOwner,
           store: situations,
-          proactive,
+          proactive: memoryProactive,
           sources: [],
           now: () => at,
         });
@@ -489,7 +711,7 @@ describe('real SQL Server migration contract', () => {
           const started = await activations.begin({
             type,
             source,
-            ownerObjectId: owner,
+            ownerObjectId: legacyOwner,
             sessionId: `session-${type}`,
             messageId: type === 'scheduled' ? '' : `message-${type}`,
             signal,
@@ -501,7 +723,7 @@ describe('real SQL Server migration contract', () => {
           registry.close(started.grant.turn);
         }
         const migratedRow = await pool.request()
-          .input('owner', sql.UniqueIdentifier, owner)
+          .input('owner', sql.UniqueIdentifier, legacyOwner)
           .query<{ revision: string; state_json: string; content_hash: string }>(
             `SELECT revision, state_json, content_hash
               FROM dbo.pi_situational_state WHERE owner_object_id=@owner;`,
@@ -516,18 +738,506 @@ describe('real SQL Server migration contract', () => {
         expect(migratedState.facts.some(({ source }) => source === 'memory')).toBe(false);
         expect(migratedState.followUps.some(({ id }) => id === 'follow:legacy-memory')).toBe(false);
         await expect(situations.commit({
-          owner, expectedRevision: 0, expectedHash: null, state: situation,
+          owner, expectedRevision: 1, expectedHash: initialized[0].hash, state: situation,
           activation: { ...activation, id: randomUUID() },
+          policyRevision,
+          followUpActions: [],
+          authoritativeRefs: [],
+          observations: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        await proactive.settings.patch({ guidance: 'changed after the situation was read' });
+        await expect(situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: situation,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision,
+          followUpActions: [],
+          authoritativeRefs: [],
+          observations: [],
+        }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        const currentPolicy = proactiveSettingsRevision(await proactive.settings.read());
+        const dueAt = new Date(at.getTime() + 60_000);
+        const followUpState = parsePiSituationState({
+          ...situation,
+          sources: situation.sources.map((entry) => entry.id === 'calendar' ? {
+            ...entry,
+            state: 'fresh',
+            observedAt: at.toISOString(),
+            reason: null,
+            refIds: ['calendar-event:flight'],
+          } : entry),
+          refs: [{
+            id: 'calendar-event:flight',
+            source: 'calendar',
+            identity: 'calendar-event:flight',
+            label: 'Flight',
+            observedAt: at.toISOString(),
+            expiresAt: null,
+            materialHash: 'f'.repeat(64),
+            verifiedAt: at.toISOString(),
+          }],
+          followUps: [{
+            id: 'follow:flight',
+            text: 'Check in.',
+            dueAt: dueAt.toISOString(),
+            refIds: ['calendar-event:flight'],
+          }],
+        });
+        const followUpAuthority = followUpState.refs.map((ref) => ({
+          ...ref,
+          verifiedAt: ref.verifiedAt!,
+          activatedAt: ref.verifiedAt!,
+          invalidatedAt: null,
+          staleReason: null,
+        }));
+        await expect(situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [],
+          authoritativeRefs: [],
+          observations: [],
+        }, signal)).rejects.toMatchObject({ code: 'invalid' });
+        expect((await situations.read(owner, signal))?.revision).toBe(stored.revision);
+        await expect(situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { blob: 'x'.repeat(40_000) },
+              dedupeKey: 'pi-followup:follow:flight:rollback',
+              summary: 'Rollback probe.',
+              detail: {},
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+          authoritativeRefs: followUpAuthority,
+          observations: [{
+            source: 'calendar',
+            state: 'ok',
+            reason: null,
+            observedAt: at.toISOString(),
+            verifiedAt: at.toISOString(),
+          }],
+        }, signal)).rejects.toThrow();
+        const atomic = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{
+            revision: number;
+            authority: number;
+            statuses: number;
+            outbox: number;
+          }>(`SELECT
+            (SELECT CONVERT(int, revision) FROM dbo.pi_situational_state
+              WHERE owner_object_id = @owner) AS revision,
+            (SELECT COUNT(*) FROM dbo.pi_situation_ref_authority WHERE owner_object_id = @owner) AS authority,
+            (SELECT COUNT(*) FROM dbo.proactive_source_status WHERE owner_object_id = @owner) AS statuses,
+            (SELECT COUNT(*) FROM dbo.pi_situation_outbox WHERE owner_object_id = @owner) AS outbox;`);
+        expect(atomic.recordset[0]).toEqual({
+          revision: stored.revision,
+          authority: 0,
+          statuses: 0,
+          outbox: 1,
+        });
+        await situations.recordLookupAuthority(
+          owner,
+          followUpAuthority[0]!,
+          currentPolicy,
+          signal,
+        );
+        const pending = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ active: number; pending: number; statuses: number }>(`
+            SELECT
+              SUM(CASE WHEN activated_at IS NULL THEN 0 ELSE 1 END) AS active,
+              SUM(CASE WHEN activated_at IS NULL AND invalidated_at IS NULL THEN 1 ELSE 0 END) AS pending,
+              (SELECT COUNT(*) FROM dbo.proactive_source_status
+                WHERE owner_object_id = @owner) AS statuses
+            FROM dbo.pi_situation_ref_authority
+            WHERE owner_object_id = @owner;`);
+        expect(pending.recordset[0]).toEqual({ active: 0, pending: 1, statuses: 0 });
+        const pendingRead = await situations.read(owner, signal);
+        expect(pendingRead?.authoritativeRefs).toEqual([
+          expect.objectContaining({
+            id: 'calendar-event:flight',
+            source: 'calendar',
+            verifiedAt: at.toISOString(),
+            materialHash: expect.any(String),
+            activatedAt: null,
+            invalidatedAt: null,
+          }),
+        ]);
+        const patchService = createPiSituationService({
+          owner,
+          store: situations,
+          proactive,
+          sources: [],
+          now: () => at,
+        });
+        patchService.attachEvents(queue);
+        const queuedPatch = await patchService.patch({
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          policyRevision: currentPolicy,
+          patch: {
+            upsertRefs: [followUpState.refs[0]],
+            upsertFollowUps: followUpState.followUps,
+          },
+          activation: { ...activation, id: randomUUID() },
+        }, signal);
+        const queued = queuedPatch.record;
+        const activated = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ active: number; pending: number }>(`SELECT
+            SUM(CASE WHEN activated_at IS NULL THEN 0 ELSE 1 END) AS active,
+            SUM(CASE WHEN activated_at IS NULL THEN 1 ELSE 0 END) AS pending
+          FROM dbo.pi_situation_ref_authority
+          WHERE owner_object_id = @owner AND invalidated_at IS NULL;`);
+        expect(activated.recordset[0]).toEqual({ active: 1, pending: 0 });
+        await expect(situations.commit({
+          owner,
+          expectedRevision: queued.revision,
+          expectedHash: queued.hash,
+          state: situation,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [],
+          authoritativeRefs: [],
+          observations: [{
+            source: 'calendar',
+            state: 'unavailable',
+            reason: 'stale_provider_result',
+            observedAt: null,
+            verifiedAt: new Date(at.getTime() - 1).toISOString(),
+          }],
+        }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        expect((await situations.read(owner, signal))?.revision).toBe(queued.revision);
+        const reconciled = await Promise.all([
+          queue.reconcileSituationOutbox(at, signal),
+          queue.reconcileSituationOutbox(at, signal),
+        ]);
+        expect(reconciled.filter(({ changed }) => changed)).toHaveLength(1);
+        expect(reconciled.every(({ pending }) => !pending)).toBe(true);
+        expect(await queue.nextDueAt()).toEqual(dueAt);
+        const cancelled = await situations.commit({
+          owner,
+          expectedRevision: queued.revision,
+          expectedHash: queued.hash,
+          state: situation,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'cancel',
+            followUpId: 'follow:flight',
+            identity: 'pi-followup:follow:flight',
+          }],
+          authoritativeRefs: [],
+          observations: [],
+        }, signal);
+        await expect(queue.reconcileSituationOutbox(
+          new Date(at.getTime() + 1),
+          signal,
+        )).resolves.toMatchObject({ changed: true, pending: false });
+        expect(await queue.nextDueAt()).toBeNull();
+        expect(cancelled.revision).toBe(4);
+        const reactivated = await situations.commit({
+          owner,
+          expectedRevision: cancelled.revision,
+          expectedHash: cancelled.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { text: 'Check in.', dueAt: dueAt.toISOString() },
+              dedupeKey: 'pi-followup:follow:flight:v1',
+              summary: 'Check in.',
+              detail: { followUpId: 'follow:flight', evidenceSources: ['calendar'] },
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+          authoritativeRefs: followUpAuthority,
+          observations: [],
+        }, signal);
+        await expect(queue.reconcileSituationOutbox(
+          new Date(at.getTime() + 2),
+          signal,
+        )).resolves.toMatchObject({ changed: true, pending: false });
+        expect(await queue.nextDueAt()).toEqual(dueAt);
+        expect(reactivated.revision).toBe(5);
+        const oldGeneration = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ id: string }>(`SELECT id FROM dbo.proactive_events
+            WHERE owner_object_id = @owner AND source = N'followup'
+              AND processed_at IS NULL;`);
+        await proactive.settings.patch({ sources: { calendar: false } });
+        await queue.reconcileSituationOutbox(new Date(), signal);
+        expect(await queue.nextDueAt()).toBeNull();
+        const invalidatedAuthority = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ invalidated_at: Date | null; stale_reason: string | null }>(`
+            SELECT invalidated_at, stale_reason
+            FROM dbo.pi_situation_ref_authority
+            WHERE owner_object_id = @owner AND source_id = N'calendar';`);
+        expect(invalidatedAuthority.recordset[0]).toMatchObject({
+          invalidated_at: expect.any(Date),
+          stale_reason: 'source_disabled',
+        });
+        await proactive.settings.patch({ sources: { calendar: true } });
+        const calendarStatus = (await proactive.sources.list())
+          .find(({ id }) => id === 'calendar')!;
+        const reverifiedAt = new Date(Date.parse(calendarStatus.invalidatedAt!) + 1);
+        const reverifiedState = parsePiSituationState({
+          ...followUpState,
+          refs: followUpState.refs.map((ref) => ({
+            ...ref,
+            verifiedAt: reverifiedAt.toISOString(),
+          })),
+        });
+        const reverifiedAuthority = reverifiedState.refs.map((ref) => ({
+          ...ref,
+          verifiedAt: ref.verifiedAt!,
+          activatedAt: ref.verifiedAt!,
+          invalidatedAt: null,
+          staleReason: null,
+        }));
+        const reenabledPolicy = proactiveSettingsRevision(await proactive.settings.read());
+        const reenabled = await situations.commit({
+          owner,
+          expectedRevision: reactivated.revision,
+          expectedHash: reactivated.hash,
+          state: reverifiedState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: reenabledPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { text: 'Check in.', dueAt: dueAt.toISOString() },
+              dedupeKey: 'pi-followup:follow:flight:v1',
+              summary: 'Check in.',
+              detail: { followUpId: 'follow:flight', evidenceSources: ['calendar'] },
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+          authoritativeRefs: reverifiedAuthority,
+          observations: [{
+            source: 'calendar',
+            state: 'ok',
+            reason: null,
+            observedAt: at.toISOString(),
+            verifiedAt: reverifiedAt.toISOString(),
+          }],
+        }, signal);
+        await expect(queue.reconcileSituationOutbox(reverifiedAt, signal))
+          .resolves.toMatchObject({ pending: false });
+        const newGeneration = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ id: string }>(`SELECT id FROM dbo.proactive_events
+            WHERE owner_object_id = @owner AND source = N'followup'
+              AND processed_at IS NULL;`);
+        expect(newGeneration.recordset[0]?.id).not.toBe(oldGeneration.recordset[0]?.id);
+        expect(reenabled.state.refs[0]).toMatchObject({
+          observedAt: at.toISOString(),
+          verifiedAt: reverifiedAt.toISOString(),
+        });
+        expect((await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ receipts: number; stale: number }>(`SELECT
+            COUNT(*) AS receipts,
+            SUM(CASE WHEN invalidated_at IS NULL THEN 0 ELSE 1 END) AS stale
+          FROM dbo.pi_situation_ref_authority
+          WHERE owner_object_id = @owner AND source_id = N'calendar';`))
+          .recordset[0]).toEqual({ receipts: 2, stale: 1 });
+        expect((await pool.request()
+          .query<{ pending: number }>(`SELECT COUNT(*) AS pending
+            FROM dbo.pi_situation_outbox
+            WHERE applied_at IS NULL;`))
+          .recordset[0]?.pending).toBe(0);
+        const lookupOwner = randomUUID();
+        const lookupProactive = createProactiveStore(pool, lookupOwner);
+        const lookupQueue = createProactiveEventStore(pool, lookupOwner);
+        const lookupService = createPiSituationService({
+          owner: lookupOwner,
+          store: situations,
+          proactive: lookupProactive,
+          sources: [],
+          now: () => at,
+        });
+        lookupService.attachEvents(lookupQueue);
+        const lookupInitial = await situations.initialize(lookupOwner, situation, at, signal);
+        const lookupPolicy = proactiveSettingsRevision(await lookupProactive.settings.read());
+        const firstLookup = {
+          id: 'calendar:ambiguous',
+          source: 'calendar' as const,
+          identity: 'calendar-event:ambiguous',
+          label: 'First',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+          materialHash: 'a'.repeat(64),
+          verifiedAt: at.toISOString(),
+          activatedAt: null,
+          invalidatedAt: null,
+          staleReason: null,
+        };
+        await situations.recordLookupAuthority(
+          lookupOwner,
+          firstLookup,
+          lookupPolicy,
+          signal,
+        );
+        const beforeFirstPatch = await situations.read(lookupOwner, signal);
+        expect(beforeFirstPatch?.authoritativeRefs).toEqual([
+          expect.objectContaining({
+            id: firstLookup.id,
+            materialHash: firstLookup.materialHash,
+            activatedAt: null,
+          }),
+        ]);
+        const firstRef = {
+          id: firstLookup.id,
+          source: firstLookup.source,
+          identity: firstLookup.identity,
+          label: firstLookup.label,
+          observedAt: firstLookup.observedAt,
+          expiresAt: firstLookup.expiresAt,
+          materialHash: firstLookup.materialHash,
+          verifiedAt: firstLookup.verifiedAt,
+        };
+        const firstPatch = await lookupService.patch({
+          expectedRevision: lookupInitial.revision,
+          expectedHash: lookupInitial.hash,
+          policyRevision: lookupPolicy,
+          patch: { upsertRefs: [firstRef] },
+          activation: { ...activation, id: randomUUID() },
+        }, signal);
+        await lookupService.synchronizeFollowUps(signal);
+        const secondVerifiedAt = new Date(at.getTime() + 1).toISOString();
+        const secondLookup = {
+          ...firstLookup,
+          label: 'Second',
+          materialHash: 'b'.repeat(64),
+          verifiedAt: secondVerifiedAt,
+        };
+        const thirdLookup = {
+          ...firstLookup,
+          label: 'Third',
+          materialHash: 'c'.repeat(64),
+          verifiedAt: secondVerifiedAt,
+        };
+        await situations.recordLookupAuthority(
+          lookupOwner,
+          secondLookup,
+          lookupPolicy,
+          signal,
+        );
+        await situations.recordLookupAuthority(
+          lookupOwner,
+          thirdLookup,
+          lookupPolicy,
+          signal,
+        );
+        const beforeExactPatch = await situations.read(lookupOwner, signal);
+        expect(beforeExactPatch?.authoritativeRefs).toHaveLength(3);
+        expect(beforeExactPatch?.authoritativeRefs.filter(({ activatedAt }) =>
+          activatedAt === null)).toHaveLength(2);
+        const secondRef = {
+          id: secondLookup.id,
+          source: secondLookup.source,
+          identity: secondLookup.identity,
+          label: secondLookup.label,
+          observedAt: secondLookup.observedAt,
+          expiresAt: secondLookup.expiresAt,
+          materialHash: secondLookup.materialHash,
+          verifiedAt: secondLookup.verifiedAt,
+        };
+        const exactPatch = await lookupService.patch({
+          expectedRevision: firstPatch.record.revision,
+          expectedHash: firstPatch.record.hash,
+          policyRevision: lookupPolicy,
+          patch: { upsertRefs: [secondRef] },
+          activation: { ...activation, id: randomUUID() },
+        }, signal);
+        await lookupService.synchronizeFollowUps(signal);
+        expect(exactPatch.record.state.refs[0]).toMatchObject({
+          id: secondLookup.id,
+          materialHash: secondLookup.materialHash,
+          verifiedAt: secondLookup.verifiedAt,
+          label: 'Second',
+        });
+        const exactRead = await situations.read(lookupOwner, signal);
+        expect(exactRead?.authoritativeRefs.find(({ materialHash }) =>
+          materialHash === secondLookup.materialHash)).toMatchObject({
+          activatedAt: expect.any(String),
+          invalidatedAt: null,
+        });
+        expect(exactRead?.authoritativeRefs.find(({ materialHash }) =>
+          materialHash === firstLookup.materialHash)).toMatchObject({
+          activatedAt: expect.any(String),
+          invalidatedAt: expect.any(String),
+        });
+        expect(exactRead?.authoritativeRefs.find(({ materialHash }) =>
+          materialHash === thirdLookup.materialHash)).toMatchObject({
+          activatedAt: null,
+          invalidatedAt: null,
+        });
+        expect((await pool.request()
+          .input('owner', sql.UniqueIdentifier, lookupOwner)
+          .query<{ pending: number }>(`SELECT COUNT(*) AS pending
+            FROM dbo.pi_situation_outbox
+            WHERE owner_object_id = @owner AND applied_at IS NULL;`))
+          .recordset[0]?.pending).toBe(0);
       } finally {
+        await pool.request().batch('DELETE FROM dbo.pi_situation_outbox;');
         await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
-        await pool.request().batch(situationDown);
-        await pool.request().batch(watchDown);
-        await pool.request().batch(brainDown);
-        await pool.request().batch(down);
-        await pool.request().batch(eventsDown);
-        await pool.request().batch(foundationDown);
-        await pool.request().batch(proactiveDown);
+        await pool.request().batch(
+          'DELETE FROM dbo.proactive_events; DELETE FROM dbo.proactive_event_batches; ' +
+          'DELETE FROM dbo.pi_message; DELETE FROM dbo.proactive_spend; ' +
+          'DELETE FROM dbo.proactive_source_status; DELETE FROM dbo.proactive_settings;',
+        );
+        const rollback = async (name: string, script: string) => {
+          try { await pool.request().batch(script); }
+          catch (error) { throw new Error(`Database rollback ${name} failed`, { cause: error }); }
+        };
+        await pool.request().batch('DELETE FROM dbo.pi_situation_ref_authority;');
+        await rollback('0101', pendingAuthorityDown);
+        await rollback('0100', generationDown);
+        await rollback('0099', reviewDown);
+        await rollback('0098', outboxDown);
+        await rollback('0097', integrityDown);
+        await rollback('0090', situationDown);
+        await rollback('watch', watchDown);
+        await rollback('brain', brainDown);
+        await rollback('core PI', down);
+        await rollback('events', eventsDown);
+        await rollback('preferences', preferencesDown);
+        await rollback('foundation', foundationDown);
+        await rollback('proactive', proactiveDown);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_watch_look', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_message', N'U') AS id")).recordset).toEqual([{ id: null }]);

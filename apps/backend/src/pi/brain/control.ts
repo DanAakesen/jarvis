@@ -66,7 +66,7 @@ export function createBrainControl(options: {
       options.proactive.spend.monthTotal(monthKey(now)),
       options.store.spendSince(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), brainTurnKinds, signal),
       options.store.lastTurn(brainTurnKinds, signal),
-      options.store.messagesSince(copenhagenDayStart(now), signal),
+      options.store.messagesSince(copenhagenDayStart(now), signal, options.owner),
       options.situation.read(signal),
       brain ? brain.status() : Promise.resolve({
         used: 0, allowed: 12, remaining: 12, lastAt: null, lastActivationType: null,

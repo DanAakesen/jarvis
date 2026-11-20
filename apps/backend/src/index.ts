@@ -1060,6 +1060,7 @@ try {
     logger.info({ runId: null, durationMs: 0, reason: 'vault_push_planner_unconfigured' },
       'proactive.reminder_plan');
   };
+  let vaultWatchRefreshHandler = () => {};
   const githubWebhookModule = createGithubWebhookModule({
     deliveryStore: webhookDeliveryStore,
     getSecret: getWebhookSecret,
@@ -1094,6 +1095,7 @@ try {
         }
         try {
           vaultPushReminderHandler();
+          vaultWatchRefreshHandler();
         } catch {
           logger.warn({ runId: null, reason: 'vault_push_trigger_failed' }, 'proactive.reminder_plan');
         }
@@ -1179,12 +1181,18 @@ try {
   let brainHandle: Brain | undefined;
   const brainComms = piGateway && piStore && conversationStore && piArea
     ? createBrainComms({
-      conversations: conversationStore, store: piStore, ownerObjectId: config.auth.ownerObjectId,
+      conversations: conversationStore, ownerObjectId: config.auth.ownerObjectId,
       pushEnabled: notifyReply !== undefined,
       push: (message) => notifyReply?.(message), announce: () => announceBrainMessage(), now: () => new Date(),
     }) : undefined;
   // Standing watches: free-text notes in PI's corner of the vault, woken by the same ticker, listed and stopped from chat.
   const watches = piArea && piStore ? createWatches({ area: piArea, store: piStore, now: () => new Date(), changed: () => brainHandle?.wake() }) : undefined;
+  vaultWatchRefreshHandler = () => {
+    if (!watches) return;
+    void watches.refresh(AbortSignal.timeout(20_000)).catch(() => {
+      logger.warn({ reason: 'watch_index_refresh_failed' }, 'pi.watches');
+    });
+  };
   piSources = buildSourceRegistry({
     ownerObjectId: config.auth.ownerObjectId,
     healthEnabled: config.healthEnabled === true,
@@ -1215,6 +1223,7 @@ try {
         proactive: proactiveStore,
         area: piArea,
         inbox: inboxStore,
+        ...(piSituationService ? { situation: piSituationService } : {}),
         now: () => new Date(),
       }) : []),
       ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
@@ -1635,6 +1644,7 @@ try {
     ...(proactiveStore && database ? { proactiveConversationContext: createProactiveConversationContext(
       config.auth.ownerObjectId, proactiveStore.items,
       createSqlConversationSelectionStore(database.pool, config.auth.ownerObjectId),
+      piStore,
     ) } : {}),
     ...(ownerInteractions ? { ownerInteractions } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
@@ -1715,6 +1725,7 @@ try {
     })()
     : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
+    ...(piSituationService ? { situation: piSituationService } : {}),
     ...(brainControl ? { background: brainControl } : {}),
     ...(inboxNudgeHook ? { onFindingsStored: [inboxNudgeHook] } : {}),
     healthEnabled: config.healthEnabled === true,

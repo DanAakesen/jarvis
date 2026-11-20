@@ -7,10 +7,10 @@ import type { JarvisTool } from '../../core/tool-registry.js';
 import { createPiArea } from '../area.js';
 import type { RemoteMcpBridge } from '../remote-mcp.js';
 import { createPiRoutes } from '../routes.js';
-import { createMemoryPiStore } from '../store.js';
+import type { PiSituationService } from '../situation.js';
 import { createPiTurnRegistry } from '../turns.js';
 import { memoryConversations, memoryVault } from './brain.testkit.js';
-import { createBrainComms } from './comms.js';
+import { BrainCommsRefusal, createBrainComms } from './comms.js';
 import { createBrainTools } from './tools.js';
 import { createMemoryProactiveStore } from '../../proactive/store.js';
 
@@ -36,13 +36,38 @@ function setup(...bridges: RemoteMcpBridge[]) {
   const vault = memoryVault();
   const conversations = memoryConversations();
   const pushes: unknown[] = [];
-  const store = createMemoryPiStore();
   const proactive = createMemoryProactiveStore(config.auth.ownerObjectId);
-  const comms = createBrainComms({ conversations: conversations.store, store, ownerObjectId: config.auth.ownerObjectId, push: (m) => pushes.push(m), announce: () => {}, now: () => new Date('2026-11-16T10:00:00Z') });
+  const emptySituation = (): Awaited<ReturnType<PiSituationService['read']>> => ({
+    state: null,
+    revision: 1,
+    hash: 'a'.repeat(64),
+    policyRevision: 'b'.repeat(64),
+    staleSources: [],
+    missingSources: [],
+    disabledSources: [],
+    freshSources: [],
+    asOf: null,
+    updatedAt: null,
+    lastActivation: null,
+  });
+  let currentSituation = emptySituation();
+  let nextSituation: ReturnType<typeof emptySituation> | undefined;
+  const situation = {
+    async read() {
+      const value = currentSituation;
+      if (nextSituation) {
+        currentSituation = nextSituation;
+        nextSituation = undefined;
+      }
+      return value;
+    },
+  } as never;
+  const comms = createBrainComms({ conversations: conversations.store, ownerObjectId: config.auth.ownerObjectId, push: (m) => pushes.push(m), announce: () => {}, now: () => new Date('2026-11-16T10:00:00Z') });
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: probes, registerRoutes: async () => {} },
       { id: 'pi', tools: createBrainTools({
-        registry, comms, proactive, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z'),
+        registry, comms, proactive, situation,
+        area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z'),
       }),
         registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges }) }],
     auth: async (token) => {
@@ -66,9 +91,52 @@ function setup(...bridges: RemoteMcpBridge[]) {
     const text = JSON.parse(line.slice(5)).result.content[0].text as string;
     return JSON.parse(text) as { outcome: string; result: Record<string, unknown> };
   }
-  const wake = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', brain: { runId: 'run-1', sent: [], wrote: [], looked: [] }, signal: live() });
+  const wake = () => registry.open({
+    ownerObjectId: config.auth.ownerObjectId,
+    sessionId: '',
+    messageId: '',
+    brain: {
+      runId: 'run-1',
+      sent: [],
+      wrote: [],
+      looked: [],
+      evidence: [
+        {
+          source: 'factory',
+          ref: 'github:workflow_run:42',
+          identity: 'github:workflow_run:42',
+          label: 'Deploy 42',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        },
+        {
+          source: 'mail',
+          ref: 'gmail-message:9',
+          identity: 'gmail-message:9',
+          label: 'Work travel mail',
+          observedAt: '2026-11-16T09:00:00.000Z',
+          verifiedAt: '2026-11-16T09:01:00.000Z',
+        },
+      ],
+    },
+    signal: live(),
+  });
   const chat = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '41', signal: live() });
-  return { app, registry, tool, wake, chat, vault, pushes, conversations, proactive };
+  return {
+    app, registry, tool, wake, chat, vault, pushes, conversations, proactive,
+    setSituationRefs(
+      value: Array<Record<string, unknown>>,
+      then: Array<Record<string, unknown>> = value,
+    ) {
+      const view = (refs: Array<Record<string, unknown>>) => ({
+        ...emptySituation(),
+        state: refs.length > 0 ? { refs, followUps: [] } : null,
+      }) as Awaited<ReturnType<PiSituationService['read']>>;
+      currentSituation = view(value);
+      nextSituation = view(then);
+    },
+    currentMaterial: () => currentSituation.state?.refs[0]?.materialHash ?? null,
+  };
 }
 
 describe('a brain wake over the Jarvis MCP server', () => {
@@ -114,6 +182,11 @@ describe('a brain wake over the Jarvis MCP server', () => {
         category: 'status',
         suggestionScope: 'unknown',
         evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory', ref: 'github:workflow_run:42', identity: 'github:workflow_run:42',
+          label: 'Deploy 42', observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
       },
     });
     expect(sent.outcome).toBe('ok');
@@ -139,9 +212,215 @@ describe('a brain wake over the Jarvis MCP server', () => {
         category: 'status',
         suggestionScope: 'work',
         evidenceSources: ['mail'],
+        evidence: [{
+          source: 'mail', ref: 'gmail-message:9', identity: 'gmail-message:9',
+          label: 'Work travel mail', observedAt: '2026-11-16T09:00:00.000Z',
+          verifiedAt: '2026-11-16T09:01:00.000Z',
+        }],
       },
     });
     expect(refused).toMatchObject({ outcome: 'refused' });
+    expect(pushes).toEqual([]);
+  });
+
+  it('refuses fabricated evidence that is not present in the wake authority', async () => {
+    const { tool, wake, pushes } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The unrelated deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:999',
+          identity: 'github:workflow_run:999',
+          label: 'Invented deploy',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('does not match') },
+    });
+    expect(pushes).toEqual([]);
+  });
+
+  it('stores canonical server evidence instead of model-authored labels', async () => {
+    const { tool, wake, conversations } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const sent = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:42',
+          identity: 'github:workflow_run:42',
+          label: 'A model-written label with invented detail',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(sent.outcome).toBe('ok');
+    expect([...conversations.proactiveReceipts.values()][0]?.evidence).toEqual([{
+      source: 'factory',
+      ref: 'github:workflow_run:42',
+      identity: 'github:workflow_run:42',
+      label: 'Deploy 42',
+      observedAt: '2026-11-16T09:58:00.000Z',
+      verifiedAt: '2026-11-16T09:59:00.000Z',
+      origin: 'event',
+      materialHash: null,
+    }]);
+  });
+
+  it('refuses wake evidence that predates a source disable epoch even after re-enable', async () => {
+    const { tool, wake, proactive, pushes } = setup();
+    await proactive.settings.patch({ sources: { factory: false } });
+    await proactive.settings.patch({ sources: { factory: true } });
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The old deploy event failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:42',
+          identity: 'github:workflow_run:42',
+          label: 'Deploy 42',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('does not match') },
+    });
+    expect(pushes).toEqual([]);
+  });
+
+  it('refuses a mid-wake situation generation change at the atomic Chat receipt boundary', async () => {
+    const {
+      tool,
+      wake,
+      pushes,
+      conversations,
+      setSituationRefs,
+      currentMaterial,
+    } = setup();
+    const oldRef = {
+      id: 'calendar:flight',
+      source: 'calendar',
+      identity: 'calendar-event:flight',
+      label: 'Flight',
+      observedAt: '2026-11-16T09:00:00.000Z',
+      verifiedAt: '2026-11-16T09:58:00.000Z',
+      materialHash: 'a'.repeat(64),
+    };
+    const newRef = {
+      ...oldRef,
+      verifiedAt: '2026-11-16T09:59:00.000Z',
+      materialHash: 'b'.repeat(64),
+    };
+    setSituationRefs([oldRef], [newRef]);
+    const store = conversations.store as typeof conversations.store & {
+      addProactiveMessage: NonNullable<typeof conversations.store.addProactiveMessage>;
+    };
+    const addProactiveMessage = store.addProactiveMessage;
+    store.addProactiveMessage = async (input) => {
+      const situationEvidence = input.evidence.find(({ origin }) => origin === 'situation');
+      if (situationEvidence?.materialHash !== currentMaterial()) {
+        throw new BrainCommsRefusal(
+          'The situation evidence generation changed before delivery. Nothing was sent.',
+        );
+      }
+      return addProactiveMessage(input);
+    };
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The old flight generation changed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['calendar'],
+        evidence: [{
+          source: 'calendar',
+          ref: oldRef.id,
+          identity: oldRef.identity,
+          label: 'Invented label is canonicalised',
+          observedAt: oldRef.observedAt,
+          verifiedAt: oldRef.verifiedAt,
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('generation changed') },
+    });
+    expect(pushes).toEqual([]);
+    expect(conversations.proactiveReceipts.size).toBe(0);
+  });
+
+  it.each([
+    {
+      ref: 'github:workflow_run:42',
+      identity: 'github:workflow_run:999',
+    },
+    {
+      ref: 'github:workflow_run:999',
+      identity: 'github:workflow_run:42',
+    },
+  ])('refuses evidence that combines a known identifier with a fabricated field: $ref / $identity', async ({
+    ref,
+    identity,
+  }) => {
+    const { tool, wake, pushes } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The unrelated deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref,
+          identity,
+          label: 'Deploy 42',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('does not match') },
+    });
     expect(pushes).toEqual([]);
   });
 
@@ -230,7 +509,17 @@ describe('chat and the brain stay apart', () => {
     expect(response.statusCode).toBe(403);
     const message = await app.inject({
       method: 'POST', url: '/tools/message_dan',
-      payload: { text: 'hi', category: 'status', suggestionScope: 'unknown', evidenceSources: ['factory'] },
+      payload: {
+        text: 'hi',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory', ref: 'factory:test', identity: 'factory:test',
+          label: 'Factory event', observedAt: '2026-11-16T10:00:00.000Z',
+          verifiedAt: '2026-11-16T10:00:00.000Z',
+        }],
+      },
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
     });
     expect(message.statusCode).toBe(403);

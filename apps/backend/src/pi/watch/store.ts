@@ -29,6 +29,7 @@ function unavailable(error: unknown): never {
   if (error instanceof WatchError) throw error;
   if (error instanceof PiAreaError) {
     if (error.code === 'unavailable') throw new WatchError('unavailable', error.message);
+    if (error.code === 'conflict') throw new WatchError('conflict', error.message);
     throw new WatchError(error.code === 'too_large' ? 'invalid' : 'refused', error.message);
   }
   if (error instanceof Error && error.name === 'AbortError') throw error;
@@ -50,30 +51,50 @@ export function createWatches(options: {
   const { area, store, now } = options;
   const changed = () => { try { options.changed?.(); } catch { /* A waker hint cannot undo a saved watch. */ } };
   const open = new Map<string, ParsedWatch>();
+  const revisions = new Map<string, string>();
   let loaded = false;
-  let loading: Promise<void> | undefined;
+  let loading: Promise<boolean> | undefined;
 
-  async function load(signal: AbortSignal): Promise<void> {
+  async function load(signal: AbortSignal): Promise<boolean> {
     const listed = await area.list('Watches', signal);
+    const before = loaded ? JSON.stringify([...revisions.entries()].sort()) : null;
     const found = new Map<string, ParsedWatch>();
+    const currentRevisions = new Map(listed.map(({ path, sha }) => [path, sha]));
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(readConcurrency, listed.length) }, async () => {
       while (next < listed.length) {
         const entry = listed[next]!;
         next += 1;
+        const name = entry.path.split('/').at(-1)!.replace(/\.md$/u, '');
+        const prior = open.get(name);
+        if (prior && revisions.get(entry.path) === entry.sha) {
+          found.set(name, prior);
+          continue;
+        }
         const file = await area.read(entry.path, signal);
-        if (file) found.set(entry.path.split('/').at(-1)!.replace(/\.md$/u, ''), parseWatch(entry.path, file.content));
+        if (file) {
+          found.set(name, parseWatch(entry.path, file.content));
+          currentRevisions.set(entry.path, file.sha);
+        } else {
+          currentRevisions.delete(entry.path);
+        }
       }
     }));
     open.clear();
     for (const [name, watch] of found) open.set(name, watch);
+    revisions.clear();
+    for (const [path, revision] of currentRevisions) revisions.set(path, revision);
     loaded = true;
+    const after = JSON.stringify([...revisions.entries()].sort());
+    return before === null ? currentRevisions.size > 0 : before !== after;
   }
 
-  async function ensureLoaded(signal: AbortSignal): Promise<void> {
-    if (loaded) return;
+  async function refresh(signal: AbortSignal, notify = false): Promise<void> {
     loading ??= load(signal).finally(() => { loading = undefined; });
-    try { await loading; } catch (error) { unavailable(error); }
+    try {
+      const material = await loading;
+      if (notify && material) changed();
+    } catch (error) { unavailable(error); }
   }
 
   function requireWatch(name: string): ParsedWatch {
@@ -87,10 +108,34 @@ export function createWatches(options: {
     if (!Number.isFinite(value.getTime())) throw new WatchError('invalid', 'The next look must be a valid time.');
   }
 
-  async function writeBack(name: string, content: string, signal: AbortSignal): Promise<void> {
-    try { await area.replace(watchPath(name), content.trimEnd(), signal, `PI: watch ${name}`); } catch (error) { unavailable(error); }
-    open.set(name, parseWatch(watchPath(name), content));
-    changed();
+  async function transform(
+    name: string,
+    signal: AbortSignal,
+    changeContent: (current: string) => string | null,
+  ): Promise<boolean> {
+    let changedOnDisk = false;
+    try {
+      const outcome = await area.transform(
+        watchPath(name),
+        signal,
+        `PI: watch ${name}`,
+        (current) => {
+          if (current === null) throw new WatchError('not_found', 'There is no open watch with that name. Refresh the watches first.');
+          return changeContent(current);
+        },
+      );
+      changedOnDisk = outcome.changed;
+      const latest = await area.read(watchPath(name), signal);
+      if (latest) {
+        open.set(name, parseWatch(watchPath(name), latest.content));
+        revisions.set(watchPath(name), latest.sha);
+      } else {
+        open.delete(name);
+        revisions.delete(watchPath(name));
+      }
+    } catch (error) { unavailable(error); }
+    if (changedOnDisk) changed();
+    return changedOnDisk;
   }
 
   type Activity = Awaited<ReturnType<typeof store.watchActivity>>;
@@ -115,53 +160,74 @@ export function createWatches(options: {
 
   return {
     async list(signal: AbortSignal): Promise<WatchView[]> {
-      await ensureLoaded(signal);
+      await refresh(signal, true);
       const seen = await activity(signal);
       return [...open.values()].map((watch) => view(watch, seen));
     },
 
     async create(input: { title: string; text: string; quote?: string | undefined; nextLook?: Date | null | undefined; source?: string | undefined }, signal: AbortSignal): Promise<{ name: string }> {
-      await ensureLoaded(signal);
+      await refresh(signal, true);
       checkNextLook(input.nextLook);
       const base = watchFileName(input.title);
-      let name = base;
-      for (let copy = 2; open.has(name) || await area.read(watchPath(name), signal).catch(unavailable); copy += 1) name = `${base} ${copy}`;
       const content = composeWatch({ ...input, at: now() });
-      try { await area.replace(watchPath(name), content.trimEnd(), signal, `PI: open watch ${name}`); } catch (error) { unavailable(error); }
-      open.set(name, parseWatch(watchPath(name), content));
-      changed();
-      return { name };
+      for (let copy = 1; copy <= 10_000; copy += 1) {
+        const name = copy === 1 ? base : `${base} ${copy}`;
+        if (open.has(name)) continue;
+        try {
+          await area.create(
+            watchPath(name), content, signal, `PI: open watch ${name}`,
+          );
+          const latest = await area.read(watchPath(name), signal);
+          if (!latest) {
+            throw new PiAreaError(
+              'unavailable',
+              'The watch was created, but its exact saved revision could not be read. Refresh the watches before continuing.',
+            );
+          }
+          open.set(name, parseWatch(watchPath(name), latest.content));
+          revisions.set(watchPath(name), latest.sha);
+          changed();
+          return { name };
+        } catch (error) {
+          if (error instanceof PiAreaError && error.code === 'conflict') continue;
+          unavailable(error);
+        }
+      }
+      throw new WatchError('conflict', 'A free watch name could not be reserved. Refresh and try again.');
     },
 
     /** Dan's change, in his words, added to the trail; the next look may change with it. A change of substance needs his message. */
     async update(input: { name: string; change: string; nextLook?: Date | null | undefined }, signal: AbortSignal): Promise<void> {
-      await ensureLoaded(signal);
-      const watch = requireWatch(input.name);
+      await refresh(signal, true);
+      requireWatch(input.name);
       if (input.nextLook !== undefined) checkNextLook(input.nextLook);
-      let content = appendTrailLine(watch.body, `changed: ${input.change}`, now());
-      content = withNextLook(content, input.nextLook === undefined ? watch.nextLook : input.nextLook);
-      await writeBack(input.name, content, signal);
+      await transform(input.name, signal, (current) => {
+        const latest = parseWatch(watchPath(input.name), current);
+        const changed = appendTrailLine(current, `changed: ${input.change}`, now());
+        return withNextLook(changed, input.nextLook === undefined ? latest.nextLook : input.nextLook!);
+      });
     },
 
     /** One look, recorded by a wake: what it found, and when to look next (or `null` for events only). */
     async look(input: { name: string; result: string; nextLook: Date | null }, run: PiBrainRun, signal: AbortSignal): Promise<void> {
-      await ensureLoaded(signal);
-      const watch = requireWatch(input.name);
+      await refresh(signal, true);
+      requireWatch(input.name);
       checkNextLook(input.nextLook);
+      if (run.looked.includes(input.name)) return;
       const at = now();
       // The ledger first: a look that cannot be counted must not be reported as recorded.
       try { await store.recordLook(input.name, run.runId, at, signal); } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw error;
         throw new WatchError('unavailable', 'The look could not be counted, so nothing was recorded. Try again.');
       }
-      const content = withNextLook(appendTrailLine(watch.body, `looked: ${input.result}`, at), input.nextLook);
-      await writeBack(input.name, content, signal);
+      await transform(input.name, signal, (current) =>
+        withNextLook(appendTrailLine(current, `looked: ${input.result}`, at), input.nextLook));
       run.looked.push(input.name);
     },
 
     /** Ends a watch (Dan's word or its own stop condition): the note moves to `PI/Watches/Closed` with a trail line. */
     async stop(input: { name: string; reason: string }, signal: AbortSignal): Promise<{ closedAs: string }> {
-      await ensureLoaded(signal);
+      await refresh(signal, true);
       const watch = requireWatch(input.name);
       let target = input.name;
       for (let copy = 2; await area.read(closedPath(target), signal).catch(unavailable); copy += 1) target = `${input.name} ${copy}`;
@@ -172,13 +238,14 @@ export function createWatches(options: {
         });
       } catch (error) { unavailable(error); }
       open.delete(watch.name);
+      revisions.delete(watchPath(watch.name));
       changed();
       return { closedAs: target };
     },
 
     /** The brain's waker: the soonest next look among open watches. Throws when the vault cannot be read, so the caller retries. */
     async nextDueAt(signal: AbortSignal): Promise<Date | null> {
-      await ensureLoaded(signal);
+      await refresh(signal, true);
       const times = [...open.values()].flatMap((watch) => watch.nextLook ? [watch.nextLook.getTime()] : []);
       return times.length === 0 ? null : new Date(Math.min(...times));
     },
@@ -189,7 +256,7 @@ export function createWatches(options: {
      * labelled as data.
      */
     async sections(at: Date, signal: AbortSignal): Promise<{ sections: string[]; lines: string[]; due: string[] }> {
-      await ensureLoaded(signal);
+      await refresh(signal, true);
       const seen = await activity(signal);
       const views = [...open.values()].map((watch) => view(watch, seen));
       if (views.length === 0) return { sections: [], lines: [], due: [] };
@@ -213,15 +280,27 @@ export function createWatches(options: {
      * brain again and again.
      */
     async afterRun(input: { runId: string; costDkk: number; events: number; run: PiBrainRun; due: readonly string[] }, signal: AbortSignal): Promise<void> {
+      await refresh(signal, true);
       const looks = input.run.looked.length;
       if (looks > 0) await store.allocateRunCost(input.runId, Number((input.costDkk / (input.events + looks)).toFixed(6)), signal);
       // Only a watch that is still due: one that was looked at has already moved its next look.
       const skipped = input.due.filter((name) => !input.run.looked.includes(name) && (open.get(name)?.nextLook ?? null) !== null && open.get(name)!.nextLook! <= now());
       const retryAt = new Date(now().getTime() + 60 * 60_000);
       for (const name of skipped) {
-        const watch = open.get(name)!;
-        await writeBack(name, withNextLook(appendTrailLine(watch.body, 'no look was recorded when it came due; trying again in an hour', now()), retryAt), signal);
+        await transform(name, signal, (current) => {
+          const latest = parseWatch(watchPath(name), current);
+          if (latest.nextLook === null || latest.nextLook > now()) return null;
+          return withNextLook(
+            appendTrailLine(current, 'no look was recorded when it came due; trying again in an hour', now()),
+            retryAt,
+          );
+        });
       }
+    },
+
+    /** Rebuilds the index after a vault change webhook, preserving unchanged parsed notes. */
+    async refresh(signal: AbortSignal): Promise<void> {
+      await refresh(signal, true);
     },
 
     /** Names of the open watches, for the decision log and tests. */

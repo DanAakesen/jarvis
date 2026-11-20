@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
-import type { PiActivationType, PiSituationCommit, PiSituationService, PiSituationView } from './situation.js';
+import type {
+  PiActivationType, PiSituationActivation, PiSituationService, PiSituationView,
+} from './situation.js';
+import { sourceIds, type SourceId } from '../proactive/types.js';
 
 export interface PiActivationStart {
   readonly type: PiActivationType;
@@ -28,7 +31,7 @@ export interface PiActivationService {
 }
 
 const activationId = (value: string | undefined): string => value ?? randomUUID();
-const metadata = (grant: PiTurnGrant): PiSituationCommit['activation'] => {
+const metadata = (grant: PiTurnGrant): PiSituationActivation => {
   const value = grant.activation;
   if (!value) throw new Error('PI activation metadata is missing');
   return {
@@ -84,10 +87,16 @@ export function createPiActivationService(options: {
       const activation = metadata(grant);
       const baseline = grant.activation;
       if (!baseline) return;
+      const source = baseline.type === 'event'
+        ? (sourceIds as readonly string[]).includes(activation.source ?? '')
+          ? activation.source as SourceId
+          : activation.source === 'github' || activation.source === 'worker' ? 'factory' as const : undefined
+        : undefined;
       await options.situation.markFailed({
         activation: { ...activation, at },
         expectedRevision: baseline.stateRevision,
         expectedHash: baseline.stateHash,
+        ...(source ? { sources: [source] } : {}),
       }, signal);
     },
   };

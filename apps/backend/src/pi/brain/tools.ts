@@ -19,6 +19,9 @@ import {
   proactiveEvidenceSourcesAllowed,
 } from '../../proactive/policy.js';
 import type { ProactiveStore } from '../../proactive/store.js';
+import type { PiSituationService } from '../situation.js';
+import type { PiProactiveEvidence } from '../store.js';
+import { shouldRedact } from '../../vault/index.js';
 
 const noteName = /^[^/\\:*?"<>|#%^[\]\p{Cc}\p{Cf}.][^/\\:*?"<>|#%^[\]\p{Cc}\p{Cf}]{0,95}$/u;
 
@@ -57,9 +60,10 @@ function translate(error: unknown): never {
 export function createBrainTools(options: {
   readonly registry: PiTurnRegistry;
   readonly comms: BrainComms;
-  readonly proactive: Pick<ProactiveStore, 'settings'>;
+  readonly proactive: Pick<ProactiveStore, 'settings' | 'sources'>;
   readonly area?: PiAreaStore | undefined;
   readonly inbox?: Pick<InboxStore, 'find' | 'replace'> | undefined;
+  readonly situation?: PiSituationService | undefined;
   readonly now: () => Date;
 }): JarvisTool[] {
   const { registry, comms } = options;
@@ -69,6 +73,7 @@ export function createBrainTools(options: {
       'Tell Dan something, as a chat message from Jarvis that always pushes to his phone and Watch. Only for a background wake; in a chat turn I answer in the reply instead.',
       `Send it only when it is worth interrupting him: something he would want to know now or soon, a decision he has to make, or a result he asked to be kept updated on. Say it in his language, plainly and briefly (at most ${MAX_BRAIN_MESSAGE_CHARACTERS} characters), with what, why it matters and what he can do. Do not repeat what he was already told, and do not send greetings or status noise.`,
       'Name the one category and Personal/Work/unknown suggestion scope, and list every Proactive source used (GitHub and Worker evidence use factory). The server enforces the current Proactive categories, scope and source switches before delivery; declare Travel as a related category when the message contains travel or booking context.',
+      'Evidence is required. For a wake event, use the event ID from the wake as ref, its source identity from detail when available, and the printed observed and verified instants. For a source lookup, use the exact current situation ref, identity, original observation time and provider verification time. The server refuses any evidence tuple it did not provide for this wake or current state.',
       'There is a daily limit and exact repeats are refused; the result says so. Report success only from the result.',
     ].join(' '),
     execution: { defaultEffect: 'action' },
@@ -86,8 +91,32 @@ export function createBrainTools(options: {
           maxItems: 4,
           uniqueItems: true,
         },
+        evidence: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 8,
+          items: {
+            type: 'object',
+            properties: {
+              source: { enum: [...sourceIds] },
+              ref: { anyOf: [{ type: 'string', minLength: 1, maxLength: 160 }, { type: 'null' }] },
+              identity: { anyOf: [{ type: 'string', minLength: 1, maxLength: 240 }, { type: 'null' }] },
+              label: { type: 'string', minLength: 1, maxLength: 160 },
+              observedAt: { anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] },
+              verifiedAt: { type: 'string', format: 'date-time' },
+            },
+            required: ['source', 'ref', 'identity', 'label', 'observedAt', 'verifiedAt'],
+            additionalProperties: false,
+          },
+        },
+        followUpIds: {
+          type: 'array',
+          maxItems: 8,
+          uniqueItems: true,
+          items: { type: 'string', minLength: 1, maxLength: 120, pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]*$' },
+        },
       },
-      required: ['text', 'category', 'suggestionScope', 'evidenceSources'],
+      required: ['text', 'category', 'suggestionScope', 'evidenceSources', 'evidence'],
       additionalProperties: false,
     },
     execute: async (input, request, signal) => {
@@ -105,9 +134,50 @@ export function createBrainTools(options: {
         ? input.relatedCategories.filter((value): value is FindingCategory =>
           typeof value === 'string' && (findingCategories as readonly string[]).includes(value))
         : [];
+      const submittedEvidence = isRecord(input) && Array.isArray(input.evidence)
+        ? input.evidence
+        : [];
+      const evidence: PiProactiveEvidence[] = [];
+      for (const value of submittedEvidence) {
+        if (!isRecord(value) ||
+            typeof value.source !== 'string' || !sourceIds.includes(value.source as SourceId) ||
+            (value.ref !== null && typeof value.ref !== 'string') ||
+            (value.identity !== null && typeof value.identity !== 'string') ||
+            typeof value.label !== 'string' || value.label.trim().length === 0 ||
+            (value.observedAt !== null && (typeof value.observedAt !== 'string' ||
+              !Number.isFinite(Date.parse(value.observedAt)))) ||
+            typeof value.verifiedAt !== 'string' ||
+            !Number.isFinite(Date.parse(value.verifiedAt))) {
+          throw new ToolRefusal('The source evidence is invalid. Nothing was sent.');
+        }
+        if (shouldRedact(JSON.stringify(value))) {
+          throw new ToolRefusal('Source evidence cannot contain secrets or credentials. Nothing was sent.');
+        }
+        if (Date.parse(value.verifiedAt) > options.now().getTime() + 5 * 60_000) {
+          throw new ToolRefusal('The source evidence claims a future observation. Nothing was sent.');
+        }
+        const maxAge = value.source === 'location'
+          ? 6 * 60 * 60_000
+          : 24 * 60 * 60_000;
+        if (options.now().getTime() - Date.parse(value.verifiedAt) > maxAge) {
+          throw new ToolRefusal('The source evidence is too old to use proactively. Nothing was sent.');
+        }
+        evidence.push({
+          source: value.source,
+          ref: value.ref,
+          identity: value.identity,
+          label: value.label.trim(),
+          observedAt: value.observedAt,
+          verifiedAt: value.verifiedAt,
+        });
+      }
+      const followUpIds = isRecord(input) && Array.isArray(input.followUpIds)
+        ? input.followUpIds.filter((value): value is string => typeof value === 'string')
+        : [];
       if (!category || !findingCategories.includes(category) || !suggestionScope ||
           !['personal', 'work', 'unknown'].includes(suggestionScope) ||
-          evidenceSources.length === 0 || relatedCategories.length > 4) {
+          evidenceSources.length === 0 || relatedCategories.length > 4 ||
+          submittedEvidence.length > 8 || followUpIds.length > 8) {
         throw new ToolRefusal('The delivery policy metadata is invalid. Nothing was sent.');
       }
       const inferredScope = classifySuggestionScope(text, [{ text }]);
@@ -116,14 +186,85 @@ export function createBrainTools(options: {
       }
       if (hasTravelEvidence(text, []) && !relatedCategories.includes('travel')) relatedCategories.push('travel');
       try {
-        const settings = await options.proactive.settings.read();
+        const [settings, sourceStatuses] = await Promise.all([
+          options.proactive.settings.read(),
+          options.proactive.sources.list(),
+        ]);
         if (!proactiveEvidenceSourcesAllowed(settings, evidenceSources) ||
             !findingAllowed(settings, category, suggestionScope, relatedCategories)) {
           throw new ToolRefusal('The current Proactive source, category or scope policy does not allow this message. Nothing was sent.');
         }
+        if (evidence.length > 0) {
+          const represented = new Set(evidence.map(({ source }) => source));
+          if (evidenceSources.some((source) => !represented.has(source)) ||
+              [...represented].some((source) => !evidenceSources.includes(source as SourceId))) {
+            throw new ToolRefusal('The exact evidence and declared evidence sources do not match. Nothing was sent.');
+          }
+          if (evidence.some((entry) =>
+            (entry.ref === null && entry.identity === null) || entry.observedAt === null)) {
+            throw new ToolRefusal('Exact source evidence needs an identity and observation time. Nothing was sent.');
+          }
+        } else {
+          throw new ToolRefusal('Exact source evidence is required for a proactive message. Nothing was sent.');
+        }
+        const needsSituation = followUpIds.length > 0 || evidence.length > 0;
+        const view = needsSituation
+          ? options.situation
+            ? await options.situation.read(signal)
+            : undefined
+          : undefined;
+        if (followUpIds.length > 0 && !view) {
+          throw new ToolRefusal('The pending follow-ups could not be verified. Nothing was sent.');
+        }
+        const statusBySource = new Map(sourceStatuses.map((status) => [status.id, status]));
+        const authoritativeEvidence: PiProactiveEvidence[] = [
+          ...(grant.brain!.evidence ?? []),
+          ...(view?.state?.refs.map((ref) => ({
+            source: ref.source,
+            ref: ref.id,
+            identity: ref.identity,
+            label: ref.label,
+            observedAt: ref.observedAt,
+            verifiedAt: ref.verifiedAt!,
+            origin: 'situation' as const,
+            materialHash: ref.materialHash ?? null,
+          })) ?? []),
+        ].filter((entry) => {
+          const invalidatedAt = statusBySource.get(entry.source as SourceId)?.invalidatedAt;
+          return !invalidatedAt ||
+            Date.parse(entry.verifiedAt) > Date.parse(invalidatedAt);
+        });
+        const canonicalEvidence = evidence.map((claimed) => {
+          const known = authoritativeEvidence.find((candidate) =>
+            candidate.source === claimed.source &&
+            (candidate.observedAt !== null && claimed.observedAt !== null &&
+              Date.parse(candidate.observedAt) === Date.parse(claimed.observedAt)) &&
+            Date.parse(candidate.verifiedAt) === Date.parse(claimed.verifiedAt) &&
+            (claimed.ref === null || candidate.ref === claimed.ref) &&
+            (claimed.identity === null || candidate.identity === claimed.identity));
+          if (!known) {
+            throw new ToolRefusal(
+              'The evidence source, identity or observation does not match this wake or the current situation. Nothing was sent.',
+            );
+          }
+          return { ...known };
+        });
+        if (followUpIds.length > 0 && view) {
+          const available = new Set(view.state?.followUps.map(({ id }) => id) ?? []);
+          if (followUpIds.some((id) => !available.has(id))) {
+            throw new ToolRefusal('A pending follow-up is stale, disabled or no longer current. Nothing was sent.');
+          }
+        }
         const sent = await comms.send({
           text,
-          evidence: { category, suggestionScope, relatedCategories, evidenceSources },
+          evidence: canonicalEvidence,
+          followUpIds,
+          notificationEvidence: {
+            category,
+            suggestionScope,
+            relatedCategories,
+            evidenceSources,
+          },
         }, grant.brain!, signal);
         return { sent: true, messageId: sent.messageId };
       } catch (error) { return translate(error); }

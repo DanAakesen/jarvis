@@ -25,7 +25,7 @@ export function createCalendarSource(google?: GoogleApiClient): ProactiveSource 
           state: 'ok',
           reason: null,
           facts: events.slice(0, CALENDAR_MAX_FACTS)
-            .map((event, index) => calendarFact(event, `cal:${index + 1}`, 'Calendar', observedAt)),
+            .map((event) => calendarFact(event, 'Calendar', observedAt)),
           observedAt,
         };
       } catch (error) {
