@@ -14,7 +14,8 @@
 ## Durable reply pushes — 20 November 2026 (#1970)
 
 - Migrations `0093_reply_notification_outbox.sql` and
-  `0094_reply_notification_reconciliation.sql` must run before this backend
+  `0094_reply_notification_reconciliation.sql`, plus
+  `0095_notification_registration_terminalization.sql`, must run before this backend
   revision. They are backward-compatible for old registrations and each has a
   matching down migration.
 - Ordinary replies are queued only by the conversation-store transaction; do
@@ -26,7 +27,11 @@
   execution/final reply storage; cancel only pending rows after accepted APNs
   and never reinterpret a state-write failure as provider rejection. Retry
   accepted-outcome persistence idempotently and fail the turn rather than
-  unblocking a potentially duplicated reply.
+  unblocking a potentially duplicated reply. Suppression reads the retained
+  accepted turn/device row, not action `expires_at`.
+- Every registration deletion/expiry/unregister path must update in-flight rows
+  by immutable `device_reference` before deleting the registration. Keep the
+  delete trigger and SQL race checks; FK `SET NULL` is never a cleanup strategy.
 - iPhone and Watch route `jarvis.reply` using `JarvisReplyNotificationTarget`.
   Watch keeps that target pending through busy chat, voice and dictation, and
   routes at idle. Keep active exact scope separately so history/foreground/
@@ -35,7 +40,8 @@
   action handling.
 - `containsSensitiveOwnerData` is the shared preview/memory/vault boundary.
   Do not add a notification-only sensitive regex; extend the shared classifier
-  for new identity or financial forms and cover each with a table case.
+  for OTP/one-time/verification/security/CVV/CVC, identity and financial forms
+  and cover each with a table case.
 - Offline checks:
   - `npm test --workspace @jarvis/backend -- src/push/reply-notifications.test.ts src/database/migrations.test.ts src/pi/brain/comms.test.ts`
   - `npm run build --workspace @jarvis/backend`

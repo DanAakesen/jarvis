@@ -293,7 +293,7 @@ async function addMessageWithReplyNotification(
             ON a.confirmation_id = c.confirmation_id
             AND a.device_reference = CONVERT(char(36), r.registration_id)
           WHERE c.owner_object_id = @owner AND c.turn_message_id = @turnMessageId
-            AND c.expires_at > SYSUTCDATETIME() AND a.state = N'accepted'
+            AND a.state = N'accepted'
           ORDER BY c.created_at DESC
         ) a
         WHERE r.owner_object_id = @owner AND r.expires_at > SYSUTCDATETIME();

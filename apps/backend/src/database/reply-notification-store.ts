@@ -131,7 +131,7 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
             @Resource=@resource, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000;
           IF @lockResult < 0 THROW 51001, 'Reply notification approval claim unavailable', 1;
           DELETE FROM dbo.reply_notification_approval_claims
-            WHERE expires_at < DATEADD(day, -1, SYSUTCDATETIME());
+            WHERE expires_at < DATEADD(day, -30, SYSUTCDATETIME());
           DECLARE @claimed bit = 0;
           IF NOT EXISTS (
             SELECT 1 FROM dbo.reply_notification_approval_claims
@@ -232,21 +232,22 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
         .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
-          UPDATE dbo.reply_notification_approval_deliveries
+          UPDATE a
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
                 updated_at = SYSUTCDATETIME()
-            WHERE confirmation_id = @confirmationId AND registration_id = @registrationId
-              AND state = N'sending'
-              AND confirmation_id IN (
-                SELECT confirmation_id FROM dbo.reply_notification_approval_claims
-                WHERE owner_object_id = @owner
-              );
+          FROM dbo.reply_notification_approval_deliveries a
+          INNER JOIN dbo.reply_notification_approval_claims c
+            ON c.confirmation_id = a.confirmation_id
+          WHERE c.owner_object_id = @owner
+            AND a.device_reference = CONVERT(char(36), @registrationId)
+            AND a.state = N'sending';
           UPDATE dbo.reply_notification_deliveries
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
                 updated_at = SYSUTCDATETIME(), lease_owner = NULL, lease_until = NULL
-            WHERE owner_object_id = @owner AND registration_id = @registrationId
+            WHERE owner_object_id = @owner
+              AND device_reference = CONVERT(char(36), @registrationId)
               AND state IN (N'pending', N'sending');
           DELETE FROM dbo.approval_notification_registrations
             WHERE owner_object_id = @owner AND registration_id = @registrationId;
@@ -287,6 +288,30 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
             WHERE owner_object_id = @owner
               AND state IN (N'accepted', N'failed', N'expired', N'invalid_token', N'suppressed')
               AND completed_at < DATEADD(day, -30, @now);
+          DECLARE @expired TABLE (
+            registration_id uniqueidentifier NOT NULL,
+            device_reference char(36) COLLATE Latin1_General_100_BIN2 NOT NULL
+          );
+          INSERT @expired (registration_id, device_reference)
+          SELECT registration_id, CONVERT(char(36), registration_id)
+            FROM dbo.approval_notification_registrations
+            WHERE owner_object_id = @owner AND expires_at <= @now;
+          UPDATE a
+            SET state = N'failed', last_result = N'registration_expired',
+                completed_at = @now, updated_at = SYSUTCDATETIME()
+          FROM dbo.reply_notification_approval_deliveries a
+          INNER JOIN @expired expired ON expired.device_reference = a.device_reference
+          WHERE a.state = N'sending';
+          UPDATE d
+            SET state = N'failed', last_result = N'registration_expired',
+                completed_at = @now, updated_at = SYSUTCDATETIME(),
+                lease_owner = NULL, lease_until = NULL
+          FROM dbo.reply_notification_deliveries d
+          INNER JOIN @expired expired ON expired.device_reference = d.device_reference
+          WHERE d.state IN (N'pending', N'sending');
+          DELETE registration
+          FROM dbo.approval_notification_registrations registration
+          INNER JOIN @expired expired ON expired.registration_id = registration.registration_id;
           UPDATE dbo.reply_notification_deliveries
             SET state = N'expired', last_result = N'expired', completed_at = @now,
                 updated_at = SYSUTCDATETIME(), lease_owner = NULL, lease_until = NULL
@@ -425,14 +450,27 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
         .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
+          UPDATE a
+            SET state = N'invalid_token', last_result = N'apns_invalid_token',
+                last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
+                updated_at = SYSUTCDATETIME()
+          FROM dbo.reply_notification_approval_deliveries a
+          INNER JOIN dbo.reply_notification_approval_claims c
+            ON c.confirmation_id = a.confirmation_id
+          WHERE c.owner_object_id = @owner
+            AND a.device_reference = CONVERT(char(36), @registrationId)
+            AND a.state = N'sending';
           UPDATE dbo.reply_notification_deliveries
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode,
                 completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
                 lease_owner = NULL, lease_until = NULL
-            WHERE owner_object_id = @owner AND registration_id = @registrationId
-              AND (state IN (N'pending', N'sending') OR id = @deliveryId)
-              AND (id <> @deliveryId OR lease_owner = @claimToken);
+            WHERE owner_object_id = @owner
+              AND device_reference = CONVERT(char(36), @registrationId)
+              AND (
+                state IN (N'pending', N'sending')
+                OR id = @deliveryId AND lease_owner = @claimToken
+              );
           DELETE FROM dbo.approval_notification_registrations
             WHERE owner_object_id = @owner AND registration_id = @registrationId;
           COMMIT TRANSACTION;`);

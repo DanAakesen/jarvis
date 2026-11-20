@@ -14,7 +14,8 @@ flowchart LR
 ```
 
 - Migrations `0093_reply_notification_outbox.sql` and
-  `0094_reply_notification_reconciliation.sql` give each native registration a
+  `0094_reply_notification_reconciliation.sql`, plus
+  `0095_notification_registration_terminalization.sql`, give each native registration a
   stable reference, record exact approval/turn claims, persist one approval
   delivery state per registration, and store one
   `reply_notification_deliveries` row per stored assistant message and device.
@@ -28,8 +29,14 @@ flowchart LR
   a known failed approval attempt leaves the reply eligible. An accepted result
   is persisted with bounded idempotent SQL retries. If that outcome still cannot
   be saved, the turn remains blocked; an unresolved sending row is never aged
-  into failure merely because its lease elapsed. Unrelated concurrent turns
-  are unaffected.
+  into failure merely because its lease elapsed. The accepted turn/device
+  outcome is read independently of `action.expires_at` and retained beyond the
+  one-hour reply window, so execution latency cannot reopen a duplicate.
+  Unrelated concurrent turns are unaffected.
+- Registration expiry, unregister, Apple invalid-token rejection and any
+  direct delete update approval/reply rows by immutable `device_reference`
+  before deleting the registration. An `INSTEAD OF DELETE` trigger is the
+  final atomic backstop so FK `SET NULL` cannot strand a `sending` row.
 - `push/reply-notifications.ts` is the only ordinary reply sender. The worker
   recovers `pending` and expired leases after restart, retries only transient
   APNs outcomes (`429`, `5xx` or transport timeout), caps attempts at five with
@@ -42,7 +49,8 @@ flowchart LR
   permanent provider rejection.
 - Preview privacy uses the shared owner-sensitive classifier from the vault/
   memory boundary, including identity and financial forms such as card number,
-  SSN/social security, passport number, account and date of birth.
+  CVV/CVC, OTP/one-time/verification/security code, SSN/social security,
+  passport number, account and date of birth.
 - Terminal Apple invalid-token rejection deletes the native registration and
   invalidates all pending rows for that stable device reference. The old
   `push-ledger.ts` process-local timestamp suppression and every dual reply path

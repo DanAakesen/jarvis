@@ -1,0 +1,1 @@
+DROP TRIGGER dbo.TR_approval_notification_registrations_terminalize_deliveries;

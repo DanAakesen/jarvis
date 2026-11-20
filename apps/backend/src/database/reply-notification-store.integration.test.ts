@@ -102,6 +102,11 @@ describe('durable reply notification store', () => {
       owner, confirmationId, failedApproval.registrationId, 'provider_rejected', 403,
     );
     expect(await deliveries.reconciliationComplete(owner, sourceA!.id)).toBe(true);
+    await pool.request()
+      .input('confirmationId', sql.Char(43), confirmationId)
+      .query(`UPDATE dbo.reply_notification_approval_claims
+        SET expires_at = DATEADD(minute, -1, SYSUTCDATETIME())
+        WHERE confirmation_id = @confirmationId;`);
     const reconciledTurnReply = await conversations.addMessage({
       sessionId: session.id,
       role: 'jarvis',
@@ -207,6 +212,173 @@ describe('durable reply notification store', () => {
     expect(storedRegistrations).toHaveLength(1);
   });
 
+  it('terminalizes approval and reply rows before every registration deletion path', async () => {
+    const conversations = createConversationStore(pool);
+    const registrations = createApprovalNotificationStore(pool);
+    const deliveries = createReplyNotificationStore(pool);
+
+    const setup = async (tokenByte: string) => {
+      const owner = randomUUID();
+      const token = tokenByte.repeat(32);
+      const session = await conversations.createSession({
+        channel: 'chat', language: 'en', ownerObjectId: owner,
+      });
+      const source = await conversations.addMessage({
+        sessionId: session.id, role: 'dan', text: 'Prepare the exact reply.', model: null,
+      });
+      expect(await registrations.upsert(owner, {
+        deviceToken: token, showActions: true, timeZone: 'Europe/Copenhagen',
+      })).toBe(true);
+      const registration = (await registrations.list(owner))[0]!;
+      const confirmationId = randomBytes(32).toString('base64url');
+      const approval = await deliveries.claimApproval({
+        owner,
+        confirmationId,
+        turnMessageId: source!.id,
+        expiresAt: new Date(Date.now() + 300_000),
+      });
+      expect(approval.deliveries).toHaveLength(1);
+      const reply = await conversations.addMessage({
+        sessionId: session.id,
+        role: 'jarvis',
+        text: 'Ready.',
+        model: 'pi',
+        replyNotification: { ownerObjectId: owner, turnMessageId: source!.id },
+      });
+      return {
+        owner, token, session, source: source!, registration, confirmationId, reply: reply!,
+      };
+    };
+
+    const assertTerminal = async (
+      fixture: Awaited<ReturnType<typeof setup>>,
+      approvalState: 'failed' | 'invalid_token',
+      approvalResult: string,
+      replyState: 'failed' | 'invalid_token',
+      replyResult: string,
+    ) => {
+      const { recordset } = await pool.request()
+        .input('confirmationId', sql.Char(43), fixture.confirmationId)
+        .input('messageId', sql.BigInt, BigInt(fixture.reply.id))
+        .query<{
+          approval_state: string;
+          approval_result: string;
+          approval_registration_id: string | null;
+          approval_reference: string;
+          reply_state: string;
+          reply_result: string;
+          reply_registration_id: string | null;
+          reply_reference: string;
+        }>(`SELECT a.state AS approval_state, a.last_result AS approval_result,
+            CONVERT(nvarchar(36), a.registration_id) AS approval_registration_id,
+            CONVERT(nvarchar(36), a.device_reference) AS approval_reference,
+            d.state AS reply_state, d.last_result AS reply_result,
+            CONVERT(nvarchar(36), d.registration_id) AS reply_registration_id,
+            CONVERT(nvarchar(36), d.device_reference) AS reply_reference
+          FROM dbo.reply_notification_approval_deliveries a
+          INNER JOIN dbo.reply_notification_deliveries d
+            ON d.device_reference = a.device_reference
+          WHERE a.confirmation_id = @confirmationId AND d.message_id = @messageId;`);
+      expect(recordset).toHaveLength(1);
+      expect(recordset[0]).toMatchObject({
+        approval_state: approvalState,
+        approval_result: approvalResult,
+        approval_registration_id: null,
+        reply_state: replyState,
+        reply_result: replyResult,
+        reply_registration_id: null,
+      });
+      expect(recordset[0]!.approval_reference.toLowerCase())
+        .toBe(fixture.registration.registrationId);
+      expect(recordset[0]!.reply_reference.toLowerCase())
+        .toBe(fixture.registration.registrationId);
+      expect(await registrations.list(fixture.owner)).toEqual([]);
+    };
+
+    const expired = await setup('10');
+    await pool.request()
+      .input('registrationId', sql.UniqueIdentifier, expired.registration.registrationId)
+      .query(`UPDATE dbo.approval_notification_registrations
+        SET expires_at = DATEADD(minute, -1, SYSUTCDATETIME())
+        WHERE registration_id = @registrationId;`);
+    const replacementToken = '11'.repeat(32);
+    expect(await registrations.upsert(expired.owner, {
+      deviceToken: replacementToken, showActions: true, timeZone: 'Europe/Copenhagen',
+    })).toBe(true);
+    await registrations.remove(expired.owner, replacementToken);
+    await assertTerminal(
+      expired, 'failed', 'registration_expired', 'failed', 'registration_expired',
+    );
+
+    const workerExpired = await setup('12');
+    await pool.request()
+      .input('registrationId', sql.UniqueIdentifier, workerExpired.registration.registrationId)
+      .query(`UPDATE dbo.approval_notification_registrations
+        SET expires_at = DATEADD(minute, -1, SYSUTCDATETIME())
+        WHERE registration_id = @registrationId;`);
+    const expiredAt = new Date(Date.now() + 1_000);
+    expect(await deliveries.claimDue(
+      workerExpired.owner, randomUUID(), expiredAt,
+      new Date(expiredAt.getTime() + 20_000), 10,
+    )).toEqual([]);
+    await assertTerminal(
+      workerExpired, 'failed', 'registration_expired', 'failed', 'registration_expired',
+    );
+
+    const unregistered = await setup('20');
+    await registrations.remove(unregistered.owner, unregistered.token);
+    await assertTerminal(
+      unregistered, 'failed', 'registration_removed', 'failed', 'registration_removed',
+    );
+
+    const invalidApproval = await setup('30');
+    await deliveries.approvalInvalidToken(
+      invalidApproval.owner,
+      invalidApproval.confirmationId,
+      invalidApproval.registration.registrationId,
+      410,
+    );
+    await assertTerminal(
+      invalidApproval,
+      'invalid_token', 'apns_invalid_token',
+      'invalid_token', 'apns_invalid_token',
+    );
+
+    const invalidReply = await setup('50');
+    await deliveries.approvalFailed(
+      invalidReply.owner,
+      invalidReply.confirmationId,
+      invalidReply.registration.registrationId,
+      'provider_rejected',
+      403,
+    );
+    const replyLease = randomUUID();
+    const replyAt = new Date(Date.now() + 1_000);
+    const [claimedReply] = await deliveries.claimDue(
+      invalidReply.owner, replyLease, replyAt, new Date(replyAt.getTime() + 20_000), 10,
+    );
+    await deliveries.invalidateRegistration(
+      invalidReply.owner,
+      invalidReply.registration.registrationId,
+      claimedReply!.id,
+      replyLease,
+      410,
+    );
+    await assertTerminal(
+      invalidReply,
+      'failed', 'provider_rejected',
+      'invalid_token', 'apns_invalid_token',
+    );
+
+    const directDelete = await setup('40');
+    await pool.request()
+      .input('registrationId', sql.UniqueIdentifier, directDelete.registration.registrationId)
+      .query('DELETE FROM dbo.approval_notification_registrations WHERE registration_id = @registrationId;');
+    await assertTerminal(
+      directDelete, 'failed', 'registration_removed', 'failed', 'registration_removed',
+    );
+  });
+
   it('reverses and reapplies per-device approval reconciliation without losing reply rows', async () => {
     const initialSchema = await readFile(
       new URL('../../../../db/migrations/0093_reply_notification_outbox.sql', import.meta.url),
@@ -224,15 +396,25 @@ describe('durable reply notification store', () => {
       new URL('../../../../db/migrations/down/0094_reply_notification_reconciliation.sql', import.meta.url),
       'utf8',
     );
+    const terminalSchema = await readFile(
+      new URL('../../../../db/migrations/0095_notification_registration_terminalization.sql', import.meta.url),
+      'utf8',
+    );
+    const terminalDown = await readFile(
+      new URL('../../../../db/migrations/down/0095_notification_registration_terminalization.sql', import.meta.url),
+      'utf8',
+    );
     const before = await pool.request().query<{ count: number }>(
       'SELECT COUNT(*) AS count FROM dbo.reply_notification_deliveries',
     );
 
+    await pool.request().batch(terminalDown);
     await pool.request().batch(down);
     expect((await pool.request().query<{ table_id: number | null }>(
       `SELECT OBJECT_ID(N'dbo.reply_notification_approval_deliveries', N'U') AS table_id`,
     )).recordset[0]?.table_id).toBeNull();
     await pool.request().batch(schema);
+    await pool.request().batch(terminalSchema);
 
     const after = await pool.request().query<{ count: number }>(
       'SELECT COUNT(*) AS count FROM dbo.reply_notification_deliveries',
@@ -242,6 +424,7 @@ describe('durable reply notification store', () => {
       `SELECT OBJECT_ID(N'dbo.reply_notification_approval_deliveries', N'U') AS table_id`,
     )).recordset[0]?.table_id).not.toBeNull();
 
+    await pool.request().batch(terminalDown);
     await pool.request().batch(down);
     await pool.request().batch(initialDown);
     const legacyOwner = randomUUID();
@@ -253,6 +436,7 @@ describe('durable reply notification store', () => {
         VALUES (@owner, @token, 'en', 1, 'Europe/Copenhagen', DATEADD(day, 30, SYSUTCDATETIME()));`);
     await pool.request().batch(initialSchema);
     await pool.request().batch(schema);
+    await pool.request().batch(terminalSchema);
     const registrations = await pool.request()
       .input('owner', sql.UniqueIdentifier, legacyOwner)
       .query<{ registration_id: string | null }>(

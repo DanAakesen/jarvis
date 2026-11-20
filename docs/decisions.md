@@ -100,9 +100,14 @@
   message-derived collapse ID covers the crash window after Apple accepted but
   before SQL recorded that result. Permanent invalid-token responses remove the
   registration and invalidate its pending rows.
+- **Registration lifecycle:** expiry, unregister and provider invalid-token
+  deletion terminalize approval/reply rows by immutable `device_reference`
+  inside the same transaction. The registration delete trigger is a backstop;
+  `SET NULL` can only observe an already-terminal row.
 - **Privacy:** only a bounded, one-line preview is stored per device. Preview
   opt-out, credentials, health/medical, diagnosis/medication, banking,
-  account, identity and financial content use the shared
+  account, OTP/one-time/verification/security code, CVV/CVC, identity and
+  financial content use the shared
   `containsSensitiveOwnerData` policy and a generic body. Logs and status
   expose no body, IDs or token; terminal counts are diagnostic evidence.
 - **Routing:** `jarvis.reply` is a dedicated iPhone/Watch tap branch carrying

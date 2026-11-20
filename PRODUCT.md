@@ -17,16 +17,20 @@ Failed or timed-out approval delivery leaves that reply available;
 approval work in another turn cannot suppress an unrelated reply. If Apple
 accepts an approval but SQL cannot yet record that result, persistence retries
 idempotently and the corresponding turn stays blocked rather than risking a
-duplicate reply.
+duplicate reply. An accepted delivery outcome remains the exact-turn/device
+suppression record beyond the action-confirmation expiry, through the execution
+and reply window.
 
 The lock-screen alert contains a single-line preview bounded to 160 characters.
 Credential-like, health, medical, medication/diagnosis, banking or account
 content uses **New reply from Jarvis**. The same shared classifier also covers
-identity and financial fields such as card numbers, SSNs/social-security
-numbers, passport numbers and dates of birth.
+credential and identity/financial fields such as OTPs, one-time, verification
+or security codes, CVV/CVC, card numbers, SSNs/social-security numbers,
+passport numbers and dates of birth.
 Transient APNs responses retry per device with bounded backoff until expiry.
-Apple's terminal invalid-device responses remove that registration and stop all
-pending deliveries for it. APNs collapse identity is stable per stored message,
+Apple's terminal invalid-device responses, registration expiry and explicit
+unregister atomically terminate every matching approval/reply row before the
+registration disappears. APNs collapse identity is stable per stored message,
 so an uncertain accepted send cannot produce a second user-facing notification
 after recovery.
 

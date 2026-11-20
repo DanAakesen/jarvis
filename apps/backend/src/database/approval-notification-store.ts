@@ -34,17 +34,30 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
           EXEC @lockResult = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive',
             @LockOwner='Transaction', @LockTimeout=5000;
           IF @lockResult < 0 THROW 51001, 'Approval notification registration unavailable', 1;
-          UPDATE dbo.reply_notification_deliveries
-            SET state = N'invalid_token', last_result = N'registration_expired',
+          DECLARE @expired TABLE (
+            registration_id uniqueidentifier NOT NULL,
+            device_reference char(36) COLLATE Latin1_General_100_BIN2 NOT NULL
+          );
+          INSERT @expired (registration_id, device_reference)
+          SELECT registration_id, CONVERT(char(36), registration_id)
+            FROM dbo.approval_notification_registrations
+            WHERE owner_object_id=@owner AND expires_at <= SYSUTCDATETIME();
+          UPDATE a
+            SET state = N'failed', last_result = N'registration_expired',
+                completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+          FROM dbo.reply_notification_approval_deliveries a
+          INNER JOIN @expired expired ON expired.device_reference = a.device_reference
+          WHERE a.state = N'sending';
+          UPDATE d
+            SET state = N'failed', last_result = N'registration_expired',
                 completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
                 lease_owner = NULL, lease_until = NULL
-            WHERE state IN (N'pending', N'sending')
-              AND registration_id IN (
-                SELECT registration_id FROM dbo.approval_notification_registrations
-                WHERE owner_object_id=@owner AND expires_at <= SYSUTCDATETIME()
-              );
-          DELETE dbo.approval_notification_registrations
-            WHERE owner_object_id=@owner AND expires_at <= SYSUTCDATETIME();
+          FROM dbo.reply_notification_deliveries d
+          INNER JOIN @expired expired ON expired.device_reference = d.device_reference
+          WHERE d.state IN (N'pending', N'sending');
+          DELETE registration
+          FROM dbo.approval_notification_registrations registration
+          INNER JOIN @expired expired ON expired.registration_id = registration.registration_id;
           DECLARE @saved bit = 0;
           IF EXISTS (SELECT 1 FROM dbo.approval_notification_registrations
             WHERE owner_object_id=@owner AND device_token=@token)
@@ -88,17 +101,30 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
         .input('token', sql.VarChar(512), deviceToken)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
-          UPDATE dbo.reply_notification_deliveries
-            SET state = N'invalid_token', last_result = N'registration_removed',
+          DECLARE @removed TABLE (
+            registration_id uniqueidentifier NOT NULL,
+            device_reference char(36) COLLATE Latin1_General_100_BIN2 NOT NULL
+          );
+          INSERT @removed (registration_id, device_reference)
+          SELECT registration_id, CONVERT(char(36), registration_id)
+            FROM dbo.approval_notification_registrations
+            WHERE owner_object_id=@owner AND device_token=@token;
+          UPDATE a
+            SET state = N'failed', last_result = N'registration_removed',
+                completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+          FROM dbo.reply_notification_approval_deliveries a
+          INNER JOIN @removed removed ON removed.device_reference = a.device_reference
+          WHERE a.state = N'sending';
+          UPDATE d
+            SET state = N'failed', last_result = N'registration_removed',
                 completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
                 lease_owner = NULL, lease_until = NULL
-            WHERE state IN (N'pending', N'sending')
-              AND registration_id IN (
-                SELECT registration_id FROM dbo.approval_notification_registrations
-                WHERE owner_object_id=@owner AND device_token=@token
-              );
-          DELETE dbo.approval_notification_registrations
-            WHERE owner_object_id=@owner AND device_token=@token;
+          FROM dbo.reply_notification_deliveries d
+          INNER JOIN @removed removed ON removed.device_reference = d.device_reference
+          WHERE d.state IN (N'pending', N'sending');
+          DELETE registration
+          FROM dbo.approval_notification_registrations registration
+          INNER JOIN @removed removed ON removed.registration_id = registration.registration_id;
           COMMIT TRANSACTION;`);
     },
   };

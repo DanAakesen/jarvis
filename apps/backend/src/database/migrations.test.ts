@@ -57,6 +57,15 @@ describe('committed SQL manifest', () => {
     expect((await readDownMigration('0094_reply_notification_reconciliation.sql')).sql)
       .toContain('DROP TABLE dbo.reply_notification_approval_deliveries');
   });
+  it('ships immutable registration terminalization for every delete path', async () => {
+    const migration = (await readMigrations()).find(({ name }) =>
+      name === '0095_notification_registration_terminalization.sql');
+    expect(migration?.sql).toContain('INSTEAD OF DELETE');
+    expect(migration?.sql).toContain('a.device_reference = CONVERT(char(36), r.registration_id)');
+    expect(migration?.sql).toContain("a.state = N'sending'");
+    expect((await readDownMigration('0095_notification_registration_terminalization.sql')).sql)
+      .toContain('DROP TRIGGER');
+  });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
     const path = await directory();
     await mkdir(join(path, 'down'));

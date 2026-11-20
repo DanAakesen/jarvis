@@ -26,7 +26,7 @@ contract; silence after a rejected upload is not accepted.
 An ordinary reply notification is a route into the existing Chat surface, not a
 new visual surface. The system notification uses the Jarvis title, one concise
 line and the existing `jarvis.reply` category. Private, credential-like, health/medical, medication/diagnosis, banking or
-account, identity or financial content uses **New reply from Jarvis**; it does
+account, OTP/code, CVV/CVC, identity or financial content uses **New reply from Jarvis**; it does
 not reveal an approval summary, preview or message fragment.
 
 On iPhone or Watch, the tap opens Chat and scrolls without animation to the
