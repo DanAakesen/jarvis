@@ -48,11 +48,15 @@ public struct WatchReplyRouteState: Equatable, Sendable {
         opening = nil
     }
 
-    public mutating func leaveActive() {
+    @discardableResult
+    public mutating func leaveActive() -> JarvisReplyNotificationTarget? {
         active = nil
         if let opening {
+            let abandoned = opening
             if pending == opening { pending = nil }
             self.opening = nil
+            return abandoned
         }
+        return nil
     }
 }

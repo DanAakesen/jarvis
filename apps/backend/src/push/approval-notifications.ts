@@ -286,7 +286,11 @@ export function createApprovalNotificationDispatcher(
         if (result.invalidToken) {
           await persist(() =>
             services.replyNotifications.approvalInvalidToken(
-              owner, confirmation.id, registration.registrationId, result.statusCode ?? null,
+              owner,
+              confirmation.id,
+              registration.registrationId,
+              registration.deviceToken,
+              result.statusCode ?? null,
             ),
           );
         } else if (result.accepted) {
@@ -380,7 +384,11 @@ export function registerApprovalNotificationRoutes<Logger extends FastifyBaseLog
     const registration = validateRegistration(request.body);
     if (!registration) return reply.code(400).send({ error: 'invalid_approval_notification_registration' });
     try {
-      if (!await services.store.upsert(app.ownerObjectId, registration)) {
+      const outcome = await services.store.upsert(app.ownerObjectId, registration);
+      if (outcome === 'invalid_token') {
+        return reply.code(410).send({ error: 'approval_notification_token_rejected' });
+      }
+      if (outcome === 'device_limit') {
         return reply.code(429).send({ error: 'approval_notification_device_limit' });
       }
       return reply.code(204).send();

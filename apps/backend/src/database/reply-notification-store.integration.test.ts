@@ -52,10 +52,10 @@ describe('durable reply notification store', () => {
     expect(sourceB).not.toBeNull();
     expect(await registrations.upsert(owner, {
       deviceToken: 'ab'.repeat(32), showActions: true, timeZone: 'Europe/Copenhagen',
-    })).toBe(true);
+    })).toBe('saved');
     expect(await registrations.upsert(owner, {
       deviceToken: 'cd'.repeat(32), showActions: false, timeZone: 'Europe/Copenhagen',
-    })).toBe(true);
+    })).toBe('saved');
 
     const confirmationId = randomBytes(32).toString('base64url');
     const approvalClaim = {
@@ -187,7 +187,12 @@ describe('durable reply notification store', () => {
     await deliveries.accepted(reconciledTurnDelivery.id, firstLease, 200);
     await deliveries.accepted(unrelatedDeliveries[0]!.id, firstLease, 200);
     await deliveries.invalidateRegistration(
-      owner, unrelatedDeliveries[1]!.registrationId, unrelatedDeliveries[1]!.id, firstLease, 410,
+      owner,
+      unrelatedDeliveries[1]!.registrationId,
+      unrelatedDeliveries[1]!.id,
+      firstLease,
+      unrelatedDeliveries[1]!.deviceToken,
+      410,
     );
     const restartedLease = randomUUID();
     expect(await deliveries.claimDue(
@@ -228,7 +233,7 @@ describe('durable reply notification store', () => {
       });
       expect(await registrations.upsert(owner, {
         deviceToken: token, showActions: true, timeZone: 'Europe/Copenhagen',
-      })).toBe(true);
+      })).toBe('saved');
       const registration = (await registrations.list(owner))[0]!;
       const confirmationId = randomBytes(32).toString('base64url');
       const approval = await deliveries.claimApproval({
@@ -304,7 +309,7 @@ describe('durable reply notification store', () => {
     const replacementToken = '11'.repeat(32);
     expect(await registrations.upsert(expired.owner, {
       deviceToken: replacementToken, showActions: true, timeZone: 'Europe/Copenhagen',
-    })).toBe(true);
+    })).toBe('saved');
     await registrations.remove(expired.owner, replacementToken);
     await assertTerminal(
       expired, 'failed', 'registration_expired', 'failed', 'registration_expired',
@@ -336,13 +341,47 @@ describe('durable reply notification store', () => {
       invalidApproval.owner,
       invalidApproval.confirmationId,
       invalidApproval.registration.registrationId,
+      invalidApproval.token,
       410,
     );
+    const restartedRegistrations = createApprovalNotificationStore(pool);
+    expect(await restartedRegistrations.upsert(invalidApproval.owner, {
+      deviceToken: invalidApproval.token,
+      showActions: true,
+      timeZone: 'Europe/Copenhagen',
+    })).toBe('invalid_token');
+    const genuinelyNewToken = '31'.repeat(32);
+    expect(await restartedRegistrations.upsert(invalidApproval.owner, {
+      deviceToken: genuinelyNewToken,
+      showActions: true,
+      timeZone: 'Europe/Copenhagen',
+    })).toBe('saved');
+    await restartedRegistrations.remove(invalidApproval.owner, genuinelyNewToken);
     await assertTerminal(
       invalidApproval,
       'invalid_token', 'apns_invalid_token',
       'invalid_token', 'apns_invalid_token',
     );
+    expect((await pool.request()
+      .input('owner', sql.UniqueIdentifier, invalidApproval.owner)
+      .query<{ reason: string }>(`SELECT reason
+        FROM dbo.approval_notification_token_tombstones
+        WHERE owner_object_id = @owner`)).recordset).toEqual([
+      { reason: 'apns_invalid_token' },
+    ]);
+
+    const proactiveInvalid = await setup('60');
+    await registrations.invalidate(proactiveInvalid.owner, proactiveInvalid.token);
+    await assertTerminal(
+      proactiveInvalid,
+      'invalid_token', 'apns_invalid_token',
+      'invalid_token', 'apns_invalid_token',
+    );
+    expect(await createApprovalNotificationStore(pool).upsert(proactiveInvalid.owner, {
+      deviceToken: proactiveInvalid.token,
+      showActions: true,
+      timeZone: 'Europe/Copenhagen',
+    })).toBe('invalid_token');
 
     const invalidReply = await setup('50');
     await deliveries.approvalFailed(
@@ -362,6 +401,7 @@ describe('durable reply notification store', () => {
       invalidReply.registration.registrationId,
       claimedReply!.id,
       replyLease,
+      invalidReply.token,
       410,
     );
     await assertTerminal(
@@ -404,10 +444,23 @@ describe('durable reply notification store', () => {
       new URL('../../../../db/migrations/down/0095_notification_registration_terminalization.sql', import.meta.url),
       'utf8',
     );
+    const tombstoneSchema = await readFile(
+      new URL('../../../../db/migrations/0096_apns_device_token_tombstones.sql', import.meta.url),
+      'utf8',
+    );
+    const tombstoneDown = await readFile(
+      new URL('../../../../db/migrations/down/0096_apns_device_token_tombstones.sql', import.meta.url),
+      'utf8',
+    );
     const before = await pool.request().query<{ count: number }>(
       'SELECT COUNT(*) AS count FROM dbo.reply_notification_deliveries',
     );
 
+    await pool.request().batch(tombstoneDown);
+    expect((await pool.request().query<{ table_id: number | null }>(
+      `SELECT OBJECT_ID(N'dbo.approval_notification_token_tombstones', N'U') AS table_id`,
+    )).recordset[0]?.table_id).toBeNull();
+    await pool.request().batch(tombstoneSchema);
     await pool.request().batch(terminalDown);
     await pool.request().batch(down);
     expect((await pool.request().query<{ table_id: number | null }>(

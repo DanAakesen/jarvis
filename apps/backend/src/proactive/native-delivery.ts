@@ -21,7 +21,7 @@ export function createNativeProactiveDelivery(
         try {
           const result = await services.sender.send(registration.deviceToken, payload,
             now().getTime() + 3600000, signal);
-          if (result.invalidToken) await services.store.remove(owner, registration.deviceToken);
+          if (result.invalidToken) await services.store.invalidate(owner, registration.deviceToken);
           return result.accepted;
         } catch { return false; }
       }));

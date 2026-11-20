@@ -143,7 +143,12 @@ export function createReplyNotificationWorker(
       try {
         if (result.invalidToken) {
           await services.store.invalidateRegistration(
-            owner, delivery.registrationId, delivery.id, delivery.claimToken, statusCode,
+            owner,
+            delivery.registrationId,
+            delivery.id,
+            delivery.claimToken,
+            delivery.deviceToken,
+            statusCode,
           );
           invalidRegistrations.add(delivery.registrationId);
           outcome = 'invalid_token';

@@ -81,12 +81,13 @@ of this work.**
 | Keep APNs transport failures separate from SQL result-write failures and preserve lease recovery | Done |
 | Retry accepted approval outcomes idempotently and keep unresolved accepted/sending rows conservatively blocked | Done |
 | Retain accepted turn/device outcomes past confirmation expiry and add `0095` atomic registration terminalization | Done |
+| Persist APNs invalid-token tombstones and preserve newer Watch taps when abandoning an exact-target open | Done |
 | Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
 | Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
 | Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
-| Run available offline gates and publish the reviewed branch head | Backend build/lint and full 692-test suite pass; isolated SQL 25-test gate and full JarvisCore 224-test Swift 6.2 suite pass; final rebase, commit and force-with-lease verification pending |
+| Run available offline gates and publish the reviewed branch head | Backend build/lint and full 693-test suite pass; isolated SQL 25-test gate and full JarvisCore 225-test Swift 6.2 suite pass; final rebase, commit and force-with-lease verification pending |
 
 Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live

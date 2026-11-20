@@ -66,6 +66,14 @@ describe('committed SQL manifest', () => {
     expect((await readDownMigration('0095_notification_registration_terminalization.sql')).sql)
       .toContain('DROP TRIGGER');
   });
+  it('ships persistent invalid APNs token tombstones', async () => {
+    const migration = (await readMigrations()).find(({ name }) =>
+      name === '0096_apns_device_token_tombstones.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.approval_notification_token_tombstones');
+    expect(migration?.sql).toContain('PRIMARY KEY (owner_object_id, device_token_hash)');
+    expect((await readDownMigration('0096_apns_device_token_tombstones.sql')).sql)
+      .toContain('DROP TABLE dbo.approval_notification_token_tombstones');
+  });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
     const path = await directory();
     await mkdir(join(path, 'down'));

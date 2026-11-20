@@ -284,7 +284,12 @@ describe('reply notification contract', () => {
     const dispatch = createApprovalNotificationDispatcher(
       randomUUID(),
       {
-        store: { upsert: async () => true, list: async () => [], remove: async () => undefined },
+        store: {
+          upsert: async () => 'saved',
+          list: async () => [],
+          remove: async () => undefined,
+          invalidate: async () => undefined,
+        },
         sender,
         replyNotifications: store,
       },
@@ -324,7 +329,12 @@ describe('reply notification contract', () => {
     const dispatch = createApprovalNotificationDispatcher(
       randomUUID(),
       {
-        store: { upsert: async () => true, list: async () => [], remove: async () => undefined },
+        store: {
+          upsert: async () => 'saved',
+          list: async () => [],
+          remove: async () => undefined,
+          invalidate: async () => undefined,
+        },
         sender: { send: async () => ({
           accepted: false, invalidToken: false, retryable: false, statusCode: 403,
         }) },
@@ -363,7 +373,12 @@ describe('reply notification contract', () => {
     const dispatch = createApprovalNotificationDispatcher(
       randomUUID(),
       {
-        store: { upsert: async () => true, list: async () => [], remove: async () => undefined },
+        store: {
+          upsert: async () => 'saved',
+          list: async () => [],
+          remove: async () => undefined,
+          invalidate: async () => undefined,
+        },
         sender: { send },
         replyNotifications: store,
       },
@@ -403,7 +418,12 @@ describe('reply notification contract', () => {
     const dispatch = createApprovalNotificationDispatcher(
       randomUUID(),
       {
-        store: { upsert: async () => true, list: async () => [], remove: async () => undefined },
+        store: {
+          upsert: async () => 'saved',
+          list: async () => [],
+          remove: async () => undefined,
+          invalidate: async () => undefined,
+        },
         sender: { send: async () => ({
           accepted: true, invalidToken: false, statusCode: 200,
         }) },
@@ -447,7 +467,12 @@ describe('reply notification contract', () => {
     const dispatch = createApprovalNotificationDispatcher(
       randomUUID(),
       {
-        store: { upsert: async () => true, list: async () => [], remove: async () => undefined },
+        store: {
+          upsert: async () => 'saved',
+          list: async () => [],
+          remove: async () => undefined,
+          invalidate: async () => undefined,
+        },
         sender: { send: async () => ({
           accepted: true, invalidToken: false, statusCode: 200,
         }) },

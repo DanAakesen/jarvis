@@ -1,8 +1,11 @@
 import sql from 'mssql';
+import { createHash } from 'node:crypto';
 
 const validId = (value: string): boolean =>
   /^[1-9]\d{0,18}$/u.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n;
 const maxAttempts = 5;
+const deviceTokenHash = (token: string) =>
+  createHash('sha256').update(token.toLowerCase()).digest('hex').toUpperCase();
 
 export interface ReplyNotificationApprovalClaim {
   readonly owner: string;
@@ -66,6 +69,7 @@ export interface ReplyNotificationStore {
     owner: string,
     confirmationId: string,
     registrationId: string,
+    deviceToken: string,
     statusCode: number | null,
   ): Promise<void>;
   reconciliationComplete(owner: string, turnMessageId: string): Promise<boolean>;
@@ -79,6 +83,7 @@ export interface ReplyNotificationStore {
     registrationId: string,
     deliveryId: string,
     claimToken: string,
+    deviceToken: string,
     statusCode: number | null,
   ): Promise<void>;
   diagnostics(owner: string, signal?: AbortSignal): Promise<ReplyNotificationDiagnostics>;
@@ -224,14 +229,26 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
               );`);
     },
 
-    async approvalInvalidToken(owner, confirmationId, registrationId, statusCode) {
+    async approvalInvalidToken(owner, confirmationId, registrationId, deviceToken, statusCode) {
       await pool.request()
         .input('owner', sql.UniqueIdentifier, owner)
         .input('confirmationId', sql.Char(43), confirmationId)
         .input('registrationId', sql.UniqueIdentifier, registrationId)
+        .input('tokenHash', sql.Char(64), deviceTokenHash(deviceToken))
         .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
+          MERGE dbo.approval_notification_token_tombstones WITH (HOLDLOCK) AS target
+          USING (SELECT @owner AS owner_object_id, @tokenHash AS device_token_hash) AS source
+            ON target.owner_object_id = source.owner_object_id
+              AND target.device_token_hash = source.device_token_hash
+          WHEN MATCHED THEN UPDATE SET last_rejected_at = SYSUTCDATETIME()
+          WHEN NOT MATCHED THEN INSERT (
+              owner_object_id, device_token_hash, reason, invalidated_at, last_rejected_at
+            ) VALUES (
+              source.owner_object_id, source.device_token_hash, N'apns_invalid_token',
+              SYSUTCDATETIME(), SYSUTCDATETIME()
+            );
           UPDATE a
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
@@ -441,15 +458,27 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           WHERE id = @id AND state = N'sending' AND lease_owner = @claimToken;`);
     },
 
-    async invalidateRegistration(owner, registrationId, deliveryId, claimToken, statusCode) {
+    async invalidateRegistration(owner, registrationId, deliveryId, claimToken, deviceToken, statusCode) {
       await pool.request()
         .input('owner', sql.UniqueIdentifier, owner)
         .input('registrationId', sql.UniqueIdentifier, registrationId)
         .input('deliveryId', sql.UniqueIdentifier, deliveryId)
         .input('claimToken', sql.UniqueIdentifier, claimToken)
+        .input('tokenHash', sql.Char(64), deviceTokenHash(deviceToken))
         .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
+          MERGE dbo.approval_notification_token_tombstones WITH (HOLDLOCK) AS target
+          USING (SELECT @owner AS owner_object_id, @tokenHash AS device_token_hash) AS source
+            ON target.owner_object_id = source.owner_object_id
+              AND target.device_token_hash = source.device_token_hash
+          WHEN MATCHED THEN UPDATE SET last_rejected_at = SYSUTCDATETIME()
+          WHEN NOT MATCHED THEN INSERT (
+              owner_object_id, device_token_hash, reason, invalidated_at, last_rejected_at
+            ) VALUES (
+              source.owner_object_id, source.device_token_hash, N'apns_invalid_token',
+              SYSUTCDATETIME(), SYSUTCDATETIME()
+            );
           UPDATE a
             SET state = N'invalid_token', last_result = N'apns_invalid_token',
                 last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),

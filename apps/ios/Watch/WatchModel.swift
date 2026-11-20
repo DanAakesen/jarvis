@@ -146,8 +146,10 @@ final class WatchModel: ObservableObject {
     }
 
     func leaveReplyDeepLink() {
-        replyRoute.active?.clearActive()
-        replyRoute.leaveActive()
+        let active = replyRoute.active
+        let abandoned = replyRoute.leaveActive()
+        active?.clearActive()
+        abandoned?.clear()
         replyTargetMessageID = nil
     }
 

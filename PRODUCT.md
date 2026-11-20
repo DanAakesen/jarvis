@@ -30,7 +30,10 @@ passport numbers and dates of birth.
 Transient APNs responses retry per device with bounded backoff until expiry.
 Apple's terminal invalid-device responses, registration expiry and explicit
 unregister atomically terminate every matching approval/reply row before the
-registration disappears. APNs collapse identity is stable per stored message,
+registration disappears. A permanently rejected token is tombstoned by owner
+and token hash, so a foreground refresh or backend restart cannot register the
+same dead token again; a genuinely new token remains allowed. APNs collapse
+identity is stable per stored message,
 so an uncertain accepted send cannot produce a second user-facing notification
 after recovery.
 

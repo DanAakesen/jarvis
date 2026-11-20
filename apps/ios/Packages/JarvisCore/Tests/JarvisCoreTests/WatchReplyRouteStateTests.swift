@@ -111,10 +111,24 @@ final class WatchReplyRouteStateTests: XCTestCase {
         )
         XCTAssertTrue(state.isCurrent(target))
 
-        state.leaveActive()
+        XCTAssertEqual(state.leaveActive(), target)
 
         XCTAssertFalse(state.isCurrent(target))
         XCTAssertNil(state.pending)
         XCTAssertNil(state.active)
+    }
+
+    func testLeavingOpeningTargetPreservesANewerPendingTap() {
+        let latest = JarvisReplyNotificationTarget(sessionID: "71", messageID: "72")!
+        var state = WatchReplyRouteState()
+        state.receive(target)
+        _ = state.takeWhenAvailable(
+            reachable: true, busy: false, startingVoice: false, voiceActive: false, dictating: false
+        )
+        state.receive(latest)
+
+        XCTAssertEqual(state.leaveActive(), target)
+        XCTAssertEqual(state.pending, latest)
+        XCTAssertFalse(state.isCurrent(target))
     }
 }

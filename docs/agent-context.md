@@ -15,7 +15,8 @@
 
 - Migrations `0093_reply_notification_outbox.sql` and
   `0094_reply_notification_reconciliation.sql`, plus
-  `0095_notification_registration_terminalization.sql`, must run before this backend
+  `0095_notification_registration_terminalization.sql` and
+  `0096_apns_device_token_tombstones.sql`, must run before this backend
   revision. They are backward-compatible for old registrations and each has a
   matching down migration.
 - Ordinary replies are queued only by the conversation-store transaction; do
@@ -32,10 +33,15 @@
 - Every registration deletion/expiry/unregister path must update in-flight rows
   by immutable `device_reference` before deleting the registration. Keep the
   delete trigger and SQL race checks; FK `SET NULL` is never a cleanup strategy.
+- Permanent APNs rejection must insert/update the owner/token-hash tombstone in
+  the same transaction as terminalization/deletion. Registration upsert rejects
+  that hash and only a different token can re-register.
 - iPhone and Watch route `jarvis.reply` using `JarvisReplyNotificationTarget`.
   Watch keeps that target pending through busy chat, voice and dictation, and
   routes at idle. Keep active exact scope separately so history/foreground/
   reconnect refreshes stay on that session/message until leave/send/sign-out.
+  Leaving an in-flight opening must call the persisted target's own `clear`,
+  which is equality-checked so a newer unrelated tap survives.
   Do not fold reply taps into the `jarvis.proactive` item route or approval
   action handling.
 - `containsSensitiveOwnerData` is the shared preview/memory/vault boundary.

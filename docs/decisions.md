@@ -103,7 +103,9 @@
 - **Registration lifecycle:** expiry, unregister and provider invalid-token
   deletion terminalize approval/reply rows by immutable `device_reference`
   inside the same transaction. The registration delete trigger is a backstop;
-  `SET NULL` can only observe an already-terminal row.
+  `SET NULL` can only observe an already-terminal row. Permanent invalid-token
+  rejection also stores an owner/token-hash tombstone; the same token cannot
+  re-register after foreground refresh or restart, while a new token can.
 - **Privacy:** only a bounded, one-line preview is stored per device. Preview
   opt-out, credentials, health/medical, diagnosis/medication, banking,
   account, OTP/one-time/verification/security code, CVV/CVC, identity and
@@ -115,7 +117,9 @@
   chat, voice and dictation instead of discarding it. Once opened, active
   scope is retained separately and scopes history/reconnect/foreground refresh
   until leave/send/sign-out. Proactive findings and approval actions keep their
-  existing categories and handlers.
+  existing categories and handlers. Leave during an opening clears only that
+  target's persisted pending entry; equality-checked clearing preserves a newer
+  unrelated tap.
 - **Continuity:** the same server-side outbox envelope accepts optional source
   evidence for #1969. Proactive scheduling, GPT-Live and voice protocol code
   remain untouched.

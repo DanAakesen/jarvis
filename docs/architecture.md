@@ -15,7 +15,8 @@ flowchart LR
 
 - Migrations `0093_reply_notification_outbox.sql` and
   `0094_reply_notification_reconciliation.sql`, plus
-  `0095_notification_registration_terminalization.sql`, give each native registration a
+  `0095_notification_registration_terminalization.sql` and
+  `0096_apns_device_token_tombstones.sql`, give each native registration a
   stable reference, record exact approval/turn claims, persist one approval
   delivery state per registration, and store one
   `reply_notification_deliveries` row per stored assistant message and device.
@@ -37,6 +38,9 @@ flowchart LR
   direct delete update approval/reply rows by immutable `device_reference`
   before deleting the registration. An `INSTEAD OF DELETE` trigger is the
   final atomic backstop so FK `SET NULL` cannot strand a `sending` row.
+- Permanent APNs rejection writes an owner/token-hash tombstone before
+  registration deletion. Registration upsert returns `invalid_token` for the
+  same tombstone across refreshes/restarts while allowing a genuinely new token.
 - `push/reply-notifications.ts` is the only ordinary reply sender. The worker
   recovers `pending` and expired leases after restart, retries only transient
   APNs outcomes (`429`, `5xx` or transport timeout), caps attempts at five with
