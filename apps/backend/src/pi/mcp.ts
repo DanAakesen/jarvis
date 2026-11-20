@@ -18,6 +18,9 @@ import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
 import { completionDispatchAllowed, completionEvidence, toolEffect } from './completion.js';
 import { piConnectionInventory } from './capabilities.js';
+import {
+  azureActionSpecs, githubActionSpecs, type RemoteActionSpec,
+} from './remote-action-contracts.js';
 
 const maxFullResults = 3;
 const maxOtherResults = 5;
@@ -56,113 +59,7 @@ const remoteActionVerbs = new Map<string, ToolCompletionOperation>([
   ['stop', 'delete'], ['submit', 'send'], ['trigger', 'start'], ['unassign', 'update'],
   ['unpin', 'update'], ['update', 'update'], ['upload', 'create'],
 ]);
-const providerExactOperations = new Map<string, {
-  readonly operation: ToolCompletionOperation;
-  readonly accepted?: readonly ToolCompletionOperation[];
-}>([
-  ['create_or_update_file', { operation: 'update', accepted: ['create', 'update'] }],
-  ['file_write', { operation: 'update', accepted: ['create', 'update'] }],
-  ['push_files', { operation: 'update', accepted: ['create', 'update'] }],
-]);
 const selectorFields = ['method', 'operation', 'action'] as const;
-
-type RemoteActionSpec = {
-  readonly operation?: ToolCompletionOperation;
-  readonly accepted?: readonly ToolCompletionOperation[];
-  readonly selector?: Readonly<Record<string, ToolCompletionOperation>>;
-  readonly identityFields: readonly string[];
-  readonly resultIdentityFields?: readonly string[];
-  readonly identityFiles?: boolean;
-  readonly evaluate?: (args: Record<string, unknown>, result: unknown) => boolean;
-};
-const repoIdentity = ['owner', 'repo', 'repository'] as const;
-const pullIdentity = [...repoIdentity, 'pullNumber', 'pull_number'] as const;
-const issueIdentity = [...repoIdentity, 'issue_number'] as const;
-const issueResultIdentity = [...issueIdentity, 'number'] as const;
-const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
-  add_automation_to_group: { operation: 'update', identityFields: [...repoIdentity, 'automation_id', 'group_id'] },
-  add_comment_to_pending_review: { operation: 'send', identityFields: [...pullIdentity, 'path'] },
-  add_issue_comment: {
-    operation: 'send', identityFields: [...issueIdentity],
-    resultIdentityFields: [...issueResultIdentity, 'commentId', 'comment_id', 'id'],
-  },
-  add_reply_to_pull_request_comment: { operation: 'send', identityFields: [...pullIdentity, 'commentId', 'comment_id'] },
-  actions_run_trigger: {
-    selector: { run_workflow: 'start', rerun_workflow_run: 'start', rerun_failed_jobs: 'start', cancel_workflow_run: 'delete', delete_workflow_run_logs: 'delete' },
-    identityFields: [...repoIdentity, 'workflow_id', 'run_id', 'ref'],
-  },
-  create_automation: { operation: 'create', identityFields: [...repoIdentity, 'name'] },
-  create_automation_group: { operation: 'create', identityFields: [...repoIdentity, 'name'] },
-  create_branch: { operation: 'create', identityFields: [...repoIdentity, 'branch', 'from_branch'] },
-  create_or_update_file: { operation: 'update', accepted: ['create', 'update'], identityFields: [...repoIdentity, 'path', 'branch'] },
-  create_pull_request: { operation: 'create', identityFields: [...repoIdentity, 'head', 'base'] },
-  create_repository: { operation: 'create', identityFields: ['organization', 'name'] },
-  delete_automation: { operation: 'delete', identityFields: [...repoIdentity, 'automation_id'] },
-  delete_file: { operation: 'delete', identityFields: [...repoIdentity, 'path', 'branch'] },
-  discussion_comment_write: {
-    selector: { add: 'send', reply: 'send', update: 'update', delete: 'delete', mark_answer: 'update', unmark_answer: 'update' },
-    identityFields: [...repoIdentity, 'discussionNumber', 'discussion_number', 'commentNodeID', 'comment_node_id'],
-  },
-  fork_repository: { operation: 'create', identityFields: [...repoIdentity, 'organization'] },
-  issue_write: {
-    selector: { create: 'create', update: 'update' },
-    identityFields: [...issueIdentity],
-    resultIdentityFields: [...issueResultIdentity],
-  },
-  label_write: {
-    selector: { create: 'create', update: 'update', delete: 'delete' },
-    identityFields: [...repoIdentity, 'name'],
-  },
-  merge_pull_request: { operation: 'update', identityFields: [...pullIdentity, 'expectedHeadSha'] },
-  pull_request_review_write: {
-    selector: {
-      create: 'update', submit_pending: 'update', delete_pending: 'delete',
-      resolve_thread: 'update', unresolve_thread: 'update',
-    },
-    identityFields: [...pullIdentity, 'threadId', 'thread_id'],
-    evaluate: (args, result) => {
-      if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
-      const value = result as Record<string, unknown>;
-      if (args.method === 'resolve_thread') return value.resolved === true;
-      if (args.method === 'unresolve_thread') return value.resolved === false;
-      if (args.method === 'delete_pending') return value.deleted === true || value.state === 'deleted';
-      return typeof value.id === 'string' || typeof value.id === 'number' ||
-        typeof value.state === 'string' || value.submitted === true;
-    },
-  },
-  push_files: {
-    operation: 'update', accepted: ['create', 'update'],
-    identityFields: [...repoIdentity, 'branch'], identityFiles: true,
-  },
-  remove_automation_from_group: { operation: 'update', identityFields: [...repoIdentity, 'automation_id', 'group_id'] },
-  reply_and_resolve_review_thread: { operation: 'update', identityFields: [...pullIdentity, 'thread_id', 'root_comment_id'] },
-  reply_to_comment: { operation: 'send', identityFields: [...pullIdentity, 'threadId', 'thread_id'] },
-  reply_to_review_thread: { operation: 'send', identityFields: [...pullIdentity, 'thread_id', 'root_comment_id'] },
-  run_automation: { operation: 'start', identityFields: [...repoIdentity, 'automation_id', 'resource_url'] },
-  request_copilot_review: {
-    operation: 'update',
-    identityFields: pullIdentity,
-    evaluate: (_args, result) => !!result && typeof result === 'object' &&
-      !Array.isArray(result) && (
-        (result as Record<string, unknown>).requested === true ||
-        Array.isArray((result as Record<string, unknown>).requested_reviewers)
-      ),
-  },
-  star_repository: {
-    operation: 'update',
-    identityFields: repoIdentity,
-    evaluate: (_args, result) => !!result && typeof result === 'object' &&
-      !Array.isArray(result) && (result as Record<string, unknown>).starred === true,
-  },
-  sub_issue_write: {
-    selector: { add: 'update', remove: 'update', reprioritize: 'update' },
-    identityFields: [...repoIdentity, 'issue_number', 'sub_issue_id', 'after_id', 'before_id'],
-  },
-  update_automation: { operation: 'update', identityFields: [...repoIdentity, 'automation_id'] },
-  update_issue_comment: { operation: 'update', identityFields: [...repoIdentity, 'comment_id'] },
-  update_pull_request: { operation: 'update', identityFields: pullIdentity },
-  update_pull_request_branch: { operation: 'update', identityFields: [...pullIdentity, 'expectedHeadSha'] },
-};
 
 function remoteOperationFromWords(words: readonly string[]): ToolCompletionOperation | undefined {
   if (words.includes('write') ||
@@ -178,7 +75,6 @@ function remoteOperationFromWords(words: readonly string[]): ToolCompletionOpera
 function remoteSelector(
   schema: unknown,
   staticOperation?: ToolCompletionOperation,
-  exactChoices?: Readonly<Record<string, ToolCompletionOperation>>,
 ): {
   readonly field: typeof selectorFields[number];
   readonly choices: ReadonlyMap<string, ToolCompletionOperation>;
@@ -217,15 +113,84 @@ function remoteSelector(
   const choices = new Map<string, ToolCompletionOperation>();
   for (const value of result.values) {
     const normalizedValue = normalizeCompletionText(value);
-    const direct = exactChoices
-      ? exactChoices[normalizedValue]
-      : normalizedValue === 'post' && staticOperation
-        ? staticOperation
-        : remoteOperationFromWords(normalizedValue.split(/[\s_-]+/u));
+    const direct = normalizedValue === 'post' && staticOperation
+      ? staticOperation
+      : remoteOperationFromWords(normalizedValue.split(/[\s_-]+/u));
     if (!direct) throw new AmbiguousRemoteTool(`${result.field} value ${value} is ambiguous`);
     choices.set(value, direct);
   }
   return { field: result.field, choices };
+}
+
+function schemaSelectorValues(
+  schema: unknown,
+  field: typeof selectorFields[number],
+  depth = 0,
+): ReadonlySet<string> {
+  if (depth > 8 || !schema || typeof schema !== 'object' || Array.isArray(schema)) return new Set();
+  const record = schema as Record<string, unknown>;
+  const properties = record.properties;
+  const output = new Set<string>();
+  if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
+    const definition = (properties as Record<string, unknown>)[field];
+    if (definition && typeof definition === 'object' && !Array.isArray(definition)) {
+      const candidate = definition as Record<string, unknown>;
+      if (typeof candidate.const === 'string') output.add(normalizeCompletionText(candidate.const));
+      if (Array.isArray(candidate.enum)) {
+        for (const value of candidate.enum) {
+          if (typeof value === 'string') output.add(normalizeCompletionText(value));
+        }
+      }
+    }
+  }
+  for (const keyword of ['allOf', 'anyOf', 'oneOf'] as const) {
+    const branches = record[keyword];
+    if (!Array.isArray(branches)) continue;
+    for (const branch of branches) {
+      for (const value of schemaSelectorValues(branch, field, depth + 1)) output.add(value);
+    }
+  }
+  return output;
+}
+
+function actionSpecFor(bridge: RemoteMcpBridge, exactName: string): RemoteActionSpec | undefined {
+  if (bridge.prefix === githubToolPrefix) return githubActionSpecs[exactName];
+  if (bridge.prefix === azureToolPrefix) return azureActionSpecs[exactName];
+  return undefined;
+}
+
+function validateActionSpecSchema(
+  tool: RegisteredTool,
+  actionSpec: RemoteActionSpec,
+): void {
+  const fields = toolSchemaFieldNames(tool.inputSchema);
+  if (!actionSpec.identityFields.some(field => fields.has(field))) {
+    throw new AmbiguousRemoteTool(`${tool.name} has no authoritative identity field in its schema`);
+  }
+  if (actionSpec.identityFields.includes('owner') &&
+      actionSpec.identityFields.includes('repo') &&
+      (!fields.has('owner') || !fields.has('repo'))) {
+    throw new AmbiguousRemoteTool(`${tool.name} has an incomplete repository identity schema`);
+  }
+  if (!actionSpec.selector) return;
+  if (!fields.has(actionSpec.selector.field)) {
+    throw new AmbiguousRemoteTool(`${tool.name} is missing its exact ${actionSpec.selector.field} selector`);
+  }
+  const schemaValues = schemaSelectorValues(tool.inputSchema, actionSpec.selector.field);
+  for (const value of schemaValues) {
+    if (!actionSpec.selector.choices[value]) {
+      throw new AmbiguousRemoteTool(`${tool.name} has an uncovered ${actionSpec.selector.field} value ${value}`);
+    }
+  }
+  if (schemaValues.size > 0) {
+    for (const value of Object.keys(actionSpec.selector.choices)) {
+      if (!schemaValues.has(value)) {
+        throw new AmbiguousRemoteTool(
+          `${tool.name} is missing the exact ${actionSpec.selector.field} value ${value}`,
+        );
+      }
+    }
+  }
 }
 
 function remoteOperationFromSchema(
@@ -236,64 +201,37 @@ function remoteOperationFromSchema(
   readonly accepted?: readonly ToolCompletionOperation[];
   readonly identityFields?: readonly string[];
   readonly resultIdentityFields?: readonly string[];
+  readonly identityMatches?: readonly (readonly string[])[];
   readonly identityFiles?: boolean;
-  readonly evaluate?: (args: Record<string, unknown>, result: unknown) => boolean;
+  readonly receipt?: (args: Record<string, unknown>, result: unknown) => boolean;
 } {
   const words = normalizeCompletionText(tool.name.slice(bridge.prefix.length)).split(/[_-]+/u).filter(Boolean);
   const exactName = normalizeCompletionText(tool.name.slice(bridge.prefix.length));
-  const providerExact = providerExactOperations.get(exactName);
   const staticOperation = remoteOperationFromWords(words);
-  const actionSpec = bridge.prefix === githubToolPrefix ? githubActionSpecs[exactName] : undefined;
-  const selector = remoteSelector(tool.inputSchema, staticOperation ?? actionSpec?.operation,
-    actionSpec?.selector);
+  const actionSpec = actionSpecFor(bridge, exactName);
   if (actionSpec) {
-    if (actionSpec.operation && actionSpec.selector) {
-      throw new AmbiguousRemoteTool(`${tool.name} has conflicting provider operation contracts`);
-    }
-    if (actionSpec.selector && !selector) {
-      throw new AmbiguousRemoteTool(`${tool.name} has no exact operation selector`);
-    }
-    if (actionSpec.operation && selector) {
-      throw new AmbiguousRemoteTool(`${tool.name} has an unexpected operation selector`);
-    }
-    if (actionSpec.operation) return {
-      operation: () => actionSpec.operation!,
+    validateActionSpecSchema(tool, actionSpec);
+    return {
+      operation: args => typeof actionSpec.operation === 'function'
+        ? actionSpec.operation(args)
+        : actionSpec.operation,
       ...(actionSpec.accepted ? { accepted: actionSpec.accepted } : {}),
       identityFields: actionSpec.identityFields,
       ...(actionSpec.resultIdentityFields ? { resultIdentityFields: actionSpec.resultIdentityFields } : {}),
+      ...(actionSpec.identityMatches ? { identityMatches: actionSpec.identityMatches } : {}),
       ...(actionSpec.identityFiles ? { identityFiles: true } : {}),
-      ...(actionSpec.evaluate ? { evaluate: actionSpec.evaluate } : {}),
-    };
-    return {
-      operation: args => selector!.choices.get(
-        normalizeCompletionText(String(args[selector!.field] ?? '')),
-      ) ?? 'generic',
-      identityFields: actionSpec.identityFields,
-      ...(actionSpec.resultIdentityFields ? { resultIdentityFields: actionSpec.resultIdentityFields } : {}),
-      ...(actionSpec.identityFiles ? { identityFiles: true } : {}),
-      ...(actionSpec.evaluate ? { evaluate: actionSpec.evaluate } : {}),
+      receipt: actionSpec.receipt,
     };
   }
-  if (bridge.prefix === githubToolPrefix) {
-    if (staticOperation !== 'read') {
-      throw new AmbiguousRemoteTool(`${tool.name} has no provider-exact GitHub action contract`);
-    }
-    if (!selector) return { operation: () => 'read' };
-    return {
-      operation: args => selector.choices.get(
-        normalizeCompletionText(String(args[selector.field] ?? '')),
-      ) ?? 'generic',
-    };
+  const selector = remoteSelector(tool.inputSchema, staticOperation);
+  if (staticOperation !== 'read' && (!selector || [...selector.choices.values()].some(value => value !== 'read'))) {
+    const provider = bridge.prefix === githubToolPrefix ? 'GitHub' :
+      bridge.prefix === azureToolPrefix ? 'Azure' : bridge.label;
+    throw new AmbiguousRemoteTool(`${tool.name} has no provider-exact ${provider} action contract`);
   }
-  if (!selector && providerExact) return {
-    operation: () => providerExact.operation,
-    ...(providerExact.accepted ? { accepted: providerExact.accepted } : {}),
-  };
   if (!selector) {
-    if (!staticOperation) throw new AmbiguousRemoteTool(`${tool.name} has no exact operation selector`);
-    return {
-      operation: () => staticOperation,
-    };
+    if (staticOperation === 'read') return { operation: () => 'read' };
+    throw new AmbiguousRemoteTool(`${tool.name} has no exact operation selector`);
   }
   return {
     operation: args => {
@@ -319,6 +257,9 @@ function remoteIdentityKey(key: string): boolean {
 function canonicalRemoteIdentity(key: string, value: unknown): unknown {
   if (typeof value !== 'string') return value;
   if (key === 'owner' || key === 'repo' || key === 'repository') return value.toLowerCase();
+  if (['subscription', 'resource-group', 'resourceGroup', 'webtest-resource', 'resourceName'].includes(key)) {
+    return value.toLowerCase();
+  }
   if (key === 'branch' || key === 'ref' || key === 'head' || key === 'base') {
     return value.replace(/^refs\/heads\//u, '');
   }
@@ -402,9 +343,64 @@ function collectRemoteResultIdentities(
   return output;
 }
 
+function containsRemoteCollection(value: unknown, depth = 0): boolean {
+  if (depth > 5 || !value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return true;
+  return Object.values(value as Record<string, unknown>).some(child =>
+    containsRemoteCollection(child, depth + 1));
+}
+
+function collectRemoteResultIdentityRows(
+  value: unknown,
+  identityFields?: readonly string[],
+  identityFiles = false,
+  depth = 0,
+): Record<string, unknown>[] {
+  if (depth > 5) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap(child =>
+      collectRemoteResultIdentityRows(child, identityFields, identityFiles, depth + 1));
+  }
+  if (!value || typeof value !== 'object') return [];
+  const own: Record<string, unknown> = {};
+  const nested: Record<string, unknown>[] = [];
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (identityFiles && ['files', 'paths'].includes(key) && Array.isArray(child)) {
+      const paths = child.flatMap(entry => {
+        const path = typeof entry === 'string'
+          ? entry
+          : entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? (entry as Record<string, unknown>).path
+            : undefined;
+        return typeof path === 'string' ? [canonicalRemoteIdentity('path', path)] : [];
+      });
+      if (paths.length > 0) own.paths = [...new Set(paths)];
+    }
+    if ((identityFields ? identityFields.includes(key) : remoteIdentityKey(key)) &&
+        (typeof child === 'string' || typeof child === 'number')) {
+      own[key] = canonicalRemoteIdentity(key, child);
+    }
+    if (child && typeof child === 'object') {
+      nested.push(...collectRemoteResultIdentityRows(
+        child, identityFields, identityFiles, depth + 1,
+      ));
+    }
+  }
+  canonicalRemoteRepository(own);
+  if (nested.length === 0) {
+    return !containsRemoteCollection(value) && Object.keys(own).length > 0 ? [own] : [];
+  }
+  return nested.map(row => {
+    const merged = { ...own, ...row };
+    canonicalRemoteRepository(merged);
+    return merged;
+  });
+}
+
 function remoteIdentitiesConsistent(
   request: Record<string, unknown>,
   result: Record<string, unknown>,
+  identityMatches: readonly (readonly string[])[] = [],
 ): boolean {
   for (const [key, requested] of Object.entries(request)) {
     const returned = result[key];
@@ -417,14 +413,7 @@ function remoteIdentitiesConsistent(
     }
     if (String(requested) !== String(returned)) return false;
   }
-  const aliases: readonly (readonly string[])[] = [
-    ['issue_number', 'issueNumber', 'number'],
-    ['pullNumber', 'pull_number'],
-    ['commentId', 'comment_id'],
-    ['discussionNumber', 'discussion_number'],
-    ['threadId', 'thread_id'],
-  ];
-  return aliases.every(group => {
+  return identityMatches.every(group => {
     const requested = group.map(key => request[key]).find(value => value !== undefined);
     const returned = group.map(key => result[key]).find(value => value !== undefined);
     return requested === undefined || returned === undefined || String(requested) === String(returned);
@@ -458,8 +447,9 @@ function compileRemoteTools(
         requestIdentities: args => remoteRequestIdentities(
           operation, args, operationSpec.identityFields, operationSpec.identityFiles,
         ),
-        resultIdentities: result => collectRemoteResultIdentities(
-          result, {}, 0, operationSpec.resultIdentityFields ?? operationSpec.identityFields,
+        resultIdentities: result => collectRemoteResultIdentityRows(
+          result,
+          operationSpec.resultIdentityFields ?? operationSpec.identityFields,
           operationSpec.identityFiles,
         ),
         evaluate: (args, result) => {
@@ -470,10 +460,12 @@ function compileRemoteTools(
             result, {}, 0, operationSpec.resultIdentityFields ?? operationSpec.identityFields,
             operationSpec.identityFiles,
           );
-          return remoteIdentitiesConsistent(requested, returned) &&
+          return remoteIdentitiesConsistent(
+            requested, returned, operationSpec.identityMatches,
+          ) &&
             !terminalFailure(result) &&
-            (operationSpec.evaluate
-              ? operationSpec.evaluate(args, result)
+            (operationSpec.receipt
+              ? operationSpec.receipt(args, result)
               : remoteTerminalReceipt(operation(args), args, result));
         },
       };

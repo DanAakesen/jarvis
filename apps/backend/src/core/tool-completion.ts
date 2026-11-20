@@ -43,7 +43,7 @@ export function semanticOperation(value: unknown): ToolCompletionOperation {
     ['open', /\b(?:open|launch|focus|show|activate|abn|abne|fokus)\b/iu],
     ['start', /\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|kør)\b/iu],
     ['create', /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu],
-    ['update', /\b(?:update|change|edit|move|push|reschedule|complete|reopen|resolve|unresolve|pause|pin|unpin|set|label|mark|merge|approve|review|star|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu],
+    ['update', /\b(?:update|change|correct|edit|move|push|reschedule|complete|reopen|resolve|unresolve|pause|pin|unpin|set|label|mark|merge|approve|review|star|rename|click|type|select|opdater|ret|rediger|flyt|færdiggør|sammenføj)\b/iu],
     ['read', /\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu],
   ];
   let selected: ToolCompletionOperation = 'generic';
@@ -316,12 +316,15 @@ export const receipt = {
       typeof result.created === 'boolean',
   inboxClose: (_args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && typeof result.id === 'string' && result.closed === true,
-  memoryWrite: (_args: Record<string, unknown>, result: unknown) =>
+  memoryWrite: (args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && typeof result.id === 'string' && typeof result.key === 'string' &&
-      Number.isSafeInteger(result.revision),
-  memoryDelete: (_args: Record<string, unknown>, result: unknown) =>
+      Number.isSafeInteger(result.revision) &&
+      (args.memoryId === undefined || result.id === String(args.memoryId)) &&
+      (args.key === undefined || result.key === String(args.key)),
+  memoryDelete: (args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && typeof result.id === 'string' && typeof result.key === 'string' &&
-      typeof result.category === 'string',
+      typeof result.category === 'string' &&
+      result.id === String(args.memoryId),
   jobCancel: (_args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && typeof result.cancelled === 'string',
   modelDeployment: (args: Record<string, unknown>, result: unknown) => {

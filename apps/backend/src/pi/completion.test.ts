@@ -636,7 +636,7 @@ describe('PI completion receipts', () => {
       .toMatchObject({ kind: 'retrieved', domain: 'generic', operation: 'read' });
   });
 
-  it('binds Danish read grammar to retrieved evidence without hashing cue words as targets', () => {
+  it('binds Danish read grammar while preserving phrase-identifiers as targets', () => {
     const mailPlan = completionPlan('Kan du fortælle mig hvad der står i e-mailen fra Alice?');
     expect(mailPlan.requirements[0]).toMatchObject({
       kind: 'retrieved', domain: 'mail', operation: 'read',
@@ -650,12 +650,13 @@ describe('PI completion receipts', () => {
 
     const azurePlan = completionPlan('Kan du forklare hvorfor Azure-statusen er nede?');
     expect(azurePlan.requirements[0]).toMatchObject({
-      kind: 'retrieved', domain: 'azure', operation: 'read', targetHashes: [],
+      kind: 'retrieved', domain: 'azure', operation: 'read',
     });
+    expect(azurePlan.requirements[0]?.targetHashes).toHaveLength(1);
     expect(completionEvidence(
       azurePlan,
       action('az_group_list', 'read'),
-      {},
+      { query: 'Azure-statusen' },
       { status: 'down', resources: [] },
     )).toMatchObject({ kind: 'retrieved', domain: 'azure' });
 
@@ -667,6 +668,17 @@ describe('PI completion receipts', () => {
       { path: 'check-config.ts' },
       { path: 'check-config.ts', url: 'file://check-config.ts' },
     )).toMatchObject({ kind: 'retrieved', domain: 'notes' });
+
+    const hyphenPlan = completionPlan('Check GitHub status-update.');
+    expect(hyphenPlan).toMatchObject({
+      kind: 'retrieved',
+      requirements: [expect.objectContaining({ operation: 'read', domain: 'github' })],
+    });
+    expect(hyphenPlan.requirements[0]?.targetHashes).toHaveLength(1);
+    expect(completionPlan('Update GitHub status-update.')).toMatchObject({
+      kind: 'committed',
+      requirements: [expect.objectContaining({ operation: 'update', domain: 'github' })],
+    });
   });
 });
 

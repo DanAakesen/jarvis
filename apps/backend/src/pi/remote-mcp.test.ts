@@ -17,6 +17,11 @@ function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
       'tools/list': { tools: [{ name: 'issue_write', description: 'Create or update an issue', inputSchema: { type: 'object' } }, { name: 'bad name!', description: 'x' }] },
       'tools/call': body.params?.name === 'broken'
         ? { isError: true, content: [{ type: 'text', text: 'Not Found' }] }
+        : body.params?.name === 'structured'
+          ? {
+            content: [{ type: 'text', text: '' }],
+            structuredContent: { status: 'requested' },
+          }
         : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] },
     };
     const message = JSON.stringify({ jsonrpc: '2.0', id: body.id, result: results[body.method] });
@@ -44,6 +49,9 @@ describe('the GitHub bridge', () => {
     const { seen, fetchStub } = server({ sse: true });
     const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: fetchStub });
     expect(await bridge.call('gh_issue_read', { issue_number: 700 }, signal())).toEqual({ outcome: 'ok', result: { number: 700, title: 'Hello' } });
+    expect(await bridge.call('gh_structured', {}, signal())).toEqual({
+      outcome: 'ok', result: { status: 'requested' },
+    });
     expect(seen.at(-1)).toMatchObject({ method: 'tools/call', session: 's1' });
     expect(await bridge.call('gh_broken', {}, signal())).toEqual({ outcome: 'error', result: { error: 'Not Found' } });
     await expect(bridge.call('issue_read', {}, signal())).rejects.toThrow('not_a_remote_tool');

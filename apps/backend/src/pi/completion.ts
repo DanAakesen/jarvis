@@ -44,6 +44,7 @@ export interface PiCompletionEvidence {
   readonly identityHashes: readonly string[];
   readonly identityTargets: readonly {
     readonly identityHash: string;
+    readonly identityGroupHash: string;
     readonly targetHashes: readonly string[];
   }[];
 }
@@ -51,7 +52,7 @@ export interface PiCompletionEvidence {
 const readVerbs = new Set(['check', 'find', 'get', 'list', 'lookup', 'read', 'search', 'show', 'status', 'view', 'query', 'download']);
 const actionVerbs = new Set([
   'add', 'archive', 'assign', 'cancel', 'close', 'comment', 'complete', 'create', 'delete', 'deploy', 'dispatch', 'edit',
-  'capture', 'log', 'merge', 'move', 'open', 'pause', 'pin', 'publish', 'record', 'remember', 'remove', 'renew', 'reply', 'resume',
+  'capture', 'correct', 'log', 'merge', 'move', 'open', 'pause', 'pin', 'publish', 'record', 'remember', 'remove', 'renew', 'reply', 'resume',
   'reopen', 'retry', 'save', 'schedule', 'send', 'set', 'start', 'stop', 'trigger', 'unassign', 'update', 'write',
 ]);
 const maxBindingTextCharacters = 20_000;
@@ -249,7 +250,7 @@ const ignoredTargetWords = new Set([
   'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag',
   'januar', 'februar', 'marts', 'maj', 'juni', 'juli', 'august', 'oktober', 'november', 'december',
   'add', 'archive', 'book', 'cancel', 'capture', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
-  'implement', 'inspect', 'keep', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember',
+  'implement', 'inspect', 'keep', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember', 'correct',
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
   'merge', 'approve', 'review', 'resolve', 'unresolve', 'forward', 'push', 'star',
   'click', 'type', 'select', 'pin', 'unpin', 'rename', 'dispatch', 'deploy', 'trigger', 'scale', 'restart',
@@ -262,6 +263,7 @@ const ignoredTargetWords = new Set([
   'credentials', 'login',
   'table', 'ticket', 'room', 'stay', 'reservation', 'hotel', 'flight', 'restaurant',
   'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'copilot', 'about',
+  'preference', 'preferences', 'fact', 'facts', 'decision', 'decisions', 'unfinished',
   'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated', 'teach',
   'saying', 'says', 'tell', 'telling', 'called', 'named',
   'worker', 'workers', 'background', 'long-running', 'watch', 'watches', 'deploy', 'deployment', 'overvågning',
@@ -289,9 +291,12 @@ const readCueTerms = new Set([
 
 function isReadCueTerm(value: string): boolean {
   const term = normalized(value);
-  if (/[./\\]/u.test(term)) return false;
-  if (readCueTerms.has(term)) return true;
-  return term.split('-').some(part => readCueTerms.has(part));
+  if (/[./\\-]/u.test(term)) return false;
+  return readCueTerms.has(term);
+}
+
+function phraseTerms(value: string): readonly string[] {
+  return value.match(/[\p{L}\p{N}]+(?:['’._/@:-][\p{L}\p{N}-]+)*/gu) ?? [];
 }
 
 function targetTerms(text: string): { readonly term: string; readonly at: number }[] {
@@ -414,6 +419,14 @@ function toolBindingIdentities(
     : bindingIdentities(value);
 }
 
+function oneIdentityTargetGroup(
+  candidate: Pick<PiCompletionEvidence, 'identityTargets'>,
+): boolean {
+  const groups = new Set(candidate.identityTargets.map(binding =>
+    binding.identityGroupHash));
+  return groups.size === 1;
+}
+
 function identityTargets(
   tool: CompletionTool,
   value: unknown,
@@ -424,13 +437,33 @@ function identityTargets(
     ? tool.completion?.resultIdentities
     : tool.completion?.requestIdentities;
   if (identityExtractor && isRecord(value)) {
-    const identities = [...authoritativeBindingIdentities(identityExtractor(value))]
-      .slice(0, 20)
-      .map(identity => hash(identity));
-    const targets = targetHashes([...rowTargetTokens(tool, value, result)]);
-    return identities.map(identityHash => ({ identityHash, targetHashes: targets }));
+    const extracted = identityExtractor(value);
+    const rows = Array.isArray(extracted) ? extracted : [extracted];
+    const bindings = new Map<string, Set<string>>();
+    for (const row of rows) {
+      if (!isRecord(row)) continue;
+      const targets = targetHashes([...bindingTokens(row)]);
+      const identities = [...authoritativeBindingIdentities(row)].slice(0, 20);
+      const identityGroupHash = hash(canonical(identities.slice().sort()));
+      for (const identity of identities) {
+        const identityHash = hash(identity);
+        const key = `${identityGroupHash}:${identityHash}`;
+        const linked = bindings.get(key) ?? new Set<string>();
+        for (const target of targets) linked.add(target);
+        bindings.set(key, linked);
+      }
+    }
+    return [...bindings].map(([key, targets]) => ({
+      identityGroupHash: key.slice(0, 64),
+      identityHash: key.slice(65),
+      targetHashes: [...targets],
+    }));
   }
-  const bindings: { identityHash: string; targetHashes: readonly string[] }[] = [];
+  const bindings: {
+    identityHash: string;
+    identityGroupHash: string;
+    targetHashes: readonly string[];
+  }[] = [];
   const visit = (child: unknown, level: number) => {
     if (level > 5 || bindings.length >= 500) return;
     if (Array.isArray(child)) {
@@ -441,19 +474,31 @@ function identityTargets(
     const identities = directBindingIdentities(child).slice(0, 20).map(identity => hash(identity));
     if (identities.length > 0) {
       const targets = targetHashes([...rowTargetTokens(tool, child, result)]);
-      for (const identityHash of identities) bindings.push({ identityHash, targetHashes: targets });
+      const identityGroupHash = hash(identities.slice().sort().join(':'));
+      for (const identityHash of identities) {
+        bindings.push({ identityHash, identityGroupHash, targetHashes: targets });
+      }
     }
     for (const entry of Object.values(child)) visit(entry, level + 1);
   };
   visit(value, depth);
-  const unique = new Map<string, Set<string>>();
+  const unique = new Map<string, {
+    identityHash: string;
+    identityGroupHash: string;
+    targets: Set<string>;
+  }>();
   for (const binding of bindings) {
-    const targets = unique.get(binding.identityHash) ?? new Set<string>();
-    for (const target of binding.targetHashes) targets.add(target);
-    unique.set(binding.identityHash, targets);
+    const key = `${binding.identityGroupHash}:${binding.identityHash}`;
+    const entry = unique.get(key) ?? {
+      identityHash: binding.identityHash,
+      identityGroupHash: binding.identityGroupHash,
+      targets: new Set<string>(),
+    };
+    for (const target of binding.targetHashes) entry.targets.add(target);
+    unique.set(key, entry);
   }
-  return [...unique].map(([identityHash, targets]) => ({
-    identityHash, targetHashes: [...targets],
+  return [...unique.values()].map(({ identityHash, identityGroupHash, targets }) => ({
+    identityHash, identityGroupHash, targetHashes: [...targets],
   }));
 }
 
@@ -500,7 +545,7 @@ function actionDomainsFor(matches: readonly DomainMatch[], text: string): readon
     notes: /\b(?:write|save|append|create|delete|update|rename|gem|skriv|opret|slet|opdater|tilføj)\b[^\n.!?]{0,60}\b(?:note|vault|notat|noter)\b/iu,
     tasks: /\b(?:add|complete|create|delete|edit|finish|log|reopen|reschedule|remember|tilføj|opret|slet|færdiggør|gem|husk)\b[^\n.!?]{0,60}\b(?:task|todo|reminder|opgave|pamindelse)\b/iu,
     health: /\b(?:log|record|save|complete|slet|log|gem)\b[^\n.!?]{0,60}\b(?:meal|food|health|gym|workout|training|mad|træning|sundhed)\b/iu,
-    memory: /\b(?:remember|save|forget|delete|husk|gem|slet)\b[^\n.!?]{0,60}\b(?:memory|fact|hukommelse)\b/iu,
+    memory: /\b(?:remember|save|correct|change|update|forget|delete|capture|husk|gem|ret|opdater|slet)\b[^\n.!?]{0,60}\b(?:memory|fact|preference|hukommelse|præference)\b/iu,
     github: /\b(?:create|close|reopen|comment|merge|approve|label|update|dispatch|opret|luk|kommenter|sammenføj|opdater|kør)\b[^\n.!?]{0,80}\b(?:github|issue|pull request|repository|workflow|kode|arbejdsgang)\b/iu,
     azure: /\b(?:create|delete|deploy|restart|start|stop|update|scale|opret|slet|start|stop|opdater)\b[^\n.!?]{0,80}\b(?:azure|resource|subscription|ressource)\b/iu,
     web: /\b(?:book|reserve|buy|order|purchase|reserve|bestil|køb|book)\b/iu,
@@ -515,8 +560,20 @@ function actionDomainsFor(matches: readonly DomainMatch[], text: string): readon
 }
 
 function externalLiveStateQuestion(text: string): boolean {
+  const liveStateTerms = new Set([
+    'down', 'up', 'slow', 'offline', 'online', 'outage', 'unavailable', 'available',
+    'healthy', 'unhealthy', 'working', 'broken', 'failed', 'failing', 'failure',
+    'changed', 'missing', 'stopped', 'pending', 'stale', 'status',
+    'nede', 'oppe', 'nedbrud', 'utilgængelig', 'tilgængelig', 'virker', 'fejler',
+    'fejlet', 'fejl', 'ændret', 'mangler', 'stoppet', 'afventer', 'forældet',
+  ]);
   return domainMatches(text).length > 0 &&
-    /\b(?:down|up|slow|offline|online|outage|unavailable|available|healthy|unhealthy|working|broken|failed|failing|failure|status|changed|missing|stopped|pending|stale|nede|oppe|offline|online|nedbrud|utilgængelig|tilgængelig|virker|fejler|fejlet|fejl|ændret|mangler|stoppet|afventer|forældet)\b/iu.test(text);
+    phraseTerms(text).some(term => {
+      const value = normalized(term);
+      return value === 'status'
+        ? isReadCueTerm(term)
+        : liveStateTerms.has(value);
+    });
 }
 
 function ordinaryConversation(text: string): boolean {
@@ -570,9 +627,20 @@ function operationForDomain(
   return operation === 'generic' ? operationFamily(request) : operation;
 }
 
+function memoryTargetHashes(
+  request: string,
+  operation: PiCompletionOperation,
+): readonly string[] {
+  if (operation === 'create') return [];
+  const explicit = [...request.matchAll(
+    /\b(?:memory|record|id)\s*[:#-]?\s*(\d+)\b/giu,
+  )].map(match => targetTerm(match[1] ?? ''));
+  return targetHashes(explicit);
+}
+
 function readIntent(value: string, source = value): boolean {
-  const words = normalized(value).match(/[\p{L}]+(?:['’][\p{L}]+)?/gu) ?? [];
-  const sourceWords = source.match(/[\p{L}]+(?:['’][\p{L}]+)?/gu) ?? [];
+  const words = phraseTerms(normalized(value));
+  const sourceWords = phraseTerms(source);
   const first = words[0] ?? '';
   const second = words[1] ?? '';
   if (first === 'tell' || first === 'give') return second === 'me';
@@ -638,7 +706,7 @@ export function completionPlan(text: string): PiCompletionPlan {
 
   const explicitActionDomains = actionDomainsFor(selectedMatches, value);
   const directRequest = /^(?:please|can you|could you|would you|will you|I need you to|I want you to|vil du|kan du|please)\b/iu.test(value);
-  const imperative = /^(?:add|archive|book|cancel|capture|change|close|comment|complete|create|delete|deploy|dispatch|edit|email|fix|issue|log|make|move|open|pause|publish|remember|remove|reply|resume|retry|save|schedule|send|set|start|stop|update|write)\b/iu.test(value);
+  const imperative = /^(?:add|archive|book|cancel|capture|change|close|comment|complete|correct|create|delete|deploy|dispatch|edit|email|fix|issue|log|make|move|open|pause|publish|remember|remove|reply|resume|retry|save|schedule|send|set|start|stop|update|write)\b/iu.test(value);
   const firstDomainAt = selectedMatches[0]?.at ?? 0;
   const prefix = normalized(value.slice(0, firstDomainAt));
   const inferredAction = firstDomainAt > 0 && prefix.length > 0 &&
@@ -666,7 +734,9 @@ export function completionPlan(text: string): PiCompletionPlan {
       const operation = actionDomains.includes(requirementDomain)
         ? operationForDomain(value, requirementDomain, selectedMatches)
         : 'read';
-      const assignedTargets = assignedTargetHashes(value, requirementDomain, selectedMatches);
+      const assignedTargets = requirementDomain === 'memory'
+        ? memoryTargetHashes(value, operation)
+        : assignedTargetHashes(value, requirementDomain, selectedMatches);
       const openDomainTarget = operation === 'open' && assignedTargets.length === 0
         ? selectedMatches.find(({ domain: candidate }) => candidate === requirementDomain)?.term
         : undefined;
@@ -677,13 +747,18 @@ export function completionPlan(text: string): PiCompletionPlan {
         targetHashes: openDomainTarget ? [hash(openDomainTarget)] : assignedTargets,
       });
     }
+    const directMemoryCapture = requirements.length === 1 &&
+      requirements[0]?.domain === 'memory' &&
+      requirements[0]?.kind === 'committed' &&
+      requirements[0]?.operation === 'create';
+    const contextualReference = contextual && !directMemoryCapture;
     return {
       kind: 'committed',
       requirements,
-      ...(contextual ? { contextual: true } : {}),
+      ...(contextualReference ? { contextual: true } : {}),
       ...(requirements.some(requirement => requirement.kind === 'committed' &&
         requirement.targetHashes.length === 0 && requirement.operation !== 'create') ||
-        contextual ? { requiresTrustedContext: true } : {}),
+        contextualReference ? { requiresTrustedContext: true } : {}),
     };
   }
 
@@ -729,7 +804,7 @@ export function completionDispatchAllowed(
         .map(binding => ({ candidate, binding })));
   const runtimeTargets = plan.runtimeTargetHashes ?? [];
   const trustedLinkedContext = linked.some(({ candidate, binding }) =>
-    candidate.identityTargets.length === 1 ||
+    oneIdentityTargetGroup(candidate) ||
     runtimeTargets.length > 0 && runtimeTargets.every(target => binding.targetHashes.includes(target)));
   const linkedTargets = linked.flatMap(({ binding }) => binding.targetHashes);
   const requestTargets = targetHashes([...toolTargetTokens(tool, args, undefined)]);
@@ -894,7 +969,7 @@ export function completionEvidence(
   const linkedTargets = linkedBindings.flatMap(({ binding }) => binding.targetHashes);
   const runtimeTargets = plan.runtimeTargetHashes ?? [];
   const trustedLinkedContext = linkedBindings.some(({ candidate, binding }) =>
-    candidate.identityTargets.length === 1 ||
+    oneIdentityTargetGroup(candidate) ||
     runtimeTargets.length > 0 && runtimeTargets.every(target => binding.targetHashes.includes(target)));
   const directTargets = identityTargets(tool, args, false);
   const resultTargets = identityTargets(tool, result, true);
@@ -916,7 +991,9 @@ export function completionEvidence(
     argumentsHash: hash(canonical(args)),
     targetHashes: evidenceTargets,
     identityHashes,
-    identityTargets: [...directTargets, ...resultTargets],
+    identityTargets: kind === 'retrieved'
+      ? resultTargets
+      : [...directTargets, ...resultTargets],
   } satisfies PiCompletionEvidence;
   if (plan.kind === 'conversation') {
     const operationMatches = plan.runtimeOperation === undefined ||

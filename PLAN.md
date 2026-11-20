@@ -115,11 +115,11 @@ Completion means the existing PI activation envelope and one background queue ow
 | --- | --- |
 | Make local discovery immediate and provider refresh on demand with a bounded selected-provider wait/continuation; add compact connection and capability status | Done |
 | Add aliases, exact-name priority and callable compact matches while retaining per-turn visibility/source checks | Done |
-| Require domain/operation/target-bound tool, argument and terminal-receipt evidence; add trusted contextual resolution, read-first NFKD Danish interrogatives and co-located per-tool contracts; enforce durable own-code task status | Done after final delta review, including exact provider/operation contracts, authoritative remote identities, unique same-turn read bindings, compiled execution IDs and construction validation across optional registries |
+| Require domain/operation/target-bound tool, argument and terminal-receipt evidence; add trusted contextual resolution, read-first NFKD Danish interrogatives and co-located per-tool contracts; enforce durable own-code task status | Done after follow-up review, including every deployed GitHub/Azure write contract, structured/legacy receipt shapes, authoritative remote identities, row-preserving read bindings, exact Memory capture/correction plans, compiled execution IDs and construction validation across optional registries |
 | Decouple GPT-Live playback cancellation from PI work and preserve exact turn authority under concurrent proactive chat | Done |
 | Keep unrestricted owner actions, target-bound deletion checks and separate foreground/proactive budgets | Done |
 | Update focused tests and PI/product/architecture/agent/decision documentation, including review regressions for same-kind, partial/cancelled, cold-provider and issue-only evidence | Done |
-| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after the exact-main rebase: build and lint pass, 63 files / 722 backend tests pass |
+| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after the exact-contract follow-up: build and lint pass, 63 files / 727 backend tests pass |
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

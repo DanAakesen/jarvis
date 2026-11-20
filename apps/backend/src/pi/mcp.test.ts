@@ -10,6 +10,9 @@ import { createPiTurnRegistry } from './turns.js';
 import { createRemoteMcpBridge, type RemoteMcpBridge } from './remote-mcp.js';
 import type { PiSituationService } from './situation.js';
 import { completionEvidence, completionPlan } from './completion.js';
+import {
+  azureActionNames, azureActionSpecs, githubActionNames, githubActionSpecs,
+} from './remote-action-contracts.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -87,8 +90,188 @@ function setup(
 type Json = Record<string, any>;
 const initialize = { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } };
 const live = () => new AbortController().signal;
+const deployedGithubWriteNames = [
+  'actions_run_trigger',
+  'add_automation_to_group',
+  'add_comment_to_pending_review',
+  'add_issue_comment',
+  'add_issue_comment_reaction',
+  'add_issue_reaction',
+  'add_pull_request_review_comment',
+  'add_pull_request_review_comment_reaction',
+  'add_reply_to_pull_request_comment',
+  'add_sub_issue',
+  'assign_copilot_to_issue',
+  'assign_copilot_to_issue_with_intent',
+  'create_automation',
+  'create_automation_group',
+  'create_branch',
+  'create_gist',
+  'create_issue',
+  'create_or_update_file',
+  'create_pull_request',
+  'create_pull_request_review',
+  'create_repository',
+  'create_repository_ruleset',
+  'custom_properties_write',
+  'delete_automation',
+  'delete_file',
+  'delete_pending_pull_request_review',
+  'delete_repository',
+  'discussion_comment_write',
+  'dismiss_notification',
+  'fork_repository',
+  'hide_issue_comment',
+  'hide_pull_request_review',
+  'hide_pull_request_review_comment',
+  'issue_artifact_write',
+  'issue_dependency_write',
+  'issue_write',
+  'label_write',
+  'manage_notification_subscription',
+  'manage_repository_notification_subscription',
+  'mark_all_notifications_read',
+  'merge_pull_request',
+  'projects_write',
+  'pull_request_artifact_write',
+  'pull_request_review_write',
+  'push_files',
+  'remove_issue_comment_reaction',
+  'remove_issue_reaction',
+  'remove_pull_request_review_comment_reaction',
+  'remove_automation_from_group',
+  'remove_sub_issue',
+  'reprioritize_sub_issue',
+  'request_copilot_review',
+  'request_pull_request_reviewers',
+  'resolve_review_thread',
+  'run_automation',
+  'set_issue_fields',
+  'star_repository',
+  'sub_issue_write',
+  'submit_pending_pull_request_review',
+  'unhide_issue_comment',
+  'unhide_pull_request_review',
+  'unhide_pull_request_review_comment',
+  'unresolve_review_thread',
+  'unstar_repository',
+  'update_automation',
+  'update_code_scanning_alert',
+  'update_dependabot_alert',
+  'update_gist',
+  'update_issue_assignees',
+  'update_issue_body',
+  'update_issue_comment',
+  'update_issue_labels',
+  'update_issue_milestone',
+  'update_issue_state',
+  'update_issue_title',
+  'update_issue_type',
+  'update_pull_request',
+  'update_pull_request_body',
+  'update_pull_request_branch',
+  'update_pull_request_draft_state',
+  'update_pull_request_state',
+  'update_pull_request_title',
+  'update_secret_scanning_alert',
+] as const;
 
 describe('PI MCP server', () => {
+  it('tracks every deployed GitHub and Azure write contract exactly', () => {
+    expect([...githubActionNames].sort()).toEqual([...deployedGithubWriteNames].sort());
+    expect(azureActionNames).toEqual(['monitor_webtests_createorupdate']);
+  });
+
+  it('compiles every exact deployed write schema without name inference', async () => {
+    const schemaTools = Object.entries(githubActionSpecs).map(([name, spec]) => {
+      const properties: Record<string, unknown> =
+        Object.fromEntries(spec.identityFields.map(field => [field, { type: 'string' }]));
+      if (spec.selector) {
+        properties[spec.selector.field] = name === 'sub_issue_write'
+          ? { type: 'string' }
+          : { type: 'string', enum: Object.keys(spec.selector.choices) };
+      }
+      if (spec.identityFiles) properties.files = {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+          additionalProperties: false,
+        },
+      };
+      return {
+        name: `gh_${name}`,
+        description: `GitHub ${name}`,
+        inputSchema: { type: 'object', properties, additionalProperties: false },
+        moduleId: 'github',
+        execute: async () => ({}),
+      };
+    });
+    const azureTools = Object.entries(azureActionSpecs).map(([name, spec]) => ({
+      name: `az_${name}`,
+      description: `Azure ${name}`,
+      inputSchema: {
+        type: 'object',
+        properties: Object.fromEntries(spec.identityFields.map(field => [field, { type: 'string' }])),
+        additionalProperties: false,
+      },
+      moduleId: 'azure',
+      execute: async () => ({}),
+    }));
+    const github: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => schemaTools, call: async () => ({ outcome: 'ok', result: {} }),
+    };
+    const azure: RemoteMcpBridge = {
+      prefix: 'az_', label: 'Azure', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => azureTools, call: async () => ({ outcome: 'ok', result: {} }),
+    };
+    const { registry, tool } = setup([github, azure]);
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId,
+      sessionId: '7',
+      messageId: '42',
+      signal: live(),
+    });
+    const githubFound = await tool('find_tools', {
+      turn: grant.turn, query: 'github issue automation repository action catalogue',
+    });
+    const azureFound = await tool('find_tools', {
+      turn: grant.turn, query: 'azure monitor webtest update',
+    });
+    expect(githubFound.body?.result.providerContractErrors).toBeUndefined();
+    expect(azureFound.body?.result.providerContractErrors).toBeUndefined();
+    for (const name of deployedGithubWriteNames) {
+      const remote = grant.remoteTools.get(`gh_${name}`);
+      expect(remote).toBeDefined();
+      const spec = githubActionSpecs[name];
+      const args = {
+        ...(spec?.selector ? { [spec.selector.field]: Object.keys(spec.selector.choices)[0] } : {}),
+        ...(name === 'assign_copilot_to_issue_with_intent' ? { is_suggestion: false } : {}),
+      };
+      expect(typeof remote?.completion?.operation === 'function'
+        ? remote.completion.operation(args)
+        : remote?.completion?.operation).not.toBe('generic');
+    }
+    expect(grant.remoteTools.has('az_monitor_webtests_createorupdate')).toBe(true);
+    for (const [name, args, operation] of [
+      ['gh_actions_run_trigger', { method: 'cancel_workflow_run' }, 'delete'],
+      ['gh_issue_write', { method: 'update' }, 'update'],
+      ['gh_label_write', { method: 'delete' }, 'delete'],
+      ['gh_projects_write', { method: 'create_project' }, 'create'],
+      ['gh_pull_request_review_write', { method: 'create' }, 'create'],
+      ['gh_pull_request_review_write', { method: 'submit_pending' }, 'send'],
+      ['gh_sub_issue_write', { method: 'add' }, 'update'],
+      ['az_monitor_webtests_createorupdate', {}, 'update'],
+    ] as const) {
+      const remote = grant.remoteTools.get(name);
+      expect(typeof remote?.completion?.operation === 'function'
+        ? remote.completion.operation(args)
+        : remote?.completion?.operation).toBe(operation);
+    }
+  });
+
   it('opens only to the static PI credential, and only on its own route', async () => {
     const { rpc, app } = setup();
     expect((await rpc(undefined, 'initialize', initialize)).status).toBe(401);
@@ -230,7 +413,13 @@ describe('PI MCP server', () => {
       }],
       call: async () => {
         calls += 1;
-        return { outcome: 'ok', result: { number: 1967, status: 'updated' } };
+        return {
+          outcome: 'ok',
+          result: {
+            method: 'update',
+            issue: { id: 'issue-1967', url: 'https://github.com/DanAakesen/jarvis/issues/1967' },
+          },
+        };
       },
     };
     const { registry, tool } = setup([bridge]);
@@ -247,12 +436,18 @@ describe('PI MCP server', () => {
       : remote?.completion?.operation).toBe('update');
     expect(remote?.completion?.evaluate(
       args,
-      { number: 1967, status: 'updated' },
+      {
+        method: 'update',
+        issue: { id: 'issue-1967', url: 'https://github.com/DanAakesen/jarvis/issues/1967' },
+      },
     )).toBe(true);
     expect(completionEvidence(
       remote!,
       args,
-      { number: 1967, status: 'updated' },
+      {
+        method: 'update',
+        issue: { id: 'issue-1967', url: 'https://github.com/DanAakesen/jarvis/issues/1967' },
+      },
     )).toBeDefined();
     expect(grant.completion.requirements).toEqual([
       expect.objectContaining({ domain: 'github', operation: 'update' }),
@@ -261,7 +456,10 @@ describe('PI MCP server', () => {
       grant.completion,
       remote!,
       args,
-      { number: 1967, status: 'updated' },
+      {
+        method: 'update',
+        issue: { id: 'issue-1967', url: 'https://github.com/DanAakesen/jarvis/issues/1967' },
+      },
     )).toBeDefined();
     const result = await tool('call_tool', {
       turn: grant.turn, name: 'gh_issue_write', arguments: args,
@@ -430,13 +628,9 @@ describe('PI MCP server', () => {
         calls += 1;
         return {
           outcome: 'ok',
-          result: {
-            owner: 'DanAakesen', repo: 'jarvis', branch: 'refs/heads/main',
-            ...(name === 'gh_push_files'
-              ? { paths: ['src/example.ts'] }
-              : { path: 'src/example.ts' }),
-            sha: 'b'.repeat(40), status: 'written',
-          },
+          result: name === 'gh_push_files'
+            ? { ref: 'refs/heads/main', object: { type: 'commit', sha: 'b'.repeat(40) } }
+            : { commit: { sha: 'b'.repeat(40) }, content: { path: 'src/example.ts' } },
         };
       },
     };
@@ -489,6 +683,209 @@ describe('PI MCP server', () => {
     });
   });
 
+  it('compiles the deployed Azure write schema and separates target from mutable web-test payload', async () => {
+    let calls = 0;
+    let wrongReceipt = false;
+    let wrongPayload = false;
+    const bridge: RemoteMcpBridge = {
+      prefix: 'az_', label: 'Azure', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [
+        {
+          name: 'az_monitor_webtests_createorupdate',
+          description: 'Create or update an Azure Monitor web test.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              subscription: { type: 'string' },
+              'resource-group': { type: 'string' },
+              'webtest-resource': { type: 'string' },
+              'request-url': { type: 'string' },
+              webtest: { type: 'string' },
+              enabled: { type: 'boolean' },
+              description: { type: 'string' },
+            },
+            required: ['subscription', 'resource-group', 'webtest-resource'],
+            additionalProperties: false,
+          },
+          moduleId: 'azure',
+          execute: async () => ({}),
+        },
+        {
+          name: 'az_monitor_webtests_delete',
+          description: 'Delete an Azure Monitor web test.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              subscription: { type: 'string' },
+              'resource-group': { type: 'string' },
+              'webtest-resource': { type: 'string' },
+            },
+            required: ['subscription', 'resource-group', 'webtest-resource'],
+            additionalProperties: false,
+          },
+          moduleId: 'azure',
+          execute: async () => ({}),
+        },
+      ],
+      call: async () => {
+        calls += 1;
+        return {
+          outcome: 'ok',
+          result: {
+            webTest: {
+              id: '/subscriptions/sub/resourceGroups/Jarvis-RG/providers/Microsoft.Insights/webtests/availability-fixture',
+              resourceName: wrongReceipt ? 'wrong-target' : 'Availability-Fixture',
+              resourceGroup: 'jarvis-rg',
+              webTestName: 'Availability fixture',
+              isEnabled: !wrongPayload,
+              request: {
+                requestUrl: wrongPayload ? 'https://wrong.example.test' : 'https://example.test/health',
+              },
+            },
+          },
+        };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Update Azure availability-fixture in Jarvis-RG.');
+    const found = await tool('find_tools', {
+      turn: grant.turn, query: 'azure monitor web test update',
+    });
+    expect(found.body?.result.providerContractErrors).toContainEqual({
+      tool: 'az_monitor_webtests_delete',
+      error: expect.any(String),
+    });
+    expect(grant.remoteTools.has('az_monitor_webtests_createorupdate')).toBe(true);
+    expect(grant.remoteTools.has('az_monitor_webtests_delete')).toBe(false);
+    const arguments_ = {
+      subscription: 'sub',
+      'resource-group': 'Jarvis-RG',
+      'webtest-resource': 'availability-fixture',
+      'request-url': 'https://example.test/health',
+      webtest: 'Availability fixture',
+      enabled: true,
+      description: 'wrong-target',
+    };
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: {
+        ...arguments_,
+        'webtest-resource': 'wrong-target',
+        description: 'availability-fixture',
+      },
+    });
+    expect(calls).toBe(0);
+
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: arguments_,
+    });
+    expect(calls).toBe(1);
+    expect(grant.evidence.at(-1)).toMatchObject({
+      tool: 'az_monitor_webtests_createorupdate',
+      operation: 'update',
+      domain: 'azure',
+    });
+
+    wrongReceipt = true;
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: arguments_,
+    });
+    expect(calls).toBe(2);
+    expect(grant.evidence).toHaveLength(1);
+    expect(grant.unverified.count).toBe(1);
+
+    wrongReceipt = false;
+    wrongPayload = true;
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: arguments_,
+    });
+    expect(calls).toBe(3);
+    expect(grant.evidence).toHaveLength(1);
+    expect(grant.unverified.count).toBe(2);
+  });
+
+  it('preserves multi-row remote reads as ambiguous contextual bindings', async () => {
+    const calls: string[] = [];
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [
+        {
+          name: 'gh_get_file_contents',
+          description: 'Read repository file contents.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              owner: { type: 'string' }, repo: { type: 'string' }, path: { type: 'string' },
+            },
+            required: ['owner', 'repo'],
+            additionalProperties: false,
+          },
+          moduleId: 'github', execute: async () => ({}),
+        },
+        {
+          name: 'gh_delete_file',
+          description: 'Delete a file.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              owner: { type: 'string' }, repo: { type: 'string' },
+              path: { type: 'string' }, branch: { type: 'string' }, message: { type: 'string' },
+            },
+            required: ['owner', 'repo', 'path', 'branch', 'message'],
+            additionalProperties: false,
+          },
+          moduleId: 'github', execute: async () => ({}),
+        },
+      ],
+      call: async (name) => {
+        calls.push(name);
+        return name === 'gh_get_file_contents'
+          ? {
+            outcome: 'ok',
+            result: {
+              files: [
+                { id: 'file-a', path: 'src/a.ts' },
+                { id: 'file-b', path: 'src/b.ts' },
+              ],
+            },
+          }
+          : { outcome: 'ok', result: { commit: { sha: 'b'.repeat(40) } } };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Read GitHub files in DanAakesen/jarvis.');
+    await tool('find_tools', { turn: grant.turn, query: 'github file read delete' });
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_get_file_contents',
+      arguments: { owner: 'DanAakesen', repo: 'jarvis' },
+    });
+    expect(new Set(grant.bindings.at(-1)?.identityTargets.map(
+      binding => binding.identityGroupHash,
+    )).size).toBe(2);
+
+    grant.completion = completionPlan('Delete it.');
+    const deleted = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_delete_file',
+      arguments: {
+        owner: 'DanAakesen', repo: 'jarvis',
+        path: 'src/a.ts', branch: 'main', message: 'Delete it',
+      },
+    });
+    expect(deleted.body).toMatchObject({ outcome: 'refused' });
+    expect(calls).toEqual(['gh_get_file_contents']);
+  });
+
   it('covers production GitHub star, review request and review thread operations', async () => {
     const bridge: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
@@ -531,16 +928,25 @@ describe('PI MCP server', () => {
       call: async (name) => ({
         outcome: 'ok',
         result: name === 'gh_star_repository'
-          ? { owner: 'DanAakesen', repo: 'jarvis', starred: true }
+          ? { message: 'Successfully starred repository DanAakesen/jarvis' }
           : name === 'gh_request_copilot_review'
-            ? { owner: 'DanAakesen', repo: 'jarvis', pullNumber: 7, requested: true }
-            : { threadId: 'thread-1', resolved: false },
+            ? { status: 'requested' }
+            : { message: 'Review thread un-resolved successfully.' },
       }),
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
     grant.completion = completionPlan('Star DanAakesen/jarvis on GitHub.');
     await tool('find_tools', { turn: grant.turn, query: 'github repository star review' });
+    const star = grant.remoteTools.get('gh_star_repository');
+    expect(star?.completion?.evaluate(
+      { owner: 'DanAakesen', repo: 'jarvis' },
+      'Successfully starred repository DanAakesen/jarvis',
+    )).toBe(true);
+    expect(star?.completion?.evaluate(
+      { owner: 'DanAakesen', repo: 'jarvis' },
+      { message: 'Successfully starred repository DanAakesen/jarvis' },
+    )).toBe(true);
     await tool('call_tool', {
       turn: grant.turn, name: 'gh_star_repository', arguments: { owner: 'DanAakesen', repo: 'jarvis' },
     });
@@ -587,13 +993,13 @@ describe('PI MCP server', () => {
         moduleId: 'github',
         execute: async () => ({}),
       }],
-      call: async (_name, args) => {
+      call: async () => {
         calls += 1;
         return {
           outcome: 'ok',
           result: {
-            deleted: true, owner: args.owner, repo: args.repo,
-            path: args.path, branch: 'refs/heads/main',
+            commit: { sha: 'b'.repeat(40), message: 'Delete src/example.ts' },
+            content: null,
           },
         };
       },

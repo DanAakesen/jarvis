@@ -11,6 +11,7 @@ import type {
 } from '../database/memory-store.js';
 import { createMemoryModule, isExplicitMemoryRequest } from './memory.js';
 import { createToolRegistry, ToolRefusal } from './tool-registry.js';
+import { completionEvidence, completionPlan } from '../pi/completion.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const ownerToken = 'owner.memory.fixture';
@@ -152,6 +153,62 @@ describe('Personal Memory', () => {
       'memory_correct',
       'memory_forget',
     ]);
+  });
+
+  it('binds Memory capture and correction plans to stable identity, not mutable content', () => {
+    const module = createMemoryModule({ store: memoryStore().store });
+    const registry = createToolRegistry([module]);
+    const remember = registry.get('memory_remember')!;
+    const correct = registry.get('memory_correct')!;
+
+    const capturePlan = completionPlan('Remember this preference about Alice.');
+    expect(capturePlan.requirements[0]).toMatchObject({
+      domain: 'memory', operation: 'create', targetHashes: [],
+    });
+    expect(remember.completion?.evaluate(
+      {
+        category: 'preference', key: 'people.alice',
+        content: 'Alice prefers morning appointments.',
+        sourceIntent: 'requested',
+      },
+      { id: '77', key: 'people.alice', revision: 1 },
+    )).toBe(true);
+    expect(completionEvidence(
+      remember,
+      {
+        category: 'preference', key: 'people.alice',
+        content: 'Alice prefers morning appointments.',
+        sourceIntent: 'requested',
+      },
+      { id: '77', key: 'people.alice', revision: 1 },
+    )).toMatchObject({ kind: 'committed', operation: 'create' });
+    expect(completionEvidence(
+      capturePlan,
+      remember,
+      {
+        category: 'preference', key: 'people.alice',
+        content: 'Alice prefers morning appointments.',
+        sourceIntent: 'requested',
+      },
+      { id: '77', key: 'people.alice', revision: 1 },
+    )).toMatchObject({ kind: 'committed', operation: 'create' });
+
+    const correctionPlan = completionPlan('Correct memory 77 to morning appointments.');
+    expect(correctionPlan.requirements[0]).toMatchObject({
+      domain: 'memory', operation: 'update',
+    });
+    expect(completionEvidence(
+      correctionPlan,
+      correct,
+      { memoryId: '77', content: 'Alice prefers morning appointments.' },
+      { id: '77', key: 'people.alice', revision: 2 },
+    )).toMatchObject({ kind: 'committed', operation: 'update' });
+    expect(completionEvidence(
+      correctionPlan,
+      correct,
+      { memoryId: '77', content: 'Alice prefers morning appointments.' },
+      { id: '88', key: 'people.alice', revision: 2 },
+    )).toBeUndefined();
   });
 
   it('lets an explicit remember request write while automatic capture is off and attributes the stored Dan message', async () => {

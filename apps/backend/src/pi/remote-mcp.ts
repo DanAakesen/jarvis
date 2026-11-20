@@ -200,7 +200,12 @@ export function createRemoteMcpBridge(options: {
         const body = text(result.content);
         let parsed: unknown = body;
         try { parsed = JSON.parse(body); } catch { /* plain text stays text */ }
-        return result.isError === true ? { outcome: 'error', result: { error: body || `${options.label} returned an error.` } } : { outcome: 'ok', result: parsed };
+        const output = result.structuredContent !== undefined && result.structuredContent !== null
+          ? result.structuredContent
+          : parsed;
+        return result.isError === true
+          ? { outcome: 'error', result: { error: body || `${options.label} returned an error.` } }
+          : { outcome: 'ok', result: output };
       } catch (error) {
         if (signal.aborted) throw error;
         return { outcome: 'error', result: { error: `${options.label} could not be reached. Nothing is confirmed as done.` } };

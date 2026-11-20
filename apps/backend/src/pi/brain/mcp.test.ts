@@ -479,7 +479,16 @@ describe('GitHub through the Jarvis door', () => {
     const github: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [ghTool],
-      call: async (name, args) => { called.push(`${name}:${JSON.stringify(args)}`); return { outcome: 'ok', result: { number: 7 } }; },
+      call: async (name, args) => {
+        called.push(`${name}:${JSON.stringify(args)}`);
+        return {
+          outcome: 'ok',
+          result: {
+            method: 'update',
+            issue: { id: 'issue-7', url: 'https://github.com/DanAakesen/jarvis/issues/7' },
+          },
+        };
+      },
     };
     return { github, called };
   };
@@ -499,7 +508,10 @@ describe('GitHub through the Jarvis door', () => {
           issue_number: 7, title: 'x',
         },
       });
-      expect(done).toMatchObject({ outcome: 'ok', result: { number: 7 } });
+      expect(done).toMatchObject({
+        outcome: 'ok',
+        result: { method: 'update', issue: { id: 'issue-7' } },
+      });
       expect(grant.results).toEqual([{ tool: 'gh_issue_write', outcome: 'ok' }]);
     }
     expect(called).toEqual([

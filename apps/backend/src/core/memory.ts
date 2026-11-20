@@ -359,7 +359,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
       name: 'memory_remember',
       completion: {
         domain: 'memory', operation: 'create',
-        requestTargetFields: ['category', 'key', 'content', 'sourceIntent'],
+        requestTargetFields: ['key'],
         resultTargetFields: ['id', 'key', 'revision'], evaluate: receipt.memoryWrite,
       },
       description: 'Save a preference, project fact, decision or unfinished task that Dan clearly stated in this owner message or its resolved context. Explicit remember, don’t forget, remember this and equivalent English or Danish requests always use Personal Memory, never Vault. sourceIntent labels the model’s interpretation but the stored Dan message proves authority. Never save a secret or credential. Automatic capture saves only clearly stated durable facts while automatic capture is enabled, and never sensitive health or financial details. Use a stable key; search first and preserve corrections under the same key.',
@@ -506,7 +506,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     {
       name: 'memory_correct',
       completion: {
-        domain: 'memory', operation: 'update', requestTargetFields: ['memoryId', 'content'],
+        domain: 'memory', operation: 'update', requestTargetFields: ['memoryId'],
         resultTargetFields: ['id', 'key', 'revision'], evaluate: receipt.memoryWrite,
       },
       description: 'Correct an existing memory after Dan corrects or updates it. Keep its category and stable key, verify this message is from Dan, and preserve the previous source-linked version.',
