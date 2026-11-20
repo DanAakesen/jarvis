@@ -7,6 +7,7 @@
 | Promote `core/memory.ts` into the production module registry and expose all supported tools through `/tools` and PI MCP | Done |
 | Enforce direct remember/capture authority from the stored Dan message, sensitivity rules, stable identity, history and forget behaviour | Done |
 | Add migration `0091` so Settings corrections/deletions carry verified request/owner provenance instead of the original capture message; reject secrets across category, key, source and content | Done; isolated SQL provenance contract passes |
+| Normalize key separators for credential policy and withhold credential-like legacy records from PI Memory serialization | Done; focused Memory tool/API and SQL contract pass |
 | Move `/memory` ownership out of Vault; keep SQL Memory API, UI edits and deletion independent of Vault availability | Done |
 | Add separate bounded Memory recall and capture instructions for Chat, Voice and background PI, with trusted `memory.automaticCapture` context | Done |
 | Make Knowledge read Vault notes through the Notes API, and refresh iPhone/web Memory pagination after successful tool writes | Done |

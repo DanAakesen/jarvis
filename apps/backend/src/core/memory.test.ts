@@ -199,7 +199,7 @@ describe('Personal Memory', () => {
 
     const automatic = memoryStore(new Map([
       ['43', 'My diagnosis is private.'],
-      ['44', 'Remember this password: violet-thunder.'],
+      ['44', 'Remember this api_key: violet-thunder.'],
     ]));
     const automaticModule = createMemoryModule({
       store: automatic.store,
@@ -232,18 +232,71 @@ describe('Personal Memory', () => {
       embedder: { model: 'fixture-embedding', embed },
     });
 
-    await expect(tool(module, 'memory_remember').execute({
-      category: 'preference',
-      key: 'password',
-      content: 'An innocuous value.',
-      sourceIntent: 'requested',
-    }, ownerRequest('42'), AbortSignal.timeout(1_000))).rejects.toThrow(/Secrets/u);
+    for (const key of ['password', 'api_key', 'access.token', 'private_key', 'seed_phrase', 'recovery.phrase']) {
+      await expect(tool(module, 'memory_remember').execute({
+        category: 'preference',
+        key,
+        content: 'An innocuous value.',
+        sourceIntent: 'requested',
+      }, ownerRequest('42'), AbortSignal.timeout(1_000))).rejects.toThrow(/Secrets/u);
+    }
     await expect(tool(module, 'memory_correct').execute({
       memoryId: '1',
       content: 'Another innocuous value.',
     }, ownerRequest('43'), AbortSignal.timeout(1_000))).rejects.toThrow(/Secrets/u);
     expect(embed).not.toHaveBeenCalled();
     expect(fixture.writes).toEqual([]);
+  });
+
+  it('withholds credential-like legacy key, content and source text from PI search, list and history', async () => {
+    const fixture = memoryStore(new Map([['42', 'Remember these appointments.']]));
+    fixture.records.set('1', record({
+      category: 'preference',
+      key: 'appointments.time',
+      content: 'Afternoon appointment preference.',
+      source: { kind: 'conversation', messageId: '42' },
+    }));
+    fixture.records.set('2', {
+      ...record({
+        category: 'preference',
+        key: 'api_key',
+        content: 'Appointment provider value.',
+        source: { kind: 'conversation', messageId: '42' },
+      }, '2'),
+      sourceText: 'Remember this appointment provider.',
+    });
+    fixture.records.set('3', {
+      ...record({
+        category: 'preference',
+        key: 'appointments.provider',
+        content: 'Appointment provider is safe.',
+        source: { kind: 'conversation', messageId: '42' },
+      }, '3'),
+      sourceText: 'The access_token=fixture-secret appears in this old source.',
+    });
+    const module = createMemoryModule({ store: fixture.store });
+    const request = ownerRequest('42');
+    const listed = await tool(module, 'memory_list').execute({}, request, AbortSignal.timeout(1_000));
+    const searched = await tool(module, 'memory_search').execute(
+      { query: 'appointment' },
+      request,
+      AbortSignal.timeout(1_000),
+    );
+    const history = await tool(module, 'memory_history').execute(
+      { memoryId: '2' },
+      request,
+      AbortSignal.timeout(1_000),
+    );
+    expect(listed).toMatchObject({ count: 1, withheldCredentialRecords: 2 });
+    expect(searched).toMatchObject({ count: 1, withheldCredentialRecords: 2 });
+    expect(history).toMatchObject({ versions: [], withheldCredentialVersions: 1 });
+    for (const result of [listed, searched, history]) {
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain('api_key');
+      expect(serialized).not.toContain('access_token');
+      expect(serialized).not.toContain('fixture-secret');
+      expect(serialized).not.toContain('Appointment provider value');
+    }
   });
 
   it('corrects the same identity and keeps revision history behind the new source', async () => {
@@ -320,7 +373,7 @@ describe('Personal Memory API', () => {
     })).statusCode).toBe(400);
     fixture.records.set('3', record({
       category: 'preference',
-      key: 'password',
+      key: 'access_token',
       content: 'Legacy key that policy must refuse.',
       source: { kind: 'conversation', messageId: '42' },
     }, '3'));
@@ -332,6 +385,24 @@ describe('Personal Memory API', () => {
     });
     expect(blocked.statusCode).toBe(400);
     expect(fixture.writes).toEqual([]);
+    fixture.records.set('4', {
+      ...record({
+        category: 'preference',
+        key: 'legacy.source',
+        content: 'Otherwise harmless.',
+        source: { kind: 'conversation', messageId: '42' },
+      }, '4'),
+      sourceText: 'Old source mentions private_key and a value.',
+    });
+    const redactedLegacy = await app.inject({
+      url: '/memory/4',
+      headers: { authorization: bearer(ownerToken) },
+    });
+    expect(redactedLegacy.statusCode).toBe(200);
+    expect(redactedLegacy.json()).toMatchObject({
+      key: '[redacted]',
+      content: '[redacted]',
+    });
     const corrected = await app.inject({
       method: 'PATCH',
       url: '/memory/1',

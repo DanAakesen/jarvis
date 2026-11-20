@@ -39,6 +39,31 @@ const explicitCapturePattern = [
   /\bmake\s+(?:that|this|it)\s+(?:a\s+)?(?:personal\s+)?memory\b/iu,
 ] as const;
 
+function normalizeMemoryPolicyText(value: string): string {
+  return value.normalize('NFKC').replace(/[._-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
+}
+
+function hasCredentialMarker(value: string): boolean {
+  const normalized = normalizeMemoryPolicyText(value);
+  return credentialPattern.test(normalized) ||
+    secretValuePattern.test(value) ||
+    secretValuePattern.test(normalized);
+}
+
+function hasSensitiveMarker(value: string): boolean {
+  return sensitivePattern.test(normalizeMemoryPolicyText(value));
+}
+
+function memoryContainsCredential(record: MemoryRecord): boolean {
+  return hasCredentialMarker(
+    `${record.category}\n${record.key}\n${record.content}\n${record.sourceText}`,
+  );
+}
+
+function safeMemoryDetails(record: MemoryRecord) {
+  return memoryContainsCredential(record) ? null : memoryDetails(record);
+}
+
 export interface MemoryModuleOptions {
   readonly store: MemoryStore;
   readonly embedder?: MemoryEmbedder;
@@ -136,10 +161,6 @@ function memoryDetails(record: MemoryRecord) {
   };
 }
 
-function shouldRedactMemory(value: string): boolean {
-  return credentialPattern.test(value) || secretValuePattern.test(value);
-}
-
 function snippet(value: string): string {
   return value.replace(/\s+/gu, ' ').trim().slice(0, 500);
 }
@@ -166,7 +187,7 @@ function apiMemorySource(record: MemoryRecord) {
 }
 
 function memoryApiItem(record: MemoryRecord) {
-  const redacted = shouldRedactMemory(`${record.key}\n${record.content}`);
+  const redacted = memoryContainsCredential(record);
   return {
     id: record.id,
     type: 'memory' as const,
@@ -179,7 +200,7 @@ function memoryApiItem(record: MemoryRecord) {
 }
 
 function memoryHistoryItem(version: MemoryVersion) {
-  const redacted = shouldRedactMemory(`${version.key}\n${version.content}`);
+  const redacted = memoryContainsCredential(version);
   return {
     id: version.id,
     category: version.category,
@@ -223,10 +244,10 @@ function validateMemoryWrite(
   automatic: boolean,
 ): void {
   const combined = `${categoryName}\n${key}\n${sourceText}\n${content}`;
-  if (credentialPattern.test(combined) || secretValuePattern.test(combined)) {
+  if (hasCredentialMarker(combined)) {
     throw new ToolRefusal('Secrets and credentials cannot be saved in memory. Nothing changed.');
   }
-  if (automatic && sensitivePattern.test(combined)) {
+  if (automatic && hasSensitiveMarker(combined)) {
     throw new ToolRefusal('Sensitive details are not saved by automatic capture. Dan must explicitly ask to remember them.');
   }
 }
@@ -415,15 +436,21 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         checkPrincipal(request);
         const query = requiredString(asObject(value).query, 'search query', 500);
         const result = await search(query, MAX_MEMORY_RESULTS, signal, request);
+        const memories = result.memories.flatMap((memory) => {
+          const safe = safeMemoryDetails(memory);
+          return safe ? [safe] : [];
+        });
+        const withheld = result.memories.length - memories.length;
         return {
-          memories: result.memories.map(memoryDetails),
-          count: result.memories.length,
+          memories,
+          count: memories.length,
           method: result.method,
           limit: MAX_MEMORY_RESULTS,
           mayHaveMore: result.mayHaveMore,
           ...(result.fallbackReason ? { fallbackReason: result.fallbackReason } : {}),
-          confirmation: result.memories.length > 0
-            ? `Found ${result.memories.length} source-linked memories using ${result.method} search.`
+          ...(withheld > 0 ? { withheldCredentialRecords: withheld } : {}),
+          confirmation: memories.length > 0
+            ? `Found ${memories.length} source-linked memories using ${result.method} search.`
             : 'No source-supported memories matched.',
         };
       },
@@ -445,12 +472,18 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           throw new ToolRefusal('Memory list limit must be between 1 and 25.');
         }
         const page = await store.list(limit, signal);
+        const memories = page.memories.flatMap((memory) => {
+          const safe = safeMemoryDetails(memory);
+          return safe ? [safe] : [];
+        });
+        const withheld = page.memories.length - memories.length;
         return {
-          memories: page.memories.map(memoryDetails),
-          count: page.memories.length,
+          memories,
+          count: memories.length,
           limit,
           hasMore: page.hasMore,
-          confirmation: `Listed ${page.memories.length} current memories with their sources.`,
+          ...(withheld > 0 ? { withheldCredentialRecords: withheld } : {}),
+          confirmation: `Listed ${memories.length} current memories with safe sources.`,
         };
       },
     },
@@ -470,13 +503,16 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const versions = await store.history(id, MAX_HISTORY_RESULTS + 1, signal);
         if (versions.length === 0) throw new ToolRefusal('No saved memory with that ID exists.');
         const boundedVersions = versions.slice(0, MAX_HISTORY_RESULTS);
+        const safeVersions = boundedVersions.flatMap((version) => {
+          const safe = safeMemoryDetails(version);
+          return safe ? [{ ...safe, changedAt: version.changedAt.toISOString() }] : [];
+        });
+        const withheld = boundedVersions.length - safeVersions.length;
         return {
-          versions: boundedVersions.map((version) => ({
-            ...memoryDetails(version),
-            changedAt: version.changedAt.toISOString(),
-          })),
+          versions: safeVersions,
           mayHaveMore: versions.length > MAX_HISTORY_RESULTS,
-          confirmation: `Found ${boundedVersions.length} source-linked memory versions.`,
+          ...(withheld > 0 ? { withheldCredentialVersions: withheld } : {}),
+          confirmation: `Found ${safeVersions.length} source-linked memory versions with safe content.`,
         };
       },
     },
@@ -539,11 +575,13 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const id = memoryId(asObject(value).memoryId);
         const forgotten = await store.forget(id, { kind: 'conversation', messageId: sourceId }, signal);
         if (!forgotten) throw new ToolRefusal('No saved memory with that ID exists. Nothing was deleted.');
+        const redacted = hasCredentialMarker(`${forgotten.category}\n${forgotten.key}`);
+        const safeKey = redacted ? '[redacted]' : forgotten.key;
         return {
           id,
           category: forgotten.category,
-          key: forgotten.key,
-          confirmation: confirmation('forgotten', forgotten.category, forgotten.key),
+          key: safeKey,
+          confirmation: confirmation('forgotten', forgotten.category, safeKey),
         };
       },
     },
@@ -645,8 +683,8 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         return {
           ...memoryApiItem(current),
           category: current.category,
-          key: shouldRedactMemory(`${current.key}\n${current.content}`) ? '[redacted]' : current.key,
-          content: shouldRedactMemory(`${current.key}\n${current.content}`) ? '[redacted]' : current.content,
+          key: memoryContainsCredential(current) ? '[redacted]' : current.key,
+          content: memoryContainsCredential(current) ? '[redacted]' : current.content,
           history: versions.slice(0, MAX_MEMORY_API_HISTORY).map(memoryHistoryItem),
           mayHaveMore: versions.length > MAX_MEMORY_API_HISTORY,
         };
@@ -669,7 +707,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           return reply.code(400).send({ error: 'Invalid memory ID' });
         }
         const text = request.body.text.trim();
-        if (!text || text.length > 2_000 || sensitivePattern.test(text)) {
+        if (!text || text.length > 2_000 || hasSensitiveMarker(text)) {
           return reply.code(400).send({ error: 'Memory text is invalid or contains restricted sensitive content' });
         }
         const signal = AbortSignal.timeout(30_000);

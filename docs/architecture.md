@@ -5819,7 +5819,11 @@ Automatic capture is allowed only while `memory.automaticCapture` is on and
 never accepts inferred facts, secrets, credentials or sensitive health and
 financial details. Before embedding or persistence, `memory_remember`,
 `memory_correct` and Settings edits validate the combined category, stable
-key, source text and content for secrets. Successful Chat/Voice tool completion invalidates iPhone
+key, source text and content for secrets after normalising `.`, `_` and `-`
+key separators to spaces. The same classifier gates PI `memory_search`,
+`memory_list` and `memory_history`; credential-like legacy rows are withheld
+from their serialized key, content and source rather than relying on Settings
+redaction. Successful Chat/Voice tool completion invalidates iPhone
 and web Memory pagination so a newly committed preference is visible from a
 fresh page; failures remain visible and are never represented as a remembered
 confirmation.
