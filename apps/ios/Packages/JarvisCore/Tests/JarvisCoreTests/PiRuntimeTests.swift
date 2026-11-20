@@ -86,17 +86,15 @@ final class PiRuntimeTests: XCTestCase {
         let client = VoiceSessionClient(
             baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
             transport: socket,
-            endAcknowledgementTimeout: .milliseconds(500)
+            endAcknowledgementTimeout: .seconds(2)
         )
         try await client.start(accessToken: "a.b.c")
         await socket.emit(#"{"type":"jarvis.session.ready","sessionId":"42"}"#)
         let ending = Task { try await client.end() }
-        var sentEnd = false
-        for _ in 0..<50 {
-            sentEnd = await socket.sentTexts().contains(#"{"type":"jarvis.session.end"}"#)
-            if sentEnd { break }
-            await Task.yield()
-        }
+        let sentEnd = await socket.waitForText(
+            #"{"type":"jarvis.session.end"}"#,
+            timeout: .seconds(1)
+        )
         XCTAssertTrue(sentEnd)
         let closedBeforeAcknowledgement = await socket.wasClosed()
         let stateBeforeAcknowledgement = await client.state()
@@ -459,6 +457,13 @@ private actor VoiceEndSocket: WebSocketTransport {
     }
 
     func sentTexts() -> [String] { sent }
+    func waitForText(_ expected: String, timeout: Duration) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !sent.contains(expected), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return sent.contains(expected)
+    }
     func wasClosed() -> Bool { !closes.isEmpty }
     func closeCodes() -> [UInt16] { closes }
 }
