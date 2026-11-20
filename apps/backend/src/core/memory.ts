@@ -23,6 +23,7 @@ const idPattern = /^[1-9]\d{0,18}$/u;
 const categories = new Set<MemoryCategory>(['preference', 'project_fact', 'decision', 'unfinished_task']);
 const credentialTerms = String.raw`(?:password|passphrase|secret|(?:api|auth|authorization|private)[ -]?key|(?:(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token)|credential|seed[ -]?phrase|recovery[ -]?phrase)`;
 const credentialPattern = new RegExp(String.raw`\b${credentialTerms}\b`, 'iu');
+const tokenFamilyPattern = /(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token/iu;
 const sensitivePattern = new RegExp(
   String.raw`\b(?:${credentialTerms}|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b`,
   'iu',
@@ -47,12 +48,18 @@ const explicitCapturePattern = [
 ] as const;
 
 function normalizeMemoryPolicyText(value: string): string {
-  return value.normalize('NFKC').replace(/[._-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
+  return value.normalize('NFKC')
+    .replace(/([\p{Ll}\p{Nd}])(\p{Lu})/gu, '$1 $2')
+    .replace(/(\p{Lu}+)(\p{Lu}\p{Ll})/gu, '$1 $2')
+    .replace(/[._-]+/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
 }
 
 function hasCredentialMarker(value: string): boolean {
   const normalized = normalizeMemoryPolicyText(value);
   return credentialPattern.test(normalized) ||
+    tokenFamilyPattern.test(normalized) ||
     secretValuePattern.test(value) ||
     secretValuePattern.test(normalized);
 }

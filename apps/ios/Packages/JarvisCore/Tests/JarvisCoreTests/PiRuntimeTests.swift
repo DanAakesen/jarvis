@@ -211,6 +211,26 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertTrue(page.hasMore)
     }
 
+    func testMemoryClientCanAdvanceAcrossAnAllVaultLegacyPage() async throws {
+        let raw = #"""
+        {"items":[
+          {"id":"vault_b25l","type":"vault_note","title":"One","folder":"Personal","content":"One"},
+          {"id":"vault_dHdv","type":"vault_note","title":"Two","folder":"Personal","content":"Two"}
+         ],
+         "count":2,"limit":50,"offset":50,"hasMore":true}
+        """#
+        let transport = RecordingTransport([HTTPResponse(statusCode: 200, body: Data(raw.utf8))])
+        let settings = JarvisSettingsClient(
+            client: try makeClient(transport: transport, retryPolicy: RetryPolicy(maximumRetries: 0))
+        )
+        let page = try await settings.loadMemory(offset: 50)
+        XCTAssertTrue(page.items.isEmpty)
+        XCTAssertEqual(page.count, 0)
+        XCTAssertEqual(page.rawCount, 2)
+        XCTAssertEqual(page.nextOffset, 52)
+        XCTAssertTrue(page.hasMore)
+    }
+
     private func makeClient(
         transport: RecordingTransport,
         retryPolicy: RetryPolicy = RetryPolicy()

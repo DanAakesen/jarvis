@@ -239,9 +239,12 @@ describe('Personal Memory', () => {
       'auth_token',
       'bearer-token',
       'refreshToken',
+      'githubApiToken',
       'session_token',
+      'primaryAuthTokenValue',
       'id.token',
       'oauthToken',
+      'myBearerTokenValue',
       'client_token',
       'private_key',
       'seed_phrase',
@@ -297,6 +300,15 @@ describe('Personal Memory', () => {
       }, '4'),
       sourceText: 'Another old appointment source.',
     });
+    fixture.records.set('5', {
+      ...record({
+        category: 'preference',
+        key: 'appointments.githubApiTokenValue',
+        content: 'Appointment provider integration.',
+        source: { kind: 'conversation', messageId: '42' },
+      }, '5'),
+      sourceText: 'Another old appointment integration.',
+    });
     const module = createMemoryModule({ store: fixture.store });
     const request = ownerRequest('42');
     const listed = await tool(module, 'memory_list').execute({}, request, AbortSignal.timeout(1_000));
@@ -310,14 +322,15 @@ describe('Personal Memory', () => {
       request,
       AbortSignal.timeout(1_000),
     );
-    expect(listed).toMatchObject({ count: 1, withheldCredentialRecords: 3 });
-    expect(searched).toMatchObject({ count: 1, withheldCredentialRecords: 3 });
+    expect(listed).toMatchObject({ count: 1, withheldCredentialRecords: 4 });
+    expect(searched).toMatchObject({ count: 1, withheldCredentialRecords: 4 });
     expect(history).toMatchObject({ versions: [], withheldCredentialVersions: 1 });
     for (const result of [listed, searched, history]) {
       const serialized = JSON.stringify(result);
       expect(serialized).not.toContain('api_key');
       expect(serialized).not.toContain('access_token');
       expect(serialized).not.toContain('bearerToken');
+      expect(serialized).not.toContain('githubApiTokenValue');
       expect(serialized).not.toContain('fixture-secret');
       expect(serialized).not.toContain('Appointment provider value');
     }
