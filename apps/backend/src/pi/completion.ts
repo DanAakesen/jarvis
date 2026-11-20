@@ -20,6 +20,10 @@ export interface PiCompletionRequirement {
 export interface PiCompletionPlan {
   readonly kind: PiCompletionKind;
   readonly requirements: readonly PiCompletionRequirement[];
+  readonly contextual?: boolean;
+  readonly requiresTrustedContext?: boolean;
+  readonly runtimeTargetHashes?: readonly string[];
+  readonly runtimeOperation?: PiCompletionOperation;
 }
 
 export interface PiCompletionEvidence {
@@ -107,10 +111,11 @@ export function toolEffect(
 function operationFamily(value: string): PiCompletionOperation {
   const text = normalized(value).replaceAll('_', ' ').replaceAll('-', ' ');
   if (/\b(?:delete|cancel|close|archive|remove|forget|discard|slet|aflys|luk|fjern)\b/iu.test(text)) return 'delete';
-  if (/\b(?:send|email|forward|reply|comment|draft|mail|send|svar)\b/iu.test(text)) return 'send';
+  if (/^(?:(?:please|can you|could you|would you|will you|vil du|kan du)\s+)?(?:draft|prepare a draft|create a draft)\b/iu.test(text)) return 'create';
+  if (/\b(?:send|email|forward|reply|comment|mail|svar)\b/iu.test(text)) return 'send';
   if (/\b(?:open|launch|focus|show|activate|åbn|vis|fokus)\b/iu.test(text)) return 'open';
   if (/\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|start|kør)\b/iu.test(text)) return 'start';
-  if (/\b(?:create|add|book|schedule|reserve|capture|remember|save|write|log|record|opret|tilføj|planlæg|gem|skriv|husk)\b/iu.test(text)) return 'create';
+  if (/\b(?:create|add|book|schedule|reserve|capture|remember|save|write|log|record|draft|opret|tilføj|planlæg|gem|skriv|husk)\b/iu.test(text)) return 'create';
   if (/\b(?:update|change|edit|move|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu.test(text)) return 'update';
   return 'generic';
 }
@@ -119,6 +124,12 @@ function receiptOperation(
   tool: Pick<RegisteredTool, 'name'>,
   args: Record<string, unknown>,
 ): PiCompletionOperation {
+  const metadata = completionToolMetadata[tool.name];
+  if (metadata) {
+    return typeof metadata.operation === 'function'
+      ? metadata.operation(args)
+      : metadata.operation;
+  }
   const input = Object.entries(args).flatMap(([key, value]) =>
     ['operation', 'action', 'goal'].includes(key) && typeof value === 'string'
       ? [value]
@@ -127,9 +138,182 @@ function receiptOperation(
   return explicit === 'generic' ? operationFamily(tool.name) : explicit;
 }
 
+const fallbackTargetFields = [
+  'id', 'messageId', 'draftId', 'taskId', 'jobId', 'eventId', 'itemId', 'projectId',
+  'path', 'repository', 'repo', 'url', 'sha', 'query', 'q', 'name', 'title', 'subject',
+  'summary', 'to', 'from', 'location', 'value', 'issue', 'issueNumber', 'operation', 'action',
+] as const;
+
+type ToolReceipt =
+  | 'completed' | 'opened' | 'applied' | 'workspace-manage' | 'vault-commit' | 'task-write'
+  | 'issue' | 'comment' | 'github-write' | 'project' | 'project-archive' | 'health-write'
+  | 'inbox-capture' | 'inbox-close' | 'memory-write' | 'memory-delete' | 'job-cancel'
+  | 'model-deployment' | 'preference-update' | 'reminder-write' | 'feedback-write'
+  | 'watch-create' | 'watch-change' | 'pc-close' | 'pc-media' | 'clipboard-write' | 'pc-browser-act'
+  | 'browser-task' | 'settings-write' | 'repository';
+
+interface CompletionToolMetadata {
+  readonly domain: PiCompletionDomain;
+  readonly operation: PiCompletionOperation | ((args: Record<string, unknown>) => PiCompletionOperation);
+  readonly acceptedRequestOperations?: readonly PiCompletionOperation[];
+  readonly targetFields: readonly string[];
+  readonly resultTargetFields: readonly string[];
+  readonly receipt?: ToolReceipt;
+}
+
+const completionToolMetadata: Readonly<Record<string, CompletionToolMetadata>> = {
+  mail_search: { domain: 'mail', operation: 'read', targetFields: ['query'], resultTargetFields: ['id', 'messageId', 'from', 'to', 'subject'] },
+  mail_list_drafts: { domain: 'mail', operation: 'read', targetFields: ['query'], resultTargetFields: ['id', 'draftId', 'to', 'subject'] },
+  mail_send: { domain: 'mail', operation: 'send', targetFields: ['to', 'subject'], resultTargetFields: ['id', 'messageId'], receipt: 'completed' },
+  mail_update_draft: {
+    domain: 'mail', operation: 'update', acceptedRequestOperations: ['create', 'update'],
+    targetFields: ['draftId', 'to', 'subject'], resultTargetFields: ['draftId', 'id'], receipt: 'completed',
+  },
+  mail_delete_draft: { domain: 'mail', operation: 'delete', targetFields: ['draftId'], resultTargetFields: ['draftId', 'id'], receipt: 'completed' },
+  mail_archive: { domain: 'mail', operation: 'update', targetFields: ['messageId'], resultTargetFields: ['messageId', 'id'], receipt: 'completed' },
+  mail_label: { domain: 'mail', operation: 'update', targetFields: ['messageId', 'add', 'remove'], resultTargetFields: ['messageId', 'id'], receipt: 'completed' },
+  mail_draft_reply: { domain: 'mail', operation: 'create', targetFields: ['messageId'], resultTargetFields: ['messageId', 'id'], receipt: 'completed' },
+
+  calendar_today_agenda: { domain: 'calendar', operation: 'read', targetFields: ['date'], resultTargetFields: ['id', 'summary', 'start', 'end'] },
+  calendar_list_events: { domain: 'calendar', operation: 'read', targetFields: ['timeMin', 'timeMax', 'query'], resultTargetFields: ['id', 'summary', 'start', 'end'] },
+  calendar_next_event: { domain: 'calendar', operation: 'read', targetFields: ['after'], resultTargetFields: ['id', 'summary', 'start', 'end'] },
+  calendar_find_free_slots: { domain: 'calendar', operation: 'read', targetFields: ['start', 'end'], resultTargetFields: ['start', 'end'] },
+  calendar_create_event: { domain: 'calendar', operation: 'create', targetFields: ['summary', 'startDateTime', 'endDateTime', 'attendees'], resultTargetFields: ['id', 'summary'], receipt: 'completed' },
+  calendar_create_events: { domain: 'calendar', operation: 'create', targetFields: ['events'], resultTargetFields: ['id', 'summary'], receipt: 'completed' },
+  calendar_update_event: { domain: 'calendar', operation: 'update', targetFields: ['eventId', 'title'], resultTargetFields: ['id', 'eventId'], receipt: 'completed' },
+  calendar_move_event: { domain: 'calendar', operation: 'update', targetFields: ['eventId', 'startDateTime', 'endDateTime'], resultTargetFields: ['id', 'eventId'], receipt: 'completed' },
+  calendar_delete_event: { domain: 'calendar', operation: 'delete', targetFields: ['eventId'], resultTargetFields: ['id', 'eventId'], receipt: 'completed' },
+
+  weather: { domain: 'weather', operation: 'read', targetFields: ['location', 'days'], resultTargetFields: ['place', 'location', 'timezone'] },
+  web_research: { domain: 'web', operation: 'read', targetFields: ['query'], resultTargetFields: ['title', 'url'] },
+  research: { domain: 'web', operation: 'start', targetFields: ['topic', 'title'], resultTargetFields: ['jobId', 'id', 'status'], receipt: 'completed' },
+
+  vault_search: { domain: 'notes', operation: 'read', targetFields: ['query', 'kind'], resultTargetFields: ['id', 'path', 'title'] },
+  vault_read: { domain: 'notes', operation: 'read', targetFields: ['path'], resultTargetFields: ['path', 'url', 'sha'] },
+  vault_write: { domain: 'notes', operation: 'create', targetFields: ['path'], resultTargetFields: ['path', 'commit', 'url'], receipt: 'vault-commit' },
+  vault_delete: { domain: 'notes', operation: 'delete', targetFields: ['path'], resultTargetFields: ['path', 'commit', 'url'], receipt: 'vault-commit' },
+  vault_task_create: { domain: 'tasks', operation: 'create', targetFields: ['text', 'scope', 'due', 'time'], resultTargetFields: ['id', 'path', 'text'], receipt: 'task-write' },
+  vault_task_complete: { domain: 'tasks', operation: 'update', targetFields: ['path', 'line', 'text', 'version', 'done'], resultTargetFields: ['id', 'path', 'text'], receipt: 'task-write' },
+  vault_task_edit: { domain: 'tasks', operation: 'update', targetFields: ['path', 'line', 'text', 'newText', 'version'], resultTargetFields: ['id', 'path', 'text'], receipt: 'task-write' },
+
+  pc_open: { domain: 'pc', operation: 'open', targetFields: ['target', 'value'], resultTargetFields: ['app'], receipt: 'opened' },
+  pc_close: { domain: 'pc', operation: 'delete', targetFields: ['app'], resultTargetFields: ['app'], receipt: 'pc-close' },
+  pc_media: { domain: 'pc', operation: 'update', targetFields: ['action'], resultTargetFields: ['action'], receipt: 'pc-media' },
+  pc_clipboard_write: { domain: 'pc', operation: 'update', targetFields: [], resultTargetFields: [], receipt: 'clipboard-write' },
+  pc_browser_act: { domain: 'web', operation: args => operationFamily(String(args.action ?? '')), targetFields: ['tabId', 'snapshotId'], resultTargetFields: ['tabId', 'snapshotId'], receipt: 'pc-browser-act' },
+  browser_do: { domain: 'web', operation: 'generic', targetFields: ['goal', 'url', 'tabId'], resultTargetFields: ['tabId'], receipt: 'browser-task' },
+  workspace_command: { domain: 'workspace', operation: args => operationFamily(String(args.operation ?? '')), targetFields: ['commandId', 'viewId', 'page', 'view'], resultTargetFields: ['commandId', 'viewId'], receipt: 'applied' },
+  workspaces_open: { domain: 'workspace', operation: 'open', targetFields: ['id', 'query'], resultTargetFields: ['id', 'title'], receipt: 'opened' },
+  folio_open: { domain: 'workspace', operation: 'open', targetFields: ['id', 'query'], resultTargetFields: ['id', 'title'], receipt: 'opened' },
+  workspaces_manage: {
+    domain: 'workspace',
+    operation: args => args.action === 'delete' ? 'delete'
+      : args.action === 'rename' || args.action === 'pin' || args.action === 'unpin' ? 'update' : 'generic',
+    targetFields: ['id', 'query'], resultTargetFields: ['id', 'title', 'action'],
+    receipt: 'workspace-manage',
+  },
+  folio_manage: {
+    domain: 'workspace',
+    operation: args => args.action === 'delete' ? 'delete'
+      : args.action === 'rename' || args.action === 'pin' || args.action === 'unpin' ? 'update' : 'generic',
+    targetFields: ['id', 'query'], resultTargetFields: ['id', 'title', 'action'],
+    receipt: 'workspace-manage',
+  },
+
+  create_issue: { domain: 'factory', operation: 'create', targetFields: ['project', 'title'], resultTargetFields: ['number', 'url', 'taskCode'], receipt: 'issue' },
+  issue_comment: { domain: 'factory', operation: 'send', targetFields: ['issueNumber', 'repository', 'project', 'text'], resultTargetFields: ['number', 'url'], receipt: 'comment' },
+  start_issue: { domain: 'factory', operation: 'start', targetFields: ['issue', 'project'], resultTargetFields: ['number', 'url', 'taskId', 'id', 'state'] },
+  create_task: { domain: 'factory', operation: 'create', targetFields: ['projectId', 'prompt'], resultTargetFields: ['taskId', 'id', 'issue', 'state'] },
+  set_task_model: { domain: 'factory', operation: 'update', targetFields: ['taskId'], resultTargetFields: ['taskId', 'id', 'state'] },
+  retry_task: { domain: 'factory', operation: 'start', targetFields: ['taskId'], resultTargetFields: ['id', 'taskId', 'state'] },
+  steer_task: { domain: 'factory', operation: 'update', targetFields: ['taskId'], resultTargetFields: ['id', 'taskId', 'state'] },
+  pause_task: { domain: 'factory', operation: 'update', targetFields: ['taskId'], resultTargetFields: ['id', 'taskId', 'state'] },
+  resume_task: { domain: 'factory', operation: 'start', targetFields: ['taskId'], resultTargetFields: ['id', 'taskId', 'state'] },
+  cancel_task: { domain: 'factory', operation: 'delete', targetFields: ['taskId'], resultTargetFields: ['id', 'taskId', 'state'] },
+  update_project: { domain: 'factory', operation: 'update', targetFields: ['projectId'], resultTargetFields: ['id', 'repo'], receipt: 'project' },
+  archive_project: { domain: 'factory', operation: 'delete', targetFields: ['projectId'], resultTargetFields: ['projectId', 'repo'], receipt: 'project-archive' },
+  manage_repository: { domain: 'factory', operation: 'create', targetFields: ['repository'], resultTargetFields: ['repository', 'repo', 'id'], receipt: 'repository' },
+  github_write: {
+    domain: 'github', operation: args => receiptOperation({ name: String(args.operation ?? '') }, args),
+    targetFields: ['repository', 'number', 'branch', 'path', 'workflow'], resultTargetFields: ['repository', 'number', 'branch', 'path', 'sha', 'runId', 'url'],
+    receipt: 'github-write',
+  },
+
+  inbox_capture: { domain: 'notes', operation: 'create', targetFields: ['title'], resultTargetFields: ['id', 'title', 'path'], receipt: 'inbox-capture' },
+  inbox_close: { domain: 'notes', operation: 'delete', targetFields: ['id', 'path'], resultTargetFields: ['id', 'title', 'path'], receipt: 'inbox-close' },
+  memory_remember: { domain: 'memory', operation: 'create', targetFields: ['key', 'content'], resultTargetFields: ['id', 'key', 'revision'], receipt: 'memory-write' },
+  memory_correct: { domain: 'memory', operation: 'update', targetFields: ['memoryId', 'content'], resultTargetFields: ['id', 'key', 'revision'], receipt: 'memory-write' },
+  memory_forget: { domain: 'memory', operation: 'delete', targetFields: ['memoryId'], resultTargetFields: ['id', 'key'], receipt: 'memory-delete' },
+  owner_reminders: {
+    domain: 'tasks',
+    operation: args => String(args.operation) === 'cancel' ? 'delete' : String(args.operation) === 'read' ? 'read' : 'update',
+    targetFields: ['id', 'task', 'fireAt'], resultTargetFields: ['id', 'task', 'fireAt', 'state'], receipt: 'reminder-write',
+  },
+  proactive_preferences: { domain: 'settings', operation: args => args.operation === 'read' || args.operation === 'help' ? 'read' : 'update', targetFields: [], resultTargetFields: [], receipt: 'preference-update' },
+  proactive_item_feedback: { domain: 'settings', operation: 'update', targetFields: ['itemId'], resultTargetFields: ['itemId', 'state'], receipt: 'feedback-write' },
+  watch_create: { domain: 'jobs', operation: 'create', targetFields: ['title', 'text'], resultTargetFields: ['name'], receipt: 'watch-create' },
+  watch_update: { domain: 'jobs', operation: 'update', targetFields: ['name'], resultTargetFields: ['name'], receipt: 'watch-change' },
+  watch_stop: { domain: 'jobs', operation: 'delete', targetFields: ['name'], resultTargetFields: ['name', 'closedAs'], receipt: 'watch-change' },
+  cancel_job: { domain: 'jobs', operation: 'delete', targetFields: ['jobId', 'query'], resultTargetFields: ['jobId', 'cancelled'], receipt: 'job-cancel' },
+  manage_model_deployment: { domain: 'settings', operation: args => args.action === 'delete' ? 'delete' : 'create', targetFields: ['name', 'model', 'version'], resultTargetFields: ['name', 'status'], receipt: 'model-deployment' },
+  set_theme: { domain: 'settings', operation: 'update', targetFields: [], resultTargetFields: [], receipt: 'settings-write' },
+  set_presence_mode: { domain: 'settings', operation: 'update', targetFields: ['mode'], resultTargetFields: ['mode'], receipt: 'settings-write' },
+  set_away_mode: { domain: 'settings', operation: 'update', targetFields: ['mode'], resultTargetFields: ['mode'], receipt: 'settings-write' },
+  update_settings: { domain: 'settings', operation: 'update', targetFields: ['settings'], resultTargetFields: ['settings'], receipt: 'settings-write' },
+  set_jarvis_model: { domain: 'settings', operation: 'update', targetFields: ['model', 'reasoning'], resultTargetFields: ['model', 'reasoning'], receipt: 'settings-write' },
+  renew_credential: { domain: 'settings', operation: 'update', targetFields: ['name'], resultTargetFields: ['outcome'], receipt: 'settings-write' },
+};
+
+function collectFieldValues(
+  value: unknown,
+  fields: readonly string[],
+  output: unknown[] = [],
+  depth = 0,
+): readonly unknown[] {
+  if (depth > 5 || output.length >= 500) return output;
+  if (Array.isArray(value)) {
+    for (const child of value) collectFieldValues(child, fields, output, depth + 1);
+    return output;
+  }
+  if (!isRecord(value)) return output;
+  for (const [key, child] of Object.entries(value)) {
+    if (fields.includes(key)) output.push(child);
+    collectFieldValues(child, fields, output, depth + 1);
+  }
+  return output;
+}
+
+function toolTargetTokens(
+  toolName: string,
+  args: Record<string, unknown>,
+  result: unknown,
+): ReadonlySet<string> {
+  const metadata = completionToolMetadata[toolName];
+  const argumentFields = metadata?.targetFields ?? fallbackTargetFields;
+  const resultFields = metadata?.resultTargetFields ?? fallbackTargetFields;
+  const output = new Set<string>();
+  for (const value of collectFieldValues(args, argumentFields)) bindingTokens(value, 0, output);
+  for (const value of collectFieldValues(result, resultFields)) bindingTokens(value, 0, output);
+  return output;
+}
+
+function rowTargetTokens(
+  toolName: string,
+  row: Record<string, unknown>,
+  result: boolean,
+): ReadonlySet<string> {
+  const metadata = completionToolMetadata[toolName];
+  const fields = result
+    ? metadata?.resultTargetFields ?? fallbackTargetFields
+    : metadata?.targetFields ?? fallbackTargetFields;
+  const output = new Set<string>();
+  for (const value of collectFieldValues(row, fields)) bindingTokens(value, 0, output);
+  return output;
+}
+
 const domainPatterns: readonly [PiCompletionDomain, RegExp][] = [
   ['calendar', /\b(?:calendar|agenda|appointment|meeting|meetings|kalender|aftale|aftaler|møde|møder)\b/iu],
-  ['mail', /\b(?:e-?mail|emails?|gmail|inbox|indbakke|epost)\b/iu],
+  ['mail', /\b(?:e-?mail|emails?|gmail|inbox|draft|drafts|indbakke|epost|kladde|kladder)\b/iu],
   ['weather', /\b(?:weather|forecast|temperature|rain|storm|vejr|prognose|temperatur|regn)\b/iu],
   ['notes', /\b(?:note|notes|vault|inbox|loose thought|idea|notat|noter|indbakke|idé)\b/iu],
   ['tasks', /\b(?:task|tasks|to-?do|reminder|reminders|opgave|opgaver|påmindelse|påmindelser)\b/iu],
@@ -145,13 +329,13 @@ const domainPatterns: readonly [PiCompletionDomain, RegExp][] = [
   ['settings', /\b(?:setting|settings|preference|preferences|mode|theme|finding|findings|suggestion|suggestions|indstilling|indstillinger|præference|tema|forslag)\b/iu],
 ];
 
-interface DomainMatch { readonly domain: PiCompletionDomain; readonly at: number }
+interface DomainMatch { readonly domain: PiCompletionDomain; readonly at: number; readonly term: string }
 
 function domainMatches(text: string): DomainMatch[] {
   return domainPatterns.flatMap(([domain, pattern]) => {
     pattern.lastIndex = 0;
     const match = pattern.exec(text);
-    return match?.index !== undefined ? [{ domain, at: match.index }] : [];
+    return match?.index !== undefined ? [{ domain, at: match.index, term: targetTerm(match[0]) }] : [];
   }).sort((left, right) => left.at - right.at);
 }
 
@@ -171,6 +355,7 @@ const ignoredTargetWords = new Set([
   'add', 'archive', 'book', 'cancel', 'capture', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
   'implement', 'inspect', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember',
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
+  'merge', 'approve', 'review', 'forward',
   'find', 'check', 'fix', 'research', 'look', 'up', 'tjek', 'læs', 'søg', 'vis', 'opret', 'slet', 'gem', 'rediger', 'start',
   'calendar', 'agenda', 'appointment', 'meeting', 'event', 'email', 'gmail', 'inbox', 'mail', 'weather', 'forecast',
   'note', 'notes', 'task', 'tasks', 'todo', 'reminder', 'reminders', 'azure', 'github', 'repository', 'repositories',
@@ -178,7 +363,7 @@ const ignoredTargetWords = new Set([
   'resource', 'resources', 'subscription', 'group', 'provider', 'temperature', 'rain',
   'table', 'ticket', 'room', 'stay', 'reservation', 'hotel', 'flight', 'restaurant',
   'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'about',
-  'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal',
+  'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated',
   'saying', 'says', 'tell', 'telling', 'called', 'named',
   'worker', 'workers', 'background', 'long-running',
   'kalender', 'aftale', 'aftaler', 'møde', 'møder', 'indbakke', 'epost', 'vejr', 'noter', 'notat', 'opgave',
@@ -276,7 +461,12 @@ function bindingIdentities(
   return output;
 }
 
-function identityTargets(value: unknown, depth = 0): PiCompletionEvidence['identityTargets'] {
+function identityTargets(
+  toolName: string,
+  value: unknown,
+  result: boolean,
+  depth = 0,
+): PiCompletionEvidence['identityTargets'] {
   const bindings: { identityHash: string; targetHashes: readonly string[] }[] = [];
   const visit = (child: unknown, level: number) => {
     if (level > 5 || bindings.length >= 500) return;
@@ -287,7 +477,7 @@ function identityTargets(value: unknown, depth = 0): PiCompletionEvidence['ident
     if (!isRecord(child)) return;
     const identities = directBindingIdentities(child).slice(0, 20).map(identity => hash(identity));
     if (identities.length > 0) {
-      const targets = targetHashes([...bindingTokens(child)]);
+      const targets = targetHashes([...rowTargetTokens(toolName, child, result)]);
       for (const identityHash of identities) bindings.push({ identityHash, targetHashes: targets });
     }
     for (const entry of Object.values(child)) visit(entry, level + 1);
@@ -309,6 +499,8 @@ function targetHashes(terms: readonly string[]): readonly string[] {
 }
 
 function toolDomain(name: string, args: Record<string, unknown>): PiCompletionDomain {
+  const metadata = completionToolMetadata[name];
+  if (metadata) return metadata.domain;
   if (name.startsWith('az_')) return 'azure';
   if (name.startsWith('gh_') || name.startsWith('github_') || name.startsWith('pr_') ||
       name.startsWith('repo_') || name.startsWith('issue_') || name.startsWith('checks_')) return 'github';
@@ -410,9 +602,15 @@ function operationForDomain(
 
 export function completionPlan(text: string): PiCompletionPlan {
   const value = normalized(text);
+  const contextual = /\b(?:it|itself|that|that one|this|this one|den|det|den der)\b/iu.test(value);
+  const runtimeTargetHashes = targetHashes(targetTerms(value).map(({ term }) => term));
+  const runtimeOperation = operationFamily(value);
   if (ordinaryConversation(value) ||
       /\b(?:do not reply|don't reply|stay quiet|be quiet|say nothing|ti stille|svar ikke|sig ingenting)\b/iu.test(value)) {
-    return { kind: 'conversation', requirements: [] };
+    return {
+      kind: 'conversation', requirements: [], runtimeTargetHashes, runtimeOperation,
+      ...(contextual ? { contextual: true } : {}),
+    };
   }
 
   const matches = domainMatches(value);
@@ -450,7 +648,8 @@ export function completionPlan(text: string): PiCompletionPlan {
   const explicitActionDomains = actionDomainsFor(selectedMatches, value);
   const readCued = /^(?:what|what's|when|where|who|which|how is|how's|show me|list|find|search|check|read|look up|look at|look for|do i have|hvad|hvilke|vis mig|læs|søg|tjek|har jeg)\b/iu.test(value) ||
     /^(?:please|can you|could you|would you|will you|vil du|kan du)\s+(?:show|list|find|search|check|read|look up|look for|hvad|vis|læs|søg|tjek)\b/iu.test(value) ||
-    /^(?:latest|current|today|tomorrow|give me|tell me|summarise|summarize|recall)\b/iu.test(value);
+    /^(?:latest|current|today|tomorrow|give me|tell me|summarise|summarize|recall)\b/iu.test(value) ||
+    /^(?:how many|how much|is|are|was|were|did|does|has|have|had|do (?:i|you|we|they|he|she|it)|can (?:i|we|you))\b/iu.test(value);
   const directRequest = /^(?:please|can you|could you|would you|will you|I need you to|I want you to|vil du|kan du|please)\b/iu.test(value);
   const imperative = /^(?:add|archive|book|cancel|capture|change|close|comment|complete|create|delete|deploy|dispatch|edit|email|fix|log|make|move|open|pause|publish|remember|remove|reply|resume|retry|save|schedule|send|set|start|stop|update|write)\b/iu.test(value);
   const firstDomainAt = selectedMatches[0]?.at ?? 0;
@@ -458,29 +657,45 @@ export function completionPlan(text: string): PiCompletionPlan {
   const inferredAction = firstDomainAt > 0 && prefix.length > 0 &&
     !/^(?:a|an|my|the|this|that|today|tomorrow|latest|current|new)\b/iu.test(prefix);
   const actionCapable = domains.every(domain => domain !== 'weather');
-  const action = explicitActionDomains.length > 0 ||
-    ((directRequest || imperative || inferredAction) && !readCued && actionCapable);
+  const action = !readCued && (explicitActionDomains.length > 0 ||
+    ((directRequest || imperative || inferredAction) && actionCapable));
   if (targetDomains.length === 0 && !action && !readCued) {
-    return { kind: 'conversation', requirements: [] };
+    return {
+      kind: 'conversation', requirements: [], runtimeTargetHashes, runtimeOperation,
+      ...(contextual ? { contextual: true } : {}),
+    };
   }
   if (targetDomains.length === 0) {
-    return { kind: 'conversation', requirements: [] };
+    return {
+      kind: 'conversation', requirements: [], runtimeTargetHashes, runtimeOperation,
+      ...(contextual ? { contextual: true } : {}),
+    };
   }
   if (action) {
     const actionDomains = explicitActionDomains.length > 0 ? explicitActionDomains : domains.slice(0, 1);
     const requirements: PiCompletionRequirement[] = [];
     for (const domain of domains) {
       const requirementDomain = domain;
+      const operation = actionDomains.includes(requirementDomain)
+        ? operationForDomain(value, requirementDomain, selectedMatches)
+        : 'read';
+      const assignedTargets = assignedTargetHashes(value, requirementDomain, selectedMatches);
+      const openDomainTarget = operation === 'open' && assignedTargets.length === 0
+        ? selectedMatches.find(({ domain: candidate }) => candidate === requirementDomain)?.term
+        : undefined;
       requirements.push({
         kind: actionDomains.includes(requirementDomain) ? 'committed' : 'retrieved',
         domain: requirementDomain,
-        operation: actionDomains.includes(requirementDomain)
-          ? operationForDomain(value, requirementDomain, selectedMatches)
-          : 'read',
-        targetHashes: assignedTargetHashes(value, requirementDomain, selectedMatches),
+        operation,
+        targetHashes: openDomainTarget ? [hash(openDomainTarget)] : assignedTargets,
       });
     }
-    return { kind: 'committed', requirements };
+    return {
+      kind: 'committed',
+      requirements,
+      ...(requirements.some(requirement => requirement.kind === 'committed' &&
+        requirement.targetHashes.length === 0) ? { requiresTrustedContext: true } : {}),
+    };
   }
 
   const requirements = domains.map<PiCompletionRequirement>(domain => ({
@@ -548,8 +763,103 @@ function statusCompleted(result: unknown): boolean {
     isRecord(item) && typeof item.status === 'string' && normalized(item.status) === 'completed');
 }
 
+function metadataReceiptCode(
+  receipt: ToolReceipt,
+  args: Record<string, unknown>,
+  result: Record<string, unknown>,
+): boolean {
+  switch (receipt) {
+    case 'completed': return statusCompleted(result);
+    case 'opened': return result.opened === true;
+    case 'applied':
+      return result.applied === true || result.type === 'generated-view' && isRecord(result.view);
+    case 'workspace-manage':
+      if (typeof result.id !== 'string') return false;
+      if (args.action === 'delete') return result.deleted === true;
+      if (result.action !== args.action) return false;
+      if (args.action === 'pin') return result.pinned === true;
+      if (args.action === 'unpin') return result.pinned === false;
+      return args.action === 'rename' &&
+        typeof args.title === 'string' && result.title === args.title;
+    case 'vault-commit':
+      return result.path === args.path && typeof result.commit === 'string' &&
+        /^[0-9a-f]{40}$/iu.test(result.commit);
+    case 'task-write':
+      return typeof result.id === 'string' && typeof result.path === 'string' &&
+        typeof result.line === 'number' && typeof result.text === 'string' &&
+        (typeof result.commit === 'string' && /^[0-9a-f]{40}$/iu.test(result.commit) ||
+          result.commit === null);
+    case 'issue':
+      return Number.isInteger(result.number) && Number(result.number) > 0 &&
+        typeof result.url === 'string' && typeof result.taskCode === 'string';
+    case 'comment':
+      return result.status === 'commented' && Number.isInteger(result.number) &&
+        typeof result.url === 'string';
+    case 'github-write':
+      return typeof result.status === 'string' &&
+        ['created', 'updated', 'commented', 'reviewed', 'merged', 'ready', 'dispatched',
+          'rerun_requested', 'written'].includes(normalized(result.status));
+    case 'project':
+      return typeof result.id === 'string' && result.id === String(args.projectId);
+    case 'project-archive':
+      return result.status === 'archived' && result.projectId === args.projectId;
+    case 'repository':
+      return result.alreadyAdded === true ||
+        isRecord(result.project) && typeof result.project.id === 'string';
+    case 'health-write':
+      return result.created === true || result.updated === true || result.deleted === true ||
+        result.saved === true || result.persisted === true || statusCompleted(result) ||
+        typeof result.status === 'string' &&
+          ['committed', 'already-applied', 'already-deleted'].includes(normalized(result.status));
+    case 'inbox-capture':
+      return typeof result.id === 'string' && typeof result.path === 'string' &&
+        typeof result.created === 'boolean';
+    case 'inbox-close':
+      return typeof result.id === 'string' && result.closed === true;
+    case 'memory-write':
+      return typeof result.id === 'string' && typeof result.key === 'string' &&
+        Number.isSafeInteger(result.revision);
+    case 'memory-delete':
+      return typeof result.id === 'string' && typeof result.key === 'string' &&
+        typeof result.category === 'string';
+    case 'job-cancel':
+      return typeof result.cancelled === 'string';
+    case 'model-deployment':
+      return result.status === 'accepted' && typeof result.name === 'string';
+    case 'preference-update':
+      return args.operation === 'update' && result.confirmation === 'Proactive preferences saved.';
+    case 'reminder-write':
+      return args.operation === 'read'
+        ? false
+        : args.operation === 'cancel'
+          ? result.cancelled === true
+          : result.created === true || result.updated === true;
+    case 'feedback-write':
+      return result.saved === true || result.alreadyApplied === true ||
+        result.applied === true || result.updated === true;
+    case 'watch-create':
+      return result.created === true;
+    case 'watch-change':
+      return result.updated === true || result.stopped === true;
+    case 'pc-close':
+      return result.closing === true && Number.isInteger(result.windows);
+    case 'pc-media':
+      return result.controlled === true && result.action === args.action;
+    case 'clipboard-write':
+      return result.written === true;
+    case 'pc-browser-act':
+      return result.completed === true || result.clicked === true || result.typed === true;
+    case 'browser-task':
+      return result.status === 'completed';
+    case 'settings-write':
+      return result.updated === true || result.saved === true || isPositiveResult(result);
+  }
+}
+
 function committedReceipt(tool: string, args: Record<string, unknown>, result: unknown): boolean {
   if (!isRecord(result) || terminalFailure(result)) return false;
+  const metadataReceipt = completionToolMetadata[tool]?.receipt;
+  if (metadataReceipt) return metadataReceiptCode(metadataReceipt, args, result);
   if (segments(tool).includes('open') && result.opened === true) return true;
   switch (tool) {
     case 'pc_open': return result.opened === true;
@@ -751,8 +1061,10 @@ function matchesRequirement(
     : requirement.kind === 'durable_job'
       ? evidence.kind === 'durable_job'
       : evidence.kind === 'retrieved';
+  const acceptedOperations = completionToolMetadata[evidence.tool]?.acceptedRequestOperations ?? [];
   const operation = requirement.operation === 'generic' ||
-    evidence.operation === requirement.operation;
+    evidence.operation === requirement.operation ||
+    acceptedOperations.includes(requirement.operation);
   if (!kind || !operation || evidence.domain !== requirement.domain) return false;
   return requirement.targetHashes.every(target => evidence.targetHashes.includes(target));
 }
@@ -763,7 +1075,8 @@ function matchesRequirementBinding(
 ): boolean {
   return evidence.domain === requirement.domain &&
     (evidence.kind === 'retrieved' || requirement.operation === 'generic' ||
-      evidence.operation === requirement.operation) &&
+      evidence.operation === requirement.operation ||
+      (completionToolMetadata[evidence.tool]?.acceptedRequestOperations ?? []).includes(requirement.operation)) &&
     requirement.targetHashes.every(target => evidence.targetHashes.includes(target));
 }
 
@@ -787,7 +1100,7 @@ export function completionEvidence(
   previousEvidence: readonly PiCompletionEvidence[] = [],
 ): PiCompletionEvidence | undefined {
   const hasPlan = typeof planOrTool === 'object' && planOrTool !== null && 'requirements' in planOrTool;
-  const plan = hasPlan ? planOrTool as PiCompletionPlan : (() => {
+  const plan: PiCompletionPlan = hasPlan ? planOrTool as PiCompletionPlan : (() => {
     const tool = planOrTool as Pick<RegisteredTool, 'name' | 'execution'>;
     const args = toolOrArgs as Record<string, unknown>;
     const kind = durableResult(argsOrResult) && toolEffect(tool, args) !== 'read'
@@ -798,7 +1111,7 @@ export function completionEvidence(
     return {
       kind,
       requirements: [{ kind, domain, operation, targetHashes: [] }],
-    } satisfies PiCompletionPlan;
+    } as PiCompletionPlan;
   })();
   const tool = hasPlan
     ? toolOrArgs as Pick<RegisteredTool, 'name' | 'execution'>
@@ -806,21 +1119,26 @@ export function completionEvidence(
   const args = hasPlan ? argsOrResult as Record<string, unknown> : toolOrArgs as Record<string, unknown>;
   const result = hasPlan ? resultOrPrevious : argsOrResult;
   const previous = previousEvidence;
-  if (plan.kind === 'conversation') return undefined;
   const kind = receiptKind(tool, args, result);
   if (!kind || isRecord(result) && !idConsistent(args, result)) return undefined;
   const domain = toolDomain(tool.name, args);
   const currentIdentities = [...bindingIdentities(args), ...bindingIdentities(result)];
   const identityHashes = targetHashes(currentIdentities);
-  const linkedTargets = previous.flatMap(candidate => candidate.kind !== 'retrieved' || candidate.domain !== domain
-    ? []
-    : candidate.identityTargets
-      .filter(binding => identityHashes.includes(binding.identityHash))
-      .flatMap(binding => binding.targetHashes));
-  const directTargets = identityTargets(args);
-  const resultTargets = identityTargets(result);
+  const linkedBindings = previous.flatMap(candidate =>
+    candidate.kind !== 'retrieved' || candidate.domain !== domain
+      ? []
+      : candidate.identityTargets
+        .filter(binding => identityHashes.includes(binding.identityHash))
+        .map(binding => ({ candidate, binding })));
+  const linkedTargets = linkedBindings.flatMap(({ binding }) => binding.targetHashes);
+  const runtimeTargets = plan.runtimeTargetHashes ?? [];
+  const trustedLinkedContext = linkedBindings.some(({ candidate, binding }) =>
+    candidate.identityTargets.length === 1 ||
+    runtimeTargets.length > 0 && runtimeTargets.every(target => binding.targetHashes.includes(target)));
+  const directTargets = identityTargets(tool.name, args, false);
+  const resultTargets = identityTargets(tool.name, result, true);
   const evidenceTargets = [...new Set([
-    ...targetHashes([...bindingTokens(args), ...bindingTokens(result)]),
+    ...targetHashes([...toolTargetTokens(tool.name, args, result)]),
     ...linkedTargets,
   ])];
   const evidence = {
@@ -833,6 +1151,21 @@ export function completionEvidence(
     identityHashes,
     identityTargets: [...directTargets, ...resultTargets],
   } satisfies PiCompletionEvidence;
+  if (plan.kind === 'conversation') {
+    const operationMatches = plan.runtimeOperation === undefined ||
+      plan.runtimeOperation === 'generic' ||
+      evidence.operation === plan.runtimeOperation;
+    if (kind !== 'retrieved' && !operationMatches) return undefined;
+    const trustedTarget = kind === 'retrieved' ||
+      trustedLinkedContext ||
+      !plan.contextual &&
+        (plan.runtimeTargetHashes ?? []).length > 0 &&
+        (plan.runtimeTargetHashes ?? []).every(target => evidence.targetHashes.includes(target));
+    return !trustedTarget ? undefined : evidence;
+  }
+  if (plan.requiresTrustedContext && kind !== 'retrieved' && !trustedLinkedContext) {
+    return undefined;
+  }
   return plan.requirements.some(requirement => matchesRequirementBinding(requirement, evidence)) ? evidence : undefined;
 }
 

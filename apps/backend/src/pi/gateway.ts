@@ -570,6 +570,28 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           segment = '';
         } else usage = event.usage;
       }
+      if (completion.kind === 'conversation' && grant &&
+          grant.results.some(result => result.outcome === 'ok') &&
+          (grant.unverified.count > 0 || grant.evidence.length === 0)) {
+        completionUnverified = true;
+        throw new PiGatewayError(
+          'pi_incomplete',
+          'PI executed a tool during this request but could not bind a terminal result to the exact target. Nothing is confirmed as done.',
+          { detail: 'completion_evidence_missing' },
+        );
+      }
+      if (completion.kind === 'conversation' && completion.contextual && grant &&
+          completion.runtimeOperation && completion.runtimeOperation !== 'read' &&
+          completion.runtimeOperation !== 'generic' &&
+          !grant.evidence.some(evidence =>
+            evidence.kind !== 'retrieved' && evidence.operation === completion.runtimeOperation)) {
+        completionUnverified = true;
+        throw new PiGatewayError(
+          'pi_incomplete',
+          'PI could not verify the requested contextual action against a trusted, exact target. Nothing is confirmed as done.',
+          { detail: 'completion_evidence_missing' },
+        );
+      }
       const missing = grant ? missingCompletionEvidence(completion, grant) : undefined;
       if (missing) {
         completionUnverified = true;

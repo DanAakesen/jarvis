@@ -23,6 +23,30 @@ describe('PI completion planning', () => {
     expect(completionRequirement('Book a hotel room in Paris.')).toBe('committed');
     expect(completionRequirement('Research the latest battery chemistry.')).toBe('durable_job');
     expect(completionRequirement('Implement issue 1967 in my repo')).toBe('durable_job');
+    for (const question of [
+      'How many emails did I send Alice?',
+      'Did you send the email to Alice?',
+      'Has the calendar changed?',
+      'Is the Azure resource healthy?',
+      'Are there open GitHub issues?',
+    ]) {
+      const plan = completionPlan(question);
+      expect(plan.kind).toBe('retrieved');
+      expect(plan.requirements.every(requirement => requirement.operation === 'read')).toBe(true);
+    }
+    const asked = completionPlan('Did I send Alice an email?');
+    expect(completionEvidence(
+      asked,
+      action('mail_send'),
+      { to: ['alice@example.com'], subject: 'Build', body: 'It passed.' },
+      { status: 'completed' },
+    )).toBeUndefined();
+    expect(completionEvidence(
+      asked,
+      action('mail_search', 'read'),
+      { query: 'alice@example.com sent' },
+      { messages: [{ id: 'mail-1', to: 'Alice <alice@example.com>', subject: 'Build' }] },
+    )).toMatchObject({ kind: 'retrieved' });
   });
 
   it('requires every source domain in a compound external action', () => {
@@ -157,6 +181,40 @@ describe('PI completion receipts', () => {
     )).toMatchObject({ kind: 'committed', domain: 'github' });
   });
 
+  it('never treats mail draft updates as send evidence and binds only draft/recipient fields', () => {
+    const update = completionPlan('Update draft draft-77 for Alice.');
+    expect(completionEvidence(
+      update,
+      action('mail_update_draft'),
+      { draftId: 'draft-77', to: ['alice@example.com'], subject: 'Alpha', body: 'Private body.' },
+      { status: 'completed' },
+    )).toMatchObject({ operation: 'update', kind: 'committed' });
+
+    const create = completionPlan('Create the draft for Alice.');
+    expect(completionEvidence(
+      create,
+      action('mail_update_draft'),
+      { draftId: 'draft-77', to: ['alice@example.com'], subject: 'Alpha', body: 'Private body.' },
+      { status: 'completed' },
+    )).toMatchObject({ operation: 'update', kind: 'committed' });
+
+    const send = completionPlan('Send the draft to Alice.');
+    expect(completionEvidence(
+      send,
+      action('mail_update_draft'),
+      { draftId: 'draft-77', to: ['alice@example.com'], subject: 'Alpha', body: 'Private body.' },
+      { status: 'completed' },
+    )).toBeUndefined();
+
+    const bodyOnly = completionPlan('Update draft draft-77 about Project Alpha.');
+    expect(completionEvidence(
+      bodyOnly,
+      action('mail_update_draft'),
+      { draftId: 'draft-77', to: ['bob@example.com'], subject: 'Gamma', body: 'Project Alpha details.' },
+      { status: 'completed' },
+    )).toBeUndefined();
+  });
+
   it('accepts an exact opened true receipt but not a false or unrelated one', () => {
     const plan = completionPlan('Open the saved workspace report Alpha.');
     expect(completionEvidence(
@@ -173,8 +231,36 @@ describe('PI completion receipts', () => {
     )).toBeUndefined();
   });
 
+  it('uses the declared workspace action discriminator and terminal result', () => {
+    const deletion = completionEvidence(
+      completionPlan('Delete workspace item 77.'),
+      action('workspaces_manage'),
+      { id: '77', action: 'delete' },
+      { id: '77', title: 'Old report', deleted: true },
+    );
+    expect(deletion).toMatchObject({ operation: 'delete', kind: 'committed' });
+    expect(completionEvidence(
+      completionPlan('Delete workspace item 77.'),
+      action('workspaces_manage'),
+      { id: '77', action: 'delete' },
+      { id: '77', title: 'Old report', action: 'rename' },
+    )).toBeUndefined();
+    expect(completionEvidence(
+      completionPlan('Pin workspace item 77.'),
+      action('workspaces_manage'),
+      { id: '77', action: 'pin' },
+      { id: '77', title: 'Old report', action: 'pin', pinned: true },
+    )).toMatchObject({ operation: 'update' });
+    expect(completionEvidence(
+      completionPlan('Unpin workspace item 77.'),
+      action('workspaces_manage'),
+      { id: '77', action: 'unpin' },
+      { id: '77', title: 'Old report', action: 'pin', pinned: true },
+    )).toBeUndefined();
+  });
+
   it('links an opaque action ID back to the retrieved target before accepting it', () => {
-    const plan = completionPlan('Reply to the email from Alice.');
+    const plan = completionPlan('Draft a reply to the email from Alice.');
     const read = completionEvidence(
       plan,
       action('mail_search', 'read'),
@@ -201,6 +287,59 @@ describe('PI completion receipts', () => {
       { messageId: 'mail-2', replyBody: 'Thanks.' },
       { status: 'completed' },
       read ? [read] : [],
+    )).toBeUndefined();
+  });
+
+  it('requires trusted same-turn context for contextual actions and keeps the requested operation', () => {
+    const deletion = completionPlan('Delete it.');
+    const direct = completionEvidence(
+      deletion,
+      action('workspaces_manage'),
+      { id: '77', action: 'delete' },
+      { id: '77', title: 'Old report', deleted: true },
+    );
+    expect(direct).toBeUndefined();
+
+    const read = completionEvidence(
+      deletion,
+      action('workspaces_search', 'read'),
+      { query: 'Old report' },
+      { items: [{ id: '77', title: 'Old report', kind: 'research' }] },
+    );
+    expect(read).toMatchObject({ kind: 'retrieved' });
+    const resolved = completionEvidence(
+      deletion,
+      action('workspaces_manage'),
+      { id: '77', action: 'delete' },
+      { id: '77', title: 'Old report', deleted: true },
+      read ? [read] : [],
+    );
+    expect(resolved).toMatchObject({ kind: 'committed', operation: 'delete' });
+    expect(completionEvidence(
+      deletion,
+      action('workspaces_manage'),
+      { id: '77', action: 'rename', title: 'New report' },
+      { id: '77', title: 'New report', action: 'rename' },
+      read ? [read] : [],
+    )).toBeUndefined();
+
+    const ambiguousRead = completionEvidence(
+      deletion,
+      action('workspaces_search', 'read'),
+      { query: 'recent report' },
+      {
+        items: [
+          { id: '77', title: 'Old report', kind: 'research' },
+          { id: '88', title: 'New report', kind: 'research' },
+        ],
+      },
+    );
+    expect(completionEvidence(
+      deletion,
+      action('workspaces_manage'),
+      { id: '77', action: 'delete' },
+      { id: '77', title: 'Old report', deleted: true },
+      ambiguousRead ? [ambiguousRead] : [],
     )).toBeUndefined();
   });
 });

@@ -128,6 +128,7 @@ export function createPiMcpRoutes(options: {
     if (done.outcome === 'ok') {
       const evidence = completionEvidence(grant.completion, { name }, args, done.result, grant.evidence);
       if (evidence) grant.evidence.push(evidence);
+      else grant.unverified.count += 1;
     }
     const body = JSON.stringify(done.result);
     const result = body.length > maxResultCharacters
@@ -286,6 +287,7 @@ export function createPiMcpRoutes(options: {
         if (outcome === 'ok') {
           const evidence = completionEvidence(grant.completion, tool, input.arguments, parsed.result, grant.evidence);
           if (evidence) grant.evidence.push(evidence);
+          else grant.unverified.count += 1;
           if (toolEffect(tool, input.arguments) === 'action') grant.actions.count += 1;
         }
         if (serialized.length > maxResultCharacters) {

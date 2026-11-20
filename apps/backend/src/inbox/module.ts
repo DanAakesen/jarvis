@@ -291,7 +291,7 @@ export function createInboxModule(options: {
           if (!item || item.closed) throw new ToolRefusal('No live inbox item matches that. Nothing was changed.');
           const closed = await store.close(item.path, value.reason, signal, item.sha);
           if (index) await bestEffort(() => index.forget(item.id, signal), request);
-          return { id: closed.id, title: closed.title, confirmation: `Closed in the inbox: ${closed.title}.` };
+          return { id: closed.id, title: closed.title, closed: true, confirmation: `Closed in the inbox: ${closed.title}.` };
         } catch (error) {
           if (error instanceof ToolRefusal || error instanceof InboxError) refusal(error);
           if (signal.aborted) throw error;

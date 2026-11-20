@@ -169,6 +169,21 @@ describe('PI gateway', () => {
     expect(store.turns.at(-1)).toMatchObject({ outcome: 'failed' });
   });
 
+  it('does not finish an ordinary conversation turn after an unverified tool execution', async () => {
+    const runtimeTool = setup([() => sse(delta('It is done.'), completed(1, 0, 1))]);
+    const open = runtimeTool.registry.open.bind(runtimeTool.registry);
+    runtimeTool.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'mail_send', outcome: 'ok' });
+      grant.unverified.count += 1;
+      return grant;
+    };
+    await expect(runtimeTool.run('Hello.')).rejects.toMatchObject({
+      code: 'pi_incomplete',
+      detail: 'completion_evidence_missing',
+    });
+  });
+
   it('accepts retrieved, committed and durable-job evidence only for the matching request', async () => {
     const retrieved = setup([() => sse(delta('Two meetings.'), completed(1, 0, 1))]);
     const openRead = retrieved.registry.open.bind(retrieved.registry);
