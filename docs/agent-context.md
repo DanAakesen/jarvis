@@ -2036,7 +2036,7 @@ sends remain separate slices. P13-05 and P13-06 themselves needed no index,
 workflow or infrastructure activation.
 
 Focused checks:
-`npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/language.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
+`npm test --workspace @jarvis/backend -- --run src/config.test.ts src/proactive/routes.test.ts src/proactive/store.test.ts src/proactive/time.test.ts src/proactive/budget.test.ts src/proactive/sources/registry.test.ts src/database/migrations.test.ts src/push/routes.test.ts`,
 `npm test --workspace @jarvis/contracts`,
 `npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx`,
 `npm run build --workspace @jarvis/backend`,

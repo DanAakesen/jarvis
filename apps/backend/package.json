@@ -26,8 +26,6 @@
     "@fastify/rate-limit": "11.2.1",
     "@fastify/websocket": "11.3.3",
     "@jarvis/contracts": "*",
-    "@microsoft/teams.apps": "2.1.0",
-    "@microsoft/teams.cards": "2.1.0",
     "@modelcontextprotocol/node": "2.1.1",
     "@modelcontextprotocol/server": "2.3.1",
     "applicationinsights": "3.16.0",

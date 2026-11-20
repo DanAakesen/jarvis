@@ -264,7 +264,7 @@ SQL and hosted-client/device acceptance.
 Favourite saves and plan saves/deletions use the same safe hub with their
 actual collection source; retained plan replays do not announce another change.
 
-`npm test --workspace @jarvis/backend -- src/health/nutrition/model.test.ts src/health/nutrition/review.test.ts src/health/nutrition/store.test.ts src/health/nutrition/frida.test.ts src/health/nutrition/handlers.test.ts src/health/tools/food.test.ts src/health/tools/food-review.test.ts src/core/owner-interactions.test.ts src/health/store/owner-store.test.ts src/health/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
+`npm test --workspace @jarvis/backend -- src/health/nutrition/model.test.ts src/health/nutrition/review.test.ts src/health/nutrition/store.test.ts src/health/nutrition/frida.test.ts src/health/nutrition/handlers.test.ts src/health/tools/food.test.ts src/health/tools/food-review.test.ts src/core/owner-interactions.test.ts src/health/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
 
 `npm run lint --workspace @jarvis/backend` and `npm run build --workspace @jarvis/backend`.
 
