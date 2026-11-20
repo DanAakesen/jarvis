@@ -394,14 +394,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 UIApplication.shared.endBackgroundTask(backgroundTask)
             }
         }
-        sessionGeneration += 1
-        returnToChatRequested = returnToChat
-        liveActivitySessionID = nil
-        connectionPresentationState = connectionPresentationMachine.apply(.ended)
         isStarting = false
         let endingClient = sessionClient
-        sessionClient = nil
-        voiceState = returnToChat ? .ended : .idle
         isMinimized = false
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
@@ -415,15 +409,27 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         photoForNextTurn = nil
         photoIsReady = false
         sentMedia = []
-        httpClient = nil
-        captions = VoiceCaptions()
         if let endingClient {
             do {
                 try await endingClient.end()
             } catch {
                 errorMessage = Self.message(for: error)
+                sessionClient = nil
+                voiceSessionID = nil
+                responseID = nil
+                httpClient = nil
+                await liveActivity.end()
+                return
             }
         }
+        sessionGeneration += 1
+        returnToChatRequested = returnToChat
+        liveActivitySessionID = nil
+        connectionPresentationState = connectionPresentationMachine.apply(.ended)
+        sessionClient = nil
+        voiceState = returnToChat ? .ended : .idle
+        httpClient = nil
+        captions = VoiceCaptions()
         await liveActivity.end()
         sessionClient = nil
         voiceSessionID = nil

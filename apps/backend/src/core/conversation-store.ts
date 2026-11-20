@@ -80,7 +80,9 @@ export interface ConversationStore {
   getSession(sessionId: string): Promise<ConversationSession | null>;
   endSession(sessionId: string, voiceUsage?: {
     /** Cumulative provider-reported live audio duration; wall-clock duration remains the fallback. */
-    readonly providerVoiceSeconds: number;
+    readonly providerVoiceSeconds?: number;
+    /** False for retry failures, so no wall-clock row is invented when provider usage never arrived. */
+    readonly allowWallClockFallback?: boolean;
   }): Promise<boolean>;
   addMessage(input: {
     /** Cancels an uncommitted plain-text write; already committed messages remain history. */

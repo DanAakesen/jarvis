@@ -88,6 +88,13 @@ failure sends the same event with `retryable: false` and ends the client. SQL
 session creation has an immediate rejection consumer so a startup failure can
 never become an unhandled Node 22 promise rejection.
 
+Clean owner, time-limit and lost-browser termination send native
+`session.close` once and wait up to five seconds for `session.closed`. A socket
+close, socket error or timeout before that terminal event is a retryable 1011,
+not a clean 1000, and no wall-clock voice usage row is invented. iOS and Watch
+keep their receive loop alive until the Jarvis terminal acknowledgement or a
+bounded End timeout; failed End is surfaced instead of publishing Ended.
+
 At a client delegation, expect this source-only sequence in logs: native input
 transcript deltas, one stored owner message, `voice.pi_turn` and the PI
 turn/receipt logs, then native output audio/transcript deltas. `voice.pi_turn`

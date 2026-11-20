@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   commentaryParts,
+  endLateVoiceSession,
   isCompatibleLiveSessionFormat,
   LiveVoiceUsageTracker,
   MAX_COMMENTARY_UTF8_BYTES,
@@ -46,17 +47,32 @@ describe('GPT-Live protocol boundaries', () => {
     let resolve!: (session: { id: string }) => void;
     const creation = new Promise<{ id: string }>((done) => { resolve = done; });
     const controller = new AbortController();
+    let abandoned = false;
     const ended: string[] = [];
     const settled = settleVoiceSessionCreation(
       creation,
       controller.signal,
-      () => false,
+      () => abandoned,
       () => { throw new Error('cancelled session must not become active'); },
       async (sessionId) => { ended.push(sessionId); },
     );
-    controller.abort(new Error('startup stopped'));
+    abandoned = true;
     resolve({ id: 'late-7' });
-    await expect(settled).rejects.toThrow('startup stopped');
+    await expect(settled).rejects.toThrow('Voice startup was cancelled');
     expect(ended).toEqual(['late-7']);
+  });
+
+  it('retries thrown or false late-session cleanup results within a fixed bound', async () => {
+    const attempts: number[] = [];
+    await endLateVoiceSession(
+      'late-8',
+      async () => {
+        attempts.push(attempts.length + 1);
+        if (attempts.length === 1) throw new Error('transient');
+        return attempts.length === 3;
+      },
+      async () => undefined,
+    );
+    expect(attempts).toEqual([1, 2, 3]);
   });
 });

@@ -33,6 +33,10 @@
 - SQL startup rejection is consumed immediately. Only clean completion emits
   `jarvis.session.ended`; provider/restart/startup failures emit an explicit
   retryable/non-retryable failure and reconnect only when the event allows it.
+- A clean close path sends native `session.close` and waits for
+  `session.closed`; socket close/error/timeout before that event is retryable
+  1011 and forbids wall-clock voice usage. Swift End waits for Jarvis terminal
+  evidence or a bounded timeout before publishing Ended.
 - Optional Live format echoes are not readiness proof or a rejection when
   absent; an explicit conflict is rejected against provisioned PCM 24 kHz.
   Commentary chunks are at most 256 UTF-8 bytes, below 500 tokens even at one

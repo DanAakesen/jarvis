@@ -11,7 +11,7 @@ import { createVoiceStatusAnnouncer } from './status-updates.js';
 import { createPiVoiceTurns, type PiVoiceAgent } from './pi-voice.js';
 import {
   commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
-  LiveVoiceUsageTracker, parseVoiceEvent,
+  endLateVoiceSession, LiveVoiceUsageTracker, parseVoiceEvent,
   settleVoiceSessionCreation,
   validPcm24Base64, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
   type VoiceConnectionFactory,
@@ -57,6 +57,7 @@ export interface VoiceRelayOptions {
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
   readonly connect?: VoiceConnectionFactory;
   readonly visionWatch?: Pick<VisionWatchService, 'registerVoice'>;
+  readonly drainTimeoutMs?: number;
 }
 
 function closeSocket(socket: WebSocket, code: number, reason: string): void {
@@ -116,6 +117,7 @@ function registerVoiceRoute(
   connect: VoiceConnectionFactory,
   getToken: VoiceRelayOptions['getToken'],
   visionWatch?: VoiceRelayOptions['visionWatch'],
+  drainTimeoutMs = CLEAN_END_TIMEOUT_MS,
 ): void {
   app.get('/voice', { websocket: true }, (browser, request) => {
     const controller = new AbortController();
@@ -227,7 +229,7 @@ function registerVoiceRoute(
       }
       try {
         upstream.send(serialized, (error) => {
-          if (error && !controller.signal.aborted && !endRequested) {
+          if (error && !controller.signal.aborted && (!endRequested || gracefulEnd)) {
             log.warn({ failure: 'upstream_send_failed', language }, 'voice.connection_failed');
             closeSession(1011, 'Voice connection failed');
           }
@@ -251,11 +253,13 @@ function registerVoiceRoute(
         diagnostics.stage('session_created');
       },
       async (lateSessionId) => {
-        if (!await store.endSession(lateSessionId)) {
+        try {
+          await endLateVoiceSession(lateSessionId, async (sessionId) => await store.endSession(sessionId));
+          log.warn('voice.late_session_ended');
+        } catch {
           log.warn('voice.late_session_cleanup_failed');
           throw new Error('Late voice session could not be ended');
         }
-        log.warn('voice.late_session_ended');
       },
     );
     const sessionReady = diagnostics.bound('session_creation', 10_000, () => sessionCreation);
@@ -414,7 +418,7 @@ function registerVoiceRoute(
       statusAnnouncer?.close();
       if (activeOutput) finishOutputGroup(activeOutput, code === 1000 ? 'completed' : 'cancelled');
       if (upstream?.readyState === WebSocket.OPEN && sendUpstream({ type: 'session.close' })) {
-        endTimer = setTimeout(() => closeSession(code, reason, notifyClient), CLEAN_END_TIMEOUT_MS);
+        endTimer = setTimeout(() => closeSession(1011, 'Voice session close was not confirmed', notifyClient), drainTimeoutMs);
         endTimer.unref();
       } else {
         closeSession(code, reason, notifyClient);
@@ -697,7 +701,7 @@ function registerVoiceRoute(
       }
     };
 
-    const finalizeSession = () => {
+    const finalizeSession = (allowWallClockFallback: boolean) => {
       finalization ??= (async () => {
         if (activeOutput && !activeOutput.completed) {
           clearTimeout(activeOutput.quietTimer);
@@ -710,7 +714,10 @@ function registerVoiceRoute(
         await persistenceQueue;
         if (!sessionId || !await store.endSession(
           sessionId,
-          providerUsage.seconds === undefined ? undefined : { providerVoiceSeconds: providerUsage.seconds },
+          {
+            allowWallClockFallback,
+            ...(providerUsage.seconds === undefined ? {} : { providerVoiceSeconds: providerUsage.seconds }),
+          },
         )) throw new Error('Voice session was not ended');
         if (persistenceFailed) throw new Error('Voice transcripts were not fully stored');
       })();
@@ -744,7 +751,7 @@ function registerVoiceRoute(
       unregisterSessionConnection();
       if (upstream) closeSocket(upstream, code, reason);
       if (!activityFinished) publishActivity(code === 1000 ? 'ended' : retryable ? 'reconnecting' : 'failed');
-      void finalizeSession().then(() => {
+      void finalizeSession(code === 1000).then(() => {
         if (notifyClient && code === 1000 && browser.readyState === WebSocket.OPEN) {
           sendClient({ type: 'jarvis.session.ended' });
         }
@@ -910,19 +917,23 @@ function registerVoiceRoute(
         });
         socket.on('message', receiveProvider);
         socket.once('close', (code, reason) => {
-          if (socket !== upstream || closing || endRequested) return;
+          if (socket !== upstream || closing) return;
           log.warn({
             events: [...seenEventTypes].join(',').slice(0, 400),
             closeCode: code,
             failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
             language,
           }, 'voice.upstream_closed');
-          closeSession(1011, 'Voice connection ended');
+          closeSession(1011, gracefulEnd
+            ? 'Voice connection ended before session.closed'
+            : 'Voice connection ended');
         });
         socket.once('error', (error) => {
-          if (socket !== upstream || controller.signal.aborted || endRequested) return;
+          if (socket !== upstream || controller.signal.aborted || closing) return;
           log.warn({ failure: safeFailure(error), language }, 'voice.connection_failed');
-          closeSession(1011, 'Voice connection failed');
+          closeSession(1011, gracefulEnd
+            ? 'Voice connection failed before session.closed'
+            : 'Voice connection failed');
         });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -948,6 +959,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
         options.connect,
         (_scope, signal) => credentialCache.get(signal),
         options.visionWatch,
+        options.drainTimeoutMs,
       );
     },
   };

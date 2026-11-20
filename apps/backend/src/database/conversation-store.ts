@@ -250,7 +250,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     },
 
     async endSession(sessionId, voiceUsage) {
-      if (voiceUsage && (!Number.isFinite(voiceUsage.providerVoiceSeconds) ||
+      if (voiceUsage?.providerVoiceSeconds !== undefined && (!Number.isFinite(voiceUsage.providerVoiceSeconds) ||
           voiceUsage.providerVoiceSeconds < 0 || voiceUsage.providerVoiceSeconds > 24 * 60 * 60)) {
         throw new RangeError('Provider voice usage is invalid');
       }
@@ -259,8 +259,9 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         .input(
           'providerVoiceMinutes',
           sql.Decimal(19, 6),
-          voiceUsage === undefined ? null : voiceUsage.providerVoiceSeconds / 60,
+          voiceUsage?.providerVoiceSeconds === undefined ? null : voiceUsage.providerVoiceSeconds / 60,
         )
+        .input('allowWallClockFallback', sql.Bit, voiceUsage?.allowWallClockFallback ?? true)
         .query<{ session_exists: number }>(`DECLARE @ended TABLE (
             id bigint NOT NULL,
             channel nvarchar(16) NOT NULL,
@@ -281,7 +282,8 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
                 CONVERT(decimal(19,6), DATEDIFF_BIG(MILLISECOND, started_at, ended_at)) / 60000.0),
               CONVERT(nvarchar(300), id), ended_at
             FROM @ended
-            WHERE channel = N'voice';
+            WHERE channel = N'voice'
+              AND (@providerVoiceMinutes IS NOT NULL OR @allowWallClockFallback = 1);
 
             DECLARE @session_exists int = CONVERT(int, CASE WHEN EXISTS (
               SELECT 1 FROM dbo.jarvis_sessions WHERE id = @sessionId

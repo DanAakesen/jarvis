@@ -744,17 +744,25 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         voiceWatchdog?.cancel(); voiceWatchdog = nil
         resetInboundAudio()
         voiceAudioTail?.cancel(); voiceAudioTail = nil; voiceAudioPending = 0
+        var endError: (any Error)?
+        do {
+            try await previous?.end()
+        } catch {
+            endError = error
+        }
         voice = nil; voiceID = nil; voiceResponseID = nil
         if VoiceLiveActivityActions.session === self { VoiceLiveActivityActions.session = nil }
         if let id {
             eventQueue.removeAll { $0.requestID == id }
-            let ended = WatchEvent(.voiceState, requestID: id, text: audioLinkStalled ? "Audio connection unavailable" : "Ended")
+            let state = audioLinkStalled
+                ? "Audio connection unavailable"
+                : endError == nil ? "Ended" : "End failed"
+            let terminal = WatchEvent(.voiceState, requestID: id, text: state)
             var context = WCSession.default.applicationContext
-            context["voice"] = try? encode(ended)
+            context["voice"] = try? encode(terminal)
             try? WCSession.default.updateApplicationContext(context)
-            emit(ended)
+            emit(terminal)
         }
-        try? await previous?.end()
         await liveActivity.end()
     }
     private func receiveVoice(_ message: VoiceServerMessage, id: UUID) {

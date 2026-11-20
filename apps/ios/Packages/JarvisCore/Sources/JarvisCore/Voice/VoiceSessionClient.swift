@@ -321,7 +321,20 @@ public actor VoiceSessionClient {
                 sendError = error
             }
         }
-        let acknowledgement = sentSessionEnd ? await waitForEndAcknowledgement() : .acknowledged
+        let cannotAcknowledge = switch machine.state {
+        case .failed, .reconnecting:
+            true
+        default:
+            false
+        }
+        let acknowledgement: EndAcknowledgementResult
+        if sentSessionEnd {
+            acknowledgement = await waitForEndAcknowledgement()
+        } else if cannotAcknowledge {
+            acknowledgement = .failed
+        } else {
+            acknowledgement = .acknowledged
+        }
         receiveTask?.cancel()
         receiveTask = nil
         if !sentSessionEnd {

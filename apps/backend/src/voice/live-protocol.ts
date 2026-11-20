@@ -140,6 +140,25 @@ export async function settleVoiceSessionCreation<T extends { id: string }>(
   return session;
 }
 
+export async function endLateVoiceSession(
+  sessionId: string,
+  endSession: (id: string) => Promise<boolean>,
+  pause: (milliseconds: number) => Promise<void> =
+    (milliseconds) => new Promise(resolve => setTimeout(resolve, milliseconds)),
+): Promise<void> {
+  let lastFailure: unknown = new Error('Late voice session could not be ended');
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      if (await endSession(sessionId)) return;
+      lastFailure = new Error('Late voice session was not found');
+    } catch (error) {
+      lastFailure = error;
+    }
+    if (attempt < 3) await pause(50 * attempt);
+  }
+  throw lastFailure;
+}
+
 export function normalizeFoundryProjectEndpoint(endpoint: string): string {
   let url: URL;
   try {
