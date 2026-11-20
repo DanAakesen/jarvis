@@ -52,11 +52,12 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual(mcp[0]["project_connection_id"], "jarvis-pi-mcp")
         self.assertFalse([tool for tool in self.definition()["tools"] if tool["type"] == "function"])
 
-    def test_persona_carries_the_identity_contract_and_leaves_no_placeholder(self):
+    def test_persona_carries_the_identity_contract_and_exactly_one_trusted_context_input(self):
         contract = json.loads((pi.ROOT / "agents" / "jarvis" / "identity-contract.json").read_text(encoding="utf-8"))
         self.assertIn(contract["fixedKernel"]["en"], self.instructions)
         self.assertIn(contract["productIdentity"]["en"], self.instructions)
-        self.assertNotIn("{{", self.instructions)
+        self.assertEqual(self.instructions.count("{{pi_context}}"), 1)
+        self.assertEqual(self.definition()["structured_inputs"], pi.PI_STRUCTURED_INPUTS)
 
     def test_skills_are_repository_files_pinned_by_version(self):
         self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches", "jarvis-situational-context"])
@@ -170,6 +171,10 @@ class DefinitionTest(unittest.TestCase):
         with_headers["definition"]["tools"][1]["headers"] = {"Authorization": "x"}
         with self.assertRaises(pi.Blocked):
             pi.verify(with_headers, self.spec, self.instructions)
+        without_context = json.loads(json.dumps(readback))
+        del without_context["definition"]["structured_inputs"]
+        with self.assertRaises(pi.Blocked):
+            pi.verify(without_context, self.spec, self.instructions)
         readback["definition"]["tools"][0]["default_config"]["enabled"] = False
         with self.assertRaises(pi.Blocked):
             pi.verify(readback, self.spec, self.instructions)

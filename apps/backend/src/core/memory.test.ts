@@ -209,6 +209,27 @@ describe('Personal Memory', () => {
       { memoryId: '77', content: 'Alice prefers morning appointments.' },
       { id: '88', key: 'people.alice', revision: 2 },
     )).toBeUndefined();
+
+    for (const request of [
+      'Do not let me forget that I use British humour.',
+      'I use British humour.',
+      'Jeg bruger britisk humor.',
+    ]) {
+      expect(completionPlan(request)).toMatchObject({
+        kind: 'committed',
+        requirements: [expect.objectContaining({
+          domain: 'memory', operation: 'create',
+        })],
+      });
+    }
+    expect(completionPlan('Correct preference #77 to morning appointments.'))
+      .toMatchObject({
+        kind: 'committed',
+        requirements: [expect.objectContaining({
+          domain: 'memory', operation: 'update',
+          targetHashes: expect.arrayContaining([expect.any(String)]),
+        })],
+      });
   });
 
   it('lets an explicit remember request write while automatic capture is off and attributes the stored Dan message', async () => {

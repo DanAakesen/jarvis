@@ -4,7 +4,7 @@ import {
   type ConversationAgent, type ConversationAgentChunk, type ConversationAgentInput,
 } from '../core/chat-agent.js';
 import { foundryTokenCosts } from '../core/usage-pricing.js';
-import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
+import { PI_CONTEXT_INPUT, PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
@@ -64,7 +64,7 @@ export interface PiGatewayOptions {
   readonly registry: PiTurnRegistry;
   readonly activations: PiActivationService;
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
-  /** The owner-specific persona block; it is re-read each turn and sent only when it changed. */
+  /** The owner-specific persona block; Foundry renders this as trusted prompt-agent instructions on every response. */
   readonly context: (signal: AbortSignal) => Promise<string>;
   /** The environment note (Azure subscription and resource group, GitHub defaults); the smoke sends it on the turn that needs it. */
   readonly environment?: string | undefined;
@@ -279,9 +279,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return ensuring;
   }
 
-  async function* respond(conversationId: string, input: string, signal: AbortSignal): AsyncGenerator<PiEvent> {
+  async function* respond(conversationId: string, input: string, context: string, signal: AbortSignal): AsyncGenerator<PiEvent> {
     const response = await call('POST', '/responses', {
-      conversation: conversationId, input: [{ role: 'user', content: input }], stream: true,
+      conversation: conversationId,
+      input: [{ role: 'user', content: input }],
+      structured_inputs: { [PI_CONTEXT_INPUT]: context },
+      stream: true,
     }, signal, true);
     if (!response.body) throw new PiGatewayError('pi_failed', 'Foundry sent PI no reply stream.');
     const reader = response.body.getReader();
@@ -438,7 +441,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       let outcome: PiTurnRecord['outcome'] = 'failed';
       let modelStarted = false;
       try {
-        for await (const event of respond(conversationId, formatWarmup({ context, now: now(), timeZone: options.timeZone }), deadline)) {
+        for await (const event of respond(
+          conversationId,
+          formatWarmup({ now: now(), timeZone: options.timeZone }),
+          context,
+          deadline,
+        )) {
           if (event.kind === 'delta') { firstTextMs ??= Math.round(performance.now() - started); modelStarted = true; }
           if (event.kind === 'done') usage = event.usage;
         }
@@ -529,7 +537,6 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     try {
       const conversationId = await ensureConversation(signal);
       const context = await options.context(signal);
-      const stored = await options.store.getConversation(options.owner, signal);
       const activation = await options.activations.begin({
         type: input.channel === 'voice' ? 'voice' : 'chat',
         source: input.channel === 'voice' ? 'voice' : 'chat',
@@ -540,17 +547,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       grant = activation.grant;
       grant.completion = completion;
-      const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
-      const activationHash = contextHash(activationContext);
+      const activationHash = contextHash(context);
+      if (activation.context) notes.push(activation.context);
       const activationNote = capabilityInventory?.();
       if (activationNote) notes.push(activationNote);
       notes.push(`[Foreground PI budget: ${budget.costDkk.toFixed(4)} DKK used of ${options.monthlyCapDkk.toFixed(0)} DKK this month; ${Math.max(0, options.monthlyCapDkk - budget.costDkk).toFixed(4)} DKK remains. This is separate from the Background PI/Proactive budget.]`);
       const text = formatTurn({
-        ...(stored?.contextHash === activationHash ? {} : { context: activationContext }), turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
+        turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
       });
       let segment = '';
       let boundaries = 0;
-      for await (const event of respond(conversationId, text, deadline)) {
+      for await (const event of respond(conversationId, text, context, deadline)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;
@@ -709,12 +716,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal: deadline,
       });
       grant = activation.grant;
+      const notes = [activation.context].filter(Boolean);
+      if (capabilityInventory) notes.push(capabilityInventory());
       const message = formatTurn({
-        context: [context, activation.context].filter(Boolean).join('\n\n'),
         turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
-        ...(capabilityInventory ? { notes: [capabilityInventory()] } : {}),
+        ...(notes.length > 0 ? { notes } : {}),
       });
-      for await (const event of respond(conversationId, message, deadline)) {
+      for await (const event of respond(conversationId, message, context, deadline)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawModel = true;
@@ -810,7 +818,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     setCapabilityInventory(read) { capabilityInventory = read; },
     smokeKit: {
       createConversation,
-      respond,
+      async *respond(conversationId, input, signal) {
+        yield* respond(conversationId, input, await options.context(signal), signal);
+      },
       openGrant: (signal) => options.registry.open({ ownerObjectId: options.owner, sessionId: '', messageId: '', smoke: true, signal }),
       closeGrant: (turn) => options.registry.close(turn),
       recordSmoke: (turn, signal) => options.store.recordTurn(turn, signal),

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { piMcpPath } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
-import { PI_GITHUB_MCP_URL, PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
+import { PI_CONTEXT_INPUT, PI_GITHUB_MCP_URL, PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 
 const spec = JSON.parse(readFileSync(new URL('../../../../agents/pi/definition.json', import.meta.url), 'utf8')) as {
   github: { url: string }; agentName: string; model: string; reasoningEffort: string; mcp: { serverLabel: string; path: string; requireApproval: string; connection: string };
@@ -29,6 +29,11 @@ describe('PI definition', () => {
 
 describe('PI instructions', () => {
   const instructions = readFileSync(new URL('../../../../agents/pi/instructions.md', import.meta.url), 'utf8');
+
+  it('binds the owner context through one required provider instruction input', () => {
+    expect(PI_CONTEXT_INPUT).toBe('pi_context');
+    expect(instructions.match(/\{\{pi_context\}\}/gu)).toHaveLength(1);
+  });
 
   it('send the capability overview through discovery, not the smoke-only operation', () => {
     expect(instructions).not.toContain('list_capabilities');

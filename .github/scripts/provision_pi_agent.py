@@ -17,6 +17,7 @@ attached.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -49,6 +50,14 @@ UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 VOICE_FINGERPRINT_KEY = "jarvis_pi_voice_fingerprint"
 DEPLOYMENTS_API = "2024-10-01"
 REPLACED_VOICE_DEPLOYMENTS = ("gpt-realtime-2.1", "gpt-realtime-2.1-mini")
+PI_CONTEXT_INPUT = "pi_context"
+PI_STRUCTURED_INPUTS = {
+    PI_CONTEXT_INPUT: {
+        "description": "Complete trusted Jarvis persona, owner preferences and current mode for this response.",
+        "required": True,
+        "schema": {"type": "string"},
+    },
+}
 
 
 class Blocked(Exception):
@@ -114,8 +123,8 @@ def instructions_text() -> str:
     text = (PI / "instructions.md").read_text(encoding="utf-8")
     text = text.replace("{{identity_kernel}}", contract["fixedKernel"]["en"])
     text = text.replace("{{product_identity}}", contract["productIdentity"]["en"])
-    # A leftover placeholder would be read by Foundry as a structured input.
-    require("{{" not in text, "instructions_placeholder_unresolved")
+    require(re.findall(r"\{\{([^{}]+)\}\}", text) == [PI_CONTEXT_INPUT],
+            "instructions_placeholder_unresolved")
     return text
 
 
@@ -151,6 +160,7 @@ def build_definition(spec: dict, instructions: str, server_url: str, skills: lis
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
         "model": spec["model"], "reasoning": {"effort": spec["reasoningEffort"]},
         "instructions": instructions,
+        "structured_inputs": copy.deepcopy(PI_STRUCTURED_INPUTS),
         "tools": [
             # The harness built-ins (shell, filesystem read and write, web, sub-agents) follow the spec; "enabled" turns them all on.
             {"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": spec["builtinTools"] == "enabled"}},
@@ -168,6 +178,7 @@ def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dic
     """Everything that makes a new agent version necessary, hashed; skill versions are not part of it, their content is."""
     return sha256(canonical({
         "spec": spec, "instructions": instructions, "server_url": server_url,
+        "structured_inputs": PI_STRUCTURED_INPUTS,
         "skills": [[skill["name"], skill["sha256"]] for skill in skills],
     }))
 
@@ -515,6 +526,8 @@ def verify(readback: dict, spec: dict, expected: str) -> None:
     require(definition.get("model") == spec["model"], "readback_model_mismatch")
     require((definition.get("reasoning") or {}).get("effort") == spec["reasoningEffort"], "readback_reasoning_mismatch")
     require(definition.get("instructions") == expected, "readback_instructions_mismatch")
+    require(definition.get("structured_inputs") == PI_STRUCTURED_INPUTS,
+            "readback_structured_inputs_mismatch")
     tools = definition.get("tools") or []
     toolset = [tool for tool in tools if tool.get("type") == "microsoft_copilot_toolset_preview"]
     require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is (spec["builtinTools"] == "enabled"), "readback_builtins_mismatch")

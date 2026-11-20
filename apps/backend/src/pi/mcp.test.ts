@@ -284,13 +284,23 @@ describe('PI MCP server', () => {
       ['gh_request_pull_request_reviewers', {}, 'send'],
       ['gh_sub_issue_write', { method: 'add' }, 'create'],
       ['gh_sub_issue_write', { method: 'remove' }, 'delete'],
-      ['gh_update_issue_state', {}, 'delete'],
+      ['gh_update_issue_state', { state: 'closed' }, 'delete'],
+      ['gh_issue_write', { method: 'update', state: 'closed' }, 'delete'],
+      ['gh_update_pull_request_state', { state: 'closed' }, 'delete'],
     ] as const) {
       expect(grant.remoteTools.get(name)?.completion?.acceptsRequestOperation?.(
         args,
         requestOperation,
       )).toBe(true);
     }
+    expect(grant.remoteTools.get('gh_update_issue_state')?.completion?.acceptsRequestOperation?.(
+      { state: 'open' },
+      'delete',
+    )).toBe(false);
+    expect(grant.remoteTools.get('gh_issue_write')?.completion?.acceptsRequestOperation?.(
+      { method: 'update', state: 'open' },
+      'delete',
+    )).toBe(false);
   });
 
   it('dispatches natural provider verbs only through exact per-action operation aliases', async () => {
@@ -486,6 +496,7 @@ describe('PI MCP server', () => {
           domain: 'memory', operation: 'create',
           requestTargetFields: ['key'],
           requestPayloadFields: ['category', 'content'],
+          payloadMode: 'advisory',
           resultTargetFields: ['id', 'key', 'revision'],
           evaluate: receipt.memoryWrite,
         },
@@ -535,6 +546,7 @@ describe('PI MCP server', () => {
           domain: 'memory', operation: 'update',
           requestTargetFields: ['memoryId'],
           requestPayloadFields: ['content'],
+          payloadMode: 'advisory',
           resultTargetFields: ['id', 'key', 'revision'],
           evaluate: receipt.memoryWrite,
         },
@@ -549,7 +561,7 @@ describe('PI MCP server', () => {
       ownerObjectId: config.auth.ownerObjectId, sessionId: 'memory', messageId: '42', signal: live(),
     });
 
-    grant.completion = completionPlan('Don’t forget that I prefer afternoon appointments.');
+    grant.completion = completionPlan('Don’t forget that I use British humour.');
     await tool('find_tools', { turn: grant.turn, query: 'memory remember search correct' });
     expect(await tool('call_tool', {
       turn: grant.turn,
@@ -557,7 +569,7 @@ describe('PI MCP server', () => {
       arguments: {
         category: 'preference',
         key: 'people.dan.appointments',
-        content: 'I prefer afternoon appointments.',
+        content: 'Dan’s humour preference is dry and British.',
         sourceIntent: 'requested',
       },
     })).toMatchObject({ body: { outcome: 'ok' } });

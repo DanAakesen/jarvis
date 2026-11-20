@@ -67,6 +67,7 @@ export interface ToolCompletionContract {
   readonly requestTargetFields: readonly string[];
   readonly resultTargetFields: readonly string[];
   readonly requestPayloadFields?: readonly string[] | undefined;
+  readonly payloadMode?: 'exact' | 'advisory' | undefined;
   readonly requestIdentities?: ((args: Record<string, unknown>) => unknown) | undefined;
   readonly resultIdentities?: ((result: unknown) => unknown) | undefined;
   readonly evaluate: (args: Record<string, unknown>, result: unknown) => boolean;
@@ -237,6 +238,8 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
             !validFields(completionSource.resultTargetFields) ||
             completionSource.requestPayloadFields !== undefined &&
               !validFields(completionSource.requestPayloadFields) ||
+            completionSource.payloadMode !== undefined &&
+              !['exact', 'advisory'].includes(completionSource.payloadMode) ||
             completionSource.acceptsRequestOperation !== undefined &&
               typeof completionSource.acceptsRequestOperation !== 'function' ||
             completionSource.requestIdentities !== undefined &&

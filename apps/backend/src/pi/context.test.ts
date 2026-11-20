@@ -40,5 +40,7 @@ describe('the trusted PI owner context', () => {
     expect(context).toContain('explicit owner request to remember always uses Personal Memory');
     expect(context).toContain('current Dan message authorizes only its stated, resolved scope');
     expect(context).toContain('"Prefer dry humour."');
+    expect(context).toContain('Apply the identity, tone, response style, custom instructions and current-mode instruction');
+    expect(context).toContain('Voice changes only spoken delivery, never personality');
   });
 });

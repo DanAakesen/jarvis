@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk, ConversationAgentInput } from '../core/chat-agent.js';
 import { PiGatewayError } from '../pi/errors.js';
@@ -23,6 +24,36 @@ const replying = (...chunks: ConversationAgentChunk[]): PiVoiceAgent => ({
 });
 
 describe('PI voice turns', () => {
+  it('speaks the authoritative PI result verbatim with its personality and matching delegation', async () => {
+    const result = 'Aye, I found it. Dry British humour and all—no generic rewrite.';
+    const agent: PiVoiceAgent = { async *stream() { yield result; } };
+    const spoken: Array<{ text: string; delegationId?: string }> = [];
+    const logs: PiVoiceTurnLog[] = [];
+    const session = new AbortController();
+    const turns = createPiVoiceTurns({
+      agent,
+      signal: session.signal,
+      speak: (text, delegationId) => spoken.push({ text, ...(delegationId ? { delegationId } : {}) }),
+      busy: () => {},
+      log: log => logs.push(log),
+      now: () => 100,
+    });
+    turns.start({ ...turn, delegationId: 'voice-result-1' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(spoken).toEqual([{ text: result, delegationId: 'voice-result-1' }]);
+    expect(logs[0]).toMatchObject({ outcome: 'ok' });
+  });
+
+  it('does not let GPT-Live greet or reinterpret before delegated PI commentary', () => {
+    const instructions = readFileSync(
+      new URL('../../../../agents/pi/voice-instructions.md', import.meta.url),
+      'utf8',
+    );
+    expect(instructions).toContain('Do not greet');
+    expect(instructions).toContain('Do not summarize, rewrite');
+    expect(instructions).toContain('exact authoritative result');
+  });
+
   it('sends the utterance to the PI agent as a voice turn and speaks its answer', async () => {
     const inputs: ConversationAgentInput[] = [];
     const agent: PiVoiceAgent = { async *stream(input) { inputs.push(input); yield 'Two meetings today.'; } };

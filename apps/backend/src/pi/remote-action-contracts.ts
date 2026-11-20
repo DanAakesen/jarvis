@@ -360,6 +360,9 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     create: 'create',
     update: 'update',
   }, issueIdentity, issueWriteReceipt, {
+    requestOperations: args => args.method === 'update'
+      ? args.state === 'closed' ? ['delete', 'update'] : ['update']
+      : ['create'],
     requiredIdentityFields: args => args.method === 'update'
       ? [...issueIdentity]
       : [...repoIdentity],
@@ -550,7 +553,9 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     identityMatches: issueMatches,
   }),
   update_issue_state: action('update', issueIdentity, idUrlReceipt, {
-    requestOperations: accepts('delete', 'update'),
+    requestOperations: args => args.state === 'closed'
+      ? ['delete', 'update']
+      : ['update'],
     resultIdentityFields: idUrlResult,
     identityMatches: issueMatches,
   }),
@@ -573,7 +578,9 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
   update_pull_request_branch: action('update', [...pullIdentity, 'expectedHeadSha'], messageReceipt),
   update_pull_request_draft_state: action('update', pullIdentity, messageReceipt),
   update_pull_request_state: action('update', pullIdentity, idUrlReceipt, {
-    requestOperations: accepts('delete', 'update'),
+    requestOperations: args => args.state === 'closed'
+      ? ['delete', 'update']
+      : ['update'],
     resultIdentityFields: idUrlResult,
     identityMatches: pullMatches,
   }),

@@ -840,9 +840,10 @@ function memoryTargetHashes(
   operation: PiCompletionOperation,
 ): readonly string[] {
   if (operation === 'create') return [];
-  const explicit = [...request.matchAll(
-    /\b(?:memory|record|id)\s*[:#-]?\s*(\d+)\b/giu,
-  )].map(match => targetTerm(match[1] ?? ''));
+  const explicit = [
+    ...request.matchAll(/\b(?:memory|record|preference|fact|decision|hukommelse|id|nr)\s*[:#-]?\s*(\d+)\b/giu),
+    ...request.matchAll(/\b(\d{1,18})\s*(?:memory|record|hukommelse)\b/giu),
+  ].map(match => targetTerm(match[1] ?? ''));
   return targetHashes(explicit);
 }
 
@@ -874,6 +875,7 @@ function memoryIntent(text: string): MemoryIntent | undefined {
     /^(?:please\s+)?(?:remember|memorise|memorize)\b/iu.test(value) ||
     /\b(?:remember|memorise|memorize)\s+(?:that|this|it|i\b|my\b|me\b|we\b)/iu.test(value) ||
     /\b(?:do not|don['’]?t)\s+forget\b/iu.test(value) ||
+    /\b(?:do not|don['’]?t)\s+let\s+me\s+forget\b/iu.test(value) ||
     /\b(?:glem ikke|husk|skal huske)\b/iu.test(value) ||
     /\bkeep\s+(?:this|that|it)?\s*in\s+mind\b/iu.test(value);
   if (explicitCapture) return { operation: 'create', automatic: false };
@@ -884,10 +886,11 @@ function memoryIntent(text: string): MemoryIntent | undefined {
     return { operation: 'delete', automatic: false };
   }
   const correction =
-    /\b(?:actually|correct (?:that|this|it|memory)|i changed (?:my|that)|i now prefer|no longer prefer)\b/iu.test(value);
+    /\b(?:actually|correct(?:ed)? (?:that|this|it|my|memory|preference|fact|decision)|i changed (?:my|that)|i now prefer|i no longer prefer|no longer prefer|ret (?:det|den|memory)|opdater (?:det|den))\b/iu.test(value);
   if (correction) return { operation: 'update', automatic: false };
   const durableCapture =
-    /^(?:i|we)\s+(?:prefer|always prefer|never prefer|usually prefer|normally prefer)\b/iu.test(value) ||
+    /^(?:i|we)\s+(?:prefer|use|always prefer|never prefer|usually prefer|normally prefer)\b/iu.test(value) ||
+    /^(?:jeg|vi)\s+(?:foretrækker|bruger|plejer)\b/iu.test(value) ||
     /^my (?:standing |usual )?preference (?:is|for)\b/iu.test(value);
   return durableCapture ? { operation: 'create', automatic: true } : undefined;
 }
@@ -930,7 +933,7 @@ export function completionPlan(text: string): PiCompletionPlan {
       /\binbox|indbakke\b/iu.test(value) && !/\b(?:note|vault|notat|noter)\b/iu.test(value)) &&
     !(domain === 'notes' && hasDomain('memory') &&
       /\bremember\b/iu.test(value) && !/\b(?:note|vault|inbox|notat|noter)\b/iu.test(value)) &&
-    !(domain === 'settings' && hasDomain('memory') && /\bremember\b/iu.test(value)) &&
+    !(domain === 'settings' && hasDomain('memory') && memory) &&
     !((domain === 'notes' || domain === 'mail' || domain === 'factory') &&
       hasDomain('settings') && /\bcredential|credentials|login\b/iu.test(value)));
   const selectedMatches = matches.filter(({ domain }) => targetDomains.includes(domain));
@@ -1087,14 +1090,16 @@ export function completionDispatchAllowed(
     if (!operationMatches) return false;
     if (plan.contextual || plan.requiresTrustedContext) return trustedLinkedContext;
     return runtimeTargets.every(target => targetSet.includes(target)) &&
-      runtimePayloads.every(target => requestPayloads.includes(target));
+      (tool.completion?.payloadMode === 'advisory' ||
+        runtimePayloads.every(target => requestPayloads.includes(target)));
   }
   return plan.requirements.some(requirement =>
     (requirement.kind === 'committed' || requirement.kind === 'durable_job') &&
     requirement.domain === domain &&
     requestOperationAccepted(tool, args, requirement.operation) &&
     requirement.targetHashes.every(target => targetSet.includes(target)) &&
-    (requirement.payloadHashes ?? []).every(target => requestPayloads.includes(target)) &&
+    (tool.completion?.payloadMode === 'advisory' ||
+      (requirement.payloadHashes ?? []).every(target => requestPayloads.includes(target))) &&
     (!plan.requiresTrustedContext || trustedLinkedContext));
 }
 
@@ -1183,8 +1188,9 @@ function matchesRequirementBinding(
     (evidence.kind === 'retrieved' ||
       requestOperationAccepted(tool, args, requirement.operation)) &&
     requirement.targetHashes.every(target => evidence.targetHashes.includes(target)) &&
-    (requirement.payloadHashes ?? []).every(target =>
-      (evidence.payloadHashes ?? []).includes(target));
+    (tool.completion?.payloadMode === 'advisory' ||
+      (requirement.payloadHashes ?? []).every(target =>
+        (evidence.payloadHashes ?? []).includes(target)));
 }
 
 export function completionEvidence(
@@ -1290,8 +1296,9 @@ export function completionEvidence(
       : kind === 'retrieved' ||
         (plan.runtimeTargetHashes ?? []).length > 0 &&
           (plan.runtimeTargetHashes ?? []).every(target => evidence.targetHashes.includes(target));
-    const payloadMatches = (plan.runtimePayloadHashes ?? []).every(target =>
-      (evidence.payloadHashes ?? []).includes(target));
+    const payloadMatches = tool.completion?.payloadMode === 'advisory' ||
+      (plan.runtimePayloadHashes ?? []).every(target =>
+        (evidence.payloadHashes ?? []).includes(target));
     return !trustedTarget || !payloadMatches ? undefined : evidence;
   }
   if (plan.requiresTrustedContext &&

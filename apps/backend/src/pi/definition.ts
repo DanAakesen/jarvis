@@ -2,6 +2,8 @@
 export const PI_MODEL = 'gpt-6.1-terra';
 export const PI_REASONING_EFFORT = 'low';
 export const PI_MCP_SERVER_LABEL = 'jarvis';
+/** Required prompt-agent structured input that Foundry renders into PI's trusted instructions. */
+export const PI_CONTEXT_INPUT = 'pi_context';
 /** GitHub's remote MCP server with every toolset. The backend, not the harness, connects to it; see github-bridge.ts. */
 export const PI_GITHUB_MCP_URL = 'https://api.githubcopilot.com/mcp/x/all';
 

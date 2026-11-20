@@ -9,6 +9,10 @@ import type {
   PiCompletionEvidence, PiCompletionDomain, PiCompletionEvidenceKind, PiCompletionOperation,
 } from './completion.js';
 import { completionPlan } from './completion.js';
+import { defaultSettings } from '../core/settings.js';
+import { defaultAwayModeState } from '../core/away-mode.js';
+import { buildPiContext } from './context.js';
+import { PI_CONTEXT_INPUT } from './definition.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -99,7 +103,7 @@ describe('PI gateway', () => {
     expect(setup([]).gateway.smokeKit.format('jt-x', 'hi', 'environment')).not.toContain('ENV NOTE');
   });
 
-  it('streams one long conversation, sends the persona once, and records tokens and DKK per turn', async () => {
+  it('streams one long conversation with the persona in the provider instruction input on every response', async () => {
     const { run, calls, store, usage, registry, conversations } = setup([
       () => sse(delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),
       () => sse(delta('Again'), completed(11_100, 11_000, 10)),
@@ -113,16 +117,40 @@ describe('PI gateway', () => {
     expect(responses[0]!.body).toMatchObject({ conversation: 'conv_1', stream: true });
     const first = (responses[0]!.body!.input as Array<{ content: string }>)[0]!.content;
     const second = (responses[1]!.body!.input as Array<{ content: string }>)[0]!.content;
-    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\n/u);
-    expect(first).toContain('Foreground PI budget');
+    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\n\[Foreground PI budget:/u);
     expect(first).toMatch(/\n\nhi$/u);
+    expect(first).not.toContain('CONTEXT BLOCK');
     expect(second).not.toContain('CONTEXT BLOCK');
+    expect(responses.map(response => response.body!.structured_inputs)).toEqual([
+      { [PI_CONTEXT_INPUT]: 'CONTEXT BLOCK' },
+      { [PI_CONTEXT_INPUT]: 'CONTEXT BLOCK' },
+    ]);
     expect(store.turns.map(turn => [turn.kind, turn.outcome, turn.inputTokens, turn.cachedTokens, turn.outputTokens])).toEqual([
       ['chat', 'ok', 11_000, 9_000, 20], ['chat', 'ok', 11_100, 11_000, 10],
     ]);
     expect(store.turns[0]!.costDkk).toBeCloseTo(11_000 * 6.5785 / 1e6 + 20 * 32.8925 / 1e6, 5);
     expect(usage[0]).toMatchObject({ model: 'gpt-6.1-terra', inputTokens: 11_000, outputTokens: 20 });
     expect(registry.size).toBe(0);
+  });
+
+  it('refreshes the trusted persona on every response without placing changed instructions in a user message', async () => {
+    let context = 'FIRST CONTEXT';
+    const { run, calls } = setup([
+      () => sse(delta('one'), completed(1, 0, 1)),
+      () => sse(delta('two'), completed(1, 0, 1)),
+    ], { context: async () => context });
+    await run('first');
+    context = 'SECOND CONTEXT';
+    await run('second');
+    const responses = calls.filter(call => call.url.includes('/responses'));
+    expect(responses.map(response => response.body!.structured_inputs)).toEqual([
+      { [PI_CONTEXT_INPUT]: 'FIRST CONTEXT' },
+      { [PI_CONTEXT_INPUT]: 'SECOND CONTEXT' },
+    ]);
+    for (const response of responses) {
+      const input = (response.body!.input as Array<{ content: string }>)[0]!.content;
+      expect(input).not.toContain('CONTEXT');
+    }
   });
 
   it('buffers provider deltas until the response can be verified and completed', async () => {
@@ -164,6 +192,67 @@ describe('PI gateway', () => {
     expect(input()).toMatch(/\n\nhi$/u);
     for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'again' }, '', new AbortController().signal)) void chunk;
     expect(input()).not.toContain('Channel: voice');
+    const responses = calls.filter(call => call.url.includes('/responses'))
+      .map(call => call.body as {
+        conversation: string;
+        input: Array<{ content: string }>;
+        structured_inputs: Record<string, string>;
+      });
+    expect(responses[1]!.conversation).toBe(responses[0]!.conversation);
+    expect(responses[0]!.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: 'CONTEXT BLOCK' });
+    expect(responses[1]!.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: 'CONTEXT BLOCK' });
+    expect(responses[0]!.input[0]!.content).not.toContain('CONTEXT BLOCK');
+    expect(responses[1]!.input[0]!.content).not.toContain('CONTEXT BLOCK');
+  });
+
+  it('sends the identical trusted identity, tone, custom and mode bundle to fresh Chat and Voice turns', async () => {
+    const settings = {
+      ...defaultSettings,
+      identity: { description: 'Dan’s direct, focused personal AI.' },
+      personality: {
+        ...defaultSettings.personality,
+        tone: 'playful' as const,
+        customInstructions: 'Use dry British humour. Never become generic.',
+        modeInstructions: {
+          present: 'Be quick and action-oriented.',
+          away: 'Stay conservative while Dan is away.',
+          on_the_move: 'Use short spoken directions.',
+        },
+      },
+    };
+    const trusted = buildPiContext(settings, {
+      ...defaultAwayModeState,
+      mode: 'on_the_move',
+    });
+    const chat = setup([
+      () => sse(delta('Chat answer.'), completed(1, 0, 2)),
+    ], { context: async () => trusted });
+    for await (const chunk of chat.gateway.stream({
+      messageId: 'chat-1', sessionId: 'chat', text: 'Who are you?',
+    }, '', new AbortController().signal)) void chunk;
+    const chatResponse = chat.calls.find(call => call.url.includes('/responses'))!.body!;
+
+    const voice = setup([
+      () => sse(delta('Voice answer, with the same dry wit.'), completed(1, 0, 2)),
+    ], { context: async () => trusted });
+    for await (const chunk of voice.gateway.stream({
+      messageId: 'voice-1', sessionId: 'voice', text: 'Who are you?', channel: 'voice',
+    }, '', new AbortController().signal)) void chunk;
+    const voiceResponse = voice.calls.find(call => call.url.includes('/responses'))!.body!;
+
+    for (const [response, channel] of [[chatResponse, 'chat'], [voiceResponse, 'voice']] as const) {
+      expect(response.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: trusted });
+      const input = (response.input as Array<{ content: string }>)[0]!.content;
+      expect(input).not.toContain(trusted);
+      expect(input).not.toContain('Dan’s direct, focused personal AI.');
+      expect(input).not.toContain('dry British humour');
+      expect(input).not.toContain('Use short spoken directions.');
+      if (channel === 'voice') {
+        expect(input).toContain('Keep the exact same identity, tone, humour');
+      } else {
+        expect(input).not.toContain('[Channel: voice.');
+      }
+    }
   });
 
   it('adds the connected capability inventory to every activation', async () => {
@@ -407,8 +496,10 @@ describe('PI gateway', () => {
     // A new conversation of its own; the owner's stored chat conversation was never bound.
     expect(conversations()).toBe(1);
     expect(await store.getConversation(owner, new AbortController().signal)).toBeNull();
-    const sent = (calls.find(call => call.url.includes('/responses'))!.body!.input as Array<{ content: string }>)[0]!.content;
-    expect(sent).toContain('CONTEXT BLOCK');
+    const response = calls.find(call => call.url.includes('/responses'))!.body!;
+    expect(response.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: 'CONTEXT BLOCK' });
+    const sent = (response.input as Array<{ content: string }>)[0]!.content;
+    expect(sent).not.toContain('CONTEXT BLOCK');
     expect(sent).toContain(`[Turn ${opened}`);
     expect(sent).toContain('WAKE BODY');
     expect(registry.size).toBe(0);
@@ -539,7 +630,10 @@ describe('PI gateway', () => {
     ], { now: () => clock });
     expect(await gateway.warm(new AbortController().signal)).toMatchObject({ state: 'warm', alreadyWarm: false });
     expect(await gateway.warm(new AbortController().signal)).toMatchObject({ state: 'warm', alreadyWarm: true });
-    expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+    const responses = calls.filter(call => call.url.includes('/responses'));
+    expect(responses).toHaveLength(1);
+    expect(responses[0]!.body!.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: 'CONTEXT BLOCK' });
+    expect((responses[0]!.body!.input as Array<{ content: string }>)[0]!.content).not.toContain('CONTEXT BLOCK');
     clock = new Date('2026-11-15T16:10:00Z');
     expect(await gateway.warm(new AbortController().signal)).toMatchObject({ alreadyWarm: false });
     expect(store.turns.map(turn => turn.kind)).toEqual(['warm', 'warm']);

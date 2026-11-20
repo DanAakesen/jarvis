@@ -7,6 +7,7 @@ import type { ConversationAgent } from '../core/chat-agent.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
+import { PI_CONTEXT_INPUT } from './definition.js';
 import { azureToolPrefix, createRemoteMcpBridge } from './remote-mcp.js';
 import { createPiRoutes, type PiModuleOptions } from './routes.js';
 import { createMemoryPiStore } from './store.js';
@@ -111,11 +112,16 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
     log: (event, fields) => { if (event === 'pi.turn') logs.push(fields); },
     fetcher: async (url, init) => {
       expect(String(url)).toContain('/agents/jarvis-pi/endpoint/protocols/openai/responses');
-      const request = JSON.parse(String(init?.body)) as { conversation: string; input: Array<{ content: string }> };
+      const request = JSON.parse(String(init?.body)) as {
+        conversation: string;
+        input: Array<{ content: string }>;
+        structured_inputs: Record<string, string>;
+      };
       expect(request.conversation).toBe('existing-pi-conversation');
+      expect(request.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: context });
       const text = request.input[0]!.content;
       if (text.endsWith('\nhello')) return sse('Hello.');
-      expect(text).toContain(context);
+      expect(text).not.toContain(context);
       expect(text).toMatch(/\nwhat's in my Jarvis resource group\?$/u);
       // The managed instructions take the reference from the first line, not from context or the history.
       const turn = /^\[Turn (\S+) \| /u.exec(text)?.[1];
