@@ -67,10 +67,8 @@ plus browser pre-connect/send/failure/ack coverage passes offline.
 
 ## Durable reply pushes and exact notification opening — 20 November 2026 (#1970)
 
-**Status: review fixes are implemented on the existing candidate branch.
-Backend, SQL and JarvisCore offline gates are being rerun before the follow-up
-force-with-lease publish. No provider call, APNs delivery, deploy or PR is part
-of this work.**
+**Status: implemented and qualified offline on the rebased candidate. No
+provider call, APNs delivery, deploy or PR is part of this work.**
 
 | Step | State |
 | --- | --- |
@@ -88,7 +86,7 @@ of this work.**
 | Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
-| Run available offline gates and publish the reviewed branch head | Backend build/lint and full 693-test suite pass; isolated SQL 25-test gate and full JarvisCore 225-test Swift 6.2 suite pass; final rebase, commit and force-with-lease verification pending |
+| Rebase on `9f777c7b868fb981d63f0d4fe92b7acaa21a8604` and run offline gates | Done; backend build/lint, full 715-test suite, isolated SQL 26-test gate, full JarvisCore 230-test Swift 6.2 suite and Watch source parsing pass |
 
 Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live
