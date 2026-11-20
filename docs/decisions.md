@@ -79,6 +79,58 @@
   captions and provider acceptance are explicitly open. Direct Voice Live
   entries below are dated historical evidence, not current routing guidance.
 
+## 20 November 2026 — Durable reply delivery belongs to the stored message (#1970)
+
+- **Identity:** confirmation dedupe and reply cancellation are separate. A
+  durable claim pairs confirmation ID with the owner-message turn; a
+  per-device approval-delivery row records the accepted/failed/invalid result.
+  Timestamps have no dedupe role.
+- **Persistence:** the conversation message and per-device outbox row commit in
+  one transaction. The old process-local ledger and callback-only sender are
+  retired, with no dual or fallback path.
+- **Recovery:** Chat awaits or reconciles the same-turn approval before storing
+  the reply outbox. Accepted APNs cancels only that registration's pending
+  duplicate; failed transport/provider delivery leaves it eligible. An
+  APNs-accepted result is retried idempotently in SQL. The turn remains blocked
+  on an unresolved sending row rather than ageing a known/uncertain acceptance
+  into failure. Separately, the leased SQL worker retries only transient reply
+  APNs failures at 1/5/20/60 seconds,
+  at most five attempts, until one-hour expiry. State-write failures preserve
+  the sending lease instead of becoming provider rejection. A stable
+  message-derived collapse ID covers the crash window after Apple accepted but
+  before SQL recorded that result. Permanent invalid-token responses remove the
+  registration and invalidate its pending rows.
+- **Registration lifecycle:** expiry, unregister and provider invalid-token
+  deletion terminalize approval/reply rows by immutable `device_reference`
+  inside the same transaction. The registration delete trigger is a backstop;
+  `SET NULL` can only observe an already-terminal row. Permanent invalid-token
+  rejection also stores an owner/token-hash tombstone; the same token cannot
+  re-register after foreground refresh or restart, while a new token can.
+  Upsert, invalidation and expiry claiming serialize on the same owner lock and
+  resolve every current registration for the exact token, so a stale claim cannot
+  miss a replacement registration. Recipient reads defensively exclude
+  tombstoned hashes even if a stale row is written.
+- **Privacy:** only a bounded, one-line preview is stored per device. Preview
+  opt-out, credentials, health/medical, diagnosis/medication, banking,
+  account, OTP/one-time/verification/security code, CVV/CVC, identity and
+  financial content use the shared
+  `containsSensitiveOwnerData` policy and a generic body. Logs and status
+  expose no body, IDs or token; terminal counts are diagnostic evidence.
+- **Routing:** `jarvis.reply` is a dedicated iPhone/Watch tap branch carrying
+  exact `sessionID`/`messageID`. Watch keeps the target pending across active
+  chat, voice and dictation instead of discarding it. Once opened, active
+  scope is retained separately and scopes history/reconnect/foreground refresh
+  until leave/send/sign-out. Proactive findings and approval actions keep their
+  existing categories and handlers. Leave during an opening clears only that
+  target's persisted pending entry; equality-checked clearing preserves a newer
+  unrelated tap.
+- **Continuity:** the same server-side outbox envelope accepts optional source
+  evidence for #1969. Proactive scheduling, GPT-Live and voice protocol code
+  remain untouched.
+- **Acceptance boundary:** deterministic unit/migration/loopback-SQL fixtures
+  prove the store and worker contract. Live APNs, Mac SwiftUI compilation and
+  physical iPhone/Watch behaviour remain owner release acceptance.
+
 ## 19 November 2026 — One PI route and an exact, release-owned backend configuration (#1966)
 
 - **Normal route:** PI is the only Chat and Voice engine. The old saved device selector, test badge and normal-client `engine` parameters are removed. An older Chat client may explicitly send `pi`; `current` and unknown values are refused. Isolated runtime-test sessions keep their separately selected runtime and are not a fallback for normal Chat or Voice.
@@ -11937,7 +11989,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 ## 2026-11-02 P15-59: Build 45 fixes (live chat, voice media, orb, controls, location)
 
 - Chat stays event driven: the composer is never disabled while Jarvis answers. A message sent mid-turn goes to the existing `POST /conversation/sessions/:id/steer` route (`JarvisChatClient.steerTurn`) and joins the running turn; a 409 means no turn is active and the text returns to the composer. `.activityChanged` refreshes history when no turn of this client is streaming, so replies finished during voice or screen sharing appear unprompted.
-- The backend pushes every finished chat reply with `createReplyNotificationDispatcher`, reusing the approval-notification device registrations and APNs sender (`jarvis.reply` category, 160 character body). The app suppresses it in the foreground; it only matters when backgrounded. It follows `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED` and needs the same protected APNs configuration.
+- The backend's historical callback dispatcher is superseded by #1970: the
+  durable message transaction now owns the `jarvis.reply` per-device outbox,
+  stable identity and retries. The same device registrations/APNs configuration
+  and foreground suppression remain.
 - Thinking text is localized and context aware (`ChatThinkingPhrase`) and lives in the assistant bubble with a shimmer and the shared `JarvisOrbView` mini core; the Now bar never shows it. The voice orb drops its rotation and non-uniform scale so it is the same mark as the mini core, only larger.
 - The Now bar is the last element above the composer: screen-share status and errors sit above it, pending attachments sit inside the composer, and the static Away/Idle title is gone. The background sheet and the bell sheet are one `ActivitySheetKind.activity` area.
 - Floating glass buttons use the chat header size (`chatMinimumTapTarget`, 44 pt). Rows already on glass and toolbars use `JarvisInlineIconButton` (no second background).
@@ -11949,7 +12004,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 ## 2026-11-03 P15-64: Approval follow-up reply, one push per event, notification caps
 
 - Decision: tapping Approve or Decline on a calendar card (`POST /now/confirmations/:id`, from the notification or the Now sheet) always posts one Jarvis chat message into the session that proposed the change (`postApprovalReply`). It states the outcome (done, not changed, or unverified) and ends with one follow-up question, in the session language. Confirmations owned by `OwnerInteractionService` already block the chat turn that asked for them, so that turn writes its own reply.
-- Push rule: one push per event, and the reply never repeats what the approval push delivered. `PushLedger` lets each event (`approval:<confirmation id>`, `reply:<message id>`) push once and keeps one log entry per event. A chat reply that finishes the turn that staged an approval is dropped because the approval push carries it. The outcome reply of a tapped approval is posted silently: the owner just made the decision.
+- Push rule: historical `PushLedger` behaviour is superseded by #1970's durable
+  exact-turn claim and per-message/device outbox. The original event-only intent
+  remains: an approval may suppress the reply from its own turn, while unrelated
+  turns and restart recovery cannot be suppressed by process timestamps.
 - Flood source: every task state change while away called `notify()`, which inserted a new Now-feed alert row with a random key, with no dedupe, cap or expiry. The feed shows up to 100 rows, so the Notifications page filled up.
 - Caps (`core/notification-policy.ts`, enforced in `recordNotification`): the same kind and text is stored once per rolling 24 hours (dismissed rows count, so a dismissed message does not return); at most 10 stored notifications per kind (`info`, `success`, `warning`, `error`) per rolling 24 hours; stored notifications leave the feed after 7 days. Other alert, release and attention rows keep their own rules.
 - Routes (owner only): `POST /now/activity/:id/dismiss`, `POST /now/activity/groups/:category/dismiss` and `POST /now/activity/clear`. Group and clear use the same visibility rules as the feed read, so they never dismiss hidden rows.

@@ -418,7 +418,38 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 try await reader.nutrition(carbsGoalGrams: goals.carbs, fatGoalGrams: goals.fat, proteinGoalGrams: goals.protein)
             })
         case .history:
-            let history = try await JarvisChatClient(client: client).history(limit: 20).messages
+            let chat = JarvisChatClient(client: client)
+            if let data = r.data {
+                guard let decoded = try? JSONDecoder().decode(JarvisReplyNotificationTarget.self, from: data),
+                      let target = JarvisReplyNotificationTarget(
+                        sessionID: decoded.sessionID, messageID: decoded.messageID
+                      ) else {
+                    throw WatchFailure.invalidRequest
+                }
+                var before: String?
+                var history: [ChatHistoryMessage] = []
+                var pages = 0
+                var found = false
+                repeat {
+                    let page = try await chat.history(limit: 100, before: before, sessionId: target.sessionID)
+                    history += page.messages
+                    pages += 1
+                    found = page.messages.contains { $0.id == target.messageID }
+                    before = page.nextCursor
+                } while !found && before != nil && pages < 100
+                let ordered = history.reduce(into: [String: ChatHistoryMessage]()) { result, message in
+                    result[message.id] = message
+                }.values.sorted { $0.at < $1.at }
+                guard found, let index = ordered.firstIndex(where: { $0.id == target.messageID }) else {
+                    return try encode([WatchHistoryMessage]())
+                }
+                let start = max(0, index - 3)
+                let end = min(ordered.count, index + 4)
+                return try encode(ordered[start..<end].map {
+                    WatchHistoryMessage(id: $0.id, user: $0.role == .dan, text: $0.text)
+                })
+            }
+            let history = try await chat.history(limit: 20).messages
             var compact = history.sorted { $0.at < $1.at }.suffix(6).map {
                 WatchHistoryMessage(id: $0.id, user: $0.role == .dan, text: $0.text)
             }

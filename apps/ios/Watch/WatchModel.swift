@@ -7,7 +7,7 @@ import OSLog
 @MainActor
 final class WatchModel: ObservableObject {
     struct Message: Identifiable { var id = UUID().uuidString; var user: Bool; var text: String }
-    enum DictationState { case idle, connecting, listening, finishing }
+    enum DictationState: Equatable { case idle, connecting, listening, finishing }
     @Published var messages: [Message] = []
     @Published private var composer = WatchComposer()
     var draft: String {
@@ -17,6 +17,7 @@ final class WatchModel: ObservableObject {
     @Published var busy = false
     @Published var error: String?
     @Published private(set) var historyError: String?
+    @Published private(set) var replyTargetMessageID: String?
     @Published var voiceID: UUID?
     @Published var voiceState = ""
     @Published private(set) var waitingForVoiceConnection = false
@@ -35,6 +36,7 @@ final class WatchModel: ObservableObject {
     private var captureLevel = WatchCaptureLevel()
     private var heartbeat: Task<Void, Never>?
     private var historyRequest = UUID()
+    private var replyRoute = WatchReplyRouteState()
     private var turn: UUID?
     private var replyID: String?
     private var voiceGeneration = UUID()
@@ -70,6 +72,10 @@ final class WatchModel: ObservableObject {
         connection.onEvent = { [weak self] in self?.receive($0) }
         connection.onSignOut = { [weak self] in
             guard let self else { return }
+            self.replyRoute.clear()
+            self.replyTargetMessageID = nil
+            JarvisReplyNotificationTarget.pending()?.clear()
+            JarvisReplyNotificationTarget.active()?.clearActive()
             let active = self.dictationState != .idle
             self.cancelDictation()
             if active { self.error = WatchFailure.signInRequired.message + " Tap Message to type." }
@@ -99,19 +105,104 @@ final class WatchModel: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
         guard !busy, !startingVoice, voiceID == nil, connection.reachable else { return }
+        if await routePendingReplyIfPossible() || replyRoute.pending != nil { return }
+        if let active = replyRoute.active {
+            _ = await loadReplyTarget(active)
+            return
+        }
+        _ = await loadHistory()
+    }
+
+    @discardableResult
+    func openReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
+        target.store()
+        replyRoute.receive(target)
+        replyTargetMessageID = nil
+        return await routePendingReplyIfPossible()
+    }
+
+    @discardableResult
+    func routePendingReplyIfPossible() async -> Bool {
+        guard let target = replyRoute.takeWhenAvailable(
+            reachable: connection.reachable,
+            busy: busy,
+            startingVoice: startingVoice,
+            voiceActive: voiceID != nil,
+            dictating: dictationState != .idle
+        ) else {
+            return false
+        }
+        let opened = await loadReplyTarget(target)
+        if opened {
+            replyRoute.opened(target)
+            target.activate()
+        } else {
+            replyRoute.failed(target)
+        }
+        if let pending = replyRoute.pending, pending != target {
+            Task { await routePendingReplyIfPossible() }
+        }
+        return opened
+    }
+
+    func leaveReplyDeepLink() {
+        let active = replyRoute.active
+        let abandoned = replyRoute.leaveActive()
+        active?.clearActive()
+        abandoned?.clear()
+        replyTargetMessageID = nil
+    }
+
+    private func loadReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
+        replyTargetMessageID = nil
+        do {
+            let data = try WatchCodec.encode(target)
+            let reply = try await requestHistory(data: data)
+            guard let reply, let decoded = try? JSONDecoder().decode([WatchHistoryMessage].self, from: reply) else {
+                throw WatchFailure.failed
+            }
+            guard replyRoute.isCurrent(target) else { return false }
+            messages = decoded.map { Message(id: $0.id, user: $0.user, text: $0.text) }
+            guard decoded.contains(where: { $0.id == target.messageID }) else {
+                historyError = "This exact reply is no longer available. Open Jarvis on your iPhone."
+                return false
+            }
+            replyTargetMessageID = target.messageID
+            historyError = nil
+            return true
+        } catch {
+            historyError = (error as? WatchFailure)?.message ?? "History could not refresh. Check Jarvis on your iPhone."
+            return false
+        }
+    }
+
+    private func loadHistory() async -> Bool {
         let read = UUID(); historyRequest = read
         historyError = nil
         do {
             let history: [WatchHistoryMessage] = try await connection.load(.history)
-            guard read == historyRequest, !busy, voiceID == nil else { return }
+            guard read == historyRequest, !busy, voiceID == nil else { return false }
             messages = history.map { Message(id: $0.id, user: $0.user, text: $0.text) }
+            return true
         } catch {
-            guard read == historyRequest, !busy, voiceID == nil else { return }
+            guard read == historyRequest, !busy, voiceID == nil else { return false }
             historyError = (error as? WatchFailure)?.message ?? "History could not refresh. Check Jarvis on your iPhone."
+            return false
         }
     }
+
+    private func requestHistory(data: Data) async throws -> Data? {
+        let read = UUID()
+        historyRequest = read
+        historyError = nil
+        let reply = try await connection.request(.init(action: .history, data: data))
+        guard read == historyRequest, !busy, voiceID == nil else { return nil }
+        return reply.data
+    }
+
     func send() async {
         guard !busy, !startingVoice, voiceID == nil, dictationState == .idle, let text = composer.beginSend() else { return }
+        leaveReplyDeepLink()
         historyRequest = UUID(); historyError = nil
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id
@@ -124,6 +215,7 @@ final class WatchModel: ObservableObject {
             busy = false; turn = nil; composer.finishSend(success: false)
             messages.removeAll { $0.id == responseID }
             show(error)
+            Task { await routePendingReplyIfPossible() }
         }
     }
     func startVoice() async {
@@ -135,6 +227,7 @@ final class WatchModel: ObservableObject {
         // A cancelled start clears these itself, so a late finish cannot reset a newer attempt.
         defer {
             if voiceStartToken == token { voiceStartToken = nil; startingVoice = false; waitingForVoiceConnection = false }
+            Task { await routePendingReplyIfPossible() }
         }
         func elapsedMs() -> Int { Int(Date().timeIntervalSince(startedAt) * 1_000) }
         do {
@@ -362,6 +455,7 @@ final class WatchModel: ObservableObject {
             draft = draft.isEmpty ? text : draft + " " + text
             transcriptionDeadline.cancel()
             dictationID = nil; dictationCapture = nil; dictationTranscription = nil; dictationState = .idle
+            Task { await routePendingReplyIfPossible() }
         } catch {
             if dictationGeneration == epoch { failDictation(error) }
         }
@@ -414,6 +508,7 @@ final class WatchModel: ObservableObject {
         if let id {
             Task { _ = try? await connection.request(.init(action: .cancelDictation, itemID: id.uuidString)) }
         }
+        Task { await routePendingReplyIfPossible() }
     }
     func interruptDictation() {
         guard dictationState != .idle else { return }
@@ -539,6 +634,7 @@ final class WatchModel: ObservableObject {
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
         audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
+        Task { await routePendingReplyIfPossible() }
     }
     private func beginLocalVoiceEnd(captureEndReason: String) {
         voiceRecovery?.cancel(); voiceRecovery = nil
@@ -584,6 +680,7 @@ final class WatchModel: ObservableObject {
                 case .chatError: error = event.text; busy = false; turn = nil
                 default: break
                 }
+                if !busy { Task { await routePendingReplyIfPossible() } }
             }
         }
         guard event.requestID == voiceID else { return }

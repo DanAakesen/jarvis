@@ -25,6 +25,7 @@ import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
+import { withConfirmationTurn } from './owner-interactions.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 const smokeTools = new Set(['get_system_health', 'github_read', 'list_jobs', 'workspace_command']);
@@ -275,9 +276,9 @@ export const coreModule: BackendModule = {
         let outcome: ToolCallOutcome = 'ok';
         let result: unknown;
         try {
-          result = phoneSessionId === undefined
-            ? await tool.execute(request.body, request, controller.signal)
-            : await executePhoneTool({
+          const execute = async () => phoneSessionId === undefined
+            ? tool.execute(request.body, request, controller.signal)
+            : executePhoneTool({
               tool,
               sessionId: phoneSessionId,
               callerId: app.ownerObjectId,
@@ -286,6 +287,9 @@ export const coreModule: BackendModule = {
               signal: controller.signal,
               execute: () => tool.execute(request.body, request, controller.signal),
             });
+          result = validMessageId
+            ? await withConfirmationTurn(messageId!, execute)
+            : await execute();
           if (smoke && tool.name === 'github_read') {
             const issue = isObject(result) ? result : {};
             result = {

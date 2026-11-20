@@ -21,7 +21,11 @@ import { defaultSettings, readSettings, type SettingsStore } from '../core/setti
 import {
   embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
 } from '../core/memory-embeddings.js';
-import { memoryContainsCredential } from '../core/memory-policy.js';
+import {
+  containsSensitiveOwnerData,
+  hasCredentialMarker,
+  memoryContainsCredential,
+} from '../core/memory-policy.js';
 import type { UsageStore } from '../core/usage.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
@@ -71,9 +75,6 @@ const maxDirectoryEntries = 10_000;
 const maxGraphNodes = 2_000;
 const maxGraphEdges = 8_000;
 const maxLinksPerNote = 512;
-const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
-const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
-const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
 const sourceMessagePattern = /^[1-9]\d{0,18}$/u;
 const maxSqlMessageId = 9_223_372_036_854_775_807n;
 
@@ -366,8 +367,10 @@ function vaultNoteTitle(path: string, heading: string): string {
 }
 
 export function shouldRedact(value: string): boolean {
-  return credentialPattern.test(value) || secretPattern.test(value);
+  return hasCredentialMarker(value);
 }
+
+export { containsSensitiveOwnerData } from '../core/memory-policy.js';
 
 type VaultTaskFailureReason =
   | 'not_connected'
@@ -787,13 +790,13 @@ function snippet(value: string): string {
 }
 
 function assertCaptureIsSafe(source: string, text: string): void {
-  if (credentialPattern.test(`${source}\n${text}`) || secretPattern.test(`${source}\n${text}`)) {
+  if (shouldRedact(`${source}\n${text}`)) {
     throw new ToolRefusal('Secrets and credentials can never be saved to the vault. Nothing was written.');
   }
 }
 
 export function isVaultLineSafe(text: string): boolean {
-  return !credentialPattern.test(text) && !secretPattern.test(text) && !sensitivePattern.test(text);
+  return !containsSensitiveOwnerData(text);
 }
 
 export function createVaultModule(options: {
@@ -1298,7 +1301,7 @@ export function createVaultModule(options: {
     const source = await options.memoryStore.getSourceMessage(header, signal);
     if (!source) throw new ToolRefusal('The source message is missing or is not from Dan. Nothing was written.');
     assertCaptureIsSafe(source.text, `${content}\n${reason}`);
-    if (automaticCapture && sensitivePattern.test(`${source.text}\n${content}`)) {
+    if (automaticCapture && containsSensitiveOwnerData(`${source.text}\n${content}`)) {
       throw new ToolRefusal('Sensitive details are not saved by automatic capture. Save them when Dan requests it.');
     }
     return { ...source, id: header };

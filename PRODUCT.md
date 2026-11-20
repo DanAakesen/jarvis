@@ -6,6 +6,53 @@ In Chat or Voice, a clear owner request such as "remember that I prefer afternoo
 
 Fresh Chat and Voice conversations retrieve Personal Memory separately from Vault search. PI may query both for one request, but Vault notes never become memories merely because they are indexed or returned by a related read. The Memory API and both Memory screens expose SQL memories only. Successful Chat or Voice memory writes refresh cached pages on iPhone and web; a failed or unavailable write is reported as not saved or not forgotten.
 
+## Durable reply notifications and exact-message opening — 20 November 2026 (#1970)
+
+Every stored ordinary assistant reply can enqueue one durable APNs delivery per
+registered iPhone. The outbox is written in the same SQL transaction as the
+assistant message, so a restart cannot lose a pending push. A staged approval
+is reconciled per device before the exact turn's reply becomes deliverable:
+only an Apple-accepted approval cancels that device's pending duplicate.
+Failed or timed-out approval delivery leaves that reply available;
+approval work in another turn cannot suppress an unrelated reply. If Apple
+accepts an approval but SQL cannot yet record that result, persistence retries
+idempotently and the corresponding turn stays blocked rather than risking a
+duplicate reply. An accepted delivery outcome remains the exact-turn/device
+suppression record beyond the action-confirmation expiry, through the execution
+and reply window.
+
+The lock-screen alert contains a single-line preview bounded to 160 characters.
+Credential-like, health, medical, medication/diagnosis, banking or account
+content uses **New reply from Jarvis**. The same shared classifier also covers
+credential and identity/financial fields such as OTPs, one-time, verification
+or security codes, CVV/CVC, card numbers, SSNs/social-security numbers,
+passport numbers and dates of birth.
+Transient APNs responses retry per device with bounded backoff until expiry.
+Apple's terminal invalid-device responses, registration expiry and explicit
+unregister atomically terminate every matching approval/reply row before the
+registration disappears. A permanently rejected token is tombstoned by owner
+and token hash, so a foreground refresh or backend restart cannot register the
+same dead token again; a genuinely new token remains allowed. APNs collapse
+identity is stable per stored message,
+so an uncertain accepted send cannot produce a second user-facing notification
+after recovery.
+
+Tapping an ordinary reply opens Chat at the exact stored `sessionID` and
+`messageID`, including a Voice-origin message already present in conversation
+history. A Watch tap received during Chat work, dictation or Voice stays durable
+and opens when that activity ends. Once open, Watch retains that exact active
+session/message scope across foreground and reconnect history refresh until the
+owner leaves, sends or signs out. iPhone and Watch keep this route separate
+from proactive-item and approval-action routes. No GPT-Live protocol or
+proactive scheduler behaviour is changed. Proactive `message_dan` can attach its
+existing category, scope and evidence-source fields to the same server-side
+message envelope; those evidence fields never enter the lock-screen payload.
+
+Status diagnostics expose aggregate delivery state. Each delivery log records
+only outcome, attempt and provider status. Neither path logs message bodies,
+previews, session/message identifiers or device tokens. Live APNs receipt and
+physical iPhone/Watch tap acceptance remain owner device checks.
+
 ## PI situational intelligence — 19 November 2026
 
 PI has one owner-scoped situational loop around the managed `jarvis-pi` Foundry agent. Normal Chat and Voice turns, scheduled sweeps and event activations use the same agent definition, Skills and Jarvis MCP tools; only trusted activation metadata differs. A wake is one PI invocation and one turn-ledger row. Tool and model iterations stay inside that invocation.

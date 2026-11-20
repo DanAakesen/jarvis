@@ -22,6 +22,10 @@ import { InvalidConversationAttachmentsError } from '../core/conversation-store.
 import { chatBlockLimits, isChatBlock, type ChatBlock } from '@jarvis/contracts';
 import { trustedBlobHostFromEnvironment } from '../core/generated-view-validation.js';
 import { normalizeVisualContext, persistedVisualContext } from '../core/visual-context.js';
+import {
+  safeReplyNotificationPreview,
+  serializeReplyNotificationEvidence,
+} from '../push/reply-notifications.js';
 
 const conversationSearchSetupPath = fileURLToPath(
   new URL('../../../../db/migrations/setup/0032_conversation_search.sql', import.meta.url),
@@ -202,6 +206,120 @@ function messageMetadata(input: Parameters<ConversationStore['addMessage']>[0]):
   return JSON.stringify({ visualContext: persistedVisualContext(visualContext) });
 }
 
+async function addMessageWithReplyNotification(
+  pool: sql.ConnectionPool,
+  input: Parameters<ConversationStore['addMessage']>[0],
+): Promise<ConversationMessage | null> {
+  const delivery = input.replyNotification;
+  if (!delivery ||
+      input.role !== 'jarvis' ||
+      input.attachmentIds?.length ||
+      !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(delivery.ownerObjectId) ||
+      delivery.turnMessageId !== undefined &&
+      (!/^[1-9]\d{0,18}$/u.test(delivery.turnMessageId) ||
+        BigInt(delivery.turnMessageId) > 9_223_372_036_854_775_807n)) {
+    throw new TypeError('Invalid reply notification message');
+  }
+  const evidenceJson = serializeReplyNotificationEvidence(delivery.evidence);
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+  try {
+    if (delivery.turnMessageId !== undefined) {
+      await transaction.request()
+        .input('owner', sql.UniqueIdentifier, delivery.ownerObjectId)
+        .input('turnMessageId', sql.BigInt, BigInt(delivery.turnMessageId))
+        .query<{ lock_result: number }>(`DECLARE @lockResult int;
+          DECLARE @resource nvarchar(255) = CONCAT(
+            N'jarvis.reply-notification-turn:',
+            LOWER(CONVERT(nvarchar(36), @owner)),
+            N':',
+            CONVERT(nvarchar(20), @turnMessageId)
+          );
+          EXEC @lockResult = sys.sp_getapplock
+            @Resource=@resource, @LockMode='Exclusive',
+            @LockOwner='Transaction', @LockTimeout=5000;
+          IF @lockResult < 0 THROW 51002, 'Reply notification turn unavailable', 1;
+          SELECT @lockResult AS lock_result;`);
+    }
+    const request = transaction.request()
+      .input('owner', sql.UniqueIdentifier, delivery.ownerObjectId)
+      .input('turnMessageId', sql.BigInt,
+        delivery.turnMessageId === undefined ? null : BigInt(delivery.turnMessageId))
+      .input('sessionId', sql.BigInt, BigInt(input.sessionId))
+      .input('role', sql.NVarChar(16), input.role)
+      .input('text', sql.NVarChar(sql.MAX), input.text)
+      .input('model', sql.NVarChar(100), input.model)
+      .input('language', sql.NVarChar(8), input.language ?? null)
+      .input('interrupted', sql.Bit, input.interrupted ?? false)
+      .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
+      .input('allowEndedSession', sql.Bit, input.allowEndedSession ?? false)
+      .input('metadata', sql.NVarChar(sql.MAX), messageMetadata(input))
+      .input('preview', sql.NVarChar(160), safeReplyNotificationPreview(input.text))
+      .input('evidence', sql.NVarChar(sql.MAX), evidenceJson);
+    const write = () => request.query<MessageRow>(`DECLARE @inserted TABLE (
+        id bigint NOT NULL, session_id bigint NOT NULL, role nvarchar(16), text nvarchar(max),
+        model nvarchar(100), at datetime2(7), metadata nvarchar(max)
+      );
+      INSERT INTO dbo.messages
+        (jarvis_session_id, role, text, model, language, interrupted, source_item_id, metadata)
+      OUTPUT CONVERT(bigint, INSERTED.id), CONVERT(bigint, INSERTED.jarvis_session_id),
+        INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
+      INTO @inserted (id, session_id, role, text, model, at, metadata)
+      SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId, @metadata
+      FROM dbo.jarvis_sessions
+      WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);
+      DECLARE @messageId bigint = (SELECT TOP (1) id FROM @inserted);
+      IF @messageId IS NOT NULL
+      BEGIN
+        INSERT dbo.reply_notification_deliveries (
+          id, owner_object_id, jarvis_session_id, message_id, turn_message_id,
+          registration_id, device_reference, notification_id, preview, state, last_result,
+          next_attempt_at, expires_at, completed_at, evidence_json
+        )
+        SELECT NEWID(), @owner, @sessionId, @messageId, @turnMessageId,
+          r.registration_id, CONVERT(char(36), r.registration_id),
+          CONCAT(N'reply-', CONVERT(nvarchar(20), @messageId)),
+          CASE WHEN r.show_actions = 1 THEN @preview ELSE N'New reply from Jarvis' END,
+          CASE WHEN a.state = N'accepted' THEN N'suppressed' ELSE N'pending' END,
+          CASE WHEN a.state = N'accepted' THEN N'approval_delivered' ELSE NULL END,
+          SYSUTCDATETIME(), DATEADD(hour, 1, SYSUTCDATETIME()),
+          CASE WHEN a.state = N'accepted' THEN SYSUTCDATETIME() ELSE NULL END,
+          @evidence
+        FROM dbo.approval_notification_registrations r
+        OUTER APPLY (
+          SELECT TOP (1) a.state
+          FROM dbo.reply_notification_approval_claims c
+          INNER JOIN dbo.reply_notification_approval_deliveries a
+            ON a.confirmation_id = c.confirmation_id
+            AND a.device_reference = CONVERT(char(36), r.registration_id)
+          WHERE c.owner_object_id = @owner AND c.turn_message_id = @turnMessageId
+            AND a.state = N'accepted'
+          ORDER BY c.created_at DESC
+        ) a
+        WHERE r.owner_object_id = @owner AND r.expires_at > SYSUTCDATETIME()
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.approval_notification_token_tombstones tombstone
+            WHERE tombstone.owner_object_id = r.owner_object_id
+              AND tombstone.device_token_hash = CONVERT(
+                char(64),
+                HASHBYTES(N'SHA2_256', CONVERT(varbinary(512), LOWER(r.device_token))),
+                2
+              )
+          );
+      END;
+      SELECT CONVERT(varchar(20), id) AS id, CONVERT(varchar(20), session_id) AS session_id,
+        role, text, model, at, metadata
+      FROM @inserted;`);
+    const result = input.signal ? await execute(request, input.signal, write) : await write();
+    const row = result.recordset[0];
+    await transaction.commit();
+    return row ? messageFromRow(row) : null;
+  } catch (error) {
+    try { await transaction.rollback(); } catch { /* Preserve the original delivery error. */ }
+    throw error;
+  }
+}
+
 export function createConversationStore(pool: sql.ConnectionPool): ConversationStore {
   let initialized = false;
   let fullTextSearchAvailable = false;
@@ -300,6 +418,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
     async addMessage(input) {
       if (input.attachmentIds?.length) return addMessageWithAttachments(pool, input);
+      if (input.replyNotification) return addMessageWithReplyNotification(pool, input);
       const request = pool.request()
         .input('sessionId', sql.BigInt, BigInt(input.sessionId))
         .input('role', sql.NVarChar(16), input.role)

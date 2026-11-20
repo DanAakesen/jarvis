@@ -61,6 +61,8 @@ struct JarvisChatScreen: View {
     @State private var composerFocused = false
     private let initialActivitySheet: ActivitySheetKind?
     private let notificationContextError: String?
+    private let replyTarget: JarvisReplyNotificationTarget?
+    private let onReplyTargetOpened: (() -> Void)?
     let onNavigate: (JarvisDestination) -> Void
     @Binding private var handoff: JarvisChatHandoff?
     @EnvironmentObject private var navigation: JarvisNavigationModel
@@ -74,6 +76,7 @@ struct JarvisChatScreen: View {
     @State private var sendRevision = 0
     @State private var keyboardRevision = 0
     @State private var liveToolsExpanded = true
+    @State private var reportedReplyTarget: JarvisReplyNotificationTarget?
 
     private var reduceMotion: Bool {
         systemReduceMotion || (JarvisChatFeedbackFixtureTransport.isEnabled &&
@@ -86,18 +89,23 @@ struct JarvisChatScreen: View {
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
         notificationContextError: String? = nil,
+        replyTarget: JarvisReplyNotificationTarget? = nil,
+        onReplyTargetOpened: (() -> Void)? = nil,
         handoff: Binding<JarvisChatHandoff?> = .constant(nil),
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
         let chatModel = JarvisChatModel(
             client: client,
             fixtureMode: fixtureMode,
-            startupError: startupError
+            startupError: startupError,
+            replyTarget: replyTarget
         )
         _model = StateObject(wrappedValue: chatModel)
         runtimeTestClient = client.map { JarvisChatClient(client: $0) }
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.notificationContextError = notificationContextError
+        self.replyTarget = replyTarget
+        self.onReplyTargetOpened = onReplyTargetOpened
         self.onNavigate = onNavigate
         _handoff = handoff
     }
@@ -198,6 +206,7 @@ struct JarvisChatScreen: View {
         .task {
             await model.load()
             await model.resumeIfSuspended()
+            reportReplyTargetOpenedIfNeeded()
             if let initialActivitySheet {
                 presentedSheet = .activity(initialActivitySheet)
             }
@@ -209,6 +218,14 @@ struct JarvisChatScreen: View {
             }
 #endif
             await model.watchActivity()
+        }
+        .onChange(of: replyTarget) { _, target in
+            guard let target else { return }
+            Task {
+                if await model.openReplyTarget(target) {
+                    reportReplyTargetOpenedIfNeeded()
+                }
+            }
         }
     }
 
@@ -342,6 +359,16 @@ struct JarvisChatScreen: View {
         navigation.openFactoryTask(taskID)
     }
 
+    private func reportReplyTargetOpenedIfNeeded() {
+        guard let replyTarget,
+              replyTarget.messageID == model.replyTargetMessageID,
+              reportedReplyTarget != replyTarget else {
+            return
+        }
+        reportedReplyTarget = replyTarget
+        onReplyTargetOpened?()
+    }
+
     @ViewBuilder
     private var conversation: some View {
         if model.isLoading && model.messages.isEmpty {
@@ -389,6 +416,7 @@ struct JarvisChatScreen: View {
                         }
                         ForEach(renderedRows) { row in
                             messageRow(row)
+                                .id(row.message.id)
                             if !row.unansweredTools.isEmpty && !model.isSending {
                                 completedTools(row.unansweredTools, messageID: "unanswered-\(row.id)")
                             }
@@ -447,7 +475,8 @@ struct JarvisChatScreen: View {
                     ),
                     sendRevision: sendRevision,
                     keyboardRevision: keyboardRevision,
-                    jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage)
+                    jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage),
+                    focusMessageID: model.replyTargetMessageID
                 ))
                 .onChange(of: model.isSending) { _, sending in
                     if sending { liveToolsExpanded = true }

@@ -65,6 +65,34 @@ Watch clients keep failed ownership distinct, reject late Ended resurrection,
 and close failed transport with 1011. Table-driven backend and Swift coverage
 plus browser pre-connect/send/failure/ack coverage passes offline.
 
+## Durable reply pushes and exact notification opening — 20 November 2026 (#1970)
+
+**Status: implemented and qualified offline on the rebased candidate. No
+provider call, APNs delivery, deploy or PR is part of this work.**
+
+| Step | State |
+| --- | --- |
+| Replace process-local timestamp suppression with durable confirmation/source-turn identity | Done |
+| Store assistant message and per-device reply outbox atomically in migration `0093` | Done |
+| Reconcile accepted approval delivery separately per device in migration `0094`, await same-turn work and cancel only unsent duplicates | Done |
+| Add bounded transient retry, stable APNs collapse identity, token invalidation and sanitized diagnostics | Done |
+| Keep APNs transport failures separate from SQL result-write failures and preserve lease recovery | Done |
+| Retry accepted approval outcomes idempotently and keep unresolved accepted/sending rows conservatively blocked | Done |
+| Retain accepted turn/device outcomes past confirmation expiry and add `0095` atomic registration terminalization | Done |
+| Persist APNs invalid-token tombstones and preserve newer Watch taps when abandoning an exact-target open | Done |
+| Serialize tombstone invalidation/upsert/expiry on the owner lock, resolve stale replacements by exact token and exclude tombstoned recipients | Done |
+| Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
+| Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
+| Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
+| Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
+| Update product, design, architecture, agent context and decisions | Done in this change |
+| Rebase on `b5627f47269a4df727c8e5163742d3fbaef95630` and run offline gates | Done; backend build/lint, full 727-test suite, isolated SQL 27-test gate, full JarvisCore 236-test Swift 6.2 suite and Watch source parsing pass |
+
+Completion requires the focused backend/SQL/Swift checks that the host supports,
+patch review for leaked content or fallback senders, and a local commit. Live
+APNs delivery, Apple compilation/rendering and physical iPhone/Watch acceptance
+remain outside this change.
+
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.
@@ -4816,7 +4844,7 @@ no per-screen hardcoded values, and a stated reason for each custom component.
 | P15-51 | [#1504](https://github.com/DanAakesen/jarvis/issues/1504) | Approval flow polish: per-button state, lock-screen delivery, early permission, placement | Approve/Decline have independent progress; the buttons-only action row sits above Now with orange/stone treatment and Danish/English copy; system permission is requested after sign-in/unlock. One actionable APNs alert is sent at core or calendar approval creation, backed by owner-scoped device registration, with no local or duplicate plain push. Existing task Live Activities remain separate; approval Live Activity and cross-device lifecycle updates are out of scope. Focused tests/builds pass; Mac compilation, rendered UI, live APNs delivery/configuration remain unverified. | P15-05, P15-16, P15-36 | Complete |
 | P15-61 | [#1531](https://github.com/DanAakesen/jarvis/issues/1531) | Health, Factory and Notes pages with the shared page header | One `JarvisPageHeader` (title, data headline, hero) on Health, Factory and Notes; Health plus chooser (Log lift / Log workout, workout save through `JarvisWorkoutLogging`, implemented by `JarvisHealthClient.createWorkout` from P15-60); Factory GitHub row button, pressable group headers, header plus and a roomier bottom dock; Notes header reset and plus. Danish/English strings, Linux phrase tests and updated UI tests. Mac compilation and rendered UI remain unverified. | P15-55 | Not started |
 | P15-59 | [#1527](https://github.com/DanAakesen/jarvis/issues/1527) | Build 45 fixes: live chat, voice media, orb, controls, location | Steerable composer, event-driven history refresh and APNs reply push, in-bubble thinking phrases with shimmer, merged activity sheet, single-size glass buttons, voice photo/video delivery and transcript media, device-location weather, sidebar blur. Core and backend tests pass; SwiftUI compilation, UI tests and live push remain unverified. | P15-55 | Complete |
-| P15-64 | [#1539](https://github.com/DanAakesen/jarvis/issues/1539) | Approval follow-up reply, one push per event, notification caps | Calendar approvals post a chat reply; push ledger gives one push and log entry per event; Now-feed notifications deduped, capped per kind per day and expired; owner-only dismiss, dismiss group and clear routes. Backend tests pass; live APNs and iOS wiring unverified. | P15-59 | Complete |
+| P15-64 | [#1539](https://github.com/DanAakesen/jarvis/issues/1539) | Approval follow-up reply, one push per event, notification caps | Calendar approvals post a chat reply; Now-feed notifications are deduped, capped and expired. Historical process-local push-ledger suppression is superseded by #1970's durable exact-turn outbox; owner-only dismiss, dismiss group and clear routes remain. | P15-59 | Complete; push path superseded |
 | P15-58 | [#1525](https://github.com/DanAakesen/jarvis/issues/1525) | Native iPhone Usage, Status and Proactive pages with a Proactive settings editor | Three SwiftUI pages mounted from the sidebar replace the placeholders; data logic, clients and Danish/English copy live in `JarvisCore` with unit tests; fixtures drive XCUITests for sidebar open, Usage range, Status filter/expand, Proactive tabs and the settings editor open/edit/save/discard/retry; iOS CI passes (SwiftUI not compiled on Linux). | P15-13 | Not started |
 | P15-57 | [#1523](https://github.com/DanAakesen/jarvis/issues/1523) | Today (Home) page and chat/voice transition | Home is the launch page and last sidebar row: time-aware greeting, Next up and Tasks due lists capped at 3 with Expand, glass plus menu (Task, Note), workouts donut and HealthKit steps ring with range toggle and bar selection, quick Log workout/lift, gym quick-log sheet saved as a vault Gym log through the existing notes path, and a matched-geometry composer/orb carry-over into Chat and Voice with a Reduce Motion cross-fade. Core logic and Danish/English copy are Linux-tested; no calendar-list route exists, so Next up shows Calendar unavailable. SwiftUI compilation, XCUITest and device HealthKit remain pending Mac CI. | P15-55 (#1518) | Not started |
 

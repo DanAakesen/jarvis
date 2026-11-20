@@ -145,6 +145,22 @@ struct WatchRoot: View {
             WatchPreview.openedURL(url)
             #endif
         }
+        .onAppear { openPendingReplyNotification() }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisWatchReplyNotificationOpened)) { _ in
+            openPendingReplyNotification()
+        }
+        .onChange(of: model.busy) { _, busy in
+            if !busy { Task { await model.routePendingReplyIfPossible() } }
+        }
+        .onChange(of: model.startingVoice) { _, starting in
+            if !starting { Task { await model.routePendingReplyIfPossible() } }
+        }
+        .onChange(of: model.voiceID) { _, voiceID in
+            if voiceID == nil { Task { await model.routePendingReplyIfPossible() } }
+        }
+        .onChange(of: model.dictationState) { _, dictationState in
+            if dictationState == .idle { Task { await model.routePendingReplyIfPossible() } }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             guard notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue else { return }
             let reason = notification.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt
@@ -167,14 +183,30 @@ struct WatchRoot: View {
         .task(id: scenePhase) {
             if scenePhase == .active {
                 await model.reconcileVoice()
+                await model.routePendingReplyIfPossible()
                 await connection.maintainConnection()
             }
         }
         .onChange(of: connection.reachable) { _, reachable in
-            if reachable { Task { await model.reconcileVoice() } }
+            if reachable {
+                Task {
+                    await model.reconcileVoice()
+                    await model.routePendingReplyIfPossible()
+                }
+            }
         }
     }
     /// Menu page: one Chat row and Factory, the menu button bottom right. The top right stays free for the system time.
+    private func openPendingReplyNotification() {
+        guard let target = JarvisReplyNotificationTarget.pending()
+            ?? JarvisReplyNotificationTarget.active() else {
+            return
+        }
+        page = 0
+        path = [.chat]
+        Task { await model.openReplyTarget(target) }
+    }
+
     private var actionPage: some View {
         ScrollView {
             VStack(spacing: 8) {

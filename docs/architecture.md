@@ -1,3 +1,82 @@
+## Durable reply APNs outbox — 20 November 2026 (#1970)
+
+```mermaid
+flowchart LR
+    A[Stored assistant reply] --> T[Message + outbox SQL transaction]
+    T --> O[Per-device reply_notification_deliveries]
+    O --> W[Leased APNs worker]
+    W -->|accepted| D[Terminal outcome]
+    W -->|transient| R[Bounded retry]
+    W -->|invalid token| I[Invalidate registration]
+    W --> H[Sanitized aggregate status]
+    P[Approval confirmation] --> C[Exact confirmation + turn claim]
+    C --> T
+```
+
+- Migrations `0093_reply_notification_outbox.sql` and
+  `0094_reply_notification_reconciliation.sql`, plus
+  `0095_notification_registration_terminalization.sql` and
+  `0096_apns_device_token_tombstones.sql`, give each native registration a
+  stable reference, record exact approval/turn claims, persist one approval
+  delivery state per registration, and store one
+  `reply_notification_deliveries` row per stored assistant message and device.
+  Message, safe preview, exact source/turn, optional evidence JSON, device
+  reference, expiry, lease, attempt and sanitized result are durable together.
+- Normal Chat and `message_dan` pass `replyNotification` into the conversation
+  store. The same SQL transaction inserts the assistant message and outbox rows.
+  Approval and reply paths take the same owner/turn application lock, and Chat
+  awaits the in-process approval result before that exact turn becomes
+  deliverable. Accepted APNs cancels only that registration's pending duplicate;
+  a known failed approval attempt leaves the reply eligible. An accepted result
+  is persisted with bounded idempotent SQL retries. If that outcome still cannot
+  be saved, the turn remains blocked; an unresolved sending row is never aged
+  into failure merely because its lease elapsed. The accepted turn/device
+  outcome is read independently of `action.expires_at` and retained beyond the
+  one-hour reply window, so execution latency cannot reopen a duplicate.
+  Unrelated concurrent turns are unaffected.
+- Registration expiry, unregister, Apple invalid-token rejection and any
+  direct delete update approval/reply rows by immutable `device_reference`
+  before deleting the registration. An `INSTEAD OF DELETE` trigger is the
+  final atomic backstop so FK `SET NULL` cannot strand a `sending` row.
+- Foreground registration upsert, invalidation and expired-recipient claiming
+  take the same owner application lock. Invalidation resolves every current
+  registration for the exact owner/token while holding it, not the stale
+  registration ID that initiated the APNs claim. List, approval-claim and reply
+  recipient queries also exclude tombstoned token hashes defensively.
+- Permanent APNs rejection writes an owner/token-hash tombstone before
+  registration deletion. Registration upsert returns `invalid_token` for the
+  same tombstone across refreshes/restarts while allowing a genuinely new token.
+- `push/reply-notifications.ts` is the only ordinary reply sender. The worker
+  recovers `pending` and expired leases after restart, retries only transient
+  APNs outcomes (`429`, `5xx` or transport timeout), caps attempts at five with
+  1/5/20/60 second backoff, and terminates at the one-hour expiry. Stable
+  `apns-collapse-id: reply-<messageId>` protects the crash window around an
+  accepted APNs response.
+- Reply transport handling is separate from SQL result persistence. A thrown,
+  reset or timeout transport is transient; an APNs-result write failure leaves
+  the current sending lease/state intact rather than rewriting it as a
+  permanent provider rejection.
+- Preview privacy uses the shared owner-sensitive classifier from the vault/
+  memory boundary, including identity and financial forms such as card number,
+  CVV/CVC, OTP/one-time/verification/security code, SSN/social security,
+  passport number, account and date of birth.
+- Terminal Apple invalid-token rejection deletes the native registration and
+  invalidates all pending rows for that stable device reference. The old
+  `push-ledger.ts` process-local timestamp suppression and every dual reply path
+  are removed.
+- The payload carries `sessionID`, `messageID` and a bounded preview. iPhone and
+  Watch first select the ordinary-reply tap branch and load the exact session
+  page. Watch retains the target through active chat, voice or dictation and
+  routes when idle. Once open, the exact session/message remains the active
+  history scope across foreground and reconnect until leave/send/sign-out;
+  proactive-item and approval branches retain their existing routes. Evidence
+  remains server-side and shares the identity reserved by #1969; the proactive
+  scheduler is unchanged.
+- `/status` database diagnostics expose only aggregate pending/accepted/failed/
+  expired/invalid-token/suppressed counts and latest sanitized failure time.
+  Logs contain outcome, attempt and HTTP status, never preview/message content
+  or tokens.
+
 ## PI-only release path — 19 November 2026 (#1966)
 
 ```mermaid
@@ -4233,7 +4312,9 @@ unchanged; only the confirmation table remains in use.
 ### Approval replies, push rule and notification caps (P15-64)
 
 - `POST /now/confirmations/:id` posts a chat reply after every calendar approval or rejection (`core/approval-reply.ts`): outcome plus one follow-up question, written into the session that staged the change. The reply is not pushed.
-- `push/push-ledger.ts` enforces one push and one log entry per event: an approval push per confirmation id, a reply push per message id. A reply that completes the turn which staged an approval is not pushed.
+- Ordinary reply push deduplication is owned by migration `0093`'s durable
+  approval/turn claim plus per-message/device outbox, not a process-local ledger.
+  Only the exact turn that staged the confirmation can be suppressed.
 - `core/notification-policy.ts` bounds the Now-feed notification rows written by `recordNotification`: identical kind and text once per rolling 24 hours, at most 10 per kind per rolling 24 hours, expiry from the feed after 7 days.
 - Owner-only feed routes: `POST /now/activity/:id/dismiss`, `POST /now/activity/groups/:category/dismiss` (`attention`, `release`, `credential`, `alert`) and `POST /now/activity/clear`; the last two return `{ dismissed }`.
 

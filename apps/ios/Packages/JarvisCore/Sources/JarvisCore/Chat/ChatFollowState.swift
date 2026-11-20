@@ -55,6 +55,13 @@ public struct ChatFollowState: Equatable, Sendable {
         messageSent()
     }
 
+    public mutating func notificationMessageOpened() {
+        isFollowing = false
+        isInteracting = false
+        hasNewMessages = true
+        selectedMessages.removeAll()
+    }
+
     /// The keyboard came up under the composer: the owner is writing, so the latest message must stay in view.
     public mutating func keyboardOpened() {
         messageSent()

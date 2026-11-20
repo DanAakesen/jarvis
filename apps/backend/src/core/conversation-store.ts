@@ -100,6 +100,12 @@ export interface ConversationStore {
     readonly attachmentRetentionDays?: number;
     readonly visualContext?: VisualContext;
     readonly blocks?: readonly ChatBlock[];
+    readonly replyNotification?: {
+      readonly ownerObjectId: string;
+      readonly turnMessageId?: string;
+      /** Bounded source/policy evidence for proactive continuity; never enters the APNs payload. */
+      readonly evidence?: Readonly<Record<string, unknown>>;
+    };
   }): Promise<ConversationMessage | null>;
   setVisualContext?(input: {
     readonly sessionId: string;

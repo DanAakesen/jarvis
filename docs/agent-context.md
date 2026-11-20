@@ -11,6 +11,58 @@
 - Successful memory actions arrive through existing `tool-call-finished` activity. Web resets the first page and advances by raw server `count`; iPhone invalidates Settings memory caches and reloads an open Memory screen. Keep both handling Chat and Voice.
 - Offline checks: `npm test --workspace @jarvis/backend -- src/core/memory.test.ts src/pi/context.test.ts src/pi/mcp.test.ts`; backend build/lint; `npm test --workspace @jarvis/web -- src/MemorySettings.test.tsx`; web build/lint; `swift:6.2` `swift test -j 2 --filter ChatToolKindTests`. No live model, provider, deployment or paid canary is allowed.
 
+## Durable reply pushes — 20 November 2026 (#1970)
+
+- Migrations `0093_reply_notification_outbox.sql` and
+  `0094_reply_notification_reconciliation.sql`, plus
+  `0095_notification_registration_terminalization.sql` and
+  `0096_apns_device_token_tombstones.sql`, must run before this backend
+  revision. They are backward-compatible for old registrations and each has a
+  matching down migration.
+- Ordinary replies are queued only by the conversation-store transaction; do
+  not add a callback-based fallback sender. `reply-notification-store.ts` owns
+  leases/results and `reply-notifications.ts` is the sole reply APNs worker.
+- Approval confirmation dedupe is exact `(confirmation ID, source turn message
+  ID)`, while reply cancellation is a separate per-registration outcome. Keep
+  `withConfirmationTurn` and `awaitReplyNotificationApproval` around tool
+  execution/final reply storage; cancel only pending rows after accepted APNs
+  and never reinterpret a state-write failure as provider rejection. Retry
+  accepted-outcome persistence idempotently and fail the turn rather than
+  unblocking a potentially duplicated reply. Suppression reads the retained
+  accepted turn/device row, not action `expires_at`.
+- Every registration deletion/expiry/unregister path must update in-flight rows
+  by immutable `device_reference` before deleting the registration. Keep the
+  delete trigger and SQL race checks; FK `SET NULL` is never a cleanup strategy.
+- Tombstone invalidation and foreground upsert use the same
+  `jarvis.approval-notifications:<owner>` application lock. Resolve all current
+  registrations for the exact token inside that transaction; never trust only a
+  stale claimed registration ID. Recipient list/claim/outbox queries must
+  exclude tombstoned token hashes.
+- Permanent APNs rejection must insert/update the owner/token-hash tombstone in
+  the same transaction as terminalization/deletion. Registration upsert rejects
+  that hash and only a different token can re-register.
+- iPhone and Watch route `jarvis.reply` using `JarvisReplyNotificationTarget`.
+  Watch keeps that target pending through busy chat, voice and dictation, and
+  routes at idle. Keep active exact scope separately so history/foreground/
+  reconnect refreshes stay on that session/message until leave/send/sign-out.
+  Leaving an in-flight opening must call the persisted target's own `clear`,
+  which is equality-checked so a newer unrelated tap survives.
+  Do not fold reply taps into the `jarvis.proactive` item route or approval
+  action handling.
+- `containsSensitiveOwnerData` is the shared preview/memory/vault boundary.
+  Do not add a notification-only sensitive regex; extend the shared classifier
+  for OTP/one-time/verification/security/CVV/CVC, identity and financial forms
+  and cover each with a table case.
+- Offline checks:
+  - `npm test --workspace @jarvis/backend -- src/push/reply-notifications.test.ts src/database/migrations.test.ts src/pi/brain/comms.test.ts`
+  - `npm run build --workspace @jarvis/backend`
+  - `npm run lint --workspace @jarvis/backend`
+  - loopback SQL contract: `src/database/reply-notification-store.integration.test.ts`
+  - `swift test --filter 'ReplyNotificationTargetTests|ChatFollowStateTests|WatchReplyRouteStateTests'` in `apps/ios/Packages/JarvisCore`
+- Never send a real APNs push or call Apple/Foundry/Voice/Azure/GitHub for this
+  feature. Linux cannot compile/render SwiftUI; the Mac job and a signed
+  iPhone/Watch remain the live tap/lock-screen checks.
+
 ## PI release hardening — 19 November 2026 (#1966)
 
 - Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.

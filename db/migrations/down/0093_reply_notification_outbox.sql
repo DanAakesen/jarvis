@@ -1,0 +1,8 @@
+DROP TABLE dbo.reply_notification_deliveries;
+DROP TABLE dbo.reply_notification_approval_claims;
+ALTER TABLE dbo.approval_notification_registrations
+  DROP CONSTRAINT UQ_approval_notification_registrations_id;
+ALTER TABLE dbo.approval_notification_registrations
+  DROP CONSTRAINT DF_approval_notification_registrations_id;
+ALTER TABLE dbo.approval_notification_registrations
+  DROP COLUMN registration_id;

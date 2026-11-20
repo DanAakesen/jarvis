@@ -121,7 +121,10 @@ export function createBrainTools(options: {
             !findingAllowed(settings, category, suggestionScope, relatedCategories)) {
           throw new ToolRefusal('The current Proactive source, category or scope policy does not allow this message. Nothing was sent.');
         }
-        const sent = await comms.send({ text }, grant.brain!, signal);
+        const sent = await comms.send({
+          text,
+          evidence: { category, suggestionScope, relatedCategories, evidenceSources },
+        }, grant.brain!, signal);
         return { sent: true, messageId: sent.messageId };
       } catch (error) { return translate(error); }
     },

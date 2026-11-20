@@ -1,0 +1,1 @@
+DROP TABLE dbo.approval_notification_token_tombstones;

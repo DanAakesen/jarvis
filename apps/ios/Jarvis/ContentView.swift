@@ -14,6 +14,8 @@ struct ContentView: View {
     @State private var chatHandoff: JarvisChatHandoff?
     @State private var openingProactiveItemID: String?
     @State private var proactiveOpenError: String?
+    @State private var openingReplyTarget: JarvisReplyNotificationTarget?
+    @State private var replyOpenRevision = 0
     private let chatClient: JarvisClient?
     private let startupError: String?
     private let onColdStartData: (@MainActor () -> Void)?
@@ -152,7 +154,10 @@ struct ContentView: View {
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
         .onDisappear { workspaceRuntime.resetSession() }
-        .onAppear { openProactiveNotificationIfNeeded() }
+        .onAppear {
+            openProactiveNotificationIfNeeded()
+            openReplyNotificationIfNeeded()
+        }
         .task {
             guard let onColdStartData else { return }
             if !fixtureMode { await todayModel.refresh(force: true) }
@@ -160,6 +165,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .jarvisProactiveNotificationOpened)) { _ in
             openProactiveNotificationIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisReplyNotificationOpened)) { _ in
+            openReplyNotificationIfNeeded()
         }
         .onReceive(navigation.navigationRequested) { request in
             prepareNavigation(to: request.to, from: request.from)
@@ -198,10 +206,12 @@ struct ContentView: View {
                                         ? .activity : nil),
                                 startupError: startupError,
                                 notificationContextError: proactiveOpenError,
+                                replyTarget: openingReplyTarget,
+                                onReplyTargetOpened: replyTargetOpened,
                                 handoff: $chatHandoff,
                                 onNavigate: { navigate(to: $0) }
                             )
-                            .id(sessionEpoch)
+                            .id("\(sessionEpoch)-reply-\(replyOpenRevision)")
                         } else {
                             destinationView(destination)
                                 .id(sessionEpoch)
@@ -218,6 +228,7 @@ struct ContentView: View {
                         guard !Task.isCancelled else { return }
                         appliedSessionEpoch = sessionEpoch
                         openProactiveNotificationIfNeeded()
+                        openReplyNotificationIfNeeded()
                         if navigation.currentDestination == .voice {
                             workspaceRuntime.beginVoiceVisuals()
                             await voiceModel.start()
@@ -344,6 +355,8 @@ struct ContentView: View {
                 client: chatClient,
                 fixtureMode: fixtureMode,
                 startupError: startupError,
+                replyTarget: openingReplyTarget,
+                onReplyTargetOpened: replyTargetOpened,
                 onNavigate: { navigate(to: $0) }
             )
         } else if destination == .notes {
@@ -472,6 +485,19 @@ struct ContentView: View {
                 proactiveOpenError = "Chat is open, but Jarvis has not loaded this notification's context. Open the notification again to retry."
             }
         }
+    }
+
+    private func openReplyNotificationIfNeeded() {
+        guard let target = JarvisReplyNotificationTarget.pending() else { return }
+        openingReplyTarget = target
+        replyOpenRevision += 1
+        navigate(to: .chat)
+    }
+
+    private func replyTargetOpened() {
+        guard let target = openingReplyTarget else { return }
+        target.clear()
+        openingReplyTarget = nil
     }
 
 #if DEBUG && targetEnvironment(simulator)

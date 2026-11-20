@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
@@ -21,7 +21,14 @@ const forecastInput = {
   data: { place: 'Copenhagen', date: '2026-11-20', conditions: 'Mostly cloudy', symbol: 'cloudy' as const, highC: 9, lowC: 5 },
 };
 
-function setup(agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<string>, channel: 'chat' | 'voice' = 'chat') {
+function setup(
+  agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<string>,
+  channel: 'chat' | 'voice' = 'chat',
+  notification?: {
+    readonly awaitApproval: (turnMessageId: string) => Promise<void>;
+    readonly onAssistantStored?: () => void;
+  },
+) {
   const messages: (ConversationMessage & { blocks?: unknown })[] = [];
   const running: { app?: ReturnType<typeof buildApp> } = {};
   const store = {
@@ -33,6 +40,7 @@ function setup(agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<s
         at: new Date(), ...(input.blocks === undefined ? {} : { blocks: input.blocks }),
       };
       messages.push(message as ConversationMessage);
+      if (input.role === 'jarvis') notification?.onAssistantStored?.();
       return message;
     },
     getDanMessagesAfter: async () => [],
@@ -44,6 +52,10 @@ function setup(agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<s
     modules: [createConversationModule()],
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' }),
     conversationStore: store, piAgent: agent,
+    ...(notification ? {
+      notifyReply: () => {},
+      awaitReplyNotificationApproval: notification.awaitApproval,
+    } : {}),
   });
   running.app = app;
   apps.push(app);
@@ -135,5 +147,27 @@ describe('chat turn with blocks', () => {
     const failed = setup(async function* (app) { app.chatBlocks.add('7', finalizeChatBlock(forecastInput)); throw new Error('provider failed'); });
     expect((await failed.turn()).at(-1)!.name).toBe('error');
     expect(failed.app.chatBlocks.take('7')).toEqual([]);
+  });
+
+  it('waits for exact-turn approval reconciliation before storing and queuing the reply', async () => {
+    let release!: () => void;
+    const approval = new Promise<void>((resolve) => { release = resolve; });
+    const awaited: string[] = [];
+    let assistantStored = false;
+    const fixture = setup(async function* () { yield 'Exact turn reply.'; }, 'chat', {
+      awaitApproval: async (turnMessageId) => {
+        awaited.push(turnMessageId);
+        await approval;
+      },
+      onAssistantStored: () => { assistantStored = true; },
+    });
+
+    const pending = fixture.turn();
+    await vi.waitFor(() => expect(awaited).toEqual(['1']));
+    expect(assistantStored).toBe(false);
+    release();
+    const events = await pending;
+    expect(events.at(-1)?.name).toBe('done');
+    expect(assistantStored).toBe(true);
   });
 });

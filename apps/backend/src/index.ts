@@ -191,13 +191,13 @@ import { createPushStore } from './database/push-store.js';
 import { createActivityRegistrationStore } from './database/activitykit-store.js';
 import { createActivityPushSender, loadActivityKitConfig } from './push/activitykit.js';
 import { createApprovalNotificationStore } from './database/approval-notification-store.js';
+import { createReplyNotificationStore } from './database/reply-notification-store.js';
 import {
   createApprovalNotificationDispatcher,
-  createReplyNotificationDispatcher,
   createApprovalNotificationSender,
   loadApprovalNotificationConfig,
 } from './push/approval-notifications.js';
-import { createPushLedger } from './push/push-ledger.js';
+import { createReplyNotificationWorker } from './push/reply-notifications.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createNativeProactiveDelivery } from './proactive/native-delivery.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
@@ -243,21 +243,28 @@ try {
   if (approvalNotificationConfig && !database) {
     throw new ConfigurationError('JARVIS_APPROVAL_NOTIFICATIONS_ENABLED requires the existing SQL pool');
   }
-  const approvalNotifications = approvalNotificationConfig && database
+  const replyNotificationStore = approvalNotificationConfig && database
+    ? createReplyNotificationStore(database.pool)
+    : undefined;
+  const approvalNotifications = approvalNotificationConfig && database && replyNotificationStore
     ? {
       store: createApprovalNotificationStore(database.pool),
       sender: await createApprovalNotificationSender(approvalNotificationConfig),
+      replyNotifications: replyNotificationStore,
     }
     : undefined;
-  const pushLedger = createPushLedger();
   const notifyApproval = approvalNotifications
     ? createApprovalNotificationDispatcher(
-      config.auth.ownerObjectId, approvalNotifications, logger, Date.now, pushLedger)
+      config.auth.ownerObjectId, approvalNotifications, logger, Date.now)
     : undefined;
-  const notifyReply = approvalNotifications
-    ? createReplyNotificationDispatcher(
-      config.auth.ownerObjectId, approvalNotifications, logger, Date.now, pushLedger)
+  const replyNotificationWorker = approvalNotifications && replyNotificationStore
+    ? createReplyNotificationWorker(
+      config.auth.ownerObjectId,
+      { store: replyNotificationStore, sender: approvalNotifications.sender },
+      logger,
+    )
     : undefined;
+  const notifyReply = replyNotificationWorker?.notify;
   if (config.healthUploadEnabled && !database) {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED requires the existing SQL pool');
   }
@@ -905,8 +912,8 @@ try {
         await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
-      onConfirmationPending: (confirmation, foodEstimate) => {
-        notifyApproval?.(confirmation);
+      onConfirmationPending: async (confirmation, foodEstimate) => {
+        await notifyApproval?.(confirmation);
         nowEventHub.publish(foodEstimate
           ? { type: 'food_estimate_pending', ...foodEstimate, confirmation }
           : { type: 'status', kind: 'approval_pending' });
@@ -1173,6 +1180,7 @@ try {
   const brainComms = piGateway && piStore && conversationStore && piArea
     ? createBrainComms({
       conversations: conversationStore, store: piStore, ownerObjectId: config.auth.ownerObjectId,
+      pushEnabled: notifyReply !== undefined,
       push: (message) => notifyReply?.(message), announce: () => announceBrainMessage(), now: () => new Date(),
     }) : undefined;
   // Standing watches: free-text notes in PI's corner of the vault, woken by the same ticker, listed and stopped from chat.
@@ -1380,7 +1388,31 @@ try {
       timer.unref();
       try {
         await request.query('SELECT 1 AS ready;');
-        return { status: 'ok', details: { configured: true } };
+        const replyDelivery = replyNotificationStore
+          ? await replyNotificationStore.diagnostics(
+            config.auth.ownerObjectId, AbortSignal.timeout(2_000),
+          )
+          : null;
+        return {
+          status: replyDelivery && replyDelivery.failed + replyDelivery.expired > 0
+            ? 'degraded'
+            : 'ok',
+          details: {
+            configured: true,
+            ...(replyDelivery ? {
+              replyDeliveryPending: replyDelivery.pending,
+              replyDeliveryAccepted: replyDelivery.accepted,
+              replyDeliveryFailed: replyDelivery.failed,
+              replyDeliveryExpired: replyDelivery.expired,
+              replyDeliveryInvalidToken: replyDelivery.invalidToken,
+              replyDeliverySuppressed: replyDelivery.suppressed,
+              replyDeliveryLastFailureAt: replyDelivery.lastFailureAt,
+              ...(replyDelivery.failed + replyDelivery.expired > 0
+                ? { reason: 'reply_delivery_failed' }
+                : {}),
+            } : { replyDeliveryConfigured: false }),
+          },
+        };
       } finally {
         clearTimeout(timer);
       }
@@ -1554,7 +1586,9 @@ try {
     ...(activityKit ? { activityKit } : {}),
     ...(approvalNotifications ? { approvalNotifications } : {}),
     ...(notifyApproval ? { notifyApproval } : {}),
+    ...(notifyApproval ? { awaitReplyNotificationApproval: notifyApproval.waitForTurn } : {}),
     ...(notifyReply ? { notifyReply } : {}),
+    ...(replyNotificationWorker ? { replyNotificationWorker } : {}),
     ...(vaultModule && config.foundryProjectEndpoint && credential ? {
       onEmbeddingModelChanged: async (jobs) => {
         if (activeEmbeddingReindex) {

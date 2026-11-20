@@ -13,6 +13,17 @@ export const confirmationLifetimeSeconds = 5 * 60;
 const maxPendingBrowserConfirmations = 10;
 const browserConversationId = 'browser';
 const phoneSessionContext = new AsyncLocalStorage<string>();
+const confirmationTurnContext = new AsyncLocalStorage<string>();
+
+export function withConfirmationTurn<T>(
+  messageId: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  if (!/^[1-9]\d{0,18}$/u.test(messageId) || BigInt(messageId) > 9_223_372_036_854_775_807n) {
+    throw new TypeError('Invalid confirmation turn');
+  }
+  return confirmationTurnContext.run(messageId, action);
+}
 
 export function withPhoneConfirmationSession<T>(
   sessionId: string,
@@ -44,6 +55,8 @@ export interface BrowserConfirmation {
   readonly actionKind: ConfirmationActionKind;
   readonly summary: string;
   readonly expiresAt: string;
+  /** Internal exact turn identity; public Now responses deliberately omit it. */
+  readonly turnMessageId?: string;
 }
 
 export interface BrowserConfirmationDelivery {
@@ -94,7 +107,7 @@ export interface OwnerInteractionOptions {
   readonly onConfirmationPending?: (
     confirmation: BrowserConfirmation,
     foodEstimate?: BrowserConfirmationDelivery['foodEstimate'],
-  ) => void;
+  ) => void | Promise<void>;
   readonly onConfirmationsChanged?: () => void;
 }
 
@@ -210,14 +223,18 @@ export function createOwnerInteractionService({
       ? AbortSignal.any([signal, waiterController.signal])
       : waiterController.signal;
     const decision = waitForDecision(id, Math.max(0, (action.expiresAt - Date.now()) / 1000), action, waitSignal);
+    const turnMessageId = confirmationTurnContext.getStore() ?? delivery?.foodEstimate?.sourceMessageId;
     browserConfirmations.set(id, {
-      view: { id, actionKind, summary: action.presentation.summary, expiresAt: action.presentation.expiresAt },
+      view: {
+        id, actionKind, summary: action.presentation.summary, expiresAt: action.presentation.expiresAt,
+        ...(turnMessageId === undefined ? {} : { turnMessageId }),
+      },
       action,
     });
     if (delivery?.foodEstimate) foodEstimates.set(id, { action });
     onConfirmationsChanged();
     try {
-      onConfirmationPending?.({ ...browserConfirmations.get(id)!.view }, delivery?.foodEstimate);
+      await onConfirmationPending?.({ ...browserConfirmations.get(id)!.view }, delivery?.foodEstimate);
       signal?.throwIfAborted();
       const resolved = await decision;
       if (resolved !== 'approve') {
@@ -254,7 +271,15 @@ export function createOwnerInteractionService({
     pendingBrowserConfirmations() {
       return [...browserConfirmations.values()]
         .filter(({ action }) => action.pending)
-        .slice(0, maxPendingBrowserConfirmations).map(({ view }) => ({ ...view }));
+        .slice(0, maxPendingBrowserConfirmations)
+        .map(({ view }) => {
+          return {
+            id: view.id,
+            actionKind: view.actionKind,
+            summary: view.summary,
+            expiresAt: view.expiresAt,
+          };
+        });
     },
     async resolveBrowserConfirmation(id, decision) {
       const pending = browserConfirmations.get(id);
