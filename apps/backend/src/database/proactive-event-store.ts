@@ -151,6 +151,83 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
           ) VALUES (@id, @owner, @now, @count, @activationType, @satisfiedSlot);`);
     },
 
+    async reserveBatch(input) {
+      const transaction = new sql.Transaction(pool);
+      try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+        const lock = await new sql.Request(transaction)
+          .input('resource', sql.NVarChar(255), `jarvis.pi.background-slots:${owner}`)
+          .query<{ result: number }>(`DECLARE @result int;
+            EXEC @result = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive',
+              @LockOwner='Transaction', @LockTimeout=10000;
+            SELECT @result AS result;`);
+        if ((lock.recordset[0]?.result ?? -999) < 0) throw new Error('PI background slot lock failed');
+
+        const request = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('batch', sql.UniqueIdentifier, input.batchId)
+          .input('dayStart', sql.DateTime2, input.dayStart)
+          .input('now', sql.DateTime2, input.now)
+          .input('count', sql.Int, input.eventCount);
+        const policy = await request.query<{ paused: boolean; allowed: number }>(`SELECT TOP (1) paused,
+            background_turns_per_day AS allowed
+          FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
+          WHERE owner_object_id=@owner;`);
+        const currentPaused = policy.recordset[0]?.paused ?? false;
+        const currentAllowed = Math.min(12, policy.recordset[0]?.allowed ?? input.allowed);
+        if (input.paused || currentPaused) {
+          await transaction.rollback();
+          return 'paused';
+        }
+        if (input.quiet && !input.allowQuiet) {
+          await transaction.rollback();
+          return 'quiet_hours';
+        }
+
+        const duplicate = await new sql.Request(transaction)
+          .input('batch', sql.UniqueIdentifier, input.batchId)
+          .query<{ found: number }>(`SELECT TOP (1) 1 AS found
+            FROM dbo.proactive_event_batches WITH (UPDLOCK, HOLDLOCK) WHERE id=@batch;`);
+        if (duplicate.recordset.length > 0) {
+          await transaction.rollback();
+          return 'duplicate';
+        }
+
+        const batches = await new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('dayStart', sql.DateTime2, input.dayStart)
+          .query<{ used: number; last_at: Date | string | null }>(`SELECT
+            (SELECT COUNT_BIG(*) FROM dbo.proactive_event_batches
+              WHERE owner_object_id=@owner AND created_at>=@dayStart) AS used,
+            (SELECT TOP (1) created_at FROM dbo.proactive_event_batches
+              WHERE owner_object_id=@owner ORDER BY created_at DESC, id DESC) AS last_at;`);
+        const row = batches.recordset[0];
+        if (Number(row?.used ?? 0) >= currentAllowed) {
+          await transaction.rollback();
+          return 'daily_cap';
+        }
+        if (row?.last_at && input.now.getTime() - date(row.last_at).getTime() < input.minGapMs) {
+          await transaction.rollback();
+          return 'spaced';
+        }
+        await new sql.Request(transaction)
+          .input('id', sql.UniqueIdentifier, input.batchId)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('now', sql.DateTime2, input.now)
+          .input('count', sql.Int, input.eventCount)
+          .input('activationType', sql.VarChar(10), input.activationType)
+          .input('satisfiedSlot', sql.NVarChar(16), input.satisfiedSlot)
+          .query(`INSERT dbo.proactive_event_batches
+            (id, owner_object_id, created_at, event_count, activation_type, satisfied_slot)
+            VALUES (@id, @owner, @now, @count, @activationType, @satisfiedSlot);`);
+        await transaction.commit();
+        return null;
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve the reservation error. */ }
+        throw error;
+      }
+    },
+
     async modelBatchesSince(since) {
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)

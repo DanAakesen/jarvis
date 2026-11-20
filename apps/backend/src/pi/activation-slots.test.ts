@@ -61,6 +61,22 @@ describe('combined PI background slots', () => {
     await expect(slots.status()).resolves.toMatchObject({ used: 1, allowed: 1, remaining: 0 });
   });
 
+  it('atomically lets only one concurrent activation reserve the final daily slot', async () => {
+    const now = new Date('2026-11-19T09:00:00.000Z');
+    const queue = createMemoryEventQueueStore();
+    const proactive = createMemoryProactiveStore(owner);
+    await proactive.settings.patch({ backgroundTurnsPerDay: 1 });
+    const slots = createPiBackgroundSlotService({ queue, proactive, now: () => now });
+    const results = await Promise.all(['00000000-0000-4000-8000-000000000021', '00000000-0000-4000-8000-000000000022']
+      .map((runId) => slots.reserve({
+        runId, eventCount: 1, activationType: 'event', allowQuiet: true,
+      })));
+
+    expect(results.filter(({ allowed }) => allowed)).toHaveLength(1);
+    expect(results.filter(({ allowed, reason }) => !allowed && reason === 'daily_cap')).toHaveLength(1);
+    await expect(slots.status()).resolves.toMatchObject({ used: 1, remaining: 0 });
+  });
+
   it('keeps persisted spacing across Copenhagen midnight after restart', async () => {
     let now = new Date('2026-11-19T22:55:00.000Z');
     const queue = createMemoryEventQueueStore();

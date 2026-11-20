@@ -18,6 +18,8 @@ export interface EventBatchReservation {
   readonly satisfiedSlot: string | null;
 }
 
+export type BatchReservationFailure = 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap' | 'duplicate';
+
 /** The queue is a table read by the existing ticker. State is derived from columns, never an enum. */
 export interface EventQueueStore {
   enqueue(input: ProactiveEventInput, now: Date): Promise<{ id: string; inserted: boolean }>;
@@ -34,6 +36,20 @@ export interface EventQueueStore {
     eventCount: number,
     metadata?: { readonly activationType?: 'event' | 'scheduled'; readonly satisfiedSlot?: string | null },
   ): Promise<void>;
+  /** Atomically applies the shared owner policy and records the model batch. */
+  reserveBatch(input: {
+    readonly batchId: string;
+    readonly now: Date;
+    readonly dayStart: Date;
+    readonly eventCount: number;
+    readonly allowed: number;
+    readonly minGapMs: number;
+    readonly quiet: boolean;
+    readonly allowQuiet: boolean;
+    readonly paused: boolean;
+    readonly activationType: 'event' | 'scheduled';
+    readonly satisfiedSlot: string | null;
+  }): Promise<BatchReservationFailure | null>;
   modelBatchesSince(since: Date): Promise<number>;
   lastBatch(): Promise<EventBatchReservation | null>;
   recovery(now: Date): Promise<{
@@ -93,7 +109,7 @@ interface MemoryRow extends QueuedEvent {
 export function createMemoryEventQueueStore(): EventQueueStore {
   const rows = new Map<string, MemoryRow>();
   const byKey = new Map<string, string>();
-  const batches: EventBatchReservation[] = [];
+  const batches: Array<EventBatchReservation & { readonly id: string }> = [];
   const view = (row: MemoryRow): QueuedEvent => ({
     id: row.id, source: row.source, kind: row.kind, dedupeKey: row.dedupeKey, summary: row.summary,
     detail: structuredClone(row.detail), occurredAt: row.occurredAt, receivedAt: row.receivedAt, attempts: row.attempts,
@@ -150,10 +166,28 @@ export function createMemoryEventQueueStore(): EventQueueStore {
     },
     async startBatch(_batchId, now, _eventCount, metadata) {
       batches.push({
+        id: _batchId,
         at: new Date(now),
         activationType: metadata?.activationType ?? 'event',
         satisfiedSlot: metadata?.satisfiedSlot ?? null,
       });
+    },
+    async reserveBatch(input) {
+      if (input.paused) return 'paused';
+      if (input.quiet && !input.allowQuiet) return 'quiet_hours';
+      if (batches.some(({ id }) => id === input.batchId)) return 'duplicate';
+      const used = batches.filter(({ at }) => at >= input.dayStart).length;
+      if (used >= input.allowed) return 'daily_cap';
+      const lastAt = batches.reduce<Date | null>((latest, batch) =>
+        latest === null || batch.at > latest ? batch.at : latest, null);
+      if (lastAt && input.now.getTime() - lastAt.getTime() < input.minGapMs) return 'spaced';
+      batches.push({
+        id: input.batchId,
+        at: new Date(input.now),
+        activationType: input.activationType,
+        satisfiedSlot: input.satisfiedSlot,
+      });
+      return null;
     },
     async modelBatchesSince(since) { return batches.filter(({ at }) => at >= since).length; },
     async lastBatch() {

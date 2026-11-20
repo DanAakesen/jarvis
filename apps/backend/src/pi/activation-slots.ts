@@ -25,7 +25,7 @@ export type PiBackgroundReservation =
   | { readonly allowed: true; readonly status: PiBackgroundSlotStatus }
   | {
     readonly allowed: false;
-    readonly reason: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap';
+    readonly reason: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap' | 'duplicate';
     readonly status: PiBackgroundSlotStatus;
   };
 
@@ -79,22 +79,24 @@ export function createPiBackgroundSlotService(options: {
     status,
     async reserve(input) {
       const at = options.now();
-      const current = await status();
       const settings = await options.proactive.settings.read();
-      if (settings.paused) return { allowed: false, reason: 'paused', status: current };
-      if (current.quiet && input.allowQuiet !== true) {
-        return { allowed: false, reason: 'quiet_hours', status: current };
-      }
-      if (current.used >= current.allowed) return { allowed: false, reason: 'daily_cap', status: current };
-      if (current.lastAt && at.getTime() - Date.parse(current.lastAt) < MIN_WAKE_GAP_MS) {
-        return { allowed: false, reason: 'spaced', status: current };
-      }
-      await options.queue.startBatch(input.runId, at, input.eventCount, {
+      const reason = await options.queue.reserveBatch({
+        batchId: input.runId,
+        now: at,
+        dayStart: copenhagenDayStart(at),
+        eventCount: input.eventCount,
+        allowed: Math.min(DEFAULT_BACKGROUND_TURNS_PER_DAY, settings.backgroundTurnsPerDay),
+        minGapMs: MIN_WAKE_GAP_MS,
+        quiet: isQuietHour(at),
+        allowQuiet: input.allowQuiet === true,
+        paused: settings.paused,
         activationType: input.activationType,
         satisfiedSlot: input.satisfiedSlot ?? null,
       });
       const updated = await status();
-      return { allowed: true, status: updated };
+      return reason
+        ? { allowed: false, reason, status: updated }
+        : { allowed: true, status: updated };
     },
   };
 }
