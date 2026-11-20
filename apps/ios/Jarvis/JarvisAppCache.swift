@@ -1,6 +1,10 @@
 import Foundation
 import JarvisCore
 
+extension Notification.Name {
+    static let jarvisMemoryChanged = Notification.Name("jarvis.memory-changed")
+}
+
 /// The app-wide on-device cache. Structured data lives as files under the Caches directory; tokens stay in the
 /// Keychain. The cache belongs to the one signed-in owner and is cleared on sign-out and on every new sign-in.
 /// API: FileManager cachesDirectory, ScenePhase (foreground invalidation) in the callers.

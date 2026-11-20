@@ -1,9 +1,10 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import {
   type MemoryCategory,
   type MemoryRecord,
+  type MemoryVersion,
   type MemoryStore,
   VectorSearchUnavailableError,
 } from '../database/memory-store.js';
@@ -14,22 +15,37 @@ import { ToolRefusal } from './tool-registry.js';
 const MAX_MEMORY_RESULTS = 5;
 const MAX_LIST_RESULTS = 25;
 const MAX_HISTORY_RESULTS = 10;
+const MAX_MEMORY_API_RESULTS = 50;
+const MAX_MEMORY_API_OFFSET = 10_000;
+const MAX_MEMORY_API_HISTORY = 10;
 const MAX_SQL_BIGINT = 9_223_372_036_854_775_807n;
 const idPattern = /^[1-9]\d{0,18}$/u;
 const categories = new Set<MemoryCategory>(['preference', 'project_fact', 'decision', 'unfinished_task']);
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    jarvisMemorySourceMessageId?: string;
-  }
-}
+const secretValuePattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
+const explicitCapturePattern = [
+  /^\s*(?:please\s+)?(?:remember|memorise|memorize)\b/iu,
+  /\b(?:remember|memorise|memorize)\s+(?:that|this|it|i\b|my\b|me\b|we\b)/iu,
+  /\b(?:do not|don['’]?t)\s+forget\b/iu,
+  /\b(?:do not|don['’]?t)\s+let\s+me\s+forget\b/iu,
+  /\bkeep\s+(?:this|that|it)?\s*in\s+mind\b/iu,
+  /\b(?:make|take)\s+(?:a\s+)?note\s+(?:of|that)\b/iu,
+  /^\s*(?:husk|glem ikke|gør et notat|gem)\b/iu,
+  /\b(?:husk|gem)\s+(?:at|det|dette|denne|jeg\b|mit\b|min\b)/iu,
+  /\blad være med at glemme\b/iu,
+  /\b(?:save|store)\s+(?:that|this|it)\s+(?:as|in|for)\s+(?:a\s+)?(?:personal\s+)?memory\b/iu,
+  /\b(?:save|store)\s+(?:that|this|it)\s+(?:about me|for me|for later)\b/iu,
+  /\bmake\s+(?:that|this|it)\s+(?:a\s+)?(?:personal\s+)?memory\b/iu,
+] as const;
 
 export interface MemoryModuleOptions {
   readonly store: MemoryStore;
   readonly embedder?: MemoryEmbedder;
+  readonly getEmbedder?: () => Promise<MemoryEmbedder | undefined>;
   readonly embeddingModel?: string;
+  readonly getEmbeddingModel?: () => Promise<string>;
+  readonly automaticCapture?: () => Promise<boolean>;
   readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
 }
 
@@ -110,6 +126,56 @@ function memoryDetails(record: MemoryRecord) {
   };
 }
 
+function shouldRedactMemory(value: string): boolean {
+  return credentialPattern.test(value) || secretValuePattern.test(value);
+}
+
+function snippet(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim().slice(0, 500);
+}
+
+function conversationUrl(messageId: string): string {
+  return `/conversation/history?before=${BigInt(messageId) + 1n}&limit=100`;
+}
+
+function memoryApiItem(record: MemoryRecord) {
+  const redacted = shouldRedactMemory(`${record.key}\n${record.content}`);
+  return {
+    id: record.id,
+    type: 'memory' as const,
+    folder: 'General',
+    title: redacted ? '[redacted]' : record.key,
+    snippet: redacted ? '[redacted]' : snippet(record.content),
+    updatedAt: record.updatedAt.toISOString(),
+    source: {
+      type: 'conversation' as const,
+      messageId: record.sourceMessageId,
+      url: conversationUrl(record.sourceMessageId),
+    },
+  };
+}
+
+function memoryHistoryItem(version: MemoryVersion) {
+  const redacted = shouldRedactMemory(`${version.key}\n${version.content}`);
+  return {
+    id: version.id,
+    category: version.category,
+    key: redacted ? '[redacted]' : version.key,
+    content: redacted ? '[redacted]' : version.content,
+    revision: version.revision,
+    changedAt: version.changedAt.toISOString(),
+    source: {
+      type: 'conversation' as const,
+      messageId: version.sourceMessageId,
+      url: conversationUrl(version.sourceMessageId),
+    },
+  };
+}
+
+export function isExplicitMemoryRequest(text: string): boolean {
+  return explicitCapturePattern.some((pattern) => pattern.test(text));
+}
+
 function checkPrincipal(request: FastifyRequest): void {
   if (!request.principal && !request.agentPrincipal) {
     throw new ToolRefusal('Memory access is not authorized.');
@@ -121,17 +187,14 @@ async function sourceForWrite(
   request: FastifyRequest,
   signal: AbortSignal,
   content: string,
-  directRequest = false,
 ) {
   checkPrincipal(request);
   const id = sourceMessageId(request);
   const source = await store.getSourceMessage(id, signal);
   if (!source) throw new ToolRefusal('The source message is missing or is not from Dan. Nothing changed.');
-  if (credentialPattern.test(`${source.text}\n${content}`)) {
+  if (credentialPattern.test(`${source.text}\n${content}`) ||
+      secretValuePattern.test(`${source.text}\n${content}`)) {
     throw new ToolRefusal('Secrets and credentials cannot be saved in memory. Nothing changed.');
-  }
-  if (!directRequest && sensitivePattern.test(`${source.text}\n${content}`)) {
-    throw new ToolRefusal('Sensitive details are not saved by automatic capture. Save them when Dan requests it.');
   }
   return source;
 }
@@ -145,18 +208,37 @@ function confirmation(action: 'saved' | 'updated' | 'forgotten', categoryName: M
 export function createMemoryModule(options: MemoryModuleOptions): BackendModule {
   const { store, embedder } = options;
 
+  async function activeEmbedder(): Promise<MemoryEmbedder | undefined> {
+    return options.getEmbedder ? options.getEmbedder() : embedder;
+  }
+
+  async function activeEmbeddingModel(active: MemoryEmbedder | undefined): Promise<string> {
+    const model = active?.model ?? (options.getEmbeddingModel
+      ? await options.getEmbeddingModel()
+      : options.embeddingModel ?? 'text-embedding-3-small');
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(model)) {
+      throw new Error('Embedding model setting is invalid');
+    }
+    return model;
+  }
+
+  async function automaticCaptureEnabled(): Promise<boolean> {
+    return options.automaticCapture ? options.automaticCapture() : false;
+  }
+
   async function embed(content: string, signal: AbortSignal, request: FastifyRequest): Promise<{
     readonly value: readonly number[] | null;
     readonly model: string | null;
     readonly unavailable: boolean;
   }> {
-    if (!store.supportsVectorSearch() || !embedder) return { value: null, model: null, unavailable: false };
-    const model = embedder.model ?? options.embeddingModel ?? 'text-embedding-3-small';
+    const currentEmbedder = await activeEmbedder();
+    if (!store.supportsVectorSearch() || !currentEmbedder) return { value: null, model: null, unavailable: false };
+    const model = await activeEmbeddingModel(currentEmbedder);
     const startedAt = performance.now();
     try {
-      const embedded = embedder.embedWithUsage
-        ? await embedder.embedWithUsage(content, signal)
-        : { embedding: await embedder.embed(content, signal) };
+      const embedded = currentEmbedder.embedWithUsage
+        ? await currentEmbedder.embedWithUsage(content, signal)
+        : { embedding: await currentEmbedder.embed(content, signal) };
       request.log.info({
         msg: 'memory.embedding',
         outcome: 'ok',
@@ -190,11 +272,16 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     }
   }
 
-  async function search(query: string, signal: AbortSignal, request: FastifyRequest): Promise<MemorySearchResult> {
+  async function search(
+    query: string,
+    limit: number,
+    signal: AbortSignal,
+    request: FastifyRequest,
+  ): Promise<MemorySearchResult> {
     const terms = searchTerms(query);
     if (terms.length === 0) return { memories: [], method: 'substring', mayHaveMore: false };
     let fallbackReason: MemorySearchResult['fallbackReason'];
-    if (store.supportsVectorSearch() && embedder) {
+    if (store.supportsVectorSearch()) {
       let queryVector: readonly number[] | null = null;
       let queryModel: string | null = null;
       try {
@@ -208,12 +295,12 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
       }
       if (queryVector && queryModel) {
         try {
-          const memories = await store.searchByVector(queryVector, queryModel, MAX_MEMORY_RESULTS + 1, signal);
+          const memories = await store.searchByVector(queryVector, queryModel, limit + 1, signal);
           if (memories.length > 0) {
             return {
-              memories: memories.slice(0, MAX_MEMORY_RESULTS),
+              memories: memories.slice(0, limit),
               method: 'vector',
-              mayHaveMore: memories.length > MAX_MEMORY_RESULTS,
+              mayHaveMore: memories.length > limit,
             };
           }
           fallbackReason = 'no_vector_match';
@@ -223,11 +310,11 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         }
       }
     }
-    const fallback = await store.searchByFullText(terms, MAX_MEMORY_RESULTS + 1, signal);
+    const fallback = await store.searchByFullText(terms, limit + 1, signal);
     return {
-      memories: fallback.memories.slice(0, MAX_MEMORY_RESULTS),
+      memories: fallback.memories.slice(0, limit),
       method: fallback.method,
-      mayHaveMore: fallback.memories.length > MAX_MEMORY_RESULTS,
+      mayHaveMore: fallback.memories.length > limit,
       ...(fallbackReason ? { fallbackReason } : {}),
     };
   }
@@ -235,7 +322,8 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
   const tools = [
     {
       name: 'memory_remember',
-      description: 'Save a preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret or credential. Set sourceIntent to requested when Dan asks to save this information, including a contextual follow-up; otherwise use automatic. Do not automatically capture sensitive health or financial details. Use a stable key; first search existing memories and preserve corrections under the same key.',
+      description: 'Save a preference, project fact, decision or unfinished task that Dan clearly stated in this owner message or its resolved context. Explicit remember, don’t forget, remember this and equivalent English or Danish requests always use Personal Memory, never Vault. sourceIntent labels the model’s interpretation but the stored Dan message proves authority. Never save a secret or credential. Automatic capture saves only clearly stated durable facts while automatic capture is enabled, and never sensitive health or financial details. Use a stable key; search first and preserve corrections under the same key.',
+      execution: { defaultEffect: 'action' },
       inputSchema: {
         type: 'object',
         properties: {
@@ -252,7 +340,14 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const kind = category(input.category);
         const key = memoryKey(input.key);
         const content = requiredString(input.content, 'content', 2000);
-        const source = await sourceForWrite(store, request, signal, content, input.sourceIntent === 'requested');
+        const source = await sourceForWrite(store, request, signal, content);
+        const directRequest = isExplicitMemoryRequest(source.text);
+        if (!directRequest && !await automaticCaptureEnabled()) {
+          throw new ToolRefusal('Automatic Personal Memory capture is off. Nothing changed.');
+        }
+        if (!directRequest && sensitivePattern.test(`${source.text}\n${content}`)) {
+          throw new ToolRefusal('Sensitive details are not saved by automatic capture. Dan must explicitly ask to remember them.');
+        }
         const embedding = await embed(content, signal, request);
         const saved = await store.save({
           category: kind, key, content, sourceMessageId: source.messageId, embedding: embedding.value,
@@ -276,7 +371,8 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     },
     {
       name: 'memory_search',
-      description: 'Search only relevant saved memories when Dan asks about a preference, past decision, project fact or unfinished task. Every result includes a source message from Dan; do not use a memory without its source.',
+      description: 'Search only Personal Memory, separately from Vault Knowledge, when a reply may depend on a saved owner preference, past decision, project fact or unfinished task. Results are bounded and source-linked; do not use a memory without its source or treat absence as proof.',
+      execution: { defaultEffect: 'read' },
       inputSchema: {
         type: 'object',
         properties: { query: { type: 'string', minLength: 1, maxLength: 500 } },
@@ -286,7 +382,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
       execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
         checkPrincipal(request);
         const query = requiredString(asObject(value).query, 'search query', 500);
-        const result = await search(query, signal, request);
+        const result = await search(query, MAX_MEMORY_RESULTS, signal, request);
         return {
           memories: result.memories.map(memoryDetails),
           count: result.memories.length,
@@ -303,6 +399,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     {
       name: 'memory_list',
       description: 'List up to 25 current saved memories with their original source message. Use this to inspect memories; do not infer that omitted memories do not exist.',
+      execution: { defaultEffect: 'read' },
       inputSchema: {
         type: 'object',
         properties: { limit: { type: 'integer', minimum: 1, maximum: MAX_LIST_RESULTS } },
@@ -328,6 +425,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     {
       name: 'memory_history',
       description: 'Inspect the current and up to nine previous source-linked versions of one memory.',
+      execution: { defaultEffect: 'read' },
       inputSchema: {
         type: 'object',
         properties: { memoryId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' } },
@@ -353,6 +451,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     {
       name: 'memory_correct',
       description: 'Correct an existing memory after Dan corrects or updates it. Keep its category and stable key, verify this message is from Dan, and preserve the previous source-linked version.',
+      execution: { defaultEffect: 'action' },
       inputSchema: {
         type: 'object',
         properties: {
@@ -366,7 +465,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const input = asObject(value);
         const id = memoryId(input.memoryId);
         const content = requiredString(input.content, 'content', 2000);
-        const source = await sourceForWrite(store, request, signal, content, true);
+        const source = await sourceForWrite(store, request, signal, content);
         const current = await store.history(id, 1, signal);
         const memory = current[0];
         if (!memory) throw new ToolRefusal('No saved memory with that ID exists. Nothing changed.');
@@ -393,6 +492,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     {
       name: 'memory_forget',
       description: 'Forget one confirmed saved memory. Search or list first, ask Dan to disambiguate multiple matches, then use the matching ID. This deletes the memory and its stored revisions, not the original conversation or source message.',
+      execution: { defaultEffect: 'action' },
       inputSchema: {
         type: 'object',
         properties: { memoryId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' } },
@@ -421,6 +521,161 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
   return {
     id: 'memory',
     tools,
-    registerRoutes: async () => {},
+    registerRoutes: async (app) => {
+      const ownerOnly = (request: FastifyRequest, reply: FastifyReply): boolean => {
+        if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+          void reply.code(403).send({ error: 'Forbidden' });
+          return false;
+        }
+        reply.header('Cache-Control', 'no-store');
+        return true;
+      };
+      const apiError = {
+        type: 'object',
+        properties: { error: { type: 'string' } },
+        required: ['error'],
+        additionalProperties: false,
+      };
+      const apiQuerySchema = {
+        type: 'object',
+        properties: {
+          query: { type: 'string', minLength: 1, maxLength: 500, pattern: '\\S' },
+          folder: { type: 'string', enum: ['General'] },
+          limit: { type: 'integer', minimum: 1, maximum: MAX_MEMORY_API_RESULTS },
+          offset: { type: 'integer', minimum: 0, maximum: MAX_MEMORY_API_OFFSET },
+        },
+        additionalProperties: false,
+      };
+      const memoryIdParams = {
+        type: 'object',
+        properties: { id: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 } },
+        required: ['id'],
+        additionalProperties: false,
+      };
+
+      app.get<{
+        Querystring: { query?: string; folder?: 'General'; limit?: number; offset?: number };
+      }>('/memory', {
+        schema: { querystring: apiQuerySchema, response: { 400: apiError, 403: apiError } },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const limit = request.query.limit ?? 25;
+        const offset = request.query.offset ?? 0;
+        const fetchLimit = Math.min(
+          MAX_MEMORY_API_OFFSET + MAX_MEMORY_API_RESULTS + 1,
+          offset + limit + 1,
+        );
+        const query = request.query.query?.trim() ?? '';
+        const signal = AbortSignal.timeout(30_000);
+        let memories: readonly MemoryRecord[];
+        let mayHaveMore: boolean;
+        let method: MemorySearchResult['method'] | undefined;
+        let fallbackReason: MemorySearchResult['fallbackReason'];
+        if (query) {
+          const result = await search(query, fetchLimit, signal, request);
+          memories = result.memories;
+          method = result.method;
+          mayHaveMore = result.mayHaveMore;
+          fallbackReason = result.fallbackReason;
+        } else {
+          const page = await store.list(fetchLimit, signal);
+          memories = page.memories;
+          mayHaveMore = page.hasMore;
+        }
+        const items = memories.slice(offset, offset + limit + 1);
+        return {
+          items: items.slice(0, limit).map(memoryApiItem),
+          count: Math.min(items.length, limit),
+          limit,
+          offset,
+          hasMore: items.length > limit || mayHaveMore,
+          ...(method ? { method } : {}),
+          ...(fallbackReason ? { fallbackReason } : {}),
+        };
+      });
+
+      app.get<{ Params: { id: string } }>('/memory/:id', {
+        schema: {
+          params: memoryIdParams,
+          response: { 400: apiError, 403: apiError, 404: apiError },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (BigInt(request.params.id) > MAX_SQL_BIGINT) {
+          return reply.code(400).send({ error: 'Invalid memory ID' });
+        }
+        const versions = await store.history(
+          request.params.id,
+          MAX_MEMORY_API_HISTORY + 1,
+          AbortSignal.timeout(30_000),
+        );
+        const current = versions[0];
+        if (!current) return reply.code(404).send({ error: 'Memory not found' });
+        return {
+          ...memoryApiItem(current),
+          category: current.category,
+          key: shouldRedactMemory(`${current.key}\n${current.content}`) ? '[redacted]' : current.key,
+          content: shouldRedactMemory(`${current.key}\n${current.content}`) ? '[redacted]' : current.content,
+          history: versions.slice(0, MAX_MEMORY_API_HISTORY).map(memoryHistoryItem),
+          mayHaveMore: versions.length > MAX_MEMORY_API_HISTORY,
+        };
+      });
+
+      app.patch<{ Params: { id: string }; Body: { text: string } }>('/memory/:id', {
+        schema: {
+          params: memoryIdParams,
+          body: {
+            type: 'object',
+            properties: { text: { type: 'string', minLength: 1, maxLength: 2_000 } },
+            required: ['text'],
+            additionalProperties: false,
+          },
+          response: { 400: apiError, 403: apiError, 404: apiError },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (BigInt(request.params.id) > MAX_SQL_BIGINT) {
+          return reply.code(400).send({ error: 'Invalid memory ID' });
+        }
+        const text = request.body.text.trim();
+        if (!text || text.length > 2_000 ||
+            credentialPattern.test(text) || secretValuePattern.test(text) || sensitivePattern.test(text)) {
+          return reply.code(400).send({ error: 'Memory text is invalid or contains restricted sensitive content' });
+        }
+        const signal = AbortSignal.timeout(30_000);
+        const versions = await store.history(request.params.id, 1, signal);
+        const current = versions[0];
+        if (!current) return reply.code(404).send({ error: 'Memory not found' });
+        const embedding = await embed(text, signal, request);
+        const corrected = await store.correct(request.params.id, {
+          category: current.category,
+          key: current.key,
+          content: text,
+          sourceMessageId: current.sourceMessageId,
+          embedding: embedding.value,
+          embeddingModel: embedding.model,
+        }, signal);
+        return { item: memoryApiItem(corrected.memory), commitUrl: null };
+      });
+
+      app.delete<{ Params: { id: string } }>('/memory/:id', {
+        schema: {
+          params: memoryIdParams,
+          response: { 400: apiError, 403: apiError, 404: apiError, 204: { type: 'null' } },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (BigInt(request.params.id) > MAX_SQL_BIGINT) {
+          return reply.code(400).send({ error: 'Invalid memory ID' });
+        }
+        const signal = AbortSignal.timeout(30_000);
+        const versions = await store.history(request.params.id, 1, signal);
+        const current = versions[0];
+        if (!current) return reply.code(404).send({ error: 'Memory not found' });
+        const forgotten = await store.forget(request.params.id, current.sourceMessageId, signal);
+        if (!forgotten) return reply.code(404).send({ error: 'Memory not found' });
+        return reply.code(204).send();
+      });
+    },
   };
 }

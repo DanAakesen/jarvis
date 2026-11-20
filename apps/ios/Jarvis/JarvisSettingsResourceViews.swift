@@ -409,6 +409,9 @@ struct JarvisMemorySettingsView: View {
             selectedMemory = nil
         }
         .refreshable { await load(reset: true, force: true) }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisMemoryChanged)) { _ in
+            Task { await load(reset: true, force: true) }
+        }
         .task(id: query) {
             if hasLoaded {
                 do {

@@ -1,3 +1,12 @@
+## Personal Memory restoration — 20 November 2026 (#1968)
+
+- `apps/backend/src/core/memory.ts` is the live Memory module. It owns the six `memory_*` tools and the owner-only `/memory` routes and is registered in production whenever SQL exists. Do not copy tool behaviour into Vault or PI discovery/transport code; the normal `/tools` catalogue and PI MCP door discover the registry automatically.
+- Session context, SQL Personal Memory and Vault Knowledge are separate. `/memory` accepts numeric SQL IDs and returns `type: "memory"` only. Vault notes continue through `/notes/note`, `/notes`, `vault_search/read/write` and the Knowledge graph.
+- Automatic capture is enforced by the stored setting, but a direct owner remember request is derived from the stored Dan message and remains valid when automatic capture is off. Never trust a model-supplied `sourceIntent` as authority. Preserve source IDs, stable keys, history, correction and forget semantics; reject secrets and automatic sensitive capture.
+- PI context carries `memory.automaticCapture` plus current owner-instruction authority. `agents/pi/instructions.md` and capability instructions require bounded `memory_search` recall separately from Vault search and confirm only an `ok` write.
+- Successful memory actions arrive through existing `tool-call-finished` activity. Web resets the first page; iPhone invalidates Settings memory caches and reloads an open Memory screen. Keep both handling Chat and Voice.
+- Offline checks: `npm test --workspace @jarvis/backend -- src/core/memory.test.ts src/pi/context.test.ts src/pi/mcp.test.ts`; backend build/lint; `npm test --workspace @jarvis/web -- src/MemorySettings.test.tsx`; web build/lint; `swift:6.2` `swift test -j 2 --filter ChatToolKindTests`. No live model, provider, deployment or paid canary is allowed.
+
 ## PI release hardening — 19 November 2026 (#1966)
 
 - Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.

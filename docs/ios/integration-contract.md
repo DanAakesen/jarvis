@@ -138,7 +138,7 @@ Its Danish/English interface language is an app-owned local preference (`jarvis.
 | Load the graph | `GET /knowledge/graph` returns the graph nodes and edges. |
 | Search note graph nodes | `GET /knowledge/search?q=TEXT` returns matching graph `nodeId`s and snippets. Load the graph first so results can be resolved to note paths. |
 
-The web graph's read-only note preview uses `GET /memory/:id`, with the id derived from the vault path. The iOS graph opens a note through `GET /notes/note?path=PATH` instead, so its editor has the `sha` required for a safe conditional save.
+The web and iOS Knowledge graph readers use `GET /notes/note?path=PATH`; the Memory API no longer addresses Vault note IDs. The Notes response includes the exact path, content, current SHA and GitHub URL, so Knowledge and Notes remain separate from Personal Memory.
 
 The web Notes and Tasks views call these routes directly; their assistant tools (`vault_search`, `show_knowledge`, `vault_read`, `vault_write`, `vault_task_create`, `vault_task_complete` and `vault_task_edit`) are not screen endpoints and are not invoked by this area. `vault_delete` is confirmation-gated and is not a substitute for a screen delete route.
 
@@ -170,7 +170,7 @@ this screen.
 | Edit training/nutrition targets | `GET` and `PATCH /daily/training-targets` and `/daily/nutrition-targets` use the existing bounded target schemas. A patch is a top-level object of changed values; `null` clears a target. |
 | Read Health upload credential state | `GET /api/health/upload-credential` returns the state and optional expiry. Its `POST` explicitly rejects owner-session tokens with 403 and requires Microsoft sign-in. V1 therefore displays state only; it does not create, rotate, revoke or reveal a one-time token. A native HealthKit upload path is not defined. |
 | Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |
-| List, view, edit or delete memory | `GET /memory?folder=General&limit=50&offset=N&query=TEXT` returns `items`, `count`, `limit`, `offset` and `hasMore`. Items may include both `memory` and `vault_note`; the native settings list filters to `memory`, as the web panel does. `GET /memory/:id` reads one; `PATCH /memory/:id` accepts `{text}`; `DELETE /memory/:id` may return 202 when approval is pending. |
+| List, view, edit or delete memory | `GET /memory?folder=General&limit=50&offset=N&query=TEXT` returns SQL Personal Memory only in `items`, with `count`, `limit`, `offset` and `hasMore`; numeric IDs identify one memory and `type` is `memory`. `GET /memory/:id` reads one with source-linked history; `PATCH /memory/:id` accepts `{text}`; `DELETE /memory/:id` returns 204 after the committed forget. Vault notes use the Notes API and never appear here. |
 | List and delete routines | `GET /routines` returns `{routines}`. The web panel deletes through `DELETE /recipes/:id`, which returns 204. |
 | Read account and sign out | `GET /me` returns the validated owner display name. `DELETE /auth/session` revokes the current session; `DELETE /auth/sessions` revokes all sessions. The existing client removes the device's Keychain token only after the server confirms the revocation. |
 

@@ -173,14 +173,6 @@ export async function searchKnowledge(backendUrl: string, getAccessToken: () => 
   return results;
 }
 
-/** Graph node ids are path hashes; the memory API reads vault notes by `vault_` plus the base64url path. */
-export function vaultMemoryId(path: string) {
-  const bytes = new TextEncoder().encode(path);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return `vault_${btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/u, '')}`;
-}
-
 export function withoutFrontMatter(content: string) {
   let start = 0;
   while (start < content.length) {
@@ -195,19 +187,24 @@ export function withoutFrontMatter(content: string) {
   return (block ? body.slice(block[0].length) : content).trimStart();
 }
 
-export async function loadKnowledgeNote(backendUrl: string, getAccessToken: () => Promise<string>, node: Pick<KnowledgeNode, 'id' | 'path'>, signal?: AbortSignal): Promise<KnowledgeNote> {
-  const id = node.path ? vaultMemoryId(node.path) : node.id;
-  const note = record(await request(backendUrl, getAccessToken, `/memory/${encodeURIComponent(id)}`, signal));
+export async function loadKnowledgeNote(
+  backendUrl: string,
+  getAccessToken: () => Promise<string>,
+  node: Pick<KnowledgeNode, 'id' | 'path' | 'title' | 'folder' | 'updatedAt'>,
+  signal?: AbortSignal,
+): Promise<KnowledgeNote> {
+  const path = new URLSearchParams({ path: node.path });
+  const note = record(await request(backendUrl, getAccessToken, `/notes/note?${path}`, signal));
   if (!note) throw new Error('This note could not be opened.');
-  const source = record(note.source);
-  const url = typeof source?.url === 'string' && /^https:\/\/github\.com\//u.test(source.url) ? source.url : null;
+  if (text(note.path, 400) !== node.path) throw new Error('Jarvis returned a different note.');
+  const url = typeof note.url === 'string' && /^https:\/\/github\.com\//u.test(note.url) ? note.url : null;
   return {
-    id,
-    title: text(note.title ?? note.key, 200) || id,
-    folder: text(note.folder, 40) || 'General',
+    id: node.id,
+    title: node.title,
+    folder: node.folder,
     // Obsidian front matter (tags, created, icon) is metadata, not reading material.
     content: withoutFrontMatter(text(note.content ?? note.snippet, 200_000)),
-    updatedAt: typeof note.updatedAt === 'string' ? note.updatedAt : null,
+    updatedAt: node.updatedAt,
     githubUrl: url,
   };
 }

@@ -1,3 +1,11 @@
+## Personal Memory stays separate from Vault Knowledge — 20 November 2026 (#1968)
+
+Jarvis has three distinct information layers. **Session context** is the current conversation, recent turns, active task and tool results. **Personal Memory** is small, durable owner-scoped facts, preferences, decisions, corrections and unfinished commitments in Azure SQL, with a stable identity, exact source-message attribution and history. **Knowledge / Vault** is Dan's Obsidian/GitHub notes, tasks, plans and research; the Vault remains authoritative and its indexes are retrieval aids.
+
+In Chat or Voice, a clear owner request such as "remember that I prefer afternoon appointments", "remember this" or "don't forget X" saves Personal Memory without a tool name, folder choice or repeat prompt. PI confirms only after the SQL write commits. With automatic capture enabled, clearly stated durable owner facts and preferences may also be saved, never inferred; secrets, credentials and automatically inferred sensitive health or financial details are refused. A correction updates the same identity and keeps history; forget resolves one exact memory before deletion. The source message, stable key and committed outcome remain authoritative.
+
+Fresh Chat and Voice conversations retrieve Personal Memory separately from Vault search. PI may query both for one request, but Vault notes never become memories merely because they are indexed or returned by a related read. The Memory API and both Memory screens expose SQL memories only. Successful Chat or Voice memory writes refresh cached pages on iPhone and web; a failed or unavailable write is reported as not saved or not forgotten.
+
 ## PI situational intelligence — 19 November 2026
 
 PI has one owner-scoped situational loop around the managed `jarvis-pi` Foundry agent. Normal Chat and Voice turns, scheduled sweeps and event activations use the same agent definition, Skills and Jarvis MCP tools; only trusted activation metadata differs. A wake is one PI invocation and one turn-ledger row. Tool and model iterations stay inside that invocation.

@@ -101,6 +101,7 @@ import { createAlertNotifier, notifyAlert } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
+import { createMemoryModule } from './core/memory.js';
 import { createFoundryMemoryEmbedder, MEMORY_EMBEDDING_DIMENSIONS } from './core/memory-embeddings.js';
 import type { MemoryEmbedder } from './core/memory-embeddings.js';
 import { checkAgentContract } from './core/agent-contract.js';
@@ -648,6 +649,17 @@ try {
   })();
   const vaultClient = githubAppTokenIssuer
     ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
+    : undefined;
+  const memoryModule = memoryStore
+    ? createMemoryModule({
+      store: memoryStore,
+      getEmbedder: getMemoryEmbedder,
+      getEmbeddingModel: embeddingModel,
+      automaticCapture: async () => settingsStore
+        ? (await readSettings(settingsStore)).memory.automaticCapture
+        : false,
+      ...(usageStore ? { usageStore } : {}),
+    })
     : undefined;
   const vaultModule = memoryStore && vaultIndexStore && vaultClient
     ? createVaultModule({
@@ -1249,6 +1261,7 @@ try {
   };
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
+    memory: memoryModule,
     backendLogs: createBackendLogsModule({
       config: config.backendLogs,
       getToken: credential ? async (signal) => {

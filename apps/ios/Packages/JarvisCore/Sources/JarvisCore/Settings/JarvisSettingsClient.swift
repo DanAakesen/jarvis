@@ -417,15 +417,14 @@ public struct JarvisSettingsClient: Sendable {
         let page: JarvisMemoryPage = try await send(
             .get, path: ["memory"], queryItems: items, idempotent: true
         )
+        let visibleItems = page.items.filter { $0.kind == "memory" }
         guard page.count == page.items.count, page.items.count <= limit,
               page.limit == limit, page.offset == offset,
-              page.items.allSatisfy({
-                  ($0.kind == "memory" || $0.kind == "vault_note") &&
-                      JarvisSettingsLogic.validMemoryID($0.id) && $0.text.utf8.count <= 20_000
+              visibleItems.allSatisfy({
+                  JarvisSettingsLogic.validMemoryID($0.id) && $0.text.utf8.count <= 20_000
               }) else {
             throw JarvisSettingsClientError.invalidResponse
         }
-        let visibleItems = page.items.filter { $0.kind == "memory" }
         return JarvisMemoryPage(
             items: visibleItems,
             count: visibleItems.count,
@@ -829,10 +828,8 @@ public enum JarvisSettingsLogic {
     }
 
     public static func validMemoryID(_ id: String) -> Bool {
-        if matches(id, pattern: #"^[1-9][0-9]{0,18}$"#) {
-            return Int64(id).map { $0 > 0 } ?? false
-        }
-        return matches(id, pattern: #"^vault_[A-Za-z0-9_-]{1,256}$"#)
+        matches(id, pattern: #"^[1-9][0-9]{0,18}$"#) &&
+            Int64(id).map { $0 > 0 } == true
     }
 
     public static func validMemoryText(_ text: String) -> Bool {
