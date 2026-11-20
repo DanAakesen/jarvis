@@ -326,6 +326,142 @@ describe('PI situational state', () => {
     expect(store.records.get(owner)).toEqual(before);
   });
 
+  it('fails a source refresh before truncating a 49-ref reconciliation graph', async () => {
+    const compactAt = '2026-11-19T05:00:00Z';
+    const refs = Array.from({ length: 48 }, (_, index) => ({
+      id: String(index),
+      source: 'x' as const,
+      identity: 'x',
+      label: 'x',
+      observedAt: compactAt,
+      expiresAt: null,
+      verifiedAt: compactAt,
+    }));
+    const authority = refs.map((ref) => ({
+      ...ref,
+      activatedAt: ref.verifiedAt,
+      invalidatedAt: null,
+      staleReason: null,
+    }));
+    const store = createMemoryPiSituationStore(authority);
+    const proactive = createMemoryProactiveStore(owner, () => at);
+    const raw = {
+      version: 1,
+      asOf: compactAt,
+      summary: '',
+      summaryRefIds: [],
+      sources: sourceIds.map((id) => ({
+        id,
+        state: 'fresh',
+        observedAt: null,
+        expiresAt: null,
+        reason: null,
+        refIds: [],
+      })),
+      refs,
+      facts: [],
+      followUps: [],
+    } as PiSituationState;
+    store.records.set(owner, {
+      owner,
+      revision: 1,
+      state: raw,
+      hash: 'a'.repeat(64),
+      asOf: at,
+      updatedAt: at,
+      authoritativeRefs: authority,
+      lastActivation: null,
+    });
+    const service = createPiSituationService({
+      owner,
+      store,
+      proactive,
+      sources: [{
+        id: 'mail',
+        label: 'Mail',
+        async read() {
+          return {
+            source: 'mail' as const,
+            state: 'ok' as const,
+            reason: null,
+            observedAt: at.toISOString(),
+            facts: [{
+              ref: 'mail:new',
+              identity: 'mail:new',
+              kind: 'mail',
+              label: 'New',
+              text: 'New mail',
+              observedAt: at.toISOString(),
+            }],
+          };
+        },
+      }],
+      now: () => at,
+    });
+    const before = structuredClone(store.records.get(owner)!);
+    await expect(service.refresh('mail', signal())).rejects.toThrow(/48-ref limit/u);
+    expect(store.records.get(owner)).toEqual(before);
+  });
+
+  it('honors explicit fact and ref removals inside disabled-source retention', async () => {
+    const { service, store, proactive } = setup();
+    const first = await service.read(signal());
+    const initial = state();
+    initial.facts.push({
+      id: 'fact:mail:extra',
+      source: 'mail',
+      refIds: ['mail:42'],
+      text: 'A second mail fact.',
+      observedAt: at.toISOString(),
+      expiresAt: null,
+      stale: false,
+    });
+    const committed = await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: initial,
+      activation: {
+        id: '00000000-0000-4000-8000-000000000032',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    await proactive.settings.patch({ sources: { mail: false } });
+    const disabled = await service.read(signal());
+    const factRemoved = await service.patch({
+      expectedRevision: committed.record.revision,
+      expectedHash: committed.record.hash,
+      policyRevision: disabled.policyRevision,
+      patch: { removeFactIds: ['fact:mail:extra'] },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000033',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    expect(store.records.get(owner)?.state.facts.some(({ id }) => id === 'fact:mail:extra'))
+      .toBe(false);
+    const refRemoved = await service.patch({
+      expectedRevision: factRemoved.record.revision,
+      expectedHash: factRemoved.record.hash,
+      policyRevision: disabled.policyRevision,
+      patch: { removeRefIds: ['mail:42'] },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000034',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    const stored = refRemoved.record.state;
+    expect(stored.refs.some(({ id }) => id === 'mail:42')).toBe(false);
+    expect(stored.facts.some(({ refIds }) => refIds.includes('mail:42'))).toBe(false);
+    expect(stored.followUps.some(({ refIds }) => refIds.includes('mail:42'))).toBe(false);
+  });
+
   it('keeps location available when Weather is off and refuses a disabled source lookup', async () => {
     const location: ProactiveSource = {
       id: 'location',

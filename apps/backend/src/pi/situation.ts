@@ -850,8 +850,12 @@ export function createPiSituationService(options: {
       entry.reason = 'source_disabled';
       entry.refIds = [];
       if (current) {
-        retainedRefs.push(...current.state.refs.filter(({ source }) => source === entry.id));
-        retainedDisabled.push(...current.state.facts.filter(({ source }) => source === entry.id)
+        retainedRefs.push(...current.state.refs.filter(({ id, source }) =>
+          source === entry.id && !removedRefIds.has(id)));
+        retainedDisabled.push(...current.state.facts.filter(({ id, source, refIds }) =>
+          source === entry.id &&
+          !removedFactIds.has(id) &&
+          refIds.every((value) => !removedRefIds.has(value)))
           .map((fact) => ({ ...fact, stale: true, staleReason: 'source_disabled' })));
       }
     }
@@ -916,7 +920,8 @@ export function createPiSituationService(options: {
     const retainedFollowUps = options.preserveInvalidated && current
       ? current.state.followUps.filter((followUp) =>
         !removedFollowUpIds.has(followUp.id) &&
-        followUp.refIds.every((value) => refIds.has(value)) &&
+        followUp.refIds.every((value) =>
+          refIds.has(value) && !removedRefIds.has(value)) &&
         followUp.refIds.some((value) =>
           current.state.refs.some((ref) => ref.id === value &&
             (invalidatedFor(ref) || staleSource(ref.source)))))
@@ -924,7 +929,8 @@ export function createPiSituationService(options: {
     const followUps = [...next.followUps, ...retainedFollowUps]
       .filter(({ id: value, refIds: values }) =>
         !removedFollowUpIds.has(value) &&
-        values.every((id) => refIds.has(id)))
+        values.every((id) =>
+          refIds.has(id) && !removedRefIds.has(id)))
       .filter((entry, index, values) =>
         values.findIndex(({ id: value }) => value === entry.id) === index);
     if (followUps.length > 16) {
@@ -1165,7 +1171,13 @@ export function createPiSituationService(options: {
         ...freshRefs,
         ...previous.refs.filter((entry) => entry.source !== source),
         ...retainedRefs,
-      ].slice(0, 48);
+      ];
+      if (refs.length > 48) {
+        throw new PiSituationError(
+          'invalid',
+          'Refreshing the source would exceed the 48-ref limit. Remove obsolete refs explicitly before retrying.',
+        );
+      }
       const validRefIds = new Set(refs.map(({ id }) => id));
       const facts = previous.facts.map((fact) => {
         if (fact.source === source &&
