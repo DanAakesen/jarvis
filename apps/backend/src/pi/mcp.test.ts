@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
@@ -96,10 +96,109 @@ describe('PI MCP server', () => {
     expect(elsewhere.statusCode).toBe(403);
   });
 
-  it('advertises find_tools and call_tool, not the catalogue', async () => {
+  it('advertises discovery, execution and completion, not the catalogue', async () => {
     const { rpc } = setup();
     const names = ((await rpc(`jp.${secret}`, 'tools/list')).json?.result?.tools as Array<{ name: string }>).map((tool) => tool.name).sort();
-    expect(names).toEqual(['call_tool', 'find_tools']);
+    expect(names).toEqual(['call_tool', 'find_tools', 'finish_turn']);
+  });
+
+  it('keeps bilingual local and public web lookup off remote catalogue reads', async () => {
+    const tools = vi.fn(async () => []);
+    const azure: RemoteMcpBridge = { prefix: 'az_', label: 'Azure', status: () => ({ state: 'starting' }), warm: () => {}, tools, call: async () => ({ outcome: 'ok', result: {} }) };
+    const local = [
+      { ...probe, name: 'calendar_today_agenda', description: 'List today’s calendar agenda.' },
+      { ...probe, name: 'vault_search', description: 'Search notes.' },
+      { ...probe, name: 'list_tasks', description: 'List tasks.' },
+      { ...probe, name: 'web_research', description: 'Research public sources on the web.' },
+    ];
+    const { registry, tool } = setup([azure], { tools: local });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    for (const [query, name] of [
+      ['Vis mig min kalender i dag', 'calendar_today_agenda'], ['Search my notes', 'vault_search'],
+      ['Vis mine opgaver', 'list_tasks'], ['Søg på nettet', 'web_research'],
+    ]) {
+      const found = await tool('find_tools', { turn: grant.turn, query });
+      expect(found.body?.result.tools[0]?.name).toBe(name);
+      expect(found.body?.result.note).toBeUndefined();
+    }
+    expect(tools).not.toHaveBeenCalled();
+    expect(grant.azure.catalogue).toBe('not_searched');
+  });
+
+  it('runs a visible exact otherMatches name only in the turn that saw it', async () => {
+    const local = ['a', 'b', 'c', 'd'].map((suffix) => ({
+      ...probe, name: `fixture_${suffix}`, description: 'Fixture.',
+    }));
+    const { registry, tool } = setup([], { tools: local });
+    const open = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const grant = open();
+    const found = await tool('find_tools', { turn: grant.turn, query: 'fixture' });
+    expect(found.body?.result.otherMatches).toEqual([{ name: 'fixture_d', description: 'Fixture.' }]);
+    const call = (turn: string, args: Record<string, unknown>) => tool('call_tool', { turn, name: 'fixture_d', arguments: args });
+    expect((await call(open().turn, { text: 'hej' })).body?.outcome).toBe('refused');
+    expect((await call(grant.turn, {})).body?.outcome).toBe('refused');
+    expect((await call(grant.turn, { text: 'hej' })).body).toMatchObject({ outcome: 'ok', result: { echoed: 'hej' } });
+  });
+
+  it('only loads the named provider, executes remote otherMatches and preserves smoke restrictions', async () => {
+    const make = (prefix: string, label: string, names: string[]) => ({
+      prefix, label, status: () => ({ state: 'ready' as const }), warm: () => {},
+      tools: vi.fn(async () => names.map((name) => ({
+        ...probe, name: `${prefix}${name}`, description: `${label}: ${name}`, moduleId: 'fixture', readOnly: true,
+      }))),
+      call: vi.fn(async () => ({ outcome: 'ok' as const, result: { number: 700 } })),
+    });
+    const github = make('gh_', 'GitHub', ['issue_a', 'issue_b', 'issue_c', 'issue_read']);
+    const azure = make('az_', 'Azure', ['group_resource_list']);
+    const { registry, tool } = setup([github, azure]);
+    const open = (smoke = false) => registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(), smoke,
+    });
+    const turn = open().turn;
+    const found = await tool('find_tools', { turn, query: 'GitHub sager' });
+    expect(found.body?.result.otherMatches[0]?.name).toBe('gh_issue_read');
+    expect(azure.tools).not.toHaveBeenCalled();
+    const call = (turn: string, name: string, args: Record<string, unknown>) => tool('call_tool', { turn, name, arguments: args });
+    expect((await call(turn, 'gh_issue_read', { method: 'get', issue_number: 14 })).body?.outcome).toBe('ok');
+    expect((await tool('finish_turn', { turn, kind: 'current_data', tool: 'gh_issue_read' })).body?.outcome).toBe('ok');
+
+    const azureFound = await tool('find_tools', { turn: open().turn, query: 'Vis ressourcer i min Azure-ressourcegruppe' });
+    expect(azureFound.body?.result.tools[0]?.name).toBe('az_group_resource_list');
+    expect(github.tools).toHaveBeenCalledTimes(1);
+
+    const smokeTurn = open(true).turn;
+    await tool('find_tools', { turn: smokeTurn, query: 'GitHub sager' });
+    expect((await call(smokeTurn, 'gh_issue_read', { method: 'get', issue_number: 14 })).body?.outcome).toBe('refused');
+    expect((await call(smokeTurn, 'gh_issue_a', { method: 'get', issue_number: 700 })).body?.outcome).toBe('refused');
+    expect((await call(smokeTurn, 'gh_issue_read', { method: 'get', issue_number: 700 })).body?.outcome).toBe('ok');
+    expect((await tool('finish_turn', { turn: smokeTurn, kind: 'current_data', tool: 'gh_issue_read' })).body?.outcome).toBe('refused');
+    expect(github.call).toHaveBeenCalledTimes(2);
+  });
+
+  it('records actual evidence, prevents duplicate in-flight dispatch and refuses calls after finish', async () => {
+    let started!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const execute = vi.fn(async () => { started(); await gate; return { records: 1 }; });
+    const local = { ...probe, name: 'fixture_read', execution: { defaultEffect: 'read' as const }, execute };
+    const { registry, tool } = setup([], { tools: [local] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const turn = grant.turn;
+    await tool('find_tools', { turn, query: local.name });
+    const finish = () => tool('finish_turn', { turn, kind: 'current_data', tool: local.name });
+    const call = () => tool('call_tool', { turn, name: local.name, arguments: { text: 'hej' } });
+    expect((await finish()).body?.outcome).toBe('refused');
+    const pending = call();
+    await entered;
+    try {
+      expect((await call()).body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('already in progress') } });
+      expect((await finish()).body).toMatchObject({ outcome: 'refused', error: expect.stringContaining('tool result') });
+    } finally { release(); }
+    expect((await pending).body?.outcome).toBe('ok');
+    expect((await finish()).body?.outcome).toBe('ok');
+    expect((await call()).body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('already finished') } });
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('runs a looked-up tool through the normal route, attributed to the stored owner message and never to the model', async () => {

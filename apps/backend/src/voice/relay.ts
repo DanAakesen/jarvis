@@ -1272,6 +1272,12 @@ function registerVoiceRoute(
     };
 
     let piBusy = false;
+    let piSpeechGeneration = 0;
+    let piSpeechItemId: string | undefined;
+    const suppressPiSpeech = () => {
+      piSpeechGeneration += 1;
+      piTurns?.suppressSpeech();
+    };
     const speakReply = (text: string) => {
       sendResponseCreate({
         type: 'response.create',
@@ -1309,25 +1315,22 @@ function registerVoiceRoute(
         });
       },
     }) : undefined;
-    const handlePiVoiceTurn = (itemId: string, text: string) => {
+    const handlePiVoiceTurn = (itemId: string, providerItemId: string) => {
       if (!piTurns || reflexedItems.has(itemId) || reflexedItems.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
       reflexedItems.add(itemId);
       const startedAt = performance.now();
+      const speechGeneration = piSpeechGeneration;
+      const staleTranscript = userSpeaking || (piSpeechItemId !== undefined && piSpeechItemId !== providerItemId);
       void (async () => {
         await transcriptQueue;
         if (controller.signal.aborted || endRequested) return;
-        // The transcript of an earlier utterance can arrive after Dan has started the next one: the newest wins, and
-        // nothing of the older one runs or is spoken over him.
-        if (userSpeaking) {
-          request.log.info({ outcome: 'superseded', channel: 'voice' }, 'voice.pi_turn');
-          return;
-        }
+        const muted = staleTranscript || speechGeneration !== piSpeechGeneration;
         const message = savedUserMessages.get(itemId);
         if (!message || !sessionId) {
-          speakReply('I could not save what you said, so I did not send it to PI. Please say it again.');
+          if (!muted) speakReply('I could not save what you said, so I did not send it to PI. Please say it again.');
           return;
         }
-        piTurns.start({ text, messageId: message.id, sessionId, proactiveContext, startedAt });
+        piTurns.start({ text: message.text, messageId: message.id, sessionId: message.sessionId, proactiveContext, startedAt }, muted);
       })().catch(() => {
         if (!controller.signal.aborted) request.log.warn('voice.pi_turn_failed');
       });
@@ -2089,6 +2092,7 @@ function registerVoiceRoute(
       if (endRequested) return;
       endRequested = true;
       if (reason) diagnostics.endReason(reason);
+      piTurns?.cancel();
       finishSharedScreenContextWait(null, true);
       closeAnnouncements();
       stopPartialRecognition();
@@ -2337,6 +2341,7 @@ function registerVoiceRoute(
         return;
       }
       if (event?.type === 'response.cancel') {
+        suppressPiSpeech();
         clearCameraImage();
         cameraGeneration += 1;
         finishSharedScreenContextWait(null, true);
@@ -2638,8 +2643,8 @@ function registerVoiceRoute(
             }
             if (event?.type === 'input_audio_buffer.speech_started') {
               limits.touch();
-              // Whatever PI is still working on belongs to what Dan said before; its answer must not land on top of him.
-              piTurns?.cancel();
+              suppressPiSpeech();
+              piSpeechItemId = typeof event.item_id === 'string' ? event.item_id : undefined;
               clearCameraImage();
               pendingImageUsageItem = undefined;
               cameraGeneration += 1;
@@ -2820,14 +2825,21 @@ function registerVoiceRoute(
                 typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
                 typeof event.transcript === 'string' && event.transcript.trim() &&
                 event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
-              if (/^stop[.!?]*$/iu.test(event.transcript.trim())) {
+              const explicitStop = /^stop[.!?]*$/iu.test(event.transcript.trim());
+              if (explicitStop) {
                 browserProgressPending = false;
                 for (const task of activeBrowserStopControllers) task.abort();
                 finishSharedScreenContextWait(null, true);
               }
-              void (piVoiceRequested
-                ? handlePiVoiceTurn(finalTurnItemId ?? event.item_id, event.transcript.trim())
-                : handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, event.transcript.trim(), event.item_id));
+              if (piVoiceRequested) {
+                if (explicitStop && piBusy && (piSpeechItemId === undefined || piSpeechItemId === event.item_id)) {
+                  piTurns?.cancel();
+                } else {
+                  handlePiVoiceTurn(finalTurnItemId ?? event.item_id, event.item_id);
+                }
+              } else {
+                void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, event.transcript.trim(), event.item_id);
+              }
             } else if (event?.type === 'conversation.item.input_audio_transcription.failed') {
               if (piVoiceRequested) speakReply('I did not catch that. Please say it again.');
               else sendResponseCreate({ type: 'response.create' });

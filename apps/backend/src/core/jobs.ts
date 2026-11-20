@@ -77,6 +77,8 @@ export class BackgroundJobRegistry {
     private readonly store?: BackgroundJobStore,
   ) {}
 
+  get durable(): boolean { return this.store !== undefined; }
+
   async initialize(): Promise<void> {
     for (const job of await this.store?.reconcileInterrupted() ?? []) this.publish(job);
   }

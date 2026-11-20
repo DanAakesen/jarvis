@@ -116,7 +116,8 @@ import { createPiSituationStore } from './database/pi-situation-store.js';
 import { buildPiContext, buildPiEnvironment } from './pi/context.js';
 import { createPiGateway } from './pi/gateway.js';
 import { createPiRoutes } from './pi/routes.js';
-import { azureToolPrefix, createRemoteMcpBridge, githubToolPrefix } from './pi/remote-mcp.js';
+import { azureToolPrefix, createRemoteMcpBridge, githubToolPrefix, remoteMcpProviderStatus } from './pi/remote-mcp.js';
+import { capabilityIndex } from './core/capability-index.js';
 import { PI_GITHUB_MCP_URL } from './pi/definition.js';
 import { createPiTurnRegistry } from './pi/turns.js';
 import { createPiActivationService } from './pi/activation.js';
@@ -600,12 +601,35 @@ try {
     ? createPiActivationService({ registry: piRegistry, situation: piSituationService })
     : undefined;
   const piEnvironment = buildPiEnvironment(process.env);
+  const piBridges = [
+    ...(config.pi?.githubToken ? [createRemoteMcpBridge({
+      url: PI_GITHUB_MCP_URL, prefix: githubToolPrefix, label: 'GitHub', token: async () => config.pi!.githubToken!,
+    })] : []),
+    ...(config.pi?.azureMcp && credential ? [createRemoteMcpBridge({
+      url: config.pi.azureMcp.url, prefix: azureToolPrefix, label: 'Azure',
+      token: async (signal) => {
+        const token = await credential.getToken(`api://${config.pi!.azureMcp!.clientId}/.default`, { abortSignal: signal });
+        if (!token) throw new Error('Azure MCP token unavailable');
+        return token.token;
+      },
+    })] : []),
+  ];
   const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore && piActivations
     ? createPiGateway({
       environment: piEnvironment,
       projectEndpoint: config.foundryProjectEndpoint, agentName: config.pi.agentName, owner: config.auth.ownerObjectId,
       monthlyCapDkk: config.pi.monthlyCapDkk, timeZone: config.googleTimeZone ?? 'Europe/Copenhagen',
       store: piStore, registry: piRegistry, activations: piActivations,
+      capabilities: (grant) => {
+        const providers = remoteMcpProviderStatus(piBridges);
+        const tools = runtime.app?.jarvisTools;
+        const github = grant.brain && grant.activation?.disabledSources.includes('factory')
+          ? 'disabled for automatic use' : providers.github.state;
+        return [
+          `[Capability catalogue status: GitHub=${github}, Azure=${providers.azure.state}. Catalogue readiness is not proof of provider access or retrieved data.]`,
+          ...(tools ? [`Registered Jarvis tools (examples; source policy and runtime availability still apply):\n${capabilityIndex(tools)}`] : []),
+        ].join('\n');
+      },
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('PI identity unavailable');
@@ -1231,20 +1255,7 @@ try {
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
       situation: piSituationService,
-      bridges: [
-        ...(config.pi?.githubToken ? [createRemoteMcpBridge({
-          url: PI_GITHUB_MCP_URL, prefix: githubToolPrefix, label: 'GitHub', token: async () => config.pi!.githubToken!,
-        })] : []),
-        // Azure: the backend's own managed identity calls the guarded server; its token is renewed by the credential.
-        ...(config.pi?.azureMcp && credential ? [createRemoteMcpBridge({
-          url: config.pi.azureMcp.url, prefix: azureToolPrefix, label: 'Azure',
-          token: async (signal) => {
-            const token = await credential.getToken(`api://${config.pi!.azureMcp!.clientId}/.default`, { abortSignal: signal });
-            if (!token) throw new Error('Azure MCP token unavailable');
-            return token.token;
-          },
-        })] : []),
-      ],
+      bridges: piBridges,
     }),
   };
   const modules: BackendModule[] = createProductionModules({

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { createHash } from 'node:crypto';
 import type { ConversationMessage } from '../core/conversation-store.js';
+import { readToolOwnerMessage } from '../core/pi-authority.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { itemFeedback, itemIdPattern } from './feedback.js';
 import { dayKey, localDateTimeInstant, localTimeLabel } from './time.js';
@@ -27,9 +28,8 @@ async function ownerMessage(request: FastifyRequest, owner: string, signal: Abor
   if (typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) || BigInt(id) > 9_223_372_036_854_775_807n) {
     throw new ToolRefusal('A current owner chat or voice request is required. Nothing was changed.');
   }
-  const page = await store.getHistory({ limit: 1 });
+  const message = await readToolOwnerMessage(request, id);
   signal.throwIfAborted();
-  const message = page.messages[0];
   if (!message || message.id !== id || message.role !== 'dan') {
     throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
   }

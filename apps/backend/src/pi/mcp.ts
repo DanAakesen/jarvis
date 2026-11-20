@@ -5,11 +5,12 @@ import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import {
   isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
-  type RegisteredTool, type ToolRegistry,
+  type RegisteredTool,
 } from '../core/tool-registry.js';
-import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
+import { azureToolPrefix, githubToolPrefix, requestedRemoteMcpPrefixes, type RemoteMcpBridge } from './remote-mcp.js';
 import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
+import { finishPiTurn, piCompletionSchema, recordPiToolEvidence } from './completion.js';
 import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
 
@@ -18,6 +19,7 @@ const maxOtherResults = 5;
 const maxResultCharacters = 200_000;
 const notFound = 'Unknown tool, or not looked up yet. Call find_tools first, then call_tool. Nothing was done.';
 const unknownTurn = 'This turn is not active, so nothing was done. Use the exact turn reference from the current message.';
+type Grant = NonNullable<ReturnType<PiTurnRegistry['resolve']>>;
 
 const turn = z.string().regex(piTurnPattern, 'The turn reference is the jt- value from the current message.');
 const findSchema = z.object({ turn, query: z.string().min(2).max(100) }).strict();
@@ -54,6 +56,24 @@ export function createPiMcpRoutes(options: {
 }): FastifyPluginAsync {
   const { registry, auth } = options;
   const bridges = options.bridges ?? [];
+  const discoveredRemote = new WeakMap<Grant, Map<string, boolean | undefined>>();
+  const inFlight = new WeakMap<Grant, Set<string>>();
+
+  function beginActual(grant: Grant, name: string, args: Record<string, unknown>): CallToolResult | (() => void) {
+    if (grant.completion) return text({ tool: name, outcome: 'refused', result: { refused: 'This turn has already finished. Nothing was done.' } });
+    const key = JSON.stringify([name, args], (_key, value: unknown) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value);
+    const active = inFlight.get(grant) ?? new Set<string>();
+    if (active.has(key)) return text({ tool: name, outcome: 'refused', result: { refused: 'An identical call is already in progress. Nothing was repeated.' } });
+    inFlight.set(grant, active);
+    active.add(key);
+    grant.inFlightToolCalls += 1;
+    return () => {
+      active.delete(key);
+      grant.inFlightToolCalls -= 1;
+    };
+  }
 
   /** The Deploy smoke may read one GitHub issue and list Azure resources, as the old smoke role did, and nothing else. */
   function smokeMayCall(name: string, args: Record<string, unknown>): boolean {
@@ -89,29 +109,39 @@ export function createPiMcpRoutes(options: {
     return sources.length === 0 || sources.some((source) => !disabled.has(source));
   };
   const turnSignalFor = (
-    grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>,
+    grant: Grant,
     requestSignal: AbortSignal,
     serverSignal: AbortSignal,
   ) => AbortSignal.any([grant.signal, requestSignal, serverSignal]);
 
-  async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
+  async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: Grant, signal: AbortSignal): Promise<CallToolResult> {
     if (grant.smoke === true && !smokeMayCall(name, args)) {
       grant.results.push({ tool: name, outcome: 'refused' });
       return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
     }
-    const done = await bridge.call(name, args, signal);
-    grant.results.push({ tool: name, outcome: done.outcome });
-    const body = JSON.stringify(done.result);
-    const result = body.length > maxResultCharacters
-      ? { truncated: true, preview: body.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' } : done.result;
-    return text({ tool: name, outcome: done.outcome, result }, done.outcome === 'error');
+    const release = beginActual(grant, name, args);
+    if (typeof release !== 'function') return release;
+    try {
+      const done = await bridge.call(name, args, signal);
+      grant.results.push({ tool: name, outcome: done.outcome });
+      if (done.outcome === 'ok') {
+        const readOnly = discoveredRemote.get(grant)?.get(name);
+        recordPiToolEvidence(grant, name, args, done.result, readOnly === undefined ? undefined : { readOnly });
+      }
+      const body = JSON.stringify(done.result);
+      const result = body.length > maxResultCharacters
+        ? { truncated: true, preview: body.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' } : done.result;
+      return text({ tool: name, outcome: done.outcome, result }, done.outcome === 'error');
+    } finally {
+      release();
+    }
   }
 
   function buildServer(app: FastifyInstance, signal: AbortSignal): McpServer {
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Jarvis tools are not listed. Look one up by a few keywords naming what the thing is (azure resource, github issue, calendar, note) to get its description and argument schema, then use call_tool. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
+      description: 'Look up tools by English or Danish keywords, or by exact tool name to see its schema. Include GitHub or Azure in the query when you need that provider (e.g. github issue, Azure ressourcegruppe). For local tools use keywords like calendar, note, task or web research. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, async (input, ctx) => {
@@ -124,47 +154,56 @@ export function createPiMcpRoutes(options: {
           return text({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
         }
       }
-      // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, so only the ones a turn asks for are ever put in
-      // front of the model. Each catalogue is bounded, so a slow server never holds up a search of the local tools.
-      const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
-      const catalogues = await Promise.all(bridges.map(async (bridge) => {
-        const tools = await bridge.tools(turnSignal);
-        return { bridge, tools, status: bridge.status() };
-      }));
-      const azure = catalogues.find(({ bridge }) => bridge.prefix === azureToolPrefix);
-      grant.azure.catalogue = !azure ? 'not_configured'
-        : azure.status.state === 'ready' && azure.tools.length === 0 ? 'empty' : azure.status.state;
-      const remoteTools = catalogues.flatMap(({ tools }) => tools);
-      const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
-        list: () => [...app.jarvisTools.list(), ...remoteTools],
-        get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
-      };
+      const turnSignal = turnSignalFor(grant, ctx.mcpReq.signal, signal);
+      turnSignal.throwIfAborted();
       const visible = (name: string) => {
-        const local = grant.brain
+        const allowed = grant.brain
           ? isWakeTool(name)
           : isCurrentAssistantTool(name) || isSituationActivationTool(name);
-        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
+        return allowed && (!grant.brain || sourceAllowed(name, {}, disabled));
       };
-      const matches = searchVoiceTools(catalogue, input.query, visible);
+      const requested = requestedRemoteMcpPrefixes(input.query).filter((prefix) => visible(`${prefix}catalogue`));
+      const catalogues = await Promise.all(requested.map(async (prefix) => {
+        const bridge = bridges.find((candidate) => candidate.prefix === prefix);
+        if (!bridge) return { prefix, label: prefix === azureToolPrefix ? 'Azure' : 'GitHub', tools: [], status: { state: 'not_configured' } as const };
+        const tools = await bridge.tools(turnSignal);
+        const status = bridge.status();
+        return { prefix, label: bridge.label, tools, status: status.state === 'ready' && tools.length === 0 ? { state: 'empty' } as const : status };
+      }));
+      const azure = catalogues.find(({ prefix }) => prefix === azureToolPrefix);
+      if (azure) grant.azure.catalogue = azure.status.state;
+      const remoteTools = catalogues.flatMap(({ tools }) => tools);
+      const localMatches = searchVoiceTools(app.jarvisTools, input.query, visible);
+      const remoteMatches = searchVoiceTools({ list: () => remoteTools }, input.query, visible);
+      const exactLocal = localMatches[0]?.name === input.query.trim().toLowerCase();
+      const matches = exactLocal ? [...localMatches, ...remoteMatches] : [...remoteMatches, ...localMatches];
       // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
       // reports a server it simply has not heard from yet as "not attached".
       const notes = (noMatch: boolean) => {
         const lines = [
           ...(noMatch ? ['No matching tool. Say so plainly.'] : []),
-          ...catalogues.flatMap(({ bridge, status }) => {
-            if (status.state === 'starting') return [`${bridge.label} tools are still loading (the server wakes from sleep and can take a minute or two). Search again shortly; ${bridge.label} is attached, just not loaded yet.`];
-            if (status.state === 'unreachable') return [`${bridge.label} could not be reached (${status.reason}). Say so plainly; do not claim to have looked.`];
+          ...catalogues.flatMap(({ label, status }) => {
+            if (status.state === 'starting') return [`${label} tools are still loading (the server wakes from sleep and can take a minute or two). Search again shortly; ${label} is attached, just not loaded yet.`];
+            if (status.state === 'unreachable') return [`${label} could not be reached (${status.reason}). Say so plainly; do not claim to have looked.`];
+            if (status.state === 'not_configured') return [`${label} is not configured for this connector.`];
             return [];
           }),
         ];
         return lines.length > 0 ? { note: lines.join(' ') } : {};
       };
       const full = matches.slice(0, maxFullResults);
-      for (const tool of full) grant.discovered.add(tool.name);
+      const others = matches.slice(maxFullResults, maxFullResults + maxOtherResults);
+      const readOnlyByName = discoveredRemote.get(grant) ?? new Map<string, boolean | undefined>();
+      for (const tool of [...full, ...others]) {
+        grant.discovered.add(tool.name);
+        const remote = remoteTools.find(({ name }) => name === tool.name);
+        if (remote) readOnlyByName.set(remote.name, remote.readOnly);
+      }
+      discoveredRemote.set(grant, readOnlyByName);
       return text({
         tool: 'find_tools', outcome: 'ok', result: {
           tools: full.map(tool => ({ name: tool.name, description: tool.description, parameters: shapeSchema(tool) })),
-          otherMatches: matches.slice(maxFullResults, maxFullResults + maxOtherResults)
+          otherMatches: others
             .map(tool => ({ name: tool.name, description: shortenVoiceDescription(tool.description) })),
           ...notes(matches.length === 0),
         },
@@ -172,7 +211,7 @@ export function createPiMcpRoutes(options: {
     });
     server.registerTool('call_tool', {
       title: 'Run a Jarvis tool',
-      description: 'Run a tool that find_tools returned, with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
+      description: 'Run a tool that find_tools returned in tools or otherMatches, using its exact name and schema-valid arguments. Pass the turn reference from the current message. Report what the result says, never more.',
       inputSchema: callSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     }, async (input, ctx) => {
@@ -197,8 +236,8 @@ export function createPiMcpRoutes(options: {
       const azureRequested = input.name.startsWith(azureToolPrefix);
       if (azureRequested) grant.azure.attempts += 1;
       const bridge = bridges.find((candidate) => input.name.startsWith(candidate.prefix));
-      if (bridge && grant.discovered.has(input.name)) {
-        return callRemote(bridge, input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
+      if (bridge && grant.discovered.has(input.name) && discoveredRemote.get(grant)?.has(input.name)) {
+        return callRemote(bridge, input.name, input.arguments, grant, turnSignalFor(grant, ctx.mcpReq.signal, signal));
       }
       const tool = app.jarvisTools.get(input.name);
       const visible = tool && (grant.brain
@@ -208,7 +247,9 @@ export function createPiMcpRoutes(options: {
         if (azureRequested) grant.azure.undiscoveredRefusals += 1;
         return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
       }
-      const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
+      const abort = turnSignalFor(grant, ctx.mcpReq.signal, signal);
+      const release = beginActual(grant, input.name, input.arguments);
+      if (typeof release !== 'function') return release;
       try {
         const response = await app.inject({
           method: 'POST',
@@ -230,10 +271,13 @@ export function createPiMcpRoutes(options: {
           return text({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }, true);
         }
         const serialized = response.body;
-        const parsed = JSON.parse(serialized) as { outcome?: unknown };
+        const parsed = JSON.parse(serialized) as { outcome?: unknown; result?: unknown };
         const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
         grant.results.push({ tool: tool.name, outcome });
-        if (outcome === 'ok' && tool.execution?.defaultEffect === 'action') grant.actions.count += 1;
+        if (outcome === 'ok') {
+          if (tool.execution?.defaultEffect === 'action') grant.actions.count += 1;
+          recordPiToolEvidence(grant, tool.name, input.arguments, parsed.result, { execution: tool.execution, durableJobs: app.backgroundJobs.durable });
+        }
         if (serialized.length > maxResultCharacters) {
           return text({
             tool: tool.name, outcome, truncated: true,
@@ -244,7 +288,19 @@ export function createPiMcpRoutes(options: {
       } catch {
         grant.results.push({ tool: tool.name, outcome: 'error' });
         return text({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }, true);
+      } finally {
+        release();
       }
+    });
+    server.registerTool('finish_turn', {
+      title: 'Finish the current owner turn',
+      description: 'Record completion only once the owner request has a verified outcome. Do not start more tool calls after finishing.',
+      inputSchema: piCompletionSchema,
+    }, async (input) => {
+      const grant = registry.resolve(input.turn);
+      if (!grant || grant.brain || grant.smoke) return text({ outcome: 'refused', error: unknownTurn }, true);
+      const error = finishPiTurn(grant, input);
+      return error ? text({ outcome: 'refused', error }, true) : text({ outcome: 'ok' });
     });
     return server;
   }

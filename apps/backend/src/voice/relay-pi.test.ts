@@ -118,36 +118,72 @@ describe('voice relay on the PI engine', () => {
     });
   });
 
-  it('cancels the PI turn in flight when Dan starts speaking, so no stale answer is spoken over him', async () => {
-    let aborted = false;
+  it.each(['barge-in', 'playback cancel'])('suppresses stale speech on %s without aborting PI', async (interruption) => {
+    const started = Promise.withResolvers<AbortSignal>();
+    const finish = Promise.withResolvers<void>();
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {
-        await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true }));
+        started.resolve(signal);
+        await finish.promise;
+        signal.throwIfAborted();
+        yield { type: 'progress', text: 'Stale progress.' };
         yield 'Stale answer.' as ConversationAgentChunk;
       },
     };
-    const { sockets, speak, responses, connect } = await harness(agent);
-    connect('?engine=pi');
+    const { app, sockets, speak, responses, connect, upstreamEvents } = await harness(agent);
+    const { browser, received } = connect('?engine=pi');
     await until(() => responses().length === 1, 'the greeting');
     speak('First question');
-    await sleep(50);
-    sockets[0]!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'item_2' }));
-    await until(() => aborted, 'the cancellation');
-    await sleep(50);
+    const signal = await started.promise;
+    if (interruption === 'barge-in') {
+      sockets[0]!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'item_2' }));
+      await until(() => received.some(event => event.type === 'input_audio_buffer.speech_started'), 'speech start');
+    } else {
+      browser.send(JSON.stringify({ type: 'response.cancel' }));
+      await until(() => upstreamEvents.some(event => event.type === 'response.cancel'), 'playback cancel');
+    }
+    expect(signal.aborted).toBe(false);
+    finish.resolve();
+    await expect.poll(async () => (await app.systemStatusReader.read()).entries.find(entry => entry.id === 'foundry.voice'))
+      .toMatchObject({ status: 'ok', details: { evidence: 'voice-turn', outcome: 'ok' } });
     expect(responses()).toHaveLength(1);
   });
 
-  it('does not start a turn for an earlier utterance whose transcript arrives while Dan is speaking again', async () => {
+  it('runs a late transcript silently and still voices the newer utterance', async () => {
     let calls = 0;
     const agent: PiVoiceAgent = { async *stream() { calls += 1; yield 'x' as ConversationAgentChunk; } };
     const { sockets, responses, connect } = await harness(agent);
-    connect('?engine=pi');
+    const { received } = connect('?engine=pi');
     await until(() => responses().length === 1, 'the greeting');
     sockets[0]!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'item_2' }));
-    await sleep(30);
+    await until(() => received.some(event => event.type === 'input_audio_buffer.speech_started'), 'speech start');
     sockets[0]!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_1', transcript: 'An older sentence' }));
-    await sleep(100);
-    expect(calls).toBe(0);
+    await until(() => calls === 1, 'the silent PI turn');
+    sockets[0]!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped', item_id: 'item_2' }));
+    sockets[0]!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_2', transcript: 'New sentence' }));
+    await until(() => responses().length === 2, 'the newer reply');
+    expect(calls).toBe(2);
+  });
+
+  it.each(['spoken Stop', 'session end'])('aborts PI on %s', async (action) => {
+    const started = Promise.withResolvers<void>();
+    const stopped = Promise.withResolvers<void>();
+    const agent: PiVoiceAgent = {
+      async *stream(_input, _authorization, signal) {
+        started.resolve();
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        stopped.resolve();
+        yield 'Do not speak this.';
+      },
+    };
+    const { connect, speak, responses } = await harness(agent);
+    const { browser } = connect('');
+    await until(() => responses().length === 1, 'the greeting');
+    speak('First question');
+    await started.promise;
+    if (action === 'spoken Stop') speak('Stop.', 'item_2');
+    else browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+    await stopped.promise;
     expect(responses()).toHaveLength(1);
   });
 

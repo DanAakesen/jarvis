@@ -1,3 +1,8 @@
+## PI owner-message authority and voice interruption — 20 November 2026 (#1967)
+
+- Check with `npm test --workspace @jarvis/backend -- src/core/pi-authority.test.ts src/voice/pi-voice.test.ts src/voice/relay-pi.test.ts`. The voice relay tests use loopback sockets and an injected PI agent; do not run a paid or live provider test.
+- During [#1982](https://github.com/DanAakesen/jarvis/pull/1982), wire native barge-in to `suppressSpeech()` and reserve `cancel()` for explicit work cancellation. Persist the exact delegation message before PI starts; do not restore legacy provider events or fallback routes.
+
 ## PI release hardening — 19 November 2026 (#1966)
 
 - Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.

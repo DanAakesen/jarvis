@@ -37,26 +37,24 @@ describe('PI voice turns', () => {
     expect(busy).toEqual([true, false]);
   });
 
-  it('speaks the note before a tool call at once and the answer after it, without repeating the note', async () => {
+  it('speaks only the first progress note and never removes matching final text', async () => {
     const { turns, spoken, logs, settled } = setup(replying(
-      'Let me check your calendar. ', { type: 'acknowledgment', text: 'Let me check your calendar. ' },
-      'You have two meetings.', { type: 'commentary', text: '' },
+      { type: 'progress', text: 'You have two meetings.' },
+      { type: 'progress', text: 'Still checking.' },
+      'You have two meetings.',
     ));
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['Let me check your calendar.', 'You have two meetings.']);
+    expect(spoken).toEqual(['You have two meetings.', 'You have two meetings.']);
     expect(logs[0]).toMatchObject({ outcome: 'ok', acknowledged: true });
   });
 
-  it('keeps a long unannounced segment in the answer and still strips a later note', async () => {
-    const long = 'First a long stretch of text that the gateway did not announce. '.repeat(10);
-    const { turns, spoken, logs, settled } = setup(replying(
-      long, 'One moment. ', { type: 'acknowledgment', text: 'One moment. ' }, 'Done.',
-    ));
+  it('accepts quiet completion without an empty-reply error', async () => {
+    const { turns, spoken, logs, settled } = setup(replying({ type: 'quiet' }));
     turns.start(turn);
     await settled();
-    expect(logs[0]).toMatchObject({ outcome: 'ok', acknowledged: true });
-    expect(spoken).toEqual(['One moment.', `${long}Done.`.trim()]);
+    expect(logs[0]).toMatchObject({ outcome: 'ok', acknowledged: false });
+    expect(spoken).toEqual([]);
   });
 
   it('says a failure plainly and never runs another engine', async () => {
@@ -100,78 +98,92 @@ describe('PI voice turns', () => {
     expect(logs[0]).toMatchObject({ outcome: 'timeout' });
   });
 
-  it('cancels the turn in flight when Dan says something new, and answers only the newest', async () => {
-    const aborted: boolean[] = [];
+  it('finishes the active turn before running a newer one and speaks only the newer answer', async () => {
+    const firstStarted = Promise.withResolvers<void>();
+    const releaseFirst = Promise.withResolvers<void>();
+    const events: string[] = [];
     const agent: PiVoiceAgent = {
       async *stream(input, _authorization, signal) {
+        events.push(`start ${input.text}`);
         if (input.text === 'first') {
-          await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted.push(true); resolve(); }, { once: true }));
-          throw signal.reason;
+          firstStarted.resolve();
+          await releaseFirst.promise;
+          signal.throwIfAborted();
+          events.push('first released');
+          yield 'First answer.';
+          return;
         }
         yield 'Second answer.';
       },
     };
     const { turns, spoken, logs, busy, settled } = setup(agent);
     turns.start({ ...turn, text: 'first' });
-    await new Promise(resolve => setTimeout(resolve, 1));
+    await firstStarted.promise;
     turns.start({ ...turn, text: 'second' });
-    await settled();
-    expect(aborted).toEqual([true]);
-    expect(spoken).toEqual(['Second answer.']);
-    expect(logs.map(entry => entry.outcome)).toEqual(['superseded', 'ok']);
-    expect(busy).toEqual([true, true, false]);
-  });
-
-  it('runs the new turn only after the cancelled one has released the conversation', async () => {
-    const events: string[] = [];
-    const agent: PiVoiceAgent = {
-      async *stream(input, _authorization, signal) {
-        events.push(`start ${input.text}`);
-        if (input.text === 'first') {
-          await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
-          await new Promise(resolve => setTimeout(resolve, 5));
-          events.push('first released');
-          throw signal.reason;
-        }
-        yield 'ok';
-      },
-    };
-    const { turns, settled } = setup(agent);
-    turns.start({ ...turn, text: 'first' });
-    await new Promise(resolve => setTimeout(resolve, 1));
-    turns.start({ ...turn, text: 'second' });
+    releaseFirst.resolve();
     await settled();
     expect(events).toEqual(['start first', 'first released', 'start second']);
+    expect(spoken).toEqual(['Second answer.']);
+    expect(logs.map(entry => entry.outcome)).toEqual(['ok', 'ok']);
+    expect(busy).toEqual([true, false]);
+  });
+
+  it('explicitly cancels active and queued turns', async () => {
+    const started = Promise.withResolvers<void>();
+    const inputs: string[] = [];
+    const agent: PiVoiceAgent = {
+      async *stream(input, _authorization, signal) {
+        inputs.push(input.text);
+        started.resolve();
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        yield 'Cancelled answer.';
+      },
+    };
+    const { turns, spoken, logs, settled } = setup(agent);
+    turns.start({ ...turn, text: 'first' });
+    await started.promise;
+    turns.start({ ...turn, text: 'second' });
+    turns.cancel();
+    await settled();
+    expect(inputs).toEqual(['first']);
+    expect(logs.map(entry => entry.outcome)).toEqual(['cancelled', 'cancelled']);
+    expect(spoken).toEqual([]);
   });
 
   it('says nothing more when Dan starts speaking while PI is still working', async () => {
-    let aborted = false;
+    const started = Promise.withResolvers<void>();
+    const finish = Promise.withResolvers<void>();
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {
-        await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true }));
-        if (signal.aborted) throw signal.reason;
+        started.resolve();
+        await finish.promise;
+        signal.throwIfAborted();
+        yield { type: 'progress', text: 'Working on it.' };
         yield 'Too late.';
       },
     };
     const { turns, spoken, logs, settled } = setup(agent);
     turns.start(turn);
-    await new Promise(resolve => setTimeout(resolve, 1));
-    turns.cancel();
+    await started.promise;
+    turns.suppressSpeech();
+    finish.resolve();
     await settled();
-    expect(aborted).toBe(true);
     expect(spoken).toEqual([]);
-    expect(logs[0]).toMatchObject({ outcome: 'superseded' });
+    expect(logs[0]).toMatchObject({ outcome: 'ok', acknowledged: false });
   });
 
   it('says nothing when the voice session ends mid-turn', async () => {
+    const started = Promise.withResolvers<void>();
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {
+        started.resolve();
         await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
         yield '';
       },
     };
     const { turns, spoken, logs, session, settled } = setup(agent);
     turns.start(turn);
+    await started.promise;
     session.abort();
     await settled();
     expect(spoken).toEqual([]);

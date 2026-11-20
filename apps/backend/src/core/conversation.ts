@@ -805,6 +805,7 @@ return {
             let agentIterator: AsyncIterator<ConversationAgentChunk> | undefined;
             let interrupted = false;
             let acknowledgmentSent = false;
+            let quiet = false;
             let invitationId: string | undefined;
             let foodResult: string | undefined;
             const invitations: string[] = [];
@@ -875,6 +876,15 @@ return {
                 if (chunk.done) break;
                 const delta = chunk.value;
                 if (typeof delta !== 'string') {
+                  if (delta.type === 'quiet' || delta.type === 'progress') {
+                    if (delta.type === 'quiet') quiet = true;
+                    else {
+                      yield streamEvent(acknowledgmentSent ? 'commentary' : 'acknowledgment', { text: delta.text });
+                      acknowledgmentSent = true;
+                    }
+                    next = agentIterator.next();
+                    continue;
+                  }
                   const interim = partial.trimStart();
                   if ((delta.type === 'acknowledgment' && acknowledgmentSent) || !interim.startsWith(delta.text.trimStart())) {
                     throw new Error('Chat progress update did not match the streamed reply');
@@ -944,7 +954,7 @@ return {
               if (presented.startsWith(partial)) yield streamEvent('delta', { text: presented.slice(partial.length) });
               partial = presented;
             }
-            if (!partial.trim()) throw new Error('Chat response was empty');
+            if (!partial.trim() && !quiet) throw new Error('Chat response was empty');
             if (!isSteering && visualContext) {
               const metadata = { ...persistedVisualContext(visualContext),
                 ...(visualResult?.visualPath === 'caption' && visualResult.description
@@ -966,7 +976,7 @@ return {
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
-            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text,
+            if (!quiet) app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text,
               turnStartedAt: turnStartedAtMs });
             logChatLatency(request, 'turn_complete', turnStartedAt);
             if (visualContext) {

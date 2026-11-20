@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { piDispatchObjectId } from '../auth/pi-credential.js';
-import type { ConversationMessage } from './conversation-store.js';
+import type { ConversationHistoryPage, ConversationMessage } from './conversation-store.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -15,6 +15,28 @@ const wakeMessageId = '9223372036854775807';
 /** True only for the in-process identity the PI MCP door uses for its own dispatches, never for another agent identity. */
 export function isPiDispatch(request: FastifyRequest): boolean {
   return request.agentPrincipal?.objectId.toLowerCase() === piDispatchObjectId;
+}
+
+export function isPiOwnerTurn(request: FastifyRequest): boolean {
+  return isPiDispatch(request) && request.jarvisPi === 'turn';
+}
+
+/**
+ * Legacy tool callers must still prove freshness. For an authenticated PI dispatch,
+ * the live MCP grant already binds the message ID; new history cannot replace it.
+ */
+export async function readToolOwnerMessage(
+  request: FastifyRequest,
+  id: string,
+): Promise<ConversationHistoryPage['messages'][number] | undefined> {
+  const store = request.server.conversationStore;
+  if (!store) return undefined;
+  if (!isPiOwnerTurn(request)) return (await store.getHistory({ limit: 1 })).messages[0];
+  if (id !== request.headers['x-jarvis-message-id'] || !/^[1-9]\d{0,18}$/u.test(id) ||
+      BigInt(id) >= BigInt(wakeMessageId)) return undefined;
+  const page = await store.getHistory({ limit: 1, before: String(BigInt(id) + 1n) });
+  const message = page.messages[0];
+  return message?.id === id && message.role === 'dan' && message.sessionId ? message : undefined;
 }
 
 /** True for any call the PI agent makes itself, in a chat or voice turn or in a wake. */

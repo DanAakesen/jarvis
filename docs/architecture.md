@@ -174,17 +174,19 @@ sequenceDiagram
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; Dan starting to speak (`speech_started`) or a newer utterance cancels the turn in flight, and the next turn waits for it to release the gateway; 90 s deadline; speaks the first progress note at once and the answer at the end; failures become one honest spoken sentence (`PiGatewayError.userMessage`, never provider text); cancelled and superseded turns say nothing |
+| PI voice turns | `apps/backend/src/voice/pi-voice.ts` | One turn at a time. Speech start or playback cancellation mutes stale progress, answers, and errors without aborting PI. New turns wait for the active turn to release the conversation. Explicit Stop, session end, and the 90 s execution deadline still cancel work. Voice speaks at most the first structured progress note plus the final answer; quiet completion needs no spoken answer. |
 | Relay route | `apps/backend/src/voice/relay.ts` | Owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). `current` and unknown query values close 1008. PI has no tool-budget rung ladder, partial-speech reflex or speech recognizer, calendar, food or camera path; typed client `conversation.item.create` or `response.create` closes the socket, camera/screen frames get `not_supported`, and Voice Live has no function calls. Status announcements still speak while no PI turn is in flight |
 | Voice Live session | `voice/realtime.ts` (`capabilityMode: 'pi'`) | Identity kernel plus a short "you are only the voice" prompt; no `tools`, no `tool_choice`. Turn detection is unchanged (the relay still creates every response) |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
-| Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
+| Authority | `apps/backend/src/core/pi-authority.ts` | Only authenticated foreground PI dispatch can use the exact stored Dan message bound by the active MCP turn grant instead of requiring the newest history row. A proactive message can no longer displace this proof. Existing tool, target, confirmation, and session checks still apply. |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
 | Logs | `voice.pi_turn`, `pi.turn` (registered in `logging.ts` with numeric fields only) | `transcriptToFirstTextMs`, `transcriptToDoneMs`, outcome (`ok`, `failed`, `timeout`, `cancelled`, `superseded`), whether a progress note was spoken. No text |
 | Deploy measurement | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | `measure_pi` adds two voice-channel turns (plain, with a Jarvis tool) in the smoke conversation and the checks `voice_spoken_shape` and `voice_tools_over_mcp`; reports first text, total and DKK. It is the PI leg only |
 | iOS | `VoiceEndpoint.url(baseURL:)`, `VoiceSessionClient`, `VoiceScreenModel` | The client connects to `/voice` without a selector and reuses that endpoint on reconnect; Watch follows the same route |
 
 Not done on purpose: camera and screen sharing with PI, Watch voice on PI, a canned "one moment" line, a second fast path. Rollback is a reviewed revert and redeploy; there is no runtime engine fallback.
+
+The backend interruption split in #1967 is independent of provider event names. Native GPT-Live delegation and playback interruption need the cutover in [#1982](https://github.com/DanAakesen/jarvis/pull/1982); there is no new legacy-provider compatibility path.
 
 ## PI standing watches (#1886, P15-175, part 3)
 
@@ -313,19 +315,23 @@ sequenceDiagram
     participant B as Backend (conversation turn route)
     participant G as PI gateway
     participant F as Foundry: jarvis-pi
-    participant M as /pi/mcp (find_tools, call_tool)
+    participant M as /pi/mcp (find_tools, call_tool, finish_turn)
     participant T as /tools/:name (existing guards)
     A->>B: POST turns {text}
     B->>G: stream(input)
     G->>G: budget check, open turn grant (jt- reference)
     G->>F: responses (conversation, stream)
-    F-->>G: text deltas
-    G-->>A: delta events (SSE, unchanged contract)
+    F-->>G: optional interim text
+    G-->>A: bounded progress events
     F->>M: MCP call + static credential + turn reference
     M->>M: resolve grant (owner message, session)
     M->>T: in-process call, message id from the grant
     T-->>M: outcome, result, confirmation
     M-->>F: result
+    F->>M: finish_turn with outcome and evidence tool
+    M->>M: verify result in the current grant
+    F-->>G: final reply
+    G-->>A: answer deltas
     F-->>G: response.completed (tokens)
     G->>G: record tokens and DKK, close the grant
     G-->>A: done
@@ -334,11 +340,11 @@ sequenceDiagram
 | Piece | Where | Notes |
 | --- | --- | --- |
 | Agent definition | `agents/pi/definition.json`, `instructions.md`, `skills/*/SKILL.md`; built by `.github/scripts/provision_pi_agent.py` in the Deploy `pi-agent` job | Persona = identity contract kernel plus product identity plus chat rules. Owner preferences, tone and mode go in a context block with the first turn and whenever they change, keeping the cached prefix stable |
-| Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call, SSE parse, text before a tool call becomes the acknowledgment and commentary events, 180 s turn deadline, cancel closes the stream and the grant. One in-flight request on the conversation: a single-flight lock, claimed synchronously, keeps a warm-up and a chat turn from ever overlapping (a turn waits for a running warm-up; a warm-up yields to a turn). Chat, voice and brain results emit bounded status evidence without turn text |
+| Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call and SSE parse. Before `finish_turn`, optional text becomes bounded progress, not part of the final reply. A foreground turn requires an accepted outcome and a completed stream. Its activation includes the foreground spend and provider catalogue state. A single-flight lock keeps warm-up and foreground turns from overlapping |
 | Warm conversation | `dbo.pi_conversation` (migration 0086), `POST /pi/warm` | One conversation per owner; a warm-up turn primes the cache when the app opens |
 | Ledger | `dbo.pi_turn`, plus `recordFoundryUsage` (role `chat`) | Per turn: tokens, cached tokens, DKK, first-text ms; the monthly hard stop sums it |
 | MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` (injected by the Foundry project connection `jarvis-pi-mcp`) accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
-| Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role (a test role for the Deploy smoke only) |
+| Turn authority | `apps/backend/src/pi/turns.ts`, `apps/backend/src/pi/completion.ts` | Grant per exact owner message; refused when forged, closed or aborted. Foreground completion checks results recorded through that grant; read evidence, write receipts and durable job/task IDs are distinct. A `smoke` grant runs the existing read-only smoke role |
 | In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
 | Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | Core and voice smoke results feed the System Status runtime evidence. The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
 

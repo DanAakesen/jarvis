@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createRemoteMcpBridge } from './remote-mcp.js';
+import { createRemoteMcpBridge, remoteMcpProviderStatus } from './remote-mcp.js';
 
 const signal = () => new AbortController().signal;
 
-function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
+function server(options: { sse?: boolean; expireOnce?: boolean; empty?: boolean } = {}) {
   const seen: { method: string; auth: string | null; session: string | null }[] = [];
   let expired = false;
   const fetchStub = (async (_url: string, init: RequestInit) => {
@@ -14,7 +14,7 @@ function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
     if (options.expireOnce && !expired && body.method === 'tools/list') { expired = true; return new Response('gone', { status: 404 }); }
     const results: Record<string, unknown> = {
       initialize: { protocolVersion: '2025-06-18', capabilities: {} },
-      'tools/list': { tools: [{ name: 'issue_write', description: 'Create or update an issue', inputSchema: { type: 'object' } }, { name: 'bad name!', description: 'x' }] },
+      'tools/list': { tools: options.empty ? [] : [{ name: 'issue_write', description: 'Create or update an issue', inputSchema: { type: 'object' }, annotations: { readOnlyHint: false } }, { name: 'bad name!', description: 'x' }] },
       'tools/call': body.params?.name === 'broken'
         ? { isError: true, content: [{ type: 'text', text: 'Not Found' }] }
         : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] },
@@ -34,6 +34,7 @@ describe('the GitHub bridge', () => {
     const tools = await bridge.tools(signal());
     expect(tools.map(({ name }) => name)).toEqual(['gh_issue_write']);
     expect(tools[0]!.description).toBe('GitHub: Create or update an issue');
+    expect(tools[0]!.readOnly).toBe(false);
     expect(seen.every(({ auth }) => auth === 'Bearer github_pat_x')).toBe(true);
     const calls = seen.length;
     await bridge.tools(signal());
@@ -101,7 +102,7 @@ describe('a server that scales from zero', () => {
     expect(bridge.status()).toEqual({ state: 'starting' });
     release();
     expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
-    expect(bridge.status()).toEqual({ state: 'ready' });
+    expect(bridge.status()).toEqual({ state: 'ready', toolCount: 1 });
   });
 
   it('names a failed first list and tries again at the next search instead of caching the failure', async () => {
@@ -118,7 +119,35 @@ describe('a server that scales from zero', () => {
     expect(await bridge.tools(signal(), 2_000)).toEqual([]);
     expect(bridge.status()).toEqual({ state: 'unreachable', reason: 'the server answered HTTP 401' });
     expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
-    expect(bridge.status()).toEqual({ state: 'ready' });
+    expect(bridge.status()).toEqual({ state: 'ready', toolCount: 1 });
+  });
+
+  it('summarizes provider state without a request, including an empty catalogue', async () => {
+    const { seen, fetchStub } = server({ empty: true });
+    const bridge = createRemoteMcpBridge({ url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't', fetch: fetchStub });
+    expect(remoteMcpProviderStatus([bridge])).toEqual({ github: { state: 'not_configured' }, azure: { state: 'starting' } });
+    expect(seen).toEqual([]);
+    expect(await bridge.tools(signal())).toEqual([]);
+    expect(remoteMcpProviderStatus([bridge])).toEqual({ github: { state: 'not_configured' }, azure: { state: 'empty' } });
+  });
+
+  it('returns the last list immediately while refreshing a stale catalogue', async () => {
+    const serverStub = server();
+    let time = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const bridge = createRemoteMcpBridge({
+      url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't', now: () => time,
+      fetch: (async (url: string, init: RequestInit) => {
+        if (time > 0) await gate;
+        return serverStub.fetchStub(url, init);
+      }) as unknown as typeof fetch,
+    });
+    const cached = await bridge.tools(signal());
+    time = 31 * 60_000;
+    try {
+      expect(await bridge.tools(signal())).toBe(cached);
+      expect(remoteMcpProviderStatus([bridge]).azure).toEqual({ state: 'ready' });
+    } finally { release(); }
   });
 });
-

@@ -101,7 +101,7 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
   let context = 'Old environment context';
   const logs: Array<Record<string, unknown>> = [];
   const sse = (delta: string) => new Response(
-    `data: ${JSON.stringify({ type: 'response.output_text.delta', delta })}\n\ndata: {"type":"response.completed","response":{}}\n\n`,
+    `data: {"type":"response.output_item.done","item":{"type":"mcp_call","server_label":"jarvis","name":"finish_turn"}}\n\ndata: ${JSON.stringify({ type: 'response.output_text.delta', delta })}\n\ndata: {"type":"response.completed","response":{}}\n\n`,
     { headers: { 'content-type': 'text/event-stream' } },
   );
   const gateway = createPiGateway({
@@ -114,20 +114,27 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
       const request = JSON.parse(String(init?.body)) as { conversation: string; input: Array<{ content: string }> };
       expect(request.conversation).toBe('existing-pi-conversation');
       const text = request.input[0]!.content;
-      if (text.endsWith('\nhello')) return sse('Hello.');
+      const turn = /^\[Turn (\S+) \| /u.exec(text)?.[1];
+      if (!turn || !piTurnPattern.test(turn)) throw new Error('No current turn');
+      if (text.endsWith('\nhello')) {
+        expect(await mcp('finish_turn', { turn, kind: 'conversation' })).toMatchObject({ outcome: 'ok' });
+        return sse('Hello.');
+      }
       expect(text).toContain(context);
       expect(text).toMatch(/\nwhat's in my Jarvis resource group\?$/u);
       // The managed instructions take the reference from the first line, not from context or the history.
-      const turn = /^\[Turn (\S+) \| /u.exec(text)?.[1];
-      if (!turn || !piTurnPattern.test(turn)) return sse('I do not have a valid tool reference.');
       expect(registry.resolve(turn)).toMatchObject({ messageId: '3', sessionId: '7' });
       expect(registry.resolve(turn)?.smoke).toBeUndefined();
+      expect(await mcp('finish_turn', { turn, kind: 'current_data', tool: 'az_group_resource_list' }))
+        .toMatchObject({ outcome: 'refused' });
       const find = await mcp('find_tools', { turn, query: 'azure resource group' });
       expect(find.result.tools).toContainEqual(expect.objectContaining({ name: 'az_group_resource_list' }));
       const call = await mcp('call_tool', {
         turn, name: 'az_group_resource_list', arguments: { subscription: 'fixture-subscription', resource_group: 'fixture-rg' },
       });
       expect(call.outcome).toBe('ok');
+      expect(await mcp('finish_turn', { turn, kind: 'current_data', tool: 'az_group_resource_list' }))
+        .toMatchObject({ outcome: 'ok' });
       return sse(call.result);
     },
   });

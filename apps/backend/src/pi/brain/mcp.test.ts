@@ -192,7 +192,7 @@ describe('GitHub through the Jarvis door', () => {
     });
     const { tool, wake } = setup(make('gh_', 'issue_write'), make('az_', 'group_list'));
     const grant = wake();
-    await tool('find_tools', { turn: grant.turn, query: 'tool issue_write group_list' });
+    await tool('find_tools', { turn: grant.turn, query: 'gh_issue_write az_group_list' });
     expect(await tool('call_tool', { turn: grant.turn, name: 'az_group_list', arguments: {} })).toMatchObject({ outcome: 'ok', result: { from: 'az_' } });
     expect(await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: {} })).toMatchObject({ result: { from: 'gh_' } });
     expect(calls).toEqual(['az_group_list', 'gh_issue_write']);

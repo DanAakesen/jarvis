@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../core/conversation-store.js';
-import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
+import { isPiCall, isPiWake, piWakeSource, readToolOwnerMessage } from '../core/pi-authority.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -377,12 +377,11 @@ async function danMessage(request: FastifyRequest): Promise<ConversationMessage>
       !request.server.conversationStore) {
     throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  const latest = page.messages[0];
-  if (!latest || latest.id !== id || latest.role !== 'dan' || !hasSession(latest)) {
+  const source = await readToolOwnerMessage(request, id);
+  if (!source || source.id !== id || source.role !== 'dan' || !hasSession(source)) {
     throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
-  return latest;
+  return source;
 }
 
 /** An approval is bound to the session that staged it, so a message without one can neither stage nor approve. */

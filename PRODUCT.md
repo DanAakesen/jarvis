@@ -196,6 +196,8 @@ PI is the only normal Chat and Voice route. The obsolete engine selector, saved 
 
 Background PI is a separate policy decision in Settings > Proactive, not an engine selector: it is off by default, and its existing loading, unavailable and save-failure states have a visible Retry path. Removing the normal selector does not remove the old harness infrastructure; that broader retirement remains gated separately.
 
+PI finds capabilities from ordinary English or Danish requests without waiting for unrelated providers. For fresh facts and actions it confirms only what it retrieved or what the tool committed. Longer supported work returns a durable research job or Factory task that Dan can check. Progress is distinct from a completed answer, and interrupting speech does not cancel PI work. Foreground spend is separate from the proactive allowance.
+
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
 The 6 November follow-up exposes the same explicit runtime test through the
@@ -1795,7 +1797,9 @@ conversation or source records.
 Voice enters immediately, hiding typing history and the composer. On desktop, the
 orb stays centred and fixed in the room whether or not windows are open;
 the existing layout carries into voice and returns on natural end, connection
-failure, Escape, or End voice. A speech interruption leaves voice active. The
+failure, Escape, or End voice. A speech interruption stops stale playback without
+cancelling PI work or ending voice. Dan can say “Stop” to cancel PI work, or use
+End voice to close the session. The
 optional “Minimise all windows when starting voice”
 setting is off by default; when enabled, windows return as workspace tabs. P8-10
 persists this preference through P8-17's account settings and mirrors it to

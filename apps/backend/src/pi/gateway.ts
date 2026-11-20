@@ -60,6 +60,7 @@ export interface PiGatewayOptions {
   readonly store: PiStore;
   readonly registry: PiTurnRegistry;
   readonly activations: PiActivationService;
+  readonly capabilities?: ((grant: PiTurnGrant) => string) | undefined;
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
   /** The owner-specific persona block; it is re-read each turn and sent only when it changed. */
   readonly context: (signal: AbortSignal) => Promise<string>;
@@ -331,14 +332,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return costs ? Number((costs.inputDkk + costs.outputDkk).toFixed(6)) : 0;
   };
 
-  async function assertBudget(signal: AbortSignal): Promise<void> {
-    const spent = await options.store.spendSince(monthStart(now()), chatTurnKinds, signal).catch((error: unknown) => {
-      throw new PiGatewayError('pi_unavailable', 'PI could not read its spend, so it did not run. No other engine was used.', { cause: error });
-    });
+  async function assertBudget(signal: AbortSignal) {
+    const spent = await options.store.spendSince(monthStart(now()), chatTurnKinds, signal).catch(() => null);
+    if (!spent || !Number.isFinite(spent.costDkk) || spent.costDkk < 0) {
+      throw new PiGatewayError('pi_unavailable', 'PI could not read its spend, so it did not run. No other engine was used.');
+    }
     if (spent.costDkk >= options.monthlyCapDkk) {
       throw new PiGatewayError('pi_budget_exhausted',
         `PI has used ${spent.costDkk.toFixed(2)} of its ${options.monthlyCapDkk.toFixed(0)} DKK monthly cap, so it stopped. Nothing was sent. No other engine was used.`);
     }
+    return spent;
   }
 
   async function record(turn: PiTurnRecord, usage: PiUsage | undefined, eventId: string): Promise<void> {
@@ -430,18 +433,6 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (input.proactiveContext) notes.push(`[Jarvis recently told Dan this, and he may be replying to it]\n${input.proactiveContext}`);
     if (input.screenContext) notes.push(`[Shared screen context: ${JSON.stringify(input.screenContext)}]`);
 
-    try {
-      await assertBudget(signal);
-    } catch (error) {
-      reportRuntime(
-        input.channel === 'voice' ? 'voice' : 'chat',
-        'failed',
-        'turn',
-        error instanceof PiGatewayError && error.code === 'pi_budget_exhausted'
-          ? 'budget_exhausted' : 'preflight_failed',
-      );
-      throw error;
-    }
     // A warm-up in flight primes the cache this turn will use; waiting for it is cheaper than racing it.
     while (busy?.kind === 'warm') {
       await Promise.race([busy.done, new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }))]);
@@ -451,6 +442,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (!releaseTurn) {
       reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', 'failed', 'turn', 'busy');
       throw new PiGatewayError('pi_failed', 'PI is already answering. Wait for that reply first.');
+    }
+    let spent: Awaited<ReturnType<typeof assertBudget>>;
+    try {
+      spent = await assertBudget(signal);
+    } catch (error) {
+      releaseTurn();
+      reportRuntime(
+        input.channel === 'voice' ? 'voice' : 'chat', 'failed', 'turn',
+        error instanceof PiGatewayError && error.code === 'pi_budget_exhausted' ? 'budget_exhausted' : 'preflight_failed',
+      );
+      throw error;
     }
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
     let grant: PiTurnGrant | undefined;
@@ -475,31 +477,53 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       grant = activation.grant;
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
+      const capabilities = options.capabilities?.(grant);
+      if (capabilities) notes.push(capabilities);
+      notes.push(`[Foreground PI budget (separate from proactive): ${spent.costDkk.toFixed(2)} DKK spent of ${options.monthlyCapDkk} DKK this month; ${(options.monthlyCapDkk - spent.costDkk).toFixed(2)} DKK remaining.]`);
+      notes.push('[Owner request: verify its outcome with finish_turn before writing the final answer. Before that, write only optional progress. For fresh facts, actions or background work, use the relevant tool and cite it in finish_turn. If evidence is missing, keep working when recoverable; otherwise mark failed. Conversation or deliberate silence needs no tool evidence.]');
       const text = formatTurn({
         ...(stored?.contextHash === activationHash ? {} : { context: activationContext }), turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
       });
       let segment = '';
-      let boundaries = 0;
+      let progressCount = 0;
+      let replyStarted = false;
+      let finishing = false;
       for await (const event of respond(conversationId, text, deadline)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;
           streamedCharacters += event.text.length;
-          segment += event.text;
-          yield event.text;
+          if (finishing && grant.completion?.kind !== 'quiet' && grant.completion?.kind !== 'failed') {
+            replyStarted ||= Boolean(event.text.trim());
+            yield event.text;
+          } else if (!finishing && segment.length < 1_000) {
+            segment += event.text.slice(0, 1_000 - segment.length);
+          }
         } else if (event.kind === 'tools_listed') {
           if (event.failed) log('pi.mcp_list_failed', { server: event.server });
         } else if (event.kind === 'tool_done') {
           if (event.failed && event.server !== PI_MCP_SERVER_LABEL) log('pi.mcp_call_failed', { server: event.server, tool: event.name });
+          if (event.server === PI_MCP_SERVER_LABEL && event.name === 'finish_turn' && grant.completion) finishing = true;
         } else if (event.kind === 'tool') {
           sawTool = true;
-          // Text before a tool call is a progress note; very long text stays in the answer.
-          if (segment.trim() && Array.from(segment).length <= 500) {
-            yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
-            boundaries += 1;
+          if (segment.trim() && progressCount < 8) {
+            yield { type: 'progress', text: Array.from(segment.trim()).slice(0, 500).join('').trimEnd() };
+            progressCount += 1;
           }
           segment = '';
         } else usage = event.usage;
+      }
+      deadline.throwIfAborted();
+      const completion = finishing ? grant.completion : undefined;
+      if (completion?.kind === 'background') {
+        yield `${replyStarted ? '\n\n' : ''}Status: ${completion.lookup} — ${completion.id}`;
+      } else if (completion?.kind === 'quiet') {
+        yield { type: 'quiet' };
+      } else if (!completion || completion.kind === 'failed' || !replyStarted) {
+        const job = grant.evidence.find(evidence => evidence.kind === 'background');
+        throw new PiGatewayError('pi_failed', job
+          ? `PI did not finish its reply, but the work has a status record: ${job.lookup} — ${job.id}.`
+          : 'PI could not verify completion. Check the source or action status before trying again.');
       }
       outcome = 'ok';
       await options.store.markWarm(options.owner, activationHash, now(), signal).catch(() => log('pi.mark_warm_failed', {}));
@@ -510,11 +534,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         await options.store.dropConversation(options.owner, AbortSignal.timeout(5_000)).catch(() => {});
       }
       if (deadline.aborted && !signal.aborted) {
-        throw new PiGatewayError('pi_timeout', 'PI took too long and was stopped. An action may already have completed; check its status before trying again.', { cause: error });
+        const job = grant && [...grant.evidence].reverse().find(evidence => evidence.kind === 'background');
+        throw new PiGatewayError('pi_timeout', job?.kind === 'background'
+          ? `PI stopped waiting, but the work has a status record: ${job.lookup} — ${job.id}.`
+          : 'PI took too long and was stopped. An action may already have completed; check its status before trying again.', { cause: error });
       }
       throw error;
     } finally {
-      releaseTurn();
       const totalMs = Math.round(performance.now() - started);
       // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
       // conservative estimate (the measured fixed prompt plus what streamed) so the monthly stop cannot be dodged.
@@ -544,6 +570,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             : 'failed',
         } : {}),
       }, billed, `pi:${input.messageId}:${now().getTime()}`);
+      releaseTurn();
       await failedActivation;
       if (grant) options.registry.close(grant.turn);
       const azureCalls = { attempts: grant?.azure.attempts ?? 0, ok: 0, refused: grant?.azure.undiscoveredRefusals ?? 0, error: 0 };
@@ -603,7 +630,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       grant = activation.grant;
       const message = formatTurn({
-        context: [context, activation.context].filter(Boolean).join('\n\n'),
+        context: [context, activation.context, options.capabilities?.(grant)].filter(Boolean).join('\n\n'),
         turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
       });
       for await (const event of respond(conversationId, message, deadline)) {

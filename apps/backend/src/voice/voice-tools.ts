@@ -29,25 +29,54 @@ export function shortenVoiceDescription(text: string): string {
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 1))}…`;
 }
 
-/** Ranks catalogue tools by query words in their name (strongest) and description. */
-export function searchVoiceTools(tools: ToolRegistry, query: string, visible: (name: string) => boolean = isCurrentAssistantTool): RegisteredTool[] {
-  const words = [...new Set(query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word.length >= 2))].slice(0, 8);
-  if (words.length === 0) return [];
+const aliases = new Map<string, string>([
+  ['kalender', 'calendar'], ['aftale', 'event'], ['aftaler', 'event'], ['begivenheder', 'event'], ['events', 'event'],
+  ['dagsorden', 'agenda'], ['dag', 'today'], ['møde', 'event'], ['møder', 'event'], ['næste', 'next'],
+  ['ledig', 'free'], ['ledige', 'free'],
+  ['note', 'vault'], ['notes', 'vault'], ['notat', 'vault'], ['notater', 'vault'], ['noter', 'vault'], ['obsidian', 'vault'],
+  ['opgave', 'task'], ['opgaver', 'task'], ['tasks', 'task'], ['todo', 'task'], ['todos', 'task'], ['gøremål', 'task'],
+  ['indbakke', 'mail'], ['inbox', 'mail'], ['email', 'mail'], ['emails', 'mail'], ['mails', 'mail'],
+  ['vejr', 'weather'], ['vejret', 'weather'],
+  ['webben', 'web'], ['nettet', 'web'], ['internet', 'web'], ['internettet', 'web'], ['online', 'web'],
+  ['undersøg', 'research'], ['researching', 'research'],
+  ['søg', 'search'], ['find', 'search'], ['læs', 'read'], ['vis', 'list'], ['listér', 'list'],
+  ['opret', 'create'], ['skriv', 'write'], ['opdater', 'update'], ['slet', 'delete'],
+  ['sag', 'issue'], ['sager', 'issue'], ['issues', 'issue'], ['fejlrapport', 'issue'],
+  ['lager', 'repo'], ['repositorium', 'repo'], ['repository', 'repo'], ['repositories', 'repo'], ['repos', 'repo'],
+  ['ressource', 'resource'], ['ressourcer', 'resource'], ['resources', 'resource'],
+  ['ressourcegruppe', 'resource group'], ['ressourcegrupper', 'resource group'], ['resourcegroup', 'resource group'],
+  ['gruppe', 'group'], ['grupper', 'group'], ['groups', 'group'], ['abonnement', 'subscription'],
+]);
+const stopWords = new Set([
+  'can', 'could', 'would', 'you', 'please', 'me', 'my', 'the', 'for', 'in', 'on', 'and', 'is', 'what', 'are',
+  'kan', 'kunne', 'vil', 'du', 'mig', 'min', 'mit', 'mine', 'den', 'det', 'der', 'på', 'og', 'hvad', 'er', 'af',
+]);
+const searchWords = (text: string): string[] =>
+  text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word.length >= 2 && !stopWords.has(word));
+const canonicalWords = (words: string[]): string[] =>
+  words.flatMap((word) => (aliases.get(word) ?? word).split(' '));
+
+/** Ranks exact names first, then bilingual query words in names and descriptions. */
+export function searchVoiceTools(tools: Pick<ToolRegistry, 'list'>, query: string, visible: (name: string) => boolean = isCurrentAssistantTool): RegisteredTool[] {
+  const exactName = query.trim().toLowerCase();
+  const words = [...new Set(canonicalWords(searchWords(query.replace(/\bi dag\b/giu, 'today'))))].slice(0, 12);
   return tools.list()
     .filter((tool) => visible(tool.name))
     .map((tool) => {
       const name = tool.name.toLowerCase();
-      const segments = name.split('_');
+      const exact = name === exactName;
+      const segments = canonicalWords(searchWords(name));
       const description = tool.description.toLowerCase();
+      const descriptionWords = new Set(canonicalWords(searchWords(description)));
       let score = 0;
       for (const word of words) {
         if (segments.includes(word)) score += 4;
         else if (name.includes(word)) score += 2;
-        if (description.includes(word)) score += 1;
+        if (descriptionWords.has(word) || description.includes(word)) score += 1;
       }
-      return { tool, score };
+      return { tool, exact, score };
     })
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.tool.name.localeCompare(right.tool.name))
+    .filter((entry) => entry.exact || entry.score > 0)
+    .sort((left, right) => Number(right.exact) - Number(left.exact) || right.score - left.score || left.tool.name.localeCompare(right.tool.name))
     .map((entry) => entry.tool);
 }

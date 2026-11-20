@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { capabilityIndex } from '../core/capability-index.js';
 import { createToolRegistry, type JarvisTool } from '../core/tool-registry.js';
 import { createRealtimeSessionUpdate, executeLazyVoiceToolCall, type RealtimeFunctionCall } from './realtime.js';
+import { searchVoiceTools } from './voice-tools.js';
 
 const tool = (name: string, description: string, execute = vi.fn(async () => ({}))): JarvisTool => ({
   name, description, inputSchema: { type: 'object', properties: {}, additionalProperties: false }, execute,
@@ -11,6 +12,15 @@ const call = (name: string, input: unknown): RealtimeFunctionCall => ({
 });
 
 describe('tool lookup', () => {
+  it('ranks an exact visible name above longer names and descriptions', () => {
+    const registry = createToolRegistry([{ id: 'test', tools: [
+      tool('calendar_read_event', 'Read a calendar event.'),
+      tool('calendar_read', 'An existing tool.'),
+    ] }]);
+    expect(searchVoiceTools(registry, ' CALENDAR_READ ')[0]?.name).toBe('calendar_read');
+    expect(searchVoiceTools(registry, 'calendar_read', (name) => name !== 'calendar_read').map(({ name }) => name)).toEqual(['calendar_read_event']);
+  });
+
   it('advertises only find_tools and call_tool and refuses a tool until find_tools returned it', async () => {
     const heavy = vi.fn(async () => ({}));
     const registry = createToolRegistry([{

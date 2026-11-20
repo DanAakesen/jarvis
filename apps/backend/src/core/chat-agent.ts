@@ -97,7 +97,8 @@ export interface ConversationAgentAcknowledgment {
   readonly text: string;
 }
 
-export type ConversationAgentChunk = string | ConversationAgentAcknowledgment;
+export type ConversationAgentChunk = string | ConversationAgentAcknowledgment |
+  { readonly type: 'progress'; readonly text: string } | { readonly type: 'quiet' };
 
 const maxStreamBytes = 1024 * 1024;
 // Bound connection/setup only. An established stream can contain long-running work.

@@ -1,4 +1,4 @@
-import { isPiWake, piWakeSource } from '../core/pi-authority.js';
+import { isPiWake, piWakeSource, readToolOwnerMessage } from '../core/pi-authority.js';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
@@ -156,9 +156,8 @@ async function ownerMessage(request: FastifyRequest, ownerObjectId: string, sign
       BigInt(id) > 9_223_372_036_854_775_807n || !conversations) {
     throw new ToolRefusal('A direct, current owner request is required to change reminders.');
   }
-  const page = await conversations.getHistory({ limit: 1 });
+  const message = await readToolOwnerMessage(request, id);
   signal.throwIfAborted();
-  const message = page.messages[0];
   if (!message || message.id !== id || message.role !== 'dan') {
     throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
   }

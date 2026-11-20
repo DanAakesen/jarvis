@@ -5,6 +5,9 @@ import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
+import { finishPiTurn, recordPiToolEvidence, type piCompletionSchema } from './completion.js';
+import type { z } from 'zod';
+import type { PiTurnGrant } from './turns.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -16,10 +19,12 @@ const sse = (...frames: string[]) => new Response(new ReadableStream({
 }), { headers: { 'content-type': 'text/event-stream' } });
 const delta = (text: string) => frame({ type: 'response.output_text.delta', delta: text });
 const tool = frame({ type: 'response.output_item.added', item: { type: 'mcp_call' } });
+const finished = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'jarvis', name: 'finish_turn' } });
+type Finish = (kind?: z.infer<typeof piCompletionSchema>['kind'], evidence?: (grant: PiTurnGrant) => string) => string;
 
 interface Call { url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
 
-function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
+function setup(replies: Array<(call: Call, finish: Finish) => Response>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
   const store = createMemoryPiStore(() => new Date('2026-11-15T16:00:00Z'));
   const registry = createPiTurnRegistry();
   let activationSequence = 0;
@@ -60,7 +65,13 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
     const call: Call = { url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
     calls.push(call);
     if (url.includes('/conversations')) { conversations += 1; return Response.json({ id: `conv_${conversations}` }); }
-    return replies.shift()!(call);
+    return replies.shift()!(call, (kind = 'conversation', evidence) => {
+      const input = (call.body!.input as Array<{ content: string }>)[0]!.content;
+      const grant = registry.resolve(/^\[Turn (\S+)/u.exec(input)?.[1])!;
+      const tool = evidence?.(grant);
+      expect(finishPiTurn(grant, { turn: grant.turn, kind, tool })).toBeUndefined();
+      return finished;
+    });
   }) as typeof fetch;
   const gateway = createPiGateway({
     projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/proj', agentName: 'jarvis-pi', owner, monthlyCapDkk: 1, timeZone: 'Europe/Copenhagen',
@@ -86,8 +97,8 @@ describe('PI gateway', () => {
 
   it('streams one long conversation, sends the persona once, and records tokens and DKK per turn', async () => {
     const { run, calls, store, usage, registry, conversations } = setup([
-      () => sse(delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),
-      () => sse(delta('Again'), completed(11_100, 11_000, 10)),
+      (_, finish) => sse(finish(), delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),
+      (_, finish) => sse(finish(), delta('Again'), completed(11_100, 11_000, 10)),
     ]);
     expect(await run('hi')).toEqual(['Hello', ' Dan']);
     await run('more');
@@ -98,7 +109,9 @@ describe('PI gateway', () => {
     expect(responses[0]!.body).toMatchObject({ conversation: 'conv_1', stream: true });
     const first = (responses[0]!.body!.input as Array<{ content: string }>)[0]!.content;
     const second = (responses[1]!.body!.input as Array<{ content: string }>)[0]!.content;
-    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\nhi$/u);
+    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n/u);
+    expect(first).toContain('Foreground PI budget (separate from proactive): 0.00 DKK spent of 1 DKK');
+    expect(first).toMatch(/\nhi$/u);
     expect(second).not.toContain('CONTEXT BLOCK');
     expect(store.turns.map(turn => [turn.kind, turn.outcome, turn.inputTokens, turn.cachedTokens, turn.outputTokens])).toEqual([
       ['chat', 'ok', 11_000, 9_000, 20], ['chat', 'ok', 11_100, 11_000, 10],
@@ -109,7 +122,7 @@ describe('PI gateway', () => {
   });
 
   it('hands the agent a live turn reference during the turn and ends it with the turn', async () => {
-    const { run, registry, calls } = setup([() => sse(delta('x'), completed(1, 0, 1))]);
+    const { run, registry, calls } = setup([(_, finish) => sse(finish(), delta('x'), completed(1, 0, 1))]);
     await run('hi');
     const text = (calls.at(-1)!.body!.input as Array<{ content: string }>)[0]!.content;
     const turn = /\[Turn (jt-[A-Za-z0-9_-]{22})/u.exec(text)![1]!;
@@ -117,10 +130,11 @@ describe('PI gateway', () => {
   });
 
   it('tells the agent a voice turn is spoken, and a chat turn nothing of the kind', async () => {
-    const { gateway, calls } = setup([() => sse(delta('x'), completed(1, 0, 1)), () => sse(delta('y'), completed(1, 0, 1))]);
+    const { gateway, calls } = setup([(_, finish) => sse(finish(), delta('x'), completed(1, 0, 1)), (_, finish) => sse(finish(), delta('y'), completed(1, 0, 1))]);
     const input = () => (calls.at(-1)!.body!.input as Array<{ content: string }>)[0]!.content;
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'hi', channel: 'voice' }, '', new AbortController().signal)) void chunk;
-    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]\n\nhi$/u);
+    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]/u);
+    expect(input()).toMatch(/\nhi$/u);
     for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'again' }, '', new AbortController().signal)) void chunk;
     expect(input()).not.toContain('Channel: voice');
   });
@@ -128,8 +142,8 @@ describe('PI gateway', () => {
   it('records only bounded runtime evidence for chat and voice turns', async () => {
     const evidence: Array<Record<string, unknown>> = [];
     const { gateway } = setup([
-      () => sse(delta('x'), completed(1, 0, 1)),
-      () => sse(delta('y'), completed(1, 0, 1)),
+      (_, finish) => sse(finish(), delta('x'), completed(1, 0, 1)),
+      (_, finish) => sse(finish(), delta('y'), completed(1, 0, 1)),
     ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'private chat text' }, '', new AbortController().signal)) void chunk;
     for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'private voice text', channel: 'voice' }, '', new AbortController().signal)) void chunk;
@@ -150,11 +164,32 @@ describe('PI gateway', () => {
     ]);
   });
 
-  it('marks text before a tool call as an acknowledgment, then commentary', async () => {
-    const { run } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
+  it('bounds long or repeated progress separately from the answer', async () => {
+    const progress = delta('Checking.'.repeat(200));
+    const { run } = setup([(_, finish) => sse(progress, tool, progress, tool, finish(), delta('Done.'), completed(5, 0, 5))]);
     expect(await run('look')).toEqual([
-      'Checking.', { type: 'acknowledgment', text: 'Checking.' }, 'Still on it.', { type: 'commentary', text: 'Still on it.' }, 'Done.',
+      { type: 'progress', text: 'Checking.'.repeat(200).slice(0, 500) },
+      { type: 'progress', text: 'Checking.'.repeat(200).slice(0, 500) }, 'Done.',
     ]);
+  });
+
+  it('does not count the end of a provider response as evidence of completion', async () => {
+    const { run, store } = setup([() => sse(delta('I saved it.'), completed(5, 0, 5))]);
+    await expect(run('Save a note')).rejects.toMatchObject({ code: 'pi_failed' });
+    expect(store.turns[0]).toMatchObject({ outcome: 'failed', outputTokens: 5 });
+  });
+
+  it('accepts quiet and adds the durable lookup to a background reply', async () => {
+    const jobId = '93b10d4b-8c76-465c-940f-988b48c131a0';
+    const { run } = setup([
+      (_, finish) => sse(finish('quiet'), completed(5, 0, 0)),
+      (_, finish) => sse(finish('background', grant => {
+        recordPiToolEvidence(grant, 'research', {}, { jobId }, { durableJobs: true });
+        return 'research';
+      }), completed(5, 0, 0)),
+    ]);
+    expect(await run('Do not reply')).toEqual([{ type: 'quiet' }]);
+    expect(await run('Research this')).toEqual([`Status: get_job — ${jobId}`]);
   });
 
   it('reads the provider\'s own report of reach servers: listed tools and call results, with plain labels only', async () => {
@@ -163,7 +198,7 @@ describe('PI gateway', () => {
     const listFailed = frame({ type: 'response.output_item.done', item: { type: 'mcp_list_tools', server_label: 'azure', tools: [], error: 'unreachable' } });
     const failed = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'github', name: 'get_issue', error: { code: 'x' } } });
     const odd = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'bad label with spaces', name: 'x', error: null } });
-    const { run } = setup([() => sse(listed, listFailed, tool, failed, odd, delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
+    const { run } = setup([(_, finish) => sse(listed, listFailed, tool, failed, odd, finish(), delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
     expect(await run('look')).toEqual(['ok']);
     expect(logs.filter(([event]) => event !== 'pi.turn')).toEqual([
       ['pi.mcp_list_failed', { server: 'azure' }], ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue' }],
@@ -217,6 +252,7 @@ describe('PI gateway', () => {
     const { run, calls, store } = setup([], {
       onRuntimeTurn: (entry) => evidence.push({ ...entry }),
     });
+
     await store.recordTurn({ kind: 'chat', messageId: null, model: 'm', inputTokens: 0, cachedTokens: 0, outputTokens: 0, costDkk: 1.5, firstTextMs: 1, totalMs: 1, outcome: 'ok' }, new AbortController().signal);
     await expect(run('hi')).rejects.toMatchObject({ code: 'pi_budget_exhausted' });
     expect(calls).toEqual([]);
@@ -224,6 +260,15 @@ describe('PI gateway', () => {
       channel: 'chat', outcome: 'failed', source: 'turn',
       reason: 'budget_exhausted', at: '2026-11-15T16:00:00.000Z',
     }]);
+  });
+
+  it('does not call Foundry if foreground spend cannot be read', async () => {
+    const { run, calls, store } = setup([]);
+    store.spendSince = async () => { throw new Error('Ledger offline'); };
+    await expect(run('Hi')).rejects.toMatchObject({
+      code: 'pi_unavailable', userMessage: expect.stringContaining('could not read its spend'),
+    });
+    expect(calls).toEqual([]);
   });
 
   it('reports honest errors for a missing agent, rate limiting and a broken stream, with no fallback', async () => {
@@ -253,10 +298,10 @@ describe('PI gateway', () => {
   it('records a cancelled turn, releases its authority and keeps the conversation usable', async () => {
     const controller = new AbortController();
     const { gateway, store, registry } = setup([
-      () => new Response(new ReadableStream({
-        start(stream) { stream.enqueue(new TextEncoder().encode(delta('first'))); },
+      (_, finish) => new Response(new ReadableStream({
+        start(stream) { stream.enqueue(new TextEncoder().encode(finish() + delta('first'))); },
       }), { headers: { 'content-type': 'text/event-stream' } }),
-      () => sse(delta('ok'), completed(2, 0, 1)),
+      (_, finish) => sse(finish(), delta('ok'), completed(2, 0, 1)),
     ]);
     const received: ConversationAgentChunk[] = [];
     await expect((async () => {
@@ -301,13 +346,13 @@ describe('PI gateway', () => {
     let inFlight = 0;
     let maxInFlight = 0;
     const order: string[] = [];
-    const tracked = (label: string, body: string[]) => () => {
+    const tracked = (label: string, body: string[]) => (_: Call, finish: Finish) => {
       order.push(label);
       inFlight += 1; maxInFlight = Math.max(maxInFlight, inFlight);
       return new Response(new ReadableStream({
         async start(controller) {
           await new Promise(resolve => setTimeout(resolve, 20));
-          for (const text of body) controller.enqueue(new TextEncoder().encode(text));
+          for (const text of label === 'chat' ? [finish(), ...body] : body) controller.enqueue(new TextEncoder().encode(text));
           inFlight -= 1; controller.close();
         },
       }), { headers: { 'content-type': 'text/event-stream' } });
@@ -342,8 +387,8 @@ describe('PI gateway', () => {
   it('records a claim refusal without sending a model request', async () => {
     const evidence: Array<Record<string, unknown>> = [];
     const { gateway, calls } = setup([
-      () => new Response(new ReadableStream({
-        start(controller) { controller.enqueue(new TextEncoder().encode(delta('first'))); },
+      (_, finish) => new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode(finish() + delta('first'))); },
       }), { headers: { 'content-type': 'text/event-stream' } }),
     ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
     const controller = new AbortController();
