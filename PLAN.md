@@ -67,20 +67,23 @@ plus browser pre-connect/send/failure/ack coverage passes offline.
 
 ## Durable reply pushes and exact notification opening — 20 November 2026 (#1970)
 
-**Status: implemented locally from refreshed `origin/main`. Available offline
-syntax/structural checks pass; the host lacks the locked npm dependencies and a
-Swift toolchain, so the executable runners remain an explicit limitation. No
-provider call, push, deploy or PR is authorized.**
+**Status: review fixes are implemented on the existing candidate branch.
+Backend, SQL and JarvisCore offline gates are being rerun before the follow-up
+force-with-lease publish. No provider call, APNs delivery, deploy or PR is part
+of this work.**
 
 | Step | State |
 | --- | --- |
 | Replace process-local timestamp suppression with durable confirmation/source-turn identity | Done |
 | Store assistant message and per-device reply outbox atomically in migration `0093` | Done |
+| Reconcile accepted approval delivery separately per device in migration `0094`, await same-turn work and cancel only unsent duplicates | Done |
 | Add bounded transient retry, stable APNs collapse identity, token invalidation and sanitized diagnostics | Done |
+| Keep APNs transport failures separate from SQL result-write failures and preserve lease recovery | Done |
 | Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
+| Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
-| Run available offline gates and commit the exact branch head | TypeScript syntax, diff/secret scanning, Swift delimiter and durable-outbox structural checks pass; Vitest/ESLint/SQL and Swift commands were attempted but blocked because the host has no installed `vitest`/`eslint`/`tsc` or `swift`; committed locally |
+| Run available offline gates and publish the reviewed branch head | Backend build/lint and full 676-test suite pass; isolated SQL 24-test gate and full JarvisCore 221-test Swift 6.2 suite pass; final rebase, commit and force-with-lease verification pending |
 
 Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live

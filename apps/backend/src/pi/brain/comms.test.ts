@@ -30,7 +30,7 @@ describe('the brain\'s chat message', () => {
     }, r, signal);
     expect(sent).toEqual({ messageId: '2', sessionId: '7' });
     expect(conversations.messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi', text: 'The deploy failed.' });
-    expect(pushes).toEqual([{ sessionId: '7', messageId: '2' }]);
+    expect(pushes).toEqual([{ sessionId: '7', messageId: '2', text: 'The deploy failed.' }]);
     expect(conversations.addMessageInputs.at(-1)?.replyNotification?.evidence).toEqual({
       category: 'technical',
       evidenceSources: ['factory'],

@@ -81,23 +81,30 @@
 
 ## 20 November 2026 — Durable reply delivery belongs to the stored message (#1970)
 
-- **Identity:** reply suppression is exact. A durable approval claim pairs the
-  random confirmation ID with the owner-message ID of the turn that staged it;
-  timestamps have no dedupe role.
+- **Identity:** confirmation dedupe and reply cancellation are separate. A
+  durable claim pairs confirmation ID with the owner-message turn; a
+  per-device approval-delivery row records the accepted/failed/invalid result.
+  Timestamps have no dedupe role.
 - **Persistence:** the conversation message and per-device outbox row commit in
   one transaction. The old process-local ledger and callback-only sender are
   retired, with no dual or fallback path.
-- **Recovery:** a leased SQL worker retries only transient APNs failures, at
-  1/5/20/60 seconds and at most five attempts, until one-hour expiry. A stable
+- **Recovery:** Chat awaits or reconciles the same-turn approval before storing
+  the reply outbox. Accepted APNs cancels only that registration's pending
+  duplicate; failed transport/provider delivery leaves it eligible. A leased
+  SQL worker retries only transient reply APNs failures at 1/5/20/60 seconds,
+  at most five attempts, until one-hour expiry. State-write failures preserve
+  the sending lease instead of becoming provider rejection. A stable
   message-derived collapse ID covers the crash window after Apple accepted but
   before SQL recorded that result. Permanent invalid-token responses remove the
   registration and invalidate its pending rows.
 - **Privacy:** only a bounded, one-line preview is stored per device. Preview
-  opt-out and credential-like content use a generic body. Logs and status expose
-  no body, IDs or token; terminal counts are diagnostic evidence.
+  opt-out, credentials, health/medical, diagnosis/medication, banking and
+  account content use a generic body. Logs and status expose no body, IDs or
+  token; terminal counts are diagnostic evidence.
 - **Routing:** `jarvis.reply` is a dedicated iPhone/Watch tap branch carrying
-  exact `sessionID`/`messageID`. Proactive findings and approval actions keep
-  their existing categories and handlers.
+  exact `sessionID`/`messageID`. Watch keeps the target pending across active
+  chat, voice and dictation instead of discarding it. Proactive findings and
+  approval actions keep their existing categories and handlers.
 - **Continuity:** the same server-side outbox envelope accepts optional source
   evidence for #1969. Proactive scheduling, GPT-Live and voice protocol code
   remain untouched.

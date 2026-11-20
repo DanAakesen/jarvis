@@ -1,10 +1,6 @@
 ALTER TABLE dbo.approval_notification_registrations
-  ADD registration_id uniqueidentifier NULL;
-UPDATE dbo.approval_notification_registrations SET registration_id = NEWID();
-ALTER TABLE dbo.approval_notification_registrations
-  ALTER COLUMN registration_id uniqueidentifier NOT NULL;
-ALTER TABLE dbo.approval_notification_registrations
-  ADD CONSTRAINT DF_approval_notification_registrations_id DEFAULT NEWID() FOR registration_id;
+  ADD registration_id uniqueidentifier NOT NULL
+    CONSTRAINT DF_approval_notification_registrations_id DEFAULT NEWID();
 ALTER TABLE dbo.approval_notification_registrations
   ADD CONSTRAINT UQ_approval_notification_registrations_id UNIQUE (registration_id);
 

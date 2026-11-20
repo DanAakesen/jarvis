@@ -270,26 +270,33 @@ async function addMessageWithReplyNotification(
       WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);
       DECLARE @messageId bigint = (SELECT TOP (1) id FROM @inserted);
       IF @messageId IS NOT NULL
-        AND (
-          @turnMessageId IS NULL OR NOT EXISTS (
-            SELECT 1 FROM dbo.reply_notification_approval_claims
-            WHERE owner_object_id = @owner AND turn_message_id = @turnMessageId
-              AND expires_at > SYSUTCDATETIME()
-          )
-        )
       BEGIN
         INSERT dbo.reply_notification_deliveries (
           id, owner_object_id, jarvis_session_id, message_id, turn_message_id,
-          registration_id, device_reference, notification_id, preview, state,
-          next_attempt_at, expires_at, evidence_json
+          registration_id, device_reference, notification_id, preview, state, last_result,
+          next_attempt_at, expires_at, completed_at, evidence_json
         )
         SELECT NEWID(), @owner, @sessionId, @messageId, @turnMessageId,
-          registration_id, CONVERT(char(36), registration_id),
+          r.registration_id, CONVERT(char(36), r.registration_id),
           CONCAT(N'reply-', CONVERT(nvarchar(20), @messageId)),
-          CASE WHEN show_actions = 1 THEN @preview ELSE N'New reply from Jarvis' END,
-          N'pending', SYSUTCDATETIME(), DATEADD(hour, 1, SYSUTCDATETIME()), @evidence
-        FROM dbo.approval_notification_registrations
-        WHERE owner_object_id = @owner AND expires_at > SYSUTCDATETIME();
+          CASE WHEN r.show_actions = 1 THEN @preview ELSE N'New reply from Jarvis' END,
+          CASE WHEN a.state = N'accepted' THEN N'suppressed' ELSE N'pending' END,
+          CASE WHEN a.state = N'accepted' THEN N'approval_delivered' ELSE NULL END,
+          SYSUTCDATETIME(), DATEADD(hour, 1, SYSUTCDATETIME()),
+          CASE WHEN a.state = N'accepted' THEN SYSUTCDATETIME() ELSE NULL END,
+          @evidence
+        FROM dbo.approval_notification_registrations r
+        OUTER APPLY (
+          SELECT TOP (1) a.state
+          FROM dbo.reply_notification_approval_claims c
+          INNER JOIN dbo.reply_notification_approval_deliveries a
+            ON a.confirmation_id = c.confirmation_id
+            AND a.device_reference = CONVERT(char(36), r.registration_id)
+          WHERE c.owner_object_id = @owner AND c.turn_message_id = @turnMessageId
+            AND c.expires_at > SYSUTCDATETIME() AND a.state = N'accepted'
+          ORDER BY c.created_at DESC
+        ) a
+        WHERE r.owner_object_id = @owner AND r.expires_at > SYSUTCDATETIME();
       END;
       SELECT CONVERT(varchar(20), id) AS id, CONVERT(varchar(20), session_id) AS session_id,
         role, text, model, at, metadata

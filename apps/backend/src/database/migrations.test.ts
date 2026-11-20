@@ -49,6 +49,14 @@ describe('committed SQL manifest', () => {
     expect((await readDownMigration('0093_reply_notification_outbox.sql')).sql)
       .toContain('DROP TABLE dbo.reply_notification_deliveries');
   });
+  it('ships per-device approval reconciliation for reply suppression', async () => {
+    const migration = (await readMigrations()).find(({ name }) =>
+      name === '0094_reply_notification_reconciliation.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.reply_notification_approval_deliveries');
+    expect(migration?.sql).toContain("state IN ('pending', 'sending', 'accepted', 'failed', 'expired', 'invalid_token', 'suppressed')");
+    expect((await readDownMigration('0094_reply_notification_reconciliation.sql')).sql)
+      .toContain('DROP TABLE dbo.reply_notification_approval_deliveries');
+  });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
     const path = await directory();
     await mkdir(join(path, 'down'));

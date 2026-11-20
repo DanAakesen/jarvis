@@ -13,25 +13,28 @@
 
 ## Durable reply pushes — 20 November 2026 (#1970)
 
-- Migration `0093_reply_notification_outbox.sql` must run before this backend
-  revision. It is backward-compatible for old registration inserts by using a
-  UUID default, and has a matching down migration.
+- Migrations `0093_reply_notification_outbox.sql` and
+  `0094_reply_notification_reconciliation.sql` must run before this backend
+  revision. They are backward-compatible for old registrations and each has a
+  matching down migration.
 - Ordinary replies are queued only by the conversation-store transaction; do
   not add a callback-based fallback sender. `reply-notification-store.ts` owns
   leases/results and `reply-notifications.ts` is the sole reply APNs worker.
-- Approval suppression is exact `(confirmation ID, source turn message ID)`.
-  Keep `withConfirmationTurn` around tool execution and keep proactive
-  confirmation metadata on `message_dan`; never restore timestamp-wide or
-  process-local suppression.
+- Approval confirmation dedupe is exact `(confirmation ID, source turn message
+  ID)`, while reply cancellation is a separate per-registration outcome. Keep
+  `withConfirmationTurn` and `awaitReplyNotificationApproval` around tool
+  execution/final reply storage; cancel only pending rows after accepted APNs
+  and never reinterpret a state-write failure as provider rejection.
 - iPhone and Watch route `jarvis.reply` using `JarvisReplyNotificationTarget`.
-  Do not fold reply taps into the `jarvis.proactive` item route or approval
-  action handling.
+  Watch keeps that target pending through busy chat, voice and dictation, and
+  routes at idle. Do not fold reply taps into the `jarvis.proactive` item route
+  or approval action handling.
 - Offline checks:
   - `npm test --workspace @jarvis/backend -- src/push/reply-notifications.test.ts src/database/migrations.test.ts src/pi/brain/comms.test.ts`
   - `npm run build --workspace @jarvis/backend`
   - `npm run lint --workspace @jarvis/backend`
   - loopback SQL contract: `src/database/reply-notification-store.integration.test.ts`
-  - `swift test --filter 'ReplyNotificationTargetTests|ChatFollowStateTests'` in `apps/ios/Packages/JarvisCore`
+  - `swift test --filter 'ReplyNotificationTargetTests|ChatFollowStateTests|WatchReplyRouteStateTests'` in `apps/ios/Packages/JarvisCore`
 - Never send a real APNs push or call Apple/Foundry/Voice/Azure/GitHub for this
   feature. Linux cannot compile/render SwiftUI; the Mac job and a signed
   iPhone/Watch remain the live tap/lock-screen checks.

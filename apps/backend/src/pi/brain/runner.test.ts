@@ -148,7 +148,11 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     } });
     await t.enqueue(failedDeploy);
     await t.tick();
-    expect(t.pushes).toEqual([{ sessionId: '7', messageId: '2' }]);
+    expect(t.pushes).toEqual([{
+      sessionId: '7',
+      messageId: '2',
+      text: 'The Deploy of main failed. The PI smoke check streaming is the cause.',
+    }]);
     expect(t.conversations.messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi', sessionId: '7' });
     expect(t.log()).toContain('Told Dan: "The Deploy of main failed.');
   });

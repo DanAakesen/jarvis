@@ -96,6 +96,7 @@ export interface BuildAppOptions {
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
   readonly notifyApproval?: (confirmation: BrowserConfirmation) => void | Promise<void>;
+  readonly awaitReplyNotificationApproval?: (turnMessageId: string) => Promise<void>;
   readonly notifyReply?: (reply: ReplyNotificationInput) => void;
   readonly replyNotificationWorker?: ReplyNotificationWorker;
   /** Test-only PI chat engine: its in-process credentials and the agent a turn that selects PI streams from. */
@@ -215,6 +216,7 @@ declare module 'fastify' {
     browserAgent: BrowserAgent | null;
     ownerInteractions: OwnerInteractionService | null;
     notifyApproval: (confirmation: BrowserConfirmation) => void | Promise<void>;
+    awaitReplyNotificationApproval: (turnMessageId: string) => Promise<void>;
     notifyReply: (reply: ReplyNotificationInput) => void;
     replyNotificationsEnabled: boolean;
     awayModeStore: AwayModeStore | null;
@@ -297,6 +299,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials, options.inboxCapture?.credentials, options.piAuth);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
+  app.decorate('awaitReplyNotificationApproval', options.awaitReplyNotificationApproval ?? (async () => {}));
   app.decorate('notifyReply', options.notifyReply ?? (() => {}));
   app.decorate('replyNotificationsEnabled', options.notifyReply !== undefined);
   app.decorate('backendLogsConfigured', config.backendLogs !== undefined);

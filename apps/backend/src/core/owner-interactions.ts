@@ -273,8 +273,12 @@ export function createOwnerInteractionService({
         .filter(({ action }) => action.pending)
         .slice(0, maxPendingBrowserConfirmations)
         .map(({ view }) => {
-          const { turnMessageId: _turnMessageId, ...publicView } = view;
-          return publicView;
+          return {
+            id: view.id,
+            actionKind: view.actionKind,
+            summary: view.summary,
+            expiresAt: view.expiresAt,
+          };
         });
     },
     async resolveBrowserConfirmation(id, decision) {

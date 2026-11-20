@@ -13,34 +13,44 @@ flowchart LR
     C --> T
 ```
 
-- Migration `0093_reply_notification_outbox.sql` gives each native registration
-  a stable reference, records exact approval/turn claims, and stores one
+- Migrations `0093_reply_notification_outbox.sql` and
+  `0094_reply_notification_reconciliation.sql` give each native registration a
+  stable reference, record exact approval/turn claims, persist one approval
+  delivery state per registration, and store one
   `reply_notification_deliveries` row per stored assistant message and device.
   Message, safe preview, exact source/turn, optional evidence JSON, device
   reference, expiry, lease, attempt and sanitized result are durable together.
 - Normal Chat and `message_dan` pass `replyNotification` into the conversation
   store. The same SQL transaction inserts the assistant message and outbox rows.
-  Approval and reply paths take the same owner/turn application lock, so an
-  exact approval claim removes only that turn's push; unrelated concurrent turns
-  are unaffected.
+  Approval and reply paths take the same owner/turn application lock, and Chat
+  awaits the in-process approval result before that exact turn becomes
+  deliverable. Accepted APNs cancels only that registration's pending duplicate;
+  a failed or stale approval attempt leaves the reply eligible. Unrelated
+  concurrent turns are unaffected.
 - `push/reply-notifications.ts` is the only ordinary reply sender. The worker
   recovers `pending` and expired leases after restart, retries only transient
   APNs outcomes (`429`, `5xx` or transport timeout), caps attempts at five with
   1/5/20/60 second backoff, and terminates at the one-hour expiry. Stable
   `apns-collapse-id: reply-<messageId>` protects the crash window around an
   accepted APNs response.
+- Reply transport handling is separate from SQL result persistence. A thrown,
+  reset or timeout transport is transient; an APNs-result write failure leaves
+  the current sending lease/state intact rather than rewriting it as a
+  permanent provider rejection.
 - Terminal Apple invalid-token rejection deletes the native registration and
   invalidates all pending rows for that stable device reference. The old
   `push-ledger.ts` process-local timestamp suppression and every dual reply path
   are removed.
 - The payload carries `sessionID`, `messageID` and a bounded preview. iPhone and
   Watch first select the ordinary-reply tap branch and load the exact session
-  page; proactive-item and approval branches retain their existing payloads and
-  routes. Evidence remains server-side and shares the message identity reserved
-  by #1969; the proactive scheduler is unchanged.
+  page. Watch retains the target through active chat, voice or dictation and
+  routes when idle; proactive-item and approval branches retain their existing
+  payloads and routes. Evidence remains server-side and shares the message
+  identity reserved by #1969; the proactive scheduler is unchanged.
 - `/status` database diagnostics expose only aggregate pending/accepted/failed/
-  expired/invalid-token counts and latest sanitized failure time. Logs contain
-  outcome, attempt and HTTP status, never preview/message content or tokens.
+  expired/invalid-token/suppressed counts and latest sanitized failure time.
+  Logs contain outcome, attempt and HTTP status, never preview/message content
+  or tokens.
 
 ## PI-only release path — 19 November 2026 (#1966)
 

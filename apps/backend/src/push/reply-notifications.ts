@@ -11,6 +11,7 @@ const replyCategory = 'jarvis.reply';
 const privateReply = 'New reply from Jarvis';
 const retryBackoffMs = [1_000, 5_000, 20_000, 60_000] as const;
 export const replyNotificationMaxAttempts = 5;
+const privatePreviewPattern = /\b(?:health|healthcare|medical|medicine|medication|medications|diagnosis|diagnoses|symptom|symptoms|patient|clinic|therapy|prescription|prescriptions|bank|banking|account|accounts|credit[ -]?card|debit[ -]?card|iban|routing[ -]?number|swift[ -]?code|sundhed|medicin|diagnose|sygehus|bankkonto|kontonummer|kreditkort|saldo)\b/iu;
 
 export interface ReplyNotificationInput {
   readonly sessionId: string;
@@ -38,7 +39,7 @@ export function safeReplyNotificationPreview(text: string): string {
     const codePoint = character.codePointAt(0);
     return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
   }).join('').replace(/\s+/gu, ' ').trim();
-  if (shouldRedact(line)) return privateReply;
+  if (shouldRedact(line) || privatePreviewPattern.test(line)) return privateReply;
   const characters = [...line];
   if (characters.length <= 160) return characters.join('') || privateReply;
   return `${characters.slice(0, 157).join('').trimEnd()}...`;
@@ -126,16 +127,21 @@ export function createReplyNotificationWorker(
       const expiresAt = delivery.expiresAt.getTime();
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(6_000)]);
       let outcome: 'accepted' | 'retry' | 'failed' | 'expired' | 'invalid_token' = 'failed';
-      let statusCode: number | null = null;
+      let result: Awaited<ReturnType<ApprovalNotificationSender['send']>>;
       try {
-        const result = await services.sender.send(
+        result = await services.sender.send(
           delivery.deviceToken,
           payload,
           expiresAt,
           signal,
           delivery.notificationId,
         );
-        statusCode = result.statusCode ?? null;
+      } catch {
+        if (controller.signal.aborted) break;
+        result = { accepted: false, invalidToken: false, retryable: true };
+      }
+      const statusCode = result.statusCode ?? null;
+      try {
         if (result.invalidToken) {
           await services.store.invalidateRegistration(
             owner, delivery.registrationId, delivery.id, delivery.claimToken, statusCode,
@@ -166,10 +172,8 @@ export function createReplyNotificationWorker(
           );
         }
       } catch {
-        if (controller.signal.aborted) break;
-        await services.store.failed(
-          delivery.id, delivery.claimToken, 'provider_rejected', statusCode,
-        );
+        logger.warn('reply_notification.persistence_unavailable');
+        continue;
       }
       completed += 1;
       logger.info({
@@ -186,8 +190,10 @@ export function createReplyNotificationWorker(
       rerun = true;
       return;
     }
-    running = runOnce()
-      .catch(() => logger.warn('reply_notification.delivery_unavailable'))
+    running = (async () => {
+      try { await runOnce(); }
+      catch { logger.warn('reply_notification.delivery_unavailable'); }
+    })()
       .finally(() => {
         running = undefined;
         if (rerun && !stopping) {

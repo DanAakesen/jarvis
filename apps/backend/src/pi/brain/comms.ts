@@ -23,7 +23,7 @@ export interface BrainCommsOptions {
   readonly ownerObjectId: string;
   readonly pushEnabled?: boolean;
   /** The one push path of a finished chat message (iOS push, mirrored to the Watch by the phone). Called exactly once per message. */
-  readonly push: (message: { sessionId: string; messageId: string }) => void;
+  readonly push: (message: { sessionId: string; messageId: string; text: string }) => void;
   /** Tells an open app to refresh its chat history. */
   readonly announce: () => void;
   readonly now: () => Date;
@@ -77,7 +77,7 @@ export function createBrainComms(options: BrainCommsOptions) {
       .catch(() => undefined);
     options.announce();
     if (options.pushEnabled !== false) {
-      options.push({ sessionId: session.id, messageId: message.id });
+      options.push({ sessionId: session.id, messageId: message.id, text });
     }
     return { messageId: message.id, sessionId: session.id };
   }

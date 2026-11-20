@@ -38,6 +38,11 @@ export interface ApprovalNotificationServices {
   replyNotifications: ReplyNotificationStore;
 }
 
+export interface ApprovalNotificationDispatcher {
+  (confirmation: BrowserConfirmation): Promise<void>;
+  waitForTurn(turnMessageId: string): Promise<void>;
+}
+
 export interface ApprovalNotificationPayloadInput extends BrowserConfirmation {
   showActions: boolean;
   timeZone: string;
@@ -210,46 +215,113 @@ export function createApprovalNotificationDispatcher(
   services: ApprovalNotificationServices,
   logger: Pick<FastifyBaseLogger, 'warn'>,
   now: () => number = Date.now,
-): (confirmation: BrowserConfirmation) => Promise<void> {
-  return async (confirmation) => {
+): ApprovalNotificationDispatcher {
+  const inFlightByTurn = new Map<string, Set<Promise<void>>>();
+
+  const deliver = async (confirmation: BrowserConfirmation): Promise<void> => {
     try {
       const expiresAt = Date.parse(confirmation.expiresAt);
       if (!Number.isFinite(expiresAt) || expiresAt <= now()) return;
-      if (!await services.replyNotifications.claimApproval({
+      const claim = await services.replyNotifications.claimApproval({
         owner,
         confirmationId: confirmation.id,
         turnMessageId: confirmation.turnMessageId ?? null,
         expiresAt: new Date(expiresAt),
-      })) return;
-      void (async () => {
-        const registrations = await services.store.list(owner);
-        await Promise.all(registrations.map(async (registration) => {
+      });
+      if (!claim.claimed) return;
+      await Promise.all(claim.deliveries.map(async (registration) => {
+        let result: ApprovalNotificationPushResult;
+        try {
+          result = await services.sender.send(
+            registration.deviceToken,
+            approvalNotificationPayload({
+              ...confirmation,
+              showActions: registration.showActions,
+              timeZone: registration.timeZone,
+            }),
+            expiresAt,
+            AbortSignal.timeout(6000),
+            confirmation.id,
+          );
+        } catch {
+          logger.warn('approval_notification.push_unavailable');
           try {
-            const result = await services.sender.send(
-              registration.deviceToken,
-              approvalNotificationPayload({
-                ...confirmation,
-                showActions: registration.showActions,
-                timeZone: registration.timeZone,
-              }),
-              expiresAt,
-              AbortSignal.timeout(6000),
+            await services.replyNotifications.approvalFailed(
+              owner,
               confirmation.id,
+              registration.registrationId,
+              'transport_unavailable',
+              null,
             );
-            if (result.invalidToken) {
-              await services.store.remove(owner, registration.deviceToken);
-            } else if (!result.accepted) {
-              logger.warn('approval_notification.push_not_accepted');
-            }
           } catch {
-            logger.warn('approval_notification.push_unavailable');
+            logger.warn('approval_notification.persistence_unavailable');
           }
-        }));
-      })().catch(() => logger.warn('approval_notification.delivery_unavailable'));
+          return;
+        }
+        try {
+          if (result.invalidToken) {
+            await services.replyNotifications.approvalInvalidToken(
+              owner, confirmation.id, registration.registrationId, result.statusCode ?? null,
+            );
+          } else if (result.accepted) {
+            await services.replyNotifications.approvalAccepted(
+              owner, confirmation.id, registration.registrationId, result.statusCode ?? null,
+            );
+          } else {
+            await services.replyNotifications.approvalFailed(
+              owner,
+              confirmation.id,
+              registration.registrationId,
+              'provider_rejected',
+              result.statusCode ?? null,
+            );
+            logger.warn('approval_notification.push_not_accepted');
+          }
+        } catch {
+          logger.warn('approval_notification.persistence_unavailable');
+        }
+      }));
     } catch {
       logger.warn('approval_notification.delivery_unavailable');
     }
   };
+
+  const dispatch = ((confirmation: BrowserConfirmation) => {
+    const operation = deliver(confirmation);
+    const turnMessageId = confirmation.turnMessageId;
+    if (turnMessageId !== undefined) {
+      const operations = inFlightByTurn.get(turnMessageId) ?? new Set<Promise<void>>();
+      operations.add(operation);
+      inFlightByTurn.set(turnMessageId, operations);
+      void operation.finally(() => {
+        operations.delete(operation);
+        if (operations.size === 0) inFlightByTurn.delete(turnMessageId);
+      });
+    }
+    return operation;
+  }) as ApprovalNotificationDispatcher;
+
+  dispatch.waitForTurn = async (turnMessageId: string): Promise<void> => {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      const operations = inFlightByTurn.get(turnMessageId);
+      if (operations?.size) {
+        await Promise.allSettled([...operations]);
+        continue;
+      }
+      try {
+        if (await services.replyNotifications.reconciliationComplete(
+          owner, turnMessageId, new Date(now()),
+        )) return;
+      } catch {
+        logger.warn('approval_notification.persistence_unavailable');
+        return;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
+    logger.warn('approval_notification.reconciliation_timeout');
+  };
+
+  return dispatch;
 }
 
 export function registerApprovalNotificationRoutes<Logger extends FastifyBaseLogger>(

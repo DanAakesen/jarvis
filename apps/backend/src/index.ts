@@ -1405,6 +1405,7 @@ try {
               replyDeliveryFailed: replyDelivery.failed,
               replyDeliveryExpired: replyDelivery.expired,
               replyDeliveryInvalidToken: replyDelivery.invalidToken,
+              replyDeliverySuppressed: replyDelivery.suppressed,
               replyDeliveryLastFailureAt: replyDelivery.lastFailureAt,
               ...(replyDelivery.failed + replyDelivery.expired > 0
                 ? { reason: 'reply_delivery_failed' }
@@ -1585,6 +1586,7 @@ try {
     ...(activityKit ? { activityKit } : {}),
     ...(approvalNotifications ? { approvalNotifications } : {}),
     ...(notifyApproval ? { notifyApproval } : {}),
+    ...(notifyApproval ? { awaitReplyNotificationApproval: notifyApproval.waitForTurn } : {}),
     ...(notifyReply ? { notifyReply } : {}),
     ...(replyNotificationWorker ? { replyNotificationWorker } : {}),
     ...(vaultModule && config.foundryProjectEndpoint && credential ? {

@@ -25,12 +25,14 @@ contract; silence after a rejected upload is not accepted.
 
 An ordinary reply notification is a route into the existing Chat surface, not a
 new visual surface. The system notification uses the Jarvis title, one concise
-line and the existing `jarvis.reply` category. Private or credential-like
-content uses **New reply from Jarvis**; it does not reveal an approval summary,
-preview or message fragment.
+line and the existing `jarvis.reply` category. Private, credential-like, health/medical, medication/diagnosis, banking or
+account content uses **New reply from Jarvis**; it does not reveal an approval
+summary, preview or message fragment.
 
 On iPhone or Watch, the tap opens Chat and scrolls without animation to the
-exact stored assistant message. Chat pauses its latest-message follow state and
+exact stored assistant message. On Watch, a tap received during an active turn,
+dictation or Voice stays queued until the activity is idle, then opens the same
+target; the owner sees no guessed or discarded navigation. Chat pauses its latest-message follow state and
 offers the existing Jump to latest control, so historical deep links do not get
 immediately pulled to the bottom. The ordinary reply branch is distinct from
 the existing proactive-item branch and the authenticated approval actions.

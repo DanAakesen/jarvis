@@ -956,6 +956,9 @@ return {
               });
             }
             const replyBlocks = app.chatBlocks.take(sessionId);
+            if (app.replyNotificationsEnabled) {
+              await app.awaitReplyNotificationApproval(turnMessageId);
+            }
             const assistantMessage = await store.addMessage({
               sessionId,
               role: 'jarvis',

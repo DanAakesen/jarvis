@@ -7,7 +7,7 @@ import OSLog
 @MainActor
 final class WatchModel: ObservableObject {
     struct Message: Identifiable { var id = UUID().uuidString; var user: Bool; var text: String }
-    enum DictationState { case idle, connecting, listening, finishing }
+    enum DictationState: Equatable { case idle, connecting, listening, finishing }
     @Published var messages: [Message] = []
     @Published private var composer = WatchComposer()
     var draft: String {
@@ -36,7 +36,7 @@ final class WatchModel: ObservableObject {
     private var captureLevel = WatchCaptureLevel()
     private var heartbeat: Task<Void, Never>?
     private var historyRequest = UUID()
-    private var replyTarget: JarvisReplyNotificationTarget?
+    private var replyRoute = WatchReplyRouteState()
     private var turn: UUID?
     private var replyID: String?
     private var voiceGeneration = UUID()
@@ -72,7 +72,7 @@ final class WatchModel: ObservableObject {
         connection.onEvent = { [weak self] in self?.receive($0) }
         connection.onSignOut = { [weak self] in
             guard let self else { return }
-            self.replyTarget = nil
+            self.replyRoute.clear()
             self.replyTargetMessageID = nil
             JarvisReplyNotificationTarget.pending()?.clear()
             let active = self.dictationState != .idle
@@ -104,18 +104,40 @@ final class WatchModel: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
         guard !busy, !startingVoice, voiceID == nil, connection.reachable else { return }
-        if let replyTarget {
-            _ = await loadReplyTarget(replyTarget)
-            return
-        }
+        if await routePendingReplyIfPossible() || replyRoute.pending != nil { return }
         _ = await loadHistory()
     }
 
     @discardableResult
     func openReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
-        replyTarget = target
+        target.store()
+        replyRoute.receive(target)
         replyTargetMessageID = nil
-        return await loadReplyTarget(target)
+        return await routePendingReplyIfPossible()
+    }
+
+    @discardableResult
+    func routePendingReplyIfPossible() async -> Bool {
+        guard let target = replyRoute.takeWhenAvailable(
+            reachable: connection.reachable,
+            busy: busy,
+            startingVoice: startingVoice,
+            voiceActive: voiceID != nil,
+            dictating: dictationState != .idle
+        ) else {
+            return false
+        }
+        let opened = await loadReplyTarget(target)
+        if opened {
+            replyRoute.opened(target)
+            target.clear()
+        } else {
+            replyRoute.failed(target)
+        }
+        if let pending = replyRoute.pending, pending != target {
+            Task { await routePendingReplyIfPossible() }
+        }
+        return opened
     }
 
     private func loadReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
@@ -133,7 +155,6 @@ final class WatchModel: ObservableObject {
             }
             replyTargetMessageID = target.messageID
             historyError = nil
-            target.clear()
             return true
         } catch {
             historyError = (error as? WatchFailure)?.message ?? "History could not refresh. Check Jarvis on your iPhone."
@@ -167,8 +188,6 @@ final class WatchModel: ObservableObject {
 
     func send() async {
         guard !busy, !startingVoice, voiceID == nil, dictationState == .idle, let text = composer.beginSend() else { return }
-        replyTarget = nil
-        replyTargetMessageID = nil
         historyRequest = UUID(); historyError = nil
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id
@@ -181,6 +200,7 @@ final class WatchModel: ObservableObject {
             busy = false; turn = nil; composer.finishSend(success: false)
             messages.removeAll { $0.id == responseID }
             show(error)
+            Task { await routePendingReplyIfPossible() }
         }
     }
     func startVoice() async {
@@ -192,6 +212,7 @@ final class WatchModel: ObservableObject {
         // A cancelled start clears these itself, so a late finish cannot reset a newer attempt.
         defer {
             if voiceStartToken == token { voiceStartToken = nil; startingVoice = false; waitingForVoiceConnection = false }
+            Task { await routePendingReplyIfPossible() }
         }
         func elapsedMs() -> Int { Int(Date().timeIntervalSince(startedAt) * 1_000) }
         do {
@@ -419,6 +440,7 @@ final class WatchModel: ObservableObject {
             draft = draft.isEmpty ? text : draft + " " + text
             transcriptionDeadline.cancel()
             dictationID = nil; dictationCapture = nil; dictationTranscription = nil; dictationState = .idle
+            Task { await routePendingReplyIfPossible() }
         } catch {
             if dictationGeneration == epoch { failDictation(error) }
         }
@@ -471,6 +493,7 @@ final class WatchModel: ObservableObject {
         if let id {
             Task { _ = try? await connection.request(.init(action: .cancelDictation, itemID: id.uuidString)) }
         }
+        Task { await routePendingReplyIfPossible() }
     }
     func interruptDictation() {
         guard dictationState != .idle else { return }
@@ -596,6 +619,7 @@ final class WatchModel: ObservableObject {
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
         audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
+        Task { await routePendingReplyIfPossible() }
     }
     private func beginLocalVoiceEnd(captureEndReason: String) {
         voiceRecovery?.cancel(); voiceRecovery = nil
@@ -641,6 +665,7 @@ final class WatchModel: ObservableObject {
                 case .chatError: error = event.text; busy = false; turn = nil
                 default: break
                 }
+                if !busy { Task { await routePendingReplyIfPossible() } }
             }
         }
         guard event.requestID == voiceID else { return }

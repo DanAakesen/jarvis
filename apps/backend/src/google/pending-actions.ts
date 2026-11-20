@@ -111,15 +111,17 @@ export class PendingGoogleActions {
     }
     this.onChanged();
     if (input.scope === 'calendar') {
-      action.notificationReady = Promise.resolve()
-        .then(() => this.onConfirmationPending({
+      try {
+        action.notificationReady = Promise.resolve(this.onConfirmationPending({
           id: action.browserId,
           actionKind: 'calendar_change',
           summary: action.summary,
           expiresAt: action.confirmation.presentation.expiresAt,
           turnMessageId: action.sourceMessageId,
-        }))
-        .catch(() => undefined);
+        })).catch(() => undefined);
+      } catch {
+        action.notificationReady = Promise.resolve();
+      }
     }
     return {
       ...confirmation.presentation,
