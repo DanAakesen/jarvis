@@ -80,6 +80,7 @@ function setup(...bridges: RemoteMcpBridge[]) {
           identity: 'github:workflow_run:42',
           label: 'Deploy 42',
           observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
         },
         {
           source: 'mail',
@@ -87,6 +88,7 @@ function setup(...bridges: RemoteMcpBridge[]) {
           identity: 'gmail-message:9',
           label: 'Work travel mail',
           observedAt: '2026-11-16T09:00:00.000Z',
+          verifiedAt: '2026-11-16T09:01:00.000Z',
         },
       ],
     },
@@ -142,6 +144,7 @@ describe('a brain wake over the Jarvis MCP server', () => {
         evidence: [{
           source: 'factory', ref: 'github:workflow_run:42', identity: 'github:workflow_run:42',
           label: 'Deploy 42', observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
         }],
       },
     });
@@ -171,6 +174,7 @@ describe('a brain wake over the Jarvis MCP server', () => {
         evidence: [{
           source: 'mail', ref: 'gmail-message:9', identity: 'gmail-message:9',
           label: 'Work travel mail', observedAt: '2026-11-16T09:00:00.000Z',
+          verifiedAt: '2026-11-16T09:01:00.000Z',
         }],
       },
     });
@@ -196,6 +200,7 @@ describe('a brain wake over the Jarvis MCP server', () => {
           identity: 'github:workflow_run:999',
           label: 'Invented deploy',
           observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
         }],
       },
     });
@@ -224,6 +229,7 @@ describe('a brain wake over the Jarvis MCP server', () => {
           identity: 'github:workflow_run:42',
           label: 'A model-written label with invented detail',
           observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
         }],
       },
     });
@@ -234,7 +240,39 @@ describe('a brain wake over the Jarvis MCP server', () => {
       identity: 'github:workflow_run:42',
       label: 'Deploy 42',
       observedAt: '2026-11-16T09:58:00.000Z',
+      verifiedAt: '2026-11-16T09:59:00.000Z',
     }]);
+  });
+
+  it('refuses wake evidence that predates a source disable epoch even after re-enable', async () => {
+    const { tool, wake, proactive, pushes } = setup();
+    await proactive.settings.patch({ sources: { factory: false } });
+    await proactive.settings.patch({ sources: { factory: true } });
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The old deploy event failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:42',
+          identity: 'github:workflow_run:42',
+          label: 'Deploy 42',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('does not match') },
+    });
+    expect(pushes).toEqual([]);
   });
 
   it.each([
@@ -267,6 +305,7 @@ describe('a brain wake over the Jarvis MCP server', () => {
           identity,
           label: 'Deploy 42',
           observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
         }],
       },
     });
@@ -370,6 +409,7 @@ describe('chat and the brain stay apart', () => {
         evidence: [{
           source: 'factory', ref: 'factory:test', identity: 'factory:test',
           label: 'Factory event', observedAt: '2026-11-16T10:00:00.000Z',
+          verifiedAt: '2026-11-16T10:00:00.000Z',
         }],
       },
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },

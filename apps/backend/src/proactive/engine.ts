@@ -205,6 +205,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         await abortable(store.sources.upsert({
           id: result.source, label: sourceLabels[result.source], enabled: true,
           state: result.state, reason: result.reason, observedAt: result.observedAt,
+          verifiedAt: now().toISOString(),
         }), controller.signal);
       }
       const mirror = options.vaultMirrorStatusReader

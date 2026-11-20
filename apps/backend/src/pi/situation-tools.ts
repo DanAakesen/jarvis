@@ -104,7 +104,8 @@ export function createSituationTools(options: {
           if (active.brain && isRecord(verified) &&
               typeof verified.source === 'string' && sourceIds.includes(verified.source as SourceId) &&
               typeof verified.id === 'string' && typeof verified.identity === 'string' &&
-              typeof verified.label === 'string' && typeof verified.observedAt === 'string') {
+              typeof verified.label === 'string' && typeof verified.observedAt === 'string' &&
+              typeof verified.verifiedAt === 'string') {
             active.brain.evidence ??= [];
             active.brain.evidence.push({
               source: verified.source,
@@ -112,6 +113,7 @@ export function createSituationTools(options: {
               identity: verified.identity,
               label: verified.label,
               observedAt: verified.observedAt,
+              verifiedAt: verified.verifiedAt,
             });
           }
           return result;

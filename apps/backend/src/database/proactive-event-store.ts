@@ -289,38 +289,75 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
           source_id: keyof typeof settings.sources;
           state: 'ok' | 'unavailable' | 'stale';
           observed_at: Date | string | null;
+          verified_at: Date | string;
           invalidated_at: Date | string | null;
-        }>(`SELECT source_id, state, observed_at, invalidated_at
+        }>(`SELECT source_id, state, observed_at, verified_at, invalidated_at
           FROM dbo.proactive_source_status
           WHERE owner_object_id = @owner;`);
         const statusBySource = new Map(sourceStatuses.recordset.map((row) =>
           [row.source_id, row] as const));
+        const sources = stateValue.sources.map((source) => {
+          const status = statusBySource.get(source.id);
+          if (!settings.sources[source.id]) return { ...source, state: 'disabled' as const };
+          if (!status) return source;
+          const observedAt = status.observed_at
+            ? (status.observed_at instanceof Date
+              ? status.observed_at
+              : new Date(status.observed_at))
+            : null;
+          const verifiedAt = status.verified_at instanceof Date
+            ? status.verified_at
+            : new Date(status.verified_at);
+          const locationStale = source.id === 'location' && observedAt !== null &&
+            at.getTime() - observedAt.getTime() > LOCATION_FRESHNESS_MS;
+          const invalidated = status.invalidated_at !== null &&
+            verifiedAt.getTime() <= (status.invalidated_at instanceof Date
+              ? status.invalidated_at
+              : new Date(status.invalidated_at)).getTime();
+          const generationMismatch = source.verifiedAt !== verifiedAt.toISOString();
+          return {
+            ...source,
+            state: status.state === 'stale' || invalidated || generationMismatch || locationStale ? 'stale' as const
+              : status.state === 'ok' && observedAt !== null ? 'fresh' as const
+                : 'missing' as const,
+            observedAt: observedAt?.toISOString() ?? null,
+            verifiedAt: verifiedAt.toISOString(),
+          };
+        });
+        const freshSources = new Set(sources
+          .filter(({ state: value }) => value === 'fresh')
+          .map(({ id: value }) => value));
+        const refs = stateValue.refs.filter((ref) => {
+          const status = statusBySource.get(ref.source);
+          const invalidatedAt = status?.invalidated_at
+            ? (status.invalidated_at instanceof Date
+              ? status.invalidated_at
+              : new Date(status.invalidated_at))
+            : null;
+          return freshSources.has(ref.source) &&
+            ref.verifiedAt !== undefined &&
+            (!invalidatedAt || Date.parse(ref.verifiedAt) > invalidatedAt.getTime()) &&
+            (ref.expiresAt === null || Date.parse(ref.expiresAt) > at.getTime());
+        });
+        const validRefIds = new Set(refs.map(({ id: value }) => value));
         const currentState = {
           ...stateValue,
-          sources: stateValue.sources.map((source) => {
-            const status = statusBySource.get(source.id);
-            if (!settings.sources[source.id]) return { ...source, state: 'disabled' as const };
-            if (!status) return source;
-            const observedAt = status.observed_at
-              ? (status.observed_at instanceof Date
-                ? status.observed_at
-                : new Date(status.observed_at))
-              : null;
-            const locationStale = source.id === 'location' && observedAt !== null &&
-              at.getTime() - observedAt.getTime() > LOCATION_FRESHNESS_MS;
-            const invalidated = status.invalidated_at !== null &&
-              observedAt !== null &&
-              observedAt.getTime() <= (status.invalidated_at instanceof Date
-                ? status.invalidated_at
-                : new Date(status.invalidated_at)).getTime();
-            return {
-              ...source,
-              state: status.state === 'stale' || invalidated || locationStale ? 'stale' as const
-                : status.state === 'ok' && observedAt !== null ? 'fresh' as const
-                  : 'missing' as const,
-              observedAt: observedAt?.toISOString() ?? null,
-            };
-          }),
+          sources: sources.map((source) => ({
+            ...source,
+            refIds: source.refIds.filter((value) => validRefIds.has(value)),
+          })),
+          refs,
+          facts: stateValue.facts.filter(({ source, stale, refIds }) =>
+            freshSources.has(source) && !stale &&
+            refIds.every((value) => validRefIds.has(value))),
+          followUps: stateValue.followUps.filter(({ refIds }) =>
+            refIds.every((value) => validRefIds.has(value))),
+          summaryRefIds: stateValue.summaryRefIds.every((value) => validRefIds.has(value))
+            ? [...stateValue.summaryRefIds]
+            : [],
+          summary: stateValue.summaryRefIds.every((value) => validRefIds.has(value))
+            ? stateValue.summary
+            : '',
         };
         const desiredActions = currentSituationFollowUpActions(currentState, settings, at);
         const desiredIdentities = new Set(desiredActions.map((action) =>

@@ -12,6 +12,18 @@ async function query<T>(request: sql.Request, statement: string, signal: AbortSi
   finally { signal.removeEventListener('abort', cancel); }
 }
 
+function proactiveEvidence(value: unknown): value is PiProactiveMessageContext['evidence'][number] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.source === 'string' &&
+    (entry.ref === null || typeof entry.ref === 'string') &&
+    (entry.identity === null || typeof entry.identity === 'string') &&
+    typeof entry.label === 'string' &&
+    (entry.observedAt === null || typeof entry.observedAt === 'string') &&
+    typeof entry.verifiedAt === 'string' &&
+    Number.isFinite(Date.parse(entry.verifiedAt));
+}
+
 interface ConversationRecord {
   agent_name: string;
   conversation_id: string;
@@ -220,7 +232,9 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
         messageId: String(row.message_id),
         textHash: row.text_hash.trim(),
         text: row.message_text ?? '',
-        evidence: Array.isArray(evidence) ? evidence as PiProactiveMessageContext['evidence'] : [],
+        evidence: Array.isArray(evidence)
+          ? evidence.filter(proactiveEvidence).slice(0, 8)
+          : [],
         followUpIds: Array.isArray(followUpIds)
           ? followUpIds.filter((value): value is string => typeof value === 'string').slice(0, 16)
           : [],

@@ -259,13 +259,30 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 ON target.owner_object_id = @owner AND target.source_id = source.source_id
                 WHEN MATCHED THEN UPDATE SET
                   state = N'stale', reason = N'source_disabled',
-                  invalidated_at = CASE WHEN target.observed_at > @invalidatedAt
-                    THEN target.observed_at ELSE @invalidatedAt END
+                  invalidated_at = CASE
+                    WHEN target.observed_at >= target.verified_at
+                      AND target.observed_at > @invalidatedAt THEN target.observed_at
+                    WHEN target.verified_at > @invalidatedAt THEN target.verified_at
+                    ELSE @invalidatedAt END,
+                  verified_at = CASE WHEN target.verified_at > @invalidatedAt
+                    THEN target.verified_at ELSE @invalidatedAt END
                 WHEN NOT MATCHED THEN INSERT (
-                  owner_object_id, source_id, state, reason, observed_at, invalidated_at
+                  owner_object_id, source_id, state, reason, observed_at, verified_at, invalidated_at
                 ) VALUES (
-                  @owner, source.source_id, N'stale', N'source_disabled', @invalidatedAt, @invalidatedAt
-                );`);
+                  @owner, source.source_id, N'stale', N'source_disabled',
+                  @invalidatedAt, @invalidatedAt, @invalidatedAt
+                );
+                UPDATE authority
+                  SET invalidated_at = status.invalidated_at,
+                    stale_reason = N'source_disabled'
+                FROM dbo.pi_situation_ref_authority AS authority
+                INNER JOIN dbo.proactive_source_status AS status
+                  ON status.owner_object_id = authority.owner_object_id
+                  AND status.source_id COLLATE Latin1_General_100_BIN2 = authority.source_id
+                INNER JOIN OPENJSON(@disabledSources) AS disabled
+                  ON disabled.[value] COLLATE Latin1_General_100_BIN2 = authority.source_id
+                WHERE authority.owner_object_id = @owner
+                  AND authority.invalidated_at IS NULL;`);
           }
           await transaction.commit();
           if (current.paused !== updated.paused ||
@@ -653,9 +670,10 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             state: SourceStatus['state'];
             reason: string | null;
             observed_at: Date | string;
+            verified_at: Date | string;
             invalidated_at: Date | string | null;
           }>(
-            `SELECT source_id, state, reason, observed_at, invalidated_at
+            `SELECT source_id, state, reason, observed_at, verified_at, invalidated_at
               FROM dbo.proactive_source_status WHERE owner_object_id = @owner;`);
         return recordset.map((row) => ({
           id: row.source_id,
@@ -664,27 +682,31 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           state: row.state,
           reason: row.reason,
           observedAt: iso(row.observed_at),
+          verifiedAt: iso(row.verified_at),
           invalidatedAt: row.invalidated_at ? iso(row.invalidated_at) : null,
         }));
       },
       async upsert(status) {
+        const verifiedAt = status.verifiedAt ?? status.observedAt ?? new Date().toISOString();
         await pool.request()
           .input('owner', sql.UniqueIdentifier, owner)
           .input('source', sql.NVarChar(16), status.id)
           .input('state', sql.NVarChar(16), status.state)
           .input('reason', sql.NVarChar(64), status.reason)
           .input('observedAt', sql.DateTime2, status.observedAt ? new Date(status.observedAt) : new Date())
+          .input('verifiedAt', sql.DateTime2, new Date(verifiedAt))
           .query(`MERGE dbo.proactive_source_status WITH (HOLDLOCK) AS target
             USING (SELECT @owner AS owner_object_id, @source AS source_id) AS source
             ON target.owner_object_id = source.owner_object_id AND target.source_id = source.source_id
-            WHEN MATCHED AND @observedAt >= target.observed_at THEN UPDATE
-              SET state = CASE WHEN target.invalidated_at IS NULL OR @observedAt > target.invalidated_at
+            WHEN MATCHED AND @verifiedAt >= target.verified_at THEN UPDATE
+              SET state = CASE WHEN target.invalidated_at IS NULL OR @verifiedAt > target.invalidated_at
                   THEN @state ELSE N'stale' END,
-                reason = CASE WHEN target.invalidated_at IS NULL OR @observedAt > target.invalidated_at
+                reason = CASE WHEN target.invalidated_at IS NULL OR @verifiedAt > target.invalidated_at
                   THEN @reason ELSE N'observation_not_newer_than_source_invalidation' END,
-                observed_at = @observedAt
-            WHEN NOT MATCHED THEN INSERT (owner_object_id, source_id, state, reason, observed_at)
-              VALUES (@owner, @source, @state, @reason, @observedAt);`);
+                observed_at = @observedAt, verified_at = @verifiedAt
+            WHEN NOT MATCHED THEN INSERT (
+              owner_object_id, source_id, state, reason, observed_at, verified_at
+            ) VALUES (@owner, @source, @state, @reason, @observedAt, @verifiedAt);`);
       },
     },
     spend: {

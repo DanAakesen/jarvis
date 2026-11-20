@@ -20,6 +20,7 @@ const sourceSchema = z.object({
   id: sourceId,
   state: z.enum(['fresh', 'stale', 'missing', 'disabled']),
   observedAt: iso.nullable(),
+  verifiedAt: iso.optional(),
   expiresAt: iso.nullable(),
   reason: z.string().max(160).nullable(),
   refIds: z.array(id).max(8),
@@ -33,6 +34,7 @@ const refSchema = z.object({
   observedAt: iso,
   expiresAt: iso.nullable(),
   materialHash: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
+  verifiedAt: iso.optional(),
 }).strict();
 
 const factSchema = z.object({
@@ -92,7 +94,19 @@ const schema = z.object({
 });
 
 export type PiSituationState = z.infer<typeof schema>;
-export type PiSituationAuthorityRef = PiSituationState['refs'][number];
+export type PiSituationAuthorityRef = PiSituationState['refs'][number] & {
+  readonly verifiedAt: string;
+  readonly receiptId?: string;
+  readonly invalidatedAt: string | null;
+  readonly staleReason: string | null;
+};
+export interface PiSituationSourceObservation {
+  readonly source: SourceId;
+  readonly state: SourceStatus['state'];
+  readonly reason: string | null;
+  readonly observedAt: string | null;
+  readonly verifiedAt: string;
+}
 const patchSchema = z.object({
   asOf: iso.optional(),
   summary: z.union([
@@ -159,6 +173,7 @@ export interface PiSituationCommit {
   readonly policyRevision: string;
   readonly followUpActions: readonly PiSituationFollowUpAction[];
   readonly authoritativeRefs: readonly PiSituationAuthorityRef[];
+  readonly observations: readonly PiSituationSourceObservation[];
 }
 
 export type PiSituationFollowUpAction =
@@ -184,6 +199,7 @@ export type PiSituationFollowUpAction =
   };
 
 export interface PiSituationStore {
+  readonly atomicObservations: boolean;
   read(owner: string, signal: AbortSignal): Promise<PiSituationRecord | null>;
   initialize(owner: string, state: PiSituationState, at: Date, signal: AbortSignal): Promise<PiSituationRecord>;
   commit(input: PiSituationCommit, signal: AbortSignal): Promise<PiSituationRecord>;
@@ -296,8 +312,23 @@ export function piSituationHash(state: PiSituationState): string {
   return createHash('sha256').update(JSON.stringify(state)).digest('hex');
 }
 
-function authorityKey(ref: Pick<PiSituationAuthorityRef, 'source' | 'id'>): string {
-  return `${ref.source}\u0000${ref.id}`;
+function authorityKey(
+  ref: Pick<PiSituationState['refs'][number], 'source' | 'id' | 'verifiedAt' | 'materialHash'>,
+): string {
+  return `${ref.source}\u0000${ref.id}\u0000${ref.verifiedAt ?? ''}\u0000${ref.materialHash ?? ''}`;
+}
+
+function stateRef(authority: PiSituationAuthorityRef): PiSituationState['refs'][number] {
+  return {
+    id: authority.id,
+    source: authority.source,
+    identity: authority.identity,
+    label: authority.label,
+    observedAt: authority.observedAt,
+    expiresAt: authority.expiresAt,
+    ...(authority.materialHash ? { materialHash: authority.materialHash } : {}),
+    verifiedAt: authority.verifiedAt,
+  };
 }
 
 export function canonicalizePiSituationState(
@@ -313,7 +344,7 @@ export function canonicalizePiSituationState(
         'A situational reference was not observed by a provider or verified by a live lookup.',
       );
     }
-    return canonical;
+    return stateRef(canonical);
   });
   return parsePiSituationState({ ...state, refs });
 }
@@ -325,7 +356,7 @@ export function retainAuthoritativePiSituationState(
   const authority = new Map(authoritativeRefs.map((ref) => [authorityKey(ref), structuredClone(ref)]));
   const refs = state.refs.flatMap((ref) => {
     const canonical = authority.get(authorityKey(ref));
-    return canonical ? [canonical] : [];
+    return canonical ? [stateRef(canonical)] : [];
   });
   const validRefIds = new Set(refs.map(({ id: value }) => value));
   const facts = state.facts.filter(({ refIds }) => refIds.every((value) => validRefIds.has(value)));
@@ -348,15 +379,16 @@ export function retainAuthoritativePiSituationState(
 }
 
 export function sourceRefsFor(state: PiSituationState): unknown {
-  return state.refs.map(({ id: value, source, identity, label, observedAt, expiresAt, materialHash }) => ({
+  return state.refs.map(({ id: value, source, identity, label, observedAt, expiresAt, materialHash, verifiedAt }) => ({
     id: value, source, identity, label, observedAt, expiresAt,
     ...(materialHash ? { materialHash } : {}),
+    ...(verifiedAt ? { verifiedAt } : {}),
   }));
 }
 
 export function freshnessFor(state: PiSituationState): unknown {
-  return state.sources.map(({ id: value, state: freshness, observedAt, expiresAt, reason }) => ({
-    source: value, state: freshness, observedAt, expiresAt, reason,
+  return state.sources.map(({ id: value, state: freshness, observedAt, verifiedAt, expiresAt, reason }) => ({
+    source: value, state: freshness, observedAt, verifiedAt, expiresAt, reason,
   }));
 }
 
@@ -376,8 +408,9 @@ function emptyState(now: Date, settings?: ProactiveSettings, statuses?: readonly
     sources: sourceIds.map((value) => {
       const status = byStatus?.get(value);
       const enabled = settings?.sources[value] ?? true;
-      const invalidated = status?.invalidatedAt && status.observedAt &&
-        Date.parse(status.observedAt) <= Date.parse(status.invalidatedAt);
+      const verifiedAt = status?.verifiedAt ?? status?.observedAt;
+      const invalidated = status?.invalidatedAt && verifiedAt &&
+        Date.parse(verifiedAt) <= Date.parse(status.invalidatedAt);
       const state = !enabled ? 'disabled' : invalidated ? 'stale' : status?.state === 'ok' ? 'fresh'
         : status?.state === 'stale' ? 'stale'
           : 'missing';
@@ -385,6 +418,7 @@ function emptyState(now: Date, settings?: ProactiveSettings, statuses?: readonly
         id: value,
         state,
         observedAt: status?.observedAt ?? null,
+        ...(status?.verifiedAt ? { verifiedAt: status.verifiedAt } : {}),
         expiresAt: null,
         reason: !enabled ? 'source_disabled' : invalidated
           ? 'observation_not_newer_than_source_invalidation'
@@ -443,7 +477,9 @@ function sourceState(status: SourceStatus | undefined, now: Date, settings: Proa
 'fresh' | 'stale' | 'missing' | 'disabled' {
   if (!status?.enabled || !settings.sources[status.id]) return 'disabled';
   if (status.state === 'unavailable' || status.state === 'not_run' || status.observedAt === null) return 'missing';
-  if (status.invalidatedAt && Date.parse(status.observedAt) <= Date.parse(status.invalidatedAt)) return 'stale';
+  const verifiedAt = status.verifiedAt ?? status.observedAt;
+  if (status.invalidatedAt && verifiedAt &&
+      Date.parse(verifiedAt) <= Date.parse(status.invalidatedAt)) return 'stale';
   if (status.state === 'stale') return 'stale';
   const observed = Date.parse(status.observedAt);
   if (status.id === 'location' && Number.isFinite(observed) && now.getTime() - observed > 6 * 60 * 60_000) return 'stale';
@@ -525,6 +561,77 @@ export function createPiSituationService(options: {
   let wakeEvents: (() => void) | undefined;
   let memoryFollowUpSnapshot: PiSituationState | null = null;
 
+  async function updateMemoryObservations(
+    observations: readonly PiSituationSourceObservation[],
+  ): Promise<void> {
+    if (options.store.atomicObservations) return;
+    for (const observation of observations) {
+      await options.proactive.sources.upsert({
+        id: observation.source,
+        label: observation.source,
+        enabled: true,
+        state: observation.state,
+        reason: observation.reason,
+        observedAt: observation.observedAt,
+        verifiedAt: observation.verifiedAt,
+      });
+    }
+  }
+
+  function referenceObservations(
+    state: PiSituationState,
+  ): PiSituationSourceObservation[] {
+    const latest = new Map<SourceId, PiSituationAuthorityRef>();
+    for (const ref of state.refs) {
+      if (!ref.verifiedAt) continue;
+      const previous = latest.get(ref.source);
+      if (!previous || Date.parse(ref.verifiedAt) > Date.parse(previous.verifiedAt)) {
+        latest.set(ref.source, {
+          ...ref,
+          verifiedAt: ref.verifiedAt,
+          invalidatedAt: null,
+          staleReason: null,
+        });
+      }
+    }
+    return [...latest.values()].map((ref) => ({
+      source: ref.source,
+      state: 'ok' as const,
+      reason: null,
+      observedAt: ref.observedAt,
+      verifiedAt: ref.verifiedAt,
+    }));
+  }
+
+  function policyWithObservations<T extends {
+    settings: ProactiveSettings;
+    statuses: readonly SourceStatus[];
+  }>(
+    policy: T,
+    observations: readonly PiSituationSourceObservation[],
+  ): T {
+    const statuses = new Map(policy.statuses.map((status) => [status.id, status]));
+    for (const observation of observations) {
+      const current = statuses.get(observation.source);
+      const invalidatedAt = current?.invalidatedAt;
+      if (!policy.settings.sources[observation.source] ||
+          invalidatedAt && Date.parse(observation.verifiedAt) <= Date.parse(invalidatedAt)) {
+        continue;
+      }
+      statuses.set(observation.source, {
+        id: observation.source,
+        label: current?.label ?? observation.source,
+        enabled: true,
+        state: observation.state,
+        reason: observation.reason,
+        observedAt: observation.observedAt,
+        verifiedAt: observation.verifiedAt,
+        invalidatedAt: current?.invalidatedAt ?? null,
+      });
+    }
+    return { ...policy, statuses: [...statuses.values()] };
+  }
+
   async function currentPolicy(signal: AbortSignal): Promise<{
     readonly settings: ProactiveSettings;
     readonly revision: string;
@@ -545,7 +652,11 @@ export function createPiSituationService(options: {
     const byStatus = new Map(statuses.map((status) => [status.id, status]));
     const states = raw.sources.map((entry) => {
       const status = byStatus.get(entry.id);
-      const freshness = sourceState(status ?? {
+      const statusVerifiedAt = status?.verifiedAt ?? status?.observedAt;
+      const generationMismatch = statusVerifiedAt !== null && statusVerifiedAt !== undefined &&
+        entry.verifiedAt !== undefined &&
+        Date.parse(entry.verifiedAt) !== Date.parse(statusVerifiedAt);
+      const freshness = generationMismatch ? 'stale' : sourceState(status ?? {
         id: entry.id,
         label: entry.id,
         enabled: settings.sources[entry.id],
@@ -557,17 +668,21 @@ export function createPiSituationService(options: {
       return {
         ...entry,
         state: freshness === 'disabled' ? 'disabled' : expired ? 'stale' : freshness,
+        verifiedAt: status?.verifiedAt ?? entry.verifiedAt,
         reason: freshness === 'disabled' ? 'source_disabled'
           : expired ? 'expired' : freshness === 'missing' ? status?.reason ?? entry.reason ?? 'not_observed'
-            : freshness === 'stale' ? status?.reason ?? entry.reason ?? 'stale'
+            : freshness === 'stale' ? generationMismatch
+              ? 'source_observation_generation_mismatch'
+              : status?.reason ?? entry.reason ?? 'stale'
               : null,
       } as PiSituationState['sources'][number];
     });
     const available = new Set(states.filter(({ state }) => state === 'fresh').map(({ id: value }) => value));
-    const refIds = new Set(raw.refs.filter(({ source, observedAt, expiresAt }) => {
+    const refIds = new Set(raw.refs.filter(({ source, verifiedAt, expiresAt }) => {
       const invalidatedAt = byStatus.get(source)?.invalidatedAt;
       return available.has(source) &&
-        (!invalidatedAt || Date.parse(observedAt) > Date.parse(invalidatedAt)) &&
+        verifiedAt !== undefined &&
+        (!invalidatedAt || Date.parse(verifiedAt) > Date.parse(invalidatedAt)) &&
         (expiresAt === null || Date.parse(expiresAt) > at.getTime());
     })
       .map(({ id: value }) => value));
@@ -692,7 +807,8 @@ export function createPiSituationService(options: {
     const invalidatedFor = (ref: PiSituationState['refs'][number]) => {
       const invalidatedAt = sourceById.get(ref.source)?.invalidatedAt;
       return invalidatedAt !== undefined && invalidatedAt !== null &&
-        Date.parse(ref.observedAt) <= Date.parse(invalidatedAt);
+        (ref.verifiedAt === undefined ||
+          Date.parse(ref.verifiedAt) <= Date.parse(invalidatedAt));
     };
     for (const entry of next.sources) {
       if (policy.settings.sources[entry.id]) continue;
@@ -745,17 +861,19 @@ export function createPiSituationService(options: {
     for (const entry of next.sources) {
       const status = sourceById.get(entry.id);
       const invalidated = status?.invalidatedAt !== null && status?.invalidatedAt !== undefined &&
-        status.observedAt !== null &&
-        Date.parse(status.observedAt) <= Date.parse(status.invalidatedAt);
+        (status.verifiedAt ?? status.observedAt) !== null &&
+        Date.parse(status.verifiedAt ?? status.observedAt!) <= Date.parse(status.invalidatedAt);
       if (invalidated) {
         entry.state = 'stale';
         entry.observedAt = status!.observedAt;
+        entry.verifiedAt = status!.verifiedAt ?? status!.observedAt ?? undefined;
         entry.reason = 'observation_not_newer_than_source_invalidation';
       } else if (status && (status.state === 'stale' || status.state === 'unavailable' ||
           status.state === 'not_run' || status.observedAt === null)) {
         entry.state = status.state === 'unavailable' || status.state === 'not_run' || status.observedAt === null
           ? 'missing' : 'stale';
         entry.observedAt = status.observedAt;
+        entry.verifiedAt = status.verifiedAt ?? status.observedAt ?? undefined;
         entry.reason = status.reason;
       }
       if (entry.state === 'disabled') entry.refIds = [];
@@ -835,7 +953,11 @@ export function createPiSituationService(options: {
     return changed;
   }
 
-  function sourceRef(source: SourceId, fact: SourceResult['facts'][number]): PiSituationState['refs'][number] {
+  function sourceRef(
+    source: SourceId,
+    fact: SourceResult['facts'][number],
+    verifiedAt: string,
+  ): PiSituationAuthorityRef {
     const rawIdentity = fact.identity ?? fact.ref;
     const identityDigest = createHash('sha256').update(rawIdentity).digest('hex');
     const identity = rawIdentity.length <= 240 ? rawIdentity : `provider:${identityDigest}`;
@@ -860,6 +982,9 @@ export function createPiSituationService(options: {
       observedAt: fact.observedAt,
       expiresAt: null,
       materialHash,
+      verifiedAt,
+      invalidatedAt: null,
+      staleReason: null,
     };
   }
 
@@ -874,26 +999,17 @@ export function createPiSituationService(options: {
     }
     const observedAt = Number.isFinite(Date.parse(result.observedAt))
       ? result.observedAt : now().toISOString();
-    await options.proactive.sources.upsert({
-      id: source,
-      label: source,
-      enabled: true,
-      state: result.state === 'ok'
-        ? result.reason === 'source_stale' ? 'stale' : 'ok'
-        : 'unavailable',
-      reason: result.reason,
-      observedAt,
-    });
+    const verifiedAt = now().toISOString();
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const policy = await currentPolicy(signal);
       const status = policy.statuses.find((entry) => entry.id === source);
-      const latestObserved = status?.observedAt;
-      if (latestObserved && Date.parse(latestObserved) > Date.parse(observedAt)) {
+      const statusVerifiedAt = status?.verifiedAt ?? status?.observedAt;
+      if (statusVerifiedAt && Date.parse(statusVerifiedAt) > Date.parse(verifiedAt)) {
         return { changed: false, baseline: false, admissible: false };
       }
       const observationInvalidated = status?.invalidatedAt !== undefined &&
         status.invalidatedAt !== null &&
-        Date.parse(observedAt) <= Date.parse(status.invalidatedAt);
+        Date.parse(verifiedAt) <= Date.parse(status.invalidatedAt);
       let current = await options.store.read(options.owner, signal);
       if (!current) {
         current = await options.store.initialize(
@@ -911,11 +1027,11 @@ export function createPiSituationService(options: {
       const baseline = oldRefs.length === 0 && !previous.sources.some((entry) =>
         entry.id === source && entry.observedAt !== null);
       const observedAuthorityRefs = result.state === 'ok' && !observationInvalidated
-        ? result.facts.slice(0, 8).map((fact) => sourceRef(source, fact))
+        ? result.facts.slice(0, 8).map((fact) => sourceRef(source, fact, verifiedAt))
           .filter((entry, index, values) => values.findIndex(({ id }) => id === entry.id) === index)
         : [];
       const freshRefs = result.state === 'ok' && !observationInvalidated
-        ? observedAuthorityRefs
+        ? observedAuthorityRefs.map(stateRef)
         : oldRefs;
       const knownAuthority = [
         ...current.authoritativeRefs,
@@ -964,11 +1080,35 @@ export function createPiSituationService(options: {
         ...sourceEntry,
         state: result.state === 'ok' && !observationInvalidated ? 'fresh' : 'stale',
         observedAt,
+        verifiedAt,
         expiresAt: null,
         reason: observationInvalidated
           ? 'observation_not_newer_than_source_invalidation'
           : result.reason,
         refIds: freshRefs.map(({ id }) => id),
+      };
+      const effectiveStatus: SourceStatus = {
+        id: source,
+        label: source,
+        enabled: true,
+        state: observationInvalidated
+          ? 'stale'
+          : result.state === 'ok' && result.reason !== 'source_stale'
+            ? 'ok'
+            : result.state === 'ok' ? 'stale' : result.state,
+        reason: observationInvalidated
+          ? 'observation_not_newer_than_source_invalidation'
+          : result.reason,
+        observedAt,
+        verifiedAt,
+        invalidatedAt: status?.invalidatedAt ?? null,
+      };
+      const effectivePolicy = {
+        ...policy,
+        statuses: [
+          ...policy.statuses.filter(({ id: value }) => value !== source),
+          effectiveStatus,
+        ],
       };
       const next = parsePiSituationState({
         ...previous,
@@ -980,12 +1120,19 @@ export function createPiSituationService(options: {
         summary: summaryAffected ? '' : previous.summary,
         summaryRefIds: summaryAffected ? [] : previous.summaryRefIds,
       });
-      const prepared = applyPolicy(next, { ...current, state: previous }, policy);
+      const prepared = applyPolicy(next, { ...current, state: previous }, effectivePolicy);
       const canonicalState = canonicalizePiSituationState(prepared.state, knownAuthority);
-      if (piSituationHash(canonicalState) === current.hash) {
-        return { changed: false, baseline, admissible: !observationInvalidated };
-      }
-      const actions = followUpActions(previous, canonicalState, policy, now());
+      const stateChanged = piSituationHash(canonicalState) !== current.hash;
+      const actions = followUpActions(previous, canonicalState, effectivePolicy, now());
+      const observations: PiSituationSourceObservation[] = [{
+        source,
+        state: observationInvalidated ? 'stale' : result.state,
+        reason: observationInvalidated
+          ? 'observation_not_newer_than_source_invalidation'
+          : result.reason,
+        observedAt: result.state === 'ok' ? observedAt : null,
+        verifiedAt,
+      }];
       try {
         await options.store.commit({
           owner: options.owner,
@@ -996,10 +1143,12 @@ export function createPiSituationService(options: {
           policyRevision: policy.revision,
           followUpActions: actions,
           authoritativeRefs: observedAuthorityRefs,
+          observations,
         }, signal);
-        if (actions.length > 0) wakeEvents?.();
+        await updateMemoryObservations(observations);
+        wakeEvents?.();
         return {
-          changed: affectedRefs.size > 0 || freshnessChanged,
+          changed: stateChanged && (affectedRefs.size > 0 || freshnessChanged),
           baseline,
           admissible: !observationInvalidated,
         };
@@ -1101,16 +1250,18 @@ export function createPiSituationService(options: {
       const currentState = current
         ? retainAuthoritativePiSituationState(current.state, current.authoritativeRefs)
         : null;
+      const observations = referenceObservations(state);
+      const effectivePolicy = policyWithObservations(policy, observations);
       const prepared = applyPolicy(
         state,
         current && currentState ? { ...current, state: currentState } : null,
-        policy,
+        effectivePolicy,
       );
       const beforeWrite = await currentPolicy(signal);
       if (beforeWrite.revision !== input.policyRevision) {
         throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before committing.');
       }
-      const actions = followUpActions(currentState, prepared.state, policy, input.activation.at);
+      const actions = followUpActions(currentState, prepared.state, effectivePolicy, input.activation.at);
       const record = await options.store.commit({
         owner: options.owner,
         expectedRevision: input.expectedRevision,
@@ -1120,8 +1271,10 @@ export function createPiSituationService(options: {
         policyRevision: policy.revision,
         followUpActions: actions,
         authoritativeRefs: [],
+        observations,
       }, signal);
-      if (actions.length > 0) wakeEvents?.();
+      await updateMemoryObservations(observations);
+      wakeEvents?.();
       return { record, excluded: prepared.excluded };
     },
     async patch(input, signal) {
@@ -1151,7 +1304,9 @@ export function createPiSituationService(options: {
         patched,
         current.authoritativeRefs,
       );
-      const prepared = applyPolicy(canonicalState, { ...current, state: currentState }, policy);
+      const observations = referenceObservations(canonicalState);
+      const effectivePolicy = policyWithObservations(policy, observations);
+      const prepared = applyPolicy(canonicalState, { ...current, state: currentState }, effectivePolicy);
       if (piSituationHash(prepared.state) === current.hash) {
         return { record: current, excluded: prepared.excluded, changed: false };
       }
@@ -1159,7 +1314,7 @@ export function createPiSituationService(options: {
       if (beforeWrite.revision !== input.policyRevision) {
         throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before patching.');
       }
-      const actions = followUpActions(currentState, prepared.state, policy, input.activation.at);
+      const actions = followUpActions(currentState, prepared.state, effectivePolicy, input.activation.at);
       const record = await options.store.commit({
         owner: options.owner,
         expectedRevision: current.revision,
@@ -1169,8 +1324,10 @@ export function createPiSituationService(options: {
         policyRevision: policy.revision,
         followUpActions: actions,
         authoritativeRefs: [],
+        observations,
       }, signal);
-      if (actions.length > 0) wakeEvents?.();
+      await updateMemoryObservations(observations);
+      wakeEvents?.();
       return { record, excluded: prepared.excluded, changed: true };
     },
     async markFailed(input, signal) {
@@ -1201,6 +1358,13 @@ export function createPiSituationService(options: {
       const next = parsePiSituationState(state);
       const policy = await currentPolicy(signal);
       const actions = followUpActions(previous, next, policy, input.activation.at);
+      const observations: PiSituationSourceObservation[] = [...affected].map((source) => ({
+        source,
+        state: 'stale' as const,
+        reason: 'activation_failed',
+        observedAt: null,
+        verifiedAt: input.activation.at.toISOString(),
+      }));
       await options.store.commit({
         owner: options.owner,
         expectedRevision: current.revision,
@@ -1210,8 +1374,10 @@ export function createPiSituationService(options: {
         policyRevision: policy.revision,
         followUpActions: actions,
         authoritativeRefs: [],
+        observations,
       }, signal);
-      if (actions.length > 0) wakeEvents?.();
+      await updateMemoryObservations(observations);
+      wakeEvents?.();
     },
     async lookup(input, signal) {
       const policy = await currentPolicy(signal);
@@ -1234,20 +1400,16 @@ export function createPiSituationService(options: {
       const fact = result.facts.find(({ ref, identity }) =>
         ref === rawRef || identity === rawRef || ref === input.ref || identity === input.ref);
       if (!fact) throw new PiSituationError('invalid', 'That raw source reference is no longer available.');
+      const verifiedAt = now().toISOString();
       const status = policy.statuses.find(({ id: value }) => value === input.source);
-      if (status?.observedAt && Date.parse(fact.observedAt) < Date.parse(status.observedAt)) {
-        throw new PiSituationError(
-          'invalid',
-          'The live provider observation is older than the current source status.',
-        );
-      }
-      if (status?.invalidatedAt && Date.parse(fact.observedAt) <= Date.parse(status.invalidatedAt)) {
+      if (status?.invalidatedAt && Date.parse(verifiedAt) <= Date.parse(status.invalidatedAt)) {
         throw new PiSituationError(
           'invalid',
           'The live provider observation is not newer than the persisted source-disable epoch.',
         );
       }
-      const verifiedRef = sourceRef(input.source, fact);
+      const authorityRef = sourceRef(input.source, fact, verifiedAt);
+      const verifiedRef = stateRef(authorityRef);
       const value = {
         source: input.source, ref: fact.ref, identity: fact.identity ?? null, label: fact.label,
         text: fact.text, observedAt: fact.observedAt, dueAt: fact.dueAt ?? null,
@@ -1259,7 +1421,7 @@ export function createPiSituationService(options: {
       }
       await options.store.recordLookupAuthority(
         options.owner,
-        verifiedRef,
+        authorityRef,
         policy.revision,
         signal,
       );
@@ -1277,14 +1439,26 @@ export function createMemoryPiSituationStore(
   const records = new Map<string, PiSituationRecord>();
   const authorities = new Map<string, PiSituationAuthorityRef[]>();
   const authority = (owner: string, extra: readonly PiSituationAuthorityRef[] = []) => {
-    const byKey = new Map([
-      ...seededAuthority,
-      ...(authorities.get(owner) ?? []),
-      ...extra,
-    ].map((ref) => [authorityKey(ref), structuredClone(ref)]));
+    const combined = [
+      ...seededAuthority.map((ref) => structuredClone(ref)),
+      ...(authorities.get(owner) ?? []).map((ref) => structuredClone(ref)),
+    ];
+    for (const ref of extra) {
+      for (let index = combined.length - 1; index >= 0; index -= 1) {
+        const existing = combined[index]!;
+        if (existing.invalidatedAt === null &&
+            existing.source === ref.source &&
+            existing.id === ref.id) {
+          combined.splice(index, 1);
+        }
+      }
+      combined.push(structuredClone(ref));
+    }
+    const byKey = new Map(combined.map((ref) => [authorityKey(ref), ref]));
     return [...byKey.values()];
   };
   return {
+    atomicObservations: false,
     records,
     authorities,
     async read(owner) {
@@ -1339,14 +1513,24 @@ export function createMemoryPiSituationStore(
       return structuredClone(record);
     },
     async recordLookupAuthority(owner, ref) {
-      const knownCurrent = authorities.get(owner)?.find((entry) => authorityKey(entry) === authorityKey(ref));
-      if (knownCurrent && Date.parse(knownCurrent.observedAt) > Date.parse(ref.observedAt)) {
+      const currentAuthority = authority(owner);
+      const knownCurrent = currentAuthority.find((entry) =>
+        entry.invalidatedAt === null &&
+        entry.source === ref.source &&
+        entry.id === ref.id);
+      if (knownCurrent && Date.parse(knownCurrent.verifiedAt) > Date.parse(ref.verifiedAt)) {
         throw new PiSituationError(
           'conflict',
-          'The provider returned an older observation than its verified reference receipt.',
+          'The provider returned an older verification than its active reference receipt.',
         );
       }
-      const known = authority(owner, [ref]);
+      const known = [
+        ...currentAuthority.filter((entry) =>
+          !(entry.invalidatedAt === null &&
+            entry.source === ref.source &&
+            entry.id === ref.id)),
+        structuredClone(ref),
+      ];
       authorities.set(owner, known);
       const current = records.get(owner);
       if (current) records.set(owner, { ...current, authoritativeRefs: known });

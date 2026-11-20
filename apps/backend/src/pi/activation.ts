@@ -86,6 +86,7 @@ export function createPiActivationService(options: {
               identity: ref.identity,
               label: ref.label,
               observedAt: ref.observedAt,
+              verifiedAt: ref.verifiedAt!,
             });
           }
         }

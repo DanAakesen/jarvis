@@ -190,7 +190,9 @@ export function createMemoryProactiveStore(
             const changedAt = current().getTime();
             const invalidatedAt = new Date(Math.max(
               changedAt,
-              previous?.observedAt ? Date.parse(previous.observedAt) : 0,
+              previous?.verifiedAt
+                ? Date.parse(previous.verifiedAt)
+                : previous?.observedAt ? Date.parse(previous.observedAt) : 0,
             )).toISOString();
             sources.set(source, {
               id: source,
@@ -199,6 +201,7 @@ export function createMemoryProactiveStore(
               state: 'stale',
               reason: 'source_disabled',
               observedAt: previous?.observedAt ?? invalidatedAt,
+              verifiedAt: previous?.verifiedAt ?? previous?.observedAt ?? invalidatedAt,
               invalidatedAt,
             });
           }
@@ -389,13 +392,19 @@ export function createMemoryProactiveStore(
       async list() { return sourceIds.flatMap((id) => sources.has(id) ? [sources.get(id)!] : []); },
       async upsert(status) {
         const previous = sources.get(status.id);
-        if (previous?.observedAt && status.observedAt &&
-            Date.parse(previous.observedAt) > Date.parse(status.observedAt)) return;
-        if (previous?.invalidatedAt && status.observedAt &&
-            Date.parse(status.observedAt) <= Date.parse(previous.invalidatedAt)) {
+        const verifiedAt = status.verifiedAt ?? status.observedAt ?? current().toISOString();
+        const previousVerified = previous?.verifiedAt ?? previous?.observedAt;
+        if (previousVerified && Date.parse(previousVerified) > Date.parse(verifiedAt)) return;
+        if (previous?.invalidatedAt &&
+            Date.parse(verifiedAt) <= Date.parse(previous.invalidatedAt)) {
           return;
         }
-        sources.set(status.id, { ...status, invalidatedAt: previous?.invalidatedAt ?? null });
+        sources.set(status.id, {
+          ...status,
+          observedAt: status.observedAt ?? previous?.observedAt ?? verifiedAt,
+          verifiedAt,
+          invalidatedAt: previous?.invalidatedAt ?? null,
+        });
       },
     },
     spend: {

@@ -50,6 +50,7 @@ describe('conversation blocks in the message store', () => {
         identity: 'calendar-event:42',
         label: 'Flight',
         observedAt: '2026-11-16T09:00:00.000Z',
+        verifiedAt: '2026-11-16T09:01:00.000Z',
       }],
       followUpIds: ['follow:flight'],
       at: new Date('2026-11-16T10:00:00.000Z'),

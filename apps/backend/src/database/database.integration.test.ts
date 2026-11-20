@@ -341,6 +341,8 @@ describe('real SQL Server migration contract', () => {
       const outboxDown = await readFile(new URL('../../../../db/migrations/down/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
       const reviewSchema = await readFile(new URL('../../../../db/migrations/0099_pi_review_integrity.sql', import.meta.url), 'utf8');
       const reviewDown = await readFile(new URL('../../../../db/migrations/down/0099_pi_review_integrity.sql', import.meta.url), 'utf8');
+      const generationSchema = await readFile(new URL('../../../../db/migrations/0100_pi_observation_generations.sql', import.meta.url), 'utf8');
+      const generationDown = await readFile(new URL('../../../../db/migrations/down/0100_pi_observation_generations.sql', import.meta.url), 'utf8');
       await pool.request().batch(proactiveSchema);
       await pool.request().batch(foundationSchema);
       await pool.request().batch(preferencesSchema);
@@ -352,6 +354,7 @@ describe('real SQL Server migration contract', () => {
       await pool.request().batch(integritySchema);
       await pool.request().batch(outboxSchema);
       await pool.request().batch(reviewSchema);
+      await pool.request().batch(generationSchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -405,7 +408,7 @@ describe('real SQL Server migration contract', () => {
           text: 'Would you like me to move the task?',
           evidence: [{
             source: 'calendar', ref: 'calendar-event:42', identity: 'calendar-event:42',
-            label: 'Flight', observedAt: at.toISOString(),
+            label: 'Flight', observedAt: at.toISOString(), verifiedAt: at.toISOString(),
           }],
           followUpIds: ['follow:flight'],
         }, new Date(), signal);
@@ -564,6 +567,7 @@ describe('real SQL Server migration contract', () => {
           state: 'ok',
           reason: null,
           observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+          verifiedAt: invalidatedAt.toISOString(),
         });
         expect((await budgetStore.sources.list()).find(({ id }) => id === 'mail'))
           .toMatchObject({ state: 'stale' });
@@ -573,10 +577,15 @@ describe('real SQL Server migration contract', () => {
           enabled: true,
           state: 'ok',
           reason: null,
-          observedAt: new Date(invalidatedAt.getTime() + 1).toISOString(),
+          observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+          verifiedAt: new Date(invalidatedAt.getTime() + 1).toISOString(),
         });
         expect((await budgetStore.sources.list()).find(({ id }) => id === 'mail'))
-          .toMatchObject({ state: 'ok' });
+          .toMatchObject({
+            state: 'ok',
+            observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+            verifiedAt: new Date(invalidatedAt.getTime() + 1).toISOString(),
+          });
 
         // Standing-watch looks: counted per watch and day, with the wake's cost shared out afterwards.
         const dayStart = new Date(Date.now() - 3_600_000);
@@ -616,6 +625,7 @@ describe('real SQL Server migration contract', () => {
           policyRevision,
           followUpActions: [],
           authoritativeRefs: [],
+          observations: [],
         }, signal);
         expect(await situations.read(owner, signal)).toMatchObject({
           revision: 2, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
@@ -728,6 +738,7 @@ describe('real SQL Server migration contract', () => {
           policyRevision,
           followUpActions: [],
           authoritativeRefs: [],
+          observations: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
         await proactive.settings.patch({ guidance: 'changed after the situation was read' });
         await expect(situations.commit({
@@ -739,6 +750,7 @@ describe('real SQL Server migration contract', () => {
           policyRevision,
           followUpActions: [],
           authoritativeRefs: [],
+          observations: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
         const currentPolicy = proactiveSettingsRevision(await proactive.settings.read());
         const dueAt = new Date(at.getTime() + 60_000);
@@ -758,6 +770,7 @@ describe('real SQL Server migration contract', () => {
             label: 'Flight',
             observedAt: at.toISOString(),
             expiresAt: null,
+            verifiedAt: at.toISOString(),
           }],
           followUps: [{
             id: 'follow:flight',
@@ -766,6 +779,12 @@ describe('real SQL Server migration contract', () => {
             refIds: ['calendar-event:flight'],
           }],
         });
+        const followUpAuthority = followUpState.refs.map((ref) => ({
+          ...ref,
+          verifiedAt: ref.verifiedAt!,
+          invalidatedAt: null,
+          staleReason: null,
+        }));
         await expect(situations.commit({
           owner,
           expectedRevision: stored.revision,
@@ -775,8 +794,59 @@ describe('real SQL Server migration contract', () => {
           policyRevision: currentPolicy,
           followUpActions: [],
           authoritativeRefs: [],
+          observations: [],
         }, signal)).rejects.toMatchObject({ code: 'invalid' });
         expect((await situations.read(owner, signal))?.revision).toBe(stored.revision);
+        await expect(situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { blob: 'x'.repeat(40_000) },
+              dedupeKey: 'pi-followup:follow:flight:rollback',
+              summary: 'Rollback probe.',
+              detail: {},
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+          authoritativeRefs: followUpAuthority,
+          observations: [{
+            source: 'calendar',
+            state: 'ok',
+            reason: null,
+            observedAt: at.toISOString(),
+            verifiedAt: at.toISOString(),
+          }],
+        }, signal)).rejects.toThrow();
+        const atomic = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{
+            revision: number;
+            authority: number;
+            statuses: number;
+            outbox: number;
+          }>(`SELECT
+            (SELECT CONVERT(int, revision) FROM dbo.pi_situational_state
+              WHERE owner_object_id = @owner) AS revision,
+            (SELECT COUNT(*) FROM dbo.pi_situation_ref_authority WHERE owner_object_id = @owner) AS authority,
+            (SELECT COUNT(*) FROM dbo.proactive_source_status WHERE owner_object_id = @owner) AS statuses,
+            (SELECT COUNT(*) FROM dbo.pi_situation_outbox WHERE owner_object_id = @owner) AS outbox;`);
+        expect(atomic.recordset[0]).toEqual({
+          revision: stored.revision,
+          authority: 0,
+          statuses: 0,
+          outbox: 1,
+        });
         const queued = await situations.commit({
           owner,
           expectedRevision: stored.revision,
@@ -799,7 +869,8 @@ describe('real SQL Server migration contract', () => {
               notBeforeAt: dueAt.toISOString(),
             },
           }],
-          authoritativeRefs: followUpState.refs,
+          authoritativeRefs: followUpAuthority,
+          observations: [],
         }, signal);
         const reconciled = await Promise.all([
           queue.reconcileSituationOutbox(at, signal),
@@ -821,6 +892,7 @@ describe('real SQL Server migration contract', () => {
             identity: 'pi-followup:follow:flight',
           }],
           authoritativeRefs: [],
+          observations: [],
         }, signal);
         await expect(queue.reconcileSituationOutbox(
           new Date(at.getTime() + 1),
@@ -850,7 +922,8 @@ describe('real SQL Server migration contract', () => {
               notBeforeAt: dueAt.toISOString(),
             },
           }],
-          authoritativeRefs: followUpState.refs,
+          authoritativeRefs: followUpAuthority,
+          observations: [],
         }, signal);
         await expect(queue.reconcileSituationOutbox(
           new Date(at.getTime() + 2),
@@ -858,6 +931,98 @@ describe('real SQL Server migration contract', () => {
         )).resolves.toMatchObject({ changed: true, pending: false });
         expect(await queue.nextDueAt()).toEqual(dueAt);
         expect(reactivated.revision).toBe(5);
+        const oldGeneration = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ id: string }>(`SELECT id FROM dbo.proactive_events
+            WHERE owner_object_id = @owner AND source = N'followup'
+              AND processed_at IS NULL;`);
+        await proactive.settings.patch({ sources: { calendar: false } });
+        await queue.reconcileSituationOutbox(new Date(), signal);
+        expect(await queue.nextDueAt()).toBeNull();
+        const invalidatedAuthority = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ invalidated_at: Date | null; stale_reason: string | null }>(`
+            SELECT invalidated_at, stale_reason
+            FROM dbo.pi_situation_ref_authority
+            WHERE owner_object_id = @owner AND source_id = N'calendar';`);
+        expect(invalidatedAuthority.recordset[0]).toMatchObject({
+          invalidated_at: expect.any(Date),
+          stale_reason: 'source_disabled',
+        });
+        await proactive.settings.patch({ sources: { calendar: true } });
+        const calendarStatus = (await proactive.sources.list())
+          .find(({ id }) => id === 'calendar')!;
+        const reverifiedAt = new Date(Date.parse(calendarStatus.invalidatedAt!) + 1);
+        const reverifiedState = parsePiSituationState({
+          ...followUpState,
+          refs: followUpState.refs.map((ref) => ({
+            ...ref,
+            verifiedAt: reverifiedAt.toISOString(),
+          })),
+        });
+        const reverifiedAuthority = reverifiedState.refs.map((ref) => ({
+          ...ref,
+          verifiedAt: ref.verifiedAt!,
+          invalidatedAt: null,
+          staleReason: null,
+        }));
+        const reenabledPolicy = proactiveSettingsRevision(await proactive.settings.read());
+        const reenabled = await situations.commit({
+          owner,
+          expectedRevision: reactivated.revision,
+          expectedHash: reactivated.hash,
+          state: reverifiedState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: reenabledPolicy,
+          followUpActions: [{
+            operation: 'upsert',
+            followUpId: 'follow:flight',
+            event: {
+              source: 'followup',
+              kind: 'commitment.due',
+              identity: 'pi-followup:follow:flight',
+              material: { text: 'Check in.', dueAt: dueAt.toISOString() },
+              dedupeKey: 'pi-followup:follow:flight:v1',
+              summary: 'Check in.',
+              detail: { followUpId: 'follow:flight', evidenceSources: ['calendar'] },
+              occurredAt: dueAt.toISOString(),
+              notBeforeAt: dueAt.toISOString(),
+            },
+          }],
+          authoritativeRefs: reverifiedAuthority,
+          observations: [{
+            source: 'calendar',
+            state: 'ok',
+            reason: null,
+            observedAt: at.toISOString(),
+            verifiedAt: reverifiedAt.toISOString(),
+          }],
+        }, signal);
+        await expect(queue.reconcileSituationOutbox(reverifiedAt, signal))
+          .resolves.toMatchObject({ pending: false });
+        const newGeneration = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ id: string }>(`SELECT id FROM dbo.proactive_events
+            WHERE owner_object_id = @owner AND source = N'followup'
+              AND processed_at IS NULL;`);
+        expect(newGeneration.recordset[0]?.id).not.toBe(oldGeneration.recordset[0]?.id);
+        expect(reenabled.state.refs[0]).toMatchObject({
+          observedAt: at.toISOString(),
+          verifiedAt: reverifiedAt.toISOString(),
+        });
+        expect((await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ receipts: number; stale: number }>(`SELECT
+            COUNT(*) AS receipts,
+            SUM(CASE WHEN invalidated_at IS NULL THEN 0 ELSE 1 END) AS stale
+          FROM dbo.pi_situation_ref_authority
+          WHERE owner_object_id = @owner AND source_id = N'calendar';`))
+          .recordset[0]).toEqual({ receipts: 2, stale: 1 });
+        expect((await pool.request()
+          .query<{ pending: number }>(`SELECT COUNT(*) AS pending
+            FROM dbo.pi_situation_outbox
+            WHERE applied_at IS NULL;`))
+          .recordset[0]?.pending).toBe(0);
       } finally {
         await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
         await pool.request().batch(
@@ -870,6 +1035,7 @@ describe('real SQL Server migration contract', () => {
           catch (error) { throw new Error(`Database rollback ${name} failed`, { cause: error }); }
         };
         await pool.request().batch('DELETE FROM dbo.pi_situation_ref_authority;');
+        await rollback('0094', generationDown);
         await rollback('0093', reviewDown);
         await rollback('0092', outboxDown);
         await rollback('0091', integrityDown);

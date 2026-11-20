@@ -34,11 +34,12 @@ function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
     refs: [
       {
         id: 'mail:42', source: 'mail', identity: 'mail:42', label: 'Travel confirmation',
-        observedAt: at.toISOString(), expiresAt: null,
+        observedAt: at.toISOString(), expiresAt: null, verifiedAt: at.toISOString(),
       },
       {
         id: 'location:device', source: 'location', identity: 'location:device', label: 'Near Copenhagen',
         observedAt: at.toISOString(), expiresAt: new Date(at.getTime() + 3_600_000).toISOString(),
+        verifiedAt: at.toISOString(),
       },
     ],
     facts: [
@@ -57,7 +58,12 @@ function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
 }
 
 function setup(sources: readonly ProactiveSource[] = []) {
-  const store = createMemoryPiSituationStore(state().refs);
+  const store = createMemoryPiSituationStore(state().refs.map((ref) => ({
+    ...ref,
+    verifiedAt: ref.verifiedAt!,
+    invalidatedAt: null,
+    staleReason: null,
+  })));
   const proactive = createMemoryProactiveStore(owner, () => at);
   const service = createPiSituationService({
     owner,
@@ -364,7 +370,7 @@ describe('PI situational state', () => {
   });
 
   it('marks only the failed source stale and keeps unrelated verified facts usable', async () => {
-    const { service, store } = setup();
+    const { service, store, proactive } = setup();
     const initial = await service.read(signal());
     await service.commit({
       expectedRevision: initial.revision, expectedHash: initial.hash, policyRevision: initial.policyRevision, state: state(),
@@ -386,6 +392,8 @@ describe('PI situational state', () => {
     expect(store.records.get(owner)?.state.facts.find(({ source }) => source === 'location')?.stale).toBe(false);
     const failed = await service.read(signal());
     expect(failed.staleSources).not.toContain('location');
+    expect((await proactive.sources.list()).find(({ id }) => id === 'mail'))
+      .toMatchObject({ state: 'stale', reason: 'activation_failed' });
     expect(failed.state?.summary).toBe('');
     expect(failed.state?.summaryRefIds).toEqual([]);
   });
@@ -482,14 +490,14 @@ describe('PI situational state', () => {
           source: 'mail',
           state: 'ok',
           reason: null,
-          observedAt: clock.current.toISOString(),
+          observedAt: at.toISOString(),
           facts: [{
             ref: 'message:epoch',
             identity: 'gmail-message:epoch',
             kind: 'mail',
             label: 'Epoch mail',
             text: 'Authoritative mail.',
-            observedAt: clock.current.toISOString(),
+            observedAt: at.toISOString(),
           }],
         };
       },
@@ -556,6 +564,11 @@ describe('PI situational state', () => {
     await service.refresh('mail', signal());
     await service.synchronizeFollowUps(signal());
     expect((await service.read(signal())).state?.refs.some(({ source }) => source === 'mail')).toBe(true);
+    expect((await service.read(signal())).state?.refs.find(({ source }) => source === 'mail'))
+      .toMatchObject({
+        observedAt: at.toISOString(),
+        verifiedAt: clock.current.toISOString(),
+      });
     expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
   });
 

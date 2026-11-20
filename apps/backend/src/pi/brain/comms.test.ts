@@ -68,6 +68,7 @@ describe('the brain\'s chat message', () => {
         identity: 'calendar-event:42',
         label: 'Flight to London',
         observedAt: '2026-11-16T09:00:00.000Z',
+        verifiedAt: '2026-11-16T09:01:00.000Z',
       }],
       followUpIds: ['follow:flight'],
     }, run(), signal);

@@ -33,6 +33,7 @@ export interface ProactiveConversationEvidence {
   readonly identity: string | null;
   readonly label: string;
   readonly observedAt: string | null;
+  readonly verifiedAt: string;
 }
 
 export type AddProactiveMessageResult =
