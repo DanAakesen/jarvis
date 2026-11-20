@@ -46,6 +46,41 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(urls.map(\.absoluteString), ["wss://example.invalid/api/voice"])
     }
 
+    func testVoiceTerminalStateTableNeverResurrectsAFailedSession() {
+        struct Row {
+            let events: [VoiceSessionEvent]
+            let expected: VoiceSessionState
+        }
+        let rows = [
+            Row(
+                events: [.start, .connected, .sessionReady, .endRequested, .sessionEnded],
+                expected: .ended
+            ),
+            Row(
+                events: [.start, .connected, .sessionReady, .endRequested, .failed, .sessionEnded],
+                expected: .failed
+            ),
+            Row(
+                events: [.endRequested, .sessionEnded],
+                expected: .idle
+            ),
+            Row(
+                events: [.start, .connected, .sessionReady, .sessionEnded, .failed],
+                expected: .ended
+            ),
+            Row(
+                events: [.start, .connectionDropped, .reconnectAttempt(1), .endRequested, .failed],
+                expected: .failed
+            ),
+        ]
+
+        for row in rows {
+            var machine = VoiceSessionStateMachine()
+            for event in row.events { machine.apply(event) }
+            XCTAssertEqual(machine.state, row.expected)
+        }
+    }
+
     func testVoiceEndWaitsForTheServerTerminalBeforeClosing() async throws {
         let socket = VoiceEndSocket()
         let client = VoiceSessionClient(
@@ -74,6 +109,8 @@ final class PiRuntimeTests: XCTestCase {
         let closedAfterAcknowledgement = await socket.wasClosed()
         XCTAssertEqual(endedState, .ended)
         XCTAssertTrue(closedAfterAcknowledgement)
+        let closeCodes = await socket.closeCodes()
+        XCTAssertTrue(closeCodes.allSatisfy { $0 == 1000 })
     }
 
     func testVoiceEndTimesOutInsteadOfClaimingAnUnacknowledgedEnd() async throws {
@@ -92,6 +129,81 @@ final class PiRuntimeTests: XCTestCase {
         }
         let closed = await socket.wasClosed()
         XCTAssertTrue(closed)
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011])
+    }
+
+    func testVoiceEndBeforeConnectionCannotClaimSuccess() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        do {
+            try await client.end()
+            XCTFail("Expected a pre-connect End to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        do {
+            try await client.end()
+            XCTFail("Expected a repeated pre-connect End to retain its failure")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011])
+    }
+
+    func testVoiceEndSendFailureCannotClaimSuccessOrCloseCleanly() async throws {
+        let socket = VoiceEndSocket(failSessionEnd: true)
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        try await client.start(accessToken: "a.b.c")
+        do {
+            try await client.end()
+            XCTFail("Expected the End send to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011])
+    }
+
+    func testVoiceEndDuringConnectionFailsTheStartAndCannotCloseCleanly() async throws {
+        let socket = VoiceConnectingSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        let starting = Task { try await client.start(accessToken: "a.b.c") }
+        await socket.waitUntilConnecting()
+
+        do {
+            try await client.end()
+            XCTFail("Expected End during connection to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        await socket.releaseConnection()
+        do {
+            try await starting.value
+            XCTFail("Expected the interrupted Start to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011, 1011])
     }
 
     func testWarmThrottleAllowsOneAttemptPerInterval() {
@@ -307,14 +419,22 @@ private actor VoiceRecordingSocket: WebSocketTransport {
 }
 
 private actor VoiceEndSocket: WebSocketTransport {
+    private let failSessionEnd: Bool
     private var continuation: AsyncThrowingStream<String, any Error>.Continuation?
     private var pending: [String] = []
     private var sent: [String] = []
-    private var closed = false
+    private var closes: [UInt16] = []
+
+    init(failSessionEnd: Bool = false) {
+        self.failSessionEnd = failSessionEnd
+    }
 
     func connect(url: URL, subprotocols: [String]) async throws {}
 
     func send(text: String) async throws {
+        if failSessionEnd && text == #"{"type":"jarvis.session.end"}"# {
+            throw VoiceProtocolError.endFailed
+        }
         sent.append(text)
     }
 
@@ -327,7 +447,7 @@ private actor VoiceEndSocket: WebSocketTransport {
     }
 
     func close(code: UInt16) async {
-        closed = true
+        closes.append(code)
     }
 
     func emit(_ text: String) {
@@ -339,7 +459,47 @@ private actor VoiceEndSocket: WebSocketTransport {
     }
 
     func sentTexts() -> [String] { sent }
-    func wasClosed() -> Bool { closed }
+    func wasClosed() -> Bool { !closes.isEmpty }
+    func closeCodes() -> [UInt16] { closes }
+}
+
+private actor VoiceConnectingSocket: WebSocketTransport {
+    private var connection: CheckedContinuation<Void, Never>?
+    private var connectWaiters: [CheckedContinuation<Void, Never>] = []
+    private var closes: [UInt16] = []
+
+    func connect(url: URL, subprotocols: [String]) async throws {
+        await withCheckedContinuation {
+            connection = $0
+            let waiters = connectWaiters
+            connectWaiters.removeAll()
+            for waiter in waiters { waiter.resume() }
+        }
+    }
+
+    func send(text: String) async throws {
+        throw VoiceProtocolError.invalidState
+    }
+
+    func receive() async -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func close(code: UInt16) async {
+        closes.append(code)
+    }
+
+    func waitUntilConnecting() async {
+        if connection != nil { return }
+        await withCheckedContinuation { connectWaiters.append($0) }
+    }
+
+    func releaseConnection() {
+        connection?.resume()
+        connection = nil
+    }
+
+    func closeCodes() -> [UInt16] { closes }
 }
 
 private actor RecordingTransport: HTTPTransport {

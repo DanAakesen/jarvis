@@ -413,14 +413,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             do {
                 try await endingClient.end()
             } catch {
-                errorMessage = Self.message(for: error)
-                sessionClient = nil
-                voiceSessionID = nil
-                responseID = nil
-                httpClient = nil
-                await liveActivity.end()
+                await tearDownFailedEnd(error)
                 return
             }
+        } else if voiceState != .ended {
+            await tearDownFailedEnd(VoiceProtocolError.endFailed)
+            return
         }
         sessionGeneration += 1
         returnToChatRequested = returnToChat
@@ -436,6 +434,23 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         responseID = nil
         voiceState = returnToChat ? .ended : .idle
         isMuted = false
+    }
+
+    private func tearDownFailedEnd(_ error: any Error) async {
+        errorMessage = Self.message(for: error)
+        sessionGeneration += 1
+        returnToChatRequested = false
+        liveActivitySessionID = nil
+        if VoiceLiveActivityActions.session === self {
+            VoiceLiveActivityActions.session = nil
+        }
+        sessionClient = nil
+        voiceSessionID = nil
+        responseID = nil
+        voiceState = .failed
+        httpClient = nil
+        isMuted = false
+        await liveActivity.end()
     }
 
     func startCamera() async {

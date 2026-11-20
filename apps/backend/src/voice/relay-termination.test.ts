@@ -193,4 +193,213 @@ describe('GPT-Live graceful termination', () => {
     expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
     expect(endedUsage).toEqual({ allowWallClockFallback: false });
   });
+
+  it('fails a connecting End without enqueueing native session.close', async () => {
+    const upstream = new WebSocketServer({ port: 0 });
+    const upstreamEvents: Record<string, unknown>[] = [];
+    const sockets: WebSocket[] = [];
+    upstream.on('connection', (socket) => {
+      sockets.push(socket);
+      socket.on('message', data => upstreamEvents.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    });
+    await new Promise<void>(resolve => upstream.once('listening', resolve));
+    const upstreamUrl = `ws://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
+    let endedUsage: { providerVoiceSeconds?: number; allowWallClockFallback: boolean } | undefined;
+    const store = {
+      createSession: async () => ({
+        id: '8a', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async (
+        _sessionId: string,
+        usage?: { providerVoiceSeconds?: number; allowWallClockFallback: boolean },
+      ) => {
+        endedUsage = usage;
+        return true;
+      },
+    } as unknown as ConversationStore;
+    const app = buildApp(
+      config,
+      createLogger({ ...config, logLevel: 'silent' } as typeof config),
+      {
+        auth: async () => ({
+          objectId: config.auth.ownerObjectId,
+          tenantId: config.auth.tenantId,
+          displayName: 'Dan',
+        }),
+        conversationStore: store,
+        piAgent: { warm: async () => undefined, async *stream() { yield 'unused'; } },
+        modules: [createVoiceRelayModule({
+          getToken: async () => 'token',
+          connect: () => new WebSocket(upstreamUrl),
+          drainTimeoutMs: 20,
+        })],
+      },
+    );
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as AddressInfo).port;
+    const browser = new WebSocket(
+      `ws://127.0.0.1:${port}/voice`,
+      [VOICE_SUBPROTOCOL, 'jarvis.auth.aaa.bbb.ccc'],
+    );
+    const received: Record<string, unknown>[] = [];
+    browser.on('message', data => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    cleanups.push(async () => {
+      browser.terminate();
+      await app.close();
+      for (const socket of sockets) socket.terminate();
+      upstream.close();
+    });
+    await until(
+      () => browser.readyState === WebSocket.OPEN && sockets.length === 1,
+      'connecting provider socket',
+    );
+    browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+    await until(
+      () => endedUsage !== undefined &&
+        received.some(event => event.type === 'jarvis.session.failed' &&
+          event.closeCode === 1011 && event.retryable === true),
+      'connecting End failure',
+    );
+    expect(upstreamEvents.some(event => event.type === 'session.close')).toBe(false);
+    expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
+    expect(endedUsage).toEqual({ allowWallClockFallback: false });
+  });
+
+  it('turns cleanup failure after provider close into 1011 without an Ended acknowledgement', async () => {
+    const upstream = new WebSocketServer({ port: 0 });
+    const upstreamEvents: Record<string, unknown>[] = [];
+    const sockets: WebSocket[] = [];
+    upstream.on('connection', (socket) => {
+      sockets.push(socket);
+      socket.on('message', (data) => upstreamEvents.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      socket.send(JSON.stringify({
+        type: 'session.started',
+        session: { id: 'live-session', audio: { format: { type: 'audio/pcm', rate: 24_000 } } },
+      }));
+    });
+    await new Promise<void>(resolve => upstream.once('listening', resolve));
+    const upstreamUrl = `ws://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
+    let cleanupUsage: { providerVoiceSeconds?: number; allowWallClockFallback: boolean } | undefined;
+    const store = {
+      createSession: async () => ({
+        id: '8b', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async (
+        _sessionId: string,
+        usage?: { providerVoiceSeconds?: number; allowWallClockFallback: boolean },
+      ) => {
+        cleanupUsage = usage;
+        return false;
+      },
+    } as unknown as ConversationStore;
+    const app = buildApp(
+      config,
+      createLogger({ ...config, logLevel: 'silent' } as typeof config),
+      {
+        auth: async () => ({
+          objectId: config.auth.ownerObjectId,
+          tenantId: config.auth.tenantId,
+          displayName: 'Dan',
+        }),
+        conversationStore: store,
+        piAgent: { warm: async () => undefined, async *stream() { yield 'unused'; } },
+        modules: [createVoiceRelayModule({
+          getToken: async () => 'token',
+          connect: () => new WebSocket(upstreamUrl),
+          drainTimeoutMs: 50,
+        })],
+      },
+    );
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as AddressInfo).port;
+    const browser = new WebSocket(
+      `ws://127.0.0.1:${port}/voice`,
+      [VOICE_SUBPROTOCOL, 'jarvis.auth.aaa.bbb.ccc'],
+    );
+    const received: Record<string, unknown>[] = [];
+    browser.on('message', data => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    cleanups.push(async () => {
+      browser.terminate();
+      await app.close();
+      for (const socket of sockets) socket.terminate();
+      upstream.close();
+    });
+    await until(
+      () => received.some(event => event.type === 'jarvis.session.ready') && sockets.length === 1,
+      'voice readiness',
+    );
+    browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+    await until(
+      () => upstreamEvents.some(event => event.type === 'session.close'),
+      'native close before cleanup failure',
+    );
+    sockets[0]!.send(JSON.stringify({
+      type: 'session.closed',
+      event_id: 'closed-cleanup-failure',
+      usage: { seconds: 4 },
+    }));
+    await until(
+      () => cleanupUsage !== undefined &&
+        received.some(event => event.type === 'jarvis.session.failed' &&
+          event.closeCode === 1011 && event.retryable === true),
+      'cleanup failure acknowledgement',
+    );
+    expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
+    expect(cleanupUsage).toEqual({ providerVoiceSeconds: 4, allowWallClockFallback: true });
+  });
+
+  it('fails pre-connect End when session.close cannot be enqueued', async () => {
+    let endedUsage: { providerVoiceSeconds?: number; allowWallClockFallback: boolean } | undefined;
+    const store = {
+      createSession: async () => ({
+        id: '9', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async (
+        _sessionId: string,
+        usage?: { providerVoiceSeconds?: number; allowWallClockFallback: boolean },
+      ) => {
+        endedUsage = usage;
+        return true;
+      },
+    } as unknown as ConversationStore;
+    const app = buildApp(
+      config,
+      createLogger({ ...config, logLevel: 'silent' } as typeof config),
+      {
+        auth: async () => ({
+          objectId: config.auth.ownerObjectId,
+          tenantId: config.auth.tenantId,
+          displayName: 'Dan',
+        }),
+        conversationStore: store,
+        piAgent: { warm: async () => undefined, async *stream() { yield 'unused'; } },
+        modules: [createVoiceRelayModule({
+          getToken: () => new Promise<string>(() => undefined),
+          connect: () => new WebSocket('ws://127.0.0.1:1'),
+          drainTimeoutMs: 20,
+        })],
+      },
+    );
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const port = (app.server.address() as AddressInfo).port;
+    const browser = new WebSocket(
+      `ws://127.0.0.1:${port}/voice`,
+      [VOICE_SUBPROTOCOL, 'jarvis.auth.aaa.bbb.ccc'],
+    );
+    const received: Record<string, unknown>[] = [];
+    browser.on('message', data => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    cleanups.push(async () => {
+      browser.terminate();
+      await app.close();
+    });
+    await new Promise<void>(resolve => browser.once('open', resolve));
+    browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+    await until(
+      () => endedUsage !== undefined &&
+        received.some(event => event.type === 'jarvis.session.failed' && event.retryable === true),
+      'pre-connect retryable failure',
+    );
+    expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
+    expect(endedUsage).toEqual({ allowWallClockFallback: false });
+  });
 });

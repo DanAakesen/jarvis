@@ -6,6 +6,8 @@ import {
   LiveVoiceUsageTracker,
   MAX_COMMENTARY_UTF8_BYTES,
   settleVoiceSessionCreation,
+  VoiceTerminationStateMachine,
+  type VoiceTerminationEvent,
 } from './live-protocol.js';
 
 describe('GPT-Live protocol boundaries', () => {
@@ -41,6 +43,137 @@ describe('GPT-Live protocol boundaries', () => {
     expect(usage.seconds).toBe(15.5);
     expect(() => usage.accept({ type: 'session.usage.updated', event_id: 'bad', usage: { seconds: -1 } }))
       .toThrowError('Invalid provider voice usage');
+  });
+
+  it.each<{
+    name: string;
+    events: VoiceTerminationEvent[];
+    phase: 'ended' | 'failed';
+    closeCode: 1000 | 1011;
+  }>([
+    {
+      name: 'clean provider and Jarvis acknowledgement',
+      events: [
+        { type: 'end-requested', canSendClose: true, reason: 'Voice session ended', notifyClient: true },
+        { type: 'provider-closed' },
+        { type: 'finalization-succeeded' },
+        { type: 'ack-sent' },
+      ],
+      phase: 'ended',
+      closeCode: 1000,
+    },
+    {
+      name: 'pre-provider End',
+      events: [
+        { type: 'end-requested', canSendClose: false, reason: 'Voice session ended', notifyClient: true },
+        { type: 'finalization-succeeded' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'connecting End',
+      events: [
+        { type: 'end-requested', canSendClose: false, reason: 'Voice session ended', notifyClient: true },
+        { type: 'finalization-succeeded' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'close send failure',
+      events: [
+        { type: 'end-requested', canSendClose: true, reason: 'Voice session ended', notifyClient: true },
+        { type: 'failed', closeCode: 1011, reason: 'Voice close send failed', notifyClient: true },
+        { type: 'finalization-succeeded' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'provider close drain timeout',
+      events: [
+        { type: 'end-requested', canSendClose: true, reason: 'Voice session ended', notifyClient: true },
+        { type: 'failed', closeCode: 1011, reason: 'Voice session close was not confirmed', notifyClient: true },
+        { type: 'finalization-succeeded' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'transport loss',
+      events: [
+        { type: 'failed', closeCode: 1011, reason: 'Browser disconnected', notifyClient: false },
+        { type: 'finalization-succeeded' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'provider close without a Jarvis request',
+      events: [
+        { type: 'provider-closed' },
+        { type: 'finalization-succeeded' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'clean provider close with failed cleanup',
+      events: [
+        { type: 'end-requested', canSendClose: true, reason: 'Voice session ended', notifyClient: true },
+        { type: 'provider-closed' },
+        { type: 'finalization-failed' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'terminal Jarvis acknowledgement failure',
+      events: [
+        { type: 'end-requested', canSendClose: true, reason: 'Voice session ended', notifyClient: true },
+        { type: 'provider-closed' },
+        { type: 'finalization-succeeded' },
+        { type: 'ack-failed' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+    {
+      name: 'late failure after acknowledged End',
+      events: [
+        { type: 'end-requested', canSendClose: true, reason: 'Voice session ended', notifyClient: true },
+        { type: 'provider-closed' },
+        { type: 'finalization-succeeded' },
+        { type: 'ack-sent' },
+        { type: 'failed', closeCode: 1011, reason: 'late failure', notifyClient: true },
+      ],
+      phase: 'ended',
+      closeCode: 1000,
+    },
+    {
+      name: 'late acknowledgement after failure',
+      events: [
+        { type: 'failed', closeCode: 1011, reason: 'transport lost', notifyClient: true },
+        { type: 'finalization-succeeded' },
+        { type: 'ack-sent' },
+      ],
+      phase: 'failed',
+      closeCode: 1011,
+    },
+  ])('enforces terminal ownership for $name', ({ events, phase, closeCode }) => {
+    const termination = new VoiceTerminationStateMachine();
+    const effects = events.map((event) => termination.apply(event));
+    const terminal = effects.filter((effect) =>
+      effect.type === 'close-ended' || effect.type === 'close-failed'
+    );
+
+    expect(termination.phase).toBe(phase);
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({ closeCode });
+    if (phase === 'failed') {
+      expect(effects.some((effect) => effect.type === 'close-ended')).toBe(false);
+    }
   });
 
   it('ends a SQL session that resolves after startup was cancelled', async () => {

@@ -84,6 +84,7 @@ public enum VoiceSessionEvent: Equatable, Sendable {
 
 public struct VoiceSessionStateMachine: Sendable {
     public private(set) var state: VoiceSessionState = .idle
+    public private(set) var endRequested = false
     private var responseID: String?
     private var responseHasAudio = false
 
@@ -93,6 +94,7 @@ public struct VoiceSessionStateMachine: Sendable {
         switch event {
         case .start where state == .idle:
             state = .connecting
+            endRequested = false
         case .connected where state == .connecting:
             state = .ready
         case .sessionReady where state == .connecting || state == .ready ||
@@ -132,12 +134,12 @@ public struct VoiceSessionStateMachine: Sendable {
         case .reconnectExhausted where isReconnecting:
             state = .failed
         case .endRequested:
-            break
-        case .sessionEnded:
+            endRequested = true
+        case .sessionEnded where state != .idle && state != .failed:
             state = .ended
             responseID = nil
             responseHasAudio = false
-        case .failed:
+        case .failed where state != .ended:
             state = .failed
             responseID = nil
             responseHasAudio = false
@@ -213,7 +215,7 @@ public actor VoiceSessionClient {
     private var isConnected = false
     private var isMuted = false
     private var cameraState: Bool?
-    private var userEnded = false
+    private var endTask: Task<Void, Error>?
     private var endWaiter: CheckedContinuation<EndAcknowledgementResult, Never>?
     private var pendingEndResult: EndAcknowledgementResult?
     private let endAcknowledgementTimeout: Duration
@@ -250,16 +252,14 @@ public actor VoiceSessionClient {
         do {
             try await transport.connect(url: target, subprotocols: subprotocols)
             isConnected = true
-            guard !userEnded, machine.state == .connecting else {
-                isConnected = false
-                await transport.close(code: 1000)
-                clearCredentials()
-                return
+            guard !machine.endRequested, machine.state == .connecting else {
+                throw VoiceProtocolError.endFailed
             }
             apply(.connected)
             receiveTask = Task { await self.receiveMessages() }
         } catch {
-            if !userEnded { apply(.failed) }
+            apply(.failed)
+            isConnected = false
             await transport.close(code: 1011)
             clearCredentials()
             throw error
@@ -307,57 +307,72 @@ public actor VoiceSessionClient {
     }
 
     public func end() async throws {
-        guard !userEnded else { return }
-        userEnded = true
+        if let endTask {
+            try await endTask.value
+            return
+        }
+        let task = Task { try await self.performEnd() }
+        endTask = task
+        try await task.value
+    }
+
+    private func performEnd() async throws {
+        if machine.state == .ended {
+            await releaseEndTransport(closeCode: 1000)
+            return
+        }
+
         pendingEndResult = nil
         apply(.endRequested)
-        var sendError: (any Error)?
-        var sentSessionEnd = false
-        if isConnected {
-            do {
-                try await send(.sessionEnd)
-                sentSessionEnd = true
-            } catch {
-                sendError = error
+        guard isConnected, isLive else {
+            apply(.failed)
+            finishEndWait(.failed)
+            await releaseEndTransport(closeCode: 1011)
+            throw VoiceProtocolError.endFailed
+        }
+
+        do {
+            try await send(.sessionEnd)
+        } catch {
+            if machine.state == .ended {
+                await releaseEndTransport(closeCode: 1000)
+                return
             }
+            apply(.failed)
+            finishEndWait(.failed)
+            await releaseEndTransport(closeCode: 1011)
+            throw error
         }
-        let cannotAcknowledge = switch machine.state {
-        case .failed, .reconnecting:
-            true
-        default:
-            false
+
+        let acknowledgement = await waitForEndAcknowledgement()
+        switch acknowledgement {
+        case .acknowledged where machine.state == .ended:
+            await releaseEndTransport(closeCode: 1000)
+        case .acknowledged:
+            apply(.failed)
+            await releaseEndTransport(closeCode: 1011)
+            throw VoiceProtocolError.endFailed
+        case .failed:
+            apply(.failed)
+            await releaseEndTransport(closeCode: 1011)
+            throw VoiceProtocolError.endFailed
+        case .timedOut:
+            apply(.failed)
+            await releaseEndTransport(closeCode: 1011)
+            throw VoiceProtocolError.endTimedOut
         }
-        let acknowledgement: EndAcknowledgementResult
-        if sentSessionEnd {
-            acknowledgement = await waitForEndAcknowledgement()
-        } else if cannotAcknowledge {
-            acknowledgement = .failed
-        } else {
-            acknowledgement = .acknowledged
-        }
+    }
+
+    private func releaseEndTransport(closeCode: UInt16) async {
         receiveTask?.cancel()
         receiveTask = nil
-        if !sentSessionEnd {
-            apply(sendError == nil ? .sessionEnded : .failed)
-        }
         isConnected = false
-        await transport.close(code: 1000)
+        await transport.close(code: closeCode)
         clearCredentials()
         endpoint = nil
         isMuted = false
         cameraState = nil
         reconnectAttempts = 0
-        if let sendError { throw sendError }
-        switch acknowledgement {
-        case .acknowledged:
-            break
-        case .failed:
-            apply(.failed)
-            throw VoiceProtocolError.endFailed
-        case .timedOut:
-            apply(.failed)
-            throw VoiceProtocolError.endTimedOut
-        }
     }
 
     private func receiveMessages() async {
@@ -381,6 +396,16 @@ public actor VoiceSessionClient {
 
     private func receive(_ raw: String) async throws {
         let message = VoiceServerMessage.decode(raw)
+        if case .sessionEnded = message {
+            apply(.sessionEnded)
+            guard machine.state == .ended else { return }
+            onMessage(message)
+            isConnected = false
+            finishEndWait(.acknowledged)
+            await transport.close(code: 1000)
+            clearCredentials()
+            return
+        }
         onMessage(message)
         switch message {
         case .sessionReady:
@@ -391,14 +416,8 @@ public actor VoiceSessionClient {
             if let cameraState {
                 try await send(.cameraState(on: cameraState))
             }
-        case .sessionEnded:
-            apply(.sessionEnded)
-            isConnected = false
-            finishEndWait(.acknowledged)
-            await transport.close(code: 1000)
-            clearCredentials()
         case .sessionFailed(let retryable, _):
-            if userEnded {
+            if machine.endRequested {
                 apply(.failed)
                 isConnected = false
                 finishEndWait(.failed)
@@ -419,7 +438,7 @@ public actor VoiceSessionClient {
             apply(.responseFinished)
         case .responseCancelled:
             apply(.responseCancelled)
-        case .transcriptionCompleted, .transcriptionDelta, .assistantTranscriptDelta,
+        case .sessionEnded, .transcriptionCompleted, .transcriptionDelta, .assistantTranscriptDelta,
             .visualContext, .screenContextUnavailable, .unknown:
             break
         }
@@ -455,14 +474,15 @@ public actor VoiceSessionClient {
     }
 
     private func reconnect() async {
-        guard !userEnded, isLive,
+        guard !machine.endRequested, isLive,
               let endpoint,
               reconnectPolicy.maximumAttempts > 0 else {
             if isLive {
                 apply(.failed)
-                      if userEnded { finishEndWait(.failed) }
+                if machine.endRequested { finishEndWait(.failed) }
                 clearCredentials()
             }
+            if machine.endRequested { await transport.close(code: 1011) }
             return
         }
 
@@ -476,7 +496,7 @@ public actor VoiceSessionClient {
             return
         }
         for attempt in firstAttempt...reconnectPolicy.maximumAttempts {
-            guard reconnectPolicy.shouldReconnect(attempt: attempt, userEnded: userEnded),
+            guard reconnectPolicy.shouldReconnect(attempt: attempt, userEnded: machine.endRequested),
                   !Task.isCancelled else { return }
             apply(.reconnectAttempt(attempt))
             do {
@@ -486,11 +506,20 @@ public actor VoiceSessionClient {
             } catch {
                 continue
             }
-            guard !Task.isCancelled, !userEnded else { return }
+            guard !Task.isCancelled, !machine.endRequested else {
+                if machine.endRequested {
+                    apply(.failed)
+                    finishEndWait(.failed)
+                    await transport.close(code: 1011)
+                }
+                return
+            }
             do {
                 try await transport.connect(url: endpoint, subprotocols: subprotocols)
-                guard !userEnded, isLive else {
-                    await transport.close(code: 1000)
+                guard !machine.endRequested, isLive else {
+                    apply(.failed)
+                    finishEndWait(.failed)
+                    await transport.close(code: 1011)
                     return
                 }
                 reconnectAttempts = attempt
@@ -501,7 +530,14 @@ public actor VoiceSessionClient {
                 reconnectAttempts = attempt
             }
         }
-        guard !userEnded, isLive else { return }
+        guard !machine.endRequested, isLive else {
+            if machine.endRequested {
+                apply(.failed)
+                finishEndWait(.failed)
+                await transport.close(code: 1011)
+            }
+            return
+        }
         apply(.reconnectExhausted)
         await transport.close(code: 1011)
         clearCredentials()

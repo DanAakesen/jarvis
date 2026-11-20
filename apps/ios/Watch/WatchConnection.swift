@@ -407,7 +407,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             if let data = voiceData, data.count <= WatchLimits.payloadBytes,
                let event = try? JSONDecoder().decode(WatchEvent.self, from: data),
                event.version == 1, event.kind == .voiceState,
-               ["Ended", "Audio connection unavailable"].contains(event.text ?? "") {
+               ["Ended", "End failed", "Audio connection unavailable"].contains(event.text ?? "") {
                 self.onEvent?(event)
             }
             if let data, data.count <= WatchLimits.payloadBytes,

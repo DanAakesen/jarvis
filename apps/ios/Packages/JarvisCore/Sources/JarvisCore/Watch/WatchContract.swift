@@ -162,7 +162,8 @@ public enum WatchEventScheduling {
     public static func isBarrier(_ event: WatchEvent) -> Bool {
         [.chatDelta, .chatDone, .chatError, .interrupt].contains(event.kind) ||
             (event.kind == .voiceState &&
-             ["Playback finished", "Ended", "Disconnected", "Audio connection unavailable"].contains(event.text ?? ""))
+             ["Playback finished", "Ended", "End failed", "Disconnected", "Audio connection unavailable"]
+                .contains(event.text ?? ""))
     }
 
     public static func insertionIndex(for event: WatchEvent, in queue: [WatchEvent]) -> Int {

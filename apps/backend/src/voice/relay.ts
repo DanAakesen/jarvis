@@ -12,9 +12,9 @@ import { createPiVoiceTurns, type PiVoiceAgent } from './pi-voice.js';
 import {
   commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
   endLateVoiceSession, LiveVoiceUsageTracker, parseVoiceEvent,
-  settleVoiceSessionCreation,
+  settleVoiceSessionCreation, VoiceTerminationStateMachine,
   validPcm24Base64, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
-  type VoiceConnectionFactory,
+  type VoiceConnectionFactory, type VoiceFailureCloseCode, type VoiceTerminationEffect,
 } from './live-protocol.js';
 export { VOICE_SUBPROTOCOL } from '../websocket.js';
 
@@ -172,8 +172,6 @@ function registerVoiceRoute(
     let microphoneMuted = true;
     let piBusy = false;
     let outputActive = false;
-    let endRequested = false;
-    let closing = false;
     let finalization: Promise<void> | undefined;
     let proactiveContext: string | undefined;
     let currentInput: InputGroup | undefined;
@@ -182,7 +180,6 @@ function registerVoiceRoute(
     let pendingDelegationGroup: InputGroup | undefined;
     let lastCommentaryDelegation: string | null = null;
     let endTimer: ReturnType<typeof setTimeout> | undefined;
-    let gracefulEnd: { code: number; reason: string; notifyClient: boolean } | undefined;
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
     const seenInputEventIds = new Set<string>();
@@ -196,6 +193,8 @@ function registerVoiceRoute(
     let unregisterVisionVoice: (() => void) | undefined;
     let activityFinished = false;
     let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
+    const termination = new VoiceTerminationStateMachine();
+    let terminalTeardownStarted = false;
 
     const publishActivity = (
       type: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | 'failed' | 'ended',
@@ -218,8 +217,8 @@ function registerVoiceRoute(
     };
 
     const sendUpstream = (event: Record<string, unknown>): boolean => {
-      if (upstream?.readyState !== WebSocket.OPEN || !providerReady && event.type !== 'session.close') {
-        if (!controller.signal.aborted && !endRequested) closeSession(1011, 'Voice connection failed');
+      if (upstream?.readyState !== WebSocket.OPEN || !providerReady) {
+        if (!controller.signal.aborted && termination.isActive) closeSession(1011, 'Voice connection failed');
         return false;
       }
       const serialized = JSON.stringify(event);
@@ -229,14 +228,14 @@ function registerVoiceRoute(
       }
       try {
         upstream.send(serialized, (error) => {
-          if (error && !controller.signal.aborted && (!endRequested || gracefulEnd)) {
+          if (error && !controller.signal.aborted && !termination.isTerminal) {
             log.warn({ failure: 'upstream_send_failed', language }, 'voice.connection_failed');
             closeSession(1011, 'Voice connection failed');
           }
         });
         return true;
       } catch {
-        if (!controller.signal.aborted && !endRequested) {
+        if (!controller.signal.aborted && !termination.isEnding) {
           closeSession(1011, 'Voice connection failed');
         }
         return false;
@@ -274,11 +273,11 @@ function registerVoiceRoute(
       if (group.persistenceTimer) clearTimeout(group.persistenceTimer);
       if (activeOutput === group) activeOutput = undefined;
       outputActive = false;
-      if (terminal === 'cancelled' && !closing && !controller.signal.aborted) {
+      if (terminal === 'cancelled' && termination.isActive && !controller.signal.aborted) {
         sendClient({ type: 'jarvis.voice.response.cancelled', responseId: group.id });
       }
       void persistOutput(group).finally(() => {
-        if (terminal === 'completed' && !closing && !controller.signal.aborted) {
+        if (terminal === 'completed' && termination.isActive && !controller.signal.aborted) {
           sendClient({
             type: 'jarvis.voice.response.completed',
             responseId: group.id,
@@ -320,7 +319,7 @@ function registerVoiceRoute(
       }).catch((error: unknown) => {
         persistenceFailed = true;
         log.warn({ failure: safeFailure(error), language }, 'voice.transcript_persistence_failed');
-        if (!endRequested && !controller.signal.aborted) closeSession(1011, 'Voice transcript could not be saved');
+        if (termination.isActive && !controller.signal.aborted) closeSession(1011, 'Voice transcript could not be saved');
       });
       return persistenceQueue;
     };
@@ -362,7 +361,7 @@ function registerVoiceRoute(
     };
 
     const sendCommentary = (text: string, delegationId: string | null) => {
-      if (!providerReady || controller.signal.aborted || endRequested) return;
+      if (!providerReady || controller.signal.aborted || !termination.isActive) return;
       const parts = commentaryParts(text);
       if (parts.length === 0) return;
       lastCommentaryDelegation = delegationId;
@@ -409,20 +408,17 @@ function registerVoiceRoute(
       piTurns.cancel();
     };
 
-    const requestGracefulEnd = (code: number, reason: string, notifyClient = true) => {
-      if (closing || gracefulEnd) return;
-      gracefulEnd = { code, reason, notifyClient };
-      endRequested = true;
+    const requestGracefulEnd = (reason: string, notifyClient = true) => {
+      if (!termination.isActive) return;
       pendingDelegation?.abort();
       piTurns.cancel();
       statusAnnouncer?.close();
-      if (activeOutput) finishOutputGroup(activeOutput, code === 1000 ? 'completed' : 'cancelled');
-      if (upstream?.readyState === WebSocket.OPEN && sendUpstream({ type: 'session.close' })) {
-        endTimer = setTimeout(() => closeSession(1011, 'Voice session close was not confirmed', notifyClient), drainTimeoutMs);
-        endTimer.unref();
-      } else {
-        closeSession(code, reason, notifyClient);
-      }
+      handleTerminationEffect(termination.apply({
+        type: 'end-requested',
+        canSendClose: providerReady && upstream?.readyState === WebSocket.OPEN,
+        reason,
+        notifyClient,
+      }));
     };
 
     const newInputGroup = (): InputGroup => {
@@ -539,7 +535,8 @@ function registerVoiceRoute(
       if (!message) throw new Error('Voice owner message was not stored');
       group.persisted = message;
       app.nowEventHub.publish({ type: 'refresh' });
-      if (signal.aborted || controller.signal.aborted || endRequested || pendingDelegationGroup !== group) return;
+      if (signal.aborted || controller.signal.aborted || !termination.isActive ||
+          pendingDelegationGroup !== group) return;
       piTurns.start({
         text: turnText,
         messageId: message.id,
@@ -598,6 +595,7 @@ function registerVoiceRoute(
     };
 
     const receiveProvider = (data: RawData, isBinary: boolean) => {
+      if (!termination.isActive && termination.phase !== 'awaiting-provider-close') return;
       const event = parseVoiceEvent(data, isBinary);
       if (!event || typeof event.type !== 'string') {
         log.warn({ failure: 'invalid_upstream_event', language }, 'voice.upstream_event_error');
@@ -637,12 +635,7 @@ function registerVoiceRoute(
           return;
         }
         if (type === 'session.usage.updated') return;
-        if (activeOutput) finishOutputGroup(activeOutput);
-        if (gracefulEnd) {
-          closeSession(gracefulEnd.code, gracefulEnd.reason, gracefulEnd.notifyClient);
-        } else {
-          closeSession(1011, 'Voice session ended', true);
-        }
+        handleTerminationEffect(termination.apply({ type: 'provider-closed' }));
         return;
       }
       if (!providerReady) {
@@ -712,67 +705,121 @@ function registerVoiceRoute(
         await sessionReady;
         await Promise.allSettled([...delegationTasks]);
         await persistenceQueue;
+        const transcriptsPersisted = !persistenceFailed;
         if (!sessionId || !await store.endSession(
           sessionId,
           {
-            allowWallClockFallback,
+            allowWallClockFallback: allowWallClockFallback && transcriptsPersisted,
             ...(providerUsage.seconds === undefined ? {} : { providerVoiceSeconds: providerUsage.seconds }),
           },
         )) throw new Error('Voice session was not ended');
-        if (persistenceFailed) throw new Error('Voice transcripts were not fully stored');
+        if (!transcriptsPersisted) throw new Error('Voice transcripts were not fully stored');
       })();
       return finalization;
     };
 
-    function closeSession(code: number, reason: string, notifyClient = true): void {
-      if (closing) return;
-      closing = true;
-      endRequested = true;
+    function beginTerminalTeardown(effect: Extract<VoiceTerminationEffect, { type: 'finalize' }>): void {
+      if (terminalTeardownStarted) return;
+      terminalTeardownStarted = true;
       clearTimeout(endTimer);
-      gracefulEnd = undefined;
-      diagnostics.summary('relay', code);
-      const retryable = code === VOICE_STARTUP_CLOSE_CODE || code === 1011 || code === 1012;
-      let failureNotified = false;
-      if (notifyClient && code !== 1000 && browser.readyState === WebSocket.OPEN) {
-        sendClient({
-          type: 'jarvis.session.failed',
-          closeCode: code,
-          retryable,
-        });
-        failureNotified = true;
-      }
+      endTimer = undefined;
       pendingDelegation?.abort();
       piTurns.cancel();
       statusAnnouncer?.close();
       unregisterVisionVoice?.();
       unregisterVisionVoice = undefined;
-      if (activeOutput) finishOutputGroup(activeOutput, code === 1000 ? 'completed' : 'cancelled');
+      if (activeOutput) {
+        finishOutputGroup(activeOutput, effect.allowWallClockFallback ? 'completed' : 'cancelled');
+      }
       controller.abort();
       unregisterSessionConnection();
-      if (upstream) closeSocket(upstream, code, reason);
-      if (!activityFinished) publishActivity(code === 1000 ? 'ended' : retryable ? 'reconnecting' : 'failed');
-      void finalizeSession(code === 1000).then(() => {
-        if (notifyClient && code === 1000 && browser.readyState === WebSocket.OPEN) {
-          sendClient({ type: 'jarvis.session.ended' });
+      if (upstream) closeSocket(upstream, effect.closeCode, effect.reason);
+    }
+
+    function handleTerminationEffect(effect: VoiceTerminationEffect): void {
+      switch (effect.type) {
+        case 'none':
+          return;
+        case 'send-close': {
+          if (!sendUpstream({ type: 'session.close' })) {
+            closeSession(1011, 'Voice session close could not be sent', effect.notifyClient);
+            return;
+          }
+          endTimer = setTimeout(
+            () => closeSession(1011, 'Voice session close was not confirmed', effect.notifyClient),
+            drainTimeoutMs,
+          );
+          endTimer.unref();
+          return;
         }
-        closeSocket(browser, code, reason);
-      }).catch(() => {
-        log.warn('voice.session_persistence_failed');
-        if (notifyClient && !failureNotified && browser.readyState === WebSocket.OPEN) {
-          sendClient({
-            type: 'jarvis.session.failed',
-            closeCode: 1011,
-            retryable: true,
+        case 'finalize':
+          beginTerminalTeardown(effect);
+          void finalizeSession(effect.allowWallClockFallback).then(() => {
+            handleTerminationEffect(termination.apply({ type: 'finalization-succeeded' }));
+          }).catch(() => {
+            log.warn('voice.session_persistence_failed');
+            handleTerminationEffect(termination.apply({ type: 'finalization-failed' }));
           });
+          return;
+        case 'send-ack':
+          clearTimeout(endTimer);
+          if (browser.readyState !== WebSocket.OPEN) {
+            handleTerminationEffect(termination.apply({ type: 'ack-failed' }));
+            return;
+          }
+          endTimer = setTimeout(
+            () => handleTerminationEffect(termination.apply({ type: 'ack-failed' })),
+            drainTimeoutMs,
+          );
+          endTimer.unref();
+          sendClient({ type: 'jarvis.session.ended' }, (error) => {
+            handleTerminationEffect(termination.apply({
+              type: error ? 'ack-failed' : 'ack-sent',
+            }));
+          });
+          return;
+        case 'close-ended':
+          clearTimeout(endTimer);
+          endTimer = undefined;
+          diagnostics.summary('relay', effect.closeCode);
+          if (!activityFinished) publishActivity('ended');
+          closeSocket(browser, effect.closeCode, effect.reason);
+          return;
+        case 'close-failed': {
+          clearTimeout(endTimer);
+          endTimer = undefined;
+          diagnostics.summary('relay', effect.closeCode);
+          const retryable = effect.closeCode === VOICE_STARTUP_CLOSE_CODE ||
+            effect.closeCode === 1011 || effect.closeCode === 1012;
+          if (effect.notifyClient && browser.readyState === WebSocket.OPEN) {
+            sendClient({
+              type: 'jarvis.session.failed',
+              closeCode: effect.closeCode,
+              retryable,
+            });
+          }
+          if (!activityFinished) publishActivity(retryable ? 'reconnecting' : 'failed');
+          closeSocket(browser, effect.closeCode, effect.reason);
+          return;
         }
-        closeSocket(browser, 1011, 'Voice session could not be saved');
-      });
+        default:
+          return;
+      }
+    }
+
+    function closeSession(code: VoiceFailureCloseCode, reason: string, notifyClient = true): void {
+      handleTerminationEffect(termination.apply({
+        type: 'failed',
+        closeCode: code,
+        reason,
+        notifyClient,
+      }));
     }
 
     const statusAnnouncer = createVoiceStatusAnnouncer({
       taskEvents: app.eventHub,
       nowEvents: app.nowEventHub,
-      canSpeak: () => providerReady && !endRequested && !piBusy && !outputActive &&
+      canSpeak: () => providerReady && termination.isActive && !piBusy && !outputActive &&
         browser.readyState === WebSocket.OPEN && upstream?.readyState === WebSocket.OPEN,
       speak: (text) => sendCommentary(text, null),
     });
@@ -785,11 +832,11 @@ function registerVoiceRoute(
     };
 
     const limitTimer = setInterval(() => {
-      if (endRequested) return;
+      if (termination.isEnding) return;
       const reason: SessionEndReason | undefined = limits.due(piBusy || pendingDelegation !== undefined);
       if (reason) {
         diagnostics.endReason(reason);
-        requestGracefulEnd(1000, 'Voice session time limit reached');
+        requestGracefulEnd('Voice session time limit reached');
       }
     }, SESSION_LIMIT_CHECK_MS);
     limitTimer.unref();
@@ -816,11 +863,11 @@ function registerVoiceRoute(
         return;
       }
       if (event.type === 'jarvis.session.end') {
-        if (endRequested) return;
-        requestGracefulEnd(1000, 'Voice session ended');
+        if (termination.isEnding) return;
+        requestGracefulEnd('Voice session ended');
         return;
       }
-      if (endRequested) return;
+      if (termination.isEnding) return;
       if (event.type === 'jarvis.microphone.active') {
         microphoneActive = true;
         microphoneMuted = false;
@@ -875,10 +922,10 @@ function registerVoiceRoute(
 
     browser.once('close', (code) => {
       diagnostics.summary('browser', code);
-      if (!closing) requestGracefulEnd(1000, 'Browser disconnected', false);
+      if (!termination.isTerminal) closeSession(1011, 'Browser disconnected', false);
     });
     browser.once('error', () => {
-      if (!closing) requestGracefulEnd(1000, 'Browser disconnected', false);
+      if (!termination.isTerminal) closeSession(1011, 'Browser disconnected', false);
     });
 
     const shutdown = async () => {
@@ -917,21 +964,21 @@ function registerVoiceRoute(
         });
         socket.on('message', receiveProvider);
         socket.once('close', (code, reason) => {
-          if (socket !== upstream || closing) return;
+          if (socket !== upstream || controller.signal.aborted || termination.isTerminal) return;
           log.warn({
             events: [...seenEventTypes].join(',').slice(0, 400),
             closeCode: code,
             failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
             language,
           }, 'voice.upstream_closed');
-          closeSession(1011, gracefulEnd
+          closeSession(1011, termination.phase === 'awaiting-provider-close'
             ? 'Voice connection ended before session.closed'
             : 'Voice connection ended');
         });
         socket.once('error', (error) => {
-          if (socket !== upstream || controller.signal.aborted || closing) return;
+          if (socket !== upstream || controller.signal.aborted || termination.isTerminal) return;
           log.warn({ failure: safeFailure(error), language }, 'voice.connection_failed');
-          closeSession(1011, gracefulEnd
+          closeSession(1011, termination.phase === 'awaiting-provider-close'
             ? 'Voice connection failed before session.closed'
             : 'Voice connection failed');
         });

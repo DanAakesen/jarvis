@@ -57,6 +57,14 @@ explicit 24 kHz conflict, caps every commentary append at 256 UTF-8 bytes, and
 retains/deduplicates cumulative provider audio seconds in voice usage. Focused
 offline protocol tests cover all three boundaries.
 
+Final termination hardening now uses one guarded backend state table for
+provider close, persistence and Jarvis acknowledgement. Only that completed
+clean sequence can publish Ended/1000; pre-provider, connecting, send, timeout,
+transport and cleanup failures use 1011 and full teardown. The web, iPhone and
+Watch clients keep failed ownership distinct, reject late Ended resurrection,
+and close failed transport with 1011. Table-driven backend and Swift coverage
+plus browser pre-connect/send/failure/ack coverage passes offline.
+
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

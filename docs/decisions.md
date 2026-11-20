@@ -33,10 +33,14 @@
 - SQL startup rejection is consumed immediately. Only clean completion emits
   `jarvis.session.ended`; provider/restart/startup failures emit an explicit
   retryable/non-retryable failure and reconnect only when the event allows it.
-- A clean close path sends native `session.close` and waits for
-  `session.closed`; socket close/error/timeout before that event is retryable
-  1011 and forbids wall-clock voice usage. Swift End waits for Jarvis terminal
-  evidence or a bounded timeout before publishing Ended.
+- A single terminal state machine owns clean versus failed completion. A clean
+  path can send `session.close` only after provider readiness, must observe
+  `session.closed`, finish persistence and enqueue `jarvis.session.ended`
+  before it emits a `1000` terminal close. Pre-provider, connecting, send,
+  drain, transport, acknowledgement and cleanup failures remain 1011 and
+  forbid wall-clock voice usage. Web, iPhone and Watch release successful
+  ownership only after Jarvis terminal evidence (or an already-ended state);
+  failed ownership is always torn down without publishing Ended.
 - Optional Live format echoes are not readiness proof or a rejection when
   absent; an explicit conflict is rejected against provisioned PCM 24 kHz.
   Commentary chunks are at most 256 UTF-8 bytes, below 500 tokens even at one

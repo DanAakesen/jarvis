@@ -520,7 +520,7 @@ export class BrowserVoiceClient {
     if (!this.running || this.stopping) return;
     const socket = this.socket;
     if (!socket || socket.readyState === WebSocket.CLOSED) {
-      this.finishStop(false);
+      this.finishStop(false, true);
       return;
     }
     this.stopping = true;
@@ -768,7 +768,9 @@ export class BrowserVoiceClient {
           if (socket) {
             socket.removeEventListener('message', this.receiveBound);
             if (this.socket === socket) this.socket = undefined;
-            socket.close();
+            if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+              socket.close(1011, 'Voice connection ended');
+            }
           }
           this.microphoneOpen = false;
           this.sessionReady = false;
@@ -811,14 +813,14 @@ export class BrowserVoiceClient {
         this.sendCameraState();
         this.options.onSessionReady?.(event.sessionId);
       }
-    } else if (event.type === 'jarvis.session.ended') {
+    } else if (event.type === 'jarvis.session.ended' && this.running) {
       this.finishStop(true);
     } else if (event.type === 'jarvis.session.failed' &&
         typeof event.retryable === 'boolean' && typeof event.closeCode === 'number') {
       this.audio.stopPlayback();
       this.playbackAllowed = false;
       this.responseFinished = false;
-      if (event.retryable) {
+      if (event.retryable && !this.stopping) {
         this.sessionReady = false;
         this.screenSessionReady = false;
         this.microphoneOpen = false;
@@ -939,7 +941,7 @@ export class BrowserVoiceClient {
     this.stopOpenHandler = undefined;
     this.controller?.abort();
     this.controller = undefined;
-    this.socket?.close(1000, 'Voice stopped');
+    this.socket?.close(sessionEnded ? 1000 : 1011, sessionEnded ? 'Voice ended' : 'Voice end failed');
     this.socket = undefined;
     this.audio.dispose();
     this.setMicrophone('off');
