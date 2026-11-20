@@ -6,7 +6,12 @@ that carries the instructions, the Jarvis MCP server (by connection) and the ski
 that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
 
-The voice agent `jarvis-pi-live` is different: Foundry owns its instructions, voice and greeting. This script creates its first
+Foundry owns the instructions text of `jarvis-pi`. agents/pi/instructions.md only seeds version 1 when the agent does not
+exist. Afterwards this script never compares, verifies or restores the text; when a code-owned part (skills, MCP, tools,
+settings) needs a new version, the new version carries forward the text of the version that serves traffic (the pinned
+version, otherwise the latest).
+
+The voice agent `jarvis-pi-live` is owned the same way: Foundry owns its instructions, voice and greeting. This script creates its first
 version from the files in agents/pi once, and afterwards only verifies the technical contract the backend relay depends on.
 
 Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scale to zero) are
@@ -113,9 +118,13 @@ def load_voice_spec() -> tuple[dict, str, dict]:
 
 
 def instructions_text() -> str:
-    """The static persona: agents/pi/instructions.md with the shared identity contract filled in."""
+    """The seed persona for version 1: agents/pi/instructions.md with the shared identity contract filled in.
+
+    The leading HTML comment explains the file to editors and is not part of the seed. Foundry owns the text afterwards.
+    """
     contract = json.loads((ROOT / "agents" / "jarvis" / "identity-contract.json").read_text(encoding="utf-8"))
     text = (PI / "instructions.md").read_text(encoding="utf-8")
+    text = re.sub(r"\A<!--.*?-->\s*", "", text, count=1, flags=re.DOTALL)
     text = text.replace("{{identity_kernel}}", contract["fixedKernel"]["en"])
     text = text.replace("{{product_identity}}", contract["productIdentity"]["en"])
     # A leftover placeholder would be read by Foundry as a structured input.
@@ -168,10 +177,13 @@ def build_definition(spec: dict, instructions: str, server_url: str, skills: lis
     }
 
 
-def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> str:
-    """Everything that makes a new agent version necessary, hashed; skill versions are not part of it, their content is."""
+def fingerprint(spec: dict, server_url: str, skills: list[dict]) -> str:
+    """Everything code owns that makes a new agent version necessary, hashed. The instructions are Foundry's, never part of it.
+
+    Skill versions are not part of it either; their content is.
+    """
     return sha256(canonical({
-        "spec": spec, "instructions": instructions, "server_url": server_url,
+        "spec": spec, "server_url": server_url,
         "skills": [[skill["name"], skill["sha256"]] for skill in skills],
     }))
 
@@ -513,12 +525,12 @@ def remove_connection(project_id: str, name: str) -> None:
             raise
 
 
-def verify(readback: dict, spec: dict, expected: str) -> None:
+def verify(readback: dict, spec: dict) -> None:
+    """Fail on drift in what code owns. The instructions text is never read."""
     definition = readback.get("definition") or {}
     require(definition.get("harness") == {"type": "microsoft_copilot_preview"}, "readback_harness_mismatch")
     require(definition.get("model") == spec["model"], "readback_model_mismatch")
     require((definition.get("reasoning") or {}).get("effort") == spec["reasoningEffort"], "readback_reasoning_mismatch")
-    require(definition.get("instructions") == expected, "readback_instructions_mismatch")
     tools = definition.get("tools") or []
     toolset = [tool for tool in tools if tool.get("type") == "microsoft_copilot_toolset_preview"]
     require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is (spec["builtinTools"] == "enabled"), "readback_builtins_mismatch")
@@ -572,10 +584,11 @@ def verify_voice_deployment(deployment: dict | None, spec: dict) -> None:
     )
 
 
-def effective_voice_version(azure: Az, name: str) -> str | None:
+def effective_version(azure: Az, name: str, features: str | None, unknown_code: str) -> str | None:
     """The version that serves traffic: the pinned one if a pin rule exists, otherwise the latest. None when the agent is absent."""
+    options = {} if features is None else {"features": features}
     try:
-        agent = azure.rest("GET", f"/agents/{name}", features=VOICE_FEATURES)
+        agent = azure.rest("GET", f"/agents/{name}", **options)
     except Blocked as error:
         if ":not_found" in str(error):
             return None
@@ -589,9 +602,26 @@ def effective_voice_version(azure: Az, name: str) -> str | None:
         version = as_version(latest.get("version") if isinstance(latest, dict) else latest)
     require(
         isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
-        "voice_agent_version_unknown",
+        unknown_code,
     )
     return version
+
+
+def effective_voice_version(azure: Az, name: str) -> str | None:
+    return effective_version(azure, name, VOICE_FEATURES, "voice_agent_version_unknown")
+
+
+def effective_state(azure: Az, name: str) -> dict | None:
+    """What the serving version of the main agent holds. None when the agent does not exist yet."""
+    version = effective_version(azure, name, None, "agent_version_unknown")
+    if version is None:
+        return None
+    readback = azure.rest("GET", f"/agents/{name}/versions/{version}")
+    definition = readback.get("definition") or {}
+    skills = {item["name"]: item["version"] for item in definition.get("skills") or []
+              if isinstance(item, dict) and "name" in item and "version" in item}
+    return {"version": version, "metadata": readback.get("metadata") or {}, "skills": skills,
+            "status": readback.get("status"), "instructions": definition.get("instructions")}
 
 
 def provision_voice_agent(
@@ -641,14 +671,13 @@ def provision(args: argparse.Namespace) -> dict:
     spec = load_spec()
     voice_spec, _voice_instructions, voice_definition = load_voice_spec()
     name = spec["agentName"]
-    instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
     experiment = getattr(args, "experiment", "none") or "none"
     spec, skills = apply_experiment(spec, skills, experiment)
     azure_mcp, azure_status = resolve_azure(args)
     github_token, github_status = resolve_github(spec)
     foundry = Az(args.project_endpoint)
-    state = current_state(foundry, name)
+    state = effective_state(foundry, name)
     secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name, github_token, azure_mcp)
     REDACT.append(secret)
     server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
@@ -659,16 +688,22 @@ def provision(args: argparse.Namespace) -> dict:
     # identity); the backend reaches both now, so those connections have no purpose left.
     for legacy in (spec["github"]["legacyConnection"], spec["azure"]["legacyConnection"]):
         remove_connection(project_id, legacy)
-    wanted = fingerprint(spec, instructions, server_url, skills)
-    unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
+    wanted = fingerprint(spec, server_url, skills)
+    unchanged = bool(state and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
     ensure_skills(foundry, skills, unchanged, state["skills"] if state else {})
     result = {"agent": name, "connection": spec["mcp"]["connection"], "connectionWritten": connection_written,
               "skills": {s["name"]: s["version"] for s in skills}, "reach": {"github": github_status, "azure": azure_status},
               "experiment": experiment}
     if unchanged:
-        version = state["pinned"]
+        version = state["version"]
         created = False
     else:
+        if state is None:
+            instructions = instructions_text()
+        else:
+            # Foundry owns the text: carry forward what serves traffic now, never the repo seed.
+            instructions = state["instructions"]
+            require(isinstance(instructions, str), "agent_instructions_unreadable")
         definition = build_definition(spec, instructions, server_url, skills)
         metadata = {FINGERPRINT_KEY: wanted}
         # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
@@ -680,7 +715,7 @@ def provision(args: argparse.Namespace) -> dict:
             and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
             "agent_version_unknown",
         )
-        verify(wait_active(foundry, name, version), spec, instructions)
+        verify(wait_active(foundry, name, version), spec)
         pin(foundry, name, version)
         created = True
     voice = provision_voice_agent(
