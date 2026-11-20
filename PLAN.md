@@ -1,8 +1,8 @@
 ## GPT-Live voice fidelity — 20 November 2026 (#1988)
 
-**Status: implemented and independently reviewed; offline qualification is
-green except the local Swift package gate, which requires the exact-head macOS
-CI run.** The work preserves the native GPT-Live route and full-duplex
+**Status: implemented and independently reviewed; offline qualification and
+the exact-head aggregate CI gate are green, including macOS JarvisCore.** The
+work preserves the native GPT-Live route and full-duplex
 behaviour, with no old voice fallback or provider-output semantic approval gate.
 
 | Step | State |
@@ -12,7 +12,7 @@ behaviour, with no old voice fallback or provider-output semantic approval gate.
 | Preserve exact caption speaker/order by stable input, response and delivery identities | Implemented; backend and portable Swift coverage added |
 | Serialize voice transcript persistence as Dan → Jarvis → Dan → Jarvis and order restored history by canonical message ID | Implemented; integration regression added |
 | Keep GPT-Live natural for duplex/backchannels while delegated tool/action turns continue through the same PI gateway | Implemented; focused no-switch/no-fallback checks added |
-| Run provisioner, backend, web, JSON/YAML, contracts and available Swift gates | Provisioner 30/30; focused backend 42/42 plus build/lint; web 57/57 plus build/lint; contracts and JSON/YAML pass. Portable Swift source is present; ARM Windows Swift package tooling failed locally, so exact-head macOS CI is required |
+| Run provisioner, backend, web, JSON/YAML, contracts and Swift gates | Provisioner 30/30; focused backend 42/42 plus build/lint; web 57/57 plus build/lint; contracts and JSON/YAML pass. Exact-head aggregate CI, including macOS JarvisCore, is green |
 | Independently review async persistence, reconnect, state and Watch ordering; inspect final diff and commit | Done; all reported defects fixed and covered |
 | Dan verifies `vesper`, Danish/English audio, iPhone/Watch reconnect and physical caption behaviour | Open; no live/paid test authorized |
 
