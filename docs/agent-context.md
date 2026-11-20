@@ -11,6 +11,31 @@
 - Successful memory actions arrive through existing `tool-call-finished` activity. Web resets the first page and advances by raw server `count`; iPhone invalidates Settings memory caches and reloads an open Memory screen. Keep both handling Chat and Voice.
 - Offline checks: `npm test --workspace @jarvis/backend -- src/core/memory.test.ts src/pi/context.test.ts src/pi/mcp.test.ts`; backend build/lint; `npm test --workspace @jarvis/web -- src/MemorySettings.test.tsx`; web build/lint; `swift:6.2` `swift test -j 2 --filter ChatToolKindTests`. No live model, provider, deployment or paid canary is allowed.
 
+## Durable reply pushes — 20 November 2026 (#1970)
+
+- Migration `0093_reply_notification_outbox.sql` must run before this backend
+  revision. It is backward-compatible for old registration inserts by using a
+  UUID default, and has a matching down migration.
+- Ordinary replies are queued only by the conversation-store transaction; do
+  not add a callback-based fallback sender. `reply-notification-store.ts` owns
+  leases/results and `reply-notifications.ts` is the sole reply APNs worker.
+- Approval suppression is exact `(confirmation ID, source turn message ID)`.
+  Keep `withConfirmationTurn` around tool execution and keep proactive
+  confirmation metadata on `message_dan`; never restore timestamp-wide or
+  process-local suppression.
+- iPhone and Watch route `jarvis.reply` using `JarvisReplyNotificationTarget`.
+  Do not fold reply taps into the `jarvis.proactive` item route or approval
+  action handling.
+- Offline checks:
+  - `npm test --workspace @jarvis/backend -- src/push/reply-notifications.test.ts src/database/migrations.test.ts src/pi/brain/comms.test.ts`
+  - `npm run build --workspace @jarvis/backend`
+  - `npm run lint --workspace @jarvis/backend`
+  - loopback SQL contract: `src/database/reply-notification-store.integration.test.ts`
+  - `swift test --filter 'ReplyNotificationTargetTests|ChatFollowStateTests'` in `apps/ios/Packages/JarvisCore`
+- Never send a real APNs push or call Apple/Foundry/Voice/Azure/GitHub for this
+  feature. Linux cannot compile/render SwiftUI; the Mac job and a signed
+  iPhone/Watch remain the live tap/lock-screen checks.
+
 ## PI release hardening — 19 November 2026 (#1966)
 
 - Ordinary Bicep deploys must preserve PI through `pi_backend_configuration.py`: validate exactly one existing backend, read the protected PI secret values, retain optional Azure/GitHub bindings and monthly cap, then pass a private `piAgentConfiguration` secure object to Bicep. Temporary backend/secret/parameter files are mode `0600` and removed on every exit, including local runs.

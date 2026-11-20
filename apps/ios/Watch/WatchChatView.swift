@@ -91,6 +91,15 @@ struct WatchChatView: View {
                 }
             }
             .defaultScrollAnchor(.bottom)
+            .task(id: model.replyTargetMessageID) {
+                guard let messageID = model.replyTargetMessageID else { return }
+                await Task.yield()
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo(messageID, anchor: .center)
+                }
+            }
             .task {
                 #if DEBUG
                 // Simulator capture of the reading-history state from synthetic messages.

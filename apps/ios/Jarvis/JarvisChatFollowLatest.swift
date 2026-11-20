@@ -34,6 +34,7 @@ struct JarvisChatFollowLatest: ViewModifier {
     var keyboardRevision = 0
     let jumpToLatestTitle: String
     var isEnabled = true
+    var focusMessageID: String?
     @Environment(\.scenePhase) private var scenePhase
     @State private var follow = ChatFollowState()
     @State private var revision = 0
@@ -109,6 +110,21 @@ struct JarvisChatFollowLatest: ViewModifier {
                 if enabled {
                     follow = ChatFollowState()
                     revision += 1
+                }
+            }
+            .onChange(of: focusMessageID, initial: true) { _, focusMessageID in
+                if focusMessageID != nil {
+                    follow.notificationMessageOpened()
+                }
+            }
+            .task(id: focusMessageID) {
+                guard let focusMessageID else { return }
+                await Task.yield()
+                guard !Task.isCancelled, scenePhase == .active else { return }
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo(focusMessageID, anchor: .center)
                 }
             }
             .overlay(alignment: .bottomTrailing) {

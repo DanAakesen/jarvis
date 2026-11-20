@@ -6,13 +6,15 @@ import { BrainCommsRefusal, MAX_BRAIN_MESSAGES_PER_DAY, createBrainComms } from 
 const signal = new AbortController().signal;
 const run = () => ({ runId: 'r1', sent: [] as { title: string | null; text: string; messageId: string }[], wrote: [] as string[], looked: [] as string[] });
 
-function setup(options: { empty?: boolean; announce?: () => void } = {}) {
+function setup(options: { empty?: boolean; announce?: () => void; pushEnabled?: boolean } = {}) {
   const now = () => new Date('2026-11-16T10:00:00Z');
   const conversations = memoryConversations(options.empty === true ? { empty: true } : {});
   const store = createMemoryPiStore(now);
   const pushes: unknown[] = [];
   const comms = createBrainComms({
-    conversations: conversations.store, store, ownerObjectId: 'o', push: (message) => pushes.push(message), announce: options.announce ?? (() => {}), now,
+    conversations: conversations.store, store, ownerObjectId: 'o',
+    pushEnabled: options.pushEnabled,
+    push: (message) => pushes.push(message), announce: options.announce ?? (() => {}), now,
   });
   return { comms, conversations, store, pushes };
 }
@@ -22,10 +24,17 @@ describe('the brain\'s chat message', () => {
     let announced = 0;
     const { comms, conversations, pushes, store } = setup({ announce: () => { announced += 1; } });
     const r = run();
-    const sent = await comms.send({ text: '  The deploy failed.  ' }, r, signal);
+    const sent = await comms.send({
+      text: '  The deploy failed.  ',
+      evidence: { category: 'technical', evidenceSources: ['factory'] },
+    }, r, signal);
     expect(sent).toEqual({ messageId: '2', sessionId: '7' });
     expect(conversations.messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi', text: 'The deploy failed.' });
-    expect(pushes).toEqual([{ sessionId: '7', messageId: '2', text: 'The deploy failed.' }]);
+    expect(pushes).toEqual([{ sessionId: '7', messageId: '2' }]);
+    expect(conversations.addMessageInputs.at(-1)?.replyNotification?.evidence).toEqual({
+      category: 'technical',
+      evidenceSources: ['factory'],
+    });
     expect(announced).toBe(1);
     expect(r.sent).toHaveLength(1);
     expect((await store.messagesSince(new Date('2026-11-16T00:00:00Z'), signal)).count).toBe(1);
@@ -36,6 +45,13 @@ describe('the brain\'s chat message', () => {
     await comms.send({ text: 'Hello.' }, run(), signal);
     expect(conversations.sessions).toHaveLength(1);
     expect(conversations.messages).toHaveLength(1);
+  });
+
+  it('does not create a dormant outbox or push callback when native delivery is disabled', async () => {
+    const { comms, conversations, pushes } = setup({ pushEnabled: false });
+    await comms.send({ text: 'Stored, without APNs.' }, run(), signal);
+    expect(conversations.addMessageInputs.at(-1)?.replyNotification).toBeUndefined();
+    expect(pushes).toEqual([]);
   });
 
   it('refuses an empty, over-long, credential-like or repeated message, and sends nothing', async () => {

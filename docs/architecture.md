@@ -1,3 +1,47 @@
+## Durable reply APNs outbox — 20 November 2026 (#1970)
+
+```mermaid
+flowchart LR
+    A[Stored assistant reply] --> T[Message + outbox SQL transaction]
+    T --> O[Per-device reply_notification_deliveries]
+    O --> W[Leased APNs worker]
+    W -->|accepted| D[Terminal outcome]
+    W -->|transient| R[Bounded retry]
+    W -->|invalid token| I[Invalidate registration]
+    W --> H[Sanitized aggregate status]
+    P[Approval confirmation] --> C[Exact confirmation + turn claim]
+    C --> T
+```
+
+- Migration `0093_reply_notification_outbox.sql` gives each native registration
+  a stable reference, records exact approval/turn claims, and stores one
+  `reply_notification_deliveries` row per stored assistant message and device.
+  Message, safe preview, exact source/turn, optional evidence JSON, device
+  reference, expiry, lease, attempt and sanitized result are durable together.
+- Normal Chat and `message_dan` pass `replyNotification` into the conversation
+  store. The same SQL transaction inserts the assistant message and outbox rows.
+  Approval and reply paths take the same owner/turn application lock, so an
+  exact approval claim removes only that turn's push; unrelated concurrent turns
+  are unaffected.
+- `push/reply-notifications.ts` is the only ordinary reply sender. The worker
+  recovers `pending` and expired leases after restart, retries only transient
+  APNs outcomes (`429`, `5xx` or transport timeout), caps attempts at five with
+  1/5/20/60 second backoff, and terminates at the one-hour expiry. Stable
+  `apns-collapse-id: reply-<messageId>` protects the crash window around an
+  accepted APNs response.
+- Terminal Apple invalid-token rejection deletes the native registration and
+  invalidates all pending rows for that stable device reference. The old
+  `push-ledger.ts` process-local timestamp suppression and every dual reply path
+  are removed.
+- The payload carries `sessionID`, `messageID` and a bounded preview. iPhone and
+  Watch first select the ordinary-reply tap branch and load the exact session
+  page; proactive-item and approval branches retain their existing payloads and
+  routes. Evidence remains server-side and shares the message identity reserved
+  by #1969; the proactive scheduler is unchanged.
+- `/status` database diagnostics expose only aggregate pending/accepted/failed/
+  expired/invalid-token counts and latest sanitized failure time. Logs contain
+  outcome, attempt and HTTP status, never preview/message content or tokens.
+
 ## PI-only release path — 19 November 2026 (#1966)
 
 ```mermaid
@@ -4233,7 +4277,9 @@ unchanged; only the confirmation table remains in use.
 ### Approval replies, push rule and notification caps (P15-64)
 
 - `POST /now/confirmations/:id` posts a chat reply after every calendar approval or rejection (`core/approval-reply.ts`): outcome plus one follow-up question, written into the session that staged the change. The reply is not pushed.
-- `push/push-ledger.ts` enforces one push and one log entry per event: an approval push per confirmation id, a reply push per message id. A reply that completes the turn which staged an approval is not pushed.
+- Ordinary reply push deduplication is owned by migration `0093`'s durable
+  approval/turn claim plus per-message/device outbox, not a process-local ledger.
+  Only the exact turn that staged the confirmation can be suppressed.
 - `core/notification-policy.ts` bounds the Now-feed notification rows written by `recordNotification`: identical kind and text once per rolling 24 hours, at most 10 per kind per rolling 24 hours, expiry from the feed after 7 days.
 - Owner-only feed routes: `POST /now/activity/:id/dismiss`, `POST /now/activity/groups/:category/dismiss` (`attention`, `release`, `credential`, `alert`) and `POST /now/activity/clear`; the last two return `{ dismissed }`.
 

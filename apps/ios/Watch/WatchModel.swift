@@ -17,6 +17,7 @@ final class WatchModel: ObservableObject {
     @Published var busy = false
     @Published var error: String?
     @Published private(set) var historyError: String?
+    @Published private(set) var replyTargetMessageID: String?
     @Published var voiceID: UUID?
     @Published var voiceState = ""
     @Published private(set) var waitingForVoiceConnection = false
@@ -35,6 +36,7 @@ final class WatchModel: ObservableObject {
     private var captureLevel = WatchCaptureLevel()
     private var heartbeat: Task<Void, Never>?
     private var historyRequest = UUID()
+    private var replyTarget: JarvisReplyNotificationTarget?
     private var turn: UUID?
     private var replyID: String?
     private var voiceGeneration = UUID()
@@ -70,6 +72,9 @@ final class WatchModel: ObservableObject {
         connection.onEvent = { [weak self] in self?.receive($0) }
         connection.onSignOut = { [weak self] in
             guard let self else { return }
+            self.replyTarget = nil
+            self.replyTargetMessageID = nil
+            JarvisReplyNotificationTarget.pending()?.clear()
             let active = self.dictationState != .idle
             self.cancelDictation()
             if active { self.error = WatchFailure.signInRequired.message + " Tap Message to type." }
@@ -99,19 +104,71 @@ final class WatchModel: ObservableObject {
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
         guard !busy, !startingVoice, voiceID == nil, connection.reachable else { return }
+        if let replyTarget {
+            _ = await loadReplyTarget(replyTarget)
+            return
+        }
+        _ = await loadHistory()
+    }
+
+    @discardableResult
+    func openReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
+        replyTarget = target
+        replyTargetMessageID = nil
+        return await loadReplyTarget(target)
+    }
+
+    private func loadReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
+        replyTargetMessageID = nil
+        do {
+            let data = try WatchCodec.encode(target)
+            let reply = try await requestHistory(data: data)
+            guard let reply, let decoded = try? JSONDecoder().decode([WatchHistoryMessage].self, from: reply) else {
+                throw WatchFailure.failed
+            }
+            messages = decoded.map { Message(id: $0.id, user: $0.user, text: $0.text) }
+            guard decoded.contains(where: { $0.id == target.messageID }) else {
+                historyError = "This exact reply is no longer available. Open Jarvis on your iPhone."
+                return false
+            }
+            replyTargetMessageID = target.messageID
+            historyError = nil
+            target.clear()
+            return true
+        } catch {
+            historyError = (error as? WatchFailure)?.message ?? "History could not refresh. Check Jarvis on your iPhone."
+            return false
+        }
+    }
+
+    private func loadHistory() async -> Bool {
         let read = UUID(); historyRequest = read
         historyError = nil
         do {
             let history: [WatchHistoryMessage] = try await connection.load(.history)
-            guard read == historyRequest, !busy, voiceID == nil else { return }
+            guard read == historyRequest, !busy, voiceID == nil else { return false }
             messages = history.map { Message(id: $0.id, user: $0.user, text: $0.text) }
+            return true
         } catch {
-            guard read == historyRequest, !busy, voiceID == nil else { return }
+            guard read == historyRequest, !busy, voiceID == nil else { return false }
             historyError = (error as? WatchFailure)?.message ?? "History could not refresh. Check Jarvis on your iPhone."
+            return false
         }
     }
+
+    private func requestHistory(data: Data) async throws -> Data? {
+        let read = UUID()
+        historyRequest = read
+        historyError = nil
+        let reply = try await connection.request(.init(action: .history, data: data))
+        guard read == historyRequest, !busy, voiceID == nil else { return nil }
+        return reply.data
+    }
+
     func send() async {
         guard !busy, !startingVoice, voiceID == nil, dictationState == .idle, let text = composer.beginSend() else { return }
+        replyTarget = nil
+        replyTargetMessageID = nil
         historyRequest = UUID(); historyError = nil
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id

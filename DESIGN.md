@@ -21,6 +21,27 @@ actions for the rest of that session and shows an explicit audio-only notice.
 The control state, notification and capture teardown are part of the product
 contract; silence after a rejected upload is not accepted.
 
+## Reply notification opening — 20 November 2026 (#1970)
+
+An ordinary reply notification is a route into the existing Chat surface, not a
+new visual surface. The system notification uses the Jarvis title, one concise
+line and the existing `jarvis.reply` category. Private or credential-like
+content uses **New reply from Jarvis**; it does not reveal an approval summary,
+preview or message fragment.
+
+On iPhone or Watch, the tap opens Chat and scrolls without animation to the
+exact stored assistant message. Chat pauses its latest-message follow state and
+offers the existing Jump to latest control, so historical deep links do not get
+immediately pulled to the bottom. The ordinary reply branch is distinct from
+the existing proactive-item branch and the authenticated approval actions.
+Loading failure remains in the current Chat error/retry language; no fabricated
+message or guessed session is shown.
+
+This change adds no controls, palette, orb or glass treatment. It follows the
+existing Chat layout, shared controls, Dynamic Type, VoiceOver and Reduce Motion
+behaviour. Apple compilation, rendered focus and physical notification-tap
+behaviour remain separate Mac/device evidence.
+
 ## Background PI in Proactive — 19 November 2026
 
 This is an extension of the existing Proactive settings and status surfaces, not a new screen. The iOS sheet keeps the existing page scaffold, shared rows, glass, toggle and slider language; the web page uses its existing Proactive blocks and shared primary/secondary controls.

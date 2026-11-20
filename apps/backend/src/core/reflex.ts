@@ -14,6 +14,7 @@ import {
   type JevFailure,
 } from './jev.js';
 import type { DecisionProviderId, DecisionTarget, DecisionTargetResolver } from './decision-provider.js';
+import { withConfirmationTurn } from './owner-interactions.js';
 
 const requestTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
@@ -436,7 +437,11 @@ export async function executeReflexAction(
     request.routeOptions.url?.includes('/voice') ? 'voice' : 'chat',
   );
   try {
-    result = await target.tool.execute(target.arguments, request, signal);
+    const execute = () => target.tool.execute(target.arguments, request, signal);
+    result = /^[1-9][0-9]{0,18}$/u.test(messageId) &&
+        BigInt(messageId) <= 9223372036854775807n
+      ? await withConfirmationTurn(messageId, execute)
+      : await execute();
     const serialized = JSON.stringify(result);
     if (serialized === undefined || Buffer.byteLength(serialized) > 1024 * 1024) {
       throw new Error('Invalid tool result');

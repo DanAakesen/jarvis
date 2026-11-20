@@ -28,11 +28,12 @@ interface PendingAction {
   readonly items?: readonly string[];
   readonly execute: (signal: AbortSignal) => Promise<unknown>;
   readonly confirmation: Confirmation;
+  notificationReady?: Promise<void>;
 }
 
 export class PendingGoogleActions {
   onChanged: () => void = () => {};
-  onConfirmationPending: (confirmation: BrowserConfirmation) => void = () => {};
+  onConfirmationPending: (confirmation: BrowserConfirmation) => void | Promise<void> = () => {};
   private readonly actions = new Map<string, PendingAction>();
   private calendarProposal: PendingAction | undefined;
   private calendarReceipt: {
@@ -110,12 +111,15 @@ export class PendingGoogleActions {
     }
     this.onChanged();
     if (input.scope === 'calendar') {
-      this.onConfirmationPending({
-        id: action.browserId,
-        actionKind: 'calendar_change',
-        summary: action.summary,
-        expiresAt: action.confirmation.presentation.expiresAt,
-      });
+      action.notificationReady = Promise.resolve()
+        .then(() => this.onConfirmationPending({
+          id: action.browserId,
+          actionKind: 'calendar_change',
+          summary: action.summary,
+          expiresAt: action.confirmation.presentation.expiresAt,
+          turnMessageId: action.sourceMessageId,
+        }))
+        .catch(() => undefined);
     }
     return {
       ...confirmation.presentation,
@@ -199,6 +203,8 @@ export class PendingGoogleActions {
   }
 
   private async complete(action: PendingAction, verdict: ApprovalVerdict | undefined, signal: AbortSignal) {
+    await action.notificationReady;
+    signal.throwIfAborted();
     const { scope, code } = action;
     const decision = action.confirmation.consume(verdict, signal);
     this.actions.delete(code);

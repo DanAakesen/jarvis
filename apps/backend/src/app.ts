@@ -72,9 +72,12 @@ import { registerWebSocketPlugin } from './websocket.js';
 import { registerActivityKitRoutes, type ActivityKitServices } from './push/activitykit-routes.js';
 import {
   registerApprovalNotificationRoutes,
-  type ReplyNotificationInput,
   type ApprovalNotificationServices,
 } from './push/approval-notifications.js';
+import type {
+  ReplyNotificationInput,
+  ReplyNotificationWorker,
+} from './push/reply-notifications.js';
 import type { BrowserConfirmation } from './core/owner-interactions.js';
 import { installWatchTranscriptionDeadline, registerWatchTranscriptionRoute } from './voice/watch-routes.js';
 import type { WatchTranscriber } from './voice/watch-transcription.js';
@@ -92,8 +95,9 @@ export interface BuildAppOptions {
   readonly proactiveConversationContext?: import('./proactive/conversation-context.js').ProactiveConversationContext;
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
-  readonly notifyApproval?: (confirmation: BrowserConfirmation) => void;
+  readonly notifyApproval?: (confirmation: BrowserConfirmation) => void | Promise<void>;
   readonly notifyReply?: (reply: ReplyNotificationInput) => void;
+  readonly replyNotificationWorker?: ReplyNotificationWorker;
   /** Test-only PI chat engine: its in-process credentials and the agent a turn that selects PI streams from. */
   readonly piAuth?: PiAuth;
   readonly piAgent?: ConversationAgent;
@@ -210,8 +214,9 @@ declare module 'fastify' {
     approvalInterpreter: ApprovalInterpreter;
     browserAgent: BrowserAgent | null;
     ownerInteractions: OwnerInteractionService | null;
-    notifyApproval: (confirmation: BrowserConfirmation) => void;
+    notifyApproval: (confirmation: BrowserConfirmation) => void | Promise<void>;
     notifyReply: (reply: ReplyNotificationInput) => void;
+    replyNotificationsEnabled: boolean;
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
@@ -293,6 +298,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
   app.decorate('notifyReply', options.notifyReply ?? (() => {}));
+  app.decorate('replyNotificationsEnabled', options.notifyReply !== undefined);
   app.decorate('backendLogsConfigured', config.backendLogs !== undefined);
   app.decorate('backendLogAuthorizationProbe', options.backendLogAuthorizationProbe ?? null);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
@@ -386,6 +392,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.addHook('onReady', async () => { await backgroundJobs.initialize(); });
   registerActivityKitRoutes(app, options.activityKit);
   registerApprovalNotificationRoutes(app, options.approvalNotifications);
+  if (options.replyNotificationWorker) {
+    app.addHook('onReady', async () => { options.replyNotificationWorker!.start(); });
+    app.addHook('preClose', async () => { await options.replyNotificationWorker!.stop(); });
+  }
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);

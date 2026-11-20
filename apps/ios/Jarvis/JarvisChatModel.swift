@@ -108,6 +108,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
+    @Published private(set) var replyTargetMessageID: String?
     /// The last turn that failed, as it was sent, so the error can offer Retry without touching the composer.
     @Published private(set) var failedTurn: FailedTurn?
 
@@ -140,6 +141,8 @@ final class JarvisChatModel: ObservableObject {
     private let watchClient: VisionWatchClient?
     private var liveStreamTask: Task<Void, Never>?
     private var historyPaging = ChatHistoryPagingState()
+    private var historySessionID: String?
+    private var replyTarget: JarvisReplyNotificationTarget?
     private var sessionID: String?
     private var activeMessageID: String?
     private var uploadedAttachmentIDs: [UUID: String] = [:]
@@ -160,7 +163,12 @@ final class JarvisChatModel: ObservableObject {
 
     private var appLanguage: JarvisAppLanguage { .en }
 
-    init(client: JarvisClient?, fixtureMode: Bool = false, startupError: String? = nil) {
+    init(
+        client: JarvisClient?,
+        fixtureMode: Bool = false,
+        startupError: String? = nil,
+        replyTarget: JarvisReplyNotificationTarget? = nil
+    ) {
         self.client = client.map { JarvisChatClient(client: $0) }
         nowClient = client.map { JarvisNowFeedClient(client: $0) }
         updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
@@ -170,6 +178,7 @@ final class JarvisChatModel: ObservableObject {
         if let client { JarvisFactoryLiveActivityController.configure(client: client) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
+        self.replyTarget = replyTarget
         if fixtureMode && JarvisChatPhotoFixture.isEnabled {
             pendingAttachments = JarvisChatPhotoFixture.pending
             draft = "Synthetic photo draft"
@@ -223,13 +232,18 @@ final class JarvisChatModel: ObservableObject {
             return
         }
 
-        do {
-            let page = try await client.history()
-            apply(page, replacing: true)
-            historyPaging.replaceHistory(nextCursor: page.nextCursor)
-            historyError = nil
-        } catch {
-            historyError = message(for: error)
+        if let replyTarget {
+            await loadReplyTarget(replyTarget)
+        } else {
+            do {
+                let page = try await client.history()
+                apply(page, replacing: true)
+                historyPaging.replaceHistory(nextCursor: page.nextCursor)
+                historySessionID = nil
+                historyError = nil
+            } catch {
+                historyError = message(for: error)
+            }
         }
         isLoading = false
         if !fixtureMode, let settingsClient { _ = await deviceLocation.sync(using: settingsClient) }
@@ -251,10 +265,16 @@ final class JarvisChatModel: ObservableObject {
         guard let client else { return }
         isLoading = true
         historyError = nil
+        if let replyTarget {
+            await loadReplyTarget(replyTarget)
+            isLoading = false
+            return
+        }
         do {
             let page = try await client.history()
             apply(page, replacing: true)
             historyPaging.replaceHistory(nextCursor: page.nextCursor)
+            historySessionID = nil
         } catch {
             historyError = message(for: error)
         }
@@ -265,13 +285,68 @@ final class JarvisChatModel: ObservableObject {
         guard let client, let cursor = historyPaging.nextCursor, !isLoadingOlder else { return }
         isLoadingOlder = true
         do {
-            let page = try await client.history(before: cursor)
+            let page = try await client.history(before: cursor, sessionId: historySessionID)
             apply(page, replacing: false)
             historyPaging.appendOlderPage(nextCursor: page.nextCursor)
         } catch {
             actionError = message(for: error)
         }
         isLoadingOlder = false
+    }
+
+    @discardableResult
+    func openReplyTarget(_ target: JarvisReplyNotificationTarget) async -> Bool {
+        replyTarget = target
+        replyTargetMessageID = nil
+        didLoad = true
+        isLoading = true
+        await loadReplyTarget(target)
+        isLoading = false
+        return replyTargetMessageID == target.messageID
+    }
+
+    private func loadReplyTarget(_ target: JarvisReplyNotificationTarget) async {
+        guard let client else {
+            historyError = startupError ?? "Chat is unavailable."
+            actionError = "Chat is open, but Jarvis could not load this exact reply."
+            return
+        }
+        historyError = nil
+        actionError = nil
+        historySessionID = target.sessionID
+        var before: String?
+        var pages = 0
+        var found = false
+        var seenCursors = Set<String>()
+        do {
+            repeat {
+                let page = try await client.history(limit: 100, before: before, sessionId: target.sessionID)
+                apply(page, replacing: pages == 0)
+                if pages == 0 {
+                    historyPaging.replaceHistory(nextCursor: page.nextCursor)
+                } else {
+                    historyPaging.appendOlderPage(nextCursor: page.nextCursor)
+                }
+                pages += 1
+                found = page.messages.contains { $0.id == target.messageID }
+                if found || page.nextCursor == nil || pages >= 100 { break }
+                guard let cursor = page.nextCursor, seenCursors.insert(cursor).inserted else {
+                    throw JarvisChatClientError.invalidResponse
+                }
+                before = cursor
+            } while true
+        } catch {
+            historyError = message(for: error)
+            actionError = "Chat is open, but Jarvis could not load this exact reply."
+            return
+        }
+        guard found else {
+            actionError = "Chat is open, but the exact reply is no longer available in this session."
+            return
+        }
+        replyTargetMessageID = target.messageID
+        historyError = nil
+        actionError = nil
     }
 
     func addAttachment(name: String, contentType: String, data: Data) {
@@ -365,6 +440,9 @@ final class JarvisChatModel: ObservableObject {
         visualFrame: PendingVisualFrame?,
         fromComposer: Bool
     ) {
+        replyTarget = nil
+        replyTargetMessageID = nil
+        historySessionID = nil
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
         turnStartedAt = Date()
@@ -880,7 +958,7 @@ final class JarvisChatModel: ObservableObject {
     private func refreshHistory() async {
         guard let client else { return }
         do {
-            let page = try await client.history()
+            let page = try await client.history(sessionId: historySessionID)
             apply(page, replacing: false)
             historyPaging.refreshLatestPage(nextCursor: page.nextCursor)
         } catch {

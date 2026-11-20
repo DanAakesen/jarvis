@@ -21,8 +21,9 @@ export interface BrainCommsOptions {
   readonly conversations: Pick<ConversationStore, 'getHistory' | 'getSession' | 'createSession' | 'addMessage'>;
   readonly store: Pick<PiStore, 'recordMessage' | 'messagesSince'>;
   readonly ownerObjectId: string;
+  readonly pushEnabled?: boolean;
   /** The one push path of a finished chat message (iOS push, mirrored to the Watch by the phone). Called exactly once per message. */
-  readonly push: (message: { sessionId: string; messageId: string; text: string }) => void;
+  readonly push: (message: { sessionId: string; messageId: string }) => void;
   /** Tells an open app to refresh its chat history. */
   readonly announce: () => void;
   readonly now: () => Date;
@@ -38,7 +39,11 @@ const hash = (text: string) => createHash('sha256').update(text.trim().replace(/
 export function createBrainComms(options: BrainCommsOptions) {
   // Admission (the daily count and the repeat check) and recording must not interleave, or parallel sends would all pass.
   let admission: Promise<unknown> = Promise.resolve();
-  async function admit(input: { readonly text: string }, run: PiBrainRun, signal: AbortSignal): Promise<{ messageId: string; sessionId: string }> {
+  async function admit(
+    input: { readonly text: string; readonly evidence?: Readonly<Record<string, unknown>> },
+    run: PiBrainRun,
+    signal: AbortSignal,
+  ): Promise<{ messageId: string; sessionId: string }> {
     const text = input.text.trim();
     if (!text) throw new BrainCommsRefusal('The message is empty. Nothing was sent.');
     if (Array.from(text).length > MAX_BRAIN_MESSAGE_CHARACTERS) {
@@ -60,6 +65,10 @@ export function createBrainComms(options: BrainCommsOptions) {
     if (!session) throw new BrainCommsRefusal('The chat session could not be found. Nothing was sent.');
     const message = await options.conversations.addMessage({
       signal, sessionId: session.id, role: 'jarvis', text, model: 'pi', language: session.language, allowEndedSession: true,
+      ...(options.pushEnabled === false ? {} : { replyNotification: {
+        ownerObjectId: options.ownerObjectId,
+        ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
+      } }),
     });
     if (!message) throw new BrainCommsRefusal('The chat could not store the message. Nothing was sent.');
     run.sent.push({ title: null, text, messageId: message.id });
@@ -67,11 +76,17 @@ export function createBrainComms(options: BrainCommsOptions) {
     await options.store.recordMessage({ runId: run.runId, sessionId: session.id, messageId: message.id, textHash }, options.now(), AbortSignal.timeout(10_000))
       .catch(() => undefined);
     options.announce();
-    options.push({ sessionId: session.id, messageId: message.id, text });
+    if (options.pushEnabled !== false) {
+      options.push({ sessionId: session.id, messageId: message.id });
+    }
     return { messageId: message.id, sessionId: session.id };
   }
   return {
-    send(input: { readonly text: string }, run: PiBrainRun, signal: AbortSignal): Promise<{ messageId: string; sessionId: string }> {
+    send(
+      input: { readonly text: string; readonly evidence?: Readonly<Record<string, unknown>> },
+      run: PiBrainRun,
+      signal: AbortSignal,
+    ): Promise<{ messageId: string; sessionId: string }> {
       const turn = admission.then(() => admit(input, run, signal), () => admit(input, run, signal));
       admission = turn.catch(() => undefined);
       return turn;

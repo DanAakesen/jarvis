@@ -11,6 +11,7 @@ final class JarvisAppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         JarvisTaskActivityBackgroundRefresh.shared.register()
         JarvisWatchBridge.shared.activate()
+        JarvisApprovalNotificationCoordinator.shared.activate()
         return true
     }
 

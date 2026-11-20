@@ -619,7 +619,6 @@ return {
       },
     }, async (request, reply) => {
       const turnStartedAt = performance.now();
-      const turnStartedAtMs = Date.now();
       const store = app.conversationStore;
       const explicitEngine = request.body.engine;
       if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
@@ -963,11 +962,16 @@ return {
               text: partial,
               model: piRequested ? 'pi' : null,
               ...(replyBlocks.length > 0 ? { blocks: replyBlocks } : {}),
+              ...(app.replyNotificationsEnabled ? {
+                replyNotification: {
+                  ownerObjectId: request.principal!.objectId,
+                  turnMessageId,
+                },
+              } : {}),
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
-            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text,
-              turnStartedAt: turnStartedAtMs });
+            app.notifyReply({ sessionId, messageId: assistantMessage.id });
             logChatLatency(request, 'turn_complete', turnStartedAt);
             if (visualContext) {
               request.log.info({

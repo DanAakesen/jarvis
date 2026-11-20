@@ -52,8 +52,8 @@ const failureEvents = new Set([
   'activitykit.push_retry_exhausted', 'activitykit.registration_unavailable',
   'approval_notification.push_not_accepted', 'approval_notification.push_unavailable',
   'approval_notification.delivery_unavailable', 'approval_notification.registration_unavailable',
-  'reply_notification.push_not_accepted', 'reply_notification.push_unavailable',
   'reply_notification.delivery_unavailable',
+  'reply_notification.delivery_outcome',
   'folio.update_failed', 'github.delivery_policy_evaluation_failed', 'github.installation_token_failed',
   'github.issue_progress_failed', 'github.issue_start_failed', 'github.repository_list_failed',
   'github.repository_management_failed', 'github.webhook_delivery_store_failed', 'github.webhook_mapping_failed',
@@ -214,6 +214,18 @@ function safeBoardDuration(value: unknown): value is number {
 }
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'reply_notification.delivery_outcome') {
+    const fields: Record<string, unknown> = {};
+    if (['accepted', 'retry', 'failed', 'expired', 'invalid_token'].includes(String(input.outcome))) {
+      fields.outcome = input.outcome;
+    }
+    if (Number.isSafeInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 5) {
+      fields.attempt = input.attempt;
+    }
+    if (Number.isInteger(input.statusCode) && Number(input.statusCode) >= 100 &&
+        Number(input.statusCode) <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
   if (input.msg === 'watch_transcription.stage') {
     const fields: Record<string, unknown> = {};
     if (safeRequestId(input.reqId)) fields.reqId = input.reqId;

@@ -145,6 +145,10 @@ struct WatchRoot: View {
             WatchPreview.openedURL(url)
             #endif
         }
+        .onAppear { openPendingReplyNotification() }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisWatchReplyNotificationOpened)) { _ in
+            openPendingReplyNotification()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             guard notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue else { return }
             let reason = notification.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt
@@ -175,6 +179,13 @@ struct WatchRoot: View {
         }
     }
     /// Menu page: one Chat row and Factory, the menu button bottom right. The top right stays free for the system time.
+    private func openPendingReplyNotification() {
+        guard let target = JarvisReplyNotificationTarget.pending() else { return }
+        page = 0
+        path = [.chat]
+        Task { await model.openReplyTarget(target) }
+    }
+
     private var actionPage: some View {
         ScrollView {
             VStack(spacing: 8) {

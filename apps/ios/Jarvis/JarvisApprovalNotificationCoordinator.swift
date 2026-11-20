@@ -4,6 +4,7 @@ import UIKit
 
 extension Notification.Name {
     static let jarvisProactiveNotificationOpened = Notification.Name("JarvisProactiveNotificationOpened")
+    static let jarvisReplyNotificationOpened = Notification.Name("JarvisReplyNotificationOpened")
     static let jarvisApprovalActionCompleted = Notification.Name("JarvisApprovalActionCompleted")
 }
 
@@ -29,15 +30,20 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
         super.init()
     }
 
-    func configure(client: JarvisClient) {
-        approvalsClient = JarvisApprovalsClient(client: client)
+    func activate() {
         center.delegate = self
         registerCategory(language: Self.currentLanguage)
+    }
+
+    func configure(client: JarvisClient) {
+        approvalsClient = JarvisApprovalsClient(client: client)
+        activate()
     }
 
     private func registerCategory(language: JarvisAppLanguage) {
         center.setNotificationCategories([
             UNNotificationCategory(identifier: Self.proactiveCategoryID, actions: [], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: Self.replyCategoryID, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(
                 identifier: Self.categoryID,
                 actions: [
@@ -136,6 +142,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     }
 
     func unregisterDeviceToken() async {
+        JarvisReplyNotificationTarget.pending()?.clear()
         guard let deviceToken else { return }
         try? await approvalsClient?.unregisterDeviceToken(deviceToken)
     }
@@ -181,6 +188,15 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     ) {
         Task { @MainActor in
             defer { completionHandler() }
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+               response.notification.request.content.categoryIdentifier == Self.replyCategoryID,
+               let target = JarvisReplyNotificationTarget(
+                   userInfo: response.notification.request.content.userInfo
+               ) {
+                target.store()
+                NotificationCenter.default.post(name: .jarvisReplyNotificationOpened, object: nil)
+                return
+            }
             if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
                response.notification.request.content.categoryIdentifier == Self.proactiveCategoryID,
                let id = response.notification.request.content.userInfo["proactiveItemID"] as? String,

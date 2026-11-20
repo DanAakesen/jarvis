@@ -39,6 +39,16 @@ describe('committed SQL manifest', () => {
     expect(migrations.length).toBeGreaterThan(0);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
+  it('ships the durable reply outbox and turn-claim store contract', async () => {
+    const migrations = await readMigrations();
+    const migration = migrations.find(({ name }) => name === '0093_reply_notification_outbox.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.reply_notification_approval_claims');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.reply_notification_deliveries');
+    expect(migration?.sql).toContain('UX_reply_notification_deliveries_message_registration');
+    expect(migration?.sql).toContain("'pending', 'sending', 'accepted', 'failed', 'expired', 'invalid_token'");
+    expect((await readDownMigration('0093_reply_notification_outbox.sql')).sql)
+      .toContain('DROP TABLE dbo.reply_notification_deliveries');
+  });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
     const path = await directory();
     await mkdir(join(path, 'down'));

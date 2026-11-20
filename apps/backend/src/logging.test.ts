@@ -514,6 +514,27 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('exports reply delivery outcome without message, preview or device identifiers', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    createLogger({ logLevel: 'info' }, sink, output).info({
+      outcome: 'retry',
+      attempt: 2,
+      statusCode: 503,
+      sessionId: '41',
+      messageId: '42',
+      preview: 'private preview',
+      deviceToken: 'private-device-token',
+    }, 'reply_notification.delivery_outcome');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend',
+      msg: 'reply_notification.delivery_outcome',
+      outcome: 'retry', attempt: 2, statusCode: 503,
+    });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each([
     'image_attached', 'image_request_accepted', 'image_context_limit',
     'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',

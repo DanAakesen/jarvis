@@ -2,7 +2,11 @@ import type { ApprovalNotificationServices } from '../push/approval-notification
 import { buildPushPayload, type SystemPushOutcome, type SystemPushRequest } from './push-delivery.js';
 
 /** Reuse owner device registrations and the APNs alert transport; no second token registration flow. */
-export function createNativeProactiveDelivery(owner: string, services: ApprovalNotificationServices, now: () => Date) {
+export function createNativeProactiveDelivery(
+  owner: string,
+  services: Pick<ApprovalNotificationServices, 'store' | 'sender'>,
+  now: () => Date,
+) {
   return {
     async hasRecipients(): Promise<boolean> { return (await services.store.list(owner)).length > 0; },
     async send(request: SystemPushRequest, signal: AbortSignal): Promise<SystemPushOutcome | undefined> {

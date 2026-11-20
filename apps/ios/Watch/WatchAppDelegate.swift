@@ -1,13 +1,39 @@
 import WatchConnectivity
 import WatchKit
+import UserNotifications
+import JarvisCore
+
+extension Notification.Name {
+    static let jarvisWatchReplyNotificationOpened = Notification.Name("JarvisWatchReplyNotificationOpened")
+}
 
 /// Budgeted refresh plus HealthKit background delivery keep installed complications useful without the app onscreen.
-final class WatchAppDelegate: NSObject, WKApplicationDelegate {
+final class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching() {
+        UNUserNotificationCenter.current().delegate = self
         Task { @MainActor in
             _ = WatchConnection.shared
             WatchStepsMonitor.shared.start()
             scheduleNextRefresh()
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            defer { completionHandler() }
+            guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+                  response.notification.request.content.categoryIdentifier == "jarvis.reply",
+                  let target = JarvisReplyNotificationTarget(
+                    userInfo: response.notification.request.content.userInfo
+                  ) else {
+                return
+            }
+            target.store()
+            NotificationCenter.default.post(name: .jarvisWatchReplyNotificationOpened, object: nil)
         }
     }
     func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {

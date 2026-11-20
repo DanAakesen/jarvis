@@ -35,6 +35,17 @@ final class ChatFollowStateTests: XCTestCase {
         XCTAssertFalse(state.shouldShowJumpToLatest)
     }
 
+    func testNotificationOpeningKeepsExactMessageInViewAndOffersLatest() {
+        var state = ChatFollowState()
+
+        state.notificationMessageOpened()
+
+        XCTAssertFalse(state.shouldFollow)
+        XCTAssertTrue(state.shouldShowJumpToLatest)
+        state.jumpedToLatest()
+        XCTAssertTrue(state.shouldFollow)
+    }
+
     func testReachingLatestClearsNewMessageIndicator() {
         var state = ChatFollowState()
         state.messageArrived()

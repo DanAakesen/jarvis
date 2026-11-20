@@ -35,6 +35,7 @@ export function memoryVault(options: { failWrites?: () => boolean } = {}): PiVau
 /** A conversation store with one chat feed, enough for the brain's messages. */
 export function memoryConversations(options: { empty?: boolean } = {}) {
   const messages: ConversationMessage[] = [];
+  const addMessageInputs: Parameters<ConversationStore['addMessage']>[0][] = [];
   const sessions: ConversationSession[] = options.empty ? [] : [{ id: '7', channel: 'chat', language: 'en', startedAt: new Date('2026-11-01T00:00:00Z'), endedAt: new Date('2026-11-02T00:00:00Z') }];
   if (!options.empty) messages.push({ id: '1', sessionId: '7', role: 'dan', text: 'hi', model: null, at: new Date('2026-11-01T00:00:01Z') });
   const store = {
@@ -48,7 +49,8 @@ export function memoryConversations(options: { empty?: boolean } = {}) {
       sessions.push(session);
       return session;
     },
-    addMessage: async (input: { sessionId: string; role: 'dan' | 'jarvis'; text: string; model: string | null; allowEndedSession?: boolean }) => {
+    addMessage: async (input: Parameters<ConversationStore['addMessage']>[0]) => {
+      addMessageInputs.push(input);
       const session = sessions.find(candidate => candidate.id === input.sessionId);
       if (!session || (session.endedAt && !input.allowEndedSession)) return null;
       const message: ConversationMessage = { id: String(messages.length + 1), sessionId: input.sessionId, role: input.role, text: input.text, model: input.model, at: new Date() };
@@ -56,7 +58,7 @@ export function memoryConversations(options: { empty?: boolean } = {}) {
       return message;
     },
   } as unknown as Pick<ConversationStore, 'getHistory' | 'getSession' | 'createSession' | 'addMessage'>;
-  return { store, messages, sessions };
+  return { store, messages, sessions, addMessageInputs };
 }
 
 export interface ScriptedWake {
