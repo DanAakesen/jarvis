@@ -49,10 +49,12 @@
   which is equality-checked so a newer unrelated tap survives.
   Do not fold reply taps into the `jarvis.proactive` item route or approval
   action handling.
-- `containsSensitiveOwnerData` is the shared preview/memory/vault boundary.
-  Do not add a notification-only sensitive regex; extend the shared classifier
-  for OTP/one-time/verification/security/CVV/CVC, identity and financial forms
-  and cover each with a table case.
+- Reply previews are useful by default: clean controls and repeated whitespace,
+  truncate to 160 Unicode characters and store the same preview for every
+  registration. `show_actions` controls approval actions only, not reply-body
+  visibility. Keep the established `shouldRedact` credential/secret guard, but
+  do not use `containsSensitiveOwnerData` or add a health, financial, account,
+  identity or notification-specific privacy classifier here.
 - Offline checks:
   - `npm test --workspace @jarvis/backend -- src/push/reply-notifications.test.ts src/database/migrations.test.ts src/pi/brain/comms.test.ts`
   - `npm run build --workspace @jarvis/backend`

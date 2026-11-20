@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
-import { containsSensitiveOwnerData, shouldRedact } from '../vault/index.js';
+import { shouldRedact } from '../vault/index.js';
 import type {
   ClaimedReplyNotificationDelivery,
   ReplyNotificationStore,
@@ -8,7 +8,7 @@ import type {
 import type { ApprovalNotificationSender } from './approval-notifications.js';
 
 const replyCategory = 'jarvis.reply';
-const privateReply = 'New reply from Jarvis';
+const redactedReply = 'New reply from Jarvis';
 const retryBackoffMs = [1_000, 5_000, 20_000, 60_000] as const;
 export const replyNotificationMaxAttempts = 5;
 
@@ -36,11 +36,14 @@ export interface ReplyNotificationWorkerOptions {
 export function safeReplyNotificationPreview(text: string): string {
   const line = Array.from(text, (character) => {
     const codePoint = character.codePointAt(0);
-    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
+    return codePoint !== undefined &&
+      (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f))
+      ? ' '
+      : character;
   }).join('').replace(/\s+/gu, ' ').trim();
-  if (containsSensitiveOwnerData(line)) return privateReply;
+  if (shouldRedact(line)) return redactedReply;
   const characters = [...line];
-  if (characters.length <= 160) return characters.join('') || privateReply;
+  if (characters.length <= 160) return characters.join('') || redactedReply;
   return `${characters.slice(0, 157).join('').trimEnd()}...`;
 }
 

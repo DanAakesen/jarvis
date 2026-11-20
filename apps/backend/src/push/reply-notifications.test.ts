@@ -8,7 +8,6 @@ import type {
   ReplyNotificationStore,
 } from '../database/reply-notification-store.js';
 import type { ApprovalNotificationSender } from './approval-notifications.js';
-import { containsSensitiveOwnerData } from '../vault/index.js';
 import { createApprovalNotificationDispatcher } from './approval-notifications.js';
 import {
   createReplyNotificationWorker,
@@ -202,11 +201,9 @@ function delivery(overrides: Partial<FixtureDelivery> = {}): FixtureDelivery {
 const logger = () => ({ info: vi.fn(), warn: vi.fn() });
 
 describe('reply notification contract', () => {
-  it('keeps the lock-screen preview concise and private for sensitive content', () => {
-    expect(safeReplyNotificationPreview('  Design review\n moved   to 10:30  '))
+  it('cleans and bounds useful lock-screen reply text', () => {
+    expect(safeReplyNotificationPreview('  Design review\n moved\u0081  to 10:30  '))
       .toBe('Design review moved to 10:30');
-    expect(safeReplyNotificationPreview(`My password is ${'x'.repeat(20)}`))
-      .toBe('New reply from Jarvis');
     expect([...safeReplyNotificationPreview('x'.repeat(500))]).toHaveLength(160);
     expect(serializeReplyNotificationEvidence({ category: 'work', evidenceSources: ['calendar'] }))
       .toBe('{"category":"work","evidenceSources":["calendar"]}');
@@ -222,27 +219,32 @@ describe('reply notification contract', () => {
     'Your account settings changed',
     'The account number is available',
     'Card number 4242 4242 4242 4242',
-    'CVV 123',
-    'CVC 456',
-    'The card verification code is 789',
     'SSN 123-45-6789',
     'Your social security number is available',
     'Passport number AB123456',
     'The date of birth is 12 May 1985',
+    'Your medicin needs renewal',
+    'Bankkontoens saldo er opdateret',
+  ])('keeps ordinary personal context visible in preview %s', (text) => {
+    expect(safeReplyNotificationPreview(text)).toBe(text);
+  });
+
+  it.each([
+    `My password is ${'x'.repeat(20)}`,
     'Your OTP is 123456',
     'The one-time code is 123456',
     'Your verification code is 123456',
     'The security code is 123456',
     'The two-factor code is 123456',
-    'Your medicin needs renewal',
-    'Bankkontoens saldo er opdateret',
-  ])('uses a private lock-screen fallback for sensitive preview %s', (text) => {
+    'CVV 123',
+    'CVC 456',
+    'The card verification code is 789',
+    `ghp_${'x'.repeat(24)}`,
+  ])('retains the existing credential fallback for secret preview %s', (text) => {
     expect(safeReplyNotificationPreview(text)).toBe('New reply from Jarvis');
-    expect(containsSensitiveOwnerData(text)).toBe(true);
   });
 
-  it('does not privatise ordinary work/accounting language without a restricted account pattern', () => {
-    expect(containsSensitiveOwnerData('The accounting model is ready for review.')).toBe(false);
+  it('keeps ordinary work and accounting language visible', () => {
     expect(safeReplyNotificationPreview('The accounting model is ready for review.'))
       .toBe('The accounting model is ready for review.');
   });

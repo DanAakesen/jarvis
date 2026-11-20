@@ -21,12 +21,14 @@ duplicate reply. An accepted delivery outcome remains the exact-turn/device
 suppression record beyond the action-confirmation expiry, through the execution
 and reply window.
 
-The lock-screen alert contains a single-line preview bounded to 160 characters.
-Credential-like, health, medical, medication/diagnosis, banking or account
-content uses **New reply from Jarvis**. The same shared classifier also covers
-credential and identity/financial fields such as OTPs, one-time, verification
-or security codes, CVV/CVC, card numbers, SSNs/social-security numbers,
-passport numbers and dates of birth.
+The lock-screen alert shows the durable reply as one useful line, with control
+characters and repeated whitespace cleaned and the result bounded to 160
+characters. Every native registration receives that same preview; the setting
+that enables notification approval actions is not a privacy switch. Ordinary
+health, medical, medication, financial, account and identity context remains
+visible. The existing credential/secret source protection still uses **New
+reply from Jarvis** when actual credential-like content would otherwise be
+emitted; this is not a general notification-privacy classifier.
 Transient APNs responses retry per device with bounded backoff until expiry.
 Apple's terminal invalid-device responses, registration expiry and explicit
 unregister atomically terminate every matching approval/reply row before the

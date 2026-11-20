@@ -82,8 +82,8 @@ provider call, APNs delivery, deploy or PR is part of this work.**
 | Persist APNs invalid-token tombstones and preserve newer Watch taps when abandoning an exact-target open | Done |
 | Serialize tombstone invalidation/upsert/expiry on the owner lock, resolve stale replacements by exact token and exclude tombstoned recipients | Done |
 | Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
-| Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
-| Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
+| Keep Watch exact targets pending through busy/chat/dictation/voice while retaining the ordinary reply route | Done |
+| Retain active Watch refresh scope separately from pending/opening state and remove broad preview classification in #1989 | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
 | Rebase on `b5627f47269a4df727c8e5163742d3fbaef95630` and run offline gates | Done; backend build/lint, full 727-test suite, isolated SQL 27-test gate, full JarvisCore 236-test Swift 6.2 suite and Watch source parsing pass |
@@ -92,6 +92,24 @@ Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live
 APNs delivery, Apple compilation/rendering and physical iPhone/Watch acceptance
 remain outside this change.
+
+## Useful reply push previews — 20 November 2026 (#1989)
+
+**Status: implemented and qualified at the focused backend boundary. The
+loopback SQL contract is updated; this Windows worktree has no local SQL
+Server host. Physical iPhone/Watch lock-screen acceptance remains with Dan.**
+
+| Step | State |
+| --- | --- |
+| Show ordinary durable reply text after control/whitespace cleanup and 160-character truncation | Done |
+| Remove broad health, medication, financial, account and identity preview suppression | Done |
+| Keep the existing credential/secret source guard and generic fallback for real secrets | Done |
+| Store the same preview for registrations with or without approval actions | Done |
+| Preserve outbox, retry, APNs identity, exact deep link and iPhone/Watch routing | Done; no client or transport change |
+| Update focused preview and loopback SQL expectations plus product/design/architecture/operations/decision docs | Done |
+| Run focused preview, backend build/lint and SQL integration gates | Backend done; SQL execution unavailable on this host |
+
+No external push/provider test is part of this change.
 
 ## PI situational state integrity — 20 November 2026 (#1969)
 

@@ -79,6 +79,22 @@
   captions and provider acceptance are explicitly open. Direct Voice Live
   entries below are dated historical evidence, not current routing guidance.
 
+## 20 November 2026 — Reply previews are useful by default (#1989)
+
+- **Decision:** ordinary stored reply text is the lock-screen preview. Clean
+  control characters, collapse repeated whitespace and truncate to 160 Unicode
+  characters; do not substitute a generic body because a reply mentions health,
+  medical, medication, finance, account or identity context.
+- **Boundary:** `show_actions` chooses approval actions for that registration;
+  it does not opt a device into a private reply body. Both SQL outbox insert
+  paths persist the same safe preview for every recipient.
+- **Protection:** retain only the existing `shouldRedact` credential/secret
+  guard at the preview source boundary. Do not reuse the broader
+  Memory/Vault-sensitive classifier and do not add a notification-only privacy
+  regex, setting or approval flow.
+- **Scope:** the message/outbox transaction, retry schedule, APNs collapse ID,
+  exact session/message route and iPhone/Watch state machines are unchanged.
+
 ## 20 November 2026 — Durable reply delivery belongs to the stored message (#1970)
 
 - **Identity:** confirmation dedupe and reply cancellation are separate. A
@@ -110,12 +126,11 @@
   resolve every current registration for the exact token, so a stale claim cannot
   miss a replacement registration. Recipient reads defensively exclude
   tombstoned hashes even if a stale row is written.
-- **Privacy:** only a bounded, one-line preview is stored per device. Preview
-  opt-out, credentials, health/medical, diagnosis/medication, banking,
-  account, OTP/one-time/verification/security code, CVV/CVC, identity and
-  financial content use the shared
-  `containsSensitiveOwnerData` policy and a generic body. Logs and status
-  expose no body, IDs or token; terminal counts are diagnostic evidence.
+- **Preview:** the stored one-line body follows the #1989 useful-by-default
+  policy above. Credentials/secrets retain their existing source guard; broad
+  personal-content classification is not part of notification delivery. Logs
+  and status expose no body, IDs or token; terminal counts are diagnostic
+  evidence.
 - **Routing:** `jarvis.reply` is a dedicated iPhone/Watch tap branch carrying
   exact `sessionID`/`messageID`. Watch keeps the target pending across active
   chat, voice and dictation instead of discarding it. Once opened, active

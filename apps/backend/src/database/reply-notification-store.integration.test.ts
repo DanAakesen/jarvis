@@ -162,7 +162,7 @@ describe('durable reply notification store', () => {
       row.state === 'pending')).toBe(true);
     expect(unrelatedRows.map(({ preview }) => preview).sort()).toEqual([
       'Design review moved to 10:30.',
-      'New reply from Jarvis',
+      'Design review moved to 10:30.',
     ]);
     expect(unrelatedRows.every(({ evidence_json }) =>
       JSON.parse(evidence_json!)?.category === 'work')).toBe(true);
