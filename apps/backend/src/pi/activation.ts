@@ -77,19 +77,6 @@ export function createPiActivationService(options: {
           source: input.source,
           at,
         }, input.signal);
-        if (input.brain && view.state) {
-          input.brain.evidence ??= [];
-          for (const ref of view.state.refs) {
-            input.brain.evidence.push({
-              source: ref.source,
-              ref: ref.id,
-              identity: ref.identity,
-              label: ref.label,
-              observedAt: ref.observedAt,
-              verifiedAt: ref.verifiedAt!,
-            });
-          }
-        }
         return { grant, situation: view, context: text };
       } catch (error) {
         options.registry.close(grant.turn);

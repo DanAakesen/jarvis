@@ -45,6 +45,7 @@ interface AuthorityRow {
   expires_at: Date | string | null;
   material_hash: string | null;
   verified_at: Date | string;
+  activated_at: Date | string | null;
   invalidated_at: Date | string | null;
   stale_reason: string | null;
 }
@@ -62,6 +63,7 @@ function authorityRef(row: AuthorityRow): PiSituationAuthorityRef {
     ...(row.material_hash ? { materialHash: row.material_hash.trim() } : {}),
     verifiedAt: date(row.verified_at).toISOString(),
     receiptId: row.receipt_id.toLowerCase(),
+    activatedAt: row.activated_at ? date(row.activated_at).toISOString() : null,
     invalidatedAt: row.invalidated_at ? date(row.invalidated_at).toISOString() : null,
     staleReason: row.stale_reason,
   };
@@ -140,7 +142,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
   const authoritySelect = `SELECT authority.receipt_id, authority.source_id, authority.ref_id,
       authority.provider_identity,
       authority.label, authority.observed_at, authority.expires_at, authority.material_hash,
-      authority.verified_at, authority.invalidated_at, authority.stale_reason
+      authority.verified_at, authority.activated_at, authority.invalidated_at, authority.stale_reason
     FROM dbo.pi_situation_ref_authority AS authority WITH (UPDLOCK, HOLDLOCK)
     WHERE authority.owner_object_id = @owner`;
 
@@ -328,7 +330,10 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           throw new PiSituationError('conflict', 'Situational state changed. Read the current revision before committing.');
         }
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, input.owner);
-        await activeRequest.query<AuthorityRow>(authoritySelect);
+        const storedAuthority = await activeRequest.query<AuthorityRow>(authoritySelect);
+        const existingAuthority = storedAuthority.recordset.map(authorityRef);
+        const existingByGeneration = new Map(existingAuthority.map((ref) =>
+          [authorityKey(ref), ref] as const));
         const sourceInvalidations = await new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, input.owner)
           .query<{
@@ -343,9 +348,69 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
             WHERE owner_object_id = @owner;`);
         const invalidations = new Map(sourceInvalidations.recordset.map((entry) =>
           [entry.source_id, entry.invalidated_at ? date(entry.invalidated_at).getTime() : null]));
+        const guardedObservations = new Map<string, {
+          source: PiSituationSourceObservation['source'];
+          verifiedAt: string;
+        }>();
+        const guardObservation = (observation: {
+          source: PiSituationSourceObservation['source'];
+          verifiedAt: string;
+        }) => {
+          const previous = guardedObservations.get(observation.source);
+          if (!previous ||
+              Date.parse(observation.verifiedAt) > Date.parse(previous.verifiedAt)) {
+            guardedObservations.set(observation.source, observation);
+          }
+        };
+        for (const observation of input.observations) guardObservation(observation);
+        for (const ref of input.authoritativeRefs) {
+          guardObservation({ source: ref.source, verifiedAt: ref.verifiedAt });
+        }
+        for (const ref of input.state.refs) {
+          if (ref.verifiedAt) {
+            const receipt = existingByGeneration.get(authorityKey({
+              source: ref.source,
+              id: ref.id,
+              verifiedAt: ref.verifiedAt,
+              materialHash: ref.materialHash,
+            }));
+            if (receipt?.activatedAt === null && receipt.invalidatedAt === null) {
+              guardObservation({ source: ref.source, verifiedAt: ref.verifiedAt });
+            }
+          }
+        }
+        for (const observation of guardedObservations.values()) {
+          const guard = await new sql.Request(transaction)
+            .input('owner', sql.UniqueIdentifier, input.owner)
+            .input('source', sql.NVarChar(16), observation.source)
+            .input('verifiedAt', sql.DateTime2, new Date(observation.verifiedAt))
+            .input('enabled', sql.Bit, settings.sources[observation.source])
+            .query<{ accepted: boolean }>(`DECLARE @current datetime2(7);
+              DECLARE @invalidated datetime2(7);
+              SELECT @current = verified_at, @invalidated = invalidated_at
+                FROM dbo.proactive_source_status WITH (UPDLOCK, HOLDLOCK)
+                WHERE owner_object_id = @owner AND source_id = @source;
+              SELECT CONVERT(bit, CASE
+                WHEN @enabled = 1
+                  AND (@current IS NULL OR @verifiedAt >= @current)
+                  AND (@invalidated IS NULL OR @verifiedAt > @invalidated)
+                  THEN 1 ELSE 0 END) AS accepted;`);
+          if (!guard.recordset[0]?.accepted) {
+            throw new PiSituationError(
+              'conflict',
+              'The source generation is no longer admissible for this situation commit.',
+            );
+          }
+        }
         const activation = input.activation;
         const updatedAt = activation?.at ?? new Date(input.state.asOf);
         for (const ref of input.authoritativeRefs) {
+          if (ref.activatedAt === null) {
+            throw new PiSituationError(
+              'invalid',
+              'Provider authority supplied to a state commit must be an activated observation.',
+            );
+          }
           const invalidatedAt = invalidations.get(ref.source);
           if (!settings.sources[ref.source]) {
             throw new PiSituationError('conflict', 'A source became disabled before its observation was committed.');
@@ -357,8 +422,33 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
               'A provider verification is not newer than the persisted source-disable epoch.',
             );
           }
+          const priorActive = existingAuthority.find((entry) =>
+            entry.source === ref.source &&
+            entry.id === ref.id &&
+            entry.activatedAt !== null &&
+            entry.invalidatedAt === null);
+          if (priorActive &&
+              Date.parse(ref.verifiedAt) < Date.parse(priorActive.verifiedAt)) {
+            throw new PiSituationError(
+              'conflict',
+              'The provider observation is older than the active reference generation.',
+            );
+          }
+          if (priorActive &&
+              Date.parse(ref.verifiedAt) === Date.parse(priorActive.verifiedAt) &&
+              ((priorActive.materialHash ?? null) !== (ref.materialHash ?? null) ||
+                priorActive.identity !== ref.identity)) {
+            throw new PiSituationError(
+              'conflict',
+              'The source emitted different material for an already accepted verification generation.',
+            );
+          }
+          const materialChanged = priorActive !== undefined &&
+            ((priorActive.materialHash ?? null) !== (ref.materialHash ?? null) ||
+              priorActive.identity !== ref.identity);
           activeRequest = new sql.Request(transaction)
             .input('receiptId', sql.UniqueIdentifier, randomUUID())
+            .input('priorReceipt', sql.UniqueIdentifier, priorActive?.receiptId ?? randomUUID())
             .input('owner', sql.UniqueIdentifier, input.owner)
             .input('source', sql.NVarChar(16), ref.source)
             .input('ref', sql.NVarChar(120), ref.id)
@@ -367,7 +457,37 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
             .input('observedAt', sql.DateTime2, new Date(ref.observedAt))
             .input('expiresAt', sql.DateTime2, ref.expiresAt ? new Date(ref.expiresAt) : null)
             .input('materialHash', sql.Char(64), ref.materialHash ?? null)
-            .input('verifiedAt', sql.DateTime2, new Date(ref.verifiedAt));
+            .input('verifiedAt', sql.DateTime2, new Date(ref.verifiedAt))
+            .input('activatedAt', sql.DateTime2, ref.activatedAt ? new Date(ref.activatedAt) : null);
+          if (materialChanged) {
+            await activeRequest.query(`UPDATE dbo.pi_situation_ref_authority
+              SET invalidated_at = @verifiedAt,
+                stale_reason = N'superseded_by_material_change'
+              WHERE owner_object_id = @owner AND receipt_id = @priorReceipt
+                AND activated_at IS NOT NULL AND invalidated_at IS NULL;
+
+              INSERT dbo.pi_situation_ref_authority (
+                receipt_id, owner_object_id, source_id, ref_id, provider_identity, label,
+                observed_at, expires_at, material_hash, verified_at,
+                activated_at, invalidated_at, stale_reason
+              ) VALUES (
+                @receiptId, @owner, @source, @ref, @identity, @label,
+                @observedAt, @expiresAt, @materialHash, @verifiedAt,
+                @activatedAt, NULL, NULL
+              );
+
+              UPDATE dbo.pi_situation_ref_authority
+                SET invalidated_at = @verifiedAt,
+                  stale_reason = N'superseded_by_provider_observation'
+                WHERE owner_object_id = @owner
+                  AND source_id = @source AND ref_id = @ref
+                  AND verified_at = @verifiedAt
+                  AND ((material_hash = @materialHash)
+                    OR (material_hash IS NULL AND @materialHash IS NULL))
+                  AND activated_at IS NULL
+                  AND invalidated_at IS NULL;`);
+            continue;
+          }
           await activeRequest.query(`MERGE dbo.pi_situation_ref_authority WITH (HOLDLOCK) AS target
             USING (SELECT @owner AS owner_object_id,
               @source COLLATE Latin1_General_100_BIN2 AS source_id,
@@ -375,25 +495,81 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
             ON target.owner_object_id = source.owner_object_id
               AND target.source_id = source.source_id
               AND target.ref_id = source.ref_id
+              AND target.activated_at IS NOT NULL
               AND target.invalidated_at IS NULL
-            WHEN MATCHED AND @verifiedAt >= target.verified_at THEN UPDATE SET
+                    WHEN MATCHED AND @verifiedAt >= target.verified_at THEN UPDATE SET
               provider_identity = @identity, label = @label, observed_at = @observedAt,
               expires_at = @expiresAt, material_hash = @materialHash, verified_at = @verifiedAt,
+              activated_at = @activatedAt,
               stale_reason = NULL
             WHEN NOT MATCHED THEN INSERT (
               receipt_id, owner_object_id, source_id, ref_id, provider_identity, label,
-              observed_at, expires_at, material_hash, verified_at, invalidated_at, stale_reason
+              observed_at, expires_at, material_hash, verified_at,
+              activated_at, invalidated_at, stale_reason
             ) VALUES (
               @receiptId, @owner, @source, @ref, @identity, @label,
-              @observedAt, @expiresAt, @materialHash, @verifiedAt, NULL, NULL
-            );`);
+              @observedAt, @expiresAt, @materialHash, @verifiedAt,
+              @activatedAt, NULL, NULL
+            );
+            UPDATE dbo.pi_situation_ref_authority
+              SET invalidated_at = @verifiedAt,
+                stale_reason = N'superseded_by_provider_observation'
+              WHERE owner_object_id = @owner
+                AND source_id = @source AND ref_id = @ref
+                AND verified_at = @verifiedAt
+                AND ((material_hash = @materialHash)
+                  OR (material_hash IS NULL AND @materialHash IS NULL))
+                AND activated_at IS NULL
+                AND invalidated_at IS NULL;`);
         }
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, input.owner);
         const refreshedAuthority = await activeRequest.query<AuthorityRow>(authoritySelect);
-        const authoritativeRefs = refreshedAuthority.recordset.map(authorityRef);
+        let authoritativeRefs = refreshedAuthority.recordset.map(authorityRef);
         const authority = new Map(authoritativeRefs.map((ref) =>
           [authorityKey(ref), ref] as const));
         let state = canonicalizePiSituationState(input.state, authoritativeRefs);
+        for (const ref of state.refs) {
+          const receipt = ref.verifiedAt
+            ? authority.get(authorityKey({
+              source: ref.source,
+              id: ref.id,
+              verifiedAt: ref.verifiedAt,
+              materialHash: ref.materialHash,
+            }))
+            : undefined;
+          if (!receipt || receipt.activatedAt !== null || receipt.invalidatedAt !== null) {
+            continue;
+          }
+          activeRequest = new sql.Request(transaction)
+            .input('owner', sql.UniqueIdentifier, input.owner)
+            .input('source', sql.NVarChar(16), receipt.source)
+            .input('ref', sql.NVarChar(120), receipt.id)
+            .input('receipt', sql.UniqueIdentifier, receipt.receiptId!)
+            .input('activatedAt', sql.DateTime2, updatedAt)
+            .input('staleAt', sql.DateTime2, new Date(receipt.verifiedAt));
+          const activated = await activeRequest.query(`UPDATE dbo.pi_situation_ref_authority
+              SET invalidated_at = @staleAt,
+                stale_reason = N'superseded_by_committed_lookup'
+              WHERE owner_object_id = @owner
+                AND source_id = @source AND ref_id = @ref
+                AND activated_at IS NOT NULL AND invalidated_at IS NULL
+                AND receipt_id <> @receipt;
+
+            UPDATE dbo.pi_situation_ref_authority
+              SET activated_at = @activatedAt
+              WHERE owner_object_id = @owner AND receipt_id = @receipt
+                AND activated_at IS NULL AND invalidated_at IS NULL;`);
+          if ((activated.rowsAffected[1] ?? 0) !== 1) {
+            throw new PiSituationError(
+              'conflict',
+              'The exact lookup receipt was consumed or invalidated before the situation commit.',
+            );
+          }
+        }
+        const activatedAuthority = await new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, input.owner)
+          .query<AuthorityRow>(authoritySelect);
+        authoritativeRefs = activatedAuthority.recordset.map(authorityRef);
         const observations = new Map<string, {
           source: PiSituationSourceObservation['source'];
           state: PiSituationSourceObservation['state'];
@@ -407,6 +583,18 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
             observations.set(observation.source, { ...observation });
           }
         }
+        for (const ref of input.authoritativeRefs) {
+          const previous = observations.get(ref.source);
+          if (!previous || Date.parse(ref.verifiedAt) >= Date.parse(previous.verifiedAt)) {
+            observations.set(ref.source, {
+              source: ref.source,
+              state: 'ok',
+              reason: null,
+              observedAt: ref.observedAt,
+              verifiedAt: ref.verifiedAt,
+            });
+          }
+        }
         for (const ref of state.refs) {
           const receipt = ref.verifiedAt
             ? authority.get(authorityKey({
@@ -416,7 +604,8 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
               materialHash: ref.materialHash,
             }))
             : undefined;
-          if (!receipt || receipt.invalidatedAt !== null) continue;
+          if (!receipt || receipt.activatedAt !== null ||
+              receipt.invalidatedAt !== null) continue;
           const previous = observations.get(ref.source);
           if (!previous || Date.parse(receipt.verifiedAt) > Date.parse(previous.verifiedAt)) {
             observations.set(ref.source, {
@@ -448,6 +637,21 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
               : 'observation_not_newer_than_source_invalidation',
           };
           effectiveObservations.set(observation.source, effective);
+          if (effective.state !== 'ok') {
+            activeRequest = new sql.Request(transaction)
+              .input('owner', sql.UniqueIdentifier, input.owner)
+              .input('source', sql.NVarChar(16), observation.source)
+              .input('invalidatedAt', sql.DateTime2, new Date(observation.verifiedAt))
+              .input('staleReason', sql.NVarChar(160),
+                effective.reason ?? 'source_unavailable');
+            await activeRequest.query(`UPDATE dbo.pi_situation_ref_authority
+              SET invalidated_at = @invalidatedAt,
+                stale_reason = @staleReason
+              WHERE owner_object_id = @owner
+                AND source_id = @source
+                AND activated_at IS NOT NULL
+                AND invalidated_at IS NULL;`);
+          }
           activeRequest = new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, input.owner)
             .input('source', sql.NVarChar(16), observation.source)
@@ -543,6 +747,9 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         await activeRequest.query(`INSERT dbo.pi_situation_outbox (
             owner_object_id, situation_revision, actions_json, created_at
           ) VALUES (@owner, @revision, @actions, @createdAt);`);
+        activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, input.owner);
+        const finalAuthority = await activeRequest.query<AuthorityRow>(authoritySelect);
+        authoritativeRefs = finalAuthority.recordset.map(authorityRef);
         activeRequest = undefined;
         await transaction.commit();
         return {
@@ -629,20 +836,35 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           .input('owner', sql.UniqueIdentifier, owner)
           .input('source', sql.NVarChar(16), ref.source)
           .input('ref', sql.NVarChar(120), ref.id);
-        const existingAuthority = await activeRequest.query<{ verified_at: Date | string }>(`
-          SELECT verified_at FROM dbo.pi_situation_ref_authority WITH (UPDLOCK, HOLDLOCK)
+        const existingAuthority = await activeRequest.query<{
+          provider_identity: string;
+          material_hash: string | null;
+          verified_at: Date | string;
+        }>(`
+          SELECT provider_identity, material_hash, verified_at
+          FROM dbo.pi_situation_ref_authority WITH (UPDLOCK, HOLDLOCK)
           WHERE owner_object_id = @owner
             AND source_id COLLATE Latin1_General_100_BIN2 =
               @source COLLATE Latin1_General_100_BIN2
             AND ref_id COLLATE Latin1_General_100_BIN2 =
               @ref COLLATE Latin1_General_100_BIN2
+            AND activated_at IS NOT NULL
             AND invalidated_at IS NULL;`);
-        if (existingAuthority.recordset[0] &&
-            date(existingAuthority.recordset[0].verified_at).getTime() > Date.parse(ref.verifiedAt)) {
-          throw new PiSituationError(
-            'conflict',
-            'The provider verification is older than its current reference receipt.',
-          );
+        const active = existingAuthority.recordset[0];
+        if (active) {
+          const currentVerifiedAt = date(active.verified_at).getTime();
+          if (currentVerifiedAt > Date.parse(ref.verifiedAt)) {
+            throw new PiSituationError(
+              'conflict',
+              'The provider verification is older than its current reference receipt.',
+            );
+          }
+          if (currentVerifiedAt === Date.parse(ref.verifiedAt) &&
+              active.provider_identity === ref.identity &&
+              (active.material_hash?.trim() ?? null) === (ref.materialHash ?? null)) {
+            await transaction.commit();
+            return;
+          }
         }
         activeRequest = new sql.Request(transaction)
           .input('receiptId', sql.UniqueIdentifier, randomUUID())
@@ -657,22 +879,24 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           .input('verifiedAt', sql.DateTime2, new Date(ref.verifiedAt));
         await activeRequest.query(`MERGE dbo.pi_situation_ref_authority WITH (HOLDLOCK) AS target
           USING (SELECT @owner AS owner_object_id,
-            @source COLLATE Latin1_General_100_BIN2 AS source_id,
-            @ref COLLATE Latin1_General_100_BIN2 AS ref_id) AS source
+          @source COLLATE Latin1_General_100_BIN2 AS source_id,
+          @ref COLLATE Latin1_General_100_BIN2 AS ref_id) AS source
           ON target.owner_object_id = source.owner_object_id
-            AND target.source_id = source.source_id
-            AND target.ref_id = source.ref_id
-            AND target.invalidated_at IS NULL
-          WHEN MATCHED AND @verifiedAt >= target.verified_at THEN UPDATE SET
-            provider_identity = @identity, label = @label, observed_at = @observedAt,
-          expires_at = @expiresAt, material_hash = @materialHash, verified_at = @verifiedAt,
-          stale_reason = NULL
+          AND target.source_id = source.source_id
+          AND target.ref_id = source.ref_id
+          AND target.verified_at = @verifiedAt
+          AND ((target.material_hash = @materialHash)
+            OR (target.material_hash IS NULL AND @materialHash IS NULL))
+          AND target.activated_at IS NULL
+          AND target.invalidated_at IS NULL
           WHEN NOT MATCHED THEN INSERT (
           receipt_id, owner_object_id, source_id, ref_id, provider_identity, label,
-          observed_at, expires_at, material_hash, verified_at, invalidated_at, stale_reason
+          observed_at, expires_at, material_hash, verified_at,
+          activated_at, invalidated_at, stale_reason
           ) VALUES (
           @receiptId, @owner, @source, @ref, @identity, @label,
-          @observedAt, @expiresAt, @materialHash, @verifiedAt, NULL, NULL
+          @observedAt, @expiresAt, @materialHash, @verifiedAt,
+          NULL, NULL, NULL
           );`);
         await transaction.commit();
       } catch (error) {

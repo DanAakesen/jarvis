@@ -34,6 +34,8 @@ export interface ProactiveConversationEvidence {
   readonly label: string;
   readonly observedAt: string | null;
   readonly verifiedAt: string;
+  readonly origin?: 'event' | 'situation';
+  readonly materialHash?: string | null;
 }
 
 export type AddProactiveMessageResult =

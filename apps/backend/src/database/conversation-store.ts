@@ -520,6 +520,55 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           return { status: 'daily_limit', message: null };
         }
         activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, input.ownerObjectId)
+          .input('evidence', sql.NVarChar(sql.MAX), JSON.stringify(input.evidence));
+        await activeRequest.query(`IF EXISTS (
+            SELECT 1
+            FROM OPENJSON(@evidence) AS evidence
+            WHERE JSON_VALUE(evidence.value, '$.origin') = N'situation'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM dbo.pi_situational_state AS state WITH (UPDLOCK, HOLDLOCK)
+                CROSS APPLY OPENJSON(state.state_json, '$.sources') AS source
+                CROSS APPLY OPENJSON(state.state_json, '$.refs') AS ref
+                INNER JOIN dbo.pi_situation_ref_authority AS authority
+                  WITH (UPDLOCK, HOLDLOCK)
+                  ON authority.owner_object_id = state.owner_object_id
+                  AND authority.source_id =
+                    JSON_VALUE(evidence.value, '$.source') COLLATE Latin1_General_100_BIN2
+                  AND authority.ref_id =
+                    JSON_VALUE(evidence.value, '$.ref') COLLATE Latin1_General_100_BIN2
+                INNER JOIN dbo.proactive_source_status AS status WITH (UPDLOCK, HOLDLOCK)
+                  ON status.owner_object_id = state.owner_object_id
+                  AND status.source_id = JSON_VALUE(evidence.value, '$.source')
+                WHERE state.owner_object_id = @owner
+                  AND JSON_VALUE(source.value, '$.id') = JSON_VALUE(evidence.value, '$.source')
+                  AND JSON_VALUE(source.value, '$.state') = N'fresh'
+                  AND TRY_CONVERT(datetime2(7), JSON_VALUE(source.value, '$.verifiedAt')) =
+                    TRY_CONVERT(datetime2(7), JSON_VALUE(evidence.value, '$.verifiedAt'))
+                  AND JSON_VALUE(ref.value, '$.source') = JSON_VALUE(evidence.value, '$.source')
+                  AND JSON_VALUE(ref.value, '$.id') = JSON_VALUE(evidence.value, '$.ref')
+                  AND JSON_VALUE(ref.value, '$.identity') = JSON_VALUE(evidence.value, '$.identity')
+                  AND JSON_VALUE(ref.value, '$.observedAt') = JSON_VALUE(evidence.value, '$.observedAt')
+                  AND TRY_CONVERT(datetime2(7), JSON_VALUE(ref.value, '$.verifiedAt')) =
+                    TRY_CONVERT(datetime2(7), JSON_VALUE(evidence.value, '$.verifiedAt'))
+                  AND JSON_VALUE(ref.value, '$.materialHash') =
+                    JSON_VALUE(evidence.value, '$.materialHash')
+                  AND authority.activated_at IS NOT NULL
+                  AND authority.invalidated_at IS NULL
+                  AND authority.provider_identity = JSON_VALUE(evidence.value, '$.identity')
+                  AND authority.material_hash =
+                    JSON_VALUE(evidence.value, '$.materialHash') COLLATE Latin1_General_100_BIN2
+                  AND authority.verified_at =
+                    TRY_CONVERT(datetime2(7), JSON_VALUE(evidence.value, '$.verifiedAt'))
+                  AND status.state = N'ok'
+                  AND status.verified_at =
+                    TRY_CONVERT(datetime2(7), JSON_VALUE(evidence.value, '$.verifiedAt'))
+                  AND (status.invalidated_at IS NULL
+                    OR status.verified_at > status.invalidated_at)
+              )
+          ) THROW 51002, 'Proactive situation evidence generation changed before delivery', 1;`);
+        activeRequest = new sql.Request(transaction)
           .input('sessionId', sql.BigInt, BigInt(input.sessionId))
           .input('text', sql.NVarChar(sql.MAX), input.text)
           .input('model', sql.NVarChar(100), input.model)

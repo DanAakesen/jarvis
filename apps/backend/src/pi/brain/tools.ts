@@ -226,6 +226,8 @@ export function createBrainTools(options: {
             label: ref.label,
             observedAt: ref.observedAt,
             verifiedAt: ref.verifiedAt!,
+            origin: 'situation' as const,
+            materialHash: ref.materialHash ?? null,
           })) ?? []),
         ].filter((entry) => {
           const invalidatedAt = statusBySource.get(entry.source as SourceId)?.invalidatedAt;

@@ -54,6 +54,8 @@ export interface PiProactiveEvidence {
   readonly label: string;
   readonly observedAt: string | null;
   readonly verifiedAt: string;
+  readonly origin?: 'event' | 'situation';
+  readonly materialHash?: string | null;
 }
 
 export interface PiProactiveMessageContext {

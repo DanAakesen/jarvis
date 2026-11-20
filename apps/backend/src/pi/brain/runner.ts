@@ -110,6 +110,8 @@ export function createBrain(options: BrainOptions) {
       label: event.summary,
       observedAt: event.occurredAt.toISOString(),
       verifiedAt: event.receivedAt.toISOString(),
+      origin: 'event',
+      materialHash: event.materialHash ?? null,
     })));
   const policyNote = (settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>): string => {
     const enabledCategories = Object.entries(settings.categories)
@@ -151,6 +153,7 @@ export function createBrain(options: BrainOptions) {
         label: 'Proactive budget ledger',
         observedAt: now().toISOString(),
         verifiedAt: now().toISOString(),
+        origin: 'event',
       }],
       followUpIds: [],
     }, { runId: 'budget', sent: [], wrote: [], looked: [] }, signal); } catch (error) {

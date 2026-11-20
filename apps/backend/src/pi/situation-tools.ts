@@ -78,6 +78,7 @@ export function createSituationTools(options: {
       description: [
         'Resolve one source reference from situation_read to a bounded current raw record.',
         'source is the exact source id and ref is the reference identity; the source switch still applies, so a disabled automatic source is refused.',
+        'The returned verifiedRef is a pending receipt: commit or patch that exact tuple into the situation before relying on it as current situation evidence.',
         'A direct owner chat request can use the underlying source tool normally even when that source is excluded here.',
         'Only the current PI activation can use this tool.',
       ].join(' '),
@@ -90,7 +91,7 @@ export function createSituationTools(options: {
         additionalProperties: false,
       },
       execute: async (input, request, signal) => {
-        const active = grant(options.registry, request);
+        grant(options.registry, request);
         if (!isRecord(input) || typeof input.source !== 'string' || typeof input.ref !== 'string' ||
             !sourceIds.includes(input.source as SourceId)) {
           throw new ToolRefusal('The source reference is invalid. Nothing was read.');
@@ -100,22 +101,6 @@ export function createSituationTools(options: {
             source: input.source as SourceId,
             ref: input.ref,
           }, signal);
-          const verified = result.verifiedRef;
-          if (active.brain && isRecord(verified) &&
-              typeof verified.source === 'string' && sourceIds.includes(verified.source as SourceId) &&
-              typeof verified.id === 'string' && typeof verified.identity === 'string' &&
-              typeof verified.label === 'string' && typeof verified.observedAt === 'string' &&
-              typeof verified.verifiedAt === 'string') {
-            active.brain.evidence ??= [];
-            active.brain.evidence.push({
-              source: verified.source,
-              ref: verified.id,
-              identity: verified.identity,
-              label: verified.label,
-              observedAt: verified.observedAt,
-              verifiedAt: verified.verifiedAt,
-            });
-          }
           return result;
         } catch (error) { return failure(error); }
       },

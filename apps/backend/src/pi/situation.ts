@@ -97,6 +97,7 @@ export type PiSituationState = z.infer<typeof schema>;
 export type PiSituationAuthorityRef = PiSituationState['refs'][number] & {
   readonly verifiedAt: string;
   readonly receiptId?: string;
+  readonly activatedAt: string | null;
   readonly invalidatedAt: string | null;
   readonly staleReason: string | null;
 };
@@ -338,7 +339,7 @@ export function canonicalizePiSituationState(
   const authority = new Map(authoritativeRefs.map((ref) => [authorityKey(ref), structuredClone(ref)]));
   const refs = state.refs.map((ref) => {
     const canonical = authority.get(authorityKey(ref));
-    if (!canonical) {
+    if (!canonical || canonical.invalidatedAt !== null) {
       throw new PiSituationError(
         'invalid',
         'A situational reference was not observed by a provider or verified by a live lookup.',
@@ -356,7 +357,9 @@ export function retainAuthoritativePiSituationState(
   const authority = new Map(authoritativeRefs.map((ref) => [authorityKey(ref), structuredClone(ref)]));
   const refs = state.refs.flatMap((ref) => {
     const canonical = authority.get(authorityKey(ref));
-    return canonical ? [stateRef(canonical)] : [];
+    return canonical && canonical.activatedAt !== null && canonical.invalidatedAt === null
+      ? [stateRef(canonical)]
+      : [];
   });
   const validRefIds = new Set(refs.map(({ id: value }) => value));
   const facts = state.facts.filter(({ refIds }) => refIds.every((value) => validRefIds.has(value)));
@@ -578,19 +581,27 @@ export function createPiSituationService(options: {
     }
   }
 
-  function referenceObservations(
+  function pendingReferenceObservations(
     state: PiSituationState,
+    authoritativeRefs: readonly PiSituationAuthorityRef[],
   ): PiSituationSourceObservation[] {
-    const latest = new Map<SourceId, PiSituationAuthorityRef>();
+    const latest = new Map<SourceId, {
+      source: SourceId;
+      observedAt: string;
+      verifiedAt: string;
+    }>();
     for (const ref of state.refs) {
       if (!ref.verifiedAt) continue;
+      const authority = authoritativeRefs.find((entry) =>
+        authorityKey(entry) === authorityKey(ref));
+      if (!authority || authority.activatedAt !== null ||
+          authority.invalidatedAt !== null) continue;
       const previous = latest.get(ref.source);
       if (!previous || Date.parse(ref.verifiedAt) > Date.parse(previous.verifiedAt)) {
         latest.set(ref.source, {
-          ...ref,
+          source: ref.source,
+          observedAt: ref.observedAt,
           verifiedAt: ref.verifiedAt,
-          invalidatedAt: null,
-          staleReason: null,
         });
       }
     }
@@ -957,6 +968,7 @@ export function createPiSituationService(options: {
     source: SourceId,
     fact: SourceResult['facts'][number],
     verifiedAt: string,
+    pending = false,
   ): PiSituationAuthorityRef {
     const rawIdentity = fact.identity ?? fact.ref;
     const identityDigest = createHash('sha256').update(rawIdentity).digest('hex');
@@ -983,6 +995,7 @@ export function createPiSituationService(options: {
       expiresAt: null,
       materialHash,
       verifiedAt,
+      activatedAt: pending ? null : verifiedAt,
       invalidatedAt: null,
       staleReason: null,
     };
@@ -1250,7 +1263,10 @@ export function createPiSituationService(options: {
       const currentState = current
         ? retainAuthoritativePiSituationState(current.state, current.authoritativeRefs)
         : null;
-      const observations = referenceObservations(state);
+      const observations = pendingReferenceObservations(
+        state,
+        current?.authoritativeRefs ?? [],
+      );
       const effectivePolicy = policyWithObservations(policy, observations);
       const prepared = applyPolicy(
         state,
@@ -1304,7 +1320,10 @@ export function createPiSituationService(options: {
         patched,
         current.authoritativeRefs,
       );
-      const observations = referenceObservations(canonicalState);
+      const observations = pendingReferenceObservations(
+        canonicalState,
+        current.authoritativeRefs,
+      );
       const effectivePolicy = policyWithObservations(policy, observations);
       const prepared = applyPolicy(canonicalState, { ...current, state: currentState }, effectivePolicy);
       if (piSituationHash(prepared.state) === current.hash) {
@@ -1408,7 +1427,7 @@ export function createPiSituationService(options: {
           'The live provider observation is not newer than the persisted source-disable epoch.',
         );
       }
-      const authorityRef = sourceRef(input.source, fact, verifiedAt);
+      const authorityRef = sourceRef(input.source, fact, verifiedAt, true);
       const verifiedRef = stateRef(authorityRef);
       const value = {
         source: input.source, ref: fact.ref, identity: fact.identity ?? null, label: fact.label,
@@ -1490,8 +1509,24 @@ export function createMemoryPiSituationStore(
           current !== undefined && current.hash !== input.expectedHash) {
         throw new PiSituationError('conflict', 'Situational state changed. Read the current revision before committing.');
       }
-      const known = authority(input.owner, input.authoritativeRefs);
+      let known = authority(input.owner, input.authoritativeRefs);
       const state = canonicalizePiSituationState(input.state, known);
+      for (const ref of state.refs) {
+        const receipt = known.find((entry) =>
+          authorityKey(entry) === authorityKey(ref));
+        if (!receipt || receipt.activatedAt !== null || receipt.invalidatedAt !== null) continue;
+        known = known.map((entry) =>
+          entry.activatedAt !== null && entry.invalidatedAt === null &&
+          entry.source === ref.source && entry.id === ref.id
+            ? {
+              ...entry,
+              invalidatedAt: ref.verifiedAt!,
+              staleReason: 'superseded_by_committed_lookup',
+            }
+            : authorityKey(entry) === authorityKey(ref)
+              ? { ...entry, activatedAt: ref.verifiedAt! }
+              : entry);
+      }
       const activation = input.activation;
       const record: PiSituationRecord = {
         owner: input.owner,
@@ -1516,6 +1551,7 @@ export function createMemoryPiSituationStore(
       const currentAuthority = authority(owner);
       const knownCurrent = currentAuthority.find((entry) =>
         entry.invalidatedAt === null &&
+        entry.activatedAt !== null &&
         entry.source === ref.source &&
         entry.id === ref.id);
       if (knownCurrent && Date.parse(knownCurrent.verifiedAt) > Date.parse(ref.verifiedAt)) {
@@ -1524,11 +1560,19 @@ export function createMemoryPiSituationStore(
           'The provider returned an older verification than its active reference receipt.',
         );
       }
-      const known = [
-        ...currentAuthority.filter((entry) =>
-          !(entry.invalidatedAt === null &&
-            entry.source === ref.source &&
-            entry.id === ref.id)),
+      if (knownCurrent &&
+          Date.parse(knownCurrent.verifiedAt) === Date.parse(ref.verifiedAt) &&
+          knownCurrent.identity === ref.identity &&
+          (knownCurrent.materialHash ?? null) === (ref.materialHash ?? null)) return;
+      const pending = currentAuthority.find((entry) =>
+        entry.activatedAt === null &&
+        entry.invalidatedAt === null &&
+        entry.source === ref.source &&
+        entry.id === ref.id &&
+        entry.verifiedAt === ref.verifiedAt &&
+        (entry.materialHash ?? null) === (ref.materialHash ?? null));
+      const known = pending ? currentAuthority : [
+        ...currentAuthority,
         structuredClone(ref),
       ];
       authorities.set(owner, known);

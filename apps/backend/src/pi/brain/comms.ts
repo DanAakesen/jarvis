@@ -54,6 +54,11 @@ export function createBrainComms(options: BrainCommsOptions) {
     }
     if (shouldRedact(text)) throw new BrainCommsRefusal('Secrets and credentials are never sent. Nothing was sent.');
     const textHash = hash(text);
+    const evidence = (Array.isArray(input.evidence) ? input.evidence : []).map((entry) => ({
+      ...entry,
+      origin: entry.origin ?? 'event',
+      materialHash: entry.materialHash ?? null,
+    }));
     if (!options.conversations.addProactiveMessage) {
       throw new BrainCommsRefusal('The chat continuation ledger is unavailable, so nothing was sent.');
     }
@@ -81,7 +86,7 @@ export function createBrainComms(options: BrainCommsOptions) {
         ownerObjectId: options.ownerObjectId,
         runId: run.runId,
         textHash,
-        evidence: Array.isArray(input.evidence) ? input.evidence : [],
+        evidence,
         followUpIds: input.followUpIds ?? [],
         ...(options.pushEnabled === false ? {} : {
           replyNotification: {

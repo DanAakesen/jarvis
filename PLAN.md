@@ -104,7 +104,7 @@ remain outside this change.
 | Put `dueAt` follow-ups, updates and cancellations in the existing `proactive_events` queue with future eligibility and identity/material dedupe | Done |
 | Persist exact outgoing text, evidence, follow-up IDs and Chat session/message IDs for Chat/Voice continuation | Done |
 | Reserve owner settings, allowance, spacing, quiet-hours and `proactive_event_batches` atomically in SQL | Done |
-| Add migrations `0091` through `0094` and reverse guards; make state+follow-up outbox, source authority/status, Chat+receipt and budget reservation atomic; bind evidence to retained verifiedAt generations and make reopen/cancel/disable races safe | Done locally |
+| Add migrations `0091` through `0095` and reverse guards; make state+follow-up outbox, source authority/status, Chat+receipt and budget reservation atomic; bind evidence to retained/pending verifiedAt generations and refuse stale or mid-wake supersession | Done locally |
 
 Completion means the existing PI activation envelope and one background queue own the whole path; no parallel brain, shadow scheduler, Personal Memory copy or push transport was introduced. Live provider behaviour and owner judgement remain outside this offline implementation.
 

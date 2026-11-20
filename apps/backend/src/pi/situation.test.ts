@@ -61,6 +61,7 @@ function setup(sources: readonly ProactiveSource[] = []) {
   const store = createMemoryPiSituationStore(state().refs.map((ref) => ({
     ...ref,
     verifiedAt: ref.verifiedAt!,
+    activatedAt: ref.verifiedAt!,
     invalidatedAt: null,
     staleReason: null,
   })));
