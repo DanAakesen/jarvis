@@ -4,7 +4,10 @@ import {
   type ConversationAgent, type ConversationAgentChunk, type ConversationAgentInput,
 } from '../core/chat-agent.js';
 import { foundryTokenCosts } from '../core/usage-pricing.js';
-import { PI_CONTEXT_INPUT, PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
+import {
+  PI_CONTEXT_INPUT, PI_MCP_SERVER_LABEL, PI_MODEL, PI_POLICY_REVISION,
+  PI_PREVIEW_HEADER, PI_REASONING_EFFORT,
+} from './definition.js';
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
@@ -15,6 +18,7 @@ import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
 import type { PiActivationType } from './situation.js';
 import { completionPlan, missingCompletionEvidence, type PiCompletionRequirement } from './completion.js';
+import type { ConversationReplayMessage } from '../core/conversation-store.js';
 
 export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
@@ -68,6 +72,11 @@ export interface PiGatewayOptions {
   readonly context: (signal: AbortSignal) => Promise<string>;
   /** The environment note (Azure subscription and resource group, GitHub defaults); the smoke sends it on the turn that needs it. */
   readonly environment?: string | undefined;
+  /** Bounded durable history used only when a policy change requires a fresh provider conversation. */
+  readonly replay?: (input: {
+    readonly limit: number;
+    readonly beforeMessageId?: string | undefined;
+  }, signal: AbortSignal) => Promise<readonly ConversationReplayMessage[]>;
   readonly recordUsage?: ((usage: { model: string; inputTokens: number; outputTokens: number; eventId: string }) => Promise<void>) | undefined;
   readonly fetcher?: typeof fetch;
   readonly now?: () => Date;
@@ -131,6 +140,9 @@ export interface PiGateway extends ConversationAgent {
 
 /** Measured fixed prompt of the managed harness (about 11k input tokens per call), used only to price a turn that never reported usage. */
 const estimatedPromptTokens = 12_000;
+const replayHistoryMessages = 32;
+const maxReplayItems = 160;
+const maxReplayBytes = 1_000_000;
 /** A failed warm-up is not retried for this long, and three failed turns in a row pause warm-ups for the longer one. */
 const warmFailureCooldownMs = 10 * 60_000;
 const repeatedFailures = 3;
@@ -138,6 +150,77 @@ const repeatedFailurePauseMs = 30 * 60_000;
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+type PiReplayInputItem =
+  | { readonly type: 'message'; readonly role: 'user' | 'assistant'; readonly content: string }
+  | {
+    readonly type: 'function_call';
+    readonly call_id: string;
+    readonly name: string;
+    readonly arguments: string;
+  }
+  | {
+    readonly type: 'function_call_output';
+    readonly call_id: string;
+    readonly output: string;
+  };
+
+function replayInput(history: readonly ConversationReplayMessage[]): readonly PiReplayInputItem[] {
+  const items: PiReplayInputItem[] = [];
+  let bytes = 0;
+  const add = (item: PiReplayInputItem) => {
+    if (items.length >= maxReplayItems) {
+      throw new PiGatewayError('pi_failed', 'PI could not safely carry this conversation to refreshed instructions.', {
+        detail: 'pi_replay_too_large',
+      });
+    }
+    bytes += Buffer.byteLength(JSON.stringify(item));
+    if (bytes > maxReplayBytes) {
+      throw new PiGatewayError('pi_failed', 'PI could not safely carry this conversation to refreshed instructions.', {
+        detail: 'pi_replay_too_large',
+      });
+    }
+    items.push(item);
+  };
+  for (const message of history) {
+    add({
+      type: 'message',
+      role: message.role === 'dan' ? 'user' : 'assistant',
+      content: message.text,
+    });
+    for (const call of message.toolCalls) {
+      if (!/^[1-9]\d{0,18}$/u.test(call.id) ||
+          !/^[A-Za-z0-9_-]{1,64}$/u.test(call.tool)) {
+        throw new PiGatewayError('pi_failed', 'PI could not safely carry its completed tool history.', {
+          detail: 'pi_replay_invalid',
+        });
+      }
+      try {
+        const argumentsValue: unknown = JSON.parse(call.arguments);
+        if (argumentsValue === null || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) throw new TypeError();
+        if (call.result !== null) JSON.parse(call.result);
+      } catch {
+        throw new PiGatewayError('pi_failed', 'PI could not safely carry its completed tool history.', {
+          detail: 'pi_replay_invalid',
+        });
+      }
+      const callId = `pi-tool-${call.id}`;
+      add({
+        type: 'function_call',
+        call_id: callId,
+        name: call.tool,
+        arguments: call.arguments,
+      });
+      add({
+        type: 'function_call_output',
+        call_id: callId,
+        output: call.result ?? JSON.stringify({ outcome: call.outcome }),
+      });
+    }
+  }
+  return items;
+}
+
 /** A server label or tool name from the provider, kept short and plain before it reaches a log or a report. */
 const label = (value: unknown): string => typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/u.test(value) ? value : '';
 
@@ -211,7 +294,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
     } catch { /* Status observation must not change the turn outcome. */ }
   };
-  let ensuring: Promise<string> | null = null;
+  let ensuring: Promise<{ readonly conversationId: string; readonly seed: readonly PiReplayInputItem[] }> | null = null;
   let capabilityInventory = options.activationCapabilities;
   // Single-flight lock for the one conversation: a warm-up and a chat turn can never both have a request in flight.
   // It is claimed synchronously (no await between the check and the claim), so two callers cannot both pass it.
@@ -266,23 +349,82 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return id;
   }
 
-  async function ensureConversation(signal: AbortSignal): Promise<string> {
-    // One owner, one conversation: concurrent callers share the same creation.
+  async function ensureConversation(
+    context: string,
+    signal: AbortSignal,
+    beforeMessageId?: string,
+  ): Promise<{ readonly conversationId: string; readonly seed: readonly PiReplayInputItem[] }> {
+    const hash = contextHash(context);
+    // One owner, one conversation: concurrent callers share creation and policy rotation.
     ensuring ??= (async () => {
       try {
         const stored = await options.store.getConversation(options.owner, signal);
-        if (stored && stored.agentName === options.agentName) return stored.conversationId;
+        if (stored && stored.agentName === options.agentName &&
+            stored.contextHash === hash && stored.warmedAt !== null) {
+          return { conversationId: stored.conversationId, seed: [] };
+        }
+        if (stored && stored.agentName === options.agentName &&
+            (stored.contextHash !== hash || stored.warmedAt === null)) {
+          // Foundry captures managed-agent structured inputs at conversation start. A changed
+          // policy therefore needs a new native conversation, not a user-message "reminder".
+          if (!options.replay) {
+            throw new PiGatewayError(
+              'pi_failed',
+              'PI could not refresh its instructions without the conversation replay boundary.',
+              { detail: 'pi_replay_unavailable' },
+            );
+          }
+          const history = await options.replay({
+            limit: replayHistoryMessages,
+            ...(beforeMessageId ? { beforeMessageId } : {}),
+          }, signal);
+          const seed = replayInput(history);
+          const nextConversationId = await createConversation(signal);
+          const rotated = await options.store.rotateConversation(
+            options.owner,
+            options.agentName,
+            stored.conversationId,
+            nextConversationId,
+            hash,
+            signal,
+          );
+          if (rotated) return { conversationId: rotated.conversationId, seed };
+          const current = await options.store.getConversation(options.owner, signal);
+          if (current?.agentName === options.agentName && current.contextHash === hash) {
+            return {
+              conversationId: current.conversationId,
+              seed: current.warmedAt === null ? seed : [],
+            };
+          }
+          throw new PiGatewayError(
+            'pi_failed',
+            'PI could not bind the refreshed instruction conversation.',
+            { detail: 'pi_conversation_rotation_conflict' },
+          );
+        }
         const created = await createConversation(signal);
-        return (await options.store.bindConversation(options.owner, options.agentName, created, signal)).conversationId;
+        const bound = await options.store.bindConversation(
+          options.owner,
+          options.agentName,
+          created,
+          signal,
+        );
+        return { conversationId: bound.conversationId, seed: [] };
       } finally { ensuring = null; }
     })();
     return ensuring;
   }
 
-  async function* respond(conversationId: string, input: string, context: string, signal: AbortSignal): AsyncGenerator<PiEvent> {
+  async function* respond(
+    conversationId: string,
+    input: string,
+    context: string,
+    signal: AbortSignal,
+    seed: readonly PiReplayInputItem[] = [],
+  ): AsyncGenerator<PiEvent> {
     const response = await call('POST', '/responses', {
       conversation: conversationId,
-      input: [{ role: 'user', content: input }],
+      input: [...seed, { type: 'message', role: 'user', content: input }],
       structured_inputs: { [PI_CONTEXT_INPUT]: context },
       stream: true,
     }, signal, true);
@@ -398,7 +540,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
   }
 
-  const contextHash = (context: string) => createHash('sha256').update(context).digest('hex');
+  const contextHash = (context: string) =>
+    createHash('sha256').update(`${PI_POLICY_REVISION}\0${context}`).digest('hex');
 
   /** Background spend stops after a failure. Derived from the ledger, so a backend restart does not forget it. */
   async function warmPause(signal: AbortSignal): Promise<'paused_after_failures' | 'recent_failure' | undefined> {
@@ -434,7 +577,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (fresh) return { state: 'warm', alreadyWarm: true, ms: Math.round(performance.now() - started) };
     {
       await assertBudget(signal);
-      const conversationId = await ensureConversation(signal);
+      const conversation = await ensureConversation(context, signal);
       const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
       let usage: PiUsage | undefined;
       let firstTextMs: number | null = null;
@@ -442,10 +585,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       let modelStarted = false;
       try {
         for await (const event of respond(
-          conversationId,
+          conversation.conversationId,
           formatWarmup({ now: now(), timeZone: options.timeZone }),
           context,
           deadline,
+          conversation.seed,
         )) {
           if (event.kind === 'delta') { firstTextMs ??= Math.round(performance.now() - started); modelStarted = true; }
           if (event.kind === 'done') usage = event.usage;
@@ -535,8 +679,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let streamedCharacters = 0;
     let completionUnverified = false;
     try {
-      const conversationId = await ensureConversation(signal);
       const context = await options.context(signal);
+      const conversation = await ensureConversation(context, signal, input.messageId);
       const activation = await options.activations.begin({
         type: input.channel === 'voice' ? 'voice' : 'chat',
         source: input.channel === 'voice' ? 'voice' : 'chat',
@@ -557,7 +701,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
-      for await (const event of respond(conversationId, text, context, deadline)) {
+      for await (const event of respond(
+        conversation.conversationId,
+        text,
+        context,
+        deadline,
+        conversation.seed,
+      )) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;

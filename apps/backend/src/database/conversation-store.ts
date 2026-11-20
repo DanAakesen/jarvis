@@ -11,6 +11,7 @@ import type {
   ConversationSearchInput,
   ConversationLanguage,
   ConversationMessage,
+  ConversationReplayToolCall,
   ConversationSteeringMessage,
   ConversationRole,
   ConversationSession,
@@ -85,6 +86,15 @@ interface ToolCallRow {
   outcome: 'ok' | 'refused' | 'error';
   task_id: string | null;
   artifact_id: string | null;
+}
+
+interface ReplayToolCallRow {
+  id: string;
+  message_id: string;
+  tool: string;
+  arguments: string;
+  result: string | null;
+  outcome: 'ok' | 'refused' | 'error';
 }
 
 function sessionFromRow(row: SessionRow): ConversationSession {
@@ -754,6 +764,84 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
           WHERE m.role = N'dan' AND s.channel = N'chat' ORDER BY m.id DESC;`);
       return result.recordset.map((row) => row.text);
+    },
+
+    async readPiReplayHistory(input, signal) {
+      if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 32) {
+        throw new RangeError('PI replay limit must be an integer from 1 to 32');
+      }
+      if (input.beforeMessageId !== undefined &&
+          !/^[1-9]\d{0,18}$/u.test(input.beforeMessageId)) {
+        throw new RangeError('PI replay cursor must be a message ID');
+      }
+      const request = databaseReadRequest(pool);
+      const result = await execute(
+        request,
+        signal,
+        () => request
+          .input('limit', sql.Int, input.limit)
+          .input('beforeId', sql.BigInt, input.beforeMessageId ? BigInt(input.beforeMessageId) : null)
+          .query<MessageRow & { interrupted: boolean }>(`DECLARE @completedBefore bigint;
+            SELECT @completedBefore = MAX(m.id)
+            FROM dbo.messages AS m
+            INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+            WHERE (@beforeId IS NULL OR m.id < @beforeId)
+              AND m.role = N'jarvis'
+              AND m.interrupted = 0
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.session_runtime_tests AS r
+                WHERE r.jarvis_session_id = s.id
+              );
+
+            DECLARE @replay TABLE (
+              id bigint NOT NULL PRIMARY KEY,
+              session_id bigint NOT NULL,
+              role nvarchar(16) NOT NULL,
+              text nvarchar(max) NOT NULL,
+              interrupted bit NOT NULL
+            );
+            INSERT INTO @replay (id, session_id, role, text, interrupted)
+            SELECT TOP (@limit) m.id, m.jarvis_session_id, m.role, m.text, m.interrupted
+            FROM dbo.messages AS m
+            INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+            WHERE m.id <= @completedBefore
+              AND m.interrupted = 0
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.session_runtime_tests AS r
+                WHERE r.jarvis_session_id = s.id
+              )
+            ORDER BY m.id DESC;
+
+            SELECT CONVERT(varchar(20), id) AS id,
+              CONVERT(varchar(20), session_id) AS session_id,
+              role, text, NULL AS model, CAST(0 AS datetime2(7)) AS at
+            FROM @replay ORDER BY id;
+
+            SELECT CONVERT(varchar(20), tc.id) AS id,
+              CONVERT(varchar(20), tc.message_id) AS message_id,
+              tc.tool, tc.[arguments], tc.result, tc.outcome
+            FROM dbo.tool_calls AS tc
+            INNER JOIN @replay AS r ON r.id = tc.message_id
+            ORDER BY tc.message_id, tc.id;`),
+      );
+      const calls = new Map<string, ConversationReplayToolCall[]>();
+      for (const row of (result.recordsets[1] ?? []) as ReplayToolCallRow[]) {
+        const grouped = calls.get(row.message_id) ?? [];
+        grouped.push({
+          id: row.id,
+          tool: row.tool,
+          arguments: row.arguments,
+          result: row.result,
+          outcome: row.outcome,
+        });
+        calls.set(row.message_id, grouped);
+      }
+      return (result.recordsets[0] ?? []).map(row => ({
+        id: row.id,
+        role: row.role,
+        text: row.text,
+        toolCalls: calls.get(row.id) ?? [],
+      }));
     },
 
     async getHistory({ limit, before, sessionId, excludeRuntimeTests = false }) {

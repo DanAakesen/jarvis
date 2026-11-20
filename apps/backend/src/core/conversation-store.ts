@@ -72,6 +72,21 @@ export interface ConversationSteeringMessage {
   readonly text: string;
 }
 
+export interface ConversationReplayToolCall {
+  readonly id: string;
+  readonly tool: string;
+  readonly arguments: string;
+  readonly result: string | null;
+  readonly outcome: 'ok' | 'refused' | 'error';
+}
+
+export interface ConversationReplayMessage {
+  readonly id: string;
+  readonly role: ConversationRole;
+  readonly text: string;
+  readonly toolCalls: readonly ConversationReplayToolCall[];
+}
+
 export interface ConversationHistoryPage {
   readonly messages: readonly ConversationHistoryMessage[];
   readonly nextCursor: string | null;
@@ -162,6 +177,11 @@ export interface ConversationStore {
   readDanMessagesSince?(since: Date, limit: number): Promise<ReadonlyArray<{ readonly id: string; readonly text: string; readonly at: Date }>>;
   /** Newest-first user chat text only; defaults to five messages and permits at most twenty. */
   readRecentUserMessages(limit?: number): Promise<string[]>;
+  /** Bounded, source-owned history for seeding a fresh PI provider conversation; never exposed by a history route. */
+  readPiReplayHistory?(input: {
+    readonly limit: number;
+    readonly beforeMessageId?: string | undefined;
+  }, signal: AbortSignal): Promise<readonly ConversationReplayMessage[]>;
   getHistory(input: {
     readonly limit: number;
     /** Route must authorize an explicit session target before calling. */

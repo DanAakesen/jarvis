@@ -76,6 +76,15 @@ export interface PiStore {
   bindConversation(owner: string, agentName: string, conversationId: string, signal: AbortSignal): Promise<PiConversationRow>;
   /** Forgets a conversation the provider no longer has, so the next turn starts a fresh one. */
   dropConversation(owner: string, signal: AbortSignal): Promise<void>;
+  /** Atomically replace one exact provider conversation after its structured instruction input changed. */
+  rotateConversation(
+    owner: string,
+    agentName: string,
+    previousConversationId: string,
+    nextConversationId: string,
+    contextHash: string,
+    signal: AbortSignal,
+  ): Promise<PiConversationRow | null>;
   markWarm(owner: string, contextHash: string, at: Date, signal: AbortSignal): Promise<void>;
   recordTurn(turn: PiTurnRecord, signal: AbortSignal): Promise<void>;
   /** Spend of the given kinds at or after `from` (UTC month start); failed and cancelled turns count at an estimate when the model had started. */
@@ -119,6 +128,13 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
       return row;
     },
     async dropConversation(owner) { conversations.delete(owner); },
+    async rotateConversation(owner, agentName, previousConversationId, nextConversationId, contextHash) {
+      const row = conversations.get(owner);
+      if (!row || row.agentName !== agentName || row.conversationId !== previousConversationId) return null;
+      const replacement = { agentName, conversationId: nextConversationId, warmedAt: null, contextHash };
+      conversations.set(owner, replacement);
+      return replacement;
+    },
     async markWarm(owner, contextHash, at) {
       const row = conversations.get(owner);
       if (row) conversations.set(owner, { ...row, warmedAt: at, contextHash });

@@ -25,7 +25,245 @@ async function until(check: () => boolean, label: string) {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
+async function openPiRelay(
+  piAgent: PiVoiceAgent,
+  store: ConversationStore,
+) {
+  const upstream = new WebSocketServer({ port: 0 });
+  const upstreamEvents: Record<string, unknown>[] = [];
+  const sockets: WebSocket[] = [];
+  upstream.on('connection', (socket) => {
+    sockets.push(socket);
+    socket.on('message', data => upstreamEvents.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    socket.send(JSON.stringify({
+      type: 'session.started',
+      session: { id: 'live-session', audio: { format: { type: 'audio/pcm', rate: 24_000 } } },
+    }));
+  });
+  await new Promise<void>(resolve => upstream.once('listening', resolve));
+  const upstreamUrl = `ws://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
+  const app = buildApp(
+    config,
+    createLogger({ ...config, logLevel: 'silent' } as typeof config),
+    {
+      auth: async () => ({
+        objectId: config.auth.ownerObjectId,
+        tenantId: config.auth.tenantId,
+        displayName: 'Dan',
+      }),
+      conversationStore: store,
+      piAgent,
+      modules: [createVoiceRelayModule({
+        getToken: async () => 'token',
+        connect: () => new WebSocket(upstreamUrl),
+      })],
+    },
+  );
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  const browser = new WebSocket(
+    `ws://127.0.0.1:${(app.server.address() as AddressInfo).port}/voice`,
+    [VOICE_SUBPROTOCOL, 'jarvis.auth.aaa.bbb.ccc'],
+  );
+  const received: Record<string, unknown>[] = [];
+  browser.on('message', data => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+  cleanups.push(async () => {
+    browser.terminate();
+    await app.close();
+    for (const socket of sockets) socket.terminate();
+    upstream.close();
+  });
+  await until(
+    () => received.some(event => event.type === 'jarvis.session.ready') && sockets.length === 1,
+    'voice relay ready',
+  );
+  return { browser, received, upstreamEvents, socket: sockets[0]! };
+}
+
 describe('GPT-Live graceful termination', () => {
+  it('rejects independent GPT-Live output before PI has supplied accepted commentary', async () => {
+    let ended = false;
+    const store = {
+      createSession: async () => ({
+        id: 'voice-gate-1', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => { ended = true; return true; },
+    } as unknown as ConversationStore;
+    const { socket, received } = await openPiRelay(
+      { warm: async () => undefined, async *stream() { yield 'PI was never asked.'; } },
+      store,
+    );
+    socket.send(JSON.stringify({
+      type: 'session.output_transcript.delta',
+      event_id: 'independent-output',
+      delta: 'Hello, I can help with that.',
+      start_ms: 0,
+      end_ms: 100,
+    }));
+    await until(
+      () => ended && received.some(event => event.type === 'jarvis.session.failed'),
+      'independent voice output rejection',
+    );
+    expect(received.some(event =>
+      event.type === 'jarvis.voice.audio.delta' ||
+        event.type === 'jarvis.voice.output_transcript.delta')).toBe(false);
+  });
+
+  it('refuses GPT-Live rewrites and generic substitutes even after a delegation exists', async () => {
+    let sequence = 0;
+    let ended = false;
+    const store = {
+      createSession: async () => ({
+        id: 'voice-gate-2', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => { ended = true; return true; },
+      addMessage: async (input: { sessionId: string; role: string; text: string; model: string | null }) => {
+        sequence += 1;
+        return {
+          id: String(sequence),
+          sessionId: input.sessionId,
+          role: input.role,
+          text: input.text,
+          model: input.model,
+          at: new Date(),
+        } as ConversationMessage;
+      },
+    } as unknown as ConversationStore;
+    const { socket, received, upstreamEvents } = await openPiRelay(
+      { warm: async () => undefined, async *stream() { yield 'The exact PI answer.'; } },
+      store,
+    );
+    socket.send(JSON.stringify({
+      type: 'session.input_transcript.delta',
+      event_id: 'input-gate-1',
+      delta: 'What is the answer?',
+      start_ms: 0,
+      end_ms: 100,
+    }));
+    socket.send(JSON.stringify({
+      type: 'session.delegation.created',
+      event_id: 'delegation-gate-1',
+      offset_ms: 100,
+      delegation: { id: 'delegate-gate-1', target: 'client' },
+    }));
+    await until(
+      () => upstreamEvents.some(event =>
+        event.type === 'session.commentary.append' &&
+          event.content === 'The exact PI answer.'),
+      'PI commentary append',
+    );
+    const append = upstreamEvents.find(event =>
+      event.type === 'session.commentary.append' &&
+        event.content === 'The exact PI answer.')!;
+    socket.send(JSON.stringify({
+      type: 'session.commentary.appended',
+      client_event_id: append.event_id,
+      start_ms: 200,
+      end_ms: 300,
+    }));
+    socket.send(JSON.stringify({
+      type: 'session.output_transcript.delta',
+      event_id: 'generic-output',
+      delta: 'Certainly, I can help with that.',
+      start_ms: 300,
+      end_ms: 500,
+    }));
+    socket.send(JSON.stringify({
+      type: 'session.output_audio.delta',
+      event_id: 'generic-audio',
+      delta: 'AAA=',
+      start_ms: 300,
+      end_ms: 500,
+    }));
+    await until(
+      () => ended && received.some(event => event.type === 'jarvis.session.failed'),
+      'GPT-Live rewrite rejection',
+    );
+    expect(received.some(event =>
+      event.type === 'jarvis.voice.audio.delta' ||
+        event.type === 'jarvis.voice.output_transcript.delta')).toBe(false);
+  });
+
+  it('forwards only the exact PI commentary and its matching delegation', async () => {
+    let sequence = 0;
+    const store = {
+      createSession: async () => ({
+        id: 'voice-gate-3', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => true,
+      addMessage: async (input: { sessionId: string; role: string; text: string; model: string | null }) => {
+        sequence += 1;
+        return {
+          id: String(sequence),
+          sessionId: input.sessionId,
+          role: input.role,
+          text: input.text,
+          model: input.model,
+          at: new Date(),
+        } as ConversationMessage;
+      },
+    } as unknown as ConversationStore;
+    const { socket, received, upstreamEvents } = await openPiRelay(
+      { warm: async () => undefined, async *stream() { yield 'The exact PI answer.'; } },
+      store,
+    );
+    socket.send(JSON.stringify({
+      type: 'session.input_transcript.delta',
+      event_id: 'input-gate-exact',
+      delta: 'Answer directly.',
+      start_ms: 0,
+      end_ms: 100,
+    }));
+    socket.send(JSON.stringify({
+      type: 'session.delegation.created',
+      event_id: 'delegation-gate-exact',
+      offset_ms: 100,
+      delegation: { id: 'delegate-gate-exact', target: 'client' },
+    }));
+    await until(
+      () => upstreamEvents.some(event =>
+        event.type === 'session.commentary.append' &&
+          event.content === 'The exact PI answer.'),
+      'exact PI commentary append',
+    );
+    const append = upstreamEvents.find(event =>
+      event.type === 'session.commentary.append' &&
+        event.content === 'The exact PI answer.')!;
+    expect(append).toMatchObject({ delegation_id: 'delegate-gate-exact' });
+    socket.send(JSON.stringify({
+      type: 'session.commentary.appended',
+      client_event_id: append.event_id,
+      start_ms: 200,
+      end_ms: 300,
+    }));
+    socket.send(JSON.stringify({
+      type: 'session.output_transcript.delta',
+      event_id: 'exact-output',
+      delta: 'The exact PI answer.',
+      start_ms: 300,
+      end_ms: 500,
+    }));
+    socket.send(JSON.stringify({
+      type: 'session.output_audio.delta',
+      event_id: 'exact-audio',
+      delta: 'AAA=',
+      start_ms: 300,
+      end_ms: 500,
+    }));
+    await until(
+      () => received.some(event => event.type === 'jarvis.voice.audio.delta') &&
+        received.some(event => event.type === 'jarvis.voice.response.completed'),
+      'verified exact voice output',
+    );
+    expect(received.find(event =>
+      event.type === 'jarvis.voice.response.started')).toMatchObject({
+      delegationId: 'delegate-gate-exact',
+    });
+    expect(received.find(event =>
+      event.type === 'jarvis.voice.output_transcript.delta')).toMatchObject({
+      delta: 'The exact PI answer.',
+    });
+  });
+
   it('refreshes proactive receipt context at the native delegated turn boundary', async () => {
     const upstream = new WebSocketServer({ port: 0 });
     const sockets: WebSocket[] = [];

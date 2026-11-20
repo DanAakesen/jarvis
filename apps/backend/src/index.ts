@@ -626,6 +626,9 @@ try {
         await awayModeStore?.read() ?? defaultAwayModeState,
         piEnvironment,
       ),
+      ...(conversationStore?.readPiReplayHistory ? {
+        replay: (input, signal) => conversationStore.readPiReplayHistory!(input, signal),
+      } : {}),
       recordUsage: usageStore?.recordFoundryUsage
         ? (usage) => usageStore.recordFoundryUsage!({ role: 'chat', ...usage }) : undefined,
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),

@@ -40,6 +40,8 @@ export interface PiVoiceTurnsOptions {
   readonly speak: (text: string, delegationId?: string) => void;
   /** True while a PI turn is in flight, so the relay keeps the session open and shows that Jarvis is thinking. */
   readonly busy: (active: boolean) => void;
+  /** End the live session when PI cannot produce an authoritative answer; never make GPT-Live invent a fallback. */
+  readonly fail?: (reason: string) => void;
   readonly log: (turn: PiVoiceTurnLog) => void;
   readonly deadlineMs?: number;
   readonly now?: () => number;
@@ -56,8 +58,8 @@ export interface PiVoiceTurns {
 
 /**
  * Every voice turn goes to the one PI agent, in its one long conversation. GPT-Live is only the ears and the voice: this
- * runs the turn, speaks PI's own short note before a tool call (if it wrote one) and then its answer, and says failures
- * plainly. Nothing here answers for PI and nothing falls back to another engine.
+ * runs the turn and speaks PI's own short note before a tool call (if it wrote one), then its exact answer. PI failure ends
+ * the voice session instead of manufacturing a spoken fallback.
  */
 export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
   const now = options.now ?? (() => performance.now());
@@ -78,6 +80,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
     let firstTextMs: number | null = null;
     let acknowledged = false;
     let reply: string | undefined;
+    let failureReason: string | undefined;
     try {
       if (signal.aborted) throw signal.reason;
       let partial = '';
@@ -105,14 +108,16 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       outcome = 'ok';
     } catch (error) {
       outcome = options.signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
-      if (outcome === 'timeout') reply = timeoutReply;
-      else if (outcome === 'failed') reply = error instanceof PiGatewayError ? error.userMessage : failedReply;
+      if (outcome === 'timeout') failureReason = timeoutReply;
+      else if (outcome === 'failed') failureReason = error instanceof PiGatewayError ? error.userMessage : failedReply;
     }
     if (outcome === 'ok' && delivery.silenced) outcome = 'superseded';
-    else if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = emptyReply; }
+    else if (outcome === 'ok' && !reply) { outcome = 'failed'; failureReason = emptyReply; }
     // Silencing interrupts playback only. The request and any committed work keep their own authority and receipt.
     if (reply && !options.signal.aborted && !delivery.silenced) {
       options.speak(reply, turn.delegationId);
+    } else if (outcome === 'failed' || outcome === 'timeout') {
+      options.fail?.(failureReason ?? failedReply);
     }
     options.log({ outcome, transcriptToFirstTextMs: firstTextMs, transcriptToDoneMs: Math.round(now() - turn.startedAt), acknowledged });
   }

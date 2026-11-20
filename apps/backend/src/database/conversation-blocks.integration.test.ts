@@ -10,6 +10,7 @@ import { proactiveSettingsRevision } from '../proactive/preferences.js';
 import { sourceIds } from '../proactive/types.js';
 import { parsePiSituationState } from '../pi/situation.js';
 import { finalizeChatBlock } from '../core/chat-blocks.js';
+import { createToolCallStore } from './tool-call-store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -36,6 +37,67 @@ afterAll(async () => {
 });
 
 describe('conversation blocks in the message store', () => {
+  it('reads bounded PI replay history with terminal tool call/output pairs', async () => {
+    const conversations = createConversationStore(pool);
+    const toolCalls = createToolCallStore(pool);
+    const session = await conversations.createSession({ channel: 'chat', language: 'en' });
+    const ownerMessage = await conversations.addMessage({
+      sessionId: session.id,
+      role: 'dan',
+      text: 'Read the resource.',
+      model: null,
+    });
+    expect(ownerMessage).not.toBeNull();
+    await toolCalls.record({
+      messageId: ownerMessage!.id,
+      tool: 'az_group_resource_list',
+      arguments: { subscription: 'sub', resourceGroup: 'rg' },
+      result: { outcome: 'ok', resources: ['fixture'] },
+      outcome: 'ok',
+    });
+    const assistantMessage = await conversations.addMessage({
+      sessionId: session.id,
+      role: 'jarvis',
+      text: 'Fixture is present.',
+      model: 'pi',
+    });
+    await conversations.addMessage({
+      sessionId: session.id,
+      role: 'dan',
+      text: 'An unfinished turn must not be replayed.',
+      model: null,
+    });
+    const current = await conversations.addMessage({
+      sessionId: session.id,
+      role: 'dan',
+      text: 'Apply the new policy.',
+      model: null,
+    });
+    const replay = await conversations.readPiReplayHistory!({
+      limit: 2,
+      beforeMessageId: current!.id,
+    }, new AbortController().signal);
+    expect(replay).toEqual([
+      expect.objectContaining({
+        id: ownerMessage!.id,
+        role: 'dan',
+        text: 'Read the resource.',
+        toolCalls: [expect.objectContaining({
+          tool: 'az_group_resource_list',
+          arguments: '{"subscription":"sub","resourceGroup":"rg"}',
+          result: '{"outcome":"ok","resources":["fixture"]}',
+          outcome: 'ok',
+        })],
+      }),
+      expect.objectContaining({
+        id: assistantMessage!.id,
+        role: 'jarvis',
+        text: 'Fixture is present.',
+        toolCalls: [],
+      }),
+    ]);
+  });
+
   it('stores a proactive message and continuation receipt atomically and idempotently', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'chat', language: 'en' });

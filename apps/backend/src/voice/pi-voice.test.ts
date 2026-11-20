@@ -10,13 +10,15 @@ function setup(agent: PiVoiceAgent, options: { deadlineMs?: number } = {}) {
   const spoken: string[] = [];
   const logs: PiVoiceTurnLog[] = [];
   const busy: boolean[] = [];
+  const failures: string[] = [];
   const session = new AbortController();
   const turns = createPiVoiceTurns({
     agent, signal: session.signal, speak: text => spoken.push(text), busy: active => busy.push(active), log: entry => logs.push(entry),
+    fail: reason => failures.push(reason),
     now: () => 100, ...options,
   });
   const settled = async () => { await new Promise(resolve => setTimeout(resolve, 10)); };
-  return { turns, spoken, logs, busy, session, settled };
+  return { turns, spoken, failures, logs, busy, session, settled };
 }
 
 const replying = (...chunks: ConversationAgentChunk[]): PiVoiceAgent => ({
@@ -88,30 +90,33 @@ describe('PI voice turns', () => {
     expect(spoken).toEqual(['One moment.', `${long}Done.`.trim()]);
   });
 
-  it('says a failure plainly and never runs another engine', async () => {
+  it('fails the voice session plainly without making GPT-Live speak a substitute answer', async () => {
     // eslint-disable-next-line require-yield
     const agent: PiVoiceAgent = { async *stream() { throw new PiGatewayError('pi_unavailable', 'PI could not reach Foundry. No other engine was used.'); } };
-    const { turns, spoken, logs, settled } = setup(agent);
+    const { turns, spoken, failures, logs, settled } = setup(agent);
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['PI could not reach Foundry. No other engine was used.']);
+    expect(spoken).toEqual([]);
+    expect(failures).toEqual(['PI could not reach Foundry. No other engine was used.']);
     expect(logs[0]).toMatchObject({ outcome: 'failed' });
   });
 
-  it('does not let a provider message reach the speaker', async () => {
+  it('does not let a provider or generic fallback reach the speaker', async () => {
     // eslint-disable-next-line require-yield
     const agent: PiVoiceAgent = { async *stream() { throw new Error('secret provider detail'); } };
-    const { turns, spoken, settled } = setup(agent);
+    const { turns, spoken, failures, settled } = setup(agent);
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['PI could not answer that. No other engine was used.']);
+    expect(spoken).toEqual([]);
+    expect(failures).toEqual(['PI could not answer that. No other engine was used.']);
   });
 
   it('treats an empty answer as a failure instead of speaking silence', async () => {
-    const { turns, spoken, logs, settled } = setup(replying('  '));
+    const { turns, spoken, failures, logs, settled } = setup(replying('  '));
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['PI sent no answer. No other engine was used.']);
+    expect(spoken).toEqual([]);
+    expect(failures).toEqual(['PI sent no answer. No other engine was used.']);
     expect(logs[0]).toMatchObject({ outcome: 'failed' });
   });
 
@@ -122,10 +127,11 @@ describe('PI voice turns', () => {
         yield '';
       },
     };
-    const { turns, spoken, logs, settled } = setup(agent, { deadlineMs: 5 });
+    const { turns, spoken, failures, logs, settled } = setup(agent, { deadlineMs: 5 });
     turns.start(turn);
     await settled();
-    expect(spoken[0]).toContain('An action may already have completed');
+    expect(spoken).toEqual([]);
+    expect(failures[0]).toContain('An action may already have completed');
     expect(logs[0]).toMatchObject({ outcome: 'timeout' });
   });
 

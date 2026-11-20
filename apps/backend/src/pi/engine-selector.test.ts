@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { createPiAuth, piMcpPath } from '../auth/pi-credential.js';
@@ -7,7 +8,7 @@ import type { ConversationAgent } from '../core/chat-agent.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
-import { PI_CONTEXT_INPUT } from './definition.js';
+import { PI_CONTEXT_INPUT, PI_POLICY_REVISION } from './definition.js';
 import { azureToolPrefix, createRemoteMcpBridge } from './remote-mcp.js';
 import { createPiRoutes, type PiModuleOptions } from './routes.js';
 import { createMemoryPiStore } from './store.js';
@@ -100,6 +101,12 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
     },
   });
   let context = 'Old environment context';
+  await store.markWarm(
+    owner,
+    createHash('sha256').update(`${PI_POLICY_REVISION}\0${context}`).digest('hex'),
+    new Date(),
+    AbortSignal.timeout(1_000),
+  );
   const logs: Array<Record<string, unknown>> = [];
   const sse = (delta: string) => new Response(
     `data: ${JSON.stringify({ type: 'response.output_text.delta', delta })}\n\ndata: {"type":"response.completed","response":{}}\n\n`,
@@ -109,20 +116,39 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
     agentName: 'jarvis-pi', projectEndpoint: 'https://foundry.example/api/projects/jarvis',
     owner, store, registry, activations, monthlyCapDkk: 250, timeZone: 'Europe/Copenhagen',
     getToken: async () => 'fixture', context: async () => context,
+    replay: async () => [{
+      id: '1',
+      role: 'dan',
+      text: 'hello',
+      toolCalls: [],
+    }, {
+      id: '2',
+      role: 'jarvis',
+      text: 'Hello.',
+      toolCalls: [],
+    }],
     log: (event, fields) => { if (event === 'pi.turn') logs.push(fields); },
     fetcher: async (url, init) => {
+      if (String(url).includes('/conversations')) return Response.json({ id: 'fresh-pi-conversation' });
       expect(String(url)).toContain('/agents/jarvis-pi/endpoint/protocols/openai/responses');
       const request = JSON.parse(String(init?.body)) as {
         conversation: string;
-        input: Array<{ content: string }>;
+        input: Array<{ content: string; type?: string; role?: string }>;
         structured_inputs: Record<string, string>;
       };
-      expect(request.conversation).toBe('existing-pi-conversation');
       expect(request.structured_inputs).toEqual({ [PI_CONTEXT_INPUT]: context });
-      const text = request.input[0]!.content;
-      if (text.endsWith('\nhello')) return sse('Hello.');
+      const text = request.input.at(-1)!.content;
+      if (text.endsWith('\nhello')) {
+        expect(request.conversation).toBe('existing-pi-conversation');
+        return sse('Hello.');
+      }
+      expect(request.conversation).toBe('fresh-pi-conversation');
       expect(text).not.toContain(context);
       expect(text).toMatch(/\nwhat's in my Jarvis resource group\?$/u);
+      expect(request.input.slice(0, -1)).toMatchObject([
+        { type: 'message', role: 'user', content: 'hello' },
+        { type: 'message', role: 'assistant', content: 'Hello.' },
+      ]);
       // The managed instructions take the reference from the first line, not from context or the history.
       const turn = /^\[Turn (\S+) \| /u.exec(text)?.[1];
       if (!turn || !piTurnPattern.test(turn)) return sse('I do not have a valid tool reference.');

@@ -97,6 +97,21 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
       await query(pool.request().input('owner', sql.UniqueIdentifier, owner),
         `DELETE FROM dbo.pi_conversation WHERE owner_object_id=@owner;`, signal);
     },
+    async rotateConversation(owner, agentName, previousConversationId, nextConversationId, contextHash, signal) {
+      const result = await query<ConversationRecord>(pool.request()
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('agent', sql.VarChar(128), agentName)
+        .input('previousConversation', sql.NVarChar(512), previousConversationId)
+        .input('nextConversation', sql.NVarChar(512), nextConversationId)
+        .input('hash', sql.Char(64), contextHash), `
+        UPDATE dbo.pi_conversation
+          SET conversation_id=@nextConversation, warmed_at=NULL, context_hash=@hash, created_at=SYSUTCDATETIME()
+          WHERE owner_object_id=@owner AND agent_name=@agent AND conversation_id=@previousConversation;
+        SELECT agent_name, conversation_id, warmed_at, context_hash
+          FROM dbo.pi_conversation
+          WHERE owner_object_id=@owner AND conversation_id=@nextConversation;`, signal);
+      return result.recordset[0] ? toRow(result.recordset[0]) : null;
+    },
     async markWarm(owner, contextHash, at, signal) {
       await query(pool.request().input('owner', sql.UniqueIdentifier, owner)
         .input('hash', sql.Char(64), contextHash).input('at', sql.DateTime2, at),

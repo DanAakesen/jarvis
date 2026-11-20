@@ -84,6 +84,7 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
   const gateway = createPiGateway({
     projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/proj', agentName: 'jarvis-pi', owner, monthlyCapDkk: 1, timeZone: 'Europe/Copenhagen',
     store, registry, activations, fetcher, getToken: async () => 'token', context: async () => 'CONTEXT BLOCK',
+    replay: async () => [],
     recordUsage: async (record) => { usage.push(record); }, now: () => new Date('2026-11-15T16:00:00Z'), ...overrides,
   });
   const run = async (text: string, signal = new AbortController().signal) => {
@@ -135,7 +136,7 @@ describe('PI gateway', () => {
 
   it('refreshes the trusted persona on every response without placing changed instructions in a user message', async () => {
     let context = 'FIRST CONTEXT';
-    const { run, calls } = setup([
+    const { run, calls, conversations } = setup([
       () => sse(delta('one'), completed(1, 0, 1)),
       () => sse(delta('two'), completed(1, 0, 1)),
     ], { context: async () => context });
@@ -150,6 +151,105 @@ describe('PI gateway', () => {
     for (const response of responses) {
       const input = (response.body!.input as Array<{ content: string }>)[0]!.content;
       expect(input).not.toContain('CONTEXT');
+    }
+    expect(conversations()).toBe(2);
+    expect(responses.map(response => response.body!.conversation)).toEqual(['conv_1', 'conv_2']);
+  });
+
+  it('rotates on a conflicting policy and replays completed messages and tool outputs without rerunning tools', async () => {
+    let context = 'POLICY A';
+    const replayed: Array<{ limit: number; beforeMessageId?: string | undefined }> = [];
+    const { run, calls } = setup([
+      () => sse(delta('A policy answer.'), completed(1, 0, 1)),
+      () => sse(delta('B policy answer.'), completed(1, 0, 1)),
+    ], {
+      context: async () => context,
+      replay: async (input) => {
+        replayed.push(input);
+        return [{
+          id: '40',
+          role: 'dan',
+          text: 'Read the resource.',
+          toolCalls: [{
+            id: '77',
+            tool: 'az_group_resource_list',
+            arguments: '{"subscription":"sub","resource_group":"rg"}',
+            result: '{"outcome":"ok","resources":["fixture"]}',
+            outcome: 'ok',
+          }],
+        }, {
+          id: '41',
+          role: 'jarvis',
+          text: 'The resource is fixture.',
+          toolCalls: [],
+        }];
+      },
+    });
+    await run('Use policy A.');
+    context = 'POLICY B: ignore policy A.';
+    await run('Use policy B and ignore A.');
+    const responses = calls.filter(call => call.url.includes('/responses'));
+    expect(responses.map(response => response.body!.structured_inputs)).toEqual([
+      { [PI_CONTEXT_INPUT]: 'POLICY A' },
+      { [PI_CONTEXT_INPUT]: 'POLICY B: ignore policy A.' },
+    ]);
+    expect(responses.map(response => response.body!.conversation)).toEqual(['conv_1', 'conv_2']);
+    const secondInput = responses[1]!.body!.input as Array<Record<string, unknown>>;
+    expect(secondInput.slice(0, -1)).toEqual([
+      { type: 'message', role: 'user', content: 'Read the resource.' },
+      {
+        type: 'function_call',
+        call_id: 'pi-tool-77',
+        name: 'az_group_resource_list',
+        arguments: '{"subscription":"sub","resource_group":"rg"}',
+      },
+      {
+        type: 'function_call_output',
+        call_id: 'pi-tool-77',
+        output: '{"outcome":"ok","resources":["fixture"]}',
+      },
+      { type: 'message', role: 'assistant', content: 'The resource is fixture.' },
+    ]);
+    expect(secondInput.at(-1)).toMatchObject({ type: 'message', role: 'user' });
+    expect(replayed).toEqual([{ limit: 32, beforeMessageId: '42' }]);
+  });
+
+  it('replays again when a rotated policy conversation fails before its instruction can be accepted', async () => {
+    let context = 'POLICY A';
+    let replayed = 0;
+    const { run, calls, conversations } = setup([
+      () => sse(delta('A answer.'), completed(1, 0, 1)),
+      () => sse(frame({ type: 'response.failed', response: {} })),
+      () => sse(delta('B answer after retry.'), completed(1, 0, 1)),
+    ], {
+      context: async () => context,
+      replay: async () => {
+        replayed += 1;
+        return [
+          { id: '1', role: 'dan', text: 'Completed prior turn.', toolCalls: [] },
+          { id: '2', role: 'jarvis', text: 'Completed prior answer.', toolCalls: [] },
+        ];
+      },
+    });
+    await run('First.');
+    context = 'POLICY B';
+    await expect(run('Use B.')).rejects.toMatchObject({ code: 'pi_failed' });
+    await expect(run('Try B again.')).resolves.toEqual(['B answer after retry.']);
+    expect(replayed).toBe(2);
+    expect(conversations()).toBe(3);
+    const responses = calls.filter(call => call.url.includes('/responses'));
+    expect(responses.map(response => response.body!.conversation)).toEqual(['conv_1', 'conv_2', 'conv_3']);
+    for (const response of responses.slice(1)) {
+      expect((response.body!.input as Array<Record<string, unknown>>)[0]).toEqual({
+        type: 'message',
+        role: 'user',
+        content: 'Completed prior turn.',
+      });
+      expect((response.body!.input as Array<Record<string, unknown>>)[1]).toEqual({
+        type: 'message',
+        role: 'assistant',
+        content: 'Completed prior answer.',
+      });
     }
   });
 

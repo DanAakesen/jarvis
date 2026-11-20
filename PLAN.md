@@ -3370,9 +3370,14 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   capture/binding covers natural English/Danish phrases, inflected references and
   numeric IDs. One Foundry `pi_context` structured input renders the exact
   trusted Chat/Voice persona into PI's agent instructions on every response;
-  source/activation material remains user payload. GPT-Live is an exact relay
-  with no greeting or paraphrase. Backend type-check, zero-warning lint, 833/833
-  tests and the 29 provisioning-script tests pass. No merge or deployment.
+  source/activation material remains user payload. A changed policy/context hash
+  rotates the managed native conversation and replays bounded completed messages
+  plus terminal tool call/output pairs without rerunning tools. GPT-Live is an
+  exact relay: only acknowledged commentary whose transcript matches PI is
+  released; independent, rewritten and fallback speech fails closed. The exact
+  head passes backend type-check and zero-warning lint, 838/838 backend tests,
+  140 focused PI/review/voice tests, and 29 provisioning tests. No merge or
+  deployment.
 
 - **P15-210 / [#1958](https://github.com/DanAakesen/jarvis/issues/1958):** next, inspect the compact chart and HTML carousel and full-screen light HTML fixture in macOS CI, then verify live arrivals, swipes and captions on an iPhone.
 

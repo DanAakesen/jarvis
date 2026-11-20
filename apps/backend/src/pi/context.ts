@@ -35,8 +35,8 @@ export function buildPiEnvironment(env: Readonly<Record<string, string | undefin
 
 /**
  * The owner-specific part of the persona. The fixed identity, truthfulness kernel and chat rules live in the agent
- * definition (agents/pi/instructions.md), so the cached prompt prefix stays stable; this block is sent with the first
- * turn and again only when it changes. Owner-written text is quoted as data.
+ * definition (agents/pi/instructions.md). Foundry renders this block into those instructions through the required
+ * `pi_context` structured input. A changed context hash rotates the provider conversation before the next response.
  */
 export function buildPiContext(settings: Settings, presence: AwayModeState, environment = ''): string {
   const { personality } = settings;

@@ -369,6 +369,28 @@ describe('real SQL Server migration contract', () => {
         const at = new Date('2026-11-15T10:00:00Z');
         await store.markWarm(owner, 'a'.repeat(64), at, signal);
         expect(await store.getConversation(owner, signal)).toMatchObject({ warmedAt: at, contextHash: 'a'.repeat(64) });
+        const rotated = await store.rotateConversation(
+          owner,
+          'jarvis-pi',
+          'conv_1',
+          'conv_2',
+          'b'.repeat(64),
+          signal,
+        );
+        expect(rotated).toMatchObject({
+          agentName: 'jarvis-pi',
+          conversationId: 'conv_2',
+          warmedAt: null,
+          contextHash: 'b'.repeat(64),
+        });
+        expect(await store.rotateConversation(
+          owner,
+          'jarvis-pi',
+          'conv_1',
+          'conv_stale',
+          'c'.repeat(64),
+          signal,
+        )).toBeNull();
         const moved = await store.bindConversation(owner, 'jarvis-pi-2', 'conv_3', signal);
         expect(moved).toMatchObject({ agentName: 'jarvis-pi-2', conversationId: 'conv_3', warmedAt: null });
         await store.dropConversation(owner, signal);

@@ -20,10 +20,12 @@ export { VOICE_SUBPROTOCOL } from '../websocket.js';
 
 const MAX_CLIENT_MESSAGE_BYTES = 1_048_576;
 const MAX_QUEUED_AUDIO_BYTES = 512_000;
+const MAX_BUFFERED_OUTPUT_BYTES = 2_000_000;
 const MAX_TRANSCRIPT_CHARACTERS = 20_000;
 const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
+const MAX_PENDING_COMMENTARY = 64;
 const OUTPUT_QUIET_MS = VOICE_INPUT_QUIET_MS;
-const OUTPUT_PERSIST_BOUND_MS = VOICE_TRANSCRIPT_MAX_WAIT_MS;
+const COMMENTARY_AUTHORITY_MS = 15_000;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CLEAN_END_TIMEOUT_MS = 5_000;
 const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
@@ -43,14 +45,34 @@ interface InputGroup {
 interface OutputGroup {
   readonly id: string;
   delegationId: string | null;
+  expectedText: string;
   text: string;
+  readonly events: Array<
+    | { readonly type: 'transcript'; readonly delta: string }
+    | {
+      readonly type: 'audio';
+      readonly delta: string;
+      readonly startMs?: number | undefined;
+      readonly endMs?: number | undefined;
+    }
+  >;
+  bufferedBytes: number;
   readonly startedAt: number;
   lastDeltaAt: number;
   messageId?: string;
   persistedTextLength: number;
   quietTimer?: ReturnType<typeof setTimeout>;
-  persistenceTimer?: ReturnType<typeof setTimeout>;
   completed: boolean;
+  released: boolean;
+}
+
+interface PendingCommentary {
+  readonly delegationId: string | null;
+  readonly content: string;
+}
+
+interface AcceptedCommentary extends PendingCommentary {
+  readonly at: number;
 }
 
 export interface VoiceRelayOptions {
@@ -66,9 +88,12 @@ function closeSocket(socket: WebSocket, code: number, reason: string): void {
 }
 
 function safeFailure(error: unknown): string {
-  return error instanceof Error
-    ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown'
-    : 'unknown';
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'unknown';
+  return message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown';
+}
+
+function comparableVoiceText(text: string): string {
+  return text.trim().replace(/\s+/gu, ' ');
 }
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -77,6 +102,7 @@ function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
       reject(signal.reason);
       return;
     }
+
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', abort);
       resolve();
@@ -178,7 +204,8 @@ function registerVoiceRoute(
     let activeOutput: OutputGroup | undefined;
     let pendingDelegation: AbortController | undefined;
     let pendingDelegationGroup: InputGroup | undefined;
-    let lastCommentaryDelegation: string | null = null;
+    const pendingCommentary = new Map<string, PendingCommentary>();
+    const acceptedCommentary: AcceptedCommentary[] = [];
     let endTimer: ReturnType<typeof setTimeout> | undefined;
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
@@ -294,18 +321,48 @@ function registerVoiceRoute(
     // the original promise is still awaited below and its error remains a session failure.
     void sessionReady.catch(() => { sessionStartupAbandoned = true; });
 
+    const releaseOutput = (group: OutputGroup): void => {
+      if (group.released) return;
+      group.released = true;
+      sendClient({
+        type: 'jarvis.voice.response.started',
+        responseId: group.id,
+        ...(group.delegationId ? { delegationId: group.delegationId } : {}),
+      });
+      for (const event of group.events) {
+        if (event.type === 'transcript') {
+          sendClient({
+            type: 'jarvis.voice.output_transcript.delta',
+            responseId: group.id,
+            delta: event.delta,
+          });
+        } else {
+          sendClient({
+            type: 'jarvis.voice.audio.delta',
+            responseId: group.id,
+            delta: event.delta,
+            ...(event.startMs !== undefined ? { startMs: event.startMs } : {}),
+            ...(event.endMs !== undefined ? { endMs: event.endMs } : {}),
+          });
+          if (microphoneActive) publishActivity('speaking');
+        }
+      }
+    };
+
     const finishOutputGroup = (group: OutputGroup, terminal: 'completed' | 'cancelled' = 'completed') => {
       if (group.completed) return;
       group.completed = true;
       if (group.quietTimer) clearTimeout(group.quietTimer);
-      if (group.persistenceTimer) clearTimeout(group.persistenceTimer);
       if (activeOutput === group) activeOutput = undefined;
       outputActive = false;
-      if (terminal === 'cancelled' && termination.isActive && !controller.signal.aborted) {
-        sendClient({ type: 'jarvis.voice.response.cancelled', responseId: group.id });
+      if (terminal === 'cancelled') return;
+      if (comparableVoiceText(group.text) !== comparableVoiceText(group.expectedText)) {
+        closeSession(1011, 'Voice provider rewrote or invented an answer');
+        return;
       }
+      releaseOutput(group);
       void persistOutput(group).finally(() => {
-        if (terminal === 'completed' && termination.isActive && !controller.signal.aborted) {
+        if (termination.isActive && !controller.signal.aborted) {
           sendClient({
             type: 'jarvis.voice.response.completed',
             responseId: group.id,
@@ -356,34 +413,38 @@ function registerVoiceRoute(
       if (group.quietTimer) clearTimeout(group.quietTimer);
       group.quietTimer = setTimeout(() => finishOutputGroup(group), OUTPUT_QUIET_MS);
       group.quietTimer.unref();
-      if (!group.persistenceTimer) {
-        group.persistenceTimer = setTimeout(() => {
-          delete group.persistenceTimer;
-          void persistOutput(group);
-          if (!group.completed && activeOutput === group) scheduleOutputPersistence(group);
-        }, OUTPUT_PERSIST_BOUND_MS);
-        group.persistenceTimer.unref();
-      }
     };
 
-    const ensureOutputGroup = (delegationId = lastCommentaryDelegation) => {
+    const ensureOutputGroup = (): OutputGroup | undefined => {
       if (activeOutput && !activeOutput.completed) return activeOutput;
+      const fresh = acceptedCommentary.filter(commentary =>
+        performance.now() - commentary.at <= COMMENTARY_AUTHORITY_MS);
+      if (fresh.length === 0) {
+        acceptedCommentary.length = 0;
+        closeSession(1011, 'Voice provider answered without accepted PI commentary');
+        return undefined;
+      }
+      acceptedCommentary.length = 0;
+      const delegationIds = new Set(fresh.map(commentary => commentary.delegationId));
+      if (delegationIds.size !== 1) {
+        closeSession(1011, 'Voice commentary came from conflicting turn authorities');
+        return undefined;
+      }
       const group: OutputGroup = {
         id: `voice_${randomUUID().replaceAll('-', '')}`,
-        delegationId,
+        delegationId: fresh[0]!.delegationId,
+        expectedText: fresh.map(commentary => commentary.content).join(' '),
         text: '',
+        events: [],
+        bufferedBytes: 0,
         startedAt: performance.now(),
         lastDeltaAt: performance.now(),
         persistedTextLength: 0,
         completed: false,
+        released: false,
       };
       activeOutput = group;
       outputActive = true;
-      sendClient({
-        type: 'jarvis.voice.response.started',
-        responseId: group.id,
-        ...(delegationId ? { delegationId } : {}),
-      });
       scheduleOutputPersistence(group);
       return group;
     };
@@ -392,13 +453,22 @@ function registerVoiceRoute(
       if (!providerReady || controller.signal.aborted || !termination.isActive) return;
       const parts = commentaryParts(text);
       if (parts.length === 0) return;
-      lastCommentaryDelegation = delegationId;
       for (const content of parts) {
+        if (pendingCommentary.size >= MAX_PENDING_COMMENTARY) {
+          closeSession(1011, 'Voice commentary acknowledgements are stalled');
+          return;
+        }
+        const eventId = `commentary_${randomUUID().replaceAll('-', '')}`;
+        pendingCommentary.set(eventId, { delegationId, content });
         if (!sendUpstream({
           type: 'session.commentary.append',
+          event_id: eventId,
           delegation_id: delegationId,
           content,
-        })) return;
+        })) {
+          pendingCommentary.delete(eventId);
+          return;
+        }
       }
     };
 
@@ -406,6 +476,7 @@ function registerVoiceRoute(
       agent: piAgent,
       signal: controller.signal,
       speak: (text, delegationId) => sendCommentary(text, delegationId ?? null),
+      fail: (reason) => closeSession(1011, safeFailure(reason)),
       busy: (active) => {
         piBusy = active;
         if (active && microphoneActive) publishActivity('thinking');
@@ -434,6 +505,9 @@ function registerVoiceRoute(
       pendingDelegation = undefined;
       pendingDelegationGroup = undefined;
       piTurns.cancel();
+      pendingCommentary.clear();
+      acceptedCommentary.length = 0;
+      if (activeOutput && !activeOutput.released) finishOutputGroup(activeOutput, 'cancelled');
     };
 
     const requestGracefulEnd = (reason: string, notifyClient = true) => {
@@ -524,7 +598,7 @@ function registerVoiceRoute(
         group.lastTimelineEndMs = Math.max(group.lastTimelineEndMs ?? 0, timelineEnd);
       }
       limits.touch();
-      if (group.text === delta) piTurns.cancel();
+      if (group.text === delta) cancelPendingDelegation();
       sendClient({
         type: 'jarvis.voice.input_transcript.delta',
         itemId: group.id,
@@ -545,7 +619,7 @@ function registerVoiceRoute(
       }
       signal.throwIfAborted();
       if (!group.text.trim()) {
-        sendCommentary('I did not catch that. Please say it again.', delegationId);
+        closeSession(1008, 'Voice turn contained no transcript');
         return;
       }
       sendInputCompletion(group);
@@ -576,6 +650,29 @@ function registerVoiceRoute(
         ...(turnProactiveContext ? { proactiveContext: turnProactiveContext } : {}),
         startedAt: performance.now(),
       });
+    };
+
+    const acceptCommentary = (event: Record<string, unknown>) => {
+      const clientEventId = typeof event.client_event_id === 'string' ? event.client_event_id : undefined;
+      if (!clientEventId) {
+        closeSession(1011, 'Voice commentary acknowledgement could not be correlated');
+        return;
+      }
+      const sent = pendingCommentary.get(clientEventId);
+      if (!sent) return;
+      pendingCommentary.delete(clientEventId);
+      const accepted = { ...sent, at: performance.now() };
+      if (activeOutput && !activeOutput.completed && activeOutput.delegationId === accepted.delegationId) {
+        activeOutput.expectedText = comparableVoiceText(
+          `${activeOutput.expectedText} ${accepted.content}`,
+        );
+        return;
+      }
+      if (acceptedCommentary.length >= MAX_PENDING_COMMENTARY) {
+        closeSession(1011, 'Voice commentary output is stalled');
+        return;
+      }
+      acceptedCommentary.push(accepted);
     };
 
     const receiveDelegation = (event: Record<string, unknown>) => {
@@ -681,23 +778,25 @@ function registerVoiceRoute(
         receiveDelegation(event);
         return;
       }
+      if (type === 'session.commentary.appended') {
+        acceptCommentary(event);
+        return;
+      }
+      if (type === 'session.thinking.appended' || type === 'session.instructions.appended') return;
       if (type === 'session.output_transcript.delta') {
         if (typeof event.delta !== 'string' || event.delta.length > MAX_TRANSCRIPT_CHARACTERS) {
           closeSession(1008, 'Invalid voice output transcript');
           return;
         }
         const group = ensureOutputGroup();
+        if (!group) return;
         group.text += event.delta;
         group.lastDeltaAt = performance.now();
         if (group.text.length > MAX_TRANSCRIPT_CHARACTERS) {
           closeSession(1009, 'Voice output transcript too large');
           return;
         }
-        sendClient({
-          type: 'jarvis.voice.output_transcript.delta',
-          responseId: group.id,
-          delta: event.delta,
-        });
+        group.events.push({ type: 'transcript', delta: event.delta });
         scheduleOutputPersistence(group);
         return;
       }
@@ -707,15 +806,23 @@ function registerVoiceRoute(
           return;
         }
         const group = ensureOutputGroup();
+        if (!group) return;
+        const startMs = typeof event.start_ms === 'number' && Number.isSafeInteger(event.start_ms)
+          ? event.start_ms : undefined;
+        const endMs = typeof event.end_ms === 'number' && Number.isSafeInteger(event.end_ms)
+          ? event.end_ms : undefined;
+        group.bufferedBytes += Buffer.byteLength(event.delta, 'base64');
+        if (group.bufferedBytes > MAX_BUFFERED_OUTPUT_BYTES) {
+          closeSession(1009, 'Voice output buffer is too large');
+          return;
+        }
         group.lastDeltaAt = performance.now();
-        sendClient({
-          type: 'jarvis.voice.audio.delta',
-          responseId: group.id,
+        group.events.push({
+          type: 'audio',
           delta: event.delta,
-          ...(typeof event.start_ms === 'number' ? { startMs: event.start_ms } : {}),
-          ...(typeof event.end_ms === 'number' ? { endMs: event.end_ms } : {}),
+          ...(startMs !== undefined ? { startMs } : {}),
+          ...(endMs !== undefined ? { endMs } : {}),
         });
-        if (microphoneActive) publishActivity('speaking');
         scheduleOutputPersistence(group);
         return;
       }
@@ -727,12 +834,6 @@ function registerVoiceRoute(
 
     const finalizeSession = (allowWallClockFallback: boolean) => {
       finalization ??= (async () => {
-        if (activeOutput && !activeOutput.completed) {
-          clearTimeout(activeOutput.quietTimer);
-          clearTimeout(activeOutput.persistenceTimer);
-          activeOutput.completed = true;
-          await persistOutput(activeOutput);
-        }
         await sessionReady;
         await Promise.allSettled([...delegationTasks]);
         await persistenceQueue;
