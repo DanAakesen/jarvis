@@ -213,9 +213,18 @@ describe('PI MCP server', () => {
     const bridge: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [{
-        name: 'gh_issue_update',
+        name: 'gh_issue_write',
         description: 'Update an issue.',
-        inputSchema: { type: 'object', properties: { number: { type: 'integer' } }, additionalProperties: false },
+        inputSchema: {
+          type: 'object',
+          properties: {
+            method: { type: 'string', enum: ['create', 'update'] },
+            owner: { type: 'string' }, repo: { type: 'string' },
+            issue_number: { type: 'integer' }, title: { type: 'string' },
+          },
+          required: ['method', 'owner', 'repo'],
+          additionalProperties: false,
+        },
         moduleId: 'github',
         execute: async () => ({}),
       }],
@@ -226,20 +235,23 @@ describe('PI MCP server', () => {
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
-    grant.completion = completionPlan('Update GitHub issue 1967.');
+    grant.completion = completionPlan('Update GitHub issue 1967 in DanAakesen/jarvis.');
     await tool('find_tools', { turn: grant.turn, query: 'github issue update' });
-    const remote = grant.remoteTools.get('gh_issue_update');
+    const remote = grant.remoteTools.get('gh_issue_write');
+    const args = {
+      method: 'update', owner: 'DanAakesen', repo: 'jarvis', issue_number: 1967,
+    };
     expect(remote?.completion?.operation).toBeTypeOf('function');
     expect(typeof remote?.completion?.operation === 'function'
-      ? remote.completion.operation({ number: 1967 })
+      ? remote.completion.operation(args)
       : remote?.completion?.operation).toBe('update');
     expect(remote?.completion?.evaluate(
-      { number: 1967 },
+      args,
       { number: 1967, status: 'updated' },
     )).toBe(true);
     expect(completionEvidence(
       remote!,
-      { number: 1967 },
+      args,
       { number: 1967, status: 'updated' },
     )).toBeDefined();
     expect(grant.completion.requirements).toEqual([
@@ -248,26 +260,30 @@ describe('PI MCP server', () => {
     expect(completionEvidence(
       grant.completion,
       remote!,
-      { number: 1967 },
+      args,
       { number: 1967, status: 'updated' },
     )).toBeDefined();
     const result = await tool('call_tool', {
-      turn: grant.turn, name: 'gh_issue_update', arguments: { number: 1967 },
+      turn: grant.turn, name: 'gh_issue_write', arguments: args,
     });
     expect(result.body).toMatchObject({ outcome: 'ok' });
     expect(calls).toBe(1);
     expect(grant.unverified.count).toBe(0);
     expect(grant.evidence).toMatchObject([{
-      executionId: 'remote:gh_:gh_issue_update',
-      tool: 'gh_issue_update',
+      executionId: 'remote:gh_:gh_issue_write',
+      tool: 'gh_issue_write',
       kind: 'committed',
       domain: 'github',
       operation: 'update',
     }]);
     await tool('call_tool', {
       turn: grant.turn,
-      name: 'gh_issue_update',
-      arguments: { number: 1968, title: 'Issue 1967 updated' },
+      name: 'gh_issue_write',
+      arguments: {
+        ...args,
+        issue_number: 1968,
+        title: 'Issue 1967 updated',
+      },
     });
     expect(calls).toBe(1);
     expect(grant.evidence).toHaveLength(1);
@@ -282,7 +298,10 @@ describe('PI MCP server', () => {
         description: 'Create or update an issue.',
         inputSchema: {
           type: 'object',
-          properties: { title: { type: 'string' }, number: { type: 'integer' } },
+          properties: {
+            owner: { type: 'string' }, repo: { type: 'string' },
+            issue_number: { type: 'integer' }, title: { type: 'string' },
+          },
           additionalProperties: false,
         },
         moduleId: 'github',
@@ -302,14 +321,21 @@ describe('PI MCP server', () => {
     ])).not.toContain('gh_issue_write');
     expect(found.body?.result.note).toContain('no unambiguous operation selector');
     expect(found.body?.result.note).toContain('gh_issue_write');
+    expect(found.body?.result.providerContractErrors).toContainEqual({
+      tool: 'gh_issue_write',
+      error: expect.any(String),
+    });
     expect(grant.remoteTools.has('gh_issue_write')).toBe(false);
     await tool('call_tool', {
-      turn: grant.turn, name: 'gh_issue_write', arguments: { number: 1967, title: 'Updated' },
+      turn: grant.turn,
+      name: 'gh_issue_write',
+      arguments: { owner: 'DanAakesen', repo: 'jarvis', issue_number: 1967, title: 'Updated' },
     });
     expect(calls).toBe(0);
   });
 
-  it('uses a declared provider selector instead of inferring from common argument presence', async () => {
+  it('withholds a declared selector when no provider-exact action contract exists', async () => {
+    let calls = 0;
     const bridge: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [{
@@ -328,25 +354,27 @@ describe('PI MCP server', () => {
         moduleId: 'github',
         execute: async () => ({}),
       }],
-      call: async (_name, args) => ({
-        outcome: 'ok',
-        result: { number: args.number ?? 1967, status: args.operation === 'create' ? 'created' : 'updated' },
-      }),
+      call: async () => {
+        calls += 1;
+        return { outcome: 'ok', result: { number: 1967, status: 'updated' } };
+      },
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
     grant.completion = completionPlan('Update GitHub issue 1967.');
-    await tool('find_tools', { turn: grant.turn, query: 'github issue' });
-    const remote = grant.remoteTools.get('gh_issue');
-    expect(typeof remote?.completion?.operation === 'function'
-      ? remote.completion.operation({ operation: 'update', number: 1967 })
-      : remote?.completion?.operation).toBe('update');
+    const found = await tool('find_tools', { turn: grant.turn, query: 'github issue' });
+    expect(found.body?.result.providerContractErrors).toContainEqual({
+      tool: 'gh_issue',
+      error: expect.any(String),
+    });
+    expect(grant.remoteTools.has('gh_issue')).toBe(false);
     await tool('call_tool', {
       turn: grant.turn,
       name: 'gh_issue',
       arguments: { operation: 'update', number: 1967, title: 'Updated' },
     });
-    expect(grant.evidence.at(-1)).toMatchObject({ operation: 'update', domain: 'github' });
+    expect(calls).toBe(0);
+    expect(grant.evidence).toHaveLength(0);
   });
 
   it('compiles provider-exact push_files identities from nested paths', async () => {
@@ -360,7 +388,7 @@ describe('PI MCP server', () => {
           inputSchema: {
             type: 'object',
             properties: {
-              repository: { type: 'string' },
+              owner: { type: 'string' }, repo: { type: 'string' },
               branch: { type: 'string' },
               files: {
                 type: 'array',
@@ -373,7 +401,7 @@ describe('PI MCP server', () => {
               },
               message: { type: 'string' },
             },
-            required: ['repository', 'branch', 'files', 'message'],
+            required: ['owner', 'repo', 'branch', 'files', 'message'],
             additionalProperties: false,
           },
           moduleId: 'github',
@@ -385,36 +413,43 @@ describe('PI MCP server', () => {
           inputSchema: {
             type: 'object',
             properties: {
-              repository: { type: 'string' },
+              owner: { type: 'string' }, repo: { type: 'string' },
+              branch: { type: 'string' },
               path: { type: 'string' },
               content: { type: 'string' },
               sha: { type: 'string' },
             },
-            required: ['repository', 'path', 'content'],
+            required: ['owner', 'repo', 'branch', 'path', 'content'],
             additionalProperties: false,
           },
           moduleId: 'github',
           execute: async () => ({}),
         },
       ],
-      call: async () => {
+      call: async (name) => {
         calls += 1;
         return {
           outcome: 'ok',
-          result: { repository: 'DanAakesen/jarvis', branch: 'main', sha: 'a'.repeat(40), status: 'written' },
+          result: {
+            owner: 'DanAakesen', repo: 'jarvis', branch: 'refs/heads/main',
+            ...(name === 'gh_push_files'
+              ? { paths: ['src/example.ts'] }
+              : { path: 'src/example.ts' }),
+            sha: 'b'.repeat(40), status: 'written',
+          },
         };
       },
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
-    grant.completion = completionPlan('Push src/example.ts to GitHub in DanAakesen/jarvis.');
+    grant.completion = completionPlan('Push src/example.ts to GitHub in DanAakesen/jarvis on main.');
     await tool('find_tools', { turn: grant.turn, query: 'github push files' });
     expect(grant.remoteTools.has('gh_create_or_update_file')).toBe(true);
     await tool('call_tool', {
       turn: grant.turn,
       name: 'gh_push_files',
       arguments: {
-        repository: 'DanAakesen/jarvis',
+        owner: 'DanAakesen', repo: 'jarvis',
         branch: 'main',
         files: [{ path: 'src/example.ts', content: 'const wrongTargetNumber = 42;' }],
         message: 'Push the exact file',
@@ -429,7 +464,7 @@ describe('PI MCP server', () => {
       turn: grant.turn,
       name: 'gh_push_files',
       arguments: {
-        repository: 'DanAakesen/jarvis',
+        owner: 'DanAakesen', repo: 'jarvis',
         branch: 'main',
         files: [{ path: 'src/wrong.ts', content: 'src/example.ts // wrong path hidden in content' }],
         message: 'Wrong target',
@@ -437,6 +472,100 @@ describe('PI MCP server', () => {
     });
     expect(calls).toBe(1);
     expect(grant.evidence).toHaveLength(1);
+
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_create_or_update_file',
+      arguments: {
+        owner: 'DanAakesen', repo: 'jarvis', branch: 'main',
+        path: 'src/example.ts', content: 'const value = 1;',
+        sha: 'a'.repeat(40),
+      },
+    });
+    expect(calls).toBe(2);
+    expect(grant.evidence.at(-1)).toMatchObject({
+      tool: 'gh_create_or_update_file',
+      operation: 'update',
+    });
+  });
+
+  it('covers production GitHub star, review request and review thread operations', async () => {
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [
+        {
+          name: 'gh_star_repository',
+          description: 'Star a repository.',
+          inputSchema: {
+            type: 'object',
+            properties: { owner: { type: 'string' }, repo: { type: 'string' } },
+            required: ['owner', 'repo'], additionalProperties: false,
+          },
+          moduleId: 'github', execute: async () => ({}),
+        },
+        {
+          name: 'gh_request_copilot_review',
+          description: 'Request a Copilot pull request review.',
+          inputSchema: {
+            type: 'object',
+            properties: { owner: { type: 'string' }, repo: { type: 'string' }, pullNumber: { type: 'integer' } },
+            required: ['owner', 'repo', 'pullNumber'], additionalProperties: false,
+          },
+          moduleId: 'github', execute: async () => ({}),
+        },
+        {
+          name: 'gh_pull_request_review_write',
+          description: 'Manage a pull request review.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              method: { type: 'string', enum: ['create', 'submit_pending', 'delete_pending', 'resolve_thread', 'unresolve_thread'] },
+              owner: { type: 'string' }, repo: { type: 'string' }, pullNumber: { type: 'integer' },
+              threadId: { type: 'string' },
+            },
+            required: ['method', 'owner', 'repo', 'pullNumber'], additionalProperties: false,
+          },
+          moduleId: 'github', execute: async () => ({}),
+        },
+      ],
+      call: async (name) => ({
+        outcome: 'ok',
+        result: name === 'gh_star_repository'
+          ? { owner: 'DanAakesen', repo: 'jarvis', starred: true }
+          : name === 'gh_request_copilot_review'
+            ? { owner: 'DanAakesen', repo: 'jarvis', pullNumber: 7, requested: true }
+            : { threadId: 'thread-1', resolved: false },
+      }),
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Star DanAakesen/jarvis on GitHub.');
+    await tool('find_tools', { turn: grant.turn, query: 'github repository star review' });
+    await tool('call_tool', {
+      turn: grant.turn, name: 'gh_star_repository', arguments: { owner: 'DanAakesen', repo: 'jarvis' },
+    });
+    expect(grant.evidence.at(-1)).toMatchObject({ tool: 'gh_star_repository', operation: 'update' });
+
+    grant.completion = completionPlan('Request a Copilot review for GitHub pull request 7 in DanAakesen/jarvis.');
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_request_copilot_review',
+      arguments: { owner: 'DanAakesen', repo: 'jarvis', pullNumber: 7 },
+    });
+    expect(grant.evidence.at(-1)).toMatchObject({ tool: 'gh_request_copilot_review', operation: 'update' });
+
+    grant.completion = completionPlan('Unresolve GitHub pull request 7 review thread thread-1.');
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_pull_request_review_write',
+      arguments: {
+        method: 'unresolve_thread', owner: 'DanAakesen', repo: 'jarvis',
+        pullNumber: 7, threadId: 'thread-1',
+      },
+    });
+    expect(grant.evidence.at(-1)).toMatchObject({
+      tool: 'gh_pull_request_review_write', operation: 'update',
+    });
   });
 
   it('binds remote delete receipts to the exact requested target', async () => {
@@ -444,12 +573,15 @@ describe('PI MCP server', () => {
     const bridge: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [{
-        name: 'gh_issue_delete',
-        description: 'Delete an issue.',
+        name: 'gh_delete_file',
+        description: 'Delete a file.',
         inputSchema: {
           type: 'object',
-          properties: { number: { type: 'integer' } },
-          required: ['number'],
+          properties: {
+            owner: { type: 'string' }, repo: { type: 'string' },
+            path: { type: 'string' }, branch: { type: 'string' },
+          },
+          required: ['owner', 'repo', 'path', 'branch'],
           additionalProperties: false,
         },
         moduleId: 'github',
@@ -457,24 +589,34 @@ describe('PI MCP server', () => {
       }],
       call: async (_name, args) => {
         calls += 1;
-        return { outcome: 'ok', result: { deleted: true, number: args.number } };
+        return {
+          outcome: 'ok',
+          result: {
+            deleted: true, owner: args.owner, repo: args.repo,
+            path: args.path, branch: 'refs/heads/main',
+          },
+        };
       },
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
-    grant.completion = completionPlan('Delete GitHub issue 42.');
-    await tool('find_tools', { turn: grant.turn, query: 'github issue delete' });
+    grant.completion = completionPlan('Delete GitHub file src/example.ts in DanAakesen/jarvis on main.');
+    await tool('find_tools', { turn: grant.turn, query: 'github delete file' });
     await tool('call_tool', {
-      turn: grant.turn, name: 'gh_issue_delete', arguments: { number: 42 },
+      turn: grant.turn,
+      name: 'gh_delete_file',
+      arguments: { owner: 'DanAakesen', repo: 'jarvis', path: 'src/example.ts', branch: 'main' },
     });
     expect(calls).toBe(1);
     expect(grant.evidence).toMatchObject([{
-      executionId: 'remote:gh_:gh_issue_delete',
+      executionId: 'remote:gh_:gh_delete_file',
       operation: 'delete',
       kind: 'committed',
     }]);
     await tool('call_tool', {
-      turn: grant.turn, name: 'gh_issue_delete', arguments: { number: 43 },
+      turn: grant.turn,
+      name: 'gh_delete_file',
+      arguments: { owner: 'DanAakesen', repo: 'jarvis', path: 'src/wrong.ts', branch: 'main' },
     });
     expect(calls).toBe(1);
     expect(grant.evidence).toHaveLength(1);

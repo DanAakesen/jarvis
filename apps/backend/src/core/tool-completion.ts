@@ -43,7 +43,7 @@ export function semanticOperation(value: unknown): ToolCompletionOperation {
     ['open', /\b(?:open|launch|focus|show|activate|abn|abne|fokus)\b/iu],
     ['start', /\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|kør)\b/iu],
     ['create', /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu],
-    ['update', /\b(?:update|change|edit|move|push|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu],
+    ['update', /\b(?:update|change|edit|move|push|reschedule|complete|reopen|resolve|unresolve|pause|pin|unpin|set|label|mark|merge|approve|review|star|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu],
     ['read', /\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu],
   ];
   let selected: ToolCompletionOperation = 'generic';
@@ -146,7 +146,6 @@ const remoteIdentityAliases = [
   [['resourceId', 'resource_id'], ['resourceId', 'resource_id', 'id']],
   [['resourceGroup'], ['resourceGroup']],
   [['resourceName'], ['resourceName']],
-  [['sha'], ['sha']],
 ] as const;
 
 function remoteIdentity(result: unknown): boolean {
@@ -168,7 +167,18 @@ function remoteDeleteTargetConfirmed(
     const returned = nestedValue(result, resultKeys);
     if (returned === undefined) continue;
     compared += 1;
-    if (normalizeCompletionText(String(requested)) !== normalizeCompletionText(String(returned))) return false;
+    const requestKey: string = requestKeys[0] ?? '';
+    const canonical = (value: unknown) => {
+      const text = String(value);
+      if (requestKey === 'owner' || requestKey === 'repo' || requestKey === 'repository') {
+        return normalizeCompletionText(text);
+      }
+      if (['branch', 'ref', 'head', 'base'].includes(requestKey)) {
+        return text.replace(/^refs\/heads\//u, '');
+      }
+      return normalizeCompletionText(text);
+    };
+    if (canonical(requested) !== canonical(returned)) return false;
   }
   if (compared === 0) return false;
   if (!isRecord(result)) return false;

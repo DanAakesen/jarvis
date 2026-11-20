@@ -140,6 +140,10 @@ describe('PI completion planning', () => {
       'Har du sendt e-mailen til Alice?',
       'Er kalenderaftalen ændret?',
       'Hvad stod der i den?',
+      'Hvordan står det til med Azure?',
+      'Står Azure stadig oppe?',
+      'Viser GitHub nogen fejl?',
+      'Ser GitHub pull request 7 sund ud?',
       'Why is Azure down?',
       'Explain why Azure is down.',
       'Hvorfor fejler GitHub?',
@@ -150,6 +154,10 @@ describe('PI completion planning', () => {
     }
     expect(completionPlan('Why is Azure down?').requirements[0]).toMatchObject({
       domain: 'azure', operation: 'read', kind: 'retrieved', targetHashes: [],
+    });
+    expect(completionPlan('Star DanAakesen/jarvis on GitHub.')).toMatchObject({
+      kind: 'committed',
+      requirements: [expect.objectContaining({ domain: 'github', operation: 'update' })],
     });
     const asked = completionPlan('Did I send Alice an email?');
     expect(completionEvidence(
@@ -650,6 +658,15 @@ describe('PI completion receipts', () => {
       {},
       { status: 'down', resources: [] },
     )).toMatchObject({ kind: 'retrieved', domain: 'azure' });
+
+    const pathPlan = completionPlan('Read check-config.ts.');
+    expect(pathPlan.runtimeTargetHashes).toHaveLength(1);
+    expect(completionEvidence(
+      pathPlan,
+      action('vault_read', 'read'),
+      { path: 'check-config.ts' },
+      { path: 'check-config.ts', url: 'file://check-config.ts' },
+    )).toMatchObject({ kind: 'retrieved', domain: 'notes' });
   });
 });
 

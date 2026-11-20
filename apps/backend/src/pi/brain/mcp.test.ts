@@ -459,11 +459,16 @@ describe('a brain wake over the Jarvis MCP server', () => {
 
 describe('GitHub through the Jarvis door', () => {
   const ghTool = {
-    name: 'gh_issue_update',
+    name: 'gh_issue_write',
     description: 'GitHub: Update an issue',
     inputSchema: {
       type: 'object',
-      properties: { number: { type: 'integer' }, title: { type: 'string' } },
+      properties: {
+        method: { type: 'string', enum: ['create', 'update'] },
+        owner: { type: 'string' }, repo: { type: 'string' },
+        issue_number: { type: 'integer' }, title: { type: 'string' },
+      },
+      required: ['method', 'owner', 'repo'],
       additionalProperties: false,
     },
     moduleId: 'github',
@@ -485,16 +490,21 @@ describe('GitHub through the Jarvis door', () => {
     for (const grant of [chat(), wake()]) {
       grant.completion = completionPlan('Update GitHub issue 7.');
       const found = await tool('find_tools', { turn: grant.turn, query: 'github issue update' });
-      expect((found.result.tools as Array<{ name: string }>).map(({ name }) => name)).toContain('gh_issue_update');
+      expect((found.result.tools as Array<{ name: string }>).map(({ name }) => name)).toContain('gh_issue_write');
       const done = await tool('call_tool', {
-        turn: grant.turn, name: 'gh_issue_update', arguments: { number: 7, title: 'x' },
+        turn: grant.turn,
+        name: 'gh_issue_write',
+        arguments: {
+          method: 'update', owner: 'DanAakesen', repo: 'jarvis',
+          issue_number: 7, title: 'x',
+        },
       });
       expect(done).toMatchObject({ outcome: 'ok', result: { number: 7 } });
-      expect(grant.results).toEqual([{ tool: 'gh_issue_update', outcome: 'ok' }]);
+      expect(grant.results).toEqual([{ tool: 'gh_issue_write', outcome: 'ok' }]);
     }
     expect(called).toEqual([
-      'gh_issue_update:{"number":7,"title":"x"}',
-      'gh_issue_update:{"number":7,"title":"x"}',
+      'gh_issue_write:{"method":"update","owner":"DanAakesen","repo":"jarvis","issue_number":7,"title":"x"}',
+      'gh_issue_write:{"method":"update","owner":"DanAakesen","repo":"jarvis","issue_number":7,"title":"x"}',
     ]);
   });
 
@@ -505,24 +515,24 @@ describe('GitHub through the Jarvis door', () => {
       tools: async () => [{ name: `${prefix}${name}`, description: `${prefix} tool ${name}`, inputSchema: { type: 'object' }, moduleId: 'remote', execute: async () => ({}) }],
       call: async (called) => { calls.push(called); return { outcome: 'ok', result: { from: prefix } }; },
     });
-    const { tool, wake } = setup(make('gh_', 'issue_update'), make('az_', 'group_list'));
+    const { tool, wake } = setup(make('gh_', 'issue_read'), make('az_', 'group_list'));
     const grant = wake();
-    await tool('find_tools', { turn: grant.turn, query: 'github issue_update azure group_list' });
+    await tool('find_tools', { turn: grant.turn, query: 'github issue_read azure group_list' });
     expect(await tool('call_tool', { turn: grant.turn, name: 'az_group_list', arguments: {} })).toMatchObject({ outcome: 'ok', result: { from: 'az_' } });
-    expect(await tool('call_tool', { turn: grant.turn, name: 'gh_issue_update', arguments: {} })).toMatchObject({ result: { from: 'gh_' } });
-    expect(calls).toEqual(['az_group_list', 'gh_issue_update']);
+    expect(await tool('call_tool', { turn: grant.turn, name: 'gh_issue_read', arguments: {} })).toMatchObject({ result: { from: 'gh_' } });
+    expect(calls).toEqual(['az_group_list', 'gh_issue_read']);
   });
 
   it('refuses a GitHub tool that was not looked up first, and is absent without a token', async () => {
     const { github, called } = bridge();
     const { tool, chat } = setup(github);
     const grant = chat();
-    expect((await tool('call_tool', { turn: grant.turn, name: 'gh_issue_update', arguments: {} })).outcome).toBe('refused');
+    expect((await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: {} })).outcome).toBe('refused');
     expect(called).toEqual([]);
     const without = setup();
     const other = without.chat();
     const found = await without.tool('find_tools', { turn: other.turn, query: 'github issue update' });
-    expect(JSON.stringify(found.result)).not.toContain('gh_issue_update');
+    expect(JSON.stringify(found.result)).not.toContain('gh_issue_write');
   });
 });
 

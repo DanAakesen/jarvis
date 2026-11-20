@@ -58,10 +58,10 @@ const maxBindingTextCharacters = 20_000;
 
 function withoutCourtesyPrefix(value: string): string {
   const prefixes = [
-    /^please[,:]?\s+/u,
-    /^(?:could|can|would|will)\s+you(?:\s+please)?[,:]?\s+/u,
-    /^(?:kan|kunne|vil)\s+du(?:\s+venligst)?[,:]?\s+/u,
-    /^venligst[,:]?\s+/u,
+    /^please[,:]?\s+/iu,
+    /^(?:could|can|would|will)\s+you(?:\s+please)?[,:]?\s+/iu,
+    /^(?:kan|kunne|vil)\s+du(?:\s+venligst)?[,:]?\s+/iu,
+    /^venligst[,:]?\s+/iu,
   ];
   let result = value;
   for (const prefix of prefixes) result = result.replace(prefix, '');
@@ -251,17 +251,17 @@ const ignoredTargetWords = new Set([
   'add', 'archive', 'book', 'cancel', 'capture', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
   'implement', 'inspect', 'keep', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember',
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
-  'merge', 'approve', 'review', 'forward', 'push',
+  'merge', 'approve', 'review', 'resolve', 'unresolve', 'forward', 'push', 'star',
   'click', 'type', 'select', 'pin', 'unpin', 'rename', 'dispatch', 'deploy', 'trigger', 'scale', 'restart',
   'find', 'check', 'fix', 'research', 'look', 'up', 'tjek', 'læs', 'læse', 'læst', 'søg', 'se', 'vis',
   'fortæl', 'fortælle', 'fortalt', 'sendt', 'sagt', 'opret', 'slet', 'gem', 'rediger', 'start',
   'calendar', 'agenda', 'appointment', 'meeting', 'event', 'email', 'gmail', 'inbox', 'mail', 'weather', 'forecast',
   'note', 'notes', 'task', 'tasks', 'todo', 'reminder', 'reminders', 'azure', 'github', 'repository', 'repositories',
-  'issue', 'issues', 'pull', 'workflow', 'workflows', 'workspace', 'screen', 'window', 'panel', 'job', 'jobs',
+  'file', 'files', 'issue', 'issues', 'pull', 'workflow', 'workflows', 'workspace', 'screen', 'window', 'panel', 'job', 'jobs',
   'resource', 'resources', 'subscription', 'group', 'provider', 'temperature', 'rain', 'credential',
   'credentials', 'login',
   'table', 'ticket', 'room', 'stay', 'reservation', 'hotel', 'flight', 'restaurant',
-  'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'about',
+  'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'copilot', 'about',
   'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated', 'teach',
   'saying', 'says', 'tell', 'telling', 'called', 'named',
   'worker', 'workers', 'background', 'long-running', 'watch', 'watches', 'deploy', 'deployment', 'overvågning',
@@ -281,14 +281,15 @@ const readCueTerms = new Set([
   'show', 'list', 'find', 'search', 'check', 'read', 'lookup', 'look', 'tell', 'give',
   'explain', 'teach', 'download', 'status',
   'latest', 'current', 'today', 'tomorrow', 'summarise', 'summarize', 'recall',
-  'hvad', 'hvilke', 'hvor', 'hvornår', 'hvem', 'hvorfor', 'har', 'er', 'var', 'blev',
-  'vis', 'læs', 'læse', 'se', 'fortæl', 'fortælle', 'fortæller', 'fortalt',
+  'hvad', 'hvilke', 'hvor', 'hvordan', 'hvornår', 'hvem', 'hvorfor', 'har', 'er', 'var', 'blev',
+  'vis', 'læs', 'læse', 'se', 'ser', 'fortæl', 'fortælle', 'fortæller', 'fortalt',
   'forklar', 'forklare', 'forklarer', 'forklaret', 'søg', 'tjek', 'star', 'stå',
   'står', 'viser', 'vise', 'viste', 'vist', 'status', 'statusen', 'statuset', 'statusene',
 ].map(normalized));
 
 function isReadCueTerm(value: string): boolean {
   const term = normalized(value);
+  if (/[./\\]/u.test(term)) return false;
   if (readCueTerms.has(term)) return true;
   return term.split('-').some(part => readCueTerms.has(part));
 }
@@ -385,12 +386,50 @@ function bindingIdentities(
   return output;
 }
 
+function authoritativeBindingIdentities(value: unknown, output = new Set<string>()): ReadonlySet<string> {
+  if (Array.isArray(value)) {
+    for (const child of value) authoritativeBindingIdentities(child, output);
+    return output;
+  }
+  if (isRecord(value)) {
+    for (const child of Object.values(value)) authoritativeBindingIdentities(child, output);
+    return output;
+  }
+  if (typeof value !== 'string' && typeof value !== 'number') return output;
+  const identity = normalized(String(value));
+  if (identity) output.add(identity);
+  return output;
+}
+
+function toolBindingIdentities(
+  tool: CompletionTool,
+  value: Record<string, unknown>,
+  result: boolean,
+): ReadonlySet<string> {
+  const identityExtractor = result
+    ? tool.completion?.resultIdentities
+    : tool.completion?.requestIdentities;
+  return identityExtractor
+    ? authoritativeBindingIdentities(identityExtractor(value))
+    : bindingIdentities(value);
+}
+
 function identityTargets(
   tool: CompletionTool,
   value: unknown,
   result: boolean,
   depth = 0,
 ): PiCompletionEvidence['identityTargets'] {
+  const identityExtractor = result
+    ? tool.completion?.resultIdentities
+    : tool.completion?.requestIdentities;
+  if (identityExtractor && isRecord(value)) {
+    const identities = [...authoritativeBindingIdentities(identityExtractor(value))]
+      .slice(0, 20)
+      .map(identity => hash(identity));
+    const targets = targetHashes([...rowTargetTokens(tool, value, result)]);
+    return identities.map(identityHash => ({ identityHash, targetHashes: targets }));
+  }
   const bindings: { identityHash: string; targetHashes: readonly string[] }[] = [];
   const visit = (child: unknown, level: number) => {
     if (level > 5 || bindings.length >= 500) return;
@@ -531,8 +570,9 @@ function operationForDomain(
   return operation === 'generic' ? operationFamily(request) : operation;
 }
 
-function readIntent(value: string): boolean {
+function readIntent(value: string, source = value): boolean {
   const words = normalized(value).match(/[\p{L}]+(?:['’][\p{L}]+)?/gu) ?? [];
+  const sourceWords = source.match(/[\p{L}]+(?:['’][\p{L}]+)?/gu) ?? [];
   const first = words[0] ?? '';
   const second = words[1] ?? '';
   if (first === 'tell' || first === 'give') return second === 'me';
@@ -541,13 +581,17 @@ function readIntent(value: string): boolean {
   }
   if (first === 'kan' || first === 'ma') return second === 'jeg' || second === 'du';
   if (first === 'vil' && second === 'du') return true;
+  if (first === 'star') {
+    return sourceWords[0]?.toLocaleLowerCase('da-DK') === 'står';
+  }
   return isReadCueTerm(first);
 }
 
 export function completionPlan(text: string): PiCompletionPlan {
-  const value = withoutCourtesyPrefix(normalized(text));
+  const source = withoutCourtesyPrefix(text);
+  const value = normalized(source);
   const contextual = /\b(?:it|itself|that|that one|this|this one|den|det|den der)\b/iu.test(value);
-  const readCued = readIntent(value) || externalLiveStateQuestion(value);
+  const readCued = readIntent(value, source) || externalLiveStateQuestion(value);
   const runtimeTargetHashes = targetHashes(targetTerms(value).map(({ term }) => term));
   const runtimeOperation = readCued ? 'read' : operationFamily(value);
   if (ordinaryConversation(value) ||
@@ -676,7 +720,7 @@ export function completionDispatchAllowed(
   if (operation === 'generic') return false;
   if (allowUnplannedAction) return true;
   const domain = toolDomain(tool, args);
-  const identities = targetHashes([...bindingIdentities(args)]);
+  const identities = targetHashes([...toolBindingIdentities(tool, args, false)]);
   const linked = previous.flatMap(candidate =>
     candidate.kind !== 'retrieved' || candidate.domain !== domain
       ? []
@@ -691,12 +735,11 @@ export function completionDispatchAllowed(
   const requestTargets = targetHashes([...toolTargetTokens(tool, args, undefined)]);
   const targetSet = [...new Set([...requestTargets, ...linkedTargets])];
   const matchesOperation = (requirement: PiCompletionRequirement) =>
-    requirement.operation === 'generic' ||
     requirement.operation === operation ||
     (tool.completion?.acceptedRequestOperations ?? []).includes(requirement.operation);
   if (plan.kind === 'conversation') {
     const operationMatches = plan.runtimeOperation !== undefined &&
-      (plan.runtimeOperation === 'generic' || plan.runtimeOperation === operation);
+      plan.runtimeOperation === operation;
     if (!operationMatches) return false;
     if (plan.contextual || plan.requiresTrustedContext) return trustedLinkedContext;
     return runtimeTargets.every(target => targetSet.includes(target));
@@ -778,8 +821,7 @@ function matchesRequirement(
       ? evidence.kind === 'durable_job'
       : evidence.kind === 'retrieved';
   const acceptedOperations = evidence.acceptedRequestOperations ?? [];
-  const operation = requirement.operation === 'generic' ||
-    evidence.operation === requirement.operation ||
+  const operation = evidence.operation === requirement.operation ||
     acceptedOperations.includes(requirement.operation);
   if (!kind || !operation || evidence.domain !== requirement.domain) return false;
   return requirement.targetHashes.every(target => evidence.targetHashes.includes(target));
@@ -790,7 +832,7 @@ function matchesRequirementBinding(
   evidence: PiCompletionEvidence,
 ): boolean {
   return evidence.domain === requirement.domain &&
-    (evidence.kind === 'retrieved' || requirement.operation === 'generic' ||
+    (evidence.kind === 'retrieved' ||
       evidence.operation === requirement.operation ||
       (evidence.acceptedRequestOperations ?? []).includes(requirement.operation)) &&
     requirement.targetHashes.every(target => evidence.targetHashes.includes(target));
@@ -838,7 +880,10 @@ export function completionEvidence(
   const kind = receiptKind(tool, args, result);
   if (!kind || isRecord(result) && !idConsistent(args, result)) return undefined;
   const domain = toolDomain(tool, args);
-  const currentIdentities = [...bindingIdentities(args), ...bindingIdentities(result)];
+  const currentIdentities = [
+    ...toolBindingIdentities(tool, args, false),
+    ...(isRecord(result) ? toolBindingIdentities(tool, result, true) : []),
+  ];
   const identityHashes = targetHashes(currentIdentities);
   const linkedBindings = previous.flatMap(candidate =>
     candidate.kind !== 'retrieved' || candidate.domain !== domain
@@ -875,7 +920,6 @@ export function completionEvidence(
   } satisfies PiCompletionEvidence;
   if (plan.kind === 'conversation') {
     const operationMatches = plan.runtimeOperation === undefined ||
-      plan.runtimeOperation === 'generic' ||
       evidence.operation === plan.runtimeOperation;
     if (kind !== 'retrieved' && !operationMatches) return undefined;
     const trustedTarget = plan.contextual
