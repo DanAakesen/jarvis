@@ -80,7 +80,13 @@ export interface MemoryStore {
     afterId: string,
     limit: number,
     signal: AbortSignal,
-  ): Promise<{ readonly id: string; readonly content: string; readonly revision: number }[]>;
+  ): Promise<MemoryRecord[]>;
+  quarantineEmbedding(
+    memoryId: string,
+    revision: number,
+    reason: 'credential',
+    signal: AbortSignal,
+  ): Promise<boolean>;
   updateEmbedding(
     memoryId: string,
     revision: number,
@@ -480,6 +486,7 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
             UPDATE dbo.memories
             SET content = @content, source_kind = @sourceKind, source_message_id = @sourceMessageId,
               action_request_id = @actionRequestId, action_owner_id = @actionOwnerId,
+              embedding_quarantined_at = NULL, embedding_quarantine_reason = NULL,
               revision = revision + 1, updated_at = SYSUTCDATETIME()${embeddingUpdate}
               , embedding_model = CASE
                 WHEN @contentChanged = 1 OR (@embeddingModel IS NOT NULL AND ISNULL(embedding_model, N'') <> @embeddingModel)
@@ -725,16 +732,35 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         .input('take', sql.Int, limit)
         .input('afterId', sql.BigInt, BigInt(afterId))
         .input('embeddingModel', sql.NVarChar(128), embeddingModel);
-      const result = await execute(request, signal, () => request.query<{
-        id: string;
-        content: string;
-        revision: number;
-      }>(`SELECT TOP (@take) CONVERT(varchar(20), m.id) AS id, m.content, m.revision
+      const result = await execute(request, signal, () => request.query<Parameters<typeof recordFromRow>[0]>(
+        `SELECT TOP (@take) ${memoryColumns}
         FROM dbo.memories AS m
+        ${sourceJoin}
         WHERE m.id > @afterId AND (m.embedding_model IS NULL OR m.embedding_model <> @embeddingModel
           OR ${vectorSearchAvailable ? 'm.embedding IS NULL' : 'm.embedding_json IS NULL'})
+          AND m.embedding_quarantined_at IS NULL
         ORDER BY m.id;`));
-      return result.recordset;
+      return result.recordset.map(recordFromRow);
+    },
+
+    async quarantineEmbedding(memoryId, revision, reason, signal) {
+      if (!initialized) throw new Error('Memory store is not initialized');
+      const id = toSqlId(memoryId);
+      if (!Number.isSafeInteger(revision) || revision < 1 || reason !== 'credential') {
+        throw new TypeError('Memory embedding quarantine request is invalid');
+      }
+      const request = databaseReadRequest(pool)
+        .input('memoryId', sql.BigInt, id)
+        .input('revision', sql.Int, revision)
+        .input('reason', sql.VarChar(16), reason);
+      const result = await execute(request, signal, () => request.query<{ id: string }>(
+        `UPDATE dbo.memories
+          SET embedding_quarantined_at = SYSUTCDATETIME(), embedding_quarantine_reason = @reason
+          OUTPUT CONVERT(varchar(20), inserted.id) AS id
+          WHERE id = @memoryId AND revision = @revision
+            AND embedding_quarantined_at IS NULL;`,
+      ));
+      return result.recordset.length > 0;
     },
 
     async updateEmbedding(memoryId, revision, embeddingModel, embedding, signal) {

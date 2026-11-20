@@ -5830,6 +5830,21 @@ and web Memory pagination so a newly committed preference is visible from a
 fresh page; failures remain visible and are never represented as a remembered
 confirmation.
 
+The same `memory-policy.ts` classifier is mandatory at every model-facing and
+provider boundary. Proactive Memory source facts and PI situation commit,
+lookup and legacy read paths discard credential-like rows before they enter
+context. Legacy embedding backfill receives full source-linked records, skips
+unsafe rows before the embedding call and persists a `credential` quarantine
+through migration `0092_memory_embedding_quarantine.sql`; subsequent passes
+exclude quarantined rows, and a corrected safe revision clears the marker.
+
+Settings corrections are explicit owner actions, so sensitive health or
+financial text is allowed subject to the credential rule; only automatic
+capture applies the broader sensitive-data restriction. On iOS, Memory page
+cache scopes are versioned independently of `.settings` freshness. A v2 page
+retains the raw API count and next offset, while old filtered-count cache pages
+stay unread and cannot advance a new load-more cursor.
+
 P9-10 adds bounded `memory` settings to the existing global settings store; no
 migration is needed. `similarityThreshold` defaults to `0.35` and controls
 embedding-based knowledge-graph edges in both the application and SQL candidate

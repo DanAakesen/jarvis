@@ -664,6 +664,7 @@ private struct RoutineResponse: Decodable {
 }
 
 public enum JarvisSettingsLogic {
+    public static let memoryCacheVersion = 2
     public static let memoryPageSize = 50
     public static let maximumMemoryOffset = 10_000
     public static let maximumMemoryQueryBytes = 200
@@ -879,6 +880,10 @@ public enum JarvisSettingsLogic {
 
     public static func validMemoryPage(offset: Int, limit: Int) -> Bool {
         (0...maximumMemoryOffset).contains(offset) && (1...memoryPageSize).contains(limit)
+    }
+
+    public static func memoryCacheScope(queryDigest: String, offset: Int) -> String {
+        "memory:v\(memoryCacheVersion):\(queryDigest):\(offset)"
     }
 
     public static func validMemoryID(_ id: String) -> Bool {

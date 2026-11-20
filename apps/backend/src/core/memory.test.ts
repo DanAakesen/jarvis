@@ -101,6 +101,7 @@ function memoryStore(sourceMessages = new Map<string, string>(), vectorSearch = 
     },
     async searchByVector() { return []; },
     async embeddingsToBackfill() { return []; },
+    async quarantineEmbedding() { return false; },
     async updateEmbedding() { return false; },
     async searchByFullText(terms, limit) {
       const memories = [...records.values()].filter((item) =>
@@ -422,6 +423,20 @@ describe('Personal Memory API', () => {
     });
     expect(blocked.statusCode).toBe(400);
     expect(fixture.writes).toEqual([]);
+    fixture.records.set('5', record({
+      category: 'project_fact',
+      key: 'care.provider',
+      content: 'Current provider.',
+      source: { kind: 'conversation', messageId: '42' },
+    }, '5'));
+    const explicitHealthCorrection = await app.inject({
+      method: 'PATCH',
+      url: '/memory/5',
+      headers: { authorization: bearer(ownerToken) },
+      payload: { text: 'My medical provider is Copenhagen Clinic.' },
+    });
+    expect(explicitHealthCorrection.statusCode).toBe(200);
+    expect(fixture.records.get('5')?.content).toBe('My medical provider is Copenhagen Clinic.');
     fixture.records.set('4', {
       ...record({
         category: 'preference',

@@ -9,6 +9,7 @@
 | Add migration `0091` so Settings corrections/deletions carry verified request/owner provenance instead of the original capture message; reject secrets across category, key, source and content | Done; isolated SQL provenance contract passes |
 | Normalize key separators for credential policy and withhold credential-like legacy records from PI Memory serialization | Done; focused Memory tool/API and SQL contract pass |
 | Carry iOS raw Memory page count/next offset through `JarvisSettingsClient` so load-more advances past filtered Vault rows | Done; focused JarvisCore paging contract passes |
+| Share one Memory policy across proactive source facts, PI situation read/commit/lookup and embedding backfill; quarantine unsafe legacy rows with migration `0092` and version iOS Memory caches | Done; focused backend and JarvisCore path tests pass |
 | Move `/memory` ownership out of Vault; keep SQL Memory API, UI edits and deletion independent of Vault availability | Done |
 | Add separate bounded Memory recall and capture instructions for Chat, Voice and background PI, with trusted `memory.automaticCapture` context | Done |
 | Make Knowledge read Vault notes through the Notes API, and refresh iPhone/web Memory pagination after successful tool writes | Done |

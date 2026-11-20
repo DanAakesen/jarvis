@@ -21,6 +21,7 @@ import { defaultSettings, readSettings, type SettingsStore } from '../core/setti
 import {
   embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
 } from '../core/memory-embeddings.js';
+import { memoryContainsCredential } from '../core/memory-policy.js';
 import type { UsageStore } from '../core/usage.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
@@ -104,10 +105,74 @@ export interface VaultModule extends BackendModule {
     progress: (step: number, detail: string) => Promise<void>,
   ): Promise<{
     readonly memories: number;
+    readonly memoryQuarantined: number;
     readonly memoryPending: boolean;
     readonly vaultFiles: number;
     readonly vaultPending: number;
   }>;
+}
+
+export async function backfillPersonalMemoryEmbeddings(options: {
+  readonly store: Pick<MemoryStore, 'embeddingsToBackfill' | 'quarantineEmbedding' | 'updateEmbedding'>;
+  readonly model: string;
+  readonly signal: AbortSignal;
+  readonly embed: (content: string, signal: AbortSignal) => Promise<readonly number[]>;
+  readonly progress: (processed: number, detail: string) => Promise<void>;
+  readonly maximum?: number;
+}): Promise<{
+  readonly updated: number;
+  readonly quarantined: number;
+  readonly processed: number;
+  readonly pending: boolean;
+}> {
+  const maximum = options.maximum ?? maxMemoryBackfillEmbeddingsPerJob;
+  let updated = 0;
+  let quarantined = 0;
+  let processed = 0;
+  let afterId = '0';
+  await options.progress(processed, 'Checking saved memory embeddings');
+  while (processed < maximum) {
+    const batch = await options.store.embeddingsToBackfill(
+      options.model,
+      afterId,
+      Math.min(100, maximum - processed),
+      options.signal,
+    );
+    if (batch.length === 0) break;
+    for (const memory of batch) {
+      options.signal.throwIfAborted();
+      if (memoryContainsCredential(memory)) {
+        if (await options.store.quarantineEmbedding(
+          memory.id,
+          memory.revision,
+          'credential',
+          options.signal,
+        )) quarantined += 1;
+      } else {
+        const embedding = await options.embed(memory.content, options.signal);
+        if (await options.store.updateEmbedding(
+          memory.id,
+          memory.revision,
+          options.model,
+          embedding,
+          options.signal,
+        )) updated += 1;
+      }
+      afterId = memory.id;
+      processed += 1;
+      if (processed % 100 === 0) {
+        await options.progress(processed, `Processed ${processed} saved memories`);
+      }
+      if (processed >= maximum) break;
+    }
+  }
+  const pending = (await options.store.embeddingsToBackfill(
+    options.model,
+    '0',
+    1,
+    options.signal,
+  )).length > 0;
+  return { updated, quarantined, processed, pending };
 }
 
 interface VaultIndexOutcome {
@@ -994,36 +1059,21 @@ export function createVaultModule(options: {
     const embedder = await activeEmbedder();
     if (!embedder) throw new Error('Embedding provider is unavailable');
     const embeddingModel = await activeEmbeddingModel(embedder);
-    let memories = 0;
-    let processed = 0;
-    let afterId = '0';
-    await progress(0, 'Checking saved memory embeddings');
-    while (options.apiMemoryStore && processed < maxMemoryBackfillEmbeddingsPerJob) {
-      const batch = await options.apiMemoryStore.embeddingsToBackfill(
-        embeddingModel, afterId, Math.min(100, maxMemoryBackfillEmbeddingsPerJob - processed), signal,
-      );
-      if (batch.length === 0) break;
-      for (const memory of batch) {
-        signal.throwIfAborted();
-        const result = await embedThrottled(embedder, memory.content, signal);
-        const updated = await options.apiMemoryStore.updateEmbedding(
-          memory.id, memory.revision, embeddingModel, result.embedding, signal,
-        );
-        afterId = memory.id;
-        if (updated) memories += 1;
-        processed += 1;
-        if (processed % 100 === 0) {
-          await progress(0, `Processed ${processed} saved memories`);
-        }
-        if (processed >= maxMemoryBackfillEmbeddingsPerJob) break;
-      }
-    }
-    const memoryPending = options.apiMemoryStore
-      ? (await options.apiMemoryStore.embeddingsToBackfill(embeddingModel, '0', 1, signal)).length > 0
-      : false;
+    const memoryBackfill = options.apiMemoryStore
+      ? await backfillPersonalMemoryEmbeddings({
+        store: options.apiMemoryStore,
+        model: embeddingModel,
+        signal,
+        embed: async (content, operationSignal) =>
+          (await embedThrottled(embedder, content, operationSignal)).embedding,
+        progress: (processed, detail) => progress(0, detail || `Processed ${processed} saved memories`),
+      })
+      : { updated: 0, quarantined: 0, pending: false };
+    const memories = memoryBackfill.updated;
+    const memoryPending = memoryBackfill.pending;
     await progress(1, memoryPending
       ? `Updated ${memories} memories; more remain`
-      : `Updated ${memories} memories`);
+      : `Updated ${memories} memories; quarantined ${memoryBackfill.quarantined} unsafe legacy rows`);
     await progress(1, 'Re-indexing vault in paced batches');
     await synchronize(signal);
     const vaultFiles = await options.indexStore.files(embeddingModel, signal);
@@ -1031,7 +1081,13 @@ export function createVaultModule(options: {
     await progress(2, vaultPending
       ? `Vault backfill paced; ${vaultPending} notes remain`
       : 'Vault backfill complete');
-    return { memories, memoryPending, vaultFiles: vaultFiles.length, vaultPending };
+    return {
+      memories,
+      memoryQuarantined: memoryBackfill.quarantined,
+      memoryPending,
+      vaultFiles: vaultFiles.length,
+      vaultPending,
+    };
   }
 
   async function buildKnowledgeGraph(

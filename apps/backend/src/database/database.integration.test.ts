@@ -60,14 +60,27 @@ describe('real SQL Server migration contract', () => {
     const core = await readFile(new URL('../../../../db/migrations/0001_core_tables.sql', import.meta.url), 'utf8');
     const memory = await readFile(new URL('../../../../db/migrations/0016_long_term_memory.sql', import.meta.url), 'utf8');
     const provenance = await readFile(new URL('../../../../db/migrations/0091_memory_action_provenance.sql', import.meta.url), 'utf8');
+    const quarantine = await readFile(new URL('../../../../db/migrations/0092_memory_embedding_quarantine.sql', import.meta.url), 'utf8');
     const coreDown = await readFile(new URL('../../../../db/migrations/down/0001_core_tables.sql', import.meta.url), 'utf8');
     const memoryDown = await readFile(new URL('../../../../db/migrations/down/0016_long_term_memory.sql', import.meta.url), 'utf8');
     const provenanceDown = await readFile(new URL('../../../../db/migrations/down/0091_memory_action_provenance.sql', import.meta.url), 'utf8');
+    const quarantineDown = await readFile(new URL('../../../../db/migrations/down/0092_memory_embedding_quarantine.sql', import.meta.url), 'utf8');
     await pool.request().batch(core);
     await pool.request().batch(memory);
     await pool.request().batch('ALTER TABLE dbo.memories ADD embedding_model nvarchar(128) NULL;');
     await pool.request().batch(provenance);
+    await pool.request().batch(quarantine);
+    let stage = 'schema verification';
     try {
+      const columns = await pool.request().query<{
+        quarantinedAt: number | null;
+        quarantineReason: number | null;
+      }>(`SELECT COL_LENGTH(N'dbo.memories', N'embedding_quarantined_at') AS quarantinedAt,
+        COL_LENGTH(N'dbo.memories', N'embedding_quarantine_reason') AS quarantineReason;`);
+      expect(columns.recordset[0]).toMatchObject({
+        quarantinedAt: expect.any(Number),
+        quarantineReason: expect.any(Number),
+      });
       const session = await pool.request().query<{ id: string }>(
         "INSERT dbo.jarvis_sessions (channel, language) OUTPUT CONVERT(varchar(20), inserted.id) AS id VALUES (N'chat', N'en');",
       );
@@ -78,7 +91,9 @@ describe('real SQL Server migration contract', () => {
           VALUES (@sessionId, N'dan', N'Remember that I prefer afternoons.');`);
       const messageId = message.recordset[0]!.id;
       const store = createMemoryStore(pool);
+      stage = 'initialization';
       await store.initialize();
+      stage = 'save';
       const saved = await store.save({
         category: 'preference',
         key: 'appointments.time',
@@ -89,6 +104,7 @@ describe('real SQL Server migration contract', () => {
       }, AbortSignal.timeout(10_000));
       const settingsRequestId = randomUUID();
       const ownerObjectId = randomUUID();
+      stage = 'correction';
       const corrected = await store.correct(saved.memory.id, {
         category: 'preference',
         key: 'appointments.time',
@@ -107,7 +123,35 @@ describe('real SQL Server migration contract', () => {
       expect(history[0]).toMatchObject({ settingsAction: { requestId: settingsRequestId }, sourceMessageId: null });
       expect(history[1]).toMatchObject({ sourceMessageId: messageId, settingsAction: null });
 
+      await expect(store.quarantineEmbedding(
+        saved.memory.id,
+        corrected.memory.revision,
+        'credential',
+        AbortSignal.timeout(10_000),
+      )).resolves.toBe(true);
+      await expect(pool.request().batch(quarantineDown)).rejects.toThrow(/durable policy evidence/u);
+      const safeCorrection = await store.correct(saved.memory.id, {
+        category: 'preference',
+        key: 'appointments.time',
+        content: 'Prefers an approved morning appointment.',
+        source: { kind: 'settings', requestId: randomUUID(), ownerObjectId },
+        embedding: null,
+        embeddingModel: null,
+      }, AbortSignal.timeout(10_000));
+      const quarantineState = await pool.request()
+        .input('memoryId', sql.BigInt, BigInt(safeCorrection.memory.id))
+        .query<{
+          embedding_quarantined_at: Date | null;
+          embedding_quarantine_reason: string | null;
+        }>(`SELECT embedding_quarantined_at, embedding_quarantine_reason
+          FROM dbo.memories WHERE id = @memoryId;`);
+      expect(quarantineState.recordset).toEqual([{
+        embedding_quarantined_at: null,
+        embedding_quarantine_reason: null,
+      }]);
+
       const deleteRequestId = randomUUID();
+      stage = 'forget';
       await expect(store.forget(saved.memory.id, {
         kind: 'settings',
         requestId: deleteRequestId,
@@ -128,12 +172,17 @@ describe('real SQL Server migration contract', () => {
         action_request_id: deleteRequestId,
         action_owner_id: ownerObjectId,
       }]);
+      stage = 'down guard';
       await expect(pool.request().batch(provenanceDown)).rejects.toThrow(/durable audit evidence/u);
+      stage = 'cleanup';
+    } catch (error) {
+      throw new Error(`Memory provenance SQL gate failed during ${stage}`, { cause: error });
     } finally {
       await pool.request().query(`IF OBJECT_ID(N'dbo.memory_deletions', N'U') IS NOT NULL
           DELETE FROM dbo.memory_deletions;
         IF OBJECT_ID(N'dbo.memories', N'U') IS NOT NULL
           DELETE FROM dbo.memories;`);
+      await pool.request().batch(quarantineDown);
       await pool.request().batch(provenanceDown);
       await pool.request().batch(memoryDown);
       await pool.request().batch(coreDown);

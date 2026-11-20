@@ -5,6 +5,7 @@ import {
   createMemoryPiSituationStore,
   createPiSituationService,
   parsePiSituationState,
+  piSituationHash,
   PiSituationError,
   type PiSituationState,
 } from './situation.js';
@@ -71,6 +72,24 @@ describe('PI situational state', () => {
       .toThrow(PiSituationError);
     expect(() => parsePiSituationState({ ...state(), facts: [{ ...state().facts[0]!, refIds: ['unknown'] }] }))
       .toThrow(PiSituationError);
+    const tokenState = state();
+    tokenState.sources.find(({ id }) => id === 'memory')!.refIds = ['memory:token'];
+    tokenState.refs.push({
+      id: 'memory:token', source: 'memory', identity: 'memory:token',
+      label: 'Integration token', observedAt: at.toISOString(), expiresAt: null,
+    });
+    expect(() => parsePiSituationState({
+      ...tokenState,
+      facts: [...tokenState.facts, {
+        id: 'fact:memory-token',
+        source: 'memory',
+        refIds: ['memory:token'],
+        text: 'githubApiTokenValue=legacy-secret',
+        observedAt: at.toISOString(),
+        expiresAt: null,
+        stale: false,
+      }],
+    })).toThrow(PiSituationError);
   });
 
   it('commits revision-checked state and rejects a stale hash without overwriting it', async () => {
@@ -155,6 +174,61 @@ describe('PI situational state', () => {
     await expect(service.lookup({ source: 'location', ref: 'location:device' }, signal())).resolves.toMatchObject({
       source: 'location', ref: 'location:device',
     });
+  });
+
+  it('withholds credential-like legacy Memory state and lookup results from PI context', async () => {
+    const memory: ProactiveSource = {
+      id: 'memory',
+      label: 'Memory',
+      async read() {
+        return {
+          source: 'memory', state: 'ok', reason: null, observedAt: at.toISOString(),
+          facts: [{
+            ref: 'memory:42', identity: 'memory:42', kind: 'memory',
+            label: 'githubApiTokenValue', text: 'bearer_token=fixture-secret',
+            observedAt: at.toISOString(),
+          }],
+        };
+      },
+    };
+    const { service, store, proactive } = setup([memory]);
+    await proactive.sources.upsert({
+      id: 'memory', label: 'Memory', enabled: true, state: 'ok', reason: null,
+      observedAt: at.toISOString(),
+    });
+    const legacy = state();
+    legacy.summary = 'Legacy bearerToken=fixture-secret';
+    legacy.summaryRefIds = ['memory:42'];
+    legacy.sources.find(({ id }) => id === 'memory')!.state = 'fresh';
+    legacy.sources.find(({ id }) => id === 'memory')!.observedAt = at.toISOString();
+    legacy.sources.find(({ id }) => id === 'memory')!.refIds = ['memory:42'];
+    legacy.refs.push({
+      id: 'memory:42', source: 'memory', identity: 'memory:42', label: 'githubApiTokenValue',
+      observedAt: at.toISOString(), expiresAt: null,
+    });
+    legacy.facts.push({
+      id: 'fact:memory', source: 'memory', refIds: ['memory:42'],
+      text: 'bearer_token=fixture-secret', observedAt: at.toISOString(), expiresAt: null, stale: false,
+    });
+    store.records.set(owner, {
+      owner,
+      revision: 1,
+      state: legacy,
+      hash: piSituationHash(legacy),
+      asOf: at,
+      updatedAt: at,
+      lastActivation: null,
+    });
+
+    const view = await service.read(signal());
+    expect(view.state?.summary).toBe('');
+    expect(view.state?.summaryRefIds).toEqual([]);
+    expect(view.state?.refs.some(({ source }) => source === 'memory')).toBe(false);
+    expect(view.state?.facts.some(({ source }) => source === 'memory')).toBe(false);
+    expect(JSON.stringify(view.state)).not.toContain('bearer');
+    expect(JSON.stringify(view.state)).not.toContain('githubApiToken');
+    await expect(service.lookup({ source: 'memory', ref: 'memory:42' }, signal()))
+      .rejects.toMatchObject({ code: 'redacted' });
   });
 
   it('marks prior state stale after a failed activation without inventing a replacement', async () => {

@@ -9,6 +9,11 @@ import {
   VectorSearchUnavailableError,
 } from '../database/memory-store.js';
 import { embeddingFailureStatus, type MemoryEmbedder } from './memory-embeddings.js';
+import {
+  hasCredentialMarker,
+  hasSensitiveMarker,
+  memoryContainsCredential,
+} from './memory-policy.js';
 import type { UsageStore } from './usage.js';
 import { ToolRefusal } from './tool-registry.js';
 
@@ -21,17 +26,6 @@ const MAX_MEMORY_API_HISTORY = 10;
 const MAX_SQL_BIGINT = 9_223_372_036_854_775_807n;
 const idPattern = /^[1-9]\d{0,18}$/u;
 const categories = new Set<MemoryCategory>(['preference', 'project_fact', 'decision', 'unfinished_task']);
-const credentialTerms = String.raw`(?:password|passphrase|secret|(?:api|auth|authorization|private)[ -]?key|(?:(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token)|credential|seed[ -]?phrase|recovery[ -]?phrase)`;
-const credentialPattern = new RegExp(String.raw`\b${credentialTerms}\b`, 'iu');
-const tokenFamilyPattern = /(?:api|access|auth|authorization|bearer|refresh|session|client|id|oauth)[ -]?token/iu;
-const sensitivePattern = new RegExp(
-  String.raw`\b(?:${credentialTerms}|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b`,
-  'iu',
-);
-const secretValuePattern = new RegExp(
-  String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|${credentialTerms})\s*[:=]\s*["']?[^\s"']{8,}`,
-  'iu',
-);
 const explicitCapturePattern = [
   /^\s*(?:please\s+)?(?:remember|memorise|memorize)\b/iu,
   /\b(?:remember|memorise|memorize)\s+(?:that|this|it|i\b|my\b|me\b|we\b)/iu,
@@ -46,33 +40,6 @@ const explicitCapturePattern = [
   /\b(?:save|store)\s+(?:that|this|it)\s+(?:about me|for me|for later)\b/iu,
   /\bmake\s+(?:that|this|it)\s+(?:a\s+)?(?:personal\s+)?memory\b/iu,
 ] as const;
-
-function normalizeMemoryPolicyText(value: string): string {
-  return value.normalize('NFKC')
-    .replace(/([\p{Ll}\p{Nd}])(\p{Lu})/gu, '$1 $2')
-    .replace(/(\p{Lu}+)(\p{Lu}\p{Ll})/gu, '$1 $2')
-    .replace(/[._-]+/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim();
-}
-
-function hasCredentialMarker(value: string): boolean {
-  const normalized = normalizeMemoryPolicyText(value);
-  return credentialPattern.test(normalized) ||
-    tokenFamilyPattern.test(normalized) ||
-    secretValuePattern.test(value) ||
-    secretValuePattern.test(normalized);
-}
-
-function hasSensitiveMarker(value: string): boolean {
-  return sensitivePattern.test(normalizeMemoryPolicyText(value));
-}
-
-function memoryContainsCredential(record: MemoryRecord): boolean {
-  return hasCredentialMarker(
-    `${record.category}\n${record.key}\n${record.content}\n${record.sourceText}`,
-  );
-}
 
 function safeMemoryDetails(record: MemoryRecord) {
   return memoryContainsCredential(record) ? null : memoryDetails(record);
@@ -721,8 +688,8 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           return reply.code(400).send({ error: 'Invalid memory ID' });
         }
         const text = request.body.text.trim();
-        if (!text || text.length > 2_000 || hasSensitiveMarker(text)) {
-          return reply.code(400).send({ error: 'Memory text is invalid or contains restricted sensitive content' });
+        if (!text || text.length > 2_000) {
+          return reply.code(400).send({ error: 'Memory text is invalid' });
         }
         const signal = AbortSignal.timeout(30_000);
         const versions = await store.history(request.params.id, 1, signal);

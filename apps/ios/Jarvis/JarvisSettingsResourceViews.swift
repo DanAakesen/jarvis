@@ -479,7 +479,11 @@ struct JarvisMemorySettingsView: View {
             loading = true
         }
         let repository: JarvisRepository<JarvisMemoryPage> = await JarvisAppCache.repository(
-            .settings, scope: "memory:\(settingsCacheDigest(requestedQuery)):\(requestedOffset)"
+            .settings,
+            scope: JarvisSettingsLogic.memoryCacheScope(
+                queryDigest: settingsCacheDigest(requestedQuery),
+                offset: requestedOffset
+            )
         ) { _ in
             .modified(try await client.loadMemory(query: requestedQuery, offset: requestedOffset), validator: nil)
         }
