@@ -584,8 +584,9 @@ def verify_voice_deployment(deployment: dict | None, spec: dict) -> None:
     )
 
 
-def effective_version(azure: Az, name: str, features: str | None, unknown_code: str) -> str | None:
-    """The version that serves traffic: the pinned one if a pin rule exists, otherwise the latest. None when the agent is absent."""
+def effective_version(azure: Az, name: str, features: str | None, unknown_code: str) -> tuple[str, bool] | None:
+    """The version that serves traffic and whether a pin rule selects it: the pinned one if a pin rule exists, otherwise the
+    latest. None when the agent is absent."""
     options = {} if features is None else {"features": features}
     try:
         agent = azure.rest("GET", f"/agents/{name}", **options)
@@ -604,24 +605,38 @@ def effective_version(azure: Az, name: str, features: str | None, unknown_code: 
         isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
         unknown_code,
     )
-    return version
+    return version, bool(rules)
 
 
 def effective_voice_version(azure: Az, name: str) -> str | None:
-    return effective_version(azure, name, VOICE_FEATURES, "voice_agent_version_unknown")
+    found = effective_version(azure, name, VOICE_FEATURES, "voice_agent_version_unknown")
+    return None if found is None else found[0]
 
 
 def effective_state(azure: Az, name: str) -> dict | None:
     """What the serving version of the main agent holds. None when the agent does not exist yet."""
-    version = effective_version(azure, name, None, "agent_version_unknown")
-    if version is None:
+    found = effective_version(azure, name, None, "agent_version_unknown")
+    if found is None:
         return None
+    version, pinned = found
     readback = azure.rest("GET", f"/agents/{name}/versions/{version}")
     definition = readback.get("definition") or {}
     skills = {item["name"]: item["version"] for item in definition.get("skills") or []
               if isinstance(item, dict) and "name" in item and "version" in item}
-    return {"version": version, "metadata": readback.get("metadata") or {}, "skills": skills,
-            "status": readback.get("status"), "instructions": definition.get("instructions")}
+    return {"version": version, "pinned": pinned, "readback": readback, "metadata": readback.get("metadata") or {},
+            "skills": skills, "status": readback.get("status"), "instructions": definition.get("instructions")}
+
+
+def require_effective(azure: Az, name: str, version: str | None, instructions: str | None) -> None:
+    """Fail unless the serving version is still the one this run read (None: the agent still does not exist).
+
+    Dan can save a portal edit while Deploy runs; publishing or pinning from a stale read would put the old text live.
+    """
+    now = effective_state(azure, name)
+    if version is None:
+        require(now is None, "agent_changed_during_deploy")
+    else:
+        require(now is not None and now["version"] == version and now["instructions"] == instructions, "agent_changed_during_deploy")
 
 
 def provision_voice_agent(
@@ -697,6 +712,12 @@ def provision(args: argparse.Namespace) -> dict:
     if unchanged:
         version = state["version"]
         created = False
+        if not state["pinned"]:
+            # An unpinned version serves as the latest, and an earlier run can have died between the POST and the pin.
+            # Verify it and pin it, so a version is never left serving without having been checked.
+            verify(state["readback"], spec)
+            require_effective(foundry, name, version, state["instructions"])
+            pin(foundry, name, version)
     else:
         if state is None:
             instructions = instructions_text()
@@ -706,6 +727,7 @@ def provision(args: argparse.Namespace) -> dict:
             require(isinstance(instructions, str), "agent_instructions_unreadable")
         definition = build_definition(spec, instructions, server_url, skills)
         metadata = {FINGERPRINT_KEY: wanted}
+        require_effective(foundry, name, state["version"] if state else None, state["instructions"] if state else None)
         # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
         version = as_version(foundry.rest("POST", f"/agents/{name}/versions", {
             "metadata": metadata, "definition": definition,
@@ -716,6 +738,9 @@ def provision(args: argparse.Namespace) -> dict:
             "agent_version_unknown",
         )
         verify(wait_active(foundry, name, version), spec)
+        # Without a pin rule the new version is now the latest; with one, the pinned version must be the one carried forward.
+        serving = state["version"] if state and state["pinned"] else version
+        require_effective(foundry, name, serving, instructions)
         pin(foundry, name, version)
         created = True
     voice = provision_voice_agent(

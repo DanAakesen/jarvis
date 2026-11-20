@@ -127,7 +127,9 @@ class DefinitionTest(unittest.TestCase):
             def rest(self, method, path, body=None, *, content_type="application/json"):
                 calls.append((method, path))
                 if method == "GET" and path == "/agents/jarvis-pi":
-                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                    if "definition" not in stored:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                    return {"versions": {"latest": {"version": 1}}}
                 if method == "POST" and path.startswith("/skills/"):
                     return {"version": 1}
                 if method == "POST" and path == "/agents/jarvis-pi/versions":
@@ -210,21 +212,27 @@ class MainAgentInstructionsTest(unittest.TestCase):
         agent = {"agent_endpoint": {"version_selector": {"version_selection_rules": [rule]}}}
         return {**agent, "versions": {"latest": {"version": latest}}} if latest else agent
 
-    def run_provision(self, agent, versions):
+    def run_provision(self, agent, versions, hook=None):
+        """hook(method, path, live) runs before each Foundry call and may change `live["agent"]` or `versions`, like a portal save."""
         calls, posted = [], []
+        live = {"agent": agent}
 
         class Fake(pi.Az):
             def rest(_self, method, path, body=None, *, content_type="application/json"):
                 calls.append((method, path))
+                if hook:
+                    hook(method, path, live)
                 if method == "GET" and path == "/agents/jarvis-pi":
-                    if agent is None:
+                    if live["agent"] is None:
                         raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
-                    return agent
+                    return live["agent"]
                 if method == "GET" and path.startswith("/agents/jarvis-pi/versions/"):
                     return versions[path.rsplit("/", 1)[-1]]
                 if method == "POST" and path == "/agents/jarvis-pi/versions":
                     posted.append(body)
                     versions["9"] = {"status": "active", "definition": body["definition"], "metadata": body["metadata"]}
+                    if live["agent"] is None or not live["agent"].get("agent_endpoint"):
+                        live["agent"] = {"versions": {"latest": {"version": 9}}}
                     return {"version": 9}
                 if method == "POST" and path.startswith("/skills/"):
                     return {"version": 2}
@@ -252,12 +260,19 @@ class MainAgentInstructionsTest(unittest.TestCase):
         self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls)
         self.assertNotIn(("POST", "/agents/jarvis-pi/versions"), calls)
 
-    def test_without_a_pin_rule_the_latest_version_is_the_effective_one(self):
+    def test_without_a_pin_rule_the_verified_latest_version_is_pinned_without_a_new_version(self):
         versions = {"3": self.version()}
-        result, calls, _posted = self.run_provision({"versions": {"latest": {"version": "3"}}}, versions)
+        result, calls, posted = self.run_provision({"versions": {"latest": {"version": "3"}}}, versions)
         self.assertEqual((result["version"], result["created"]), ("3", False))
         self.assertIn(("GET", "/agents/jarvis-pi/versions/3"), calls)
-        self.assertEqual({method for method, _ in calls}, {"GET"})
+        self.assertEqual(posted, [])
+        self.assertEqual([call for call in calls if call[0] != "GET"], [("PATCH", "/agents/jarvis-pi")])
+
+    def test_an_unpinned_latest_version_with_a_matching_fingerprint_is_still_verified_before_it_is_pinned(self):
+        # An earlier run can have died after the POST (which stores the fingerprint) and before verify and pin.
+        versions = {"3": self.version(model="another-model")}
+        with self.assertRaisesRegex(pi.Blocked, "readback_model_mismatch"):
+            self.run_provision({"versions": {"latest": {"version": "3"}}}, versions)
 
     def test_an_instructions_only_edit_never_creates_a_version(self):
         for text in (self.live, "", self.seed + "\nand one more line"):
@@ -296,6 +311,57 @@ class MainAgentInstructionsTest(unittest.TestCase):
         self.assertEqual([call for call in calls if call == ("POST", "/agents/jarvis-pi/versions")], [("POST", "/agents/jarvis-pi/versions")])
         self.assertEqual(posted[0]["definition"]["instructions"], self.seed)
         self.assertEqual([call for call in calls if call[0] == "PATCH"], [("PATCH", "/agents/jarvis-pi")])
+
+    def stale_skills(self):
+        stale = [dict(skill, sha256="0" * 64) for skill in self.skills]
+        return self.version(skills=stale, fingerprint=pi.fingerprint(self.spec, self.url, stale))
+
+    def test_a_portal_edit_saved_before_the_version_is_posted_aborts_the_deploy_without_any_write(self):
+        def edit(method, path, live):
+            if (method, path) == ("POST", "/skills/jarvis-inbox-triage/versions"):
+                versions["3"] = self.version("Dan saved this while Deploy ran.")
+                live["agent"] = self.pinned("3")
+
+        versions = {"2": self.stale_skills()}
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision(self.pinned("2"), versions, edit)
+        self.assertNotIn("9", versions)
+
+    def test_a_portal_edit_saved_while_the_new_version_activates_is_never_overwritten_by_the_pin(self):
+        calls_seen = []
+
+        def edit(method, path, live):
+            calls_seen.append((method, path))
+            if (method, path) == ("GET", "/agents/jarvis-pi/versions/9"):
+                versions["3"] = self.version("Dan saved this while Deploy ran.")
+                live["agent"] = self.pinned("3")
+
+        versions = {"2": self.stale_skills()}
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision(self.pinned("2"), versions, edit)
+        self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls_seen)
+
+    def test_without_a_pin_rule_a_newer_portal_version_also_stops_the_pin(self):
+        calls_seen = []
+
+        def edit(method, path, live):
+            calls_seen.append((method, path))
+            if (method, path) == ("GET", "/agents/jarvis-pi/versions/9"):
+                versions["10"] = self.version("Dan saved this while Deploy ran.")
+                live["agent"] = {"versions": {"latest": {"version": 10}}}
+
+        versions = {"3": self.stale_skills()}
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision({"versions": {"latest": {"version": "3"}}}, versions, edit)
+        self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls_seen)
+
+    def test_an_agent_created_by_someone_else_while_seeding_aborts_instead_of_posting_the_seed(self):
+        def create(method, path, live):
+            if (method, path) == ("POST", "/skills/jarvis-inbox-triage/versions"):
+                live["agent"] = self.pinned("1")
+
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision(None, {"1": self.version()}, create)
 
     def test_an_existing_agent_without_a_usable_version_or_text_fails_instead_of_being_reseeded(self):
         with self.assertRaisesRegex(pi.Blocked, "agent_version_unknown"):
@@ -506,7 +572,9 @@ class ReachTest(unittest.TestCase):
         class Fake(pi.Az):
             def rest(self, method, path, body=None, *, content_type="application/json"):
                 if method == "GET" and path == "/agents/jarvis-pi":
-                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found")
+                    if "definition" not in stored:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found")
+                    return {"versions": {"latest": {"version": 1}}}
                 if method == "POST" and path.startswith("/skills/"):
                     return {"version": 1}
                 if method == "POST" and path == "/agents/jarvis-pi/versions":
