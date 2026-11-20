@@ -31,7 +31,7 @@ describe('the GitHub bridge', () => {
   it('lists the remote tools as gh_ catalogue entries with the token, once, and drops unusable names', async () => {
     const { seen, fetchStub } = server();
     const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: fetchStub });
-    const tools = await bridge.tools(signal());
+    const tools = await bridge.tools(signal(), 2_000);
     expect(tools.map(({ name }) => name)).toEqual(['gh_issue_write']);
     expect(tools[0]!.description).toBe('GitHub: Create or update an issue');
     expect(seen.every(({ auth }) => auth === 'Bearer github_pat_x')).toBe(true);
@@ -54,7 +54,8 @@ describe('the GitHub bridge', () => {
       init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
     })) as unknown as typeof fetch });
     const turn = new AbortController();
-    const waiting = stalled.tools(turn.signal);
+    await expect(stalled.tools(signal())).resolves.toEqual([]);
+    const waiting = stalled.tools(turn.signal, 30_000);
     turn.abort(new Error('turn cancelled'));
     await expect(waiting).rejects.toThrow('turn cancelled');
   });
@@ -70,18 +71,44 @@ describe('the GitHub bridge', () => {
         return slow.fetchStub(url, init);
       }) as unknown as typeof fetch,
     });
-    // A search that gives up after 20 ms gets nothing; the refresh goes on and the next search has the list.
-    expect(await bridge.tools(signal(), 20)).toEqual([]);
+    // The local search uses the last completed list immediately; a later explicit wait can observe the refresh.
+    expect(await bridge.tools(signal())).toEqual([]);
     expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
+  });
+
+  it('uses the stale list while refreshing an expired catalogue', async () => {
+    let currentTime = 0;
+    let release!: () => void;
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let slow = false;
+    const source = server();
+    const bridge = createRemoteMcpBridge({
+      url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't',
+      now: () => currentTime,
+      fetch: (async (url: string, init: RequestInit) => {
+        if (slow) {
+          markStarted();
+          await new Promise<void>((resolve) => { release = resolve; });
+        }
+        return source.fetchStub(url, init);
+      }) as unknown as typeof fetch,
+    });
+    expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['gh_issue_write']);
+    currentTime = 30 * 60_000;
+    slow = true;
+    expect((await bridge.tools(signal())).map(({ name }) => name)).toEqual(['gh_issue_write']);
+    await started;
+    release();
   });
 
   it('opens a new session when the old one expired, and answers with an empty list instead of failing when GitHub is down', async () => {
     const expiring = server({ sse: true, expireOnce: true });
     const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: expiring.fetchStub });
-    expect((await bridge.tools(signal())).map(({ name }) => name)).toEqual(['gh_issue_write']);
+    expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['gh_issue_write']);
     expect(expiring.seen.filter(({ method }) => method === 'initialize')).toHaveLength(2);
     const down = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
-    expect(await down.tools(signal())).toEqual([]);
+    expect(await down.tools(signal(), 2_000)).toEqual([]);
     expect(await down.call('gh_x', {}, signal())).toMatchObject({ outcome: 'error' });
   });
 });
@@ -121,4 +148,3 @@ describe('a server that scales from zero', () => {
     expect(bridge.status()).toEqual({ state: 'ready' });
   });
 });
-

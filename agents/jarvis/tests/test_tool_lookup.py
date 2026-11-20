@@ -45,6 +45,19 @@ def test_lookup_offers_two_small_tools_and_refuses_a_tool_not_looked_up() -> Non
     assert (real.name, real.arguments) == ("vault_task_create", '{"title":"Milk"}')
 
 
+def test_search_supports_exact_names_and_danish_aliases() -> None:
+    from tool_lookup import search_tools
+
+    tools = [
+        _tool("calendar_list_events", "Read events."),
+        _tool("get_calendar_settings", "Read calendar preferences."),
+        _tool("vault_search", "Search notes and knowledge."),
+    ]
+    assert search_tools(tools, "calendar list events")[0].name == "calendar_list_events"
+    assert search_tools(tools, "kalender")[0].name == "calendar_list_events"
+    assert search_tools(tools, "viden")[0].name == "vault_search"
+
+
 def test_stream_failure_code_reports_only_known_content_free_codes() -> None:
     from model_client import stream_failure_code
 

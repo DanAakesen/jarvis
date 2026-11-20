@@ -22,6 +22,26 @@ CALL_TOOL = "call_tool"
 MAX_FULL_RESULTS = 3
 MAX_OTHER_RESULTS = 5
 MAX_SHORT_DESCRIPTION = 240
+_TOOL_ALIASES: dict[str, tuple[str, ...]] = {
+    "kalender": ("calendar",), "calendar": ("kalender",),
+    "mail": ("email", "e-mail", "post"), "email": ("mail", "e-mail", "post"),
+    "e-mail": ("mail", "email", "post"), "post": ("mail", "email"),
+    "opgave": ("task", "tasks"), "opgaver": ("task", "tasks"),
+    "task": ("opgave", "opgaver"), "tasks": ("opgaver",),
+    "påmindelse": ("reminder",), "påmindelser": ("reminders",),
+    "reminder": ("påmindelse",), "reminders": ("påmindelser",),
+    "note": ("notes", "noter"), "notes": ("note", "noter"), "noter": ("note", "notes"),
+    "projekt": ("project", "projects"), "projekter": ("project", "projects"),
+    "project": ("projekt", "projekter"), "projects": ("projekter",),
+    "søg": ("search", "find"), "search": ("søg", "find"), "find": ("søg", "search"),
+    "viden": ("knowledge",), "knowledge": ("viden",),
+    "sundhed": ("health",), "health": ("sundhed",),
+    "mad": ("food",), "food": ("mad",),
+    "træning": ("workout", "gym"), "workout": ("træning",), "gym": ("træning",),
+    "vejr": ("weather",), "weather": ("vejr",),
+    "rejse": ("travel",), "travel": ("rejse",),
+    "indbakke": ("inbox",), "inbox": ("indbakke",),
+}
 
 LOOKUP_TOOLS: tuple[dict[str, Any], ...] = (
     {
@@ -95,22 +115,23 @@ def short_description(text: str) -> str:
 
 def search_tools(tools: Sequence[BackendTool], query: str) -> list[BackendTool]:
     """Rank tools by query words in the name (strongest) and the description."""
+    normalized_query = re.sub(r"[_-]+", " ", query.lower().strip())
     words = list(dict.fromkeys(
-        word for word in re.split(r"[^\w]+", query.lower()) if len(word) >= 2
+        word for word in re.split(r"[^\w]+", normalized_query) if len(word) >= 2
     ))[:8]
     scored: list[tuple[int, str, BackendTool]] = []
     for tool in tools:
         name = tool.name.lower()
         segments = name.split("_")
         description = tool.description.lower()
-        score = 0
+        score = 12 if name.replace("_", " ") == normalized_query else 0
         for word in words:
-            if word in segments:
-                score += 4
-            elif word in name:
-                score += 2
-            if word in description:
-                score += 1
+            variants = (word, *_TOOL_ALIASES.get(word, ()))
+            score += max(
+                (4 if variant in segments else 2 if variant in name else 0)
+                + (1 if variant in description else 0)
+                for variant in variants
+            )
         if score > 0:
             scored.append((-score, tool.name, tool))
     return [tool for _, _, tool in sorted(scored, key=lambda item: item[:2])]

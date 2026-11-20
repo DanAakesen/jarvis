@@ -11,8 +11,6 @@ export const azureToolPrefix = 'az_';
 const protocolVersion = '2025-06-18';
 const listTtlMs = 30 * 60_000;
 const maxPages = 10;
-/** A search of the local tools never waits long for a remote catalogue... */
-const searchWaitMs = 8_000;
 /**
  * ...but the refresh itself may take this long, so a container that scales from zero can finish starting in the background.
  * The Container Apps ingress holds a request for a stopped app for up to 240 s; giving up before that cancels a start that is
@@ -175,16 +173,18 @@ export function createRemoteMcpBridge(options: {
       return failure !== undefined && !refreshing ? { state: 'unreachable', reason: failure } : { state: 'starting' };
     },
     warm() { if (!listed || now() - listed.at >= listTtlMs) void refresh(); },
-    async tools(signal, waitMs = searchWaitMs) {
+    async tools(signal, waitMs = 0) {
       if (listed && now() - listed.at < listTtlMs) return listed.tools;
-      // Bounded: a slow server costs a search a few seconds, then the last list (or none) is used.
+      const cached = listed?.tools ?? [];
       const loading = refresh();
+      // Searches always use the last completed catalogue; waking a remote server must not hold up local tools.
+      if (waitMs <= 0 || listed) return cached;
       const wait = AbortSignal.any([signal, AbortSignal.timeout(waitMs)]);
       await Promise.race([loading, new Promise<void>((resolve, reject) => {
         const stop = () => (signal.aborted ? reject(signal.reason) : resolve());
         if (wait.aborted) stop(); else wait.addEventListener('abort', stop, { once: true });
       })]);
-      return listed?.tools ?? [];
+      return (listed as { readonly at: number; readonly tools: readonly RegisteredTool[] } | undefined)?.tools ?? cached;
     },
 
     async call(name, args, signal) {
