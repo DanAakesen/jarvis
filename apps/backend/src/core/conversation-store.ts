@@ -79,9 +79,9 @@ export interface ConversationStore {
   }): Promise<ConversationSession>;
   getSession(sessionId: string): Promise<ConversationSession | null>;
   endSession(sessionId: string, voiceUsage?: {
-    /** Cumulative provider-reported live audio duration; wall-clock duration remains the fallback. */
+    /** Cumulative provider-reported live audio duration. */
     readonly providerVoiceSeconds?: number;
-    /** False for retry failures, so no wall-clock row is invented when provider usage never arrived. */
+    /** Opt in only after a clean provider-confirmed voice terminal. Defaults to false. */
     readonly allowWallClockFallback?: boolean;
   }): Promise<boolean>;
   addMessage(input: {

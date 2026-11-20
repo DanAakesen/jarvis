@@ -80,7 +80,7 @@ describe('voice usage finalization in the conversation store', () => {
   it('does not invent minutes for abandoned sessions and retains provider-only duration', async () => {
     const store = createConversationStore(pool);
     const abandoned = await store.createSession({ channel: 'voice', language: 'en' });
-    expect(await store.endSession(abandoned.id, { allowWallClockFallback: false })).toBe(true);
+    expect(await store.endSession(abandoned.id)).toBe(true);
     expect((await store.getSession(abandoned.id))?.endedAt).not.toBeNull();
     const abandonedUsage = await pool.request()
       .input('sessionId', sql.BigInt, BigInt(abandoned.id))

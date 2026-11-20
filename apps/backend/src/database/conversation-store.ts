@@ -261,7 +261,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           sql.Decimal(19, 6),
           voiceUsage?.providerVoiceSeconds === undefined ? null : voiceUsage.providerVoiceSeconds / 60,
         )
-        .input('allowWallClockFallback', sql.Bit, voiceUsage?.allowWallClockFallback ?? true)
+        .input('allowWallClockFallback', sql.Bit, voiceUsage?.allowWallClockFallback ?? false)
         .query<{ session_exists: number }>(`DECLARE @ended TABLE (
             id bigint NOT NULL,
             channel nvarchar(16) NOT NULL,

@@ -1210,7 +1210,10 @@ return {
     }, async (request, reply) => {
       if (!app.conversationStore) return reply.code(503).send({ error: 'Conversation storage unavailable' });
       if (!validId(request.params.sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID' });
-      if (!await app.conversationStore.endSession(request.params.sessionId)) {
+      if (!await app.conversationStore.endSession(
+        request.params.sessionId,
+        { allowWallClockFallback: false },
+      )) {
         return reply.code(404).send({ error: 'Conversation session not found' });
       }
       app.onConversationSessionEnded(request.params.sessionId);
