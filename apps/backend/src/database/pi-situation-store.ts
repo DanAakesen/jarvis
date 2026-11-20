@@ -530,7 +530,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         let state = canonicalizePiSituationState(
           input.state,
           authoritativeRefs,
-          input.observations.length > 0,
+          input.observations.length > 0 || input.preserveInvalidated === true,
         );
         for (const ref of state.refs) {
           const receipt = ref.verifiedAt

@@ -393,6 +393,7 @@ describe('PI situational state', () => {
     expect(store.records.get(owner)?.state.facts.find(({ source }) => source === 'location')?.stale).toBe(false);
     const failed = await service.read(signal());
     expect(failed.staleSources).not.toContain('location');
+    expect(store.records.get(owner)?.state.summary).toBe('One compact cross-source model.');
     expect((await proactive.sources.list()).find(({ id }) => id === 'mail'))
       .toMatchObject({ state: 'stale', reason: 'activation_failed' });
     expect(failed.state?.summary).toBe('');
@@ -555,6 +556,42 @@ describe('PI situational state', () => {
     store.authorities.set(owner, [...store.records.get(owner)!.authoritativeRefs]);
     await service.synchronizeFollowUps(signal());
     expect(await queue.nextDueAt()).toBeNull();
+    const disabledView = await service.read(signal());
+    const unrelatedCommit = await service.commit({
+      expectedRevision: disabledView.revision,
+      expectedHash: disabledView.hash,
+      policyRevision: disabledView.policyRevision,
+      state: disabledView.state!,
+      activation: {
+        id: '00000000-0000-4000-8000-000000000027',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    const unrelatedPatch = await service.patch({
+      expectedRevision: unrelatedCommit.record.revision,
+      expectedHash: unrelatedCommit.record.hash,
+      policyRevision: disabledView.policyRevision,
+      patch: { asOf: new Date(at.getTime() + 1).toISOString() },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000028',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    await service.markFailed({
+      expectedRevision: unrelatedPatch.record.revision,
+      expectedHash: unrelatedPatch.record.hash,
+      sources: ['calendar'],
+      activation: {
+        id: '00000000-0000-4000-8000-000000000029',
+        type: 'scheduled',
+        source: 'timer',
+        at: new Date(at.getTime() + 2),
+      },
+    }, signal());
     await proactive.settings.patch({ sources: { mail: true } });
     await service.synchronizeFollowUps(signal());
     expect(await queue.nextDueAt()).toBeNull();

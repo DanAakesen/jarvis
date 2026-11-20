@@ -175,6 +175,7 @@ export interface PiSituationCommit {
   readonly followUpActions: readonly PiSituationFollowUpAction[];
   readonly authoritativeRefs: readonly PiSituationAuthorityRef[];
   readonly observations: readonly PiSituationSourceObservation[];
+  readonly preserveInvalidated?: boolean;
 }
 
 export type PiSituationFollowUpAction =
@@ -813,6 +814,13 @@ export function createPiSituationService(options: {
     submitted: PiSituationState,
     current: PiSituationRecord | null,
     policy: { readonly settings: ProactiveSettings; readonly statuses: readonly SourceStatus[] },
+    options: {
+      readonly preserveInvalidated?: boolean;
+      readonly removedRefIds?: ReadonlySet<string>;
+      readonly removedFactIds?: ReadonlySet<string>;
+      readonly removedFollowUpIds?: ReadonlySet<string>;
+      readonly summaryRemoved?: boolean;
+    } = {},
   ): { readonly state: PiSituationState; readonly excluded: readonly SourceId[] } {
     const excluded: SourceId[] = [];
     const retainedDisabled: PiSituationState['facts'] = [];
@@ -825,6 +833,16 @@ export function createPiSituationService(options: {
         (ref.verifiedAt === undefined ||
           Date.parse(ref.verifiedAt) <= Date.parse(invalidatedAt));
     };
+    const staleSource = (source: SourceId) => {
+      const entry = sourceById.get(source);
+      return !policy.settings.sources[source] ||
+        entry?.state === 'stale' ||
+        entry?.state === 'unavailable' ||
+        entry?.state === 'not_run';
+    };
+    const removedRefIds = options.removedRefIds ?? new Set<string>();
+    const removedFactIds = options.removedFactIds ?? new Set<string>();
+    const removedFollowUpIds = options.removedFollowUpIds ?? new Set<string>();
     for (const entry of next.sources) {
       if (policy.settings.sources[entry.id]) continue;
       excluded.push(entry.id);
@@ -836,6 +854,11 @@ export function createPiSituationService(options: {
         retainedDisabled.push(...current.state.facts.filter(({ source }) => source === entry.id)
           .map((fact) => ({ ...fact, stale: true, staleReason: 'source_disabled' })));
       }
+    }
+    if (options.preserveInvalidated && current) {
+      retainedRefs.push(...current.state.refs.filter((ref) =>
+        !removedRefIds.has(ref.id) &&
+        (invalidatedFor(ref) || staleSource(ref.source))));
     }
     retainedRefs.push(...next.refs.filter(invalidatedFor).map((ref) => ({
       ...ref,
@@ -853,8 +876,18 @@ export function createPiSituationService(options: {
     const acceptedFacts = next.facts
       .filter(({ source, refIds: values }) =>
         policy.settings.sources[source] && values.every((value) => activeRefIds.has(value)));
+    const retainedStaleFacts = options.preserveInvalidated && current
+      ? current.state.facts.filter((fact) =>
+        !removedFactIds.has(fact.id) &&
+        fact.refIds.every((value) => refIds.has(value)) &&
+        (fact.source !== undefined && staleSource(fact.source)))
+        .map((fact) => ({
+          ...fact,
+          stale: true,
+          staleReason: fact.staleReason ?? 'source_not_current',
+        }))
+      : [];
     const staleFacts = [
-      ...retainedDisabled,
       ...next.facts.filter((fact) =>
         !policy.settings.sources[fact.source] || fact.refIds.some((value) =>
           refs.some((ref) => ref.id === value && invalidatedFor(ref))))
@@ -863,13 +896,28 @@ export function createPiSituationService(options: {
           stale: true,
           staleReason: 'source_observation_not_newer_than_invalidation' as const,
         })),
+      ...retainedDisabled,
+      ...retainedStaleFacts,
     ]
       .filter(({ refIds: values }) => values.every((value) => refIds.has(value)));
     const facts = [...acceptedFacts, ...staleFacts]
       .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
       .slice(0, 24);
-    const followUps = next.followUps.filter(({ refIds: values }) =>
-      values.every((value) => refIds.has(value))).slice(0, 16);
+    const retainedFollowUps = options.preserveInvalidated && current
+      ? current.state.followUps.filter((followUp) =>
+        !removedFollowUpIds.has(followUp.id) &&
+        followUp.refIds.every((value) => refIds.has(value)) &&
+        followUp.refIds.some((value) =>
+          current.state.refs.some((ref) => ref.id === value &&
+            (invalidatedFor(ref) || staleSource(ref.source)))))
+      : [];
+    const followUps = [...next.followUps, ...retainedFollowUps]
+      .filter(({ id: value, refIds: values }) =>
+        !removedFollowUpIds.has(value) &&
+        values.every((id) => refIds.has(id)))
+      .filter((entry, index, values) =>
+        values.findIndex(({ id: value }) => value === entry.id) === index)
+      .slice(0, 16);
     const retainedSummaryRefs = next.summaryRefIds.filter((value) => refIds.has(value));
     const unchangedStoredSummary = current !== null &&
       next.summary === current.state.summary &&
@@ -878,9 +926,23 @@ export function createPiSituationService(options: {
     const summaryIsActive = retainedSummaryRefs.length === next.summaryRefIds.length &&
       retainedSummaryRefs.length > 0 &&
       next.summaryRefIds.every((value) => activeRefIds.has(value));
-    const summary = retainedSummaryRefs.length === next.summaryRefIds.length &&
+    const currentSummaryStale = options.preserveInvalidated && current !== null &&
+      current.state.summary.length > 0 &&
+      current.state.summaryRefIds.every((value) => refIds.has(value)) &&
+      current.state.summaryRefIds.some((value) =>
+        current.state.refs.some((ref) => ref.id === value &&
+          (invalidatedFor(ref) || staleSource(ref.source))));
+    const summaryExplicitlyRemoved = options.summaryRemoved === true ||
+      current?.state.summaryRefIds.some((value) => removedRefIds.has(value)) === true;
+    const summary = !summaryExplicitlyRemoved && currentSummaryStale &&
+        next.summary.length === 0
+      ? current.state.summary
+      : retainedSummaryRefs.length === next.summaryRefIds.length &&
       retainedSummaryRefs.length > 0 &&
       (summaryIsActive || unchangedStoredSummary) ? next.summary : '';
+    const summaryRefIds = summary === current?.state.summary && next.summary.length === 0
+      ? [...current.state.summaryRefIds]
+      : summary ? retainedSummaryRefs : [];
     for (const entry of next.sources) {
       const status = sourceById.get(entry.id);
       const invalidated = status?.invalidatedAt !== null && status?.invalidatedAt !== undefined &&
@@ -906,7 +968,7 @@ export function createPiSituationService(options: {
       state: parsePiSituationState({
         ...next,
         summary,
-        summaryRefIds: summary ? retainedSummaryRefs : [],
+        summaryRefIds,
         refs,
         facts,
         followUps,
@@ -1170,7 +1232,12 @@ export function createPiSituationService(options: {
         summary: summaryAffected ? '' : previous.summary,
         summaryRefIds: summaryAffected ? [] : previous.summaryRefIds,
       });
-      const prepared = applyPolicy(next, { ...current, state: previous }, effectivePolicy);
+      const prepared = applyPolicy(
+        next,
+        { ...current, state: previous },
+        effectivePolicy,
+        { preserveInvalidated: true },
+      );
       const canonicalState = canonicalizePiSituationState(prepared.state, knownAuthority, true);
       const stateChanged = piSituationHash(canonicalState) !== current.hash;
       const actions = followUpActions(previous, canonicalState, effectivePolicy, now());
@@ -1193,6 +1260,7 @@ export function createPiSituationService(options: {
           policyRevision: policy.revision,
           followUpActions: actions,
           authoritativeRefs: observedAuthorityRefs,
+          preserveInvalidated: true,
           observations,
         }, signal);
         await updateMemoryObservations(observations);
@@ -1298,7 +1366,7 @@ export function createPiSituationService(options: {
       );
       validateTimes(state);
       const currentState = current
-        ? retainAuthoritativePiSituationState(current.state, current.authoritativeRefs)
+        ? retainAuthoritativePiSituationState(current.state, current.authoritativeRefs, true)
         : null;
       const observations = pendingReferenceObservations(
         state,
@@ -1309,6 +1377,7 @@ export function createPiSituationService(options: {
         state,
         current && currentState ? { ...current, state: currentState } : null,
         effectivePolicy,
+        { preserveInvalidated: true },
       );
       const beforeWrite = await currentPolicy(signal);
       if (beforeWrite.revision !== input.policyRevision) {
@@ -1325,6 +1394,7 @@ export function createPiSituationService(options: {
         followUpActions: actions,
         authoritativeRefs: [],
         observations,
+        preserveInvalidated: true,
       }, signal);
       await updateMemoryObservations(observations);
       wakeEvents?.();
@@ -1350,19 +1420,33 @@ export function createPiSituationService(options: {
       const currentState = retainAuthoritativePiSituationState(
         current.state,
         current.authoritativeRefs,
+        true,
       );
-      const patched = applyPatch(currentState, input.patch);
+      const parsedPatch = parsePiSituationPatch(input.patch);
+      const patched = applyPatch(currentState, parsedPatch);
       validateTimes(patched);
       const canonicalState = canonicalizePiSituationState(
         patched,
         current.authoritativeRefs,
+        true,
       );
       const observations = pendingReferenceObservations(
         canonicalState,
         current.authoritativeRefs,
       );
       const effectivePolicy = policyWithObservations(policy, observations);
-      const prepared = applyPolicy(canonicalState, { ...current, state: currentState }, effectivePolicy);
+      const prepared = applyPolicy(
+        canonicalState,
+        { ...current, state: currentState },
+        effectivePolicy,
+        {
+          preserveInvalidated: true,
+          removedRefIds: new Set(parsedPatch.removeRefIds ?? []),
+          removedFactIds: new Set(parsedPatch.removeFactIds ?? []),
+          removedFollowUpIds: new Set(parsedPatch.removeFollowUpIds ?? []),
+          summaryRemoved: parsedPatch.summary === null,
+        },
+      );
       if (piSituationHash(prepared.state) === current.hash) {
         return { record: current, excluded: prepared.excluded, changed: false };
       }
@@ -1381,6 +1465,7 @@ export function createPiSituationService(options: {
         followUpActions: actions,
         authoritativeRefs: [],
         observations,
+        preserveInvalidated: true,
       }, signal);
       await updateMemoryObservations(observations);
       wakeEvents?.();
@@ -1395,21 +1480,15 @@ export function createPiSituationService(options: {
       const previous = retainAuthoritativePiSituationState(
         current.state,
         current.authoritativeRefs,
+        true,
       );
       const state = credentialSafeState(clone(previous));
-      const affectedRefs = new Set(state.refs
-        .filter(({ source }) => affected.has(source))
-        .map(({ id: value }) => value));
       state.sources = state.sources.map((source) => !affected.has(source.id) || source.state === 'disabled'
         ? source
         : { ...source, state: 'stale', reason: 'activation_failed' });
       state.facts = state.facts.map((fact) => !affected.has(fact.source)
         ? fact
         : { ...fact, stale: true, staleReason: 'activation_failed' });
-      if (state.summaryRefIds.some((value) => affectedRefs.has(value))) {
-        state.summary = '';
-        state.summaryRefIds = [];
-      }
       state.asOf = current.asOf.toISOString();
       const next = parsePiSituationState(state);
       const policy = await currentPolicy(signal);
@@ -1550,7 +1629,7 @@ export function createMemoryPiSituationStore(
       const state = canonicalizePiSituationState(
         input.state,
         known,
-        input.observations.length > 0,
+        input.observations.length > 0 || input.preserveInvalidated === true,
       );
       for (const ref of state.refs) {
         const receipt = known.find((entry) =>
