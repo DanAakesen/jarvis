@@ -283,6 +283,49 @@ describe('PI situational state', () => {
     expect((await service.read(signal())).state?.facts.some(({ source }) => source === 'mail')).toBe(false);
   });
 
+  it('rejects an unrelated commit rather than truncating preserved stale facts', async () => {
+    const { service, store, proactive } = setup();
+    const first = await service.read(signal());
+    await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: {
+        id: '00000000-0000-4000-8000-000000000030',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal());
+    await proactive.settings.patch({ sources: { mail: false } });
+    const before = structuredClone(store.records.get(owner)!);
+    const disabled = await service.read(signal());
+    const submitted = structuredClone(disabled.state!);
+    submitted.facts.push(...Array.from({ length: 23 }, (_, index) => ({
+      id: `fact:limit:${index}`,
+      source: 'location' as const,
+      refIds: ['location:device'],
+      text: 'L',
+      observedAt: at.toISOString(),
+      expiresAt: null,
+      stale: false,
+    })));
+    await expect(service.commit({
+      expectedRevision: disabled.revision,
+      expectedHash: disabled.hash,
+      policyRevision: disabled.policyRevision,
+      state: submitted,
+      activation: {
+        id: '00000000-0000-4000-8000-000000000031',
+        type: 'chat',
+        source: 'chat',
+        at,
+      },
+    }, signal())).rejects.toThrow(/24-fact limit/u);
+    expect(store.records.get(owner)).toEqual(before);
+  });
+
   it('keeps location available when Weather is off and refuses a disabled source lookup', async () => {
     const location: ProactiveSource = {
       id: 'location',

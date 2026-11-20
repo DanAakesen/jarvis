@@ -867,8 +867,13 @@ export function createPiSituationService(options: {
     const acceptedRefs = next.refs.filter((ref) =>
       policy.settings.sources[ref.source] && !invalidatedFor(ref));
     const refs = [...acceptedRefs, ...retainedRefs]
-      .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
-      .slice(0, 48);
+      .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index);
+    if (refs.length > 48) {
+      throw new PiSituationError(
+        'invalid',
+        'Preserving stale reconciliation references would exceed the 48-ref limit. Remove obsolete refs explicitly before committing.',
+      );
+    }
     const refIds = new Set(refs.map(({ id: value }) => value));
     const activeRefIds = new Set(acceptedRefs
       .filter(({ id: value }) => refIds.has(value))
@@ -901,8 +906,13 @@ export function createPiSituationService(options: {
     ]
       .filter(({ refIds: values }) => values.every((value) => refIds.has(value)));
     const facts = [...acceptedFacts, ...staleFacts]
-      .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
-      .slice(0, 24);
+      .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index);
+    if (facts.length > 24) {
+      throw new PiSituationError(
+        'invalid',
+        'Preserving stale reconciliation facts would exceed the 24-fact limit. Remove obsolete facts explicitly before committing.',
+      );
+    }
     const retainedFollowUps = options.preserveInvalidated && current
       ? current.state.followUps.filter((followUp) =>
         !removedFollowUpIds.has(followUp.id) &&
@@ -916,8 +926,13 @@ export function createPiSituationService(options: {
         !removedFollowUpIds.has(value) &&
         values.every((id) => refIds.has(id)))
       .filter((entry, index, values) =>
-        values.findIndex(({ id: value }) => value === entry.id) === index)
-      .slice(0, 16);
+        values.findIndex(({ id: value }) => value === entry.id) === index);
+    if (followUps.length > 16) {
+      throw new PiSituationError(
+        'invalid',
+        'Preserving stale reconciliation follow-ups would exceed the 16-follow-up limit. Remove obsolete follow-ups explicitly before committing.',
+      );
+    }
     const retainedSummaryRefs = next.summaryRefIds.filter((value) => refIds.has(value));
     const unchangedStoredSummary = current !== null &&
       next.summary === current.state.summary &&
