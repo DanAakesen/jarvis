@@ -43,7 +43,7 @@ export function semanticOperation(value: unknown): ToolCompletionOperation {
     ['open', /\b(?:open|launch|focus|show|activate|abn|abne|fokus)\b/iu],
     ['start', /\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|kør)\b/iu],
     ['create', /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu],
-    ['update', /\b(?:update|change|edit|move|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu],
+    ['update', /\b(?:update|change|edit|move|push|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu],
     ['read', /\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu],
   ];
   let selected: ToolCompletionOperation = 'generic';

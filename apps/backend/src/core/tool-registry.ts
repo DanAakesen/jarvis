@@ -64,6 +64,8 @@ export interface ToolCompletionContract {
   readonly acceptedRequestOperations?: readonly ToolCompletionOperation[] | undefined;
   readonly requestTargetFields: readonly string[];
   readonly resultTargetFields: readonly string[];
+  readonly requestIdentities?: ((args: Record<string, unknown>) => unknown) | undefined;
+  readonly resultIdentities?: ((result: unknown) => unknown) | undefined;
   readonly evaluate: (args: Record<string, unknown>, result: unknown) => boolean;
 }
 
@@ -228,6 +230,10 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
             !Array.isArray(completionSource.resultTargetFields) ||
             !validFields(completionSource.requestTargetFields) ||
             !validFields(completionSource.resultTargetFields) ||
+            completionSource.requestIdentities !== undefined &&
+              typeof completionSource.requestIdentities !== 'function' ||
+            completionSource.resultIdentities !== undefined &&
+              typeof completionSource.resultIdentities !== 'function' ||
             typeof completionSource.evaluate !== 'function' ||
             completionSource.acceptedRequestOperations !== undefined &&
               (!Array.isArray(completionSource.acceptedRequestOperations) ||

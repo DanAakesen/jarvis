@@ -264,6 +264,13 @@ describe('PI MCP server', () => {
       domain: 'github',
       operation: 'update',
     }]);
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_issue_update',
+      arguments: { number: 1968, title: 'Issue 1967 updated' },
+    });
+    expect(calls).toBe(1);
+    expect(grant.evidence).toHaveLength(1);
   });
 
   it('withholds an ambiguous consolidated remote tool without a declared selector', async () => {
@@ -289,8 +296,12 @@ describe('PI MCP server', () => {
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
     const found = await tool('find_tools', { turn: grant.turn, query: 'github issue write' });
-    expect(JSON.stringify(found.body?.result)).not.toContain('gh_issue_write');
+    expect(JSON.stringify([
+      ...(found.body?.result.tools as unknown[] ?? []),
+      ...(found.body?.result.otherMatches as unknown[] ?? []),
+    ])).not.toContain('gh_issue_write');
     expect(found.body?.result.note).toContain('no unambiguous operation selector');
+    expect(found.body?.result.note).toContain('gh_issue_write');
     expect(grant.remoteTools.has('gh_issue_write')).toBe(false);
     await tool('call_tool', {
       turn: grant.turn, name: 'gh_issue_write', arguments: { number: 1967, title: 'Updated' },
@@ -336,6 +347,96 @@ describe('PI MCP server', () => {
       arguments: { operation: 'update', number: 1967, title: 'Updated' },
     });
     expect(grant.evidence.at(-1)).toMatchObject({ operation: 'update', domain: 'github' });
+  });
+
+  it('compiles provider-exact push_files identities from nested paths', async () => {
+    let calls = 0;
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [
+        {
+          name: 'gh_push_files',
+          description: 'Push files on one branch.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              repository: { type: 'string' },
+              branch: { type: 'string' },
+              files: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { path: { type: 'string' }, content: { type: 'string' } },
+                  required: ['path', 'content'],
+                  additionalProperties: false,
+                },
+              },
+              message: { type: 'string' },
+            },
+            required: ['repository', 'branch', 'files', 'message'],
+            additionalProperties: false,
+          },
+          moduleId: 'github',
+          execute: async () => ({}),
+        },
+        {
+          name: 'gh_create_or_update_file',
+          description: 'Create or update one file.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              repository: { type: 'string' },
+              path: { type: 'string' },
+              content: { type: 'string' },
+              sha: { type: 'string' },
+            },
+            required: ['repository', 'path', 'content'],
+            additionalProperties: false,
+          },
+          moduleId: 'github',
+          execute: async () => ({}),
+        },
+      ],
+      call: async () => {
+        calls += 1;
+        return {
+          outcome: 'ok',
+          result: { repository: 'DanAakesen/jarvis', branch: 'main', sha: 'a'.repeat(40), status: 'written' },
+        };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Push src/example.ts to GitHub in DanAakesen/jarvis.');
+    await tool('find_tools', { turn: grant.turn, query: 'github push files' });
+    expect(grant.remoteTools.has('gh_create_or_update_file')).toBe(true);
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_push_files',
+      arguments: {
+        repository: 'DanAakesen/jarvis',
+        branch: 'main',
+        files: [{ path: 'src/example.ts', content: 'const wrongTargetNumber = 42;' }],
+        message: 'Push the exact file',
+      },
+    });
+    expect(grant.evidence.at(-1)).toMatchObject({
+      executionId: 'remote:gh_:gh_push_files',
+      operation: 'update',
+      domain: 'github',
+    });
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_push_files',
+      arguments: {
+        repository: 'DanAakesen/jarvis',
+        branch: 'main',
+        files: [{ path: 'src/wrong.ts', content: 'src/example.ts // wrong path hidden in content' }],
+        message: 'Wrong target',
+      },
+    });
+    expect(calls).toBe(1);
+    expect(grant.evidence).toHaveLength(1);
   });
 
   it('binds remote delete receipts to the exact requested target', async () => {
@@ -421,6 +522,33 @@ describe('PI MCP server', () => {
     });
     expect(result.body).toMatchObject({ outcome: 'refused' });
     expect(deletes).toBe(0);
+  });
+
+  it('refuses a generic action contract before dispatch', async () => {
+    let executions = 0;
+    const action: JarvisTool = {
+      name: 'generic_action',
+      description: 'Run an action whose operation is not declared.',
+      inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+      execution: { defaultEffect: 'action' },
+      completion: {
+        domain: 'generic', operation: 'generic', requestTargetFields: ['id'],
+        resultTargetFields: ['id'], evaluate: () => true,
+      },
+      execute: async () => {
+        executions += 1;
+        return { id: '42' };
+      },
+    };
+    const { registry, tool } = setup([], { tools: [action] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Update item 42.');
+    await tool('find_tools', { turn: grant.turn, query: 'generic action' });
+    const result = await tool('call_tool', {
+      turn: grant.turn, name: 'generic_action', arguments: { id: '42' },
+    });
+    expect(result.body).toMatchObject({ outcome: 'refused' });
+    expect(executions).toBe(0);
   });
 
   it('records only a terminal receipt bound to the classified tool arguments and target', async () => {

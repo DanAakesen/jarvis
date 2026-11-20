@@ -183,8 +183,10 @@ function toolTargetTokens(
   const argumentFields = metadata?.requestTargetFields ?? fallbackTargetFields;
   const resultFields = metadata?.resultTargetFields ?? fallbackTargetFields;
   const output = new Set<string>();
-  for (const value of collectFieldValues(args, argumentFields)) bindingTokens(value, 0, output);
-  for (const value of collectFieldValues(result, resultFields)) bindingTokens(value, 0, output);
+  if (metadata?.requestIdentities) bindingTokens(metadata.requestIdentities(args), 0, output);
+  else for (const value of collectFieldValues(args, argumentFields)) bindingTokens(value, 0, output);
+  if (metadata?.resultIdentities) bindingTokens(metadata.resultIdentities(result), 0, output);
+  else for (const value of collectFieldValues(result, resultFields)) bindingTokens(value, 0, output);
   return output;
 }
 
@@ -198,7 +200,9 @@ function rowTargetTokens(
     ? metadata?.resultTargetFields ?? fallbackTargetFields
     : metadata?.requestTargetFields ?? fallbackTargetFields;
   const output = new Set<string>();
-  for (const value of collectFieldValues(row, fields)) bindingTokens(value, 0, output);
+  if (result && metadata?.resultIdentities) bindingTokens(metadata.resultIdentities(row), 0, output);
+  else if (!result && metadata?.requestIdentities) bindingTokens(metadata.requestIdentities(row), 0, output);
+  else for (const value of collectFieldValues(row, fields)) bindingTokens(value, 0, output);
   return output;
 }
 
@@ -247,7 +251,7 @@ const ignoredTargetWords = new Set([
   'add', 'archive', 'book', 'cancel', 'capture', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
   'implement', 'inspect', 'keep', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember',
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
-  'merge', 'approve', 'review', 'forward',
+  'merge', 'approve', 'review', 'forward', 'push',
   'click', 'type', 'select', 'pin', 'unpin', 'rename', 'dispatch', 'deploy', 'trigger', 'scale', 'restart',
   'find', 'check', 'fix', 'research', 'look', 'up', 'tjek', 'læs', 'læse', 'læst', 'søg', 'se', 'vis',
   'fortæl', 'fortælle', 'fortalt', 'sendt', 'sagt', 'opret', 'slet', 'gem', 'rediger', 'start',
@@ -271,19 +275,36 @@ const ignoredTargetWords = new Set([
   'pa', 'på', 'abn', 'åbn', 'abne', 'åbne',
 ].map(normalized));
 
+const readCueTerms = new Set([
+  'what', "what's", 'when', 'where', 'who', 'which', 'why', 'how', "how's",
+  'is', 'are', 'was', 'were', 'did', 'does', 'has', 'have', 'had',
+  'show', 'list', 'find', 'search', 'check', 'read', 'lookup', 'look', 'tell', 'give',
+  'explain', 'teach', 'download', 'status',
+  'latest', 'current', 'today', 'tomorrow', 'summarise', 'summarize', 'recall',
+  'hvad', 'hvilke', 'hvor', 'hvornår', 'hvem', 'hvorfor', 'har', 'er', 'var', 'blev',
+  'vis', 'læs', 'læse', 'se', 'fortæl', 'fortælle', 'fortæller', 'fortalt',
+  'forklar', 'forklare', 'forklarer', 'forklaret', 'søg', 'tjek', 'star', 'stå',
+  'står', 'viser', 'vise', 'viste', 'vist', 'status', 'statusen', 'statuset', 'statusene',
+].map(normalized));
+
+function isReadCueTerm(value: string): boolean {
+  const term = normalized(value);
+  if (readCueTerms.has(term)) return true;
+  return term.split('-').some(part => readCueTerms.has(part));
+}
+
 function targetTerms(text: string): { readonly term: string; readonly at: number }[] {
   const terms: { readonly term: string; readonly at: number }[] = [];
-  const readCueTerm = /^(?:(?:[\p{L}\p{N}]+-)?status(?:en|er|et|erne)?|star|stå|stået|viser|vise|viste|vist|forklar|forklare|forklarer|forklaret|fortæl|fortælle|fortæller|fortalt)$/iu;
   const quoted = /["“”'‘’]([^"“”'‘’]{1,300})["“”'‘’]/gu;
   for (const match of text.matchAll(quoted)) {
     const value = targetTerm(match[1] ?? '');
-    if (value && !readCueTerm.test(value)) terms.push({ term: value, at: match.index ?? 0 });
+    if (value && !isReadCueTerm(value)) terms.push({ term: value, at: match.index ?? 0 });
   }
   const wordPattern = /[\p{L}\p{N}]+(?:[._/@:-][\p{L}\p{N}-]+)*/gu;
   for (const match of text.matchAll(wordPattern)) {
     const value = targetTerm(match[0]);
     if (!value || ignoredTargetWords.has(value) ||
-        readCueTerm.test(value) ||
+        isReadCueTerm(value) ||
         value.length < 2 && !/^\d$/u.test(value)) continue;
     terms.push({ term: value, at: match.index ?? 0 });
   }
@@ -511,9 +532,16 @@ function operationForDomain(
 }
 
 function readIntent(value: string): boolean {
-  return /^(?:what|what's|when|where|who|which|why|how is|how's|show me|list|find|search|check|read|look up|look at|look for|do i have|hvad|hvilke|hvor|hvornår|hvem|hvorfor|vis mig|læs|læse|se|fortæl|fortælle|søg|tjek|har jeg|har du|er|var|blev)\b/iu.test(value) ||
-    /^(?:latest|current|today|tomorrow|give me|tell me|summarise|summarize|recall)\b/iu.test(value) ||
-    /^(?:how many|how much|is|are|was|were|did|does|has|have|had|do (?:i|you|we|they|he|she|it)|can (?:i|we|you)|kan jeg|må jeg)\b/iu.test(value);
+  const words = normalized(value).match(/[\p{L}]+(?:['’][\p{L}]+)?/gu) ?? [];
+  const first = words[0] ?? '';
+  const second = words[1] ?? '';
+  if (first === 'tell' || first === 'give') return second === 'me';
+  if (first === 'do' || first === 'can' || first === 'could' || first === 'will' || first === 'would') {
+    return ['i', 'you', 'we', 'they', 'he', 'she', 'it'].includes(second);
+  }
+  if (first === 'kan' || first === 'ma') return second === 'jeg' || second === 'du';
+  if (first === 'vil' && second === 'du') return true;
+  return isReadCueTerm(first);
 }
 
 export function completionPlan(text: string): PiCompletionPlan {
@@ -641,9 +669,12 @@ export function completionDispatchAllowed(
   tool: CompletionTool,
   args: Record<string, unknown>,
   previous: readonly PiCompletionEvidence[],
+  allowUnplannedAction = false,
 ): boolean {
   if (toolEffect(tool, args) !== 'action') return true;
   const operation = receiptOperation(tool, args);
+  if (operation === 'generic') return false;
+  if (allowUnplannedAction) return true;
   const domain = toolDomain(tool, args);
   const identities = targetHashes([...bindingIdentities(args)]);
   const linked = previous.flatMap(candidate =>
@@ -732,6 +763,7 @@ function receiptKind(
   if (result === null || result === undefined) return undefined;
   const effect = toolEffect(tool, args);
   if (effect !== 'action') return isPositiveResult(result) ? 'retrieved' : undefined;
+  if (receiptOperation(tool, args) === 'generic') return undefined;
   if (committedReceipt(tool, args, result)) return durableTerminal(result) ? 'durable_job' : 'committed';
   return undefined;
 }
