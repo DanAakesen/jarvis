@@ -109,7 +109,7 @@ Completion means the existing PI activation envelope and one background queue ow
 
 ## PI execution integrity — 20 November 2026 (#1967)
 
-**Status: implemented and in offline qualification.** The PI path now loads remote catalogues only on provider-specific discovery, supports English/Danish aliases and exact `otherMatches`, records completion evidence, separates Voice Live playback interruption from PI work, and binds tool authority to the exact owner message. No live model/provider, `measure_pi`, external message, deployment or spend was used.
+**Status: implemented and qualified offline.** The PI path now loads remote catalogues only on provider-specific discovery, supports English/Danish aliases and exact `otherMatches`, records completion evidence, separates Voice Live playback interruption from PI work, and binds tool authority to the exact owner message. No live model/provider, `measure_pi`, external message, deployment or spend was used.
 
 | Step | State |
 | --- | --- |
@@ -119,7 +119,7 @@ Completion means the existing PI activation envelope and one background queue ow
 | Decouple GPT-Live playback cancellation from PI work and preserve exact turn authority under concurrent proactive chat | Done |
 | Keep unrestricted owner actions, target-bound deletion checks and separate foreground/proactive budgets | Done |
 | Update focused tests and PI/product/architecture/agent/decision documentation | Done |
-| Run full offline backend build, test and lint; review and commit | Build and lint pass; 60 files / 666 backend tests pass; commit next |
+| Run full offline backend build, test and lint; review and commit | Done: build and lint pass, 60 files / 666 backend tests pass; implementation commit `6b15dae` |
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.
