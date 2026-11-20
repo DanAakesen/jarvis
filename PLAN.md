@@ -25,7 +25,7 @@ No live model/provider smoke, deployment or spending is authorized. Physical Cha
 | Step | State |
 | --- | --- |
 | Replace the two 2.1 Bicep deployments with `gpt-live-1` `2026-09-10`, GlobalStandard capacity 10, in the existing sequential Sweden Central chain | Done in source |
-| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, `marin`, client delegation, through `provision_pi_agent.py` | Done in source |
+| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, `marin`, client delegation, through `provision_pi_agent.py` (since 2026-11-20 seeded once; instructions and voice are Foundry-owned) | Done in source |
 | Replace the direct model WebSocket with the exact Foundry agent Live route and backend-only Entra/preview headers | Done in source |
 | Preserve native full duplex and the existing `/voice` client route; normalise provider events to `jarvis.voice.*` and use native mute/unmute | Done in source |
 | Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, use 0.6-second quiet (max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source |

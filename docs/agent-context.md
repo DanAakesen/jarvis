@@ -156,7 +156,11 @@
   selector. The backend uses fixed Foundry agent `jarvis-pi-live`; old clients
   cannot choose a different provider path.
 - The normal Deploy order is Bicep (`gpt-live-1`), backend, hosted chat agent,
-  then `pi-agent`. The last job provisions/pins `jarvis-pi-live`, waits for the
+  then `pi-agent`. The last job seeds `jarvis-pi-live` only if it is missing (its
+  instructions, voice and greeting are Foundry-owned and never written, compared
+  or reset by Deploy; it only fails on drift in the technical contract: kind,
+  sub-protocol, model, delegation `client`, `store` false, PCM 24 kHz; tune it in
+  the Foundry portal), waits for the
   backend revision configured with the name and only then removes the two old
   voice deployments by ARM. Failure blocks readiness; there is no runtime
   fallback.
@@ -6357,8 +6361,8 @@ message ID and the shared `dbo.pi_conversation`.
 delegation ID. New transcript input cancels stale PI work. Output deltas are
 grouped and persisted on 0.6-second quiet with a three-second persistence bound.
 
-The normal `pi-agent` Deploy phase provisions and pins one immutable
-`jarvis-pi-live` voice agent, configures and waits for the backend revision, then
+The normal `pi-agent` Deploy phase seeds `jarvis-pi-live` once (then only
+verifies its technical contract; its instructions and voice are tuned in Foundry), configures and waits for the backend revision, then
 idempotently deletes the two replaced 2.1 deployments. This ordering is in
 `.github/scripts/provision_pi_agent.py`; incremental Bicep alone cannot perform
 that cleanup. Do not invoke this phase from a coding session or edit Foundry
