@@ -138,7 +138,7 @@ function validExecutionMetadata(value: unknown): value is ToolExecutionMetadata 
     /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(name) && (effect === 'read' || effect === 'action'));
 }
 
-function schemaPropertyNames(value: unknown, output = new Set<string>(), depth = 0): ReadonlySet<string> {
+export function toolSchemaFieldNames(value: unknown, output = new Set<string>(), depth = 0): ReadonlySet<string> {
   if (depth > 8 || value === null || typeof value !== 'object' || Array.isArray(value)) return output;
   const record = value as Record<string, unknown>;
   const properties = record.properties;
@@ -147,8 +147,8 @@ function schemaPropertyNames(value: unknown, output = new Set<string>(), depth =
   }
   for (const keyword of ['allOf', 'anyOf', 'oneOf', 'if', 'then', 'else'] as const) {
     const branch = record[keyword];
-    if (Array.isArray(branch)) for (const child of branch) schemaPropertyNames(child, output, depth + 1);
-    else schemaPropertyNames(branch, output, depth + 1);
+    if (Array.isArray(branch)) for (const child of branch) toolSchemaFieldNames(child, output, depth + 1);
+    else toolSchemaFieldNames(branch, output, depth + 1);
   }
   return output;
 }
@@ -217,7 +217,7 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
         throw new Error(`Action tool ${tool.name} is missing PI completion contract`);
       }
       if (completionSource) {
-        const propertyNames = schemaPropertyNames(tool.inputSchema);
+        const propertyNames = toolSchemaFieldNames(tool.inputSchema);
         const validFields = (fields: readonly string[]) => fields.every(field =>
           /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(field)) && new Set(fields).size === fields.length;
         if (!completionDomains.has(completionSource.domain) ||

@@ -62,7 +62,7 @@ const pcCompletion = {
   pc_browser_act: {
     domain: 'pc', operation: 'update',
     requestTargetFields: ['tabId', 'snapshotId', 'elementIndex', 'action', 'text', 'keys', 'value', 'direction'],
-    resultTargetFields: ['tabId', 'snapshotId'], evaluate: receipt.pcBrowserAct,
+    resultTargetFields: ['acted', 'action'], evaluate: receipt.pcBrowserAct,
   },
   pc_act: {
     domain: 'pc', operation: args => semanticOperation(args.goal),

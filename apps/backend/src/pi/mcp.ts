@@ -4,10 +4,12 @@ import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextp
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import {
-  isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
-  type CompiledToolExecutionContract, type RegisteredTool, type ToolRegistry,
+  createToolRegistry, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, toolSchemaFieldNames,
+  type JarvisTool, type RegisteredTool, type ToolCompletionContract, type ToolRegistry,
 } from '../core/tool-registry.js';
-import { normalizeCompletionText, receipt } from '../core/tool-completion.js';
+import {
+  normalizeCompletionText, remoteTerminalReceipt, semanticOperation,
+} from '../core/tool-completion.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
@@ -21,12 +23,6 @@ const maxOtherResults = 5;
 const maxResultCharacters = 200_000;
 const notFound = 'Unknown tool, or not looked up yet. Call find_tools first, then call_tool. Nothing was done.';
 const unknownTurn = 'This turn is not active, so nothing was done. Use the exact turn reference from the current message.';
-const remoteReadWords = new Set(['check', 'compare', 'diff', 'download', 'find', 'get', 'list', 'lookup', 'read', 'search', 'status', 'view']);
-const remoteActionWords = new Set([
-  'add', 'archive', 'assign', 'cancel', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
-  'merge', 'move', 'open', 'publish', 'remove', 'rename', 'reply', 'resume', 'retry', 'revoke', 'send', 'set',
-  'start', 'stop', 'trigger', 'update', 'write',
-]);
 
 const turn = z.string().regex(piTurnPattern, 'The turn reference is the jt- value from the current message.');
 const findSchema = z.object({ turn, query: z.string().min(2).max(100) }).strict();
@@ -41,28 +37,55 @@ function text(value: unknown, isError = false): CallToolResult {
   return { ...(isError ? { isError: true } : {}), content: [{ type: 'text', text: body }] };
 }
 
-function remoteReadContract(
+function remoteOperation(
   bridge: RemoteMcpBridge,
   name: string,
   args: Record<string, unknown>,
-): CompiledToolExecutionContract | undefined {
+) {
   const words = normalizeCompletionText(name.slice(bridge.prefix.length)).split(/[_-]+/u).filter(Boolean);
-  if (!words.some(word => remoteReadWords.has(word)) || words.some(word => remoteActionWords.has(word))) {
-    return undefined;
+  if (words.some(word => ['delete', 'remove', 'cancel', 'close', 'archive'].includes(word))) return 'delete' as const;
+  if (words.some(word => ['send', 'comment', 'reply'].includes(word))) return 'send' as const;
+  if (words.some(word => ['dispatch', 'run', 'start', 'trigger', 'retry', 'rerun'].includes(word))) return 'start' as const;
+  if (words.includes('write')) {
+    return ['id', 'number', 'issue', 'issueNumber', 'issue_number', 'pullNumber',
+      'pull_number', 'sha', 'path'].some(field => args[field] !== undefined)
+      ? 'update' as const : 'create' as const;
   }
+  if (words.includes('create') && words.includes('update')) {
+    return args.sha !== undefined || args.id !== undefined || args.number !== undefined
+      ? 'update' as const : 'create' as const;
+  }
+  if (words.some(word => ['update', 'edit', 'move', 'merge', 'approve', 'ready', 'label',
+    'assign', 'mark', 'reopen', 'pause', 'resume', 'pin', 'unpin'].includes(word))) return 'update' as const;
+  if (words.some(word => ['create', 'add'].includes(word))) return 'create' as const;
+  if (words.some(word => ['open', 'show', 'restore'].includes(word))) return 'open' as const;
+  return semanticOperation(name.slice(bridge.prefix.length));
+}
+
+function compileRemoteTools(
+  bridge: RemoteMcpBridge,
+  tools: readonly RegisteredTool[],
+): readonly RegisteredTool[] {
   const domain = bridge.prefix === githubToolPrefix ? 'github' as const
     : bridge.prefix === azureToolPrefix ? 'azure' as const : 'generic' as const;
-  return Object.freeze({
-    executionId: `remote:${bridge.prefix}:${name}`,
-    domain,
-    operation: 'read',
-    requestTargetFields: Object.freeze(Object.keys(args).filter(field =>
-      /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(field))),
-    resultTargetFields: Object.freeze([
-      'id', 'number', 'repository', 'url', 'path', 'sha', 'branch', 'runId', 'title', 'name',
-    ]),
-    evaluate: receipt.read,
+  const contracted: JarvisTool[] = tools.map(tool => {
+    const operation = (args: Record<string, unknown>) => remoteOperation(bridge, tool.name, args);
+    const completion: ToolCompletionContract = {
+      domain,
+      operation,
+      requestTargetFields: [...toolSchemaFieldNames(tool.inputSchema)],
+      resultTargetFields: [
+        'id', 'number', 'issueNumber', 'issue_number', 'pullNumber', 'pull_number', 'repository',
+        'repo', 'owner', 'resourceId', 'resource_id', 'resourceGroup', 'resourceName', 'url',
+        'html_url', 'path', 'sha', 'commit', 'branch', 'ref', 'runId', 'jobId',
+        'title', 'name', 'status', 'state', 'outcome', 'created', 'updated', 'deleted', 'merged',
+        'sent', 'commented', 'closed', 'archived', 'accepted', 'opened', 'dispatched',
+      ],
+      evaluate: (args, result) => remoteTerminalReceipt(operation(args), args, result),
+    };
+    return { ...tool, completion };
   });
+  return createToolRegistry([{ id: `remote:${bridge.prefix}`, tools: contracted }]).list();
 }
 
 /** Chat never shows the capability-discovery operation selector; the voice and chat catalogues stay aligned. */
@@ -149,25 +172,17 @@ export function createPiMcpRoutes(options: {
     return new Set(current.disabledSources);
   };
 
-  async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
+  async function callRemote(bridge: RemoteMcpBridge, tool: RegisteredTool, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
+    const name = tool.name;
     if (grant.smoke === true && !smokeMayCall(name, args)) {
       grant.results.push({ tool: name, outcome: 'refused' });
       return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
     }
-    const completion = remoteReadContract(bridge, name, args);
-    if (!completion) {
-      grant.results.push({ tool: name, outcome: 'refused' });
-      return text({
-        tool: name, outcome: 'refused',
-        result: { refused: 'Remote action tools are refused. Use the exact Jarvis action tool contract instead.' },
-      }, true);
-    }
-    const remoteTool = { name, completion, execution: { defaultEffect: 'read' as const } };
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     if (done.outcome === 'ok') {
-      const binding = completionEvidence(remoteTool, args, done.result);
-      const evidence = completionEvidence(grant.completion, remoteTool, args, done.result, grant.bindings);
+      const binding = completionEvidence(tool, args, done.result);
+      const evidence = completionEvidence(grant.completion, tool, args, done.result, grant.bindings);
       if (evidence) grant.evidence.push(evidence);
       else if (!((grant.completion.contextual || grant.completion.requiresTrustedContext) &&
           binding?.kind === 'retrieved')) grant.unverified.count += 1;
@@ -213,8 +228,8 @@ export function createPiMcpRoutes(options: {
           providerPrefixNeeded(input.query, azureToolPrefix)) {
         grant.azure.catalogue = 'not_configured';
       }
-      const remoteTools = catalogues.flatMap(({ bridge, tools }) =>
-        tools.filter(tool => remoteReadContract(bridge, tool.name, {}) !== undefined));
+      const remoteTools = catalogues.flatMap(({ bridge, tools }) => compileRemoteTools(bridge, tools));
+      for (const tool of remoteTools) grant.remoteTools.set(tool.name, tool);
       const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
@@ -292,8 +307,9 @@ export function createPiMcpRoutes(options: {
       if (azureRequested) grant.azure.attempts += 1;
       const bridge = bridges.find((candidate) => input.name.startsWith(candidate.prefix));
       const visibleRemote = grant.brain ? isWakeTool(input.name) : isCurrentAssistantTool(input.name) || isSituationActivationTool(input.name);
-      if (bridge && visibleRemote && grant.discovered.has(input.name)) {
-        return callRemote(bridge, input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
+      const remoteTool = grant.remoteTools.get(input.name);
+      if (bridge && visibleRemote && remoteTool && grant.discovered.has(input.name)) {
+        return callRemote(bridge, remoteTool, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
       }
       const tool = app.jarvisTools.get(input.name);
       const visible = tool && (grant.brain

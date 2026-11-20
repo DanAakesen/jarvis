@@ -232,13 +232,14 @@ function domainMatches(text: string): DomainMatch[] {
 
 const ignoredTargetWords = new Set([
   'a', 'am', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'but', 'by', 'can', 'could', 'did', 'do', 'does',
-  'for', 'from', 'get', 'give', 'got', 'has', 'have', 'hello', 'her', 'him', 'how', 'i', 'in', 'is', 'it',
+  'explain', 'for', 'from', 'get', 'give', 'got', 'has', 'have', 'hello', 'her', 'him', 'how', 'i', 'in', 'is', 'it',
   'its', 'latest', 'me', 'my', 'new', 'next', 'of', 'on', 'or', 'our', 'please', 'right', 'so', 'some',
   'that', 'the', 'their', 'them', 'then', 'there', 'this', 'to', 'today', 'tomorrow', 'was', 'we', 'what',
-  'when', 'where', 'which', 'who', 'will', 'with', 'would', 'you', 'your', 'yesterday', 'current', 'now', 'pm',
+  'when', 'where', 'which', 'who', 'why', 'will', 'with', 'would', 'you', 'your', 'yesterday', 'current', 'now', 'pm',
   'jeg', 'mig', 'min', 'mine', 'mit', 'du', 'dit', 'din', 'kan', 'vil', 'skal', 'det', 'den', 'de', 'der',
   'og', 'eller', 'på', 'til', 'fra', 'med', 'for', 'som', 'i', 'en', 'et', 'dag', 'idag', 'morgen', 'nu',
-  'ny', 'nye', 'næste', 'seneste', 'aktuel', 'aktuelle', 'venligst', 'hvad', 'hvilke', 'hvordan', 'kl',
+  'ny', 'nye', 'næste', 'seneste', 'aktuel', 'aktuelle', 'venligst', 'hvad', 'hvilke', 'hvor', 'hvornår',
+  'hvem', 'hvorfor', 'hvordan', 'kl', 'har', 'er', 'var', 'blev',
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
   'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december',
   'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag',
@@ -248,7 +249,8 @@ const ignoredTargetWords = new Set([
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
   'merge', 'approve', 'review', 'forward',
   'click', 'type', 'select', 'pin', 'unpin', 'rename', 'dispatch', 'deploy', 'trigger', 'scale', 'restart',
-  'find', 'check', 'fix', 'research', 'look', 'up', 'tjek', 'læs', 'søg', 'vis', 'opret', 'slet', 'gem', 'rediger', 'start',
+  'find', 'check', 'fix', 'research', 'look', 'up', 'tjek', 'læs', 'læse', 'læst', 'søg', 'se', 'vis',
+  'fortæl', 'fortælle', 'fortalt', 'sendt', 'sagt', 'opret', 'slet', 'gem', 'rediger', 'start',
   'calendar', 'agenda', 'appointment', 'meeting', 'event', 'email', 'gmail', 'inbox', 'mail', 'weather', 'forecast',
   'note', 'notes', 'task', 'tasks', 'todo', 'reminder', 'reminders', 'azure', 'github', 'repository', 'repositories',
   'issue', 'issues', 'pull', 'workflow', 'workflows', 'workspace', 'screen', 'window', 'panel', 'job', 'jobs',
@@ -256,10 +258,15 @@ const ignoredTargetWords = new Set([
   'credentials', 'login',
   'table', 'ticket', 'room', 'stay', 'reservation', 'hotel', 'flight', 'restaurant',
   'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'about',
-  'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated',
+  'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated', 'teach',
   'saying', 'says', 'tell', 'telling', 'called', 'named',
   'worker', 'workers', 'background', 'long-running',
-  'kalender', 'aftale', 'aftaler', 'møde', 'møder', 'indbakke', 'epost', 'vejr', 'noter', 'notat', 'opgave',
+  'down', 'up', 'slow', 'offline', 'online', 'outage', 'unavailable', 'available', 'healthy', 'unhealthy',
+  'working', 'broken', 'failed', 'failing', 'failure', 'changed', 'missing', 'stopped', 'pending', 'stale',
+  'nede', 'oppe', 'nedbrud', 'utilgængelig', 'tilgængelig', 'virker', 'fejler', 'fejlet', 'fejl', 'ændret',
+  'mangler', 'stoppet', 'afventer', 'forældet',
+  'kalender', 'kalenderen', 'kalenderaften', 'kalenderaftalen', 'aftale', 'aftalen', 'aftaler', 'møde',
+  'mødet', 'møder', 'indbakke', 'epost', 'e-mailen', 'vejr', 'noter', 'notat', 'opgave',
   'opgaver', 'pamindelse', 'pamindelser', 'ressource', 'ressourcer', 'lager', 'arbejdsgang', 'skærm',
   'pa', 'på', 'abn', 'åbn', 'abne', 'åbne',
 ].map(normalized));
@@ -445,6 +452,11 @@ function actionDomainsFor(matches: readonly DomainMatch[], text: string): readon
   return [...new Set(matches.map(({ domain }) => domain).filter(domain => actionPatterns[domain].test(text)))];
 }
 
+function externalLiveStateQuestion(text: string): boolean {
+  return domainMatches(text).length > 0 &&
+    /\b(?:down|up|slow|offline|online|outage|unavailable|available|healthy|unhealthy|working|broken|failed|failing|failure|status|changed|missing|stopped|pending|stale|nede|oppe|offline|online|nedbrud|utilgængelig|tilgængelig|virker|fejler|fejlet|fejl|ændret|mangler|stoppet|afventer|forældet)\b/iu.test(text);
+}
+
 function ordinaryConversation(text: string): boolean {
   if (!text) return true;
   if (/^(?:hi|hello|hej|hey)(?:[,! ]+\s*(?:how are you|how's it going|how are things))?[.!?]*$/iu.test(text) ||
@@ -453,7 +465,8 @@ function ordinaryConversation(text: string): boolean {
       /\b(?:joke|poem|story|haiku|essay|opinion|vittighed|digt|historie|historier|mening)\b/iu.test(text)) return true;
   if (/^(?:what (?:is|are)|what's|hvad er)\s+(?:an?|the definition of|definitionen på|et|en)\b/iu.test(text)) return true;
   if (/^(?:what is|what's|hvad er)\s+(?:email|mail|github|azure|weather|a weather forecast|health|a meeting|an issue)[.!?]*$/iu.test(text)) return true;
-  if (/^(?:explain|teach me|how does|how do|why does|why is|forklar|hvorfor)\b/iu.test(text) &&
+  if (/^(?:explain|teach me|how does|how do|why|forklar|hvorfor)\b/iu.test(text) &&
+      !externalLiveStateQuestion(text) &&
       !/\b(?:today|current|latest|now|status|my|mine|i dag|seneste|aktuel|min)\b/iu.test(text)) return true;
   if (/^(?:what do you think|what would you do|do you think|hvad tænker du)\b/iu.test(text)) return true;
   return false;
@@ -496,7 +509,7 @@ function operationForDomain(
 }
 
 function readIntent(value: string): boolean {
-  return /^(?:what|what's|when|where|who|which|how is|how's|show me|list|find|search|check|read|look up|look at|look for|do i have|hvad|hvilke|hvor|hvornår|hvem|vis mig|læs|læse|se|fortæl|søg|tjek|har jeg|har du|er|var|blev)\b/iu.test(value) ||
+  return /^(?:what|what's|when|where|who|which|why|how is|how's|show me|list|find|search|check|read|look up|look at|look for|do i have|hvad|hvilke|hvor|hvornår|hvem|hvorfor|vis mig|læs|læse|se|fortæl|fortælle|søg|tjek|har jeg|har du|er|var|blev)\b/iu.test(value) ||
     /^(?:latest|current|today|tomorrow|give me|tell me|summarise|summarize|recall)\b/iu.test(value) ||
     /^(?:how many|how much|is|are|was|were|did|does|has|have|had|do (?:i|you|we|they|he|she|it)|can (?:i|we|you)|kan jeg|må jeg)\b/iu.test(value);
 }
@@ -504,7 +517,7 @@ function readIntent(value: string): boolean {
 export function completionPlan(text: string): PiCompletionPlan {
   const value = withoutCourtesyPrefix(normalized(text));
   const contextual = /\b(?:it|itself|that|that one|this|this one|den|det|den der)\b/iu.test(value);
-  const readCued = readIntent(value);
+  const readCued = readIntent(value) || externalLiveStateQuestion(value);
   const runtimeTargetHashes = targetHashes(targetTerms(value).map(({ term }) => term));
   const runtimeOperation = readCued ? 'read' : operationFamily(value);
   if (ordinaryConversation(value) ||

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createToolRegistry, type JarvisTool } from '../core/tool-registry.js';
 import { createBrowserAgentModule } from '../core/browser-agent.js';
+import { coreModule } from '../core/index.js';
 import { createHtmlResearchModule } from '../core/research.js';
 import { createWorkspacesModule } from '../core/workspaces.js';
 import { factoryModule } from '../factory/index.js';
@@ -23,6 +24,7 @@ const healthModules = () => createHealthModules(
   {} as never,
 );
 const completionModules = () => [
+  coreModule,
   createGoogleModule({} as never, { timeZone: 'Europe/Copenhagen' }),
   createPcBridgeModule(),
   createBrowserAgentModule({} as never),
@@ -133,15 +135,22 @@ describe('PI completion planning', () => {
     for (const question of [
       'Kan du venligst læse e-mailen fra Alice?',
       'Kan du se kalenderaftalen?',
+      'Kan du fortælle mig hvad kalenderen viser?',
       'Hvor mange e-mails har jeg?',
       'Har du sendt e-mailen til Alice?',
       'Er kalenderaftalen ændret?',
       'Hvad stod der i den?',
+      'Why is Azure down?',
+      'Explain why Azure is down.',
+      'Hvorfor fejler GitHub?',
     ]) {
       expect(completionPlan(question)).toMatchObject({
         kind: question === 'Hvad stod der i den?' ? 'conversation' : 'retrieved',
       });
     }
+    expect(completionPlan('Why is Azure down?').requirements[0]).toMatchObject({
+      domain: 'azure', operation: 'read', kind: 'retrieved', targetHashes: [],
+    });
     const asked = completionPlan('Did I send Alice an email?');
     expect(completionEvidence(
       asked,
@@ -397,6 +406,33 @@ describe('PI completion receipts', () => {
       { credential: 'shown-once', id: 'abcdef123456', label: 'iPhone', scope: 'write' },
     )).toMatchObject({ operation: 'create', domain: 'settings' });
 
+    expect(completionEvidence(
+      action('manage_model_deployment'),
+      { action: 'create', model: 'gpt-6', version: '2026-11', sku: 'GlobalStandard', capacity: 1 },
+      { status: 'accepted', name: 'gpt-6-2026-11', model: 'gpt-6', version: '2026-11' },
+    )).toMatchObject({ operation: 'create', domain: 'settings' });
+
+    const mealPreference = action('health_nutrition_history');
+    expect(mealPreference.completion?.evaluate(
+      { operation: 'set_meal_preference', mealKey: 'favorite:1', preference: 'like' },
+      { status: 'unchanged', mealKey: 'favorite:1', preference: 'like' },
+    )).toBe(true);
+    expect(completionEvidence(
+      mealPreference,
+      { operation: 'set_meal_preference', mealKey: 'favorite:1', preference: 'like' },
+      { status: 'unchanged', mealKey: 'favorite:1', preference: 'like' },
+    )).toMatchObject({ operation: 'update', domain: 'health' });
+    expect(completionEvidence(
+      action('health_nutrition_targets'),
+      { operation: 'set_targets', targets: { proteinGrams: 180 } },
+      { status: 'unchanged', targets: { proteinGrams: 180 } },
+    )).toMatchObject({ operation: 'update', domain: 'health' });
+    expect(completionEvidence(
+      action('health_saved_food'),
+      { operation: 'save_plan', name: 'Weekday plan', entries: [] },
+      { status: 'already-applied', operation: 'save_plan', record: { id: 'plan-1' } },
+    )).toMatchObject({ operation: 'create', domain: 'health' });
+
     const click = completionPlan('Click Checkout on my PC.');
     const snapshot = completionEvidence(
       click,
@@ -408,14 +444,14 @@ describe('PI completion receipts', () => {
       click,
       action('pc_browser_act'),
       { tabId: 'tab-1', snapshotId: 'snapshot-1', elementIndex: 2, action: 'click' },
-      { clicked: true },
+      { acted: true, action: 'click' },
       snapshot ? [snapshot] : [],
     )).toMatchObject({ operation: 'update', domain: 'pc' });
     expect(completionEvidence(
       click,
       action('pc_browser_act'),
       { tabId: 'tab-1', snapshotId: 'snapshot-1', elementIndex: 2, action: 'click' },
-      { typed: true },
+      { acted: true, action: 'type' },
       snapshot ? [snapshot] : [],
     )).toBeUndefined();
   });

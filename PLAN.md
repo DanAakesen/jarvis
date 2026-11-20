@@ -119,7 +119,7 @@ Completion means the existing PI activation envelope and one background queue ow
 | Decouple GPT-Live playback cancellation from PI work and preserve exact turn authority under concurrent proactive chat | Done |
 | Keep unrestricted owner actions, target-bound deletion checks and separate foreground/proactive budgets | Done |
 | Update focused tests and PI/product/architecture/agent/decision documentation, including review regressions for same-kind, partial/cancelled, cold-provider and issue-only evidence | Done |
-| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after round-four review: build and lint pass, 60 files / 692 backend tests pass |
+| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after final review follow-up: build and lint pass, 60 files / 693 backend tests pass |
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

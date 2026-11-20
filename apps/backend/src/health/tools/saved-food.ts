@@ -48,7 +48,7 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
         : args.operation === 'delete_plan' ? 'delete'
           : args.operation === 'save_favorite' || args.operation === 'save_plan' ? 'create' : 'update',
       requestTargetFields: ['operation', 'name', 'id', 'favoriteId'],
-      resultTargetFields: ['status', 'after', 'id'], evaluate: receipt.healthWrite,
+      resultTargetFields: ['status', 'operation', 'record', 'after', 'id'], evaluate: receipt.healthWrite,
     },
     description: 'Read owned saved food by exact name/alias (lookup_saved) or canonical favourite preferences (read_preferences). Save favourite/aliases from an owned intake or a proposed definition; save a plan from owned favourites; soft-delete a plan; set like/dislike/null feedback on an exact favourite. Reads need no review; requested mutations execute without another approval. Read current revisions first (0 means new); plans require one breakfast, lunch and dinner. Never supply operation IDs, owners, confidence, provenance or confirmation flags. Writes require a current verified chat/browser-voice source; no phone or Teams. Definitions/plans/preferences never log intake or export Health. Keep the same source and revision on retry.',
     inputSchema: internalSavedInputSchema,

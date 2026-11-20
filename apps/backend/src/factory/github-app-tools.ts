@@ -625,10 +625,17 @@ function makeOperationTool(
             operation: (args: Record<string, unknown>) => {
               if (args.operation === 'file_write') return args.sha === undefined ? 'create' as const : 'update' as const;
               if (args.operation === 'workflow_dispatch' || args.operation === 'workflow_rerun') return 'start' as const;
+              if (args.operation === 'pr_ready') return 'update' as const;
               return semanticOperation(args.operation);
             },
-            requestTargetFields: ['operation', 'repository', 'number', 'branch', 'path', 'workflow'],
-            resultTargetFields: ['repository', 'number', 'branch', 'path', 'sha', 'runId', 'url'],
+            requestTargetFields: [
+              'operation',
+              ...new Set(definitions.flatMap(definition => Object.keys(definition.properties))),
+            ],
+            resultTargetFields: [
+              'repository', 'number', 'branch', 'path', 'sha', 'runId', 'url', 'name',
+              'ref', 'title', 'state', 'reviewId', 'color',
+            ],
             evaluate: receipt.githubWrite,
           },
         }

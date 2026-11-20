@@ -39,7 +39,8 @@ export function semanticOperation(value: unknown): ToolCompletionOperation {
   if (/\b(?:send|sende|email|forward|reply|comment|mail|svar|besvar)\b/iu.test(text)) return 'send';
   if (/\b(?:open|launch|focus|show|activate|abn|abne|vis|fokus)\b/iu.test(text)) return 'open';
   if (/\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|start|kør)\b/iu.test(text)) return 'start';
-  if (/\b(?:create|issue|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|draft|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu.test(text)) return 'create';
+  if (/^issue\b/iu.test(text) ||
+      /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|draft|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu.test(text)) return 'create';
   if (/\b(?:update|change|edit|move|reschedule|complete|reopen|pause|pin|unpin|set|label|mark|merge|approve|review|rename|click|type|select|opdater|rediger|flyt|færdiggør|sammenføj)\b/iu.test(text)) return 'update';
   if (/\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu.test(text)) return 'read';
   return 'generic';
@@ -92,6 +93,156 @@ export function durableTerminal(result: unknown): boolean {
   return durableActive(result) || durableCancelled(result);
 }
 
+function nestedValue(
+  value: unknown,
+  keys: readonly string[],
+  depth = 0,
+): unknown {
+  if (depth > 5) return undefined;
+  if (Array.isArray(value)) {
+    for (const child of value) {
+      const found = nestedValue(child, keys, depth + 1);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (!isRecord(value)) return undefined;
+  for (const key of keys) {
+    const found = value[key];
+    if (found !== undefined && (typeof found === 'string' || typeof found === 'number' ||
+        typeof found === 'boolean')) return found;
+  }
+  for (const child of Object.values(value)) {
+    const found = nestedValue(child, keys, depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+const remoteIdentityAliases = [
+  [['id'], ['id']],
+  [['number', 'issue', 'issue_number', 'issueNumber', 'pull_number', 'pullNumber'],
+    ['number', 'issue', 'issue_number', 'issueNumber', 'pull_number', 'pullNumber']],
+  [['taskId', 'task_id'], ['taskId', 'task_id', 'id']],
+  [['jobId', 'job_id', 'runId', 'run_id'], ['jobId', 'job_id', 'runId', 'run_id', 'id']],
+  [['path'], ['path']],
+  [['repository', 'repo'], ['repository', 'repo']],
+  [['owner'], ['owner']],
+  [['branch', 'ref'], ['branch', 'ref']],
+  [['workflow'], ['workflow']],
+  [['name'], ['name']],
+  [['resourceId', 'resource_id'], ['resourceId', 'resource_id', 'id']],
+  [['resourceGroup'], ['resourceGroup']],
+  [['resourceName'], ['resourceName']],
+  [['sha'], ['sha']],
+] as const;
+
+function remoteIdentity(result: unknown): boolean {
+  return nestedValue(result, [
+    'id', 'number', 'issueNumber', 'issue_number', 'pullNumber', 'pull_number', 'taskId',
+    'jobId', 'runId', 'sha', 'commit', 'url', 'html_url', 'path', 'branch', 'ref',
+  ]) !== undefined;
+}
+
+function remoteDeleteTargetConfirmed(
+  args: Record<string, unknown>,
+  result: unknown,
+): boolean {
+  let compared = 0;
+  for (const [requestKeys, resultKeys] of remoteIdentityAliases) {
+    const requested = requestKeys.map(key => args[key]).find(value =>
+      typeof value === 'string' || typeof value === 'number');
+    if (requested === undefined) continue;
+    const returned = nestedValue(result, resultKeys);
+    if (returned === undefined) continue;
+    compared += 1;
+    if (normalizeCompletionText(String(requested)) !== normalizeCompletionText(String(returned))) return false;
+  }
+  if (compared === 0) return false;
+  if (!isRecord(result)) return false;
+  const state = normalizeCompletionText(String(result.status ?? result.state ?? result.outcome ?? ''));
+  return result.deleted === true || result.removed === true || result.closed === true ||
+    result.archived === true ||
+    ['deleted', 'removed', 'closed', 'archived', 'completed', 'done', 'success', 'succeeded'].includes(state);
+}
+
+export function remoteTerminalReceipt(
+  operation: ToolCompletionOperation,
+  args: Record<string, unknown>,
+  result: unknown,
+): boolean {
+  if (operation === 'read') return isPositiveResult(result) && !terminalFailure(result);
+  if (terminalFailure(result)) return false;
+  if (operation === 'delete') return remoteDeleteTargetConfirmed(args, result);
+  if (!isRecord(result) && typeof result !== 'string') return false;
+  const state = normalizeCompletionText(String(isRecord(result)
+    ? result.status ?? result.state ?? result.outcome ?? result.conclusion ?? ''
+    : result));
+  const genericTerminal = [
+    'accepted', 'completed', 'done', 'ok', 'succeeded', 'success',
+  ];
+  const terminal = operation === 'create'
+    ? [...genericTerminal, 'created', 'opened', 'written'].includes(state)
+    : operation === 'update'
+      ? [...genericTerminal, 'approved', 'closed', 'merged', 'ready', 'reviewed', 'updated', 'written'].includes(state)
+      : operation === 'send'
+        ? [...genericTerminal, 'commented', 'reviewed', 'sent'].includes(state)
+        : operation === 'start'
+          ? [...genericTerminal, 'dispatched', 'queued', 'running', 'scheduled', 'started'].includes(state)
+          : operation === 'open'
+            ? [...genericTerminal, 'opened'].includes(state)
+            : genericTerminal.includes(state);
+  const explicitWriteStates = [
+    'accepted', 'archived', 'closed', 'commented', 'created', 'deleted', 'dispatched', 'merged',
+    'opened', 'removed', 'reviewed', 'sent', 'started', 'updated', 'written',
+  ];
+  if (state && explicitWriteStates.includes(state) && !terminal) return false;
+  if (isRecord(result) && (
+    operation === 'create' && (result.updated === true || result.deleted === true ||
+      result.removed === true || result.closed === true) ||
+    operation === 'update' && (result.created === true || result.deleted === true ||
+      result.removed === true) ||
+    operation === 'start' && (result.deleted === true || result.updated === true) ||
+    operation === 'send' && (result.deleted === true || result.removed === true)
+  )) return false;
+  if (operation === 'open') {
+    return isRecord(result) && (result.opened === true || typeof result.url === 'string') ||
+      terminal;
+  }
+  if (operation === 'start') {
+    if (!isPositiveResult(result)) return false;
+    return remoteIdentity(result) || terminal;
+  }
+  if (operation === 'send') {
+    if (!isPositiveResult(result)) return false;
+    if (!isRecord(result)) return terminal;
+    return remoteIdentity(result) || terminal || result.sent === true || result.commented === true;
+  }
+  return remoteIdentity(result) || terminal;
+}
+
+function healthWriteReceipt(args: Record<string, unknown>, result: unknown): boolean {
+  if (!isRecord(result) || terminalFailure(result)) return false;
+  if (result.created === true || result.updated === true || result.deleted === true ||
+      result.saved === true || result.persisted === true || completed(result)) return true;
+  if (typeof result.status === 'string' &&
+      ['committed', 'already-applied', 'already-deleted'].includes(normalizeCompletionText(result.status))) {
+    return result.status === 'committed' ||
+      result.operation === args.operation && isRecord(result.record);
+  }
+  if (result.status === 'unchanged') {
+    if (args.mealKey !== undefined) {
+      return result.mealKey === args.mealKey && Object.is(result.preference, args.preference);
+    }
+    if (isRecord(args.targets) && isRecord(result.targets)) {
+      const currentTargets = result.targets;
+      return Object.entries(args.targets).every(([key, value]) => Object.is(currentTargets[key], value));
+    }
+    return false;
+  }
+  return isRecord(result.entry) && typeof result.entry.id === 'string';
+}
+
 export const receipt = {
   read: (_args: Record<string, unknown>, result: unknown) => isPositiveResult(result),
   completed: (_args: Record<string, unknown>, result: unknown) => completed(result),
@@ -137,14 +288,7 @@ export const receipt = {
   repository: (_args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && (result.alreadyAdded === true ||
       isRecord(result.project) && typeof result.project.id === 'string'),
-  healthWrite: (_args: Record<string, unknown>, result: unknown) =>
-    isRecord(result) && !terminalFailure(result) && (
-      result.created === true || result.updated === true || result.deleted === true ||
-      result.saved === true || result.persisted === true || completed(result) ||
-      typeof result.status === 'string' &&
-        ['committed', 'already-applied', 'already-deleted'].includes(normalizeCompletionText(result.status)) ||
-      isRecord(result.entry) && typeof result.entry.id === 'string'
-    ),
+  healthWrite: healthWriteReceipt,
   inboxCapture: (_args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && typeof result.id === 'string' && typeof result.path === 'string' &&
       typeof result.created === 'boolean',
@@ -158,8 +302,12 @@ export const receipt = {
       typeof result.category === 'string',
   jobCancel: (_args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && typeof result.cancelled === 'string',
-  modelDeployment: (args: Record<string, unknown>, result: unknown) =>
-    isRecord(result) && result.status === 'accepted' && result.name === args.name,
+  modelDeployment: (args: Record<string, unknown>, result: unknown) => {
+    if (!isRecord(result) || result.status !== 'accepted' || typeof result.name !== 'string') return false;
+    if (args.action === 'delete') return result.name === args.name;
+    return args.action === 'create' && typeof args.model === 'string' &&
+      typeof args.version === 'string' && result.name === `${args.model}-${args.version}`;
+  },
   preferenceUpdate: (args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && args.operation === 'update' &&
       result.confirmation === 'Proactive preferences saved.',
@@ -185,9 +333,7 @@ export const receipt = {
     isRecord(result) && result.written === true,
   pcBrowserAct: (args: Record<string, unknown>, result: unknown) => {
     if (!isRecord(result)) return false;
-    if (args.action === 'click') return result.clicked === true;
-    if (args.action === 'type' || args.action === 'type_focused') return result.typed === true;
-    return result.completed === true;
+    return result.acted === true && result.action === args.action;
   },
   browserTask: (_args: Record<string, unknown>, result: unknown) =>
     isRecord(result) && result.status === 'completed',

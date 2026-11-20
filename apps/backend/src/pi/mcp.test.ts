@@ -9,7 +9,7 @@ import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
 import { createRemoteMcpBridge, type RemoteMcpBridge } from './remote-mcp.js';
 import type { PiSituationService } from './situation.js';
-import { completionPlan } from './completion.js';
+import { completionEvidence, completionPlan } from './completion.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -208,7 +208,7 @@ describe('PI MCP server', () => {
     expect(recorded).toContainEqual({ messageId: '42', tool: exact });
   });
 
-  it('refuses remote action names before invoking a provider without a co-located contract', async () => {
+  it('compiles and executes eligible remote actions through the registry contract', async () => {
     let calls = 0;
     const bridge: RemoteMcpBridge = {
       prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
@@ -219,16 +219,90 @@ describe('PI MCP server', () => {
         moduleId: 'github',
         execute: async () => ({}),
       }],
-      call: async () => { calls += 1; return { outcome: 'ok', result: {} }; },
+      call: async () => {
+        calls += 1;
+        return { outcome: 'ok', result: { number: 1967, status: 'updated' } };
+      },
     };
     const { registry, tool } = setup([bridge]);
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Update GitHub issue 1967.');
     await tool('find_tools', { turn: grant.turn, query: 'github issue update' });
+    const remote = grant.remoteTools.get('gh_issue_update');
+    expect(remote?.completion?.operation).toBeTypeOf('function');
+    expect(typeof remote?.completion?.operation === 'function'
+      ? remote.completion.operation({ number: 1967 })
+      : remote?.completion?.operation).toBe('update');
+    expect(remote?.completion?.evaluate(
+      { number: 1967 },
+      { number: 1967, status: 'updated' },
+    )).toBe(true);
+    expect(completionEvidence(
+      remote!,
+      { number: 1967 },
+      { number: 1967, status: 'updated' },
+    )).toBeDefined();
+    expect(grant.completion.requirements).toEqual([
+      expect.objectContaining({ domain: 'github', operation: 'update' }),
+    ]);
+    expect(completionEvidence(
+      grant.completion,
+      remote!,
+      { number: 1967 },
+      { number: 1967, status: 'updated' },
+    )).toBeDefined();
     const result = await tool('call_tool', {
       turn: grant.turn, name: 'gh_issue_update', arguments: { number: 1967 },
     });
-    expect(result.body).toMatchObject({ outcome: 'refused' });
-    expect(calls).toBe(0);
+    expect(result.body).toMatchObject({ outcome: 'ok' });
+    expect(calls).toBe(1);
+    expect(grant.unverified.count).toBe(0);
+    expect(grant.evidence).toMatchObject([{
+      executionId: 'remote:gh_:gh_issue_update',
+      tool: 'gh_issue_update',
+      kind: 'committed',
+      domain: 'github',
+      operation: 'update',
+    }]);
+  });
+
+  it('binds remote delete receipts to the exact requested target', async () => {
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [{
+        name: 'gh_issue_delete',
+        description: 'Delete an issue.',
+        inputSchema: {
+          type: 'object',
+          properties: { number: { type: 'integer' } },
+          required: ['number'],
+          additionalProperties: false,
+        },
+        moduleId: 'github',
+        execute: async () => ({}),
+      }],
+      call: async (_name, args) => ({
+        outcome: 'ok',
+        result: { deleted: true, number: args.number },
+      }),
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Delete GitHub issue 42.');
+    await tool('find_tools', { turn: grant.turn, query: 'github issue delete' });
+    await tool('call_tool', {
+      turn: grant.turn, name: 'gh_issue_delete', arguments: { number: 42 },
+    });
+    expect(grant.evidence).toMatchObject([{
+      executionId: 'remote:gh_:gh_issue_delete',
+      operation: 'delete',
+      kind: 'committed',
+    }]);
+    await tool('call_tool', {
+      turn: grant.turn, name: 'gh_issue_delete', arguments: { number: 43 },
+    });
+    expect(grant.evidence).toHaveLength(1);
+    expect(grant.unverified.count).toBe(1);
   });
 
   it('records only a terminal receipt bound to the classified tool arguments and target', async () => {
