@@ -3,8 +3,8 @@ import { databaseReadRequest } from './wake-retry.js';
 import {
   PI_SITUATION_SCHEMA_VERSION,
   freshnessFor,
-  parsePiSituationState,
   piSituationHash,
+  sanitizeLegacyPiSituationState,
   sourceRefsFor,
   staleReasonsFor,
   PiSituationError,
@@ -29,34 +29,43 @@ interface SituationRow {
 
 const date = (value: Date | string): Date => value instanceof Date ? value : new Date(value);
 
-function toRecord(row: SituationRow): PiSituationRecord {
-  let state: ReturnType<typeof parsePiSituationState>;
+function decodeRow(row: SituationRow): {
+  readonly record: PiSituationRecord;
+  readonly originalState: PiSituationRecord['state'];
+  readonly changed: boolean;
+} {
+  let decoded: ReturnType<typeof sanitizeLegacyPiSituationState>;
   try {
-    state = parsePiSituationState(JSON.parse(row.state_json));
+    decoded = sanitizeLegacyPiSituationState(JSON.parse(row.state_json));
   } catch (error) {
     if (error instanceof PiSituationError) {
       throw new PiSituationError('unavailable', 'The stored PI situational state is invalid. No replacement was invented.');
     }
     throw error;
   }
-  if (row.schema_version !== PI_SITUATION_SCHEMA_VERSION || row.content_hash.trim() !== piSituationHash(state)) {
+  if (row.schema_version !== PI_SITUATION_SCHEMA_VERSION ||
+      row.content_hash.trim() !== piSituationHash(decoded.original)) {
     throw new PiSituationError('unavailable', 'The stored PI situational state hash is invalid. No replacement was invented.');
   }
   return {
-    owner: row.owner_object_id.toLowerCase(),
-    revision: Number(row.revision),
-    state,
-    hash: row.content_hash.trim(),
-    asOf: date(row.as_of_at),
-    updatedAt: date(row.updated_at),
-    lastActivation: row.last_activation_id && row.last_activation_type && row.last_activation_at
-      ? {
-        id: row.last_activation_id.toLowerCase(),
-        type: row.last_activation_type,
-        source: row.last_activation_source,
-        at: date(row.last_activation_at),
-      }
-      : null,
+    record: {
+      owner: row.owner_object_id.toLowerCase(),
+      revision: Number(row.revision),
+      state: decoded.state,
+      hash: row.content_hash.trim(),
+      asOf: date(row.as_of_at),
+      updatedAt: date(row.updated_at),
+      lastActivation: row.last_activation_id && row.last_activation_type && row.last_activation_at
+        ? {
+          id: row.last_activation_id.toLowerCase(),
+          type: row.last_activation_type,
+          source: row.last_activation_source,
+          at: date(row.last_activation_at),
+        }
+        : null,
+    },
+    originalState: decoded.original,
+    changed: decoded.changed,
   };
 }
 
@@ -81,7 +90,74 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         `${select} WHERE owner_object_id=@owner;`,
         signal,
       );
-      return recordset[0] ? toRecord(recordset[0]) : null;
+      const row = recordset[0];
+      if (!row) return null;
+      const decoded = decodeRow(row);
+      if (!decoded.changed) return decoded.record;
+
+      signal.throwIfAborted();
+      const transaction = new sql.Transaction(pool);
+      let activeRequest: sql.Request | undefined;
+      const cancel = () => activeRequest?.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        await transaction.begin();
+        activeRequest = new sql.Request(transaction);
+        const locked = await activeRequest
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<SituationRow>(`${select}
+            WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id=@owner;`);
+        activeRequest = undefined;
+        const current = locked.recordset[0];
+        if (!current) {
+          await transaction.commit();
+          return null;
+        }
+        const safe = decodeRow(current);
+        const safeHash = piSituationHash(safe.record.state);
+        if (!safe.changed) {
+          await transaction.commit();
+          return safe.record;
+        }
+        const revision = safe.record.revision + 1;
+        const migratedAt = new Date();
+        const request = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('expectedRevision', sql.BigInt, safe.record.revision)
+          .input('expectedHash', sql.Char(64), current.content_hash.trim())
+          .input('revision', sql.BigInt, revision)
+          .input('state', sql.NVarChar(sql.MAX), JSON.stringify(safe.record.state))
+          .input('hash', sql.Char(64), safeHash)
+          .input('refs', sql.NVarChar(sql.MAX), JSON.stringify(sourceRefsFor(safe.record.state)))
+          .input('freshness', sql.NVarChar(sql.MAX), JSON.stringify(freshnessFor(safe.record.state)))
+          .input('reasons', sql.NVarChar(sql.MAX), JSON.stringify(staleReasonsFor(safe.record.state)))
+          .input('updatedAt', sql.DateTime2, migratedAt);
+        activeRequest = request;
+        const migrated = await request.query<SituationRow>(`UPDATE dbo.pi_situational_state
+          SET revision=@revision, state_json=@state, content_hash=@hash,
+            source_refs_json=@refs, freshness_json=@freshness, stale_reasons_json=@reasons,
+            updated_at=@updatedAt
+          OUTPUT INSERTED.owner_object_id, INSERTED.schema_version, INSERTED.revision,
+            INSERTED.state_json, INSERTED.content_hash, INSERTED.last_activation_id,
+            INSERTED.last_activation_type, INSERTED.last_activation_source,
+            INSERTED.last_activation_at, INSERTED.as_of_at, INSERTED.updated_at
+          WHERE owner_object_id=@owner
+            AND revision=@expectedRevision
+            AND content_hash=@expectedHash;`);
+        activeRequest = undefined;
+        const migratedRow = migrated.recordset[0];
+        if (!migratedRow) {
+          throw new PiSituationError('conflict', 'Situational state changed during credential migration.');
+        }
+        const migratedRecord = decodeRow(migratedRow);
+        await transaction.commit();
+        return migratedRecord.record;
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve migration error. */ }
+        throw error;
+      } finally {
+        signal.removeEventListener('abort', cancel);
+      }
     },
     async commit(input, signal) {
       signal.throwIfAborted();

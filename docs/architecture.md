@@ -5838,6 +5838,14 @@ unsafe rows before the embedding call and persists a `credential` quarantine
 through migration `0092_memory_embedding_quarantine.sql`; subsequent passes
 exclude quarantined rows, and a corrected safe revision clears the marker.
 
+`pi_situational_state.state_json` is read with a structural parser first. A
+row written under the old token policy may be decoded, checked against its old
+hash, sanitised across summary, refs, facts and follow-ups, then atomically
+rewritten with a new revision/hash and fresh derived JSON before any Chat,
+Voice or background activation is opened. A normal strict commit still rejects
+new credentials; this read migration is one-time repair, not a permissive
+runtime fallback.
+
 Settings corrections are explicit owner actions, so sensitive health or
 financial text is allowed subject to the credential rule; only automatic
 capture applies the broader sensitive-data restriction. On iOS, Memory page

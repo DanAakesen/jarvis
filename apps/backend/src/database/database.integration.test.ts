@@ -14,6 +14,10 @@ import { parsePiSituationState } from '../pi/situation.js';
 import { sourceIds } from '../proactive/types.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 import { createMemoryStore } from './memory-store.js';
+import { createMemoryProactiveStore } from '../proactive/store.js';
+import { createPiActivationService } from '../pi/activation.js';
+import { createPiSituationService, piSituationHash } from '../pi/situation.js';
+import { createPiTurnRegistry } from '../pi/turns.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -409,6 +413,87 @@ describe('real SQL Server migration contract', () => {
         expect(await situations.read(owner, signal)).toMatchObject({
           revision: 1, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
         });
+
+        const legacy = structuredClone(situation);
+        legacy.summary = 'Legacy bearerToken=fixture-secret';
+        legacy.summaryRefIds = ['memory:legacy'];
+        legacy.sources.find(({ id }) => id === 'memory')!.state = 'fresh';
+        legacy.sources.find(({ id }) => id === 'memory')!.observedAt = at.toISOString();
+        legacy.sources.find(({ id }) => id === 'memory')!.refIds = ['memory:legacy'];
+        legacy.refs.push({
+          id: 'memory:legacy',
+          source: 'memory',
+          identity: 'memory:legacy',
+          label: 'githubApiTokenValue',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        });
+        legacy.facts.push({
+          id: 'fact:legacy-memory',
+          source: 'memory',
+          refIds: ['memory:legacy'],
+          text: 'auth_token=fixture-secret',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+          stale: false,
+        });
+        legacy.followUps.push({
+          id: 'follow:legacy-memory',
+          text: 'Remember the api_token=fixture-secret.',
+          dueAt: null,
+          refIds: ['memory:legacy'],
+        });
+        const legacyHash = piSituationHash(legacy);
+        await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('state', sql.NVarChar(sql.MAX), JSON.stringify(legacy))
+          .input('hash', sql.Char(64), legacyHash)
+          .query(`UPDATE dbo.pi_situational_state
+            SET state_json=@state, content_hash=@hash
+            WHERE owner_object_id=@owner;`);
+
+        const proactive = createMemoryProactiveStore(owner);
+        const situationService = createPiSituationService({
+          owner,
+          store: situations,
+          proactive,
+          sources: [],
+          now: () => at,
+        });
+        const registry = createPiTurnRegistry();
+        const activations = createPiActivationService({ registry, situation: situationService });
+        for (const [type, source] of [
+          ['chat', 'chat'],
+          ['voice', 'voice'],
+          ['scheduled', 'timer'],
+        ] as const) {
+          const started = await activations.begin({
+            type,
+            source,
+            ownerObjectId: owner,
+            sessionId: `session-${type}`,
+            messageId: type === 'scheduled' ? '' : `message-${type}`,
+            signal,
+          });
+          expect(started.context).not.toContain('api_token');
+          expect(started.context).not.toContain('auth_token');
+          expect(started.context).not.toContain('bearerToken');
+          expect(started.context).not.toContain('githubApiTokenValue');
+          registry.close(started.grant.turn);
+        }
+        const migratedRow = await pool.request()
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<{ revision: string; state_json: string; content_hash: string }>(
+            `SELECT revision, state_json, content_hash
+              FROM dbo.pi_situational_state WHERE owner_object_id=@owner;`,
+          );
+        const migratedState = JSON.parse(migratedRow.recordset[0]!.state_json) as ReturnType<typeof parsePiSituationState>;
+        expect(Number(migratedRow.recordset[0]!.revision)).toBe(2);
+        expect(migratedRow.recordset[0]!.content_hash.trim()).toBe(piSituationHash(migratedState));
+        expect(migratedState.summary).toBe('');
+        expect(migratedState.refs.some(({ source }) => source === 'memory')).toBe(false);
+        expect(migratedState.facts.some(({ source }) => source === 'memory')).toBe(false);
+        expect(migratedState.followUps.some(({ id }) => id === 'follow:legacy-memory')).toBe(false);
         await expect(situations.commit({
           owner, expectedRevision: 0, expectedHash: null, state: situation,
           activation: { ...activation, id: randomUUID() },

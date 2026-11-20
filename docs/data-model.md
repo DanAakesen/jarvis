@@ -794,6 +794,7 @@ P7-40 continues to own notes, tasks and documents in the GitHub Vault.
 | `memory_history` | Previous values and their exclusive conversation/Settings provenance; deleting a memory cascades only to its versions |
 | `memory_deletions` | Content-free audit of the memory ID and exact conversation or Settings action that requested forgetting; no FK to the deleted memory |
 | `memories.embedding_quarantined_at/reason` | Durable marker added by migration `0092`; credential-like legacy rows are excluded from embedding backfill until a safe correction clears the marker |
+| `pi_situational_state` legacy state_json | A store read structurally validates the old JSON/hash, sanitises credential-bearing content with the current Memory policy and atomically rewrites state_json, hash, derived JSON and revision before use |
 | `messages.source_item_id` | Nullable provider transcript item identifier used to resolve a voice tool call to the saved Dan transcript; indexed only when non-null |
 
 Personal Memory searches and list/history pages are bounded and join only Dan source

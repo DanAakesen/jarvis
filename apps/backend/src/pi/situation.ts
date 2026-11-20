@@ -170,16 +170,20 @@ export interface PiSituationService {
 
 const jsonBytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value), 'utf8');
 
-export function parsePiSituationState(value: unknown): PiSituationState {
+function parsePiSituationStructure(value: unknown): PiSituationState {
   const result = schema.safeParse(value);
-  const serialized = JSON.stringify(result.success ? result.data : value);
-  if (!result.success || jsonBytes(result.data) > PI_SITUATION_MAX_BYTES || hasCredentialMarker(serialized)) {
-    const code = hasCredentialMarker(typeof value === 'string' ? value : JSON.stringify(value)) ? 'redacted' : 'invalid';
-    throw new PiSituationError(code, code === 'redacted'
-      ? 'Secrets and credentials cannot be stored in situational state.'
-      : 'The situational state did not match the bounded schema.');
+  if (!result.success || jsonBytes(result.data) > PI_SITUATION_MAX_BYTES) {
+    throw new PiSituationError('invalid', 'The situational state did not match the bounded schema.');
   }
   return result.data;
+}
+
+export function parsePiSituationState(value: unknown): PiSituationState {
+  const state = parsePiSituationStructure(value);
+  if (hasCredentialMarker(JSON.stringify(state))) {
+    throw new PiSituationError('redacted', 'Secrets and credentials cannot be stored in situational state.');
+  }
+  return state;
 }
 
 export function piSituationHash(state: PiSituationState): string {
@@ -246,6 +250,17 @@ function credentialSafeState(state: PiSituationState): PiSituationState {
       !hasCredentialMarker(JSON.stringify(followUp)) &&
       followUp.refIds.every((value) => refIds.has(value))),
   };
+}
+
+/** One-time read adapter for rows written before the stricter Memory credential classifier. */
+export function sanitizeLegacyPiSituationState(value: unknown): {
+  readonly original: PiSituationState;
+  readonly state: PiSituationState;
+  readonly changed: boolean;
+} {
+  const original = parsePiSituationStructure(value);
+  const state = parsePiSituationState(credentialSafeState(original));
+  return { original, state, changed: JSON.stringify(original) !== JSON.stringify(state) };
 }
 
 function sourceState(status: SourceStatus | undefined, now: Date, settings: ProactiveSettings):
