@@ -114,10 +114,12 @@ export function createSourceChangePoller(options: {
   observe?: (source: SourceId, result: SourceResult, signal: AbortSignal) => Promise<{
     readonly changed: boolean;
     readonly baseline: boolean;
+    readonly admissible: boolean;
   }>;
 }) {
   const seen = new Set<string>();
   const baselined = new Set<string>();
+  const disabled = new Set<string>();
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let polling: Promise<void> | undefined;
@@ -143,6 +145,7 @@ export function createSourceChangePoller(options: {
     const observation = options.observe
       ? await options.observe(source.id, result, timeout)
       : undefined;
+    if (observation?.admissible === false) return;
     if (source.id !== 'mail' && source.id !== 'calendar') {
       if (observation?.changed && !observation.baseline &&
           (result.state !== 'ok' || observationEventSources.has(source.id))) {
@@ -199,6 +202,15 @@ export function createSourceChangePoller(options: {
   async function poll() {
     if (options.allowed && !await options.allowed()) return;
     const settings = await options.settings();
+    for (const source of options.sources) {
+      if (!settings.sources[source.id]) {
+        disabled.add(source.id);
+      } else if (disabled.delete(source.id)) {
+        for (const key of seen) {
+          if (key.startsWith(`${source.id}:`)) seen.delete(key);
+        }
+      }
+    }
     const enabled = options.sources.filter((source) =>
       !settings.paused && settings.sources[source.id] &&
       (source.id === 'mail' || source.id === 'calendar' || options.observe !== undefined));

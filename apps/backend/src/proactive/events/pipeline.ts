@@ -118,7 +118,7 @@ export function createEventPipeline(options: EventPipelineOptions) {
     if (claimed.length === BATCH_SIZE) wake(current);
     const escalated = new Map<string, number>();
     const survivors: QueuedEvent[] = [];
-    const settled: { id: string; outcome: string }[] = [];
+    const settled: { id: string; outcome: string; reopenable?: boolean }[] = [];
     for (const event of claimed) {
       if (!escalated.has(event.source)) {
         escalated.set(event.source, await queue.escalatedSince(event.source, new Date(current.getTime() - HOUR_MS)));
@@ -129,7 +129,11 @@ export function createEventPipeline(options: EventPipelineOptions) {
         escalatedLastHour: escalated.get(event.source)! + survivors.filter(({ source }) => source === event.source).length,
       });
       if (verdict.keep) survivors.push(event);
-      else settled.push({ id: event.id, outcome: `rule: ${verdict.reason}` });
+      else settled.push({
+        id: event.id,
+        outcome: `rule: ${verdict.reason}`,
+        reopenable: ['source_disabled', 'stale', 'calendar_too_far_ahead'].includes(verdict.reason),
+      });
     }
     const dropped = settled.length;
     if (settled.length) await queue.settle(settled, current);

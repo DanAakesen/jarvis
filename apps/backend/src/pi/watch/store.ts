@@ -124,12 +124,14 @@ export function createWatches(options: {
           return changeContent(current);
         },
       );
-      if (outcome.content !== null) open.set(name, parseWatch(watchPath(name), outcome.content));
-      revisions.delete(watchPath(name));
       changedOnDisk = outcome.changed;
-      if (changedOnDisk) {
-        const latest = await area.read(watchPath(name), signal);
-        if (latest) revisions.set(watchPath(name), latest.sha);
+      const latest = await area.read(watchPath(name), signal);
+      if (latest) {
+        open.set(name, parseWatch(watchPath(name), latest.content));
+        revisions.set(watchPath(name), latest.sha);
+      } else {
+        open.delete(name);
+        revisions.delete(watchPath(name));
       }
     } catch (error) { unavailable(error); }
     if (changedOnDisk) changed();
@@ -172,12 +174,18 @@ export function createWatches(options: {
         const name = copy === 1 ? base : `${base} ${copy}`;
         if (open.has(name)) continue;
         try {
-          const outcome = await area.create(
+          await area.create(
             watchPath(name), content, signal, `PI: open watch ${name}`,
           );
-          open.set(name, parseWatch(watchPath(name), outcome.content));
           const latest = await area.read(watchPath(name), signal);
-          if (latest) revisions.set(watchPath(name), latest.sha);
+          if (!latest) {
+            throw new PiAreaError(
+              'unavailable',
+              'The watch was created, but its exact saved revision could not be read. Refresh the watches before continuing.',
+            );
+          }
+          open.set(name, parseWatch(watchPath(name), latest.content));
+          revisions.set(watchPath(name), latest.sha);
           changed();
           return { name };
         } catch (error) {

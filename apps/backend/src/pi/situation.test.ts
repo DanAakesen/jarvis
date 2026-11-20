@@ -57,8 +57,8 @@ function state(overrides: Partial<PiSituationState> = {}): PiSituationState {
 }
 
 function setup(sources: readonly ProactiveSource[] = []) {
-  const store = createMemoryPiSituationStore();
-  const proactive = createMemoryProactiveStore(owner);
+  const store = createMemoryPiSituationStore(state().refs);
+  const proactive = createMemoryProactiveStore(owner, () => at);
   const service = createPiSituationService({
     owner,
     store,
@@ -165,6 +165,51 @@ describe('PI situational state', () => {
       activation: { id: '00000000-0000-4000-8000-000000000002', type: 'chat', source: 'chat', at },
     }, signal())).rejects.toMatchObject({ code: 'conflict' });
     expect(store.records.get(owner)?.revision).toBe(2);
+  });
+
+  it('refuses model-minted references that were never observed or verified by a provider', async () => {
+    const store = createMemoryPiSituationStore();
+    const proactive = createMemoryProactiveStore(owner, () => at);
+    const service = createPiSituationService({
+      owner,
+      store,
+      proactive,
+      sources: [],
+      now: () => at,
+    });
+    const first = await service.read(signal());
+    await expect(service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: state(),
+      activation: { id: '00000000-0000-4000-8000-000000000024', type: 'chat', source: 'chat', at },
+    }, signal())).rejects.toMatchObject({ code: 'invalid' });
+    expect(store.records.get(owner)?.state.refs).toEqual([]);
+  });
+
+  it('canonicalizes reference identity, label and observation from provider authority', async () => {
+    const { service, store } = setup();
+    const first = await service.read(signal());
+    const submitted = state();
+    submitted.refs[0] = {
+      ...submitted.refs[0]!,
+      identity: 'invented-identity',
+      label: 'Invented label',
+      observedAt: new Date(at.getTime() - 1_000).toISOString(),
+    };
+    await service.commit({
+      expectedRevision: first.revision,
+      expectedHash: first.hash,
+      policyRevision: first.policyRevision,
+      state: submitted,
+      activation: { id: '00000000-0000-4000-8000-000000000026', type: 'chat', source: 'chat', at },
+    }, signal());
+    expect(store.records.get(owner)?.state.refs[0]).toMatchObject({
+      identity: 'mail:42',
+      label: 'Travel confirmation',
+      observedAt: at.toISOString(),
+    });
   });
 
   it('applies a bounded patch without replacing unrelated source facts', async () => {
@@ -425,6 +470,93 @@ describe('PI situational state', () => {
     }, signal());
     expect(store.records.get(owner)).toMatchObject({ revision: 3 });
     expect(store.records.get(owner)?.state.facts.every(({ stale }) => !stale)).toBe(true);
+  });
+
+  it('persists a disable epoch and requires a newer provider observation before evidence returns', async () => {
+    const clock = { current: at };
+    const provider: ProactiveSource = {
+      id: 'mail',
+      label: 'Mail',
+      async read() {
+        return {
+          source: 'mail',
+          state: 'ok',
+          reason: null,
+          observedAt: clock.current.toISOString(),
+          facts: [{
+            ref: 'message:epoch',
+            identity: 'gmail-message:epoch',
+            kind: 'mail',
+            label: 'Epoch mail',
+            text: 'Authoritative mail.',
+            observedAt: clock.current.toISOString(),
+          }],
+        };
+      },
+    };
+    const store = createMemoryPiSituationStore();
+    const proactive = createMemoryProactiveStore(owner, () => clock.current);
+    const service = createPiSituationService({
+      owner,
+      store,
+      proactive,
+      sources: [provider],
+      now: () => clock.current,
+    });
+    const queue = createMemoryEventQueueStore();
+    service.attachEvents(queue);
+    await service.refresh('mail', signal());
+    let view = await service.read(signal());
+    const refId = view.state!.refs.find(({ source }) => source === 'mail')!.id;
+    await service.patch({
+      expectedRevision: view.revision,
+      expectedHash: view.hash,
+      policyRevision: view.policyRevision,
+      patch: {
+        summary: { text: 'Mail matters.', refIds: [refId] },
+        upsertFacts: [{
+          id: 'fact:epoch',
+          source: 'mail',
+          refIds: [refId],
+          text: 'The provider confirms the mail.',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+          stale: false,
+        }],
+        upsertFollowUps: [{
+          id: 'follow:epoch',
+          text: 'Follow the mail.',
+          dueAt: new Date(at.getTime() + 30 * 60_000).toISOString(),
+          refIds: [refId],
+        }],
+      },
+      activation: { id: '00000000-0000-4000-8000-000000000025', type: 'chat', source: 'chat', at },
+    }, signal());
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
+    await proactive.settings.patch({ sources: { mail: false } });
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toBeNull();
+    await proactive.settings.patch({ sources: { mail: true } });
+    await service.synchronizeFollowUps(signal());
+    expect(await queue.nextDueAt()).toBeNull();
+    view = await service.read(signal());
+    expect(view.state?.refs.some(({ source }) => source === 'mail')).toBe(false);
+    expect(view.state?.facts.some(({ source }) => source === 'mail')).toBe(false);
+    expect(view.state?.followUps.some(({ refIds }) => refIds.includes(refId))).toBe(false);
+    expect(view.state?.summary).toBe('');
+
+    await expect(service.lookup({ source: 'mail', ref: 'message:epoch' }, signal()))
+      .rejects.toMatchObject({ code: 'invalid' });
+    await service.observe('mail', await provider.read({ now: clock.current, signal: signal(), settings: await proactive.settings.read() }), signal());
+    await service.synchronizeFollowUps(signal());
+    expect((await service.read(signal())).state?.refs.some(({ source }) => source === 'mail')).toBe(false);
+
+    clock.current = new Date(at.getTime() + 1);
+    await service.refresh('mail', signal());
+    await service.synchronizeFollowUps(signal());
+    expect((await service.read(signal())).state?.refs.some(({ source }) => source === 'mail')).toBe(true);
+    expect(await queue.nextDueAt()).toEqual(new Date(at.getTime() + 30 * 60_000));
   });
 
   it('schedules, updates and cancels evidence-linked dueAt follow-ups through the event queue', async () => {

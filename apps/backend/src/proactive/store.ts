@@ -146,7 +146,10 @@ function runSummary(run: RunSummary & { generation: number; leaseUntil: number }
   };
 }
 
-export function createMemoryProactiveStore(ownerObjectId: string = randomUUID()): ProactiveStore {
+export function createMemoryProactiveStore(
+  ownerObjectId: string = randomUUID(),
+  current: () => Date = () => new Date(),
+): ProactiveStore {
   void ownerObjectId;
   let settings = defaultProactiveSettings();
   const preferenceListeners = new Set<() => void>();
@@ -155,7 +158,7 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
   const materials = new Map<string, string>();
   const runs: (RunSummary & { generation: number; leaseUntil: number })[] = [];
   const sources = new Map<SourceId, SourceStatus>();
-  const spend: { month: string; estimatedDkk: number }[] = [];
+  const spend: { month: string; estimatedDkk: number; runId: string }[] = [];
 
   return {
     settings: {
@@ -181,6 +184,25 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           categories: { ...settings.categories, ...patch.categories },
           newsFeeds: patch.newsFeeds === undefined ? [...settings.newsFeeds] : [...patch.newsFeeds],
         };
+        for (const source of sourceIds) {
+          if (previousSources[source] && !settings.sources[source]) {
+            const previous = sources.get(source);
+            const changedAt = current().getTime();
+            const invalidatedAt = new Date(Math.max(
+              changedAt,
+              previous?.observedAt ? Date.parse(previous.observedAt) : 0,
+            )).toISOString();
+            sources.set(source, {
+              id: source,
+              label: sourceLabels[source],
+              enabled: true,
+              state: 'stale',
+              reason: 'source_disabled',
+              observedAt: previous?.observedAt ?? invalidatedAt,
+              invalidatedAt,
+            });
+          }
+        }
         if (previousPaused !== settings.paused ||
             previousTurns !== settings.backgroundTurnsPerDay ||
             sourceIds.some((source) => previousSources[source] !== settings.sources[source]) ||
@@ -369,11 +391,18 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
         const previous = sources.get(status.id);
         if (previous?.observedAt && status.observedAt &&
             Date.parse(previous.observedAt) > Date.parse(status.observedAt)) return;
-        sources.set(status.id, { ...status });
+        if (previous?.invalidatedAt && status.observedAt &&
+            Date.parse(status.observedAt) <= Date.parse(previous.invalidatedAt)) {
+          return;
+        }
+        sources.set(status.id, { ...status, invalidatedAt: previous?.invalidatedAt ?? null });
       },
     },
     spend: {
-      async record(input) { spend.push({ month: input.month, estimatedDkk: input.estimatedDkk }); },
+      async record(input) {
+        if (spend.some((entry) => entry.runId === input.runId)) return;
+        spend.push({ month: input.month, estimatedDkk: input.estimatedDkk, runId: input.runId });
+      },
       async monthTotal(month) { return spend.filter((entry) => entry.month === month).reduce((total, entry) => total + entry.estimatedDkk, 0); },
     },
   };

@@ -10,6 +10,8 @@ export interface EventSettlement {
   outcome: string;
   /** The model call this event was part of, when it reached the model. */
   batchId?: string;
+  /** State/policy invalidations can be reactivated by a later valid observation. */
+  reopenable?: boolean;
 }
 
 export interface EventBatchReservation {
@@ -31,13 +33,15 @@ export interface EventBatchReserveInput {
   readonly activationType: 'event' | 'scheduled';
   readonly allowQuiet: boolean;
   readonly minimumGapMs: number;
+  readonly expectedPolicyRevision: string;
+  readonly worstCaseDkk: number;
   /** Memory-store fallback; SQL reads the owner setting inside the reservation transaction. */
   readonly fallbackAllowed: number;
 }
 
 export interface EventBatchReserveResult {
   readonly allowed: boolean;
-  readonly reason?: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap';
+  readonly reason?: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap' | 'policy_changed' | 'budget_exhausted';
   readonly status: {
     readonly used: number;
     readonly allowed: number;
@@ -152,6 +156,18 @@ interface MemoryRow extends QueuedEvent {
   processedAt: Date | null;
   outcome: string | null;
   batchId: string | null;
+  reopenable: boolean;
+}
+
+function archivedDedupeKey(key: string, generationId: string): string {
+  const archived = `${key}:archived:${generationId}`;
+  return archived.length <= 200
+    ? archived
+    : `sha256:${createHash('sha256').update(archived).digest('hex')}`;
+}
+
+function materialDedupeKey(key: string, materialHash: string): string {
+  return `${key.slice(0, 175)}:${materialHash.slice(0, 24)}`;
 }
 
 export function createMemoryEventQueueStore(): EventQueueStore {
@@ -179,41 +195,52 @@ export function createMemoryEventQueueStore(): EventQueueStore {
       if (active?.materialHash === event.materialHash) return { id: active.id, inserted: false };
       const existing = byKey.get(event.dedupeKey);
       const existingRow = existing ? rows.get(existing) : undefined;
-      const reopensCancelled = existingRow?.outcome?.startsWith('follow-up cancelled') === true;
-      const reopensSuperseded = existingRow?.outcome === 'superseded by material change';
-      if (existingRow?.identity === event.identity &&
-          existingRow.materialHash === event.materialHash &&
-          existingRow.processedAt !== null &&
-          (reopensCancelled || reopensSuperseded)) {
+      const sameMaterial = [...rows.values()]
+        .filter((row) => row.identity === event.identity && row.materialHash === event.materialHash)
+        .sort((left, right) => right.receivedAt.getTime() - left.receivedAt.getTime())[0];
+      const id = randomUUID();
+      const previous = sameMaterial ?? existingRow;
+      if (previous?.identity === event.identity &&
+          previous.materialHash === event.materialHash &&
+          previous.processedAt !== null &&
+          !previous.reopenable) {
+        return { id: previous.id, inserted: false };
+      }
+      const reopensPrevious = previous?.identity === event.identity &&
+        previous.materialHash === event.materialHash &&
+        previous.processedAt !== null &&
+        previous.reopenable;
+      if (reopensPrevious) {
         if (active) {
           active.processedAt = now;
           active.claimedUntil = null;
           active.outcome = 'superseded by material change';
+          active.reopenable = true;
         }
-        existingRow.receivedAt = now;
-        existingRow.processedAt = null;
-        existingRow.claimedUntil = null;
-        existingRow.retryAt = null;
-        existingRow.attempts = 0;
-        existingRow.outcome = null;
-        return { id: existingRow.id, inserted: true };
+        const archived = archivedDedupeKey(previous.dedupeKey, id);
+        byKey.delete(previous.dedupeKey);
+        previous.dedupeKey = archived;
+        byKey.set(archived, previous.id);
       }
-      if (existing && (!active || existing !== active.id)) return { id: existing, inserted: false };
+      if (previous && !reopensPrevious && !active && previous.identity !== event.identity) {
+        return { id: previous.id, inserted: false };
+      }
       if (active) {
         active.processedAt = now;
         active.claimedUntil = null;
         active.outcome = 'superseded by material change';
+        active.reopenable = true;
       }
-      const dedupeKey = active && existing === active.id
-        ? `${event.dedupeKey.slice(0, 175)}:${event.materialHash.slice(0, 24)}`
+      const baseOccupied = byKey.has(event.dedupeKey);
+      const dedupeKey = baseOccupied || active
+        ? materialDedupeKey(event.dedupeKey, event.materialHash)
         : event.dedupeKey;
-      const id = randomUUID();
       rows.set(id, {
         id, source: event.source, kind: event.kind, dedupeKey, summary: event.summary,
         detail: event.detail, occurredAt: event.occurredAt, receivedAt: now, attempts: 0,
         identity: event.identity, materialHash: event.materialHash, notBeforeAt: event.notBeforeAt,
         claimedUntil: null, retryAt: null, processedAt: event.baseline ? now : null,
-        outcome: event.baseline ? 'baseline' : null, batchId: null,
+        outcome: event.baseline ? 'baseline' : null, batchId: null, reopenable: false,
       });
       byKey.set(dedupeKey, id);
       return { id, inserted: true };
@@ -225,6 +252,7 @@ export function createMemoryEventQueueStore(): EventQueueStore {
         row.processedAt = now;
         row.claimedUntil = null;
         row.outcome = reason.slice(0, 400);
+        row.reopenable = true;
         changed = true;
       }
       return changed;
@@ -250,13 +278,14 @@ export function createMemoryEventQueueStore(): EventQueueStore {
       return claimed.map(view);
     },
     async settle(settlements, now) {
-      for (const { id, outcome, batchId } of settlements) {
+      for (const { id, outcome, batchId, reopenable } of settlements) {
         const row = rows.get(id);
         if (!row) continue;
         row.processedAt = now;
         row.claimedUntil = null;
         row.outcome = outcome.slice(0, 400);
         row.batchId = batchId ?? null;
+        row.reopenable = reopenable === true;
       }
     },
     async retryLater(ids, retryAt) {

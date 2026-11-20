@@ -25,6 +25,7 @@ export type SourceStatus = {
   state: 'ok' | 'unavailable' | 'stale' | 'disabled' | 'not_run';
   reason: string | null;
   observedAt: string | null;
+  invalidatedAt?: string | null;
 };
 
 export type Item = {

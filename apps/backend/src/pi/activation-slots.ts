@@ -1,4 +1,5 @@
 import type { EventQueueStore } from '../proactive/events/event-queue.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
 import type { ProactiveStore } from '../proactive/store.js';
 import { copenhagenDayStart, isQuietHour, nextSlotAfter } from '../proactive/time.js';
 
@@ -25,7 +26,7 @@ export type PiBackgroundReservation =
   | { readonly allowed: true; readonly status: PiBackgroundSlotStatus }
   | {
     readonly allowed: false;
-    readonly reason: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap';
+    readonly reason: 'paused' | 'quiet_hours' | 'spaced' | 'daily_cap' | 'policy_changed' | 'budget_exhausted';
     readonly status: PiBackgroundSlotStatus;
   };
 
@@ -37,6 +38,8 @@ export interface PiBackgroundSlotService {
     readonly activationType: 'event' | 'scheduled';
     readonly satisfiedSlot?: string | null;
     readonly allowQuiet?: boolean;
+    readonly policyRevision?: string;
+    readonly worstCaseDkk?: number;
   }): Promise<PiBackgroundReservation>;
 }
 
@@ -80,6 +83,10 @@ export function createPiBackgroundSlotService(options: {
     async reserve(input) {
       const current = await status();
       const settings = await options.proactive.settings.read();
+      const policyRevision = input.policyRevision ?? proactiveSettingsRevision(settings);
+      if (proactiveSettingsRevision(settings) !== policyRevision) {
+        return { allowed: false, reason: 'policy_changed', status: current };
+      }
       if (settings.paused) return { allowed: false, reason: 'paused', status: current };
       const reservation = await options.queue.reserveBatch({
         batchId: input.runId,
@@ -99,6 +106,8 @@ export function createPiBackgroundSlotService(options: {
         allowQuiet: input.allowQuiet === true,
         minimumGapMs: MIN_WAKE_GAP_MS,
         fallbackAllowed: Math.min(DEFAULT_BACKGROUND_TURNS_PER_DAY, settings.backgroundTurnsPerDay),
+        expectedPolicyRevision: policyRevision,
+        worstCaseDkk: input.worstCaseDkk ?? 0,
       });
       if (!reservation.allowed) {
         return {

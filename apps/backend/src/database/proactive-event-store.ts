@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
 import {
@@ -16,6 +16,9 @@ import {
 } from '../pi/situation.js';
 import { proactiveSettingsFromRow, type ProactiveSettingsRow } from './proactive-store.js';
 import { defaultProactiveSettings } from '../proactive/store.js';
+import { effectiveProactiveBudget } from '../proactive/budget.js';
+import { proactiveSettingsRevision } from '../proactive/preferences.js';
+import { monthKey } from '../proactive/time.js';
 import { LOCATION_FRESHNESS_MS } from '../proactive/sources/location.js';
 
 interface EventRow {
@@ -56,6 +59,16 @@ function isUniqueViolation(error: unknown): boolean {
     (error.number === 2601 || error.number === 2627);
 }
 
+function archivedDedupeKey(key: string, generationId: string): string {
+  const archived = `${key}:archived:${generationId}`;
+  if (archived.length <= 200) return archived;
+  return `sha256:${createHash('sha256').update(archived).digest('hex')}`;
+}
+
+function materialDedupeKey(key: string, materialHash: string): string {
+  return `${key.slice(0, 175)}:${materialHash.slice(0, 24)}`;
+}
+
 async function enqueueInTransaction(
   transaction: sql.Transaction,
   owner: string,
@@ -82,42 +95,56 @@ async function enqueueInTransaction(
   const existing = await new sql.Request(transaction)
     .input('owner', sql.UniqueIdentifier, owner)
     .input('key', sql.NVarChar(200), event.dedupeKey)
-    .query<{ id: string; identity_key: string | null; material_hash: string | null; outcome: string | null }>(
-      `SELECT id, identity_key, material_hash, outcome FROM dbo.proactive_events
-        WHERE owner_object_id = @owner AND dedupe_key = @key;`,
+    .input('identity', sql.NVarChar(200), event.identity)
+    .input('material', sql.Char(64), event.materialHash)
+    .query<{
+      id: string;
+      dedupe_key: string;
+      identity_key: string | null;
+      material_hash: string | null;
+      outcome: string | null;
+      reopenable: boolean;
+    }>(
+      `SELECT TOP (1) id, dedupe_key, identity_key, material_hash, outcome, reopenable
+        FROM dbo.proactive_events WITH (UPDLOCK, HOLDLOCK)
+        WHERE owner_object_id = @owner
+          AND (dedupe_key = @key OR identity_key = @identity AND material_hash = @material)
+        ORDER BY CASE WHEN identity_key = @identity AND material_hash = @material THEN 0 ELSE 1 END,
+          received_at DESC, id DESC;`,
     );
   const previous = existing.recordset[0];
-  const reopensCancelled = previous?.outcome?.startsWith('follow-up cancelled') === true;
-  const reopensSuperseded = previous?.outcome === 'superseded by material change';
   if (previous?.identity_key === event.identity &&
       previous.material_hash?.trim() === event.materialHash &&
-      (reopensCancelled || reopensSuperseded)) {
+      !previous.reopenable) {
+    return { id: previous.id.toLowerCase(), inserted: false };
+  }
+  const reopensPrevious = previous?.identity_key === event.identity &&
+    previous.material_hash?.trim() === event.materialHash &&
+    previous.reopenable === true;
+  if (reopensPrevious) {
     if (active) {
       await new sql.Request(transaction)
         .input('owner', sql.UniqueIdentifier, owner)
         .input('active', sql.UniqueIdentifier, active.id)
         .input('now', sql.DateTime2, now)
         .query(`UPDATE dbo.proactive_events
-          SET processed_at = @now, claimed_until = NULL, outcome = N'superseded by material change'
+          SET processed_at = @now, claimed_until = NULL, reopenable = 1,
+            outcome = N'superseded by material change'
           WHERE owner_object_id = @owner AND id = @active AND processed_at IS NULL;`);
     }
     await new sql.Request(transaction)
       .input('owner', sql.UniqueIdentifier, owner)
       .input('id', sql.UniqueIdentifier, previous.id)
-      .input('now', sql.DateTime2, now)
-      .input('notBeforeAt', sql.DateTime2, event.notBeforeAt)
+      .input('archivedKey', sql.NVarChar(200), archivedDedupeKey(event.dedupeKey, id))
       .query(`UPDATE dbo.proactive_events
-        SET processed_at = NULL, outcome = NULL, received_at = @now,
-          claimed_until = NULL, retry_at = NULL, attempts = 0, not_before_at = @notBeforeAt
+        SET dedupe_key = @archivedKey
         WHERE owner_object_id = @owner AND id = @id;`);
-    return { id: previous.id.toLowerCase(), inserted: true };
   }
-  const collidesWithActive = active && previous?.id.toLowerCase() === active.id.toLowerCase();
-  if (previous && !collidesWithActive) {
+  if (previous && !reopensPrevious && !active && previous.identity_key !== event.identity) {
     return { id: previous.id.toLowerCase(), inserted: false };
   }
-  const dedupeKey = collidesWithActive
-    ? `${event.dedupeKey.slice(0, 175)}:${event.materialHash.slice(0, 24)}`
+  const dedupeKey = active || !reopensPrevious && previous?.dedupe_key === event.dedupeKey
+    ? materialDedupeKey(event.dedupeKey, event.materialHash)
     : event.dedupeKey;
   if (active) {
     await new sql.Request(transaction)
@@ -125,7 +152,8 @@ async function enqueueInTransaction(
       .input('active', sql.UniqueIdentifier, active.id)
       .input('now', sql.DateTime2, now)
       .query(`UPDATE dbo.proactive_events
-        SET processed_at = @now, claimed_until = NULL, outcome = N'superseded by material change'
+        SET processed_at = @now, claimed_until = NULL, reopenable = 1,
+          outcome = N'superseded by material change'
         WHERE owner_object_id = @owner AND id = @active AND processed_at IS NULL;`);
   }
   const { recordset } = await new sql.Request(transaction)
@@ -171,7 +199,7 @@ async function cancelInTransaction(
     .input('now', sql.DateTime2, now)
     .input('outcome', sql.NVarChar(400), reason.slice(0, 400))
     .query(`UPDATE dbo.proactive_events
-      SET processed_at = @now, claimed_until = NULL, outcome = @outcome
+      SET processed_at = @now, claimed_until = NULL, outcome = @outcome, reopenable = 1
       WHERE owner_object_id = @owner AND identity_key = @identity AND processed_at IS NULL;`);
   return (rowsAffected[0] ?? 0) > 0;
 }
@@ -261,7 +289,8 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
           source_id: keyof typeof settings.sources;
           state: 'ok' | 'unavailable' | 'stale';
           observed_at: Date | string | null;
-        }>(`SELECT source_id, state, observed_at
+          invalidated_at: Date | string | null;
+        }>(`SELECT source_id, state, observed_at, invalidated_at
           FROM dbo.proactive_source_status
           WHERE owner_object_id = @owner;`);
         const statusBySource = new Map(sourceStatuses.recordset.map((row) =>
@@ -279,9 +308,14 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
               : null;
             const locationStale = source.id === 'location' && observedAt !== null &&
               at.getTime() - observedAt.getTime() > LOCATION_FRESHNESS_MS;
+            const invalidated = status.invalidated_at !== null &&
+              observedAt !== null &&
+              observedAt.getTime() <= (status.invalidated_at instanceof Date
+                ? status.invalidated_at
+                : new Date(status.invalidated_at)).getTime();
             return {
               ...source,
-              state: status.state === 'stale' || locationStale ? 'stale' as const
+              state: status.state === 'stale' || invalidated || locationStale ? 'stale' as const
                 : status.state === 'ok' && observedAt !== null ? 'fresh' as const
                   : 'missing' as const,
               observedAt: observedAt?.toISOString() ?? null,
@@ -465,15 +499,16 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
     },
 
     async settle(settlements, now) {
-      for (const { id, outcome, batchId } of settlements) {
+      for (const { id, outcome, batchId, reopenable } of settlements) {
         await pool.request()
           .input('owner', sql.UniqueIdentifier, owner)
           .input('id', sql.UniqueIdentifier, id)
           .input('now', sql.DateTime2, now)
           .input('outcome', sql.NVarChar(400), outcome.slice(0, 400))
           .input('batch', sql.UniqueIdentifier, batchId ?? null)
+          .input('reopenable', sql.Bit, reopenable === true)
           .query(`UPDATE dbo.proactive_events SET processed_at = @now, claimed_until = NULL,
-              outcome = @outcome, batch_id = @batch
+              outcome = @outcome, batch_id = @batch, reopenable = @reopenable
             WHERE owner_object_id = @owner AND id = @id AND processed_at IS NULL;`);
       }
     },
@@ -518,6 +553,19 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
         if (!Number.isFinite(sampled.at.getTime()) || !Number.isFinite(sampled.dayStart.getTime())) {
           throw new RangeError('Invalid PI background reservation time');
         }
+        if (!Number.isFinite(input.worstCaseDkk) || input.worstCaseDkk < 0) {
+          throw new RangeError('Invalid PI background worst-case cost');
+        }
+        const policyRow = await new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day,
+              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance
+            FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
+            WHERE owner_object_id = @owner;`);
+        const settings = policyRow.recordset[0]
+          ? proactiveSettingsFromRow(policyRow.recordset[0])
+          : defaultProactiveSettings();
+        const policyMatches = proactiveSettingsRevision(settings) === input.expectedPolicyRevision;
         const { recordset } = await new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, owner)
           .input('id', sql.UniqueIdentifier, input.batchId)
@@ -530,6 +578,13 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
           .input('quiet', sql.Bit, sampled.quiet)
           .input('minimumGapMs', sql.Int, input.minimumGapMs)
           .input('fallbackAllowed', sql.Int, input.fallbackAllowed)
+          .input('allowedTurns', sql.Int, Math.min(input.fallbackAllowed, settings.backgroundTurnsPerDay))
+          .input('paused', sql.Bit, settings.paused)
+          .input('policyMatches', sql.Bit, policyMatches)
+          .input('policyRevision', sql.Char(64), input.expectedPolicyRevision)
+          .input('budgetLimit', sql.Decimal(9, 4), effectiveProactiveBudget(settings.monthlyBudgetDkk))
+          .input('worstCase', sql.Decimal(9, 4), input.worstCaseDkk)
+          .input('monthKey', sql.Char(7), monthKey(sampled.at))
           .query<{
             allowed: boolean;
             reason: EventBatchReserveResult['reason'] | null;
@@ -538,12 +593,7 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
             last_at: Date | string | null;
             activation_type: 'event' | 'scheduled' | null;
             satisfied_slot: string | null;
-          }>(`DECLARE @paused bit = 0;
-            DECLARE @allowedTurns int = @fallbackAllowed;
-            SELECT @paused = paused, @allowedTurns = background_turns_per_day
-              FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
-              WHERE owner_object_id = @owner;
-            IF @allowedTurns < 1 SET @allowedTurns = @fallbackAllowed;
+          }>(`IF @allowedTurns < 1 SET @allowedTurns = @fallbackAllowed;
             IF @allowedTurns > @fallbackAllowed SET @allowedTurns = @fallbackAllowed;
 
             DECLARE @used int = (
@@ -557,9 +607,26 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
               FROM dbo.proactive_event_batches WITH (UPDLOCK, HOLDLOCK)
               WHERE owner_object_id = @owner
               ORDER BY created_at DESC, id DESC;
+            DECLARE @spent decimal(19,4) = (
+              SELECT ISNULL(SUM(estimated_dkk), 0) FROM dbo.proactive_spend WITH (UPDLOCK, HOLDLOCK)
+                WHERE owner_object_id = @owner AND month_key = @monthKey
+            );
+            DECLARE @reserved decimal(19,4) = (
+              SELECT ISNULL(SUM(reserved_dkk), 0) FROM dbo.proactive_event_batches WITH (UPDLOCK, HOLDLOCK)
+                WHERE owner_object_id = @owner AND month_key = @monthKey AND actual_dkk IS NULL
+            );
+            DECLARE @existingPolicy char(64);
+            DECLARE @existingBatch bit = 0;
+            SELECT @existingPolicy = policy_revision FROM dbo.proactive_event_batches
+              WHERE owner_object_id = @owner AND id = @id;
+            SELECT @existingBatch = 1 FROM dbo.proactive_event_batches
+              WHERE owner_object_id = @owner AND id = @id;
             DECLARE @reason varchar(16);
 
-            IF EXISTS (SELECT 1 FROM dbo.proactive_event_batches
+            IF @policyMatches = 0 OR @existingBatch = 1
+                AND (@existingPolicy IS NULL OR @existingPolicy <> @policyRevision)
+              SET @reason = 'policy_changed';
+            ELSE IF EXISTS (SELECT 1 FROM dbo.proactive_event_batches
                 WHERE owner_object_id = @owner AND id = @id)
               SET @reason = NULL;
             ELSE IF @paused = 1
@@ -571,11 +638,17 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
             ELSE IF @lastAt IS NOT NULL
                 AND DATEDIFF_BIG(millisecond, @lastAt, @at) < @minimumGapMs
               SET @reason = 'spaced';
+            ELSE IF @spent + @reserved + @worstCase > @budgetLimit
+              SET @reason = 'budget_exhausted';
             ELSE
             BEGIN
               INSERT dbo.proactive_event_batches (
-                id, owner_object_id, created_at, event_count, activation_type, satisfied_slot
-              ) VALUES (@id, @owner, @at, @count, @activationType, @satisfiedSlot);
+                id, owner_object_id, created_at, event_count, activation_type, satisfied_slot,
+                policy_revision, month_key, reserved_dkk
+              ) VALUES (
+                @id, @owner, @at, @count, @activationType, @satisfiedSlot,
+                @policyRevision, @monthKey, @worstCase
+              );
               SET @used += 1;
               SET @lastAt = @at;
               SET @lastType = @activationType;

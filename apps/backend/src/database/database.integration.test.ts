@@ -339,6 +339,8 @@ describe('real SQL Server migration contract', () => {
       const integrityDown = await readFile(new URL('../../../../db/migrations/down/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
       const outboxSchema = await readFile(new URL('../../../../db/migrations/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
       const outboxDown = await readFile(new URL('../../../../db/migrations/down/0098_pi_situation_followup_outbox.sql', import.meta.url), 'utf8');
+      const reviewSchema = await readFile(new URL('../../../../db/migrations/0099_pi_review_integrity.sql', import.meta.url), 'utf8');
+      const reviewDown = await readFile(new URL('../../../../db/migrations/down/0099_pi_review_integrity.sql', import.meta.url), 'utf8');
       await pool.request().batch(proactiveSchema);
       await pool.request().batch(foundationSchema);
       await pool.request().batch(preferencesSchema);
@@ -349,6 +351,7 @@ describe('real SQL Server migration contract', () => {
       await pool.request().batch(situationSchema);
       await pool.request().batch(integritySchema);
       await pool.request().batch(outboxSchema);
+      await pool.request().batch(reviewSchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -445,6 +448,136 @@ describe('real SQL Server migration contract', () => {
           runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
         })).resolves.toMatchObject({ allowed: true });
 
+        const budgetOwner = randomUUID();
+        const budgetStore = createProactiveStore(pool, budgetOwner);
+        await budgetStore.settings.patch({ monthlyBudgetDkk: 1 });
+        let budgetAt = new Date('2026-11-15T10:00:00.000Z');
+        const budgetQueue = createProactiveEventStore(pool, budgetOwner);
+        const budgetSlots = createPiBackgroundSlotService({
+          queue: budgetQueue,
+          proactive: budgetStore,
+          now: () => budgetAt,
+        });
+        const budgetPolicy = proactiveSettingsRevision(await budgetStore.settings.read());
+        const reserved = await Promise.all([
+          budgetQueue.reserveBatch({
+            batchId: randomUUID(),
+            sampleTime: () => ({
+              at: budgetAt,
+              dayStart: new Date('2026-11-14T23:00:00.000Z'),
+              quiet: false,
+              satisfiedSlot: null,
+            }),
+            eventCount: 1,
+            activationType: 'event',
+            allowQuiet: true,
+            minimumGapMs: 0,
+            fallbackAllowed: 12,
+            expectedPolicyRevision: budgetPolicy,
+            worstCaseDkk: 0.6,
+          }),
+          budgetQueue.reserveBatch({
+            batchId: randomUUID(),
+            sampleTime: () => ({
+              at: budgetAt,
+              dayStart: new Date('2026-11-14T23:00:00.000Z'),
+              quiet: false,
+              satisfiedSlot: null,
+            }),
+            eventCount: 1,
+            activationType: 'event',
+            allowQuiet: true,
+            minimumGapMs: 0,
+            fallbackAllowed: 12,
+            expectedPolicyRevision: budgetPolicy,
+            worstCaseDkk: 0.6,
+          }),
+        ]);
+        expect(reserved.filter(({ allowed }) => allowed)).toHaveLength(1);
+        expect(reserved.find(({ allowed }) => !allowed))
+          .toMatchObject({ reason: 'budget_exhausted' });
+        const admittedBatch = await pool.request()
+          .input('owner', sql.UniqueIdentifier, budgetOwner)
+          .query<{ id: string; reserved_dkk: number; actual_dkk: number | null }>(`
+            SELECT id, reserved_dkk, actual_dkk
+            FROM dbo.proactive_event_batches
+            WHERE owner_object_id = @owner;`);
+        expect(admittedBatch.recordset).toMatchObject([{
+          reserved_dkk: 0.6,
+          actual_dkk: null,
+        }]);
+        await budgetStore.spend.record({
+          runId: admittedBatch.recordset[0]!.id,
+          month: '2026-11',
+          inputTokens: 1,
+          outputTokens: 1,
+          estimatedDkk: 0.1,
+          createdAt: budgetAt,
+        });
+        expect((await pool.request()
+          .input('owner', sql.UniqueIdentifier, budgetOwner)
+          .query<{ reserved_dkk: number; actual_dkk: number }>(`
+            SELECT reserved_dkk, actual_dkk
+            FROM dbo.proactive_event_batches
+            WHERE owner_object_id = @owner;`)).recordset[0])
+          .toEqual(expect.objectContaining({ reserved_dkk: 0.6, actual_dkk: 0.1 }));
+        budgetAt = new Date(budgetAt.getTime() + 11 * 60_000);
+        await expect(budgetSlots.reserve({
+          runId: randomUUID(),
+          eventCount: 1,
+          activationType: 'event',
+          allowQuiet: true,
+          policyRevision: budgetPolicy,
+          worstCaseDkk: 0.85,
+        })).resolves.toMatchObject({ allowed: true });
+        const stalePolicy = budgetPolicy;
+        await budgetStore.settings.patch({ sources: { x: true } });
+        budgetAt = new Date(budgetAt.getTime() + 11 * 60_000);
+        await expect(budgetQueue.reserveBatch({
+          batchId: randomUUID(),
+          sampleTime: () => ({
+            at: budgetAt,
+            dayStart: new Date('2026-11-14T23:00:00.000Z'),
+            quiet: false,
+            satisfiedSlot: null,
+          }),
+          eventCount: 1,
+          activationType: 'event',
+          allowQuiet: true,
+          minimumGapMs: 10 * 60_000,
+          fallbackAllowed: 12,
+          expectedPolicyRevision: stalePolicy,
+          worstCaseDkk: 0.01,
+        })).resolves.toMatchObject({ allowed: false, reason: 'policy_changed' });
+        await budgetStore.settings.patch({ sources: { mail: false } });
+        await budgetStore.settings.patch({ sources: { mail: true } });
+        const disabled = (await budgetStore.sources.list()).find(({ id }) => id === 'mail')!;
+        expect(disabled).toMatchObject({
+          state: 'stale',
+          reason: 'source_disabled',
+        });
+        const invalidatedAt = new Date(disabled.invalidatedAt!);
+        await budgetStore.sources.upsert({
+          id: 'mail',
+          label: 'Mail',
+          enabled: true,
+          state: 'ok',
+          reason: null,
+          observedAt: new Date(invalidatedAt.getTime() - 1).toISOString(),
+        });
+        expect((await budgetStore.sources.list()).find(({ id }) => id === 'mail'))
+          .toMatchObject({ state: 'stale' });
+        await budgetStore.sources.upsert({
+          id: 'mail',
+          label: 'Mail',
+          enabled: true,
+          state: 'ok',
+          reason: null,
+          observedAt: new Date(invalidatedAt.getTime() + 1).toISOString(),
+        });
+        expect((await budgetStore.sources.list()).find(({ id }) => id === 'mail'))
+          .toMatchObject({ state: 'ok' });
+
         // Standing-watch looks: counted per watch and day, with the wake's cost shared out afterwards.
         const dayStart = new Date(Date.now() - 3_600_000);
         const wake = randomUUID();
@@ -482,6 +615,7 @@ describe('real SQL Server migration contract', () => {
           activation,
           policyRevision,
           followUpActions: [],
+          authoritativeRefs: [],
         }, signal);
         expect(await situations.read(owner, signal)).toMatchObject({
           revision: 2, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
@@ -593,6 +727,7 @@ describe('real SQL Server migration contract', () => {
           activation: { ...activation, id: randomUUID() },
           policyRevision,
           followUpActions: [],
+          authoritativeRefs: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
         await proactive.settings.patch({ guidance: 'changed after the situation was read' });
         await expect(situations.commit({
@@ -603,6 +738,7 @@ describe('real SQL Server migration contract', () => {
           activation: { ...activation, id: randomUUID() },
           policyRevision,
           followUpActions: [],
+          authoritativeRefs: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
         const currentPolicy = proactiveSettingsRevision(await proactive.settings.read());
         const dueAt = new Date(at.getTime() + 60_000);
@@ -630,6 +766,17 @@ describe('real SQL Server migration contract', () => {
             refIds: ['calendar-event:flight'],
           }],
         });
+        await expect(situations.commit({
+          owner,
+          expectedRevision: stored.revision,
+          expectedHash: stored.hash,
+          state: followUpState,
+          activation: { ...activation, id: randomUUID() },
+          policyRevision: currentPolicy,
+          followUpActions: [],
+          authoritativeRefs: [],
+        }, signal)).rejects.toMatchObject({ code: 'invalid' });
+        expect((await situations.read(owner, signal))?.revision).toBe(stored.revision);
         const queued = await situations.commit({
           owner,
           expectedRevision: stored.revision,
@@ -652,6 +799,7 @@ describe('real SQL Server migration contract', () => {
               notBeforeAt: dueAt.toISOString(),
             },
           }],
+          authoritativeRefs: followUpState.refs,
         }, signal);
         const reconciled = await Promise.all([
           queue.reconcileSituationOutbox(at, signal),
@@ -672,6 +820,7 @@ describe('real SQL Server migration contract', () => {
             followUpId: 'follow:flight',
             identity: 'pi-followup:follow:flight',
           }],
+          authoritativeRefs: [],
         }, signal);
         await expect(queue.reconcileSituationOutbox(
           new Date(at.getTime() + 1),
@@ -701,6 +850,7 @@ describe('real SQL Server migration contract', () => {
               notBeforeAt: dueAt.toISOString(),
             },
           }],
+          authoritativeRefs: followUpState.refs,
         }, signal);
         await expect(queue.reconcileSituationOutbox(
           new Date(at.getTime() + 2),
@@ -712,18 +862,25 @@ describe('real SQL Server migration contract', () => {
         await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
         await pool.request().batch(
           'DELETE FROM dbo.proactive_events; DELETE FROM dbo.proactive_event_batches; ' +
-          'DELETE FROM dbo.pi_message; DELETE FROM dbo.proactive_settings;',
+          'DELETE FROM dbo.pi_message; DELETE FROM dbo.proactive_spend; ' +
+          'DELETE FROM dbo.proactive_source_status; DELETE FROM dbo.proactive_settings;',
         );
-        await pool.request().batch(outboxDown);
-        await pool.request().batch(integrityDown);
-        await pool.request().batch(situationDown);
-        await pool.request().batch(watchDown);
-        await pool.request().batch(brainDown);
-        await pool.request().batch(down);
-        await pool.request().batch(eventsDown);
-        await pool.request().batch(preferencesDown);
-        await pool.request().batch(foundationDown);
-        await pool.request().batch(proactiveDown);
+        const rollback = async (name: string, script: string) => {
+          try { await pool.request().batch(script); }
+          catch (error) { throw new Error(`Database rollback ${name} failed`, { cause: error }); }
+        };
+        await pool.request().batch('DELETE FROM dbo.pi_situation_ref_authority;');
+        await rollback('0093', reviewDown);
+        await rollback('0092', outboxDown);
+        await rollback('0091', integrityDown);
+        await rollback('0090', situationDown);
+        await rollback('watch', watchDown);
+        await rollback('brain', brainDown);
+        await rollback('core PI', down);
+        await rollback('events', eventsDown);
+        await rollback('preferences', preferencesDown);
+        await rollback('foundation', foundationDown);
+        await rollback('proactive', proactiveDown);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_watch_look', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_message', N'U') AS id")).recordset).toEqual([{ id: null }]);

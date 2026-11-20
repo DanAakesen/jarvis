@@ -182,6 +182,63 @@ describe('mail and calendar change poller', () => {
     expect(read).not.toHaveBeenCalled();
     expect(sink.enqueue).not.toHaveBeenCalled();
   });
+
+  it('reoffers an invalidated fact when its disabled source is enabled again', async () => {
+    const queue = createMemoryEventQueueStore();
+    await queue.enqueue({
+      source: 'mail',
+      kind: 'message.new',
+      identity: 'mail:history',
+      material: { subject: 'old' },
+      dedupeKey: 'mail:history',
+      summary: 'Older mail',
+      occurredAt: NOW,
+    }, NOW);
+    const sink = {
+      enqueue: vi.fn(async (event: ProactiveEventInput) => queue.enqueue(event, NOW)),
+    };
+    const settings = defaultProactiveSettings();
+    const mail = source('mail', () => [fact('Re-enable me', { ref: 'mail:again', identity: 'gmail:again' })]);
+    const poller = createSourceChangePoller({
+      sources: [mail],
+      sink,
+      queue,
+      now: () => NOW,
+      settings: async () => settings,
+    });
+    await poller.poll();
+    const target = (await queue.claim(NOW, 2, 60_000))
+      .find(({ identity }) => identity === 'mail:gmail:again');
+    expect(target).toBeDefined();
+    await queue.settle([{ id: target!.id, outcome: 'source disabled', reopenable: true }], NOW);
+    settings.sources.mail = false;
+    await poller.poll();
+    settings.sources.mail = true;
+    await poller.poll();
+    expect(sink.enqueue).toHaveBeenCalledTimes(2);
+    const reopened = await queue.claim(NOW, 10, 60_000);
+    expect(reopened).toMatchObject([{ source: 'mail' }]);
+    expect(reopened[0]?.id).not.toBe(target!.id);
+  });
+
+  it('does not enqueue provider facts rejected by the persisted source observation epoch', async () => {
+    const queue = createMemoryEventQueueStore();
+    const sink = { enqueue: vi.fn() };
+    const mail = source('mail', () => [fact('Old but still listed', {
+      ref: 'mail:old',
+      identity: 'gmail:old',
+    })]);
+    const poller = createSourceChangePoller({
+      sources: [mail],
+      sink,
+      queue,
+      now: () => NOW,
+      settings: async () => defaultProactiveSettings(),
+      observe: async () => ({ changed: false, baseline: false, admissible: false }),
+    });
+    await poller.poll();
+    expect(sink.enqueue).not.toHaveBeenCalled();
+  });
 });
 
 describe('event identity and scheduling', () => {
@@ -234,9 +291,40 @@ describe('event identity and scheduling', () => {
     const first = await queue.enqueue(input, NOW);
     expect(await queue.cancel('pi-followup:one', NOW, 'follow-up cancelled by Dan')).toBe(true);
     expect(await queue.hasWork(NOW)).toBe(false);
-    expect(await queue.enqueue(input, new Date(NOW.getTime() + 1_000)))
-      .toEqual({ id: first.id, inserted: true });
+    const reopened = await queue.enqueue(input, new Date(NOW.getTime() + 1_000));
+    expect(reopened).toMatchObject({ inserted: true });
+    expect(reopened.id).not.toBe(first.id);
     expect(await queue.hasWork(new Date(NOW.getTime() + 1_000))).toBe(true);
+  });
+
+  it('reopens explicit invalidations with a new generation but keeps delivered material deduped', async () => {
+    const queue = createMemoryEventQueueStore();
+    const deliveredInput = {
+      source: 'mail', kind: 'message.new', identity: 'mail:delivered',
+      material: { subject: 'Same mail' }, dedupeKey: 'mail:delivered:v1',
+      summary: 'Mail', occurredAt: NOW,
+    } as const;
+    const delivered = await queue.enqueue(deliveredInput, NOW);
+    await queue.claim(NOW, 1, 60_000);
+    await queue.settle([{ id: delivered.id, outcome: 'delivered' }], NOW);
+    expect(await queue.enqueue(deliveredInput, new Date(NOW.getTime() + 1)))
+      .toEqual({ id: delivered.id, inserted: false });
+
+    const invalidatedInput = {
+      ...deliveredInput,
+      identity: 'mail:invalidated',
+      dedupeKey: 'mail:invalidated:v1',
+    };
+    const invalidated = await queue.enqueue(invalidatedInput, NOW);
+    await queue.claim(NOW, 1, 60_000);
+    await queue.settle([{
+      id: invalidated.id,
+      outcome: 'source disabled',
+      reopenable: true,
+    }], NOW);
+    const reopened = await queue.enqueue(invalidatedInput, new Date(NOW.getTime() + 1));
+    expect(reopened).toMatchObject({ inserted: true });
+    expect(reopened.id).not.toBe(invalidated.id);
   });
 
   it('queues an actual material reversion after an intermediate update', async () => {
@@ -253,10 +341,33 @@ describe('event identity and scheduling', () => {
     const first = await queue.enqueue(a, NOW);
     await queue.enqueue(b, new Date(NOW.getTime() + 1));
     const reverted = await queue.enqueue(a, new Date(NOW.getTime() + 2));
-    expect(reverted).toEqual({ id: first.id, inserted: true });
+    expect(reverted).toMatchObject({ inserted: true });
+    expect(reverted.id).not.toBe(first.id);
     expect(await queue.claim(NOW, 10, 60_000)).toMatchObject([
-      { id: first.id, summary: 'Original time' },
+      { id: reverted.id, summary: 'Original time' },
     ]);
+  });
+
+  it('tracks each material generation when updates share one dedupe key', async () => {
+    const queue = createMemoryEventQueueStore();
+    const original = {
+      source: 'calendar',
+      kind: 'event.new_or_changed',
+      identity: 'calendar-event:shared-key',
+      material: { startsAt: 'A' },
+      dedupeKey: 'calendar:shared-key',
+      summary: 'Original',
+      occurredAt: NOW,
+      notBeforeAt: NOW,
+    } as const;
+    const changed = { ...original, material: { startsAt: 'B' }, summary: 'Changed' };
+    await queue.enqueue(original, NOW);
+    const second = await queue.enqueue(changed, new Date(NOW.getTime() + 1));
+    const reverted = await queue.enqueue(original, new Date(NOW.getTime() + 2));
+    const returned = await queue.enqueue(changed, new Date(NOW.getTime() + 3));
+    expect(returned.inserted).toBe(true);
+    expect(returned.id).not.toBe(second.id);
+    expect(reverted.id).not.toBe(returned.id);
   });
 
   it('queues a material reversion after the intermediate version was already processed', async () => {
@@ -275,9 +386,10 @@ describe('event identity and scheduling', () => {
     const claimed = await queue.claim(NOW, 10, 60_000);
     expect(claimed).toMatchObject([{ id: updated.id }]);
     await queue.settle([{ id: updated.id, outcome: 'delivered' }], new Date(NOW.getTime() + 2));
-    expect(await queue.enqueue(original, new Date(NOW.getTime() + 3)))
-      .toEqual({ id: first.id, inserted: true });
+    const reopened = await queue.enqueue(original, new Date(NOW.getTime() + 3));
+    expect(reopened).toMatchObject({ inserted: true });
+    expect(reopened.id).not.toBe(first.id);
     expect(await queue.claim(new Date(NOW.getTime() + 3), 10, 60_000))
-      .toMatchObject([{ id: first.id, summary: 'Original time' }]);
+      .toMatchObject([{ id: reopened.id, summary: 'Original time' }]);
   });
 });

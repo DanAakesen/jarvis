@@ -90,13 +90,31 @@ export function createSituationTools(options: {
         additionalProperties: false,
       },
       execute: async (input, request, signal) => {
-        grant(options.registry, request);
+        const active = grant(options.registry, request);
         if (!isRecord(input) || typeof input.source !== 'string' || typeof input.ref !== 'string' ||
             !sourceIds.includes(input.source as SourceId)) {
           throw new ToolRefusal('The source reference is invalid. Nothing was read.');
         }
         try {
-          return await options.service.lookup({ source: input.source as SourceId, ref: input.ref }, signal);
+          const result = await options.service.lookup({
+            source: input.source as SourceId,
+            ref: input.ref,
+          }, signal);
+          const verified = result.verifiedRef;
+          if (active.brain && isRecord(verified) &&
+              typeof verified.source === 'string' && sourceIds.includes(verified.source as SourceId) &&
+              typeof verified.id === 'string' && typeof verified.identity === 'string' &&
+              typeof verified.label === 'string' && typeof verified.observedAt === 'string') {
+            active.brain.evidence ??= [];
+            active.brain.evidence.push({
+              source: verified.source,
+              ref: verified.id,
+              identity: verified.identity,
+              label: verified.label,
+              observedAt: verified.observedAt,
+            });
+          }
+          return result;
         } catch (error) { return failure(error); }
       },
     },
@@ -106,7 +124,7 @@ export function createSituationTools(options: {
         'Apply one bounded, evidence-linked patch to the server-initialized PI situational state.',
         'Send the exact revision, hash and proactive-policy revision from situation_read.',
         'Patch only facts, references, source observations, summary and follow-ups that changed; use remove arrays to invalidate only affected evidence.',
-        'The server owns the remaining sources and rejects disabled, stale, secret or unlinked evidence. A no-material-change patch returns without a new revision.',
+        'New refs must be the exact verifiedRef returned by situation_lookup or a ref from a server provider observation; the model cannot mint evidence refs. The server rejects disabled, stale, secret or unlinked evidence. A no-material-change patch returns without a new revision.',
         'Only the current PI activation can use this tool.',
       ].join(' '),
       execution: { defaultEffect: 'action' },
@@ -161,7 +179,7 @@ export function createSituationTools(options: {
       description: [
         'Compatibility commit for one material whole-state change. Prefer situation_patch and preserve sources/facts not changed in this turn.',
         'Send the exact revision, hash and proactive-policy revision from situation_read, plus the complete bounded state schema.',
-        'The server rejects stale revisions, source-policy changes and secrets. Facts from disabled sources are excluded; prior disabled-source facts are retained only as explicitly stale storage and are never used proactively.',
+        'The server rejects stale revisions, source-policy changes, secrets and refs not minted by provider observation or verified live lookup. Facts from disabled sources are excluded; prior disabled-source facts are retained only as explicitly stale storage and are never used proactively.',
         'Only the current PI activation can use this tool.',
       ].join(' '),
       execution: { defaultEffect: 'action' },

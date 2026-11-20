@@ -10,6 +10,7 @@ import {
   copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
 } from '../../proactive/time.js';
 import { sourceIds, type SourceId } from '../../proactive/types.js';
+import { proactiveSettingsRevision } from '../../proactive/preferences.js';
 import { PI_MODEL } from '../definition.js';
 import type { PiBrainRun } from '../turns.js';
 import type { PiGateway } from '../gateway.js';
@@ -206,14 +207,16 @@ export function createBrain(options: BrainOptions) {
     const claimed = queueDue ? await queue.claim(current, MAX_WAKE_EVENTS, LEASE_MS) : [];
     if (claimed.length === MAX_WAKE_EVENTS) wake(current);
     const survivors: QueuedEvent[] = [];
-    const settled: { id: string; outcome: string }[] = [];
+    const settled: { id: string; outcome: string; reopenable?: boolean }[] = [];
     for (const event of claimed) {
       const maxAge = event.source === 'timer' ? timerMaxAgeMs : defaultMaxAgeMs;
       if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
       else if (eventSources(event).some((source) => !settings.sources[source])) {
-        settled.push({ id: event.id, outcome: 'source disabled' });
+        settled.push({ id: event.id, outcome: 'source disabled', reopenable: true });
       }
-      else if (current.getTime() - event.occurredAt.getTime() > maxAge) settled.push({ id: event.id, outcome: 'stale' });
+      else if (current.getTime() - event.occurredAt.getTime() > maxAge) {
+        settled.push({ id: event.id, outcome: 'stale', reopenable: true });
+      }
       else survivors.push(event);
     }
     // A timer review alone is not worth waking at night; the evening or morning one covers it.
@@ -262,6 +265,8 @@ export function createBrain(options: BrainOptions) {
       activationType,
       satisfiedSlot: slotKey,
       allowQuiet: activationType === 'event',
+      policyRevision: proactiveSettingsRevision(settings),
+      worstCaseDkk: worstCase,
     });
     if (!reservation.allowed) {
       const retryAt = reservation.status.nextAllowedAt
@@ -285,13 +290,11 @@ export function createBrain(options: BrainOptions) {
       }),
     }, signal);
     const at = now();
-    if (outcome.usage.inputTokens > 0 || outcome.usage.outputTokens > 0) {
-      // Spent is spent, whether or not the answer was usable: the tokens were billed.
-      await proactive.spend.record({
-        runId, month: monthKey(at), inputTokens: outcome.usage.inputTokens, outputTokens: outcome.usage.outputTokens,
-        estimatedDkk: outcome.costDkk, createdAt: at,
-      }).catch(() => log('warn', { reason: 'spend_record_failed' }));
-    }
+    // Reconcile the provisional worst case even when the provider returned zero tokens.
+    await proactive.spend.record({
+      runId, month: monthKey(at), inputTokens: outcome.usage.inputTokens, outputTokens: outcome.usage.outputTokens,
+      estimatedDkk: outcome.costDkk, createdAt: at,
+    }).catch(() => log('warn', { reason: 'spend_record_failed' }));
     await options.extras?.afterRun({ runId, costDkk: outcome.costDkk, events: survivors.length, run: outcome.run, due: extra.due }, signal)
       .catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));
     if (outcome.ok) {
@@ -370,6 +373,8 @@ export function createBrain(options: BrainOptions) {
       activationType: 'scheduled',
       satisfiedSlot: claim.run.slot,
       allowQuiet: claim.run.trigger === 'manual',
+      policyRevision: proactiveSettingsRevision(settings),
+      worstCaseDkk: worstCase,
     });
     if (!reservation.allowed) {
       await finish('skipped', reservation.reason === 'spaced'
@@ -395,16 +400,14 @@ export function createBrain(options: BrainOptions) {
       }),
     }, signal);
     const at = now();
-    if (outcome.usage.inputTokens > 0 || outcome.usage.outputTokens > 0) {
-      await options.proactive.spend.record({
-        runId: claim.run.id,
-        month: monthKey(at),
-        inputTokens: outcome.usage.inputTokens,
-        outputTokens: outcome.usage.outputTokens,
-        estimatedDkk: outcome.costDkk,
-        createdAt: at,
-      });
-    }
+    await options.proactive.spend.record({
+      runId: claim.run.id,
+      month: monthKey(at),
+      inputTokens: outcome.usage.inputTokens,
+      outputTokens: outcome.usage.outputTokens,
+      estimatedDkk: outcome.costDkk,
+      createdAt: at,
+    });
     await options.extras?.afterRun({
       runId: claim.run.id, costDkk: outcome.costDkk, events: 0, run: outcome.run, due: extra.due,
     }, signal).catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));

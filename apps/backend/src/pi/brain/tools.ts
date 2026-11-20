@@ -221,16 +221,20 @@ export function createBrainTools(options: {
             observedAt: ref.observedAt,
           })) ?? []),
         ];
-        if (evidence.some((claimed) => !authoritativeEvidence.some((known) =>
-          known.source === claimed.source &&
-          (known.observedAt !== null && claimed.observedAt !== null &&
-            Date.parse(known.observedAt) === Date.parse(claimed.observedAt)) &&
-          (claimed.ref === null || known.ref === claimed.ref) &&
-          (claimed.identity === null || known.identity === claimed.identity)))) {
-          throw new ToolRefusal(
-            'The evidence source, identity or observation does not match this wake or the current situation. Nothing was sent.',
-          );
-        }
+        const canonicalEvidence = evidence.map((claimed) => {
+          const known = authoritativeEvidence.find((candidate) =>
+            candidate.source === claimed.source &&
+            (candidate.observedAt !== null && claimed.observedAt !== null &&
+              Date.parse(candidate.observedAt) === Date.parse(claimed.observedAt)) &&
+            (claimed.ref === null || candidate.ref === claimed.ref) &&
+            (claimed.identity === null || candidate.identity === claimed.identity));
+          if (!known) {
+            throw new ToolRefusal(
+              'The evidence source, identity or observation does not match this wake or the current situation. Nothing was sent.',
+            );
+          }
+          return { ...known };
+        });
         if (followUpIds.length > 0 && view) {
           const available = new Set(view.state?.followUps.map(({ id }) => id) ?? []);
           if (followUpIds.some((id) => !available.has(id))) {
@@ -239,7 +243,7 @@ export function createBrainTools(options: {
         }
         const sent = await comms.send({
           text,
-          evidence,
+          evidence: canonicalEvidence,
           followUpIds,
           notificationEvidence: {
             category,

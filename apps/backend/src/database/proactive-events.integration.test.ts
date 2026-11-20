@@ -30,7 +30,8 @@ beforeAll(async () => {
     ALTER TABLE dbo.proactive_events ADD
       identity_key nvarchar(200) NULL,
       material_hash char(64) NULL,
-      not_before_at datetime2(7) NULL;`);
+      not_before_at datetime2(7) NULL,
+      reopenable bit NOT NULL DEFAULT 0;`);
   await pool.request().batch(`CREATE UNIQUE INDEX UX_proactive_events_owner_active_identity_test
       ON dbo.proactive_events (owner_object_id, identity_key)
       WHERE identity_key IS NOT NULL AND processed_at IS NULL;`);
@@ -147,8 +148,12 @@ describe('proactive event queue on SQL Server', () => {
     expect(claimed.map(({ id }) => id)).toEqual([changed.id]);
     expect(await queue.cancel('calendar-event:stable', dueAt, 'follow-up cancelled in test')).toBe(true);
     expect(await queue.hasWork(new Date(dueAt.getTime() + 1))).toBe(false);
-    expect(await queue.enqueue(changedInput, new Date(dueAt.getTime() + 1_000)))
-      .toEqual({ id: changed.id, inserted: true });
+    const reopened = await queue.enqueue(changedInput, new Date(dueAt.getTime() + 1_000));
+    expect(reopened).toMatchObject({ inserted: true });
+    expect(reopened.id).not.toBe(changed.id);
+    await queue.settle([{ id: changed.id, outcome: 'late result from old worker' }], new Date(dueAt.getTime() + 1_100));
+    await queue.retryLater([changed.id], new Date(dueAt.getTime() + 60_000));
+    expect(await queue.claim(dueAt, 10, 60_000)).toMatchObject([{ id: reopened.id }]);
   });
 
   it('reactivates an earlier material version after the newer version has settled', async () => {
@@ -170,9 +175,29 @@ describe('proactive event queue on SQL Server', () => {
     const changedClaim = await queue.claim(now, 10, 60_000);
     expect(changedClaim).toMatchObject([{ id: changedRow.id }]);
     await queue.settle([{ id: changedRow.id, outcome: 'brain wake delivered' }], now);
-    expect(await queue.enqueue(original, new Date(now.getTime() + 1_000)))
-      .toEqual({ id: first.id, inserted: true });
-    expect(await queue.claim(now, 10, 60_000)).toMatchObject([{ id: first.id }]);
+    const reopened = await queue.enqueue(original, new Date(now.getTime() + 1_000));
+    expect(reopened).toMatchObject({ inserted: true });
+    expect(reopened.id).not.toBe(first.id);
+    expect(await queue.claim(now, 10, 60_000)).toMatchObject([{ id: reopened.id }]);
+  });
+
+  it('selects reopenable material generations independently of a reused dedupe key', async () => {
+    await pool.request().query('DELETE dbo.proactive_events');
+    const original = {
+      ...event('shared-material-key'),
+      identity: 'calendar-event:shared-material',
+      material: { startsAt: 'A' },
+      notBeforeAt: now,
+    };
+    const changed = { ...original, material: { startsAt: 'B' }, summary: 'Moved' };
+    await queue.enqueue(original, now);
+    const changedRow = await queue.enqueue(changed, new Date(now.getTime() + 1));
+    const revertedRow = await queue.enqueue(original, new Date(now.getTime() + 2));
+    const returnedRow = await queue.enqueue(changed, new Date(now.getTime() + 3));
+    expect(returnedRow).toMatchObject({ inserted: true });
+    expect(returnedRow.id).not.toBe(changedRow.id);
+    expect(returnedRow.id).not.toBe(revertedRow.id);
+    expect(await queue.claim(now, 10, 60_000)).toMatchObject([{ id: returnedRow.id }]);
   });
 
   it('computes the first due instant across the whole owner queue before truncating', async () => {

@@ -206,6 +206,37 @@ describe('a brain wake over the Jarvis MCP server', () => {
     expect(pushes).toEqual([]);
   });
 
+  it('stores canonical server evidence instead of model-authored labels', async () => {
+    const { tool, wake, conversations } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const sent = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:42',
+          identity: 'github:workflow_run:42',
+          label: 'A model-written label with invented detail',
+          observedAt: '2026-11-16T09:58:00.000Z',
+        }],
+      },
+    });
+    expect(sent.outcome).toBe('ok');
+    expect([...conversations.proactiveReceipts.values()][0]?.evidence).toEqual([{
+      source: 'factory',
+      ref: 'github:workflow_run:42',
+      identity: 'github:workflow_run:42',
+      label: 'Deploy 42',
+      observedAt: '2026-11-16T09:58:00.000Z',
+    }]);
+  });
+
   it.each([
     {
       ref: 'github:workflow_run:42',

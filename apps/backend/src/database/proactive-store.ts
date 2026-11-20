@@ -221,6 +221,9 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             categories: { ...current.categories, ...patch.categories },
             newsFeeds: patch.newsFeeds === undefined ? current.newsFeeds : patch.newsFeeds,
           };
+          const disabledSources = sourceIds.filter((source) =>
+            current.sources[source] && !updated.sources[source]);
+          const invalidatedAt = new Date();
           await new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, owner)
             .input('paused', sql.Bit, updated.paused)
@@ -243,6 +246,27 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
                 (owner_object_id, paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
                  news_feeds_json, guidance)
                 VALUES (@owner, @paused, @budget, @backgroundTurns, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
+          if (disabledSources.length > 0) {
+            await new sql.Request(transaction)
+              .input('owner', sql.UniqueIdentifier, owner)
+              .input('disabledSources', sql.NVarChar(sql.MAX), JSON.stringify(disabledSources))
+              .input('invalidatedAt', sql.DateTime2, invalidatedAt)
+              .query(`MERGE dbo.proactive_source_status WITH (HOLDLOCK) AS target
+                USING (
+                  SELECT [value] COLLATE Latin1_General_100_BIN2 AS source_id
+                  FROM OPENJSON(@disabledSources)
+                ) AS source
+                ON target.owner_object_id = @owner AND target.source_id = source.source_id
+                WHEN MATCHED THEN UPDATE SET
+                  state = N'stale', reason = N'source_disabled',
+                  invalidated_at = CASE WHEN target.observed_at > @invalidatedAt
+                    THEN target.observed_at ELSE @invalidatedAt END
+                WHEN NOT MATCHED THEN INSERT (
+                  owner_object_id, source_id, state, reason, observed_at, invalidated_at
+                ) VALUES (
+                  @owner, source.source_id, N'stale', N'source_disabled', @invalidatedAt, @invalidatedAt
+                );`);
+          }
           await transaction.commit();
           if (current.paused !== updated.paused ||
               current.backgroundTurnsPerDay !== updated.backgroundTurnsPerDay ||
@@ -624,8 +648,15 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
       async list() {
         const { recordset } = await databaseReadRequest(pool)
           .input('owner', sql.UniqueIdentifier, owner)
-          .query<{ source_id: SourceId; state: SourceStatus['state']; reason: string | null; observed_at: Date | string }>(
-            `SELECT source_id, state, reason, observed_at FROM dbo.proactive_source_status WHERE owner_object_id = @owner;`);
+          .query<{
+            source_id: SourceId;
+            state: SourceStatus['state'];
+            reason: string | null;
+            observed_at: Date | string;
+            invalidated_at: Date | string | null;
+          }>(
+            `SELECT source_id, state, reason, observed_at, invalidated_at
+              FROM dbo.proactive_source_status WHERE owner_object_id = @owner;`);
         return recordset.map((row) => ({
           id: row.source_id,
           label: sourceLabels[row.source_id],
@@ -633,6 +664,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           state: row.state,
           reason: row.reason,
           observedAt: iso(row.observed_at),
+          invalidatedAt: row.invalidated_at ? iso(row.invalidated_at) : null,
         }));
       },
       async upsert(status) {
@@ -646,25 +678,59 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             USING (SELECT @owner AS owner_object_id, @source AS source_id) AS source
             ON target.owner_object_id = source.owner_object_id AND target.source_id = source.source_id
             WHEN MATCHED AND @observedAt >= target.observed_at THEN UPDATE
-              SET state = @state, reason = @reason, observed_at = @observedAt
+              SET state = CASE WHEN target.invalidated_at IS NULL OR @observedAt > target.invalidated_at
+                  THEN @state ELSE N'stale' END,
+                reason = CASE WHEN target.invalidated_at IS NULL OR @observedAt > target.invalidated_at
+                  THEN @reason ELSE N'observation_not_newer_than_source_invalidation' END,
+                observed_at = @observedAt
             WHEN NOT MATCHED THEN INSERT (owner_object_id, source_id, state, reason, observed_at)
               VALUES (@owner, @source, @state, @reason, @observedAt);`);
       },
     },
     spend: {
       async record(input) {
-        await pool.request()
-          .input('id', sql.UniqueIdentifier, randomUUID())
-          .input('owner', sql.UniqueIdentifier, owner)
-          .input('run', sql.UniqueIdentifier, input.runId)
-          .input('month', sql.Char(7), input.month)
-          .input('inputTokens', sql.Int, input.inputTokens)
-          .input('outputTokens', sql.Int, input.outputTokens)
-          .input('estimated', sql.Decimal(9, 4), input.estimatedDkk)
-          .input('createdAt', sql.DateTime2, input.createdAt)
-          .query(`INSERT dbo.proactive_spend
-            (id, owner_object_id, run_id, month_key, input_tokens, output_tokens, estimated_dkk, created_at)
-            VALUES (@id, @owner, @run, @month, @inputTokens, @outputTokens, @estimated, @createdAt);`);
+        const transaction = new sql.Transaction(pool);
+        try {
+          await transaction.begin();
+          await new sql.Request(transaction)
+            .input('id', sql.UniqueIdentifier, randomUUID())
+            .input('owner', sql.UniqueIdentifier, owner)
+            .input('run', sql.UniqueIdentifier, input.runId)
+            .input('month', sql.Char(7), input.month)
+            .input('inputTokens', sql.Int, input.inputTokens)
+            .input('outputTokens', sql.Int, input.outputTokens)
+            .input('estimated', sql.Decimal(9, 4), input.estimatedDkk)
+            .input('createdAt', sql.DateTime2, input.createdAt)
+            .query(`DECLARE @lockResult int;
+              DECLARE @resource nvarchar(255) = CONCAT(
+                N'jarvis.proactive.spend:', LOWER(CONVERT(nvarchar(36), @owner)), N':',
+                LOWER(CONVERT(nvarchar(36), @run))
+              );
+              EXEC @lockResult = sys.sp_getapplock @Resource = @resource, @LockMode = 'Exclusive',
+                @LockOwner = 'Transaction', @LockTimeout = 10000;
+              IF @lockResult < 0 THROW 51001, 'Could not acquire proactive spend lock', 1;
+
+              SELECT id FROM dbo.proactive_event_batches WITH (UPDLOCK, HOLDLOCK)
+                WHERE owner_object_id = @owner AND id = @run;
+              IF NOT EXISTS (
+                SELECT 1 FROM dbo.proactive_spend WITH (UPDLOCK, HOLDLOCK)
+                WHERE owner_object_id = @owner AND run_id = @run
+              )
+                INSERT dbo.proactive_spend (
+                  id, owner_object_id, run_id, month_key, input_tokens, output_tokens, estimated_dkk, created_at
+                ) VALUES (@id, @owner, @run, @month, @inputTokens, @outputTokens, @estimated, @createdAt);
+
+              DECLARE @actual decimal(9,4);
+              SELECT TOP (1) @actual = estimated_dkk FROM dbo.proactive_spend
+                WHERE owner_object_id = @owner AND run_id = @run;
+              UPDATE dbo.proactive_event_batches
+                SET actual_dkk = @actual, reconciled_at = @createdAt
+                WHERE owner_object_id = @owner AND id = @run AND actual_dkk IS NULL;`);
+          await transaction.commit();
+        } catch (error) {
+          try { await transaction.rollback(); } catch { /* Preserve the spend recording failure. */ }
+          throw error;
+        }
       },
       async monthTotal(month) {
         const { recordset } = await databaseReadRequest(pool)

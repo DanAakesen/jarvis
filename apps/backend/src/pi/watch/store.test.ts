@@ -223,4 +223,35 @@ describe('standing watches in the vault', () => {
     await watches.list(signal);
     expect(reads).toBe(2);
   });
+
+  it('does not label a parsed pre-write snapshot with a human edit that arrives before reread', async () => {
+    const t = setup();
+    const path = 'PI/Watches/Atomic.md';
+    await t.watches.create({ title: 'Atomic', text: 'The original watch.' }, signal);
+    const write = t.vault.write;
+    t.vault.write = async (notePath, content, message, expected, abort) => {
+      const result = await write(notePath, content, message, expected, abort);
+      if (notePath === path) {
+        t.vault.files.set(path, content.replace('The original watch.', 'Human edit after PI saved.'));
+      }
+      return result;
+    };
+    await t.watches.update({ name: 'Atomic', change: 'PI also changed the trail.' }, signal);
+    expect((await t.watches.list(signal))[0]?.excerpt).toContain('Human edit after PI saved.');
+  });
+
+  it('caches a newly created watch from the exact reread, not from the attempted create content', async () => {
+    const t = setup();
+    const path = 'PI/Watches/Created.md';
+    const write = t.vault.write;
+    t.vault.write = async (notePath, content, message, expected, abort) => {
+      const result = await write(notePath, content, message, expected, abort);
+      if (notePath === path) {
+        t.vault.files.set(path, content.replace('Initial text.', 'Human edit immediately after create.'));
+      }
+      return result;
+    };
+    await t.watches.create({ title: 'Created', text: 'Initial text.' }, signal);
+    expect((await t.watches.list(signal))[0]?.excerpt).toContain('Human edit immediately after create.');
+  });
 });

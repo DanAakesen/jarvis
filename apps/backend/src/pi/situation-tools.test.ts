@@ -32,13 +32,34 @@ describe('PI situation MCP tools', () => {
   it('reads, commits and rejects a closed activation through the live grant', async () => {
     const registry = createPiTurnRegistry();
     const proactive = createMemoryProactiveStore(owner);
+    const location = {
+      id: 'location' as const,
+      label: 'Location',
+      async read() {
+        return {
+          source: 'location' as const,
+          state: 'ok' as const,
+          reason: null,
+          observedAt: at.toISOString(),
+          facts: [{
+            ref: 'location:device',
+            identity: 'location:device',
+            kind: 'location',
+            label: 'Near Copenhagen',
+            text: 'Coarse location',
+            observedAt: at.toISOString(),
+          }],
+        };
+      },
+    };
     const service = createPiSituationService({
-      owner, store: createMemoryPiSituationStore(), proactive, sources: [], now: () => at,
+      owner, store: createMemoryPiSituationStore(), proactive, sources: [location], now: () => at,
     });
     const tools = createSituationTools({ registry, service, now: () => at });
     const read = tools.find(({ name }) => name === 'situation_read')!;
     const commit = tools.find(({ name }) => name === 'situation_commit')!;
     const patch = tools.find(({ name }) => name === 'situation_patch')!;
+    const lookup = tools.find(({ name }) => name === 'situation_lookup')!;
     const grant = registry.open({
       ownerObjectId: owner, sessionId: '7', messageId: '42', signal: live(),
       activation: {
@@ -70,25 +91,24 @@ describe('PI situation MCP tools', () => {
       state,
     }, request, live()) as Record<string, unknown>;
     expect(result).toMatchObject({ committed: true, revision: 2 });
+    const lookedUp = await lookup.execute(
+      { source: 'location', ref: 'location:device' },
+      request,
+      live(),
+    ) as Record<string, unknown>;
+    const verifiedRef = lookedUp.verifiedRef as { id: string };
     const patchResult = await patch.execute({
       expectedRevision: result.revision,
       expectedHash: result.hash,
       policyRevision: first.policyRevision,
       patch: {
         summary: null,
-        upsertRefs: [{
-          id: 'location:device',
-          source: 'location',
-          identity: 'location:device',
-          label: 'Near Copenhagen',
-          observedAt: at.toISOString(),
-          expiresAt: null,
-        }],
+        upsertRefs: [verifiedRef],
         upsertFollowUps: [{
           id: 'follow:location',
           text: 'Check the location later.',
           dueAt: null,
-          refIds: ['location:device'],
+          refIds: [verifiedRef.id],
         }],
       },
     }, request, live()) as Record<string, unknown>;
