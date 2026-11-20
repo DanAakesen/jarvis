@@ -5794,17 +5794,22 @@ background PI read the same `dbo.memories` store.
 `GET /memory` returns SQL Personal Memory only, with `query`, compatibility
 `folder=General`, `limit` (1–50) and `offset` (0–10,000). IDs are decimal SQL
 IDs, every item has `type: "memory"`, and every result carries the exact
-conversation message ID plus a source link. Search uses the existing vector
+conversation source or verified Settings-action source. Search uses the existing vector
 retrieval and falls back to full-text/substring search; it never consults the
 Vault index. An absent match is bounded and explicitly not proof of absence.
 
 `GET /memory/{id}` returns the current item and up to ten source-linked
 versions. `PATCH /memory/{id}` accepts only `{ "text": ... }` and preserves SQL
-history; `DELETE /memory/{id}` commits the forget and returns 204. Vault note
+history; its new revision is sourced to the server-generated request UUID and
+authenticated owner object ID, never to the original capture. `DELETE
+/memory/{id}` records the same explicit Settings provenance and returns 204.
+Migration `0091_memory_action_provenance.sql` makes conversation source fields
+nullable only when a complete Settings action source is present, and refuses
+rollback while such durable audit evidence exists. Vault note
 reads and edits remain on `/notes/note`, and Knowledge/graph reads use that
 Notes contract. There is no `vault_note` branch in `/memory` and no
 `/memory/status`. Responses are uncached, bounded and redact credential-like
-text. No database migration is needed; durable-memory edits remain capped at
+text. Durable-memory edits remain capped at
 2,000 characters.
 
 The authenticated owner message is the write authority. Explicit remember
@@ -5812,7 +5817,9 @@ language (including "remember this" and "don't forget") bypasses the
 automatic-capture switch; a model-supplied `sourceIntent` is only descriptive.
 Automatic capture is allowed only while `memory.automaticCapture` is on and
 never accepts inferred facts, secrets, credentials or sensitive health and
-financial details. Successful Chat/Voice tool completion invalidates iPhone
+financial details. Before embedding or persistence, `memory_remember`,
+`memory_correct` and Settings edits validate the combined category, stable
+key, source text and content for secrets. Successful Chat/Voice tool completion invalidates iPhone
 and web Memory pagination so a newly committed preference is visible from a
 fresh page; failures remain visible and are never represented as a remembered
 confirmation.

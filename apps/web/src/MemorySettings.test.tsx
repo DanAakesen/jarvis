@@ -59,7 +59,34 @@ it('loads memory-only pages and keeps Load more on the correct SQL offset', asyn
   expect(screen.queryByText('A note that must stay in Knowledge')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
   expect(await screen.findByText('Morning meetings.')).not.toBeNull();
-  expect(requests.map((url) => url.searchParams.get('offset'))).toEqual(['0', '1']);
+  expect(requests.map((url) => url.searchParams.get('offset'))).toEqual(['0', '2']);
+});
+
+it('advances past a raw page containing only Vault notes', async () => {
+  const offsets: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    const offset = url.searchParams.get('offset') ?? '0';
+    offsets.push(offset);
+    const items = offset === '0'
+      ? [
+        { ...memory('vault-1', 'First note'), id: 'vault_abc', type: 'vault_note' },
+        { ...memory('vault-2', 'Second note'), id: 'vault_def', type: 'vault_note' },
+      ]
+      : [memory('3', 'The next real memory.')];
+    return new Response(JSON.stringify({
+      items,
+      count: items.length,
+      limit: 50,
+      offset: Number(offset),
+      hasMore: offset === '0',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }));
+
+  render(<MemorySettings backendUrl="https://api.example.test" getAccessToken={async () => 'fixture'} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+  expect(await screen.findByText('The next real memory.')).not.toBeNull();
+  expect(offsets).toEqual(['0', '2']);
 });
 
 it('refreshes the first page after a successful Chat or Voice memory write', async () => {

@@ -13,6 +13,7 @@ import { createPiSituationStore } from './pi-situation-store.js';
 import { parsePiSituationState } from '../pi/situation.js';
 import { sourceIds } from '../proactive/types.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
+import { createMemoryStore } from './memory-store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -53,6 +54,90 @@ describe('real SQL Server migration contract', () => {
       expect(rows.recordset).toEqual([{ id: 1, value: 'original' }]);
       expect((await pool.request().query('SELECT name FROM dbo.schema_migrations')).recordset).toEqual([{ name: first.name }]);
     } finally { await other.close(); }
+  });
+
+  it('stores Settings corrections and deletion audits as Settings actions, never as the capture message', async () => {
+    const core = await readFile(new URL('../../../../db/migrations/0001_core_tables.sql', import.meta.url), 'utf8');
+    const memory = await readFile(new URL('../../../../db/migrations/0016_long_term_memory.sql', import.meta.url), 'utf8');
+    const provenance = await readFile(new URL('../../../../db/migrations/0091_memory_action_provenance.sql', import.meta.url), 'utf8');
+    const coreDown = await readFile(new URL('../../../../db/migrations/down/0001_core_tables.sql', import.meta.url), 'utf8');
+    const memoryDown = await readFile(new URL('../../../../db/migrations/down/0016_long_term_memory.sql', import.meta.url), 'utf8');
+    const provenanceDown = await readFile(new URL('../../../../db/migrations/down/0091_memory_action_provenance.sql', import.meta.url), 'utf8');
+    await pool.request().batch(core);
+    await pool.request().batch(memory);
+    await pool.request().batch('ALTER TABLE dbo.memories ADD embedding_model nvarchar(128) NULL;');
+    await pool.request().batch(provenance);
+    try {
+      const session = await pool.request().query<{ id: string }>(
+        "INSERT dbo.jarvis_sessions (channel, language) OUTPUT CONVERT(varchar(20), inserted.id) AS id VALUES (N'chat', N'en');",
+      );
+      const message = await pool.request()
+        .input('sessionId', sql.BigInt, BigInt(session.recordset[0]!.id))
+        .query<{ id: string }>(`INSERT dbo.messages (jarvis_session_id, role, text)
+          OUTPUT CONVERT(varchar(20), inserted.id) AS id
+          VALUES (@sessionId, N'dan', N'Remember that I prefer afternoons.');`);
+      const messageId = message.recordset[0]!.id;
+      const store = createMemoryStore(pool);
+      await store.initialize();
+      const saved = await store.save({
+        category: 'preference',
+        key: 'appointments.time',
+        content: 'Prefers afternoon appointments.',
+        source: { kind: 'conversation', messageId },
+        embedding: null,
+        embeddingModel: null,
+      }, AbortSignal.timeout(10_000));
+      const settingsRequestId = randomUUID();
+      const ownerObjectId = randomUUID();
+      const corrected = await store.correct(saved.memory.id, {
+        category: 'preference',
+        key: 'appointments.time',
+        content: 'Prefers morning appointments.',
+        source: { kind: 'settings', requestId: settingsRequestId, ownerObjectId },
+        embedding: null,
+        embeddingModel: null,
+      }, AbortSignal.timeout(10_000));
+      expect(corrected.memory).toMatchObject({
+        sourceMessageId: null,
+        settingsAction: { requestId: settingsRequestId, ownerObjectId },
+        sourceText: '',
+      });
+      const history = await store.history(saved.memory.id, 10, AbortSignal.timeout(10_000));
+      expect(history).toHaveLength(2);
+      expect(history[0]).toMatchObject({ settingsAction: { requestId: settingsRequestId }, sourceMessageId: null });
+      expect(history[1]).toMatchObject({ sourceMessageId: messageId, settingsAction: null });
+
+      const deleteRequestId = randomUUID();
+      await expect(store.forget(saved.memory.id, {
+        kind: 'settings',
+        requestId: deleteRequestId,
+        ownerObjectId,
+      }, AbortSignal.timeout(10_000))).resolves.toMatchObject({ key: 'appointments.time' });
+      const audit = await pool.request().query<{
+        source_kind: string;
+        request_message_id: string | null;
+        action_request_id: string | null;
+        action_owner_id: string | null;
+      }>(`SELECT source_kind, CONVERT(varchar(20), request_message_id) AS request_message_id,
+          LOWER(CONVERT(char(36), action_request_id)) AS action_request_id,
+          LOWER(CONVERT(char(36), action_owner_id)) AS action_owner_id
+        FROM dbo.memory_deletions;`);
+      expect(audit.recordset).toEqual([{
+        source_kind: 'settings',
+        request_message_id: null,
+        action_request_id: deleteRequestId,
+        action_owner_id: ownerObjectId,
+      }]);
+      await expect(pool.request().batch(provenanceDown)).rejects.toThrow(/durable audit evidence/u);
+    } finally {
+      await pool.request().query(`IF OBJECT_ID(N'dbo.memory_deletions', N'U') IS NOT NULL
+          DELETE FROM dbo.memory_deletions;
+        IF OBJECT_ID(N'dbo.memories', N'U') IS NOT NULL
+          DELETE FROM dbo.memories;`);
+      await pool.request().batch(provenanceDown);
+      await pool.request().batch(memoryDown);
+      await pool.request().batch(coreDown);
+    }
   });
 
   describe('persistent Watch-only credentials', () => {

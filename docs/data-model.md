@@ -189,7 +189,7 @@ flowchart LR
     subgraph USE["7 · Usage and cost"]
         usage
     end
-    subgraph MEMORY["9 · Legacy SQL memory"]
+    subgraph MEMORY["9 · Personal Memory"]
         memories
         memory_history
         memory_deletions
@@ -238,7 +238,7 @@ flowchart LR
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
 | 7 | Usage and cost | Transparency per task/project, Foundry chat-canary tokens and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
 | 8 | Phone, notifications and confirmations | Phone-call sessions plus expiring browser approvals; `teams_conversations` remains dormant optional-integration storage, not used in production | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
-| 9 | Legacy SQL memory | Historical source-linked memory rows, retained for compatibility but superseded as the durable knowledge source | `memories`, `memory_history`, `memory_deletions` |
+| 9 | Personal Memory | Authoritative durable owner facts, preferences, decisions and commitments, separate from Vault Knowledge | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata and explicitly pinned workspace views; image bytes are private Blob objects | `workspace_artifacts`, `workspace_pins` |
 | 11 | GitHub vault index | Derived heading chunks and optional vectors keyed by vault path and blob SHA; vault content remains authoritative in GitHub | `vault_chunks` |
 | 12 | Owner sign-in sessions | The optional, revocable 10-day owner session (`JARVIS_OWNER_SESSION_ENABLED`, default off); unrelated to the conversation `jarvis_sessions` | `owner_sessions` |
@@ -336,7 +336,7 @@ erDiagram
 - P9-105 adds append-only `dbo.conversation_summaries` in migration `0051`, with a paired down batch, so a long chat keeps its decisions after the history window moves. A row is owner-scoped by Dan's Entra object ID and numbered by version. It records the covered `from_message_id` and `through_message_id` (no foreign key: messages are never changed or deleted), `message_count`, a 1 to 6,000 character `summary`, up to 3,000 characters of `open_items` (decisions, commitments, open tasks), the `model` and `created_at`. Text is redacted by the backend and never holds file contents. The backend keeps the newest 200 versions per owner; the 24-hour row count enforces `global.conversationSummaryDailyLimit`, stored in the existing `settings` table as `global.conversation_summary_daily_limit` (integer 0 to 48, default 24, 0 off). The hosted agent reads the newest row and appends the next version through the owner-only `/conversation/summary` routes; see [architecture.md](architecture.md).
 - `tool_calls` records what Jarvis actually did. Spoken confirmations are built from these results (L16).
 - P4-04's agent-only turn context reads up to 20 running tasks and their three latest `task_events` from the existing tables. It selects task status/activity and event type, summary, source, and time; it excludes task requests and event payloads, and clips summaries to 400 characters. No schema or migration change is needed.
-- P7-13's `memories` row is keyed by category and stable key, has one current Dan source message, and optionally stores a 1536-dimensional embedding. `memory_history` keeps each replaced source-linked revision; `memory_deletions` records only the forgotten memory ID, request message ID and deletion time, never deleted content. Forget cascades to revisions but does not remove messages. Chat writes use the existing message ID; voice persists the provider transcript item ID on `messages` and resolves it to Dan's stored transcript before a write. Retrieval joins the current source message and returns bounded source text.
+- P7-13's `memories` row is keyed by category and stable key and optionally stores a 1536-dimensional embedding. Conversation revisions source to the exact Dan message. Migration `0091` lets a current row or history version instead source to a verified Settings action: server-generated request UUID plus authenticated owner object ID. `memory_deletions` records the same mutually exclusive conversation or Settings source, never deleted content. Forget cascades to revisions but does not remove messages. Chat and Voice resolve a stored Dan transcript before writes; Settings routes never reuse the original capture message as action provenance. Retrieval joins conversation sources and returns bounded source text; Settings sources carry their action identity.
 - The backend tool dispatcher requires `X-Jarvis-Message-ID` and stores the validated arguments, result and `ok`/`refused`/`error` outcome in `tool_calls`. A tool refuses by throwing `ToolRefusal` with a safe reason, stored as `{ "refused": reason }`; `ToolFailure` stores a bounded safe explanation with an `error` outcome, while unexpected failures stay generic. P7-10 stores its bounded query and returned title/snippet/link values in this existing table; no new table or migration is needed. P1-01 (#15) owns the table migration; no live SQL write has been verified yet. P4-06 stores the source message before P4-09 sends its ID and the delegated token in the application payload to the hosted agent through Foundry Invocations. The agent registers its chat handler with that protocol, verifies the caller and message through the backend, and sets the message ID in the per-turn context used by tool calls. P4-04's running-task context is fetched by the model client on every turn. No data-model or migration change is required.
 - P7-14 reuses `tool_calls` for its daily `web_research` count. Because the tool is sensitive, the audit stores neither the query nor returned answer/source text; the name, outcome, and timestamp remain. No research table, column, index, or migration is added.
 - P3-12 `create_project` reuses `dbo.projects`, `dbo.tasks`, `dbo.messages`, and `dbo.tool_calls`: tool arguments/results contain the requested name/description and project/task identifiers, while the task uses `source = 'chat'` and references the calling message. The backend-only repository token is never persisted; the project starts with the `node`/`1x2` base defaults. No schema or migration change is required.
@@ -780,25 +780,25 @@ does not delete Blob objects. `0018_tool_call_refused_outcome.sql` makes the run
 `refused` outcome persistable so refused image requests remain visible and counted;
 its down migration refuses to proceed while refused rows exist.
 
-## Legacy SQL memory schema (group 9)
+## Personal Memory schema (group 9)
 
-P7-13 created this standalone memory schema. P7-40 supersedes its production
-capture/retrieval path: the existing tables are retained for compatibility and
-historical data, but current durable knowledge is written to the GitHub vault.
+P7-13 created Personal Memory and #1968 restores it as a live domain separate
+from Vault Knowledge. The tables are authoritative for durable owner facts;
+P7-40 continues to own notes, tasks and documents in the GitHub Vault.
 
 `0016_long_term_memory.sql` adds:
 
 | Table/column | Contract |
 | --- | --- |
-| `memories` | One current row per `(category, memory_key)`, with validated content, a required source message, revision and update time; optional `vector(1536)` when supported |
-| `memory_history` | Previous values and their Dan source-message IDs; deleting a memory cascades only to its versions |
-| `memory_deletions` | Content-free audit of the memory ID and Dan message that requested forgetting; no FK to the deleted memory |
+| `memories` | One current row per `(category, memory_key)`, with validated content, an exclusive conversation or Settings provenance source, revision and update time; optional `vector(1536)` when supported |
+| `memory_history` | Previous values and their exclusive conversation/Settings provenance; deleting a memory cascades only to its versions |
+| `memory_deletions` | Content-free audit of the memory ID and exact conversation or Settings action that requested forgetting; no FK to the deleted memory |
 | `messages.source_item_id` | Nullable provider transcript item identifier used to resolve a voice tool call to the saved Dan transcript; indexed only when non-null |
 
-Legacy memory searches and list/history pages are bounded and join only Dan source
+Personal Memory searches and list/history pages are bounded and join only Dan source
 messages. Vector search uses cosine distance when the SQL vector type is available;
 otherwise retrieval uses SQL full-text when installed and bounded substring search
-as the final fallback. These tables are not the source of truth for new captures.
+as the final fallback. Settings-sourced rows are retained without a synthetic message.
 The full-text catalog is created outside migration transactions and remains empty
 after a down migration; the idempotent setup batch can recreate the index later.
 

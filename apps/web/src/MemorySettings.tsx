@@ -6,7 +6,7 @@ import { formatDateTime } from './format/date-time';
 
 interface MemoryItem { id: string; kind: 'memory'; title: string; folder: string; text: string; updatedAt: string | null; githubUrl: string | null }
 interface MemoryDetail extends MemoryItem { history: { at: string | null; text: string; url: string | null }[] }
-interface MemoryPage { items: MemoryItem[]; offset: number; limit: number; hasMore: boolean }
+interface MemoryPage { items: MemoryItem[]; offset: number; nextOffset: number; limit: number; hasMore: boolean }
 
 type Load<T> = { status: 'loading' } | { status: 'unavailable' } | { status: 'error'; message: string } | { status: 'ready'; value: T };
 
@@ -51,12 +51,18 @@ function readPage(value: unknown): MemoryPage {
   if (!list) throw new Error('Memory returned an unexpected list.');
   const offset = typeof container?.offset === 'number' ? container.offset : -1;
   const limit = typeof container?.limit === 'number' ? container.limit : -1;
-  if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+  const count = typeof container?.count === 'number' ? container.count : -1;
+  const rawItems = list.slice(0, limit);
+  if (!Number.isInteger(offset) || offset < 0 ||
+      !Number.isInteger(limit) || limit < 1 || limit > 50 ||
+      !Number.isInteger(count) || count < 0 || count > limit ||
+      count !== list.length || rawItems.length !== list.length) {
     throw new Error('Memory returned an invalid page.');
   }
   return {
-    items: list.slice(0, limit).flatMap((entry) => { const item = readItem(entry); return item ? [item] : []; }),
+    items: rawItems.flatMap((entry) => { const item = readItem(entry); return item ? [item] : []; }),
     offset,
+    nextOffset: offset + count,
     limit,
     hasMore: container?.hasMore === true,
   };
@@ -122,6 +128,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     if (!response.ok) throw new Error(await errorMessage(response, 'Memories could not be loaded. Try again.'));
     const page = readPage(await response.json());
     if (page.offset !== offset || page.limit !== 50) throw new Error('Memory returned the wrong page. Try again.');
+    if (page.hasMore && page.nextOffset <= offset) throw new Error('Memory pagination did not advance. Try again.');
     return page;
   }, [call]);
 
@@ -254,7 +261,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
   async function loadMore() {
     if (list.status !== 'ready' || !list.value.hasMore || loadingMore) return;
     const generation = listGeneration.current;
-    const offset = list.value.offset + list.value.items.length;
+    const offset = list.value.nextOffset;
     setLoadingMore(true);
     setError('');
     try {
@@ -269,6 +276,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
             ...next,
             items: [...currentList.value.items, ...next.items.filter((item) => !seen.has(item.id))],
             offset: currentList.value.offset,
+            nextOffset: next.nextOffset,
           },
         };
       });

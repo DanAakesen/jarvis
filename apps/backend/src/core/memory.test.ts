@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type {
+  MemoryActionSource,
   MemoryRecord,
   MemorySaveInput,
   MemoryStore,
@@ -21,34 +22,40 @@ afterEach(async () => {
 });
 
 function record(
-  input: Pick<MemorySaveInput, 'category' | 'key' | 'content' | 'sourceMessageId'>,
+  input: Pick<MemorySaveInput, 'category' | 'key' | 'content' | 'source'>,
   id = '1',
   revision = 1,
 ): MemoryRecord {
+  const sourceMessageId = input.source.kind === 'conversation' ? input.source.messageId : null;
   return {
     id,
     category: input.category,
     key: input.key,
     content: input.content,
-    sourceMessageId: input.sourceMessageId,
-    sourceText: 'Dan source message',
+    sourceMessageId,
+    settingsAction: input.source.kind === 'settings'
+      ? { requestId: input.source.requestId, ownerObjectId: input.source.ownerObjectId }
+      : null,
+    sourceText: sourceMessageId ? 'Dan source message' : '',
     sourceTextTruncated: false,
     revision,
     updatedAt: new Date('2026-11-20T04:00:00.000Z'),
   };
 }
 
-function memoryStore(sourceMessages = new Map<string, string>()): {
+function memoryStore(sourceMessages = new Map<string, string>(), vectorSearch = false): {
   readonly store: MemoryStore;
   readonly records: Map<string, MemoryRecord>;
   readonly writes: MemorySaveInput[];
+  readonly forgetSources: MemoryActionSource[];
 } {
   const records = new Map<string, MemoryRecord>();
   const writes: MemorySaveInput[] = [];
+  const forgetSources: MemoryActionSource[] = [];
   let nextId = 1;
   const store: MemoryStore = {
     async initialize() {},
-    supportsVectorSearch: () => false,
+    supportsVectorSearch: () => vectorSearch,
     async getSourceMessage(messageId) {
       const text = sourceMessages.get(messageId);
       return text === undefined ? null : { messageId, text };
@@ -57,7 +64,12 @@ function memoryStore(sourceMessages = new Map<string, string>()): {
       writes.push(input);
       const existing = [...records.values()].find((item) =>
         item.category === input.category && item.key === input.key);
-      if (existing && existing.content === input.content && existing.sourceMessageId === input.sourceMessageId) {
+      const sameSource = input.source.kind === 'conversation'
+        ? existing?.sourceMessageId === input.source.messageId && existing.settingsAction === null
+        : existing?.sourceMessageId === null &&
+          existing.settingsAction?.requestId === input.source.requestId &&
+          existing.settingsAction.ownerObjectId === input.source.ownerObjectId;
+      if (existing && existing.content === input.content && sameSource) {
         return { memory: existing, created: false, changed: false };
       }
       const created = !existing;
@@ -81,7 +93,8 @@ function memoryStore(sourceMessages = new Map<string, string>()): {
       const current = records.get(memoryId);
       return current ? [{ ...current, changedAt: current.updatedAt }].slice(0, limit) : [];
     },
-    async forget(memoryId) {
+    async forget(memoryId, source) {
+      forgetSources.push(source);
       const current = records.get(memoryId);
       records.delete(memoryId);
       return current ? { category: current.category, key: current.key } : null;
@@ -95,7 +108,7 @@ function memoryStore(sourceMessages = new Map<string, string>()): {
       return { method: 'substring', memories: memories.slice(0, limit) };
     },
   };
-  return { store, records, writes };
+  return { store, records, writes, forgetSources };
 }
 
 function ownerRequest(messageId: string): FastifyRequest {
@@ -152,7 +165,7 @@ describe('Personal Memory', () => {
     }, ownerRequest('42'), AbortSignal.timeout(1_000));
 
     expect(result).toMatchObject({ id: '1', changed: true });
-    expect(fixture.writes[0]).toMatchObject({ sourceMessageId: '42' });
+    expect(fixture.writes[0]).toMatchObject({ source: { kind: 'conversation', messageId: '42' } });
     expect(automatic).not.toHaveBeenCalled();
   });
 
@@ -201,6 +214,38 @@ describe('Personal Memory', () => {
     expect(automatic.records.size).toBe(0);
   });
 
+  it('checks category, key, source and content for secrets before embedding remember or correct', async () => {
+    const embed = vi.fn(async () => Array.from({ length: 1536 }, () => 0));
+    const fixture = memoryStore(new Map([
+      ['42', 'Remember this harmless fact.'],
+      ['43', 'Correct that harmless fact.'],
+    ]), true);
+    fixture.records.set('1', record({
+      category: 'preference',
+      key: 'password',
+      content: 'Existing content.',
+      source: { kind: 'conversation', messageId: '42' },
+    }));
+    const module = createMemoryModule({
+      store: fixture.store,
+      automaticCapture: async () => true,
+      embedder: { model: 'fixture-embedding', embed },
+    });
+
+    await expect(tool(module, 'memory_remember').execute({
+      category: 'preference',
+      key: 'password',
+      content: 'An innocuous value.',
+      sourceIntent: 'requested',
+    }, ownerRequest('42'), AbortSignal.timeout(1_000))).rejects.toThrow(/Secrets/u);
+    await expect(tool(module, 'memory_correct').execute({
+      memoryId: '1',
+      content: 'Another innocuous value.',
+    }, ownerRequest('43'), AbortSignal.timeout(1_000))).rejects.toThrow(/Secrets/u);
+    expect(embed).not.toHaveBeenCalled();
+    expect(fixture.writes).toEqual([]);
+  });
+
   it('corrects the same identity and keeps revision history behind the new source', async () => {
     const fixture = memoryStore(new Map([
       ['42', 'Remember that I prefer afternoons.'],
@@ -210,7 +255,7 @@ describe('Personal Memory', () => {
       category: 'preference',
       key: 'appointments.time',
       content: 'Prefers afternoon appointments.',
-      sourceMessageId: '42',
+      source: { kind: 'conversation', messageId: '42' },
     }));
     const module = createMemoryModule({
       store: fixture.store,
@@ -237,13 +282,13 @@ describe('Personal Memory API', () => {
       category: 'preference',
       key: 'appointments.time',
       content: 'Prefers afternoon appointments.',
-      sourceMessageId: '42',
+      source: { kind: 'conversation', messageId: '42' },
     }));
     fixture.records.set('2', record({
       category: 'project_fact',
       key: 'jarvis.database',
       content: 'Jarvis uses Azure SQL.',
-      sourceMessageId: '42',
+      source: { kind: 'conversation', messageId: '42' },
     }, '2'));
     const module = createMemoryModule({ store: fixture.store });
     const app = buildApp(config, undefined, {
@@ -273,6 +318,20 @@ describe('Personal Memory API', () => {
       url: '/memory/vault_dGVzdA',
       headers: { authorization: bearer(ownerToken) },
     })).statusCode).toBe(400);
+    fixture.records.set('3', record({
+      category: 'preference',
+      key: 'password',
+      content: 'Legacy key that policy must refuse.',
+      source: { kind: 'conversation', messageId: '42' },
+    }, '3'));
+    const blocked = await app.inject({
+      method: 'PATCH',
+      url: '/memory/3',
+      headers: { authorization: bearer(ownerToken) },
+      payload: { text: 'An innocuous replacement.' },
+    });
+    expect(blocked.statusCode).toBe(400);
+    expect(fixture.writes).toEqual([]);
     const corrected = await app.inject({
       method: 'PATCH',
       url: '/memory/1',
@@ -280,7 +339,20 @@ describe('Personal Memory API', () => {
       payload: { text: 'Prefers morning appointments.' },
     });
     expect(corrected.statusCode).toBe(200);
-    expect(corrected.json().item).toMatchObject({ id: '1', type: 'memory' });
+    const correction = corrected.json();
+    expect(correction.item).toMatchObject({
+      id: '1',
+      type: 'memory',
+      source: {
+        type: 'settings',
+        requestId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+      },
+    });
+    expect(fixture.writes.at(-1)?.source).toMatchObject({
+      kind: 'settings',
+      requestId: correction.item.source.requestId,
+      ownerObjectId: config.auth.ownerObjectId,
+    });
     const detail = await app.inject({
       url: '/memory/1',
       headers: { authorization: bearer(ownerToken) },
@@ -289,12 +361,22 @@ describe('Personal Memory API', () => {
       id: '1',
       content: 'Prefers morning appointments.',
       category: 'preference',
+      source: { type: 'settings', requestId: correction.item.source.requestId },
     });
-    expect((await app.inject({
+    const forgotten = await app.inject({
       method: 'DELETE',
       url: '/memory/1',
       headers: { authorization: bearer(ownerToken) },
-    })).statusCode).toBe(204);
+    });
+    expect(forgotten.statusCode).toBe(204);
+    expect(fixture.forgetSources.at(-1)).toMatchObject({
+      kind: 'settings',
+      ownerObjectId: config.auth.ownerObjectId,
+      requestId: expect.stringMatching(/^[0-9a-f-]{36}$/u),
+    });
+    expect(fixture.forgetSources.at(-1)?.kind === 'settings'
+      ? fixture.forgetSources.at(-1)?.requestId
+      : '').not.toBe(correction.item.source.requestId);
     expect(fixture.records.has('1')).toBe(false);
     expect((await app.inject({ url: '/memory?folder=General' })).statusCode).toBe(401);
   });

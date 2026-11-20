@@ -107,11 +107,21 @@ function searchTerms(query: string): string[] {
 }
 
 function memorySource(record: MemoryRecord) {
-  return {
-    messageId: record.sourceMessageId,
-    text: record.sourceText,
-    truncated: record.sourceTextTruncated,
-  };
+  if (record.sourceMessageId) {
+    return {
+      type: 'conversation' as const,
+      messageId: record.sourceMessageId,
+      text: record.sourceText,
+      truncated: record.sourceTextTruncated,
+    };
+  }
+  if (record.settingsAction) {
+    return {
+      type: 'settings' as const,
+      requestId: record.settingsAction.requestId,
+    };
+  }
+  throw new Error('Memory source provenance is invalid');
 }
 
 function memoryDetails(record: MemoryRecord) {
@@ -138,6 +148,23 @@ function conversationUrl(messageId: string): string {
   return `/conversation/history?before=${BigInt(messageId) + 1n}&limit=100`;
 }
 
+function apiMemorySource(record: MemoryRecord) {
+  if (record.sourceMessageId) {
+    return {
+      type: 'conversation' as const,
+      messageId: record.sourceMessageId,
+      url: conversationUrl(record.sourceMessageId),
+    };
+  }
+  if (record.settingsAction) {
+    return {
+      type: 'settings' as const,
+      requestId: record.settingsAction.requestId,
+    };
+  }
+  throw new Error('Memory source provenance is invalid');
+}
+
 function memoryApiItem(record: MemoryRecord) {
   const redacted = shouldRedactMemory(`${record.key}\n${record.content}`);
   return {
@@ -147,11 +174,7 @@ function memoryApiItem(record: MemoryRecord) {
     title: redacted ? '[redacted]' : record.key,
     snippet: redacted ? '[redacted]' : snippet(record.content),
     updatedAt: record.updatedAt.toISOString(),
-    source: {
-      type: 'conversation' as const,
-      messageId: record.sourceMessageId,
-      url: conversationUrl(record.sourceMessageId),
-    },
+    source: apiMemorySource(record),
   };
 }
 
@@ -164,11 +187,7 @@ function memoryHistoryItem(version: MemoryVersion) {
     content: redacted ? '[redacted]' : version.content,
     revision: version.revision,
     changedAt: version.changedAt.toISOString(),
-    source: {
-      type: 'conversation' as const,
-      messageId: version.sourceMessageId,
-      url: conversationUrl(version.sourceMessageId),
-    },
+    source: apiMemorySource(version),
   };
 }
 
@@ -192,11 +211,24 @@ async function sourceForWrite(
   const id = sourceMessageId(request);
   const source = await store.getSourceMessage(id, signal);
   if (!source) throw new ToolRefusal('The source message is missing or is not from Dan. Nothing changed.');
-  if (credentialPattern.test(`${source.text}\n${content}`) ||
-      secretValuePattern.test(`${source.text}\n${content}`)) {
+  requiredString(content, 'content', 2_000);
+  return source;
+}
+
+function validateMemoryWrite(
+  categoryName: MemoryCategory,
+  key: string,
+  sourceText: string,
+  content: string,
+  automatic: boolean,
+): void {
+  const combined = `${categoryName}\n${key}\n${sourceText}\n${content}`;
+  if (credentialPattern.test(combined) || secretValuePattern.test(combined)) {
     throw new ToolRefusal('Secrets and credentials cannot be saved in memory. Nothing changed.');
   }
-  return source;
+  if (automatic && sensitivePattern.test(combined)) {
+    throw new ToolRefusal('Sensitive details are not saved by automatic capture. Dan must explicitly ask to remember them.');
+  }
 }
 
 function confirmation(action: 'saved' | 'updated' | 'forgotten', categoryName: MemoryCategory, key: string): string {
@@ -345,12 +377,12 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         if (!directRequest && !await automaticCaptureEnabled()) {
           throw new ToolRefusal('Automatic Personal Memory capture is off. Nothing changed.');
         }
-        if (!directRequest && sensitivePattern.test(`${source.text}\n${content}`)) {
-          throw new ToolRefusal('Sensitive details are not saved by automatic capture. Dan must explicitly ask to remember them.');
-        }
+        validateMemoryWrite(kind, key, source.text, content, !directRequest);
         const embedding = await embed(content, signal, request);
         const saved = await store.save({
-          category: kind, key, content, sourceMessageId: source.messageId, embedding: embedding.value,
+          category: kind, key, content,
+          source: { kind: 'conversation', messageId: source.messageId },
+          embedding: embedding.value,
           embeddingModel: embedding.model,
         }, signal);
         return {
@@ -465,16 +497,15 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const input = asObject(value);
         const id = memoryId(input.memoryId);
         const content = requiredString(input.content, 'content', 2000);
-        const source = await sourceForWrite(store, request, signal, content);
         const current = await store.history(id, 1, signal);
         const memory = current[0];
         if (!memory) throw new ToolRefusal('No saved memory with that ID exists. Nothing changed.');
+        const source = await sourceForWrite(store, request, signal, content);
+        validateMemoryWrite(memory.category, memory.key, source.text, content, false);
         const embedding = await embed(content, signal, request);
         const corrected = await store.correct(id, {
-          category: memory.category,
-          key: memory.key,
-          content,
-          sourceMessageId: source.messageId,
+          category: memory.category, key: memory.key, content,
+          source: { kind: 'conversation', messageId: source.messageId },
           embedding: embedding.value,
           embeddingModel: embedding.model,
         }, signal);
@@ -506,7 +537,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           throw new ToolRefusal('The current Dan message is missing. Nothing was deleted.');
         }
         const id = memoryId(asObject(value).memoryId);
-        const forgotten = await store.forget(id, sourceId, signal);
+        const forgotten = await store.forget(id, { kind: 'conversation', messageId: sourceId }, signal);
         if (!forgotten) throw new ToolRefusal('No saved memory with that ID exists. Nothing was deleted.');
         return {
           id,
@@ -638,20 +669,27 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           return reply.code(400).send({ error: 'Invalid memory ID' });
         }
         const text = request.body.text.trim();
-        if (!text || text.length > 2_000 ||
-            credentialPattern.test(text) || secretValuePattern.test(text) || sensitivePattern.test(text)) {
+        if (!text || text.length > 2_000 || sensitivePattern.test(text)) {
           return reply.code(400).send({ error: 'Memory text is invalid or contains restricted sensitive content' });
         }
         const signal = AbortSignal.timeout(30_000);
         const versions = await store.history(request.params.id, 1, signal);
         const current = versions[0];
         if (!current) return reply.code(404).send({ error: 'Memory not found' });
+        try {
+          validateMemoryWrite(current.category, current.key, current.sourceText, text, false);
+        } catch (error) {
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          throw error;
+        }
         const embedding = await embed(text, signal, request);
         const corrected = await store.correct(request.params.id, {
-          category: current.category,
-          key: current.key,
-          content: text,
-          sourceMessageId: current.sourceMessageId,
+          category: current.category, key: current.key, content: text,
+          source: {
+            kind: 'settings',
+            requestId: request.id,
+            ownerObjectId: request.principal!.objectId,
+          },
           embedding: embedding.value,
           embeddingModel: embedding.model,
         }, signal);
@@ -670,9 +708,12 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         }
         const signal = AbortSignal.timeout(30_000);
         const versions = await store.history(request.params.id, 1, signal);
-        const current = versions[0];
-        if (!current) return reply.code(404).send({ error: 'Memory not found' });
-        const forgotten = await store.forget(request.params.id, current.sourceMessageId, signal);
+        if (!versions[0]) return reply.code(404).send({ error: 'Memory not found' });
+        const forgotten = await store.forget(request.params.id, {
+          kind: 'settings',
+          requestId: request.id,
+          ownerObjectId: request.principal!.objectId,
+        }, signal);
         if (!forgotten) return reply.code(404).send({ error: 'Memory not found' });
         return reply.code(204).send();
       });

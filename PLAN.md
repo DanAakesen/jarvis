@@ -6,10 +6,11 @@
 | --- | --- |
 | Promote `core/memory.ts` into the production module registry and expose all supported tools through `/tools` and PI MCP | Done |
 | Enforce direct remember/capture authority from the stored Dan message, sensitivity rules, stable identity, history and forget behaviour | Done |
+| Add migration `0091` so Settings corrections/deletions carry verified request/owner provenance instead of the original capture message; reject secrets across category, key, source and content | Done; isolated SQL provenance contract passes |
 | Move `/memory` ownership out of Vault; keep SQL Memory API, UI edits and deletion independent of Vault availability | Done |
 | Add separate bounded Memory recall and capture instructions for Chat, Voice and background PI, with trusted `memory.automaticCapture` context | Done |
 | Make Knowledge read Vault notes through the Notes API, and refresh iPhone/web Memory pagination after successful tool writes | Done |
-| Run offline backend/web/Swift checks and browser inspection, update affected docs and commit the result | Done locally; backend 658, web 51, contracts 12 and JarvisCore 214 pass; Memory checked at 1280px and 390×844 with no new console errors |
+| Run offline backend/web/Swift/SQL checks and browser inspection, update affected docs and commit the follow-up | Done locally; focused blocker gates pass, including isolated SQL, migration, backend and web pagination tests |
 
 No live model/provider smoke, deployment or spending is authorized. Physical Chat, Voice and device acceptance remains an owner check.
 

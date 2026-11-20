@@ -12,12 +12,26 @@ export interface MemorySource {
   readonly text: string;
 }
 
+export type MemoryActionSource =
+  | { readonly kind: 'conversation'; readonly messageId: string }
+  | {
+    readonly kind: 'settings';
+    readonly requestId: string;
+    readonly ownerObjectId: string;
+  };
+
+export interface MemorySettingsAction {
+  readonly requestId: string;
+  readonly ownerObjectId: string;
+}
+
 export interface MemoryRecord {
   readonly id: string;
   readonly category: MemoryCategory;
   readonly key: string;
   readonly content: string;
-  readonly sourceMessageId: string;
+  readonly sourceMessageId: string | null;
+  readonly settingsAction: MemorySettingsAction | null;
   readonly sourceText: string;
   readonly sourceTextTruncated: boolean;
   readonly revision: number;
@@ -32,7 +46,7 @@ export interface MemorySaveInput {
   readonly category: MemoryCategory;
   readonly key: string;
   readonly content: string;
-  readonly sourceMessageId: string;
+  readonly source: MemoryActionSource;
   readonly embedding: readonly number[] | null;
   readonly embeddingModel: string | null;
 }
@@ -54,7 +68,7 @@ export interface MemoryStore {
     readonly hasMore: boolean;
   }>;
   history(memoryId: string, limit: number, signal: AbortSignal): Promise<MemoryVersion[]>;
-  forget(memoryId: string, requestMessageId: string, signal: AbortSignal): Promise<Pick<MemoryRecord, 'category' | 'key'> | null>;
+  forget(memoryId: string, source: MemoryActionSource, signal: AbortSignal): Promise<Pick<MemoryRecord, 'category' | 'key'> | null>;
   searchByVector(
     embedding: readonly number[],
     embeddingModel: string,
@@ -162,6 +176,7 @@ export class VectorSearchUnavailableError extends Error {
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const sqlId = /^[1-9]\d{0,18}$/;
+const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu;
 const vectorDimensions = 1536;
 const maxVectorCandidates = 10_000;
 const fullTextSetupPath = fileURLToPath(
@@ -217,6 +232,42 @@ function toSqlId(value: string): bigint {
   return BigInt(value);
 }
 
+function persistenceSource(source: MemoryActionSource) {
+  if (source.kind === 'conversation') {
+    return {
+      kind: 'conversation' as const,
+      messageId: toSqlId(source.messageId),
+      requestId: null,
+      ownerObjectId: null,
+    };
+  }
+  if (source.kind === 'settings' && uuid.test(source.requestId) && uuid.test(source.ownerObjectId)) {
+    return {
+      kind: 'settings' as const,
+      messageId: null,
+      requestId: source.requestId,
+      ownerObjectId: source.ownerObjectId,
+    };
+  }
+  throw new TypeError('Invalid memory action provenance');
+}
+
+async function rollbackMemoryTransaction(
+  transaction: sql.Transaction,
+  failure: unknown,
+): Promise<never> {
+  try {
+    await transaction.rollback();
+  } catch (rollbackError) {
+    throw new AggregateError(
+      [failure, rollbackError],
+      'Memory transaction failed and rollback also failed',
+      { cause: rollbackError },
+    );
+  }
+  throw failure;
+}
+
 async function execute<T>(
   request: sql.Request,
   signal: AbortSignal,
@@ -239,31 +290,59 @@ function recordFromRow(row: {
   category: MemoryCategory;
   memory_key: string;
   content: string;
-  source_message_id: string;
-  source_text: string;
+  source_kind: 'conversation' | 'settings';
+  source_message_id: string | null;
+  source_text: string | null;
   source_text_truncated: boolean;
+  action_request_id: string | null;
+  action_owner_id: string | null;
   revision: number;
   updated_at: Date;
 }): MemoryRecord {
-  return {
-    id: row.id,
-    category: row.category,
-    key: row.memory_key,
-    content: row.content,
-    sourceMessageId: row.source_message_id,
-    sourceText: row.source_text,
-    sourceTextTruncated: row.source_text_truncated,
-    revision: row.revision,
-    updatedAt: row.updated_at,
-  };
+  if (row.source_kind === 'conversation' && row.source_message_id &&
+      row.action_request_id === null && row.action_owner_id === null) {
+    return {
+      id: row.id,
+      category: row.category,
+      key: row.memory_key,
+      content: row.content,
+      sourceMessageId: row.source_message_id,
+      settingsAction: null,
+      sourceText: row.source_text ?? '',
+      sourceTextTruncated: row.source_text_truncated,
+      revision: row.revision,
+      updatedAt: row.updated_at,
+    };
+  }
+  if (row.source_kind === 'settings' && row.source_message_id === null &&
+      row.action_request_id && row.action_owner_id) {
+    return {
+      id: row.id,
+      category: row.category,
+      key: row.memory_key,
+      content: row.content,
+      sourceMessageId: null,
+      settingsAction: {
+        requestId: row.action_request_id.toLowerCase(),
+        ownerObjectId: row.action_owner_id.toLowerCase(),
+      },
+      sourceText: '',
+      sourceTextTruncated: false,
+      revision: row.revision,
+      updatedAt: row.updated_at,
+    };
+  }
+  throw new Error('Memory source provenance is invalid');
 }
 
 const memoryColumns = `CONVERT(varchar(20), m.id) AS id, m.category, m.memory_key, m.content,
-  CONVERT(varchar(20), m.source_message_id) AS source_message_id,
+  m.source_kind, CONVERT(varchar(20), m.source_message_id) AS source_message_id,
   LEFT(source.text, 500) AS source_text,
-  CONVERT(bit, CASE WHEN LEN(source.text) > 500 THEN 1 ELSE 0 END) AS source_text_truncated,
+  COALESCE(CONVERT(bit, CASE WHEN LEN(source.text) > 500 THEN 1 ELSE 0 END), CONVERT(bit, 0)) AS source_text_truncated,
+  CONVERT(char(36), m.action_request_id) AS action_request_id,
+  CONVERT(char(36), m.action_owner_id) AS action_owner_id,
   m.revision, m.updated_at`;
-const sourceJoin = `INNER JOIN dbo.messages AS source
+const sourceJoin = `LEFT JOIN dbo.messages AS source
   ON source.id = m.source_message_id AND source.role = N'dan'`;
 
 export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
@@ -287,7 +366,7 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
     signal: AbortSignal,
     memoryId?: string,
   ): Promise<MemorySaveResult> {
-    const sourceMessageId = toSqlId(input.sourceMessageId);
+    const source = persistenceSource(input.source);
     if (input.embedding !== null && !parseEmbedding(input.embedding)) {
       throw new TypeError('Memory embedding is invalid');
     }
@@ -299,13 +378,15 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
     const embeddingModel = vectorSearchAvailable || jsonEmbeddingAvailable ? input.embeddingModel : null;
     const transaction = new sql.Transaction(pool);
     await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-    let committed = false;
     try {
       const request = new sql.Request(transaction)
         .input('category', sql.NVarChar(24), input.category)
         .input('memoryKey', sql.NVarChar(100), input.key)
         .input('content', sql.NVarChar(2000), input.content)
-        .input('sourceMessageId', sql.BigInt, sourceMessageId)
+        .input('sourceKind', sql.VarChar(12), source.kind)
+        .input('sourceMessageId', sql.BigInt, source.messageId)
+        .input('actionRequestId', sql.UniqueIdentifier, source.requestId)
+        .input('actionOwnerId', sql.UniqueIdentifier, source.ownerObjectId)
         .input('targetId', sql.BigInt, targetId)
         .input('embedding', sql.NVarChar(sql.MAX), input.embedding === null ? null : JSON.stringify(input.embedding))
         .input('embeddingModel', sql.NVarChar(128), input.embedding === null ? null : embeddingModel);
@@ -330,14 +411,20 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         DECLARE @created bit = 0;
         DECLARE @changed bit = 0;
         DECLARE @contentChanged bit = 0;
+        DECLARE @provenanceChanged bit = 0;
         DECLARE @oldContent nvarchar(2000);
+        DECLARE @oldSourceKind varchar(12);
         DECLARE @oldSourceMessageId bigint;
+        DECLARE @oldActionRequestId uniqueidentifier;
+        DECLARE @oldActionOwnerId uniqueidentifier;
 
-        IF NOT EXISTS (
+        IF @sourceKind = 'conversation' AND NOT EXISTS (
           SELECT 1 FROM dbo.messages
           WHERE id = @sourceMessageId AND role = N'dan'
         )
           THROW 51000, 'Memory source message is unavailable.', 1;
+        IF @sourceKind <> 'conversation' AND @sourceKind <> 'settings'
+          THROW 51003, 'Memory source provenance is unavailable.', 1;
 
         IF @targetId IS NULL
           SELECT @memoryId = id FROM dbo.memories WITH (UPDLOCK, HOLDLOCK)
@@ -355,27 +442,44 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         BEGIN
           IF @targetId IS NOT NULL
             THROW 51002, 'Memory not found.', 1;
-          INSERT INTO dbo.memories (category, memory_key, content, source_message_id, embedding_model${embeddingColumn})
-           VALUES (@category, @memoryKey, @content, @sourceMessageId, @embeddingModel${embeddingValue});
+          INSERT INTO dbo.memories (
+            category, memory_key, content, source_kind, source_message_id,
+            action_request_id, action_owner_id, embedding_model${embeddingColumn})
+           VALUES (
+            @category, @memoryKey, @content, @sourceKind, @sourceMessageId,
+            @actionRequestId, @actionOwnerId, @embeddingModel${embeddingValue});
           SET @memoryId = CONVERT(bigint, SCOPE_IDENTITY());
           SET @created = 1;
           SET @changed = 1;
         END
         ELSE
         BEGIN
-          SELECT @oldContent = content, @oldSourceMessageId = source_message_id
+          SELECT @oldContent = content, @oldSourceKind = source_kind,
+            @oldSourceMessageId = source_message_id, @oldActionRequestId = action_request_id,
+            @oldActionOwnerId = action_owner_id
           FROM dbo.memories WHERE id = @memoryId;
           SET @contentChanged = CASE WHEN
             @oldContent COLLATE Latin1_General_100_BIN2 <> @content COLLATE Latin1_General_100_BIN2
             THEN 1 ELSE 0 END;
-          IF @contentChanged = 1 OR @oldSourceMessageId <> @sourceMessageId
+          SET @provenanceChanged = CASE WHEN
+            @oldSourceKind <> @sourceKind
+            OR ISNULL(@oldSourceMessageId, 0) <> ISNULL(@sourceMessageId, 0)
+            OR ISNULL(@oldActionRequestId, '00000000-0000-0000-0000-000000000000')
+              <> ISNULL(@actionRequestId, '00000000-0000-0000-0000-000000000000')
+            OR ISNULL(@oldActionOwnerId, '00000000-0000-0000-0000-000000000000')
+              <> ISNULL(@actionOwnerId, '00000000-0000-0000-0000-000000000000')
+            THEN 1 ELSE 0 END;
+          IF @contentChanged = 1 OR @provenanceChanged = 1
           BEGIN
             INSERT INTO dbo.memory_history
-              (memory_id, revision, category, memory_key, content, source_message_id)
-            SELECT id, revision, category, memory_key, content, source_message_id
+              (memory_id, revision, category, memory_key, content, source_kind, source_message_id,
+                action_request_id, action_owner_id)
+            SELECT id, revision, category, memory_key, content, source_kind, source_message_id,
+              action_request_id, action_owner_id
             FROM dbo.memories WHERE id = @memoryId;
             UPDATE dbo.memories
-            SET content = @content, source_message_id = @sourceMessageId,
+            SET content = @content, source_kind = @sourceKind, source_message_id = @sourceMessageId,
+              action_request_id = @actionRequestId, action_owner_id = @actionOwnerId,
               revision = revision + 1, updated_at = SYSUTCDATETIME()${embeddingUpdate}
               , embedding_model = CASE
                 WHEN @contentChanged = 1 OR (@embeddingModel IS NOT NULL AND ISNULL(embedding_model, N'') <> @embeddingModel)
@@ -396,11 +500,7 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
           END
         END;
 
-        SELECT CONVERT(varchar(20), @memoryId) AS id, @created AS created, @changed AS changed,
-          m.category, m.memory_key, m.content, CONVERT(varchar(20), m.source_message_id) AS source_message_id,
-          LEFT(source.text, 500) AS source_text,
-          CONVERT(bit, CASE WHEN LEN(source.text) > 500 THEN 1 ELSE 0 END) AS source_text_truncated,
-          m.revision, m.updated_at
+        SELECT @created AS created, @changed AS changed, ${memoryColumns}
         FROM dbo.memories AS m
         ${sourceJoin}
         WHERE m.id = @memoryId;`;
@@ -410,11 +510,11 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         changed: boolean;
       } & Parameters<typeof recordFromRow>[0]) | undefined;
       if (!row) throw new Error('Memory save did not return the saved record');
+      const memory = recordFromRow(row);
       await transaction.commit();
-      committed = true;
-      return { memory: recordFromRow(row), created: row.created, changed: row.changed };
-    } finally {
-      if (!committed) await transaction.rollback();
+      return { memory, created: row.created, changed: row.changed };
+    } catch (error) {
+      return rollbackMemoryTransaction(transaction, error);
     }
   }
 
@@ -496,24 +596,33 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         category: MemoryCategory;
         memory_key: string;
         content: string;
-        source_message_id: string;
-        source_text: string;
+        source_kind: 'conversation' | 'settings';
+        source_message_id: string | null;
+        source_text: string | null;
         source_text_truncated: boolean;
+        action_request_id: string | null;
+        action_owner_id: string | null;
         revision: number;
         changed_at: Date;
       }>(`SELECT TOP (@take) CONVERT(varchar(20), versions.memory_id) AS id, versions.category,
-          versions.memory_key, versions.content, CONVERT(varchar(20), versions.source_message_id) AS source_message_id,
+          versions.memory_key, versions.content, versions.source_kind,
+          CONVERT(varchar(20), versions.source_message_id) AS source_message_id,
           LEFT(source.text, 500) AS source_text,
-          CONVERT(bit, CASE WHEN LEN(source.text) > 500 THEN 1 ELSE 0 END) AS source_text_truncated,
+          COALESCE(CONVERT(bit, CASE WHEN LEN(source.text) > 500 THEN 1 ELSE 0 END), CONVERT(bit, 0))
+            AS source_text_truncated,
+          CONVERT(char(36), versions.action_request_id) AS action_request_id,
+          CONVERT(char(36), versions.action_owner_id) AS action_owner_id,
           versions.revision, versions.changed_at
         FROM (
-          SELECT id AS memory_id, category, memory_key, content, source_message_id, revision, updated_at AS changed_at
+          SELECT id AS memory_id, category, memory_key, content, source_kind, source_message_id,
+            action_request_id, action_owner_id, revision, updated_at AS changed_at
           FROM dbo.memories WHERE id = @memoryId
           UNION ALL
-          SELECT memory_id, category, memory_key, content, source_message_id, revision, changed_at
+          SELECT memory_id, category, memory_key, content, source_kind, source_message_id,
+            action_request_id, action_owner_id, revision, changed_at
           FROM dbo.memory_history WHERE memory_id = @memoryId
         ) AS versions
-        INNER JOIN dbo.messages AS source
+        LEFT JOIN dbo.messages AS source
           ON source.id = versions.source_message_id AND source.role = N'dan'
         ORDER BY versions.revision DESC;`));
       return result.recordset.map((row) => ({
@@ -522,38 +631,43 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
       }));
     },
 
-    async forget(memoryId, requestMessageId, signal) {
+    async forget(memoryId, sourceInput, signal) {
       const id = toSqlId(memoryId);
-      const requestId = toSqlId(requestMessageId);
+      const source = persistenceSource(sourceInput);
       const transaction = new sql.Transaction(pool);
       await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-      let committed = false;
       try {
         const request = new sql.Request(transaction)
           .input('memoryId', sql.BigInt, id)
-          .input('requestMessageId', sql.BigInt, requestId);
+          .input('sourceKind', sql.VarChar(12), source.kind)
+          .input('requestMessageId', sql.BigInt, source.messageId)
+          .input('actionRequestId', sql.UniqueIdentifier, source.requestId)
+          .input('actionOwnerId', sql.UniqueIdentifier, source.ownerObjectId);
         const result = await execute(request, signal, () => request.query<{
           category: MemoryCategory;
           memory_key: string;
         }>(`DECLARE @category nvarchar(24);
           DECLARE @memoryKey nvarchar(100);
-          IF NOT EXISTS (SELECT 1 FROM dbo.messages WHERE id = @requestMessageId AND role = N'dan')
+          IF @sourceKind = 'conversation'
+            AND NOT EXISTS (SELECT 1 FROM dbo.messages WHERE id = @requestMessageId AND role = N'dan')
             THROW 51000, 'Memory source message is unavailable.', 1;
+          IF @sourceKind <> 'conversation' AND @sourceKind <> 'settings'
+            THROW 51003, 'Memory source provenance is unavailable.', 1;
           SELECT @category = category, @memoryKey = memory_key
           FROM dbo.memories WITH (UPDLOCK, HOLDLOCK) WHERE id = @memoryId;
           IF @category IS NOT NULL
           BEGIN
-            INSERT INTO dbo.memory_deletions (memory_id, request_message_id)
-            VALUES (@memoryId, @requestMessageId);
+            INSERT INTO dbo.memory_deletions (
+              memory_id, source_kind, request_message_id, action_request_id, action_owner_id)
+            VALUES (@memoryId, @sourceKind, @requestMessageId, @actionRequestId, @actionOwnerId);
             DELETE FROM dbo.memories WHERE id = @memoryId;
           END;
           SELECT @category AS category, @memoryKey AS memory_key;`));
         await transaction.commit();
-        committed = true;
         const row = result.recordset[0];
         return row?.category ? { category: row.category, key: row.memory_key } : null;
-      } finally {
-        if (!committed) await transaction.rollback();
+      } catch (error) {
+        return rollbackMemoryTransaction(transaction, error);
       }
     },
 
