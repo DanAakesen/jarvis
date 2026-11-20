@@ -268,8 +268,10 @@ sequenceDiagram
 | Audio format | `voice-definition.json`, `relay.ts` | The pinned agent owns PCM 24 kHz. `session.started` may omit the optional format echo; an explicit start/started format is accepted only when it matches `audio/pcm` at 24,000 Hz. |
 | Commentary bound | `voice/relay.ts` | PI commentary is appended in chunks of at most 256 UTF-8 bytes. Because byte-pair tokenisation cannot produce more tokens than bytes, every append is conservatively below 500 tokens. |
 | Provider usage | `relay.ts`, `ConversationStore.endSession` | `session.usage.updated` and `session.closed.usage.seconds` are cumulative. Event IDs are deduplicated, the maximum is retained, and the final provider seconds replace wall-clock lifetime in the single voice-minutes row. |
-| Voice-agent definition | `agents/pi/voice-definition.json`, `.github/scripts/provision_pi_agent.py` | Immutable `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, model `gpt-live-1`, PCM 24 kHz and output voice `marin`; `delegation: { type: "client" }`. No Foundry-managed prompt conversation is used. |
-| Turn boundary | `apps/backend/src/voice/relay.ts` | GPT-Live supplies transcript deltas but no transcript-done/output-done events. Native `event_id` and `start_ms`/`end_ms` keep fragments in the same candidate through pauses; delegation `offset_ms` assigns the exact owner turn. After assignment, 0.6-second quiet (max three seconds) closes and persists it before PI. Output grouping/persistence follows the bounded rule. |
+| Voice-agent definition | `agents/pi/voice-definition.json`, `.github/scripts/provision_pi_agent.py` | Immutable `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, model `gpt-live-1`, PCM 24 kHz and output voice `vesper`; `delegation: { type: "client" }`. No Foundry-managed prompt conversation is used. |
+| Client activity | `voice/relay.ts`, `VoiceSessionStateMachine`, web `voice-client.ts`, Watch bridge | The relay publishes explicit `jarvis.voice.activity` evidence. Clients retain authoritative Listening/Thinking/Speaking through response and playback IDs, show Reconnecting through bounded retries, and accept Ended only from terminal Jarvis evidence. |
+| Turn boundary | `apps/backend/src/voice/relay.ts` | GPT-Live supplies transcript deltas but no transcript-done/output-done events. Native `event_id` and `start_ms`/`end_ms` keep fragments in the same candidate through pauses; delegation `offset_ms` assigns the exact owner turn. For delegated work, 0.6-second quiet (max three seconds) closes and persists it before PI. A natural direct response closes and enqueues the owner message at the first provider output, so direct conversation is also restored in exact Dan/Jarvis order. Output grouping/persistence follows the bounded rule. |
+| Transcript timeline | `relay.ts`, `VoiceCaptions`, `WatchContract`, `ConversationStore` | Native event IDs deduplicate deltas; input/output groups have stable item/response IDs. Output writes are serialized behind the matching owner write, then updated by exact message/session/role. iPhone captions and Watch v2 rows preserve explicit speaker identity and ordered IDs across overlap, reconnect and restored history; state/caption delivery is serial so a retry cannot overtake later content. |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
 | Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
@@ -2174,7 +2176,7 @@ WebSocket adapter against the #1391 core seam.
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
-| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with `marin`; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Source compile/static qualification only; provider audio and physical-device acceptance are open |
+| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with `vesper`; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
@@ -2523,11 +2525,12 @@ removes orb and minimization animation; system text styles and VoiceOver labels
 remain available.
 
 Voice captions accumulate backend-normalised GPT-Live input and output transcript
-deltas in `JarvisCore`; bounded completed user transcripts replace the partial
-text.
-The phone follows the bottom of its bounded-height caption area. Watch receives
-user and assistant text in wire-sized chunks and follows its existing chat view.
-These are session display state, not an additional persisted transcript.
+deltas in an identity-ordered `JarvisCore` timeline; bounded completed user
+transcripts replace the matching partial entry. The phone follows the bottom of
+its bounded-height caption area. Watch receives explicit `dan`/`jarvis` roles,
+stable delivery IDs and wire-sized chunks; restored Chat history uses message ID
+order when timestamps tie. These are the display/history views of the same
+persisted conversation, not a parallel transcript store.
 
 End invalidates the screen-model generation before detaching the client, stopping
 capture/playback and deactivating AVAudioSession. Startup, socket, playback and
@@ -6601,7 +6604,7 @@ flowchart LR
         SWA["Static Web Apps<br/>board (React/Vite)"]
         BE["Container Apps<br/>Jarvis backend (Node.js)"]
         subgraph Foundry["Foundry"]
-            VL["Voice agent: jarvis-pi-live<br/>gpt-live-1 + marin<br/>native 24 kHz Live"]
+            VL["Voice agent: jarvis-pi-live<br/>gpt-live-1 + vesper<br/>native 24 kHz Live"]
             PI["PI agent: jarvis-pi<br/>tools + stored owner turn"]
             JA["Hosted agent: Jarvis<br/>gpt-5.6-luna"]
             SB["Hosted agents: sandboxes<br/>one per task, Codex / Copilot"]

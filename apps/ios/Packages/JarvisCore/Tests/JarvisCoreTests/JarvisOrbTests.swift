@@ -196,6 +196,7 @@ final class JarvisOrbTests: XCTestCase {
         XCTAssertEqual(JarvisOrbActivity(watchVoiceStatus: "Listening", isMuted: true), .muted)
         XCTAssertEqual(JarvisOrbActivity(watchVoiceStatus: "Speaking", isMuted: false), .speaking)
         XCTAssertEqual(JarvisOrbActivity(watchVoiceStatus: "Thinking", isMuted: false), .thinking)
+        XCTAssertEqual(JarvisOrbActivity(watchVoiceStatus: "Reconnecting", isMuted: false), .reconnecting)
         XCTAssertEqual(JarvisOrbActivity(watchVoiceStatus: "Connecting", isMuted: false), .calm)
         XCTAssertEqual(JarvisOrbActivity(watchVoiceStatus: "Disconnected", isMuted: true), .offline)
     }

@@ -27,6 +27,15 @@ public enum VoiceEndpoint {
     }
 }
 
+public enum VoiceActivityState: String, Decodable, Equatable, Sendable {
+    case listening
+    case thinking
+    case speaking
+    case reconnecting
+    case failed
+    case ended
+}
+
 public enum VoiceClientMessage: Equatable, Sendable {
     case appendAudio(String)
     case microphoneActive
@@ -105,13 +114,14 @@ public enum VoiceServerMessage: Equatable, Sendable {
     case sessionReady(sessionID: UInt64)
     case sessionEnded
     case sessionFailed(retryable: Bool, closeCode: Int)
-    case transcriptionCompleted(transcript: String, itemID: String?)
-    case responseCreated(responseID: String?)
-    case audioDelta(type: String, delta: String)
-    case transcriptionDelta(delta: String, itemID: String?)
-    case assistantTranscriptDelta(String)
-    case responseDone
-    case responseCancelled
+    case activity(VoiceActivityState)
+    case transcriptionCompleted(transcript: String, itemID: String)
+    case responseCreated(responseID: String, delegationID: String?)
+    case audioDelta(type: String, delta: String, responseID: String, eventID: String?)
+    case transcriptionDelta(delta: String, itemID: String, eventID: String?)
+    case assistantTranscriptDelta(delta: String, responseID: String, eventID: String?)
+    case responseDone(responseID: String)
+    case responseCancelled(responseID: String)
     case visualContext(itemID: String?, path: String, reason: String?)
     case screenContextUnavailable(itemID: String?, reason: String?)
     case unknown(type: String?, raw: String)
@@ -138,6 +148,11 @@ public enum VoiceServerMessage: Equatable, Sendable {
                 return .unknown(type: type, raw: raw)
             }
             return .sessionFailed(retryable: payload.retryable, closeCode: payload.closeCode)
+        case "jarvis.voice.activity":
+            guard let payload = try? JSONDecoder().decode(ActivityPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .activity(payload.state)
         case "jarvis.voice.input_transcript.completed":
             guard let payload = try? JSONDecoder().decode(TranscriptionPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
@@ -147,24 +162,41 @@ public enum VoiceServerMessage: Equatable, Sendable {
             guard let payload = try? JSONDecoder().decode(TranscriptionDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
-            return .transcriptionDelta(delta: payload.delta, itemID: payload.itemID)
+            return .transcriptionDelta(delta: payload.delta, itemID: payload.itemID, eventID: payload.eventID)
         case "jarvis.voice.response.started":
-            let payload = try? JSONDecoder().decode(ResponseCreatedPayload.self, from: data)
-            return .responseCreated(responseID: payload?.responseID)
+            guard let payload = try? JSONDecoder().decode(ResponseCreatedPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .responseCreated(responseID: payload.responseID, delegationID: payload.delegationID)
         case "jarvis.voice.audio.delta":
             guard let payload = try? JSONDecoder().decode(AudioDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
-            return .audioDelta(type: type, delta: payload.delta)
+            return .audioDelta(
+                type: type,
+                delta: payload.delta,
+                responseID: payload.responseID,
+                eventID: payload.eventID
+            )
         case "jarvis.voice.output_transcript.delta":
             guard let payload = try? JSONDecoder().decode(TextDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
-            return .assistantTranscriptDelta(payload.delta)
+            return .assistantTranscriptDelta(
+                delta: payload.delta,
+                responseID: payload.responseID,
+                eventID: payload.eventID
+            )
         case "jarvis.voice.response.completed":
-            return .responseDone
+            guard let payload = try? JSONDecoder().decode(ResponseCompletionPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .responseDone(responseID: payload.responseID)
         case "jarvis.voice.response.cancelled":
-            return .responseCancelled
+            guard let payload = try? JSONDecoder().decode(ResponseCompletionPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .responseCancelled(responseID: payload.responseID)
         case "jarvis.visual_context":
             guard let payload = try? JSONDecoder().decode(VisualContextPayload.self, from: data),
                   payload.visualPath == "image" || payload.visualPath == "caption" else {
@@ -176,6 +208,17 @@ public enum VoiceServerMessage: Equatable, Sendable {
             return .screenContextUnavailable(itemID: payload?.itemID, reason: payload?.reason)
         default:
             return .unknown(type: type, raw: raw)
+        }
+    }
+
+    public var eventID: String? {
+        switch self {
+        case .audioDelta(_, _, _, let eventID),
+             .transcriptionDelta(_, _, let eventID),
+             .assistantTranscriptDelta(_, _, let eventID):
+            return eventID
+        default:
+            return nil
         }
     }
 }
@@ -203,6 +246,10 @@ private struct SessionFailedPayload: Decodable {
     let closeCode: Int
 }
 
+private struct ActivityPayload: Decodable {
+    let state: VoiceActivityState
+}
+
 private struct SessionID: Decodable {
     let value: UInt64
 
@@ -222,7 +269,7 @@ private struct SessionID: Decodable {
 
 private struct TranscriptionPayload: Decodable {
     let transcript: String
-    let itemID: String?
+    let itemID: String
 
     enum CodingKeys: String, CodingKey {
         case transcript
@@ -232,28 +279,56 @@ private struct TranscriptionPayload: Decodable {
 
 private struct TranscriptionDeltaPayload: Decodable {
     let delta: String
-    let itemID: String?
+    let itemID: String
+    let eventID: String?
 
     enum CodingKeys: String, CodingKey {
         case delta
         case itemID = "itemId"
+        case eventID = "eventId"
     }
 }
 
 private struct ResponseCreatedPayload: Decodable {
-    let responseID: String?
+    let responseID: String
+    let delegationID: String?
 
     enum CodingKeys: String, CodingKey {
         case responseID = "responseId"
+        case delegationID = "delegationId"
     }
 }
 
 private struct AudioDeltaPayload: Decodable {
     let delta: String
+    let responseID: String
+    let eventID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case delta
+        case responseID = "responseId"
+        case eventID = "eventId"
+    }
 }
 
 private struct TextDeltaPayload: Decodable {
     let delta: String
+    let responseID: String
+    let eventID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case delta
+        case responseID = "responseId"
+        case eventID = "eventId"
+    }
+}
+
+private struct ResponseCompletionPayload: Decodable {
+    let responseID: String
+
+    enum CodingKeys: String, CodingKey {
+        case responseID = "responseId"
+    }
 }
 
 private struct VisualContextPayload: Decodable {

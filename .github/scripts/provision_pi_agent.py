@@ -90,7 +90,7 @@ def load_voice_spec() -> tuple[dict, str, dict]:
     audio = spec["audio"]
     require(audio == {
         "format": {"type": "audio/pcm", "rate": 24000},
-        "output": {"voice": "marin"},
+        "output": {"voice": "vesper"},
     }, "voice_audio_invalid")
     instructions_file = spec["instructionsFile"]
     require(re.fullmatch(r"[A-Za-z0-9._-]+\.md", instructions_file) is not None, "voice_instructions_file_invalid")

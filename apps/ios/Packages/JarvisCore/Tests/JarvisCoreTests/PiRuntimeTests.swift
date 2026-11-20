@@ -81,6 +81,76 @@ final class PiRuntimeTests: XCTestCase {
         }
     }
 
+    func testVoiceStateFollowsAuthoritativeActivityAndPlaybackIds() {
+        var machine = VoiceSessionStateMachine()
+        machine.apply(.start)
+        XCTAssertEqual(machine.state, .connecting)
+        machine.apply(.connected)
+        XCTAssertEqual(machine.state, .connecting)
+        machine.apply(.sessionReady)
+        XCTAssertEqual(machine.state, .listening)
+        machine.apply(.activity(.thinking))
+        XCTAssertEqual(machine.state, .thinking)
+        machine.apply(.responseCreated(id: "response-1"))
+        XCTAssertEqual(machine.state, .thinking)
+        machine.apply(.audioDelta(responseID: "response-1"))
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.responseFinished(responseID: "response-1"))
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.activity(.listening))
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.playbackFinished(responseID: "response-1"))
+        XCTAssertEqual(machine.state, .listening)
+    }
+
+    func testVoiceReconnectStaysVisibleUntilAProviderReadyEvent() {
+        var machine = VoiceSessionStateMachine()
+        for event in [VoiceSessionEvent.start, .connected, .sessionReady, .connectionDropped] {
+            machine.apply(event)
+        }
+        XCTAssertEqual(machine.state, .reconnecting(attempt: 0))
+        machine.apply(.reconnectAttempt(3))
+        XCTAssertEqual(machine.state, .reconnecting(attempt: 3))
+        machine.apply(.reconnected)
+        XCTAssertEqual(machine.state, .reconnecting(attempt: 3))
+        machine.apply(.playbackFinished(responseID: "late-response"))
+        XCTAssertEqual(machine.state, .reconnecting(attempt: 3))
+        machine.apply(.sessionReady)
+        XCTAssertEqual(machine.state, .listening)
+    }
+
+    func testVoiceStaleCompletionCannotEndANewerSpeakingResponse() {
+        var machine = VoiceSessionStateMachine()
+        machine.apply(.start)
+        machine.apply(.connected)
+        machine.apply(.sessionReady)
+        machine.apply(.responseCreated(id: "old"))
+        machine.apply(.audioDelta(responseID: "old"))
+        machine.apply(.responseCreated(id: "new"))
+        machine.apply(.audioDelta(responseID: "new"))
+        machine.apply(.responseFinished(responseID: "old"))
+        machine.apply(.playbackFinished(responseID: "old"))
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.responseFinished(responseID: "new"))
+        machine.apply(.playbackFinished(responseID: "new"))
+        XCTAssertEqual(machine.state, .listening)
+    }
+
+    func testVoiceOlderPlaybackCannotHideANewerPendingResponse() {
+        var machine = VoiceSessionStateMachine()
+        machine.apply(.start)
+        machine.apply(.connected)
+        machine.apply(.sessionReady)
+        machine.apply(.responseCreated(id: "old"))
+        machine.apply(.audioDelta(responseID: "old"))
+        machine.apply(.responseCreated(id: "new"))
+        machine.apply(.responseFinished(responseID: "old"))
+        machine.apply(.playbackFinished(responseID: "old"))
+        XCTAssertEqual(machine.state, .thinking)
+        machine.apply(.responseFinished(responseID: "new"))
+        XCTAssertEqual(machine.state, .listening)
+    }
+
     func testVoiceEndWaitsForTheServerTerminalBeforeClosing() async throws {
         let socket = VoiceEndSocket()
         let client = VoiceSessionClient(

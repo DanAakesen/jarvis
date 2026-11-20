@@ -58,6 +58,20 @@ class DefinitionTest(unittest.TestCase):
         self.assertIn(contract["productIdentity"]["en"], self.instructions)
         self.assertNotIn("{{", self.instructions)
 
+    def test_voice_definition_pins_vesper_with_natural_client_delegation(self):
+        spec, instructions, definition = pi.load_voice_spec()
+        self.assertEqual(spec["agentName"], "jarvis-pi-live")
+        self.assertEqual(spec["audio"]["output"]["voice"], "vesper")
+        self.assertEqual(spec["audio"]["format"], {"type": "audio/pcm", "rate": 24000})
+        self.assertEqual(spec["delegation"], {"type": "client"})
+        self.assertFalse(spec["store"])
+        self.assertEqual(definition["kind"], "voice")
+        self.assertEqual(definition["sub_protocol"], "live")
+        self.assertEqual(definition["delegation"], {"type": "client"})
+        self.assertIn("natural full-duplex conversation", instructions)
+        self.assertIn("delegate it through the client target", instructions)
+        self.assertIn("Do not call a tool, invent an action result", instructions)
+
     def test_skills_are_repository_files_pinned_by_version(self):
         self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches", "jarvis-situational-context"])
         self.assertEqual(self.definition()["skills"], [

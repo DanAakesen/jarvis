@@ -83,6 +83,9 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertTrue(WatchEventScheduling.isBarrier(finished))
         XCTAssertTrue(WatchEventScheduling.isBarrier(endFailed))
         XCTAssertTrue(WatchEventScheduling.isBarrier(interrupted))
-        XCTAssertFalse(WatchEventScheduling.isBarrier(state))
+        XCTAssertTrue(WatchEventScheduling.isBarrier(state))
+        XCTAssertTrue(WatchEventScheduling.isBarrier(
+            WatchEvent(.voiceTranscript, requestID: id, text: "Jarvis")
+        ))
     }
 }

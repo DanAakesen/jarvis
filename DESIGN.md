@@ -15,6 +15,15 @@ voice-role option, `gpt-live-1`; it is not a fallback selector. Web, iPhone and
 Watch keep `/voice`; physical-device audio, captions, barge-in and rendering
 remain owner acceptance items.
 
+The state line reflects authoritative evidence: Connecting before readiness,
+Listening while the owner can speak, Thinking while PI/delegated work is active,
+Speaking only while response audio is present, Reconnecting while the bounded
+transport retry runs, and Ended after the server terminal. Captions are an
+identity-ordered timeline rather than one mutable owner/assistant string. Watch
+uses a clean v2 event cutover with explicit speaker role and stable delivery
+IDs. State/caption events are serialized behind prior delivery, so retries do
+not overtake later words or states. There is no mixed old/new Watch wire shim.
+
 Camera and screen requests are refused by this voice backend. On the first
 `not_supported` response, the client stops active capture, disables the visual
 actions for the rest of that session and shows an explicit audio-only notice.

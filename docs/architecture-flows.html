@@ -174,7 +174,7 @@ const RISK_KEYS = ["proven", "docs", "assumed", "unknown"];
 const LANES = {
   user:     { name: "Dan",              tech: "Browser · microphone" },
   board:    { name: "Board",            tech: "React + TypeScript + Vite · Static Web Apps" },
-  voice:    { name: "Voice",            tech: "Foundry GPT-Live · marin · shared EN/DA route" },
+  voice:    { name: "Voice",            tech: "Foundry GPT-Live · vesper · shared EN/DA route" },
   jarvis:   { name: "Jarvis agent",     tech: "Foundry hosted agent · chat" },
   pc:       { name: "Dan's PC",         tech: ".NET 10 tray companion · Windows" },
   model:    { name: "Model",            tech: "PI · gpt-live-1 · gpt-6.1-terra" },
@@ -220,7 +220,7 @@ const FLOWS = [
       { id: "relay", lane: "backend", col: 3, s: "proven", t: "Delegate the saved turn", d: "The relay groups native input transcript deltas for 0.6 seconds (max three), persists Dan's exact owner message, then invokes PI through the existing gateway and grant.", ev: "Source compile/static checks only; live GPT-Live delivery remains unverified." },
       { id: "stt", lane: "voice", col: 4, s: "proven", t: "Native transcript", d: "GPT-Live emits transcript deltas directly; there is no external STT model or parallel recognizer.", ev: "The provider protocol is documented; acoustic acceptance is open." },
       { id: "vq", lane: "voice", col: 5, s: "unknown", t: "Voice quality and cost", d: "Physical latency, audio and billed meters are not yet measured for GPT-Live.", ev: "Dan's post-Deploy device acceptance is open.", href: VR },
-      { id: "jin", lane: "model", col: 6, s: "docs", t: "GPT-Live delegates", d: "`jarvis-pi-live` runs `gpt-live-1` with marin and client delegation; PI owns the same tools and conversation as Chat.", ev: "Official GPT-Live and Voice Agent schema; no provider call was made." },
+      { id: "jin", lane: "model", col: 6, s: "docs", t: "GPT-Live delegates", d: "`jarvis-pi-live` runs `gpt-live-1` with vesper and client delegation; PI owns the same tools and conversation as Chat for delegated work.", ev: "Official GPT-Live and Voice Agent schema; no provider call was made." },
     ],
     edges: [
       ["start", "card", "docs", "click"], ["start", "project-settings", "docs", "project settings"], ["project-settings", "project-api", "docs", "API request"],
@@ -474,7 +474,7 @@ const FLOWS = [
       { id: "usageApi", lane: "backend", col: 5, s: "proven", t: "Read a bounded usage report", d: "Authenticated GET /usage filters a selected period, suppresses Codex/Copilot costs, and includes read-only active-sandbox estimates.", ev: "P6-01 route and SQL-store tests cover period bounds, result caps, and cost rules. Live SQL remains unverified." },
       { id: "usageReport", lane: "board", col: 8, s: "proven", t: "Compare usage by period", d: "Choose a period and group by project, agent, or source; open task rows.", ev: "P6-01 adds loading, empty, error/retry, truncated-result, and populated states. Focused web tests and desktop/mobile browser inspection verify local behavior; live API and real provider/voice rows remain unverified." },
       { id: "sum", lane: "jarvis", col: 5, s: "proven", t: "Summarize status in Danish", d: "“Hvordan går det med Codex-opgaven?”", ev: "Voice prototype V4: 4/4 Danish status answers matched the task data in every configuration.", href: VR },
-      { id: "say", lane: "voice", col: 7, s: "docs", t: "Speak the answer", d: "GPT-Live uses the built-in marin voice and speaks PI commentary tied to its client delegation.", ev: "Official provider schema; real audio remains open.", href: VR },
+      { id: "say", lane: "voice", col: 7, s: "docs", t: "Speak the answer", d: "GPT-Live uses the built-in vesper voice for natural duplex speech and speaks PI commentary tied to its client delegation.", ev: "Official provider schema; real audio remains open.", href: VR },
     ],
     edges: [
       ["ctx", "live", "proven", ""], ["live", "store", "proven", "event"], ["live", "usage", "proven", "turn and usage report"],

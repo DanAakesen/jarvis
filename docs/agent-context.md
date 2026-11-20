@@ -160,13 +160,21 @@
   backend revision configured with the name and only then removes the two old
   voice deployments by ARM. Failure blocks readiness; there is no runtime
   fallback.
-- Allowed coding-session checks are TypeScript/Vite/static builds, Swift parse
-  or package compile, Python compile/static checks and Bicep build. Do not run a
-  test suite, `measure_pi`, model/provider smoke, voice session or Azure delete
-  for this change. Dan owns the future device/provider acceptance.
-- Open physical checks: one future Deploy, real microphone capture and PCM
-  playback, `marin` output, acoustic barge-in while PI is busy, transcripts and
-  captions, Watch/phone handoff, failure/retry and provider latency/cost.
+- Allowed coding-session checks are the focused offline backend/provisioner/web
+  voice tests, TypeScript/Vite builds, Swift parse/package checks and Python/JSON
+  validation. Do not run `measure_pi`, a live model/provider smoke, a voice
+  session, Deploy or an Azure delete. Dan owns future device/provider acceptance.
+- `voice-definition.json` pins `vesper`. Backend activity and transcript events
+  carry explicit state/event/response identities. Focused checks:
+  `npx vitest run src/voice/relay-events.test.ts src/voice/pi-voice.test.ts
+  src/voice/live-protocol.test.ts src/voice/relay-termination.test.ts` from
+  `apps/backend`; `python -m unittest discover -s .github/scripts/tests -p
+  'test_pi_agent.py'`; `swift test --filter
+  'PiRuntimeTests|VoiceCaptionTests|JarvisOrbTests'` from JarvisCore.
+- Open physical checks: one future Deploy, male British `vesper` output in
+  English and Danish, real microphone capture and PCM playback, acoustic
+  barge-in while PI is busy, caption sequence/speaker on iPhone and Watch,
+  reconnect continuity, failure/retry and provider latency/cost.
 
 ## PI built-ins and wake actions (#1886, P15-175)
 
@@ -5751,7 +5759,7 @@ the exact
 route, gets the `https://ai.azure.com/.default` token with
 `DefaultAzureCredential`, and sends
 `Foundry-Features: VoiceAgents=V1Preview`. The agent uses `gpt-live-1`, PCM
-24 kHz and `marin`; it has client delegation and no Foundry-managed prompt
+24 kHz and `vesper`; it has client delegation and no Foundry-managed prompt
 conversation. Browser, iPhone and Watch provider events remain server-internal.
 No live/provider smoke is part of this source cutover.
 

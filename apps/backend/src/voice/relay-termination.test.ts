@@ -292,6 +292,10 @@ describe('GPT-Live graceful termination', () => {
       'retryable close without a terminal event',
     );
     expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
+    expect(received).toContainEqual(expect.objectContaining({
+      type: 'jarvis.voice.activity',
+      state: 'reconnecting',
+    }));
     expect(endedUsage).toEqual({ allowWallClockFallback: false });
   });
 
