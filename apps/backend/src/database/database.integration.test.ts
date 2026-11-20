@@ -775,6 +775,7 @@ describe('real SQL Server migration contract', () => {
             label: 'Flight',
             observedAt: at.toISOString(),
             expiresAt: null,
+            materialHash: 'f'.repeat(64),
             verifiedAt: at.toISOString(),
           }],
           followUps: [{
@@ -870,31 +871,36 @@ describe('real SQL Server migration contract', () => {
             FROM dbo.pi_situation_ref_authority
             WHERE owner_object_id = @owner;`);
         expect(pending.recordset[0]).toEqual({ active: 0, pending: 1, statuses: 0 });
-        const queued = await situations.commit({
+        const pendingRead = await situations.read(owner, signal);
+        expect(pendingRead?.authoritativeRefs).toEqual([
+          expect.objectContaining({
+            id: 'calendar-event:flight',
+            source: 'calendar',
+            verifiedAt: at.toISOString(),
+            materialHash: expect.any(String),
+            activatedAt: null,
+            invalidatedAt: null,
+          }),
+        ]);
+        const patchService = createPiSituationService({
           owner,
+          store: situations,
+          proactive,
+          sources: [],
+          now: () => at,
+        });
+        patchService.attachEvents(queue);
+        const queuedPatch = await patchService.patch({
           expectedRevision: stored.revision,
           expectedHash: stored.hash,
-          state: followUpState,
-          activation: { ...activation, id: randomUUID() },
           policyRevision: currentPolicy,
-          followUpActions: [{
-            operation: 'upsert',
-            followUpId: 'follow:flight',
-            event: {
-              source: 'followup',
-              kind: 'commitment.due',
-              identity: 'pi-followup:follow:flight',
-              material: { text: 'Check in.', dueAt: dueAt.toISOString() },
-              dedupeKey: 'pi-followup:follow:flight:v1',
-              summary: 'Check in.',
-              detail: { followUpId: 'follow:flight', evidenceSources: ['calendar'] },
-              occurredAt: dueAt.toISOString(),
-              notBeforeAt: dueAt.toISOString(),
-            },
-          }],
-          authoritativeRefs: [],
-          observations: [],
+          patch: {
+            upsertRefs: [followUpState.refs[0]],
+            upsertFollowUps: followUpState.followUps,
+          },
+          activation: { ...activation, id: randomUUID() },
         }, signal);
+        const queued = queuedPatch.record;
         const activated = await pool.request()
           .input('owner', sql.UniqueIdentifier, owner)
           .query<{ active: number; pending: number }>(`SELECT
@@ -1073,7 +1079,141 @@ describe('real SQL Server migration contract', () => {
             FROM dbo.pi_situation_outbox
             WHERE applied_at IS NULL;`))
           .recordset[0]?.pending).toBe(0);
+        const lookupOwner = randomUUID();
+        const lookupProactive = createProactiveStore(pool, lookupOwner);
+        const lookupQueue = createProactiveEventStore(pool, lookupOwner);
+        const lookupService = createPiSituationService({
+          owner: lookupOwner,
+          store: situations,
+          proactive: lookupProactive,
+          sources: [],
+          now: () => at,
+        });
+        lookupService.attachEvents(lookupQueue);
+        const lookupInitial = await situations.initialize(lookupOwner, situation, at, signal);
+        const lookupPolicy = proactiveSettingsRevision(await lookupProactive.settings.read());
+        const firstLookup = {
+          id: 'calendar:ambiguous',
+          source: 'calendar' as const,
+          identity: 'calendar-event:ambiguous',
+          label: 'First',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+          materialHash: 'a'.repeat(64),
+          verifiedAt: at.toISOString(),
+          activatedAt: null,
+          invalidatedAt: null,
+          staleReason: null,
+        };
+        await situations.recordLookupAuthority(
+          lookupOwner,
+          firstLookup,
+          lookupPolicy,
+          signal,
+        );
+        const beforeFirstPatch = await situations.read(lookupOwner, signal);
+        expect(beforeFirstPatch?.authoritativeRefs).toEqual([
+          expect.objectContaining({
+            id: firstLookup.id,
+            materialHash: firstLookup.materialHash,
+            activatedAt: null,
+          }),
+        ]);
+        const firstRef = {
+          id: firstLookup.id,
+          source: firstLookup.source,
+          identity: firstLookup.identity,
+          label: firstLookup.label,
+          observedAt: firstLookup.observedAt,
+          expiresAt: firstLookup.expiresAt,
+          materialHash: firstLookup.materialHash,
+          verifiedAt: firstLookup.verifiedAt,
+        };
+        const firstPatch = await lookupService.patch({
+          expectedRevision: lookupInitial.revision,
+          expectedHash: lookupInitial.hash,
+          policyRevision: lookupPolicy,
+          patch: { upsertRefs: [firstRef] },
+          activation: { ...activation, id: randomUUID() },
+        }, signal);
+        await lookupService.synchronizeFollowUps(signal);
+        const secondVerifiedAt = new Date(at.getTime() + 1).toISOString();
+        const secondLookup = {
+          ...firstLookup,
+          label: 'Second',
+          materialHash: 'b'.repeat(64),
+          verifiedAt: secondVerifiedAt,
+        };
+        const thirdLookup = {
+          ...firstLookup,
+          label: 'Third',
+          materialHash: 'c'.repeat(64),
+          verifiedAt: secondVerifiedAt,
+        };
+        await situations.recordLookupAuthority(
+          lookupOwner,
+          secondLookup,
+          lookupPolicy,
+          signal,
+        );
+        await situations.recordLookupAuthority(
+          lookupOwner,
+          thirdLookup,
+          lookupPolicy,
+          signal,
+        );
+        const beforeExactPatch = await situations.read(lookupOwner, signal);
+        expect(beforeExactPatch?.authoritativeRefs).toHaveLength(3);
+        expect(beforeExactPatch?.authoritativeRefs.filter(({ activatedAt }) =>
+          activatedAt === null)).toHaveLength(2);
+        const secondRef = {
+          id: secondLookup.id,
+          source: secondLookup.source,
+          identity: secondLookup.identity,
+          label: secondLookup.label,
+          observedAt: secondLookup.observedAt,
+          expiresAt: secondLookup.expiresAt,
+          materialHash: secondLookup.materialHash,
+          verifiedAt: secondLookup.verifiedAt,
+        };
+        const exactPatch = await lookupService.patch({
+          expectedRevision: firstPatch.record.revision,
+          expectedHash: firstPatch.record.hash,
+          policyRevision: lookupPolicy,
+          patch: { upsertRefs: [secondRef] },
+          activation: { ...activation, id: randomUUID() },
+        }, signal);
+        await lookupService.synchronizeFollowUps(signal);
+        expect(exactPatch.record.state.refs[0]).toMatchObject({
+          id: secondLookup.id,
+          materialHash: secondLookup.materialHash,
+          verifiedAt: secondLookup.verifiedAt,
+          label: 'Second',
+        });
+        const exactRead = await situations.read(lookupOwner, signal);
+        expect(exactRead?.authoritativeRefs.find(({ materialHash }) =>
+          materialHash === secondLookup.materialHash)).toMatchObject({
+          activatedAt: expect.any(String),
+          invalidatedAt: null,
+        });
+        expect(exactRead?.authoritativeRefs.find(({ materialHash }) =>
+          materialHash === firstLookup.materialHash)).toMatchObject({
+          activatedAt: expect.any(String),
+          invalidatedAt: expect.any(String),
+        });
+        expect(exactRead?.authoritativeRefs.find(({ materialHash }) =>
+          materialHash === thirdLookup.materialHash)).toMatchObject({
+          activatedAt: null,
+          invalidatedAt: null,
+        });
+        expect((await pool.request()
+          .input('owner', sql.UniqueIdentifier, lookupOwner)
+          .query<{ pending: number }>(`SELECT COUNT(*) AS pending
+            FROM dbo.pi_situation_outbox
+            WHERE owner_object_id = @owner AND applied_at IS NULL;`))
+          .recordset[0]?.pending).toBe(0);
       } finally {
+        await pool.request().batch('DELETE FROM dbo.pi_situation_outbox;');
         await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
         await pool.request().batch(
           'DELETE FROM dbo.proactive_events; DELETE FROM dbo.proactive_event_batches; ' +

@@ -4,6 +4,7 @@ import { databaseReadRequest } from './wake-retry.js';
 import { proactiveSettingsFromRow, type ProactiveSettingsRow } from './proactive-store.js';
 import { defaultProactiveSettings } from '../proactive/store.js';
 import { proactiveSettingsRevision } from '../proactive/preferences.js';
+import { hasCredentialMarkerDeep } from '../core/memory-policy.js';
 import {
   PI_SITUATION_SCHEMA_VERSION,
   canonicalizePiSituationState,
@@ -69,6 +70,14 @@ function authorityRef(row: AuthorityRow): PiSituationAuthorityRef {
   };
 }
 
+function safeAuthorityRefs(
+  refs: readonly PiSituationAuthorityRef[],
+): PiSituationAuthorityRef[] {
+  return refs
+    .filter((ref) => !hasCredentialMarkerDeep(ref))
+    .map((ref) => structuredClone(ref));
+}
+
 function authorityKey(
   ref: Pick<PiSituationAuthorityRef, 'source' | 'id' | 'verifiedAt' | 'materialHash'>,
 ): string {
@@ -101,17 +110,7 @@ function decodeRow(row: SituationRow, authoritativeRefs: readonly PiSituationAut
       hash: row.content_hash.trim(),
       asOf: date(row.as_of_at),
       updatedAt: date(row.updated_at),
-      authoritativeRefs: decoded.state.refs.flatMap((safe) => {
-        const current = authoritativeRefs.find((ref) =>
-          ref.source === safe.source && ref.id === safe.id);
-        return current ? [structuredClone({
-          ...current,
-          ...safe,
-          verifiedAt: safe.verifiedAt ?? current.verifiedAt,
-          invalidatedAt: current.invalidatedAt,
-          staleReason: current.staleReason,
-        })] : [];
-      }),
+      authoritativeRefs: safeAuthorityRefs(authoritativeRefs),
       lastActivation: row.last_activation_id && row.last_activation_type && row.last_activation_at
         ? {
           id: row.last_activation_id.toLowerCase(),
@@ -163,7 +162,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
       );
       const decoded = decodeRow(
         row,
-        initialAuthority.recordset.map(authorityRef),
+        safeAuthorityRefs(initialAuthority.recordset.map(authorityRef)),
       );
       if (!decoded.changed) return decoded.record;
 
@@ -190,7 +189,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           .query<AuthorityRow>(authoritySelect);
         const safe = decodeRow(
           current,
-          lockedAuthority.recordset.map(authorityRef),
+          safeAuthorityRefs(lockedAuthority.recordset.map(authorityRef)),
         );
         const safeHash = piSituationHash(safe.record.state);
         if (!safe.changed) {
@@ -229,7 +228,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         }
         const migratedRecord = decodeRow(
           migratedRow,
-          lockedAuthority.recordset.map(authorityRef),
+          safeAuthorityRefs(lockedAuthority.recordset.map(authorityRef)),
         );
         await transaction.commit();
         return migratedRecord.record;
@@ -260,7 +259,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           await transaction.commit();
           return decodeRow(
             current.recordset[0],
-            existingAuthority.recordset.map(authorityRef),
+            safeAuthorityRefs(existingAuthority.recordset.map(authorityRef)),
           ).record;
         }
         const hash = piSituationHash(state);
@@ -331,7 +330,9 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         }
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, input.owner);
         const storedAuthority = await activeRequest.query<AuthorityRow>(authoritySelect);
-        const existingAuthority = storedAuthority.recordset.map(authorityRef);
+        const existingAuthority = safeAuthorityRefs(
+          storedAuthority.recordset.map(authorityRef),
+        );
         const existingByGeneration = new Map(existingAuthority.map((ref) =>
           [authorityKey(ref), ref] as const));
         const sourceInvalidations = await new sql.Request(transaction)
@@ -524,7 +525,9 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         }
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, input.owner);
         const refreshedAuthority = await activeRequest.query<AuthorityRow>(authoritySelect);
-        let authoritativeRefs = refreshedAuthority.recordset.map(authorityRef);
+        let authoritativeRefs = safeAuthorityRefs(
+          refreshedAuthority.recordset.map(authorityRef),
+        );
         const authority = new Map(authoritativeRefs.map((ref) =>
           [authorityKey(ref), ref] as const));
         let state = canonicalizePiSituationState(
@@ -573,7 +576,9 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         const activatedAuthority = await new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, input.owner)
           .query<AuthorityRow>(authoritySelect);
-        authoritativeRefs = activatedAuthority.recordset.map(authorityRef);
+        authoritativeRefs = safeAuthorityRefs(
+          activatedAuthority.recordset.map(authorityRef),
+        );
         const observations = new Map<string, {
           source: PiSituationSourceObservation['source'];
           state: PiSituationSourceObservation['state'];
@@ -753,7 +758,9 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           ) VALUES (@owner, @revision, @actions, @createdAt);`);
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, input.owner);
         const finalAuthority = await activeRequest.query<AuthorityRow>(authoritySelect);
-        authoritativeRefs = finalAuthority.recordset.map(authorityRef);
+        authoritativeRefs = safeAuthorityRefs(
+          finalAuthority.recordset.map(authorityRef),
+        );
         activeRequest = undefined;
         await transaction.commit();
         return {
