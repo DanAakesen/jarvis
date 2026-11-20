@@ -176,7 +176,7 @@ function registerVoiceRoute(
 
     const unregisterSessionConnection = request.ownerSession
       ? app.ownerSessionConnections?.register(request.ownerSession.id, () => {
-        closeSession(1008, 'Session ended', false);
+        closeSession(1008, 'Session ended');
       }) ?? (() => {})
       : () => {};
     const limits = createSessionLimits();
@@ -262,6 +262,9 @@ function registerVoiceRoute(
         sessionId = session.id;
         diagnostics.stage('session_created');
       }));
+    // Startup work begins before the first awaited stage (proactive context). Consume a possible rejection now;
+    // the original promise is still awaited below and its error remains a session failure.
+    void sessionReady.catch(() => undefined);
 
     const finishOutputGroup = (group: OutputGroup, terminal: 'completed' | 'cancelled' = 'completed') => {
       if (group.completed) return;
@@ -667,7 +670,7 @@ function registerVoiceRoute(
       }
       if (type === 'session.closed') {
         if (activeOutput) finishOutputGroup(activeOutput);
-        closeSession(1000, 'Voice session ended', true);
+        closeSession(endRequested ? 1000 : 1011, 'Voice session ended', true);
         return;
       }
       if (type === 'error') {
@@ -699,6 +702,16 @@ function registerVoiceRoute(
       endRequested = true;
       clearTimeout(endTimer);
       diagnostics.summary('relay', code);
+      const retryable = code === VOICE_STARTUP_CLOSE_CODE || code === 1011 || code === 1012;
+      let failureNotified = false;
+      if (notifyClient && code !== 1000 && browser.readyState === WebSocket.OPEN) {
+        sendClient({
+          type: 'jarvis.session.failed',
+          closeCode: code,
+          retryable,
+        });
+        failureNotified = true;
+      }
       pendingDelegation?.abort();
       piTurns.cancel();
       statusAnnouncer?.close();
@@ -708,14 +721,21 @@ function registerVoiceRoute(
       controller.abort();
       unregisterSessionConnection();
       if (upstream) closeSocket(upstream, code, reason);
-      if (!activityFinished) publishActivity(code === 1000 || code === 1012 ? 'ended' : 'failed');
+      if (!activityFinished) publishActivity(code === 1000 ? 'ended' : retryable ? 'reconnecting' : 'failed');
       void finalizeSession().then(() => {
-        if (notifyClient && browser.readyState === WebSocket.OPEN) {
+        if (notifyClient && code === 1000 && browser.readyState === WebSocket.OPEN) {
           sendClient({ type: 'jarvis.session.ended' });
         }
         closeSocket(browser, code, reason);
       }).catch(() => {
         log.warn('voice.session_persistence_failed');
+        if (notifyClient && !failureNotified && browser.readyState === WebSocket.OPEN) {
+          sendClient({
+            type: 'jarvis.session.failed',
+            closeCode: 1011,
+            retryable: true,
+          });
+        }
         closeSocket(browser, 1011, 'Voice session could not be saved');
       });
     }
@@ -881,7 +901,7 @@ function registerVoiceRoute(
             failure: reason.toString('utf8').replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'none',
             language,
           }, 'voice.upstream_closed');
-          closeSession(code === 1000 ? 1000 : 1011, 'Voice connection ended');
+          closeSession(1011, 'Voice connection ended');
         });
         socket.once('error', (error) => {
           if (socket !== upstream || controller.signal.aborted || endRequested) return;

@@ -813,6 +813,21 @@ export class BrowserVoiceClient {
       }
     } else if (event.type === 'jarvis.session.ended') {
       this.finishStop(true);
+    } else if (event.type === 'jarvis.session.failed' &&
+        typeof event.retryable === 'boolean' && typeof event.closeCode === 'number') {
+      this.audio.stopPlayback();
+      this.playbackAllowed = false;
+      this.responseFinished = false;
+      if (event.retryable) {
+        this.sessionReady = false;
+        this.screenSessionReady = false;
+        this.microphoneOpen = false;
+        this.audio.detachInput();
+        if (this.microphone === 'live') this.setMicrophone('granted');
+        this.publish('reconnecting', 'Voice connection failed. Reconnecting…');
+      } else {
+        this.finishStop(false, true);
+      }
     } else if (event.type === 'jarvis.visual_context') {
       const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
       if (event.itemId !== undefined && itemId === undefined) {

@@ -28,6 +28,9 @@ Draft for the native iPhone app, derived from reading the current backend and we
 - URL: `wss://BACKEND/voice` (English) or `wss://BACKEND/voice/da` (Danish). It is a WebSocket carrying JSON, not WebRTC.
 - Auth: exactly two subprotocols, `jarvis.voice.v2` and `jarvis.auth.TOKEN`.
   v1 is rejected during the upgrade and has no alias or fallback.
+- Terminal: `jarvis.session.ended` is clean completion only.
+  `jarvis.session.failed` carries `retryable` and `closeCode`; clients reconnect
+  only when `retryable` is true.
 - Language: read `settings.voice.defaultLanguage` from the existing authenticated `GET /settings` route for each new session; the default is `da`.
 - Audio: base64 PCM16 little-endian, mono, 24 kHz inside JSON messages. There is no Opus.
 - The microphone is open (no push to talk). Starting to speak during playback must stop playback at once.

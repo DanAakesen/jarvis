@@ -796,6 +796,17 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .responseCancelled:
             emit(.init(.interrupt, requestID: id, responseID: voiceResponseID))
             voiceResponseID = nil
+        case .sessionFailed(let retryable, _):
+            emit(.init(.interrupt, requestID: id, responseID: voiceResponseID))
+            voiceResponseID = nil
+            if retryable {
+                emit(.init(.voiceState, requestID: id, text: "Reconnecting"))
+            } else {
+                Task {
+                    guard voiceID == id else { return }
+                    await stopVoice()
+                }
+            }
         case .sessionEnded:
             Task {
                 guard voiceID == id else { return }

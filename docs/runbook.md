@@ -78,6 +78,14 @@ backoff. Do not infer readiness from a WebSocket open alone. The next event must
 be the service-owned `session.started`, after which Jarvis sends
 `jarvis.session.ready` to the phone/browser.
 
+`jarvis.session.ended` is terminal and is sent only for a clean owner/time-limit
+end. A retryable failure (startup, provider disconnect, service restart) sends
+`jarvis.session.failed` with `retryable: true`, stops queued playback and then
+closes with the retry code. Web/iOS reconnect; a permanent policy/protocol
+failure sends the same event with `retryable: false` and ends the client. SQL
+session creation has an immediate rejection consumer so a startup failure can
+never become an unhandled Node 22 promise rejection.
+
 At a client delegation, expect this source-only sequence in logs: native input
 transcript deltas, one stored owner message, `voice.pi_turn` and the PI
 turn/receipt logs, then native output audio/transcript deltas. `voice.pi_turn`

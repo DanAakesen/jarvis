@@ -612,6 +612,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 guard sessionGeneration == generation else { return }
                 await end()
             }
+        case .sessionFailed(let retryable, _):
+            audio.stopPlayback()
+            responseID = nil
+            if !retryable {
+                errorMessage = JarvisVoiceLocalization.string(.unavailable)
+            }
         case .transcriptionCompleted(let transcript, let itemID):
             captions.receive(message)
             if (isCameraEnabled || photoForNextTurn != nil), let itemID { inspectCameraTurn(transcript, itemID: itemID) }

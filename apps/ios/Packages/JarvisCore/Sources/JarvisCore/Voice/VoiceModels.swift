@@ -104,6 +104,7 @@ extension VoiceClientMessage: Encodable {
 public enum VoiceServerMessage: Equatable, Sendable {
     case sessionReady(sessionID: UInt64)
     case sessionEnded
+    case sessionFailed(retryable: Bool, closeCode: Int)
     case transcriptionCompleted(transcript: String, itemID: String?)
     case responseCreated(responseID: String?)
     case audioDelta(type: String, delta: String)
@@ -132,6 +133,11 @@ public enum VoiceServerMessage: Equatable, Sendable {
             return .sessionReady(sessionID: payload.sessionID.value)
         case "jarvis.session.ended":
             return .sessionEnded
+        case "jarvis.session.failed":
+            guard let payload = try? JSONDecoder().decode(SessionFailedPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .sessionFailed(retryable: payload.retryable, closeCode: payload.closeCode)
         case "jarvis.voice.input_transcript.completed":
             guard let payload = try? JSONDecoder().decode(TranscriptionPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
@@ -187,6 +193,12 @@ private struct SessionReadyPayload: Decodable {
     enum CodingKeys: String, CodingKey {
         case sessionID = "sessionId"
     }
+
+}
+
+private struct SessionFailedPayload: Decodable {
+    let retryable: Bool
+    let closeCode: Int
 }
 
 private struct SessionID: Decodable {

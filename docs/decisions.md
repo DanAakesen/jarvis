@@ -30,6 +30,9 @@
 - Camera/screen rejection is visible and terminal for that session's visual
   controls: clients stop capture and disable retries instead of continuing an
   unacknowledged audio-only upload flow.
+- SQL startup rejection is consumed immediately. Only clean completion emits
+  `jarvis.session.ended`; provider/restart/startup failures emit an explicit
+  retryable/non-retryable failure and reconnect only when the event allows it.
 
 ## 20 November 2026 — Replace direct Voice Live with one PI-delegated GPT-Live agent
 

@@ -352,6 +352,15 @@ public actor VoiceSessionClient {
             isConnected = false
             await transport.close(code: 1000)
             clearCredentials()
+        case .sessionFailed(let retryable, _):
+            if retryable {
+                isConnected = false
+                apply(.connectionDropped)
+            } else {
+                apply(.failed)
+                isConnected = false
+                clearCredentials()
+            }
         case .responseCreated(let responseID):
             apply(.responseCreated(id: responseID))
         case .audioDelta:
