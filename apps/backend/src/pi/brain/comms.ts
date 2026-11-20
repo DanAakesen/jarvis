@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { ConversationStore } from '../../core/conversation-store.js';
-import type { PiStore } from '../store.js';
+import type { PiProactiveEvidence, PiStore } from '../store.js';
 import { copenhagenDayStart } from '../../proactive/time.js';
 import { shouldRedact } from '../../vault/index.js';
 import type { PiBrainRun } from '../turns.js';
@@ -39,18 +39,23 @@ const hash = (text: string) => createHash('sha256').update(text.trim().replace(/
 export function createBrainComms(options: BrainCommsOptions) {
   // Admission (the daily count and the repeat check) and recording must not interleave, or parallel sends would all pass.
   let admission: Promise<unknown> = Promise.resolve();
-  async function admit(
-    input: { readonly text: string; readonly evidence?: Readonly<Record<string, unknown>> },
-    run: PiBrainRun,
-    signal: AbortSignal,
-  ): Promise<{ messageId: string; sessionId: string }> {
+  async function admit(input: {
+    readonly text: string;
+    readonly evidence?: readonly PiProactiveEvidence[] | Readonly<Record<string, unknown>>;
+    readonly followUpIds?: readonly string[];
+    readonly notificationEvidence?: Readonly<Record<string, unknown>>;
+  }, run: PiBrainRun, signal: AbortSignal): Promise<{ messageId: string; sessionId: string }> {
     const text = input.text.trim();
     if (!text) throw new BrainCommsRefusal('The message is empty. Nothing was sent.');
     if (Array.from(text).length > MAX_BRAIN_MESSAGE_CHARACTERS) {
       throw new BrainCommsRefusal(`The message is longer than ${MAX_BRAIN_MESSAGE_CHARACTERS} characters. Say less. Nothing was sent.`);
     }
     if (shouldRedact(text)) throw new BrainCommsRefusal('Secrets and credentials are never sent. Nothing was sent.');
-    const day = await options.store.messagesSince(copenhagenDayStart(options.now()), signal);
+    const day = await options.store.messagesSince(
+      copenhagenDayStart(options.now()),
+      signal,
+      options.ownerObjectId,
+    );
     if (day.count >= MAX_BRAIN_MESSAGES_PER_DAY) {
       throw new BrainCommsRefusal(`I have already messaged Dan ${MAX_BRAIN_MESSAGES_PER_DAY} times today, which is the limit. Nothing was sent; put it in a note for tomorrow.`);
     }
@@ -63,18 +68,36 @@ export function createBrainComms(options: BrainCommsOptions) {
       ? await options.conversations.getSession(latest.sessionId)
       : await options.conversations.createSession({ channel: 'chat', language: 'en', ownerObjectId: options.ownerObjectId });
     if (!session) throw new BrainCommsRefusal('The chat session could not be found. Nothing was sent.');
+    const notificationEvidence: Readonly<Record<string, unknown>> | undefined =
+      input.notificationEvidence ??
+      (input.evidence !== undefined && !Array.isArray(input.evidence)
+        ? input.evidence as Readonly<Record<string, unknown>>
+        : undefined);
     const message = await options.conversations.addMessage({
       signal, sessionId: session.id, role: 'jarvis', text, model: 'pi', language: session.language, allowEndedSession: true,
       ...(options.pushEnabled === false ? {} : { replyNotification: {
         ownerObjectId: options.ownerObjectId,
-        ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
+        ...(notificationEvidence === undefined ? {} : { evidence: notificationEvidence }),
       } }),
     });
     if (!message) throw new BrainCommsRefusal('The chat could not store the message. Nothing was sent.');
+    try {
+      await options.store.recordMessage({
+        ownerObjectId: options.ownerObjectId,
+        runId: run.runId,
+        sessionId: session.id,
+        messageId: message.id,
+        textHash,
+        text,
+        evidence: Array.isArray(input.evidence) ? input.evidence : [],
+        followUpIds: input.followUpIds ?? [],
+      }, options.now(), AbortSignal.timeout(10_000));
+    } catch {
+      throw new BrainCommsRefusal(
+        'The message was saved in Chat, but its continuation evidence could not be saved, so no push was sent. Check Chat before trying again.',
+      );
+    }
     run.sent.push({ title: null, text, messageId: message.id });
-    // The message is Dan's now; bookkeeping must not make the brain send it again.
-    await options.store.recordMessage({ runId: run.runId, sessionId: session.id, messageId: message.id, textHash }, options.now(), AbortSignal.timeout(10_000))
-      .catch(() => undefined);
     options.announce();
     if (options.pushEnabled !== false) {
       options.push({ sessionId: session.id, messageId: message.id, text });
@@ -82,11 +105,12 @@ export function createBrainComms(options: BrainCommsOptions) {
     return { messageId: message.id, sessionId: session.id };
   }
   return {
-    send(
-      input: { readonly text: string; readonly evidence?: Readonly<Record<string, unknown>> },
-      run: PiBrainRun,
-      signal: AbortSignal,
-    ): Promise<{ messageId: string; sessionId: string }> {
+    send(input: {
+      readonly text: string;
+      readonly evidence?: readonly PiProactiveEvidence[] | Readonly<Record<string, unknown>>;
+      readonly followUpIds?: readonly string[];
+      readonly notificationEvidence?: Readonly<Record<string, unknown>>;
+    }, run: PiBrainRun, signal: AbortSignal): Promise<{ messageId: string; sessionId: string }> {
       const turn = admission.then(() => admit(input, run, signal), () => admit(input, run, signal));
       admission = turn.catch(() => undefined);
       return turn;

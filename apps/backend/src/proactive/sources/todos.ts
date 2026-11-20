@@ -60,11 +60,13 @@ export function createTodosSource(vaultClient?: VaultReader, includeOrdinary = f
           state: 'ok',
           reason: null,
           observedAt: now.toISOString(),
-          facts: selected.map(({ todo, index }) => ({
-            ref: `todo:${index + 1}`,
-            identity: `vault-task:${createHash('sha256').update(JSON.stringify([
+          facts: selected.map(({ todo }) => {
+            const identity = `vault-task:${todo.taskIdentity ?? createHash('sha256').update(JSON.stringify([
               todo.path, normaliseFactText(todo.text),
-            ])).digest('hex')}`,
+            ])).digest('hex')}`;
+            return {
+            ref: identity,
+            identity,
             ...(/^(?:Personal|Work)\//u.test(todo.path) && !/(?:^|\/)projects?(?:\/|$)/iu.test(todo.path)
               ? { taskScope: todo.path.startsWith('Personal/') ? 'personal' as const : 'work' as const }
               : {}),
@@ -77,7 +79,8 @@ export function createTodosSource(vaultClient?: VaultReader, includeOrdinary = f
             dueHasTime: todo.dueHasTime,
             ...(todo.remindAtDue ? { remindAtDue: true } : {}),
             highPriority: todo.highPriority,
-          })),
+            };
+          }),
         };
       } catch (error) {
         if (error instanceof TodoDiscoveryError) return unavailable(now, error.reason);

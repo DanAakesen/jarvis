@@ -38,6 +38,7 @@ describe('PI situation MCP tools', () => {
     const tools = createSituationTools({ registry, service, now: () => at });
     const read = tools.find(({ name }) => name === 'situation_read')!;
     const commit = tools.find(({ name }) => name === 'situation_commit')!;
+    const patch = tools.find(({ name }) => name === 'situation_patch')!;
     const grant = registry.open({
       ownerObjectId: owner, sessionId: '7', messageId: '42', signal: live(),
       activation: {
@@ -49,7 +50,7 @@ describe('PI situation MCP tools', () => {
     });
     const request = toolRequest(grant.activation!.id);
     const first = await read.execute({}, request, live()) as Record<string, unknown>;
-    expect(first).toMatchObject({ revision: 0, state: null });
+    expect(first).toMatchObject({ revision: 1, state: expect.objectContaining({ version: 1 }) });
     const state = parsePiSituationState({
       version: 1,
       asOf: at.toISOString(),
@@ -68,7 +69,30 @@ describe('PI situation MCP tools', () => {
       policyRevision: first.policyRevision,
       state,
     }, request, live()) as Record<string, unknown>;
-    expect(result).toMatchObject({ committed: true, revision: 1 });
+    expect(result).toMatchObject({ committed: true, revision: 2 });
+    const patchResult = await patch.execute({
+      expectedRevision: result.revision,
+      expectedHash: result.hash,
+      policyRevision: first.policyRevision,
+      patch: {
+        summary: null,
+        upsertRefs: [{
+          id: 'location:device',
+          source: 'location',
+          identity: 'location:device',
+          label: 'Near Copenhagen',
+          observedAt: at.toISOString(),
+          expiresAt: null,
+        }],
+        upsertFollowUps: [{
+          id: 'follow:location',
+          text: 'Check the location later.',
+          dueAt: null,
+          refIds: ['location:device'],
+        }],
+      },
+    }, request, live()) as Record<string, unknown>;
+    expect(patchResult).toMatchObject({ committed: true, changed: true, revision: 3 });
     registry.close(grant.turn);
     await expect(read.execute({}, request, live())).rejects.toThrow('live PI activation');
   });

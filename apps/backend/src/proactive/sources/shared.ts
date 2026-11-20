@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { GoogleApiError } from '../../google/api-client.js';
 import type { SourceFact } from '../types.js';
 import type { CalendarEvent } from './calendar-reader.js';
@@ -46,13 +47,18 @@ export function eventFactText(event: CalendarEvent): string {
 
 export function calendarFact(
   event: CalendarEvent,
-  ref: string,
   label: 'Calendar' | 'Travel',
   observedAt: string,
 ): SourceFact {
+  const provider = label.toLowerCase();
+  const identity = event.id
+    ? `${provider}-event:${event.id}`
+    : `${provider}-event:${createHash('sha256').update(JSON.stringify([
+      event.title, event.location, event.startsAt.toISOString(), event.endsAt.toISOString(), event.allDay,
+    ])).digest('hex').slice(0, 32)}`;
   return {
-    ref,
-    ...(event.id ? { identity: `calendar-event:${event.id}` } : {}),
+    ref: identity,
+    identity,
     kind: label === 'Calendar' ? 'event' : 'travel',
     label,
     text: eventFactText(event),

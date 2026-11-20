@@ -101,9 +101,65 @@ export function createSituationTools(options: {
       },
     },
     {
+      name: 'situation_patch',
+      description: [
+        'Apply one bounded, evidence-linked patch to the server-initialized PI situational state.',
+        'Send the exact revision, hash and proactive-policy revision from situation_read.',
+        'Patch only facts, references, source observations, summary and follow-ups that changed; use remove arrays to invalidate only affected evidence.',
+        'The server owns the remaining sources and rejects disabled, stale, secret or unlinked evidence. A no-material-change patch returns without a new revision.',
+        'Only the current PI activation can use this tool.',
+      ].join(' '),
+      execution: { defaultEffect: 'action' },
+      sensitive: true,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          expectedRevision: { type: 'integer', minimum: 0, maximum: 9_007_199_254_740_991 },
+          expectedHash: {
+            anyOf: [{ type: 'string', pattern: '^[0-9a-f]{64}$' }, { type: 'null' }],
+          },
+          policyRevision: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+          patch: { type: 'object', additionalProperties: true },
+        },
+        required: ['expectedRevision', 'expectedHash', 'policyRevision', 'patch'],
+        additionalProperties: false,
+      },
+      execute: async (input, request, signal) => {
+        const active = grant(options.registry, request);
+        if (!isRecord(input) || !Number.isSafeInteger(input.expectedRevision) ||
+            (input.expectedHash !== null && typeof input.expectedHash !== 'string') ||
+            typeof input.policyRevision !== 'string' || !isRecord(input.patch)) {
+          throw new ToolRefusal('The situation patch is invalid. Nothing was changed.');
+        }
+        const activation = active.activation!;
+        try {
+          const result = await options.service.patch({
+            expectedRevision: input.expectedRevision as number,
+            expectedHash: input.expectedHash as string | null,
+            policyRevision: input.policyRevision,
+            patch: input.patch,
+            activation: {
+              id: activation.id,
+              type: activation.type,
+              source: activation.source,
+              at: options.now(),
+            },
+          }, signal);
+          return {
+            committed: result.changed,
+            changed: result.changed,
+            revision: result.record.revision,
+            hash: result.record.hash,
+            asOf: result.record.asOf.toISOString(),
+            excludedSources: result.excluded,
+          };
+        } catch (error) { return failure(error); }
+      },
+    },
+    {
       name: 'situation_commit',
       description: [
-        'Commit one material change to my compact PI situational state. Do not call this on every turn: omit it when the current state is still useful.',
+        'Compatibility commit for one material whole-state change. Prefer situation_patch and preserve sources/facts not changed in this turn.',
         'Send the exact revision, hash and proactive-policy revision from situation_read, plus the complete bounded state schema.',
         'The server rejects stale revisions, source-policy changes and secrets. Facts from disabled sources are excluded; prior disabled-source facts are retained only as explicitly stale storage and are never used proactively.',
         'Only the current PI activation can use this tool.',

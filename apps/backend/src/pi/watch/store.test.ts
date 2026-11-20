@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { VaultWriteConflictError } from '../../vault/github-client.js';
 import { createPiArea } from '../area.js';
 import { createMemoryPiStore } from '../store.js';
 import { memoryVault } from '../brain/brain.testkit.js';
@@ -66,6 +67,16 @@ describe('standing watches in the vault', () => {
     const listed = await t.watches.list(signal);
     expect(listed.map(({ name, looksToday, costTodayDkk, costMonthDkk }) => ({ name, looksToday, costTodayDkk, costMonthDkk })))
       .toEqual([{ name: 'A', looksToday: 1, costTodayDkk: 0.1, costMonthDkk: 0.1 }, { name: 'B', looksToday: 1, costTodayDkk: 0.1, costMonthDkk: 0.1 }]);
+  });
+
+  it('records the same watch identity only once in a wake', async () => {
+    const t = setup();
+    await t.watches.create({ title: 'Build', text: 'x' }, signal);
+    const run = t.run('wake-duplicate');
+    await t.watches.look({ name: 'Build', result: 'still running', nextLook: null }, run, signal);
+    await t.watches.look({ name: 'Build', result: 'still running', nextLook: null }, run, signal);
+    expect(run.looked).toEqual(['Build']);
+    expect((await t.watches.list(signal))[0]).toMatchObject({ looksToday: 1 });
   });
 
   it('moves a due watch that got no look an hour ahead, so one stuck watch cannot wake the brain again and again', async () => {
@@ -138,5 +149,54 @@ describe('standing watches in the vault', () => {
     await expect(reborn.list(signal)).rejects.toMatchObject({ code: 'unavailable' });
     (t.vault as { read: unknown }).read = read;
     expect(await reborn.list(signal)).toHaveLength(1);
+  });
+
+  it('rereads the latest note and preserves a human edit during a watch update', async () => {
+    const t = setup();
+    await t.watches.create({ title: 'Deploy', text: 'Watch the deploy.', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
+    await t.watches.list(signal);
+    const path = 'PI/Watches/Deploy.md';
+    t.vault.files.set(path, t.vault.files.get(path)!.replace('Watch the deploy.', 'Watch the deploy and keep my own note.\n\nDan edit: wait for the database.'));
+    await t.watches.update({
+      name: 'Deploy',
+      change: 'check every hour',
+      nextLook: new Date(t.clock.t.getTime() + hours(2)),
+    }, signal);
+    const saved = t.vault.files.get(path)!;
+    expect(saved).toContain('Dan edit: wait for the database.');
+    expect(saved).toContain('changed: check every hour');
+    expect(await t.make().nextDueAt(signal)).toEqual(new Date(t.clock.t.getTime() + hours(2)));
+  });
+
+  it('refreshes the in-memory index after notes are added or removed outside PI', async () => {
+    const t = setup();
+    expect(await t.watches.list(signal)).toEqual([]);
+    await t.watches.create({ title: 'First', text: 'x' }, signal);
+    const path = 'PI/Watches/First.md';
+    t.vault.files.set(path + '.hidden', 'ignored');
+    t.vault.files.set('PI/Watches/Dan added.md', '# Dan added\n\nHuman watch\n\n## Trail\n');
+    expect((await t.watches.list(signal)).map(({ name }) => name).sort()).toEqual(['Dan added', 'First']);
+    t.vault.files.delete(path);
+    expect((await t.watches.list(signal)).map(({ name }) => name)).toEqual(['Dan added']);
+  });
+
+  it('reports a genuine repeated Vault conflict instead of overwriting the human revision', async () => {
+    const t = setup();
+    await t.watches.create({ title: 'Contended', text: 'x' }, signal);
+    const path = 'PI/Watches/Contended.md';
+    const original = t.vault.write;
+    let conflicts = 0;
+    t.vault.write = async (notePath, content, message, expected, abort) => {
+      if (notePath === path && conflicts < 3) {
+        conflicts += 1;
+        t.vault.files.set(path, `${t.vault.files.get(path)!.trimEnd()}\n\nDan revision ${conflicts}\n`);
+        throw new VaultWriteConflictError();
+      }
+      return original(notePath, content, message, expected, abort);
+    };
+    await expect(t.watches.update({ name: 'Contended', change: 'new cadence' }, signal))
+      .rejects.toMatchObject({ code: 'conflict' });
+    expect(t.vault.files.get(path)).toContain('Dan revision 3');
+    expect(t.vault.files.get(path)).not.toContain('changed: new cadence');
   });
 });

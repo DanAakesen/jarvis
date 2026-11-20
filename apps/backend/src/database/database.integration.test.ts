@@ -18,6 +18,9 @@ import { createMemoryProactiveStore } from '../proactive/store.js';
 import { createPiActivationService } from '../pi/activation.js';
 import { createPiSituationService, piSituationHash } from '../pi/situation.js';
 import { createPiTurnRegistry } from '../pi/turns.js';
+import { createProactiveEventStore } from './proactive-event-store.js';
+import { createProactiveStore } from './proactive-store.js';
+import { createPiBackgroundSlotService } from '../pi/activation-slots.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -319,6 +322,8 @@ describe('real SQL Server migration contract', () => {
       const proactiveDown = await readFile(new URL('../../../../db/migrations/down/0054_proactive_push.sql', import.meta.url), 'utf8');
       const foundationSchema = await readFile(new URL('../../../../db/migrations/0055_proactive_foundation.sql', import.meta.url), 'utf8');
       const foundationDown = await readFile(new URL('../../../../db/migrations/down/0055_proactive_foundation.sql', import.meta.url), 'utf8');
+      const preferencesSchema = await readFile(new URL('../../../../db/migrations/0063_proactive_suggestion_preferences.sql', import.meta.url), 'utf8');
+      const preferencesDown = await readFile(new URL('../../../../db/migrations/down/0063_proactive_suggestion_preferences.sql', import.meta.url), 'utf8');
       const eventsSchema = await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8');
       const eventsDown = await readFile(new URL('../../../../db/migrations/down/0080_proactive_events.sql', import.meta.url), 'utf8');
       const schema = await readFile(new URL('../../../../db/migrations/0086_pi_chat.sql', import.meta.url), 'utf8');
@@ -329,13 +334,17 @@ describe('real SQL Server migration contract', () => {
       const watchDown = await readFile(new URL('../../../../db/migrations/down/0088_pi_watch_look.sql', import.meta.url), 'utf8');
       const situationSchema = await readFile(new URL('../../../../db/migrations/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
       const situationDown = await readFile(new URL('../../../../db/migrations/down/0090_pi_situational_intelligence.sql', import.meta.url), 'utf8');
+      const integritySchema = await readFile(new URL('../../../../db/migrations/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
+      const integrityDown = await readFile(new URL('../../../../db/migrations/down/0097_pi_proactive_integrity.sql', import.meta.url), 'utf8');
       await pool.request().batch(proactiveSchema);
       await pool.request().batch(foundationSchema);
+      await pool.request().batch(preferencesSchema);
       await pool.request().batch(eventsSchema);
       await pool.request().batch(schema);
       await pool.request().batch(brainSchema);
       await pool.request().batch(watchSchema);
       await pool.request().batch(situationSchema);
+      await pool.request().batch(integritySchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -380,9 +389,57 @@ describe('real SQL Server migration contract', () => {
         expect((await store.readBrainSwitch(owner, signal)).enabled).toBe(false);
 
         const day = new Date(Date.now() - 60_000);
-        await store.recordMessage({ runId: randomUUID(), sessionId: '7', messageId: '9', textHash: 'b'.repeat(64) }, new Date(), signal);
-        expect(await store.messagesSince(day, signal)).toEqual({ count: 1, textHashes: ['b'.repeat(64)] });
-        expect(await store.messagesSince(new Date(Date.now() + 60_000), signal)).toEqual({ count: 0, textHashes: [] });
+        await store.recordMessage({
+          ownerObjectId: owner,
+          runId: randomUUID(),
+          sessionId: '7',
+          messageId: '9',
+          textHash: 'b'.repeat(64),
+          text: 'Would you like me to move the task?',
+          evidence: [{
+            source: 'calendar', ref: 'calendar-event:42', identity: 'calendar-event:42',
+            label: 'Flight', observedAt: at.toISOString(),
+          }],
+          followUpIds: ['follow:flight'],
+        }, new Date(), signal);
+        expect(await store.messagesSince(day, signal, owner)).toEqual({ count: 1, textHashes: ['b'.repeat(64)] });
+        expect(await store.messagesSince(day, signal, randomUUID())).toEqual({ count: 0, textHashes: [] });
+        expect(await store.messagesSince(new Date(Date.now() + 60_000), signal, owner)).toEqual({ count: 0, textHashes: [] });
+        expect(await store.latestProactiveMessage(owner, day, signal)).toMatchObject({
+          sessionId: '7',
+          messageId: '9',
+          text: 'Would you like me to move the task?',
+          followUpIds: ['follow:flight'],
+          evidence: [expect.objectContaining({ ref: 'calendar-event:42' })],
+        });
+
+        const proactive = createProactiveStore(pool, owner);
+        await proactive.settings.patch({ backgroundTurnsPerDay: 1 });
+        const queue = createProactiveEventStore(pool, owner);
+        const slots = createPiBackgroundSlotService({
+          queue,
+          proactive,
+          now: () => new Date('2026-11-15T10:00:00.000Z'),
+        });
+        const reservations = await Promise.all([
+          slots.reserve({
+            runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
+          }),
+          slots.reserve({
+            runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
+          }),
+        ]);
+        expect(reservations.filter(({ allowed }) => allowed)).toHaveLength(1);
+        expect(reservations.find(({ allowed }) => !allowed)).toMatchObject({ reason: 'daily_cap' });
+        const otherOwner = randomUUID();
+        const otherSlots = createPiBackgroundSlotService({
+          queue: createProactiveEventStore(pool, otherOwner),
+          proactive: createProactiveStore(pool, otherOwner),
+          now: () => new Date('2026-11-15T10:00:00.000Z'),
+        });
+        await expect(otherSlots.reserve({
+          runId: randomUUID(), eventCount: 1, activationType: 'event', allowQuiet: true,
+        })).resolves.toMatchObject({ allowed: true });
 
         // Standing-watch looks: counted per watch and day, with the wake's cost shared out afterwards.
         const dayStart = new Date(Date.now() - 3_600_000);
@@ -407,11 +464,20 @@ describe('real SQL Server migration contract', () => {
         const activation = {
           id: randomUUID(), type: 'event' as const, source: 'timer', at,
         };
+        const initialized = await Promise.all([
+          situations.initialize(owner, situation, at, signal),
+          situations.initialize(owner, situation, at, signal),
+        ]);
+        expect(initialized.map(({ revision }) => revision)).toEqual([1, 1]);
         const stored = await situations.commit({
-          owner, expectedRevision: 0, expectedHash: null, state: situation, activation,
+          owner,
+          expectedRevision: initialized[0].revision,
+          expectedHash: initialized[0].hash,
+          state: situation,
+          activation,
         }, signal);
         expect(await situations.read(owner, signal)).toMatchObject({
-          revision: 1, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
+          revision: 2, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
         });
 
         const legacy = structuredClone(situation);
@@ -516,16 +582,22 @@ describe('real SQL Server migration contract', () => {
         expect(migratedState.facts.some(({ source }) => source === 'memory')).toBe(false);
         expect(migratedState.followUps.some(({ id }) => id === 'follow:legacy-memory')).toBe(false);
         await expect(situations.commit({
-          owner, expectedRevision: 0, expectedHash: null, state: situation,
+          owner, expectedRevision: 1, expectedHash: initialized[0].hash, state: situation,
           activation: { ...activation, id: randomUUID() },
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
       } finally {
         await pool.request().batch('DELETE FROM dbo.pi_situational_state;');
+        await pool.request().batch(
+          'DELETE FROM dbo.proactive_events; DELETE FROM dbo.proactive_event_batches; ' +
+          'DELETE FROM dbo.pi_message; DELETE FROM dbo.proactive_settings;',
+        );
+        await pool.request().batch(integrityDown);
         await pool.request().batch(situationDown);
         await pool.request().batch(watchDown);
         await pool.request().batch(brainDown);
         await pool.request().batch(down);
         await pool.request().batch(eventsDown);
+        await pool.request().batch(preferencesDown);
         await pool.request().batch(foundationDown);
         await pool.request().batch(proactiveDown);
       }

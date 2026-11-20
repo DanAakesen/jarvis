@@ -54,6 +54,32 @@ describe('the brain\'s chat message', () => {
     expect(pushes).toEqual([]);
   });
 
+  it('persists exact outgoing evidence and pending follow-ups with the chat IDs', async () => {
+    const { comms, store } = setup();
+    await comms.send({
+      text: 'Would you like me to move the departure reminder?',
+      evidence: [{
+        source: 'calendar',
+        ref: 'calendar-event:42',
+        identity: 'calendar-event:42',
+        label: 'Flight to London',
+        observedAt: '2026-11-16T09:00:00.000Z',
+      }],
+      followUpIds: ['follow:flight'],
+    }, run(), signal);
+    expect(await store.latestProactiveMessage(
+      'o',
+      new Date('2026-11-16T00:00:00.000Z'),
+      signal,
+    )).toMatchObject({
+      sessionId: '7',
+      messageId: '2',
+      text: 'Would you like me to move the departure reminder?',
+      evidence: [expect.objectContaining({ ref: 'calendar-event:42' })],
+      followUpIds: ['follow:flight'],
+    });
+  });
+
   it('refuses an empty, over-long, credential-like or repeated message, and sends nothing', async () => {
     const { comms, pushes } = setup();
     await expect(comms.send({ text: '   ' }, run(), signal)).rejects.toBeInstanceOf(BrainCommsRefusal);
@@ -84,6 +110,14 @@ describe('the brain\'s chat message', () => {
     const { comms, conversations, pushes } = setup();
     (conversations.store as { addMessage: () => Promise<null> }).addMessage = async () => null;
     await expect(comms.send({ text: 'Lost.' }, run(), signal)).rejects.toThrow('could not store');
+    expect(pushes).toEqual([]);
+  });
+
+  it('does not push when the durable continuation receipt fails', async () => {
+    const { comms, store, pushes } = setup();
+    (store as { recordMessage: unknown }).recordMessage = async () => { throw new Error('sql down'); };
+    await expect(comms.send({ text: 'Saved but not attested.' }, run(), signal))
+      .rejects.toThrow('no push was sent');
     expect(pushes).toEqual([]);
   });
 });

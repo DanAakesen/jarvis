@@ -117,9 +117,10 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
           }));
           for (const fact of batch) {
             if (!fact) continue;
+              const identity = `gmail-message:${fact.id}`;
             facts.push({
-              ref: `mail:${facts.length + 1}`,
-              identity: `gmail-message:${fact.id}`,
+                ref: identity,
+                identity,
               kind: 'mail',
               label: 'Mail',
               text: cleanSourceText(`From ${fact.sender} | ${fact.subject}`),

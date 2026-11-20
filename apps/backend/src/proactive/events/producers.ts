@@ -75,16 +75,21 @@ export function workerEvent(event: TaskEventMessage, now: Date): ProactiveEventI
  * between polls; a changed time or text makes a new key, which is how a change reaches the queue.
  */
 export function factEvent(source: 'mail' | 'calendar', fact: SourceFact, now: Date): ProactiveEventInput {
-  const fingerprint = createHash('sha256').update(JSON.stringify([
-    source, fact.identity ?? null, fact.text, fact.startsAt ?? null, fact.endsAt ?? null, fact.dueAt ?? null,
-  ])).digest('hex').slice(0, 40);
+  const identity = `${source}:${fact.identity ?? fact.ref}`;
+  const material = [
+    fact.text, fact.startsAt ?? null, fact.endsAt ?? null, fact.dueAt ?? null,
+  ];
+  const fingerprint = createHash('sha256').update(JSON.stringify([identity, ...material])).digest('hex').slice(0, 40);
   const detail: Record<string, unknown> = {};
+  detail.identity = fact.identity ?? fact.ref;
+  detail.ref = fact.ref;
   if (fact.startsAt) detail.startsAt = fact.startsAt;
   if (fact.endsAt) detail.endsAt = fact.endsAt;
   if (fact.allDay !== undefined) detail.allDay = fact.allDay;
   const observed = Date.parse(fact.observedAt);
   return {
     source, kind: source === 'mail' ? 'message.new' : 'event.new_or_changed',
+    identity, material,
     dedupeKey: `${source}:${fingerprint}`,
     summary: oneLine(`${fact.label}: ${fact.text}`, 400),
     detail,

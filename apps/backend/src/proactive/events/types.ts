@@ -15,6 +15,12 @@ export interface ProactiveEventInput {
   summary: string;
   detail?: Record<string, unknown>;
   occurredAt: Date;
+  /** Stable source object identity. Dedupe and updates are scoped to this, not prose. */
+  identity?: string;
+  /** The material state that changed. It is hashed at the queue boundary. */
+  material?: unknown;
+  /** Earliest time the existing queue may claim this event. */
+  notBeforeAt?: Date;
   /** Record the event as already seen so a first poll never floods the model. */
   baseline?: boolean;
 }
@@ -29,6 +35,9 @@ export interface QueuedEvent {
   occurredAt: Date;
   receivedAt: Date;
   attempts: number;
+  identity?: string | null;
+  materialHash?: string | null;
+  notBeforeAt?: Date | null;
 }
 
 export interface ProactiveEventSink {

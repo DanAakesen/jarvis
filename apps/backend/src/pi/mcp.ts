@@ -93,6 +93,14 @@ export function createPiMcpRoutes(options: {
     requestSignal: AbortSignal,
     serverSignal: AbortSignal,
   ) => AbortSignal.any([grant.signal, requestSignal, serverSignal]);
+  const disabledFor = async (signal: AbortSignal): Promise<ReadonlySet<string>> => {
+    const service = options.situation;
+    if (!service) return new Set();
+    const current = typeof service.policy === 'function'
+      ? await service.policy(signal)
+      : await service.read(signal);
+    return new Set(current.disabledSources);
+  };
 
   async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
     if (grant.smoke === true && !smokeMayCall(name, args)) {
@@ -117,9 +125,11 @@ export function createPiMcpRoutes(options: {
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
-      let disabled = new Set<string>(grant.activation?.disabledSources ?? []);
+      let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
       if (grant.brain && options.situation) {
-        try { disabled = new Set((await options.situation.read(turnSignalFor(grant, ctx.mcpReq.signal, signal))).disabledSources); }
+        try { disabled = await disabledFor(
+          turnSignalFor(grant, ctx.mcpReq.signal, signal),
+        ); }
         catch {
           return text({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
         }
@@ -179,9 +189,11 @@ export function createPiMcpRoutes(options: {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
       if (grant.brain) {
-        let disabled = new Set<string>(grant.activation?.disabledSources ?? []);
+        let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
         if (options.situation) {
-          try { disabled = new Set((await options.situation.read(turnSignalFor(grant, ctx.mcpReq.signal, signal))).disabledSources); }
+          try { disabled = await disabledFor(
+            turnSignalFor(grant, ctx.mcpReq.signal, signal),
+          ); }
           catch {
             return text({ tool: input.name, outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
           }

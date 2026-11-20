@@ -131,6 +131,16 @@
   prove the store and worker contract. Live APNs, Mac SwiftUI compilation and
   physical iPhone/Watch behaviour remain owner release acceptance.
 
+## 20 November 2026 — PI state changes are server-owned patches, and follow-ups stay in the one event queue (#1969)
+
+- **State ownership:** the backend creates a valid `pi_situational_state` before the first PI turn. PI receives exact revision/hash/policy evidence and normally uses bounded `situation_patch`; a compatibility whole-state commit remains accepted but is not the agent's normal path. Source observations carry stable provider identities and material hashes. Failed/cancelled activations and failed refreshes can stale only their affected source or linked facts.
+- **Vault concurrency:** PI watch methods transform the latest GitHub Vault content/SHA and retry ordinary conflicts. A sustained conflict is visible and never falls back to a cached whole-body write. The SHA-aware watch index refreshes on Vault pushes and before due/list reads.
+- **One scheduler:** evidence-linked follow-ups with `dueAt` are queue rows in `dbo.proactive_events`, with stable identity, material hash and `not_before_at`. Material updates supersede the active row; cancellation marks it processed and retains its evidence. There is no follow-up timer or shadow brain.
+- **Activation integrity:** SQL owns the owner lock and the combined decision for pause, Copenhagen-day allowance, spacing, quiet hours and the `proactive_event_batches` insert. A caller-side check followed by `startBatch` is not accepted as a reservation.
+- **Continuation context:** `message_dan` stores the exact outgoing text, evidence references, pending follow-up IDs and Chat session/message IDs in the owner-scoped `pi_message` ledger. `proactiveConversationContext` exposes that bounded receipt to both Chat and Voice so "do that" resolves to the suggestion Dan received. This does not change Personal Memory or the push sender.
+- **Dedupe:** queue admission and source refresh compare stable source/provider identity plus material content, not prose or list position. Repeated identical material is quiet; a genuine material change is eligible once.
+- **Evidence/limits:** qualification is offline only (unit/replay/build/lint plus isolated loopback SQL and migration down). Gateway completion, GPT-Live transport, Personal Memory and the push sender remain owned elsewhere. No live model/provider, deployment or paid call is part of this decision.
+
 ## 19 November 2026 — One PI route and an exact, release-owned backend configuration (#1966)
 
 - **Normal route:** PI is the only Chat and Voice engine. The old saved device selector, test badge and normal-client `engine` parameters are removed. An older Chat client may explicitly send `pi`; `current` and unknown values are refused. Isolated runtime-test sessions keep their separately selected runtime and are not a fallback for normal Chat or Voice.

@@ -2,14 +2,16 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { proactiveSettingsRevision } from '../proactive/preferences.js';
 import type { ProactiveStore } from '../proactive/store.js';
+import type { EventQueueStore } from '../proactive/events/event-queue.js';
 import {
-  sourceIds, type ProactiveSettings, type ProactiveSource, type SourceId, type SourceStatus,
+  sourceIds, type ProactiveSettings, type ProactiveSource, type SourceId, type SourceResult, type SourceStatus,
 } from '../proactive/types.js';
 import { hasCredentialMarkerDeep } from '../core/memory-policy.js';
 
 export const PI_SITUATION_SCHEMA_VERSION = 1 as const;
 export const PI_SITUATION_MAX_BYTES = 8 * 1024;
 export const PI_SITUATION_LOOKUP_MAX_BYTES = 8 * 1024;
+export const PI_SITUATION_PATCH_MAX_BYTES = 6 * 1024;
 const iso = z.iso.datetime({ offset: true });
 const id = z.string().min(1).max(120).regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]*$/u);
 const sourceId = z.enum(sourceIds);
@@ -30,6 +32,7 @@ const refSchema = z.object({
   label: z.string().min(1).max(160),
   observedAt: iso,
   expiresAt: iso.nullable(),
+  materialHash: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
 }).strict();
 
 const factSchema = z.object({
@@ -40,6 +43,7 @@ const factSchema = z.object({
   observedAt: iso,
   expiresAt: iso.nullable(),
   stale: z.boolean(),
+  staleReason: z.string().min(1).max(160).optional(),
 }).strict();
 
 const followUpSchema = z.object({
@@ -88,6 +92,31 @@ const schema = z.object({
 });
 
 export type PiSituationState = z.infer<typeof schema>;
+const patchSchema = z.object({
+  asOf: iso.optional(),
+  summary: z.union([
+    z.null(),
+    z.object({ text: z.string().max(1_600), refIds: z.array(id).max(8) }).strict(),
+  ]).optional(),
+  sources: z.array(sourceSchema).max(sourceIds.length).optional(),
+  upsertRefs: z.array(refSchema).max(16).optional(),
+  removeRefIds: z.array(id).max(16).optional(),
+  upsertFacts: z.array(factSchema).max(12).optional(),
+  removeFactIds: z.array(id).max(12).optional(),
+  upsertFollowUps: z.array(followUpSchema).max(8).optional(),
+  removeFollowUpIds: z.array(id).max(8).optional(),
+}).strict().superRefine((patch, context) => {
+  const unique = (values: readonly { id: string }[] | readonly string[] | undefined) => {
+    const items = values?.map((value) => typeof value === 'string' ? value : value.id) ?? [];
+    return new Set(items).size === items.length;
+  };
+  if (!unique(patch.sources) || !unique(patch.upsertRefs) || !unique(patch.removeRefIds) ||
+      !unique(patch.upsertFacts) || !unique(patch.removeFactIds) ||
+      !unique(patch.upsertFollowUps) || !unique(patch.removeFollowUpIds)) {
+    context.addIssue({ code: 'custom', message: 'Patch entries must be unique' });
+  }
+});
+export type PiSituationPatch = z.infer<typeof patchSchema>;
 export type PiActivationType = 'chat' | 'voice' | 'scheduled' | 'event';
 
 export class PiSituationError extends Error {
@@ -112,25 +141,28 @@ export interface PiSituationRecord {
   };
 }
 
+export interface PiSituationActivation {
+  readonly id: string;
+  readonly type: PiActivationType;
+  readonly source: string | null;
+  readonly at: Date;
+}
+
 export interface PiSituationCommit {
   readonly owner: string;
   readonly expectedRevision: number;
   readonly expectedHash: string | null;
   readonly state: PiSituationState;
-  readonly activation: {
-    readonly id: string;
-    readonly type: PiActivationType;
-    readonly source: string | null;
-    readonly at: Date;
-  };
+  readonly activation: PiSituationActivation | null;
 }
 
 export interface PiSituationStore {
   read(owner: string, signal: AbortSignal): Promise<PiSituationRecord | null>;
+  initialize(owner: string, state: PiSituationState, at: Date, signal: AbortSignal): Promise<PiSituationRecord>;
   commit(input: PiSituationCommit, signal: AbortSignal): Promise<PiSituationRecord>;
   recordActivation(
     owner: string,
-    activation: PiSituationCommit['activation'],
+    activation: PiSituationActivation,
     signal: AbortSignal,
   ): Promise<void>;
 }
@@ -151,20 +183,46 @@ export interface PiSituationView {
 
 export interface PiSituationService {
   read(signal: AbortSignal): Promise<PiSituationView>;
+  policy(signal: AbortSignal): Promise<{
+    readonly revision: string;
+    readonly disabledSources: readonly SourceId[];
+  }>;
   context(signal: AbortSignal): Promise<{ text: string; view: PiSituationView }>;
-  markActivation(activation: PiSituationCommit['activation'], signal: AbortSignal): Promise<void>;
+  markActivation(activation: PiSituationActivation, signal: AbortSignal): Promise<void>;
   commit(input: {
     readonly expectedRevision: number;
     readonly expectedHash: string | null;
     readonly policyRevision: string;
     readonly state: unknown;
-    readonly activation: PiSituationCommit['activation'];
+    readonly activation: PiSituationActivation;
   }, signal: AbortSignal): Promise<{ record: PiSituationRecord; excluded: readonly SourceId[] }>;
-  markFailed(input: {
-    readonly activation: PiSituationCommit['activation'];
+  patch(input: {
     readonly expectedRevision: number;
     readonly expectedHash: string | null;
+    readonly policyRevision: string;
+    readonly patch: unknown;
+    readonly activation: PiSituationActivation;
+  }, signal: AbortSignal): Promise<{
+    readonly record: PiSituationRecord;
+    readonly excluded: readonly SourceId[];
+    readonly changed: boolean;
+  }>;
+  markFailed(input: {
+    readonly activation: PiSituationActivation;
+    readonly expectedRevision: number;
+    readonly expectedHash: string | null;
+    readonly sources?: readonly SourceId[];
   }, signal: AbortSignal): Promise<void>;
+  observe(source: SourceId, result: SourceResult, signal: AbortSignal): Promise<{
+    readonly changed: boolean;
+    readonly baseline: boolean;
+  }>;
+  refresh(source: SourceId, signal: AbortSignal): Promise<{
+    readonly changed: boolean;
+    readonly baseline: boolean;
+  }>;
+  attachEvents(queue: EventQueueStore): void;
+  synchronizeFollowUps(signal: AbortSignal): Promise<void>;
   lookup(input: { readonly source: SourceId; readonly ref: string }, signal: AbortSignal): Promise<Record<string, unknown>>;
 }
 
@@ -186,13 +244,27 @@ export function parsePiSituationState(value: unknown): PiSituationState {
   return state;
 }
 
+export function parsePiSituationPatch(value: unknown): PiSituationPatch {
+  const result = patchSchema.safeParse(value);
+  if (!result.success || jsonBytes(result.data) > PI_SITUATION_PATCH_MAX_BYTES ||
+      hasCredentialMarkerDeep(result.data)) {
+    const code = hasCredentialMarkerDeep(value)
+      ? 'redacted' : 'invalid';
+    throw new PiSituationError(code, code === 'redacted'
+      ? 'Secrets and credentials cannot be stored in situational state patches.'
+      : 'The situational state patch did not match the bounded schema.');
+  }
+  return result.data;
+}
+
 export function piSituationHash(state: PiSituationState): string {
   return createHash('sha256').update(JSON.stringify(state)).digest('hex');
 }
 
 export function sourceRefsFor(state: PiSituationState): unknown {
-  return state.refs.map(({ id: value, source, identity, label, observedAt, expiresAt }) => ({
+  return state.refs.map(({ id: value, source, identity, label, observedAt, expiresAt, materialHash }) => ({
     id: value, source, identity, label, observedAt, expiresAt,
+    ...(materialHash ? { materialHash } : {}),
   }));
 }
 
@@ -208,15 +280,28 @@ export function staleReasonsFor(state: PiSituationState): unknown {
     .map(({ id: value, state: freshness, reason }) => ({ source: value, state: freshness, reason }));
 }
 
-function emptyState(now: Date): PiSituationState {
+function emptyState(now: Date, settings?: ProactiveSettings, statuses?: readonly SourceStatus[]): PiSituationState {
+  const byStatus = new Map(statuses?.map((status) => [status.id, status]));
   return {
     version: PI_SITUATION_SCHEMA_VERSION,
     asOf: now.toISOString(),
     summary: '',
     summaryRefIds: [],
-    sources: sourceIds.map((value) => ({
-      id: value, state: 'missing', observedAt: null, expiresAt: null, reason: 'not_observed', refIds: [],
-    })),
+    sources: sourceIds.map((value) => {
+      const status = byStatus?.get(value);
+      const enabled = settings?.sources[value] ?? true;
+      const state = !enabled ? 'disabled' : status?.state === 'ok' ? 'fresh'
+        : status?.state === 'stale' ? 'stale'
+          : 'missing';
+      return {
+        id: value,
+        state,
+        observedAt: status?.observedAt ?? null,
+        expiresAt: null,
+        reason: !enabled ? 'source_disabled' : status?.state === 'ok' ? null : status?.reason ?? 'not_observed',
+        refIds: [],
+      } as PiSituationState['sources'][number];
+    }),
     refs: [],
     facts: [],
     followUps: [],
@@ -293,6 +378,7 @@ export function createPiSituationService(options: {
   readonly now?: () => Date;
 }): PiSituationService {
   const now = options.now ?? (() => new Date());
+  let events: EventQueueStore | undefined;
 
   async function currentPolicy(signal: AbortSignal): Promise<{
     readonly settings: ProactiveSettings;
@@ -304,28 +390,11 @@ export function createPiSituationService(options: {
       options.proactive.settings.read(),
       options.proactive.sources.list(),
     ]);
-    const statuses = [...storedStatuses];
-    const sources = typeof options.sources === 'function' ? options.sources() : options.sources;
-    const location = sources.find(({ id }) => id === 'location');
-    if (location && settings.sources.location) {
-      const result = await location.read({ now: now(), signal, settings });
-      const existing = statuses.findIndex(({ id }) => id === 'location');
-      const status: SourceStatus = {
-        id: 'location',
-        label: 'Location',
-        enabled: true,
-        state: result.reason === 'location_observation_stale' ? 'stale' : result.state,
-        reason: result.reason,
-        observedAt: result.observedAt,
-      };
-      if (existing >= 0) statuses.splice(existing, 1, status);
-      else statuses.push(status);
-    }
-    return { settings, revision: proactiveSettingsRevision(settings), statuses };
+    return { settings, revision: proactiveSettingsRevision(settings), statuses: storedStatuses };
   }
 
   function visible(record: PiSituationRecord | null, settings: ProactiveSettings, statuses: readonly SourceStatus[], at: Date): PiSituationView {
-    const raw = credentialSafeState(record?.state ?? emptyState(at));
+    const raw = credentialSafeState(record?.state ?? emptyState(at, settings, statuses));
     const byStatus = new Map(statuses.map((status) => [status.id, status]));
     const states = raw.sources.map((entry) => {
       const status = byStatus.get(entry.id);
@@ -369,8 +438,8 @@ export function createPiSituationService(options: {
     const disabledSources = states.filter(({ state: value }) => value === 'disabled').map(({ id: value }) => value);
     const freshSources = states.filter(({ state: value }) => value === 'fresh').map(({ id: value }) => value);
     return {
-      state: record ? state : null,
-      revision: record?.revision ?? 0,
+      state,
+      revision: record?.revision ?? 1,
       hash: record?.hash ?? null,
       policyRevision: proactiveSettingsRevision(settings),
       staleSources,
@@ -384,15 +453,372 @@ export function createPiSituationService(options: {
   }
 
   async function read(signal: AbortSignal): Promise<PiSituationView> {
-    const [{ settings, statuses }, record] = await Promise.all([
-      currentPolicy(signal),
-      options.store.read(options.owner, signal),
-    ]);
-    return visible(record, settings, statuses, now());
+    const policy = await currentPolicy(signal);
+    let record = await options.store.read(options.owner, signal);
+    if (!record) {
+      record = await options.store.initialize(
+        options.owner,
+        parsePiSituationState(emptyState(now(), policy.settings, policy.statuses)),
+        now(),
+        signal,
+      );
+    }
+    return visible(record, policy.settings, policy.statuses, now());
+  }
+
+  function validateTimes(state: PiSituationState): void {
+    const latestAllowed = now().getTime() + 5 * 60_000;
+    const times = [
+      state.asOf,
+      ...state.refs.map(({ observedAt }) => observedAt),
+      ...state.facts.map(({ observedAt }) => observedAt),
+    ];
+    if (times.some((value) => Date.parse(value) > latestAllowed)) {
+      throw new PiSituationError('invalid', 'Situational state cannot claim a future observation.');
+    }
+  }
+
+  function applyPatch(base: PiSituationState, value: unknown): PiSituationState {
+    const patch = parsePiSituationPatch(value);
+    const next = clone(base);
+    if (patch.asOf !== undefined) next.asOf = patch.asOf;
+    for (const entry of patch.sources ?? []) {
+      const index = next.sources.findIndex(({ id: value }) => value === entry.id);
+      next.sources[index] = structuredClone(entry);
+    }
+    const removedRefs = new Set(patch.removeRefIds ?? []);
+    next.refs = next.refs.filter(({ id: value }) => !removedRefs.has(value));
+    for (const entry of patch.upsertRefs ?? []) {
+      const index = next.refs.findIndex(({ id: value }) => value === entry.id);
+      if (index >= 0) next.refs[index] = structuredClone(entry);
+      else next.refs.push(structuredClone(entry));
+    }
+    const refIds = new Set(next.refs.map(({ id: value }) => value));
+    const removedFacts = new Set(patch.removeFactIds ?? []);
+    next.facts = next.facts.filter((entry) =>
+      !removedFacts.has(entry.id) && !entry.refIds.some((ref) => removedRefs.has(ref)) &&
+      entry.refIds.every((ref) => refIds.has(ref)));
+    for (const entry of patch.upsertFacts ?? []) {
+      const index = next.facts.findIndex(({ id: value }) => value === entry.id);
+      if (index >= 0) next.facts[index] = structuredClone(entry);
+      else next.facts.push(structuredClone(entry));
+    }
+    const removedFollowUps = new Set(patch.removeFollowUpIds ?? []);
+    next.followUps = next.followUps.filter((entry) =>
+      !removedFollowUps.has(entry.id) && !entry.refIds.some((ref) => removedRefs.has(ref)) &&
+      entry.refIds.every((ref) => refIds.has(ref)));
+    for (const entry of patch.upsertFollowUps ?? []) {
+      const index = next.followUps.findIndex(({ id: value }) => value === entry.id);
+      if (index >= 0) next.followUps[index] = structuredClone(entry);
+      else next.followUps.push(structuredClone(entry));
+    }
+    if (patch.summary === null) {
+      next.summary = '';
+      next.summaryRefIds = [];
+    } else if (patch.summary) {
+      next.summary = patch.summary.text;
+      next.summaryRefIds = [...patch.summary.refIds];
+    } else if (next.summaryRefIds.some((value) => removedRefs.has(value))) {
+      next.summary = '';
+      next.summaryRefIds = [];
+    }
+    return parsePiSituationState(next);
+  }
+
+  function applyPolicy(
+    submitted: PiSituationState,
+    current: PiSituationRecord | null,
+    policy: { readonly settings: ProactiveSettings; readonly statuses: readonly SourceStatus[] },
+  ): { readonly state: PiSituationState; readonly excluded: readonly SourceId[] } {
+    const excluded: SourceId[] = [];
+    const retainedDisabled: PiSituationState['facts'] = [];
+    const retainedRefs: PiSituationState['refs'] = [];
+    const next = clone(submitted);
+    for (const entry of next.sources) {
+      if (policy.settings.sources[entry.id]) continue;
+      excluded.push(entry.id);
+      entry.state = 'disabled';
+      entry.reason = 'source_disabled';
+      entry.refIds = [];
+      if (current) {
+        retainedRefs.push(...current.state.refs.filter(({ source }) => source === entry.id));
+        retainedDisabled.push(...current.state.facts.filter(({ source }) => source === entry.id)
+          .map((fact) => ({ ...fact, stale: true, staleReason: 'source_disabled' })));
+      }
+    }
+    const acceptedRefs = next.refs.filter(({ source }) => policy.settings.sources[source]);
+    const refs = [...acceptedRefs, ...retainedRefs]
+      .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
+      .slice(0, 48);
+    const refIds = new Set(refs.map(({ id: value }) => value));
+    const activeRefIds = new Set(acceptedRefs
+      .filter(({ id: value }) => refIds.has(value))
+      .map(({ id: value }) => value));
+    const acceptedFacts = next.facts
+      .filter(({ source, refIds: values }) =>
+        policy.settings.sources[source] && values.every((value) => refIds.has(value)));
+    const staleFacts = retainedDisabled
+      .filter(({ refIds: values }) => values.every((value) => refIds.has(value)));
+    const facts = [...acceptedFacts, ...staleFacts]
+      .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
+      .slice(0, 24);
+    const followUps = next.followUps.filter(({ refIds: values }) =>
+      values.every((value) => activeRefIds.has(value))).slice(0, 16);
+    const filteredSummaryRefs = next.summaryRefIds.filter((value) => activeRefIds.has(value));
+    const summary = filteredSummaryRefs.length === next.summaryRefIds.length &&
+      filteredSummaryRefs.length > 0 ? next.summary : '';
+    const sourceById = new Map(policy.statuses.map((entry) => [entry.id, entry]));
+    for (const entry of next.sources) {
+      const status = sourceById.get(entry.id);
+      if (status && (status.state === 'stale' || status.state === 'unavailable' ||
+          status.state === 'not_run' || status.observedAt === null)) {
+        entry.state = status.state === 'unavailable' || status.state === 'not_run' || status.observedAt === null
+          ? 'missing' : 'stale';
+        entry.observedAt = status.observedAt;
+        entry.reason = status.reason;
+      }
+      if (entry.state === 'disabled') entry.refIds = [];
+      else entry.refIds = entry.refIds.filter((value) => refIds.has(value));
+    }
+    return {
+      state: parsePiSituationState({
+        ...next,
+        summary,
+        summaryRefIds: summary ? filteredSummaryRefs : [],
+        refs,
+        facts,
+        followUps,
+      }),
+      excluded: [...new Set(excluded)],
+    };
+  }
+
+  function followUpIdentity(followUpId: string): string {
+    return `pi-followup:${followUpId}`;
+  }
+
+  function eligibleFollowUps(
+    state: PiSituationState,
+    policy: { readonly settings: ProactiveSettings },
+    at: Date,
+  ): PiSituationState['followUps'] {
+    const refs = new Map(state.refs.map((ref) => [ref.id, ref]));
+    const states = new Map(state.sources.map((source) => [source.id, source]));
+    return state.followUps.filter((followUp) => followUp.dueAt !== null &&
+      followUp.refIds.length > 0 && followUp.refIds.every((id) => {
+        const ref = refs.get(id);
+        return ref !== undefined && policy.settings.sources[ref.source] &&
+          states.get(ref.source)?.state !== 'disabled' &&
+          states.get(ref.source)?.state !== 'stale' &&
+          states.get(ref.source)?.state === 'fresh' &&
+          (ref.expiresAt === null || Date.parse(ref.expiresAt) > at.getTime());
+      }));
+  }
+
+  async function syncFollowUps(
+    previous: PiSituationState | null,
+    next: PiSituationState,
+    policy: { readonly settings: ProactiveSettings },
+    at: Date,
+  ): Promise<void> {
+    const queue = events;
+    if (!queue) return;
+    const eligible = new Map(eligibleFollowUps(next, policy, at).map((entry) => [entry.id, entry]));
+    const priorIds = new Set(previous?.followUps.map(({ id: value }) => value) ?? []);
+    for (const priorId of priorIds) {
+      if (!eligible.has(priorId)) {
+        await queue.cancel(followUpIdentity(priorId), at, 'follow-up cancelled or invalidated');
+      }
+    }
+    for (const followUp of eligible.values()) {
+      const dueAt = new Date(followUp.dueAt!);
+      if (!Number.isFinite(dueAt.getTime())) continue;
+      const identity = followUpIdentity(followUp.id);
+      const material = {
+        text: followUp.text,
+        dueAt: followUp.dueAt,
+        refIds: [...followUp.refIds],
+      };
+      const materialHash = createHash('sha256').update(JSON.stringify(material)).digest('hex');
+      await queue.enqueue({
+        source: 'followup',
+        kind: 'commitment.due',
+        identity,
+        material,
+        dedupeKey: `${identity}:${materialHash}`,
+        summary: followUp.text,
+        detail: {
+          followUpId: followUp.id,
+          dueAt: followUp.dueAt,
+          refIds: [...followUp.refIds],
+          evidenceSources: followUp.refIds.flatMap((id) => {
+            const ref = next.refs.find((entry) => entry.id === id);
+            return ref ? [ref.source] : [];
+          }),
+        },
+        occurredAt: dueAt,
+        notBeforeAt: dueAt,
+      }, at);
+    }
+  }
+
+  function sourceRef(source: SourceId, fact: SourceResult['facts'][number]): PiSituationState['refs'][number] {
+    const rawIdentity = fact.identity ?? fact.ref;
+    const identityDigest = createHash('sha256').update(rawIdentity).digest('hex');
+    const identity = rawIdentity.length <= 240 ? rawIdentity : `provider:${identityDigest}`;
+    const stable = `${source}:${identityDigest.slice(0, 48)}`;
+    const materialText = source === 'factory'
+      ? fact.text.replace(/; waited [^;]+$/u, '')
+      : fact.text;
+    const materialHash = createHash('sha256').update(JSON.stringify([
+      source,
+      identity,
+      materialText,
+      fact.startsAt ?? null,
+      fact.endsAt ?? null,
+      fact.dueAt ?? null,
+      fact.kind,
+    ])).digest('hex');
+    return {
+      id: stable,
+      source,
+      identity,
+      label: fact.label.slice(0, 160),
+      observedAt: fact.observedAt,
+      expiresAt: null,
+      materialHash,
+    };
+  }
+
+  async function observeResult(
+    source: SourceId,
+    result: SourceResult,
+    signal: AbortSignal,
+  ): Promise<{ readonly changed: boolean; readonly baseline: boolean }> {
+    const settings = await options.proactive.settings.read();
+    if (!settings.sources[source]) return { changed: false, baseline: false };
+    const observedAt = Number.isFinite(Date.parse(result.observedAt))
+      ? result.observedAt : now().toISOString();
+    await options.proactive.sources.upsert({
+      id: source,
+      label: source,
+      enabled: true,
+      state: result.state === 'ok'
+        ? result.reason === 'source_stale' ? 'stale' : 'ok'
+        : 'unavailable',
+      reason: result.reason,
+      observedAt,
+    });
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const policy = await currentPolicy(signal);
+      const latestObserved = policy.statuses.find((entry) => entry.id === source)?.observedAt;
+      if (latestObserved && Date.parse(latestObserved) > Date.parse(observedAt)) {
+        return { changed: false, baseline: false };
+      }
+      let current = await options.store.read(options.owner, signal);
+      if (!current) {
+        current = await options.store.initialize(
+          options.owner,
+          parsePiSituationState(emptyState(now(), policy.settings, policy.statuses)),
+          now(),
+          signal,
+        );
+      }
+      const previous = current.state;
+      const oldRefs = previous.refs.filter((ref) => ref.source === source);
+      const baseline = oldRefs.length === 0 && !previous.sources.some((entry) =>
+        entry.id === source && entry.observedAt !== null);
+      const freshRefs = result.state === 'ok'
+        ? result.facts.slice(0, 8).map((fact) => sourceRef(source, fact))
+          .filter((entry, index, values) => values.findIndex(({ id }) => id === entry.id) === index)
+        : oldRefs;
+      const nextMaterial = new Map(freshRefs.map((entry) => [entry.id, entry.materialHash]));
+      const oldById = new Map(oldRefs.map((entry) => [entry.id, entry]));
+      const affectedRefs = new Set(oldRefs.flatMap((entry) => {
+        const material = nextMaterial.get(entry.id);
+        return result.state !== 'ok' || !nextMaterial.has(entry.id) || material !== entry.materialHash
+          ? [entry.id] : [];
+      }));
+      for (const fresh of freshRefs) {
+        if (!oldById.has(fresh.id)) affectedRefs.add(fresh.id);
+      }
+      const retainedRefs = oldRefs.filter((entry) => !nextMaterial.has(entry.id) &&
+        (previous.facts.some((fact) => fact.refIds.includes(entry.id)) ||
+          previous.followUps.some((followUp) => followUp.refIds.includes(entry.id))))
+        .map((entry) => ({
+          ...entry,
+          expiresAt: observedAt,
+        }));
+      const refs = [
+        ...freshRefs,
+        ...previous.refs.filter((entry) => entry.source !== source),
+        ...retainedRefs,
+      ].slice(0, 48);
+      const validRefIds = new Set(refs.map(({ id }) => id));
+      const facts = previous.facts.map((fact) =>
+        fact.source === source && (result.state !== 'ok' || fact.refIds.some((id) => affectedRefs.has(id)))
+          ? {
+            ...fact,
+            stale: true,
+            staleReason: result.state === 'ok' ? 'source_material_changed' : result.reason ?? 'source_unavailable',
+          }
+          : fact).filter((fact) => fact.refIds.every((id) => validRefIds.has(id)));
+      const followUps = previous.followUps.filter((entry) =>
+        entry.refIds.every((id) => validRefIds.has(id)));
+      const summaryAffected = previous.summaryRefIds.some((id) =>
+        affectedRefs.has(id) || !validRefIds.has(id));
+      const sourceEntry = previous.sources.find((entry) => entry.id === source)!;
+      const freshnessChanged = result.state === 'ok'
+        ? sourceEntry.state !== 'fresh'
+        : sourceEntry.state !== 'stale' && sourceEntry.state !== 'missing';
+      const sourcePatch: PiSituationState['sources'][number] = {
+        ...sourceEntry,
+        state: result.state === 'ok' ? 'fresh' : 'stale',
+        observedAt,
+        expiresAt: null,
+        reason: result.reason,
+        refIds: freshRefs.map(({ id }) => id),
+      };
+      const next = parsePiSituationState({
+        ...previous,
+        asOf: now().toISOString(),
+        sources: previous.sources.map((entry) => entry.id === source ? sourcePatch : entry),
+        refs,
+        facts,
+        followUps,
+        summary: summaryAffected ? '' : previous.summary,
+        summaryRefIds: summaryAffected ? [] : previous.summaryRefIds,
+      });
+      const prepared = applyPolicy(next, current, policy);
+      if (piSituationHash(prepared.state) === current.hash) return { changed: false, baseline };
+      try {
+        const record = await options.store.commit({
+          owner: options.owner,
+          expectedRevision: current.revision,
+          expectedHash: current.hash,
+          state: prepared.state,
+          activation: null,
+        }, signal);
+        await syncFollowUps(previous, record.state, policy, now());
+        return { changed: affectedRefs.size > 0 || freshnessChanged, baseline };
+      } catch (error) {
+        if (error instanceof PiSituationError && error.code === 'conflict' && attempt < 3) continue;
+        throw error;
+      }
+    }
+    throw new PiSituationError('conflict', 'Situational source refresh conflicted repeatedly. Try the source again.');
   }
 
   return {
     read,
+    async policy(signal) {
+      signal.throwIfAborted();
+      const settings = await options.proactive.settings.read();
+      return {
+        revision: proactiveSettingsRevision(settings),
+        disabledSources: sourceIds.filter((source) => !settings.sources[source]),
+      };
+    },
     async context(signal) {
       const view = await read(signal);
       const body = {
@@ -417,6 +843,31 @@ export function createPiSituationService(options: {
     async markActivation(activation, signal) {
       await options.store.recordActivation(options.owner, activation, signal);
     },
+    attachEvents(queue) {
+      events = queue;
+    },
+    async synchronizeFollowUps(signal) {
+      const policy = await currentPolicy(signal);
+      const record = await options.store.read(options.owner, signal);
+      if (!record) return;
+      await syncFollowUps(record.state, record.state, policy, now());
+    },
+    async observe(source, result, signal) {
+      return observeResult(source, result, signal);
+    },
+    async refresh(source, signal) {
+      const settings = await options.proactive.settings.read();
+      if (!settings.sources[source]) return { changed: false, baseline: false };
+      const provider = (typeof options.sources === 'function' ? options.sources() : options.sources)
+        .find(({ id }) => id === source);
+      if (!provider) throw new PiSituationError('unavailable', `${source} is not connected.`);
+      const result = await provider.read({
+        now: now(),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+        settings,
+      });
+      return observeResult(source, result, signal);
+    },
     async commit(input, signal) {
       const policy = await currentPolicy(signal);
       if (policy.revision !== input.policyRevision) {
@@ -428,69 +879,8 @@ export function createPiSituationService(options: {
         throw new PiSituationError('conflict', 'Situational state changed. Read the current revision before committing.');
       }
       const state = parsePiSituationState(input.state);
-      const latestAllowed = now().getTime() + 5 * 60_000;
-      const times = [
-        state.asOf,
-        ...state.refs.map(({ observedAt }) => observedAt),
-        ...state.facts.map(({ observedAt }) => observedAt),
-      ];
-      if (times.some((value) => Date.parse(value) > latestAllowed)) {
-        throw new PiSituationError('invalid', 'Situational state cannot claim a future observation.');
-      }
-      const excluded: SourceId[] = [];
-      const submitted = clone(state);
-      const retainedDisabled: PiSituationState['facts'] = [];
-      const retainedRefs: PiSituationState['refs'] = [];
-      for (const entry of submitted.sources) {
-        if (policy.settings.sources[entry.id]) continue;
-        excluded.push(entry.id);
-        entry.state = 'disabled';
-        entry.reason = 'source_disabled';
-        entry.refIds = [];
-        if (current) {
-          retainedRefs.push(...current.state.refs.filter(({ source }) => source === entry.id));
-          retainedDisabled.push(...current.state.facts.filter(({ source }) => source === entry.id)
-            .map((fact) => ({ ...fact, stale: true })));
-        }
-      }
-      const acceptedRefs = submitted.refs.filter(({ source }) => policy.settings.sources[source]);
-      const refs = [...acceptedRefs, ...retainedRefs]
-        .filter((entry, index, values) => values.findIndex(({ id: value }) => value === entry.id) === index)
-        .slice(0, 48);
-      const refIds = new Set(refs.map(({ id: value }) => value));
-      const activeRefIds = new Set(acceptedRefs.map(({ id: value }) => value));
-      const acceptedFacts = submitted.facts
-        .filter(({ source, refIds: values }) => policy.settings.sources[source] && values.every((value) => refIds.has(value)));
-      const staleFacts = retainedDisabled
-        .filter(({ refIds: values }) => values.every((value) => refIds.has(value)));
-      const facts = [...acceptedFacts, ...staleFacts].slice(0, 24);
-      const followUps = submitted.followUps.filter(({ refIds: values }) =>
-        values.every((value) => activeRefIds.has(value)));
-      const filteredSummaryRefs = submitted.summaryRefIds.filter((value) => activeRefIds.has(value));
-      const summary = filteredSummaryRefs.length === submitted.summaryRefIds.length &&
-        filteredSummaryRefs.length > 0
-        ? submitted.summary
-        : '';
-      const summaryRefIds = summary ? filteredSummaryRefs : [];
-      const sourceById = new Map(policy.statuses.map((entry) => [entry.id, entry]));
-      for (const entry of submitted.sources) {
-        const status = sourceById.get(entry.id);
-        if (status && (status.state === 'stale' || status.state === 'unavailable' || status.observedAt === null)) {
-          entry.state = status.state === 'unavailable' || status.state === 'not_run' ? 'missing' : 'stale';
-          entry.observedAt = status.observedAt;
-          entry.reason = status.reason;
-        }
-        if (entry.state === 'disabled') entry.refIds = [];
-        else entry.refIds = entry.refIds.filter((value) => refIds.has(value));
-      }
-      const next = parsePiSituationState({
-        ...submitted,
-        summary,
-        summaryRefIds,
-        refs,
-        facts,
-        followUps,
-      });
+      validateTimes(state);
+      const prepared = applyPolicy(state, current, policy);
       const beforeWrite = await currentPolicy(signal);
       if (beforeWrite.revision !== input.policyRevision) {
         throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before committing.');
@@ -499,29 +889,80 @@ export function createPiSituationService(options: {
         owner: options.owner,
         expectedRevision: input.expectedRevision,
         expectedHash: input.expectedHash,
-        state: next,
+        state: prepared.state,
         activation: input.activation,
       }, signal);
-      return { record, excluded: [...new Set(excluded)] };
+      await syncFollowUps(current?.state ?? null, record.state, policy, input.activation.at);
+      return { record, excluded: prepared.excluded };
+    },
+    async patch(input, signal) {
+      const policy = await currentPolicy(signal);
+      if (policy.revision !== input.policyRevision) {
+        throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before patching.');
+      }
+      let current = await options.store.read(options.owner, signal);
+      if (!current) {
+        current = await options.store.initialize(
+          options.owner,
+          parsePiSituationState(emptyState(now(), policy.settings, policy.statuses)),
+          now(),
+          signal,
+        );
+      }
+      if (current.revision !== input.expectedRevision || current.hash !== input.expectedHash) {
+        throw new PiSituationError('conflict', 'Situational state changed. Read the current revision before patching.');
+      }
+      const patched = applyPatch(current.state, input.patch);
+      validateTimes(patched);
+      const prepared = applyPolicy(patched, current, policy);
+      if (piSituationHash(prepared.state) === current.hash) {
+        return { record: current, excluded: prepared.excluded, changed: false };
+      }
+      const beforeWrite = await currentPolicy(signal);
+      if (beforeWrite.revision !== input.policyRevision) {
+        throw new PiSituationError('conflict', 'Proactive policy changed. Read the situation again before patching.');
+      }
+      const record = await options.store.commit({
+        owner: options.owner,
+        expectedRevision: current.revision,
+        expectedHash: current.hash,
+        state: prepared.state,
+        activation: input.activation,
+      }, signal);
+      await syncFollowUps(current.state, record.state, policy, input.activation.at);
+      return { record, excluded: prepared.excluded, changed: true };
     },
     async markFailed(input, signal) {
       const current = await options.store.read(options.owner, signal);
       if (!current) return;
       if (current.revision !== input.expectedRevision || current.hash !== input.expectedHash) return;
+      const affected = new Set(input.sources ?? []);
+      if (affected.size === 0) return;
       const state = credentialSafeState(clone(current.state));
-      state.sources = state.sources.map((source) => source.state === 'disabled'
+      const affectedRefs = new Set(state.refs
+        .filter(({ source }) => affected.has(source))
+        .map(({ id: value }) => value));
+      state.sources = state.sources.map((source) => !affected.has(source.id) || source.state === 'disabled'
         ? source
         : { ...source, state: 'stale', reason: 'activation_failed' });
-      state.facts = state.facts.map((fact) => ({ ...fact, stale: true }));
+      state.facts = state.facts.map((fact) => !affected.has(fact.source)
+        ? fact
+        : { ...fact, stale: true, staleReason: 'activation_failed' });
+      if (state.summaryRefIds.some((value) => affectedRefs.has(value))) {
+        state.summary = '';
+        state.summaryRefIds = [];
+      }
       state.asOf = current.asOf.toISOString();
       const next = parsePiSituationState(state);
-      await options.store.commit({
+      const record = await options.store.commit({
         owner: options.owner,
         expectedRevision: current.revision,
         expectedHash: current.hash,
         state: next,
         activation: input.activation,
       }, signal);
+      const policy = await currentPolicy(signal);
+      await syncFollowUps(current.state, record.state, policy, input.activation.at);
     },
     async lookup(input, signal) {
       const { settings } = await currentPolicy(signal);
@@ -531,12 +972,17 @@ export function createPiSituationService(options: {
       const sources = typeof options.sources === 'function' ? options.sources() : options.sources;
       const source = sources.find(({ id: value }) => value === input.source);
       if (!source) throw new PiSituationError('unavailable', `${input.source} is not connected.`);
+      const view = await read(signal);
+      const linked = view.state?.refs.find((ref) =>
+        ref.source === input.source && (ref.id === input.ref || ref.identity === input.ref));
+      const rawRef = linked?.identity ?? linked?.id ?? input.ref;
       const deadline = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
       const result = await source.read({ now: now(), signal: deadline, settings });
       if (result.state !== 'ok') {
         throw new PiSituationError('unavailable', `${input.source} could not be read${result.reason ? `: ${result.reason}` : ''}.`);
       }
-      const fact = result.facts.find(({ ref, identity }) => ref === input.ref || identity === input.ref);
+      const fact = result.facts.find(({ ref, identity }) =>
+        ref === rawRef || identity === rawRef || ref === input.ref || identity === input.ref);
       if (!fact) throw new PiSituationError('invalid', 'That raw source reference is no longer available.');
       const value = {
         source: input.source, ref: fact.ref, identity: fact.identity ?? null, label: fact.label,
@@ -559,25 +1005,41 @@ export function createMemoryPiSituationStore(): PiSituationStore & { readonly re
       const record = records.get(owner);
       return record ? structuredClone(record) : null;
     },
+    async initialize(owner, state, at) {
+      const existing = records.get(owner);
+      if (existing) return structuredClone(existing);
+      const record: PiSituationRecord = {
+        owner,
+        revision: 1,
+        state: structuredClone(state),
+        hash: piSituationHash(state),
+        asOf: new Date(state.asOf),
+        updatedAt: at,
+        lastActivation: null,
+      };
+      records.set(owner, record);
+      return structuredClone(record);
+    },
     async commit(input) {
       const current = records.get(input.owner);
       if ((current?.revision ?? 0) !== input.expectedRevision ||
           current !== undefined && current.hash !== input.expectedHash) {
         throw new PiSituationError('conflict', 'Situational state changed. Read the current revision before committing.');
       }
+      const activation = input.activation;
       const record: PiSituationRecord = {
         owner: input.owner,
         revision: (current?.revision ?? 0) + 1,
         state: structuredClone(input.state),
         hash: piSituationHash(input.state),
         asOf: new Date(input.state.asOf),
-        updatedAt: input.activation.at,
-        lastActivation: {
-          id: input.activation.id,
-          type: input.activation.type,
-          source: input.activation.source,
-          at: input.activation.at,
-        },
+        updatedAt: activation?.at ?? new Date(input.state.asOf),
+        lastActivation: activation ? {
+          id: activation.id,
+          type: activation.type,
+          source: activation.source,
+          at: activation.at,
+        } : current?.lastActivation ?? null,
       };
       records.set(input.owner, record);
       return structuredClone(record);

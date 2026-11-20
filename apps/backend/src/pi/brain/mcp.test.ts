@@ -114,6 +114,10 @@ describe('a brain wake over the Jarvis MCP server', () => {
         category: 'status',
         suggestionScope: 'unknown',
         evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory', ref: 'github:workflow_run:42', identity: 'github:workflow_run:42',
+          label: 'Deploy 42', observedAt: '2026-11-16T09:58:00.000Z',
+        }],
       },
     });
     expect(sent.outcome).toBe('ok');
@@ -139,6 +143,10 @@ describe('a brain wake over the Jarvis MCP server', () => {
         category: 'status',
         suggestionScope: 'work',
         evidenceSources: ['mail'],
+        evidence: [{
+          source: 'mail', ref: 'gmail-message:9', identity: 'gmail-message:9',
+          label: 'Work travel mail', observedAt: '2026-11-16T09:00:00.000Z',
+        }],
       },
     });
     expect(refused).toMatchObject({ outcome: 'refused' });
@@ -230,7 +238,16 @@ describe('chat and the brain stay apart', () => {
     expect(response.statusCode).toBe(403);
     const message = await app.inject({
       method: 'POST', url: '/tools/message_dan',
-      payload: { text: 'hi', category: 'status', suggestionScope: 'unknown', evidenceSources: ['factory'] },
+      payload: {
+        text: 'hi',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory', ref: 'factory:test', identity: 'factory:test',
+          label: 'Factory event', observedAt: '2026-11-16T10:00:00.000Z',
+        }],
+      },
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
     });
     expect(message.statusCode).toBe(403);

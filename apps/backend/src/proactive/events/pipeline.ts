@@ -81,8 +81,9 @@ export function createEventPipeline(options: EventPipelineOptions) {
           return result.state === 'ok' ? result.facts.map((fact) => ({ ...fact, source: source.id })) : [];
         } catch { return []; }
       }));
-    return results.flat().map((fact, index) => ({
-      ref: `${fact.source}:${index}`, source: fact.source, label: fact.label, text: fact.text,
+    return results.flat().map((fact) => ({
+      ref: fact.ref, identity: fact.identity ?? fact.ref,
+      source: fact.source, label: fact.label, text: fact.text,
     }));
   }
 

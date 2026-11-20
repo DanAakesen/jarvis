@@ -88,10 +88,18 @@ export function createBrain(options: BrainOptions) {
   const notified = new Set<string>();
 
   const wake = (at: Date) => { if (nextWorkAt === null || at < nextWorkAt) nextWorkAt = at; };
-  const eventSource = (value: string): SourceId | undefined => {
-    if ((sourceIds as readonly string[]).includes(value)) return value as SourceId;
-    if (value === 'github' || value === 'worker') return 'factory';
-    return undefined;
+  const eventSources = (event: QueuedEvent): SourceId[] => {
+    const fromName = (value: string): SourceId | undefined => {
+      if ((sourceIds as readonly string[]).includes(value)) return value as SourceId;
+      if (value === 'github' || value === 'worker') return 'factory';
+      return undefined;
+    };
+    const direct = fromName(event.source);
+    const evidence = Array.isArray(event.detail.evidenceSources)
+      ? event.detail.evidenceSources.filter((value): value is SourceId =>
+        typeof value === 'string' && (sourceIds as readonly string[]).includes(value))
+      : [];
+    return [...new Set([...(direct ? [direct] : []), ...evidence])];
   };
   const policyNote = (settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>): string => {
     const enabledCategories = Object.entries(settings.categories)
@@ -124,7 +132,17 @@ export function createBrain(options: BrainOptions) {
     const text = state === 'warn'
       ? `PI has used ${spent.toFixed(0)} of its ${limit.toFixed(0)} DKK proactive budget this month. I will be more sparing.`
       : `PI has used its ${limit.toFixed(0)} DKK proactive budget for this month, so it has stopped looking on its own. Chat still works. You can raise the budget in the proactive settings, or it starts again next month.`;
-    try { await options.comms.send({ text }, { runId: 'budget', sent: [], wrote: [], looked: [] }, signal); } catch (error) {
+    try { await options.comms.send({
+      text,
+      evidence: [{
+        source: 'proactive-budget',
+        ref: `budget:${monthKey(now())}`,
+        identity: `proactive-budget:${monthKey(now())}`,
+        label: 'Proactive budget ledger',
+        observedAt: now().toISOString(),
+      }],
+      followUpIds: [],
+    }, { runId: 'budget', sent: [], wrote: [], looked: [] }, signal); } catch (error) {
       // Kept only once Dan has it (or already had exactly this today); any other refusal or failure is tried again on a later tick.
       if (!(error instanceof BrainCommsRefusal && error.reason === 'duplicate')) notified.delete(key);
       log('warn', { reason: 'budget_notice_failed' });
@@ -184,7 +202,7 @@ export function createBrain(options: BrainOptions) {
     for (const event of claimed) {
       const maxAge = event.source === 'timer' ? timerMaxAgeMs : defaultMaxAgeMs;
       if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
-      else if (eventSource(event.source) && !settings.sources[eventSource(event.source)!]) {
+      else if (eventSources(event).some((source) => !settings.sources[source])) {
         settled.push({ id: event.id, outcome: 'source disabled' });
       }
       else if (current.getTime() - event.occurredAt.getTime() > maxAge) settled.push({ id: event.id, outcome: 'stale' });
@@ -195,6 +213,18 @@ export function createBrain(options: BrainOptions) {
     if (timerOnly && isQuietHour(current) && !extraNow) {
       settled.push(...survivors.map(({ id }) => ({ id, outcome: 'timer review skipped in quiet hours' })));
       survivors.length = 0;
+    }
+    const deferredFollowUps = isQuietHour(current) && !extraNow
+      ? survivors.filter((event) => event.source === 'followup')
+      : [];
+    if (deferredFollowUps.length > 0) {
+      const retryAt = nextSlotAfter(current).at;
+      await queue.retryLater(deferredFollowUps.map(({ id }) => id), retryAt);
+      for (const event of deferredFollowUps) {
+        const index = survivors.findIndex(({ id }) => id === event.id);
+        if (index >= 0) survivors.splice(index, 1);
+      }
+      wake(retryAt);
     }
     if (settled.length > 0) await queue.settle(settled, current);
     if (survivors.length === 0 && !extraNow) return result('filtered', claimed.length);

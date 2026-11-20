@@ -50,9 +50,10 @@ export function createFactorySource(taskStore?: Pick<TaskStore, 'getProactiveSna
           ].filter(Boolean).join('; ');
           const projectName = Array.from(sanitizeFactText(task.projectName)).slice(0, 80).join('');
           const title = Array.from(sanitizeFactText(task.title)).slice(0, 120).join('');
+          const identity = `factory-task:${task.id}`;
           facts.push({
-            ref: `factory:${facts.length + 1}`,
-            identity: `factory-task:${task.id}`,
+            ref: identity,
+            identity,
             projectRelated: true,
             kind: 'factory',
             label: 'Software Factory',
@@ -64,6 +65,7 @@ export function createFactorySource(taskStore?: Pick<TaskStore, 'getProactiveSna
         if (runningCount > 0) {
           facts.push({
             ref: 'factory:running',
+            identity: 'factory:running',
             kind: 'factory',
             label: 'Software Factory',
             text: `${runningCount} running tasks`,

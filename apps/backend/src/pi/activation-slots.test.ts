@@ -83,4 +83,25 @@ describe('combined PI background slots', () => {
       allowQuiet: true,
     })).resolves.toMatchObject({ allowed: false, reason: 'spaced' });
   });
+
+  it('gives two simultaneous activations only one final owner slot', async () => {
+    const now = new Date('2026-11-19T09:00:00.000Z');
+    const queue = createMemoryEventQueueStore();
+    const proactive = createMemoryProactiveStore(owner);
+    await proactive.settings.patch({ backgroundTurnsPerDay: 1 });
+    const slots = createPiBackgroundSlotService({ queue, proactive, now: () => now });
+    const results = await Promise.all([
+      slots.reserve({
+        runId: '00000000-0000-4000-8000-000000000011', eventCount: 1,
+        activationType: 'event', allowQuiet: true,
+      }),
+      slots.reserve({
+        runId: '00000000-0000-4000-8000-000000000012', eventCount: 1,
+        activationType: 'event', allowQuiet: true,
+      }),
+    ]);
+    expect(results.filter(({ allowed }) => allowed)).toHaveLength(1);
+    expect(results.find(({ allowed }) => !allowed)).toMatchObject({ reason: 'daily_cap' });
+    expect(await slots.status()).toMatchObject({ used: 1, remaining: 0 });
+  });
 });

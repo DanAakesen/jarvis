@@ -26,7 +26,14 @@ beforeAll(async () => {
   await pool.request().batch(await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8'));
   await pool.request().batch(`ALTER TABLE dbo.proactive_event_batches ADD
     activation_type varchar(10) NOT NULL DEFAULT 'event',
-    satisfied_slot nvarchar(16) NULL;`);
+    satisfied_slot nvarchar(16) NULL;
+    ALTER TABLE dbo.proactive_events ADD
+      identity_key nvarchar(200) NULL,
+      material_hash char(64) NULL,
+      not_before_at datetime2(7) NULL;`);
+  await pool.request().batch(`CREATE UNIQUE INDEX UX_proactive_events_owner_active_identity_test
+      ON dbo.proactive_events (owner_object_id, identity_key)
+      WHERE identity_key IS NOT NULL AND processed_at IS NULL;`);
 });
 afterAll(async () => {
   await pool.close();
@@ -110,6 +117,38 @@ describe('proactive event queue on SQL Server', () => {
     expect(await queue.purge(new Date(now.getTime() - 1))).toBe(0);
     expect(await queue.purge(new Date(now.getTime() + 1))).toBe(1);
     expect(await queue.enqueue(event('baseline'), now)).toMatchObject({ inserted: true });
+  });
+
+  it('updates one active identity only for material change and holds future work until not_before_at', async () => {
+    await pool.request().query('DELETE dbo.proactive_events');
+    const dueAt = new Date(now.getTime() + 60_000);
+    const first = await queue.enqueue({
+      ...event('identity-v1'),
+      identity: 'calendar-event:stable',
+      material: { startsAt: dueAt.toISOString() },
+      notBeforeAt: dueAt,
+    }, now);
+    expect(await queue.hasWork(now)).toBe(false);
+    expect(await queue.enqueue({
+      ...event('identity-v1'),
+      identity: 'calendar-event:stable',
+      material: { startsAt: dueAt.toISOString() },
+      notBeforeAt: dueAt,
+    }, now)).toMatchObject({ id: first.id, inserted: false });
+    const changedInput = {
+      ...event('identity-v2', { startsAt: new Date(dueAt.getTime() + 60_000).toISOString() }),
+      identity: 'calendar-event:stable',
+      material: { startsAt: new Date(dueAt.getTime() + 60_000).toISOString() },
+      notBeforeAt: dueAt,
+    };
+    const changed = await queue.enqueue(changedInput, now);
+    expect(changed.inserted).toBe(true);
+    const claimed = await queue.claim(dueAt, 10, 60_000);
+    expect(claimed.map(({ id }) => id)).toEqual([changed.id]);
+    expect(await queue.cancel('calendar-event:stable', dueAt, 'follow-up cancelled in test')).toBe(true);
+    expect(await queue.hasWork(new Date(dueAt.getTime() + 1))).toBe(false);
+    expect(await queue.enqueue(changedInput, new Date(dueAt.getTime() + 1_000)))
+      .toEqual({ id: changed.id, inserted: true });
   });
 });
 

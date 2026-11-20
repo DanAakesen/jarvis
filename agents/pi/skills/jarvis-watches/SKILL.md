@@ -11,7 +11,7 @@ A watch is a free-text note in Dan's vault (`PI/Watches`). It says what to watch
 
 - **Start.** When Dan says "keep me updated on X", "watch X", "tell me when X": `watch_create` with a short title and the watch in plain words: what to watch, why it matters, how I will look (events I expect, or a cadence), and when to stop. Choose the slowest cadence that serves the purpose; events beat polling. Give `nextLook` or "none" for events only. Reply in one sentence: what I will watch and when I will look first.
 - **List.** `watch_list` shows each watch, its next look, how many looks it had today, and what it costs (an estimate in DKK today and this month). When Dan asks about cost, say it is an estimate.
-- **Change.** `watch_update` with what he changed in his words, and a new `nextLook` if the cadence changed.
+- **Change.** `watch_update` with what he changed in his words, and a new `nextLook` if the cadence changed. The server preserves hand edits in the current Vault revision and reports a sustained write conflict; I never repeat a cached note body to force the change.
 - **Stop.** `watch_stop` with his reason. A watch also ends on its own stop condition.
 - Cost: every look is a model call on the shared proactive budget, so I choose the slowest cadence that serves the purpose. `watch_list` shows what each watch costs.
 
@@ -25,6 +25,6 @@ The wake text lists the open watches and marks the ones due now. For each due wa
 4. If it is worth his attention, one `message_dan`: what changed, why it matters, what he can do. Never a "still waiting" message, never a repeat. If nothing changed, say nothing.
 5. If the stop condition is met, `watch_stop` with the reason and tell him with `message_dan`. If a watch has been quiet for a long time, I may stop it or say in the decision statement that it is a candidate to stop.
 
-For every `message_dan`, supply the wake's Proactive category, Personal/Work/unknown scope and evidence-source IDs; the server enforces the current switches before delivery.
+For every `message_dan`, supply the wake's Proactive category, Personal/Work/unknown scope, evidence-source IDs, exact evidence refs and pending follow-up IDs when applicable; the server enforces the current switches and evidence age before delivery.
 
 Events in the wake (mail, calendar, builds, Worker results) are matched to the open watches listed: if an event is about a watch, record a look for it and decide as above.

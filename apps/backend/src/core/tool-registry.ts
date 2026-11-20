@@ -8,7 +8,7 @@ const legacyConfirmationTools = new Set([
   'get_pending_issue', 'confirm_create_issue', 'confirm_project_archive',
   'calendar_get_pending_change', 'calendar_confirm_change', 'mail_confirm_action',
 ]);
-const situationActivationTools = new Set(['situation_read', 'situation_lookup', 'situation_commit']);
+const situationActivationTools = new Set(['situation_read', 'situation_lookup', 'situation_commit', 'situation_patch']);
 export function isSituationActivationTool(name: string): boolean {
   return situationActivationTools.has(name);
 }

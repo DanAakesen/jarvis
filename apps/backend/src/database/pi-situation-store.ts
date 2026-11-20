@@ -159,6 +159,57 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         signal.removeEventListener('abort', cancel);
       }
     },
+    async initialize(owner, state, at, signal) {
+      signal.throwIfAborted();
+      const transaction = new sql.Transaction(pool);
+      let activeRequest: sql.Request | undefined;
+      const cancel = () => activeRequest?.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        await transaction.begin();
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner);
+        const current = await activeRequest.query<SituationRow>(
+          `${select} WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id=@owner;`,
+        );
+        if (current.recordset[0]) {
+          await transaction.commit();
+          return decodeRow(current.recordset[0]).record;
+        }
+        const hash = piSituationHash(state);
+        activeRequest = new sql.Request(transaction)
+          .input('owner', sql.UniqueIdentifier, owner)
+          .input('schema', sql.SmallInt, PI_SITUATION_SCHEMA_VERSION)
+          .input('state', sql.NVarChar(sql.MAX), JSON.stringify(state))
+          .input('hash', sql.Char(64), hash)
+          .input('refs', sql.NVarChar(sql.MAX), JSON.stringify(sourceRefsFor(state)))
+          .input('freshness', sql.NVarChar(sql.MAX), JSON.stringify(freshnessFor(state)))
+          .input('reasons', sql.NVarChar(sql.MAX), JSON.stringify(staleReasonsFor(state)))
+          .input('asOf', sql.DateTime2, new Date(state.asOf))
+          .input('at', sql.DateTime2, at);
+        await activeRequest.query(`INSERT dbo.pi_situational_state (
+            owner_object_id, schema_version, revision, state_json, content_hash,
+            source_refs_json, freshness_json, stale_reasons_json, as_of_at, updated_at
+          ) VALUES (
+            @owner, @schema, 1, @state, @hash, @refs, @freshness, @reasons, @asOf, @at
+          );`);
+        await transaction.commit();
+        return {
+          owner: owner.toLowerCase(),
+          revision: 1,
+          state: structuredClone(state),
+          hash,
+          asOf: new Date(state.asOf),
+          updatedAt: at,
+          lastActivation: null,
+        };
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve the initialization error. */ }
+        throw error;
+      } finally {
+        signal.removeEventListener('abort', cancel);
+      }
+    },
     async commit(input, signal) {
       signal.throwIfAborted();
       const transaction = new sql.Transaction(pool);
@@ -181,6 +232,8 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         const revision = input.expectedRevision + 1;
         const stateJson = JSON.stringify(input.state);
         const hash = piSituationHash(input.state);
+        const activation = input.activation;
+        const updatedAt = activation?.at ?? new Date(input.state.asOf);
         const request = new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, input.owner)
           .input('schema', sql.SmallInt, PI_SITUATION_SCHEMA_VERSION)
@@ -191,18 +244,22 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           .input('refs', sql.NVarChar(sql.MAX), JSON.stringify(sourceRefsFor(input.state)))
           .input('freshness', sql.NVarChar(sql.MAX), JSON.stringify(freshnessFor(input.state)))
           .input('reasons', sql.NVarChar(sql.MAX), JSON.stringify(staleReasonsFor(input.state)))
-          .input('activationId', sql.UniqueIdentifier, input.activation.id)
-          .input('activationType', sql.VarChar(10), input.activation.type)
-          .input('activationSource', sql.NVarChar(64), input.activation.source)
+          .input('activationId', sql.UniqueIdentifier, activation?.id ?? null)
+          .input('activationType', sql.VarChar(10), activation?.type ?? null)
+          .input('activationSource', sql.NVarChar(64), activation?.source ?? null)
           .input('asOf', sql.DateTime2, new Date(input.state.asOf))
-          .input('updated', sql.DateTime2, input.activation.at);
+          .input('updated', sql.DateTime2, updatedAt);
         if (row) {
           activeRequest = request;
           const updated = await request.query(`UPDATE dbo.pi_situational_state
             SET schema_version=@schema, revision=@revision, state_json=@state, content_hash=@hash,
               source_refs_json=@refs, freshness_json=@freshness, stale_reasons_json=@reasons,
-              last_activation_id=@activationId, last_activation_type=@activationType,
-              last_activation_source=@activationSource, last_activation_at=@updated,
+              last_activation_id=COALESCE(@activationId, last_activation_id),
+              last_activation_type=COALESCE(@activationType, last_activation_type),
+              last_activation_source=CASE WHEN @activationId IS NULL
+                THEN last_activation_source ELSE @activationSource END,
+              last_activation_at=CASE WHEN @activationId IS NULL
+                THEN last_activation_at ELSE @updated END,
               as_of_at=@asOf, updated_at=@updated
             WHERE owner_object_id=@owner AND revision=@expected;`);
           if (updated.rowsAffected[0] === 0) {
@@ -217,7 +274,8 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
               last_activation_at, as_of_at, updated_at
             ) VALUES (
               @owner, @schema, @revision, @state, @hash, @refs, @freshness, @reasons,
-              @activationId, @activationType, @activationSource, @updated, @asOf, @updated
+              @activationId, @activationType, @activationSource,
+              CASE WHEN @activationId IS NULL THEN NULL ELSE @updated END, @asOf, @updated
             );`);
         }
         activeRequest = undefined;
@@ -228,13 +286,20 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
           state: structuredClone(input.state),
           hash,
           asOf: new Date(input.state.asOf),
-          updatedAt: input.activation.at,
-          lastActivation: {
-            id: input.activation.id,
-            type: input.activation.type,
-            source: input.activation.source,
-            at: input.activation.at,
-          },
+          updatedAt,
+          lastActivation: activation ? {
+            id: activation.id,
+            type: activation.type,
+            source: activation.source,
+            at: activation.at,
+          } : row?.last_activation_id && row.last_activation_type && row.last_activation_at
+            ? {
+              id: row.last_activation_id.toLowerCase(),
+              type: row.last_activation_type,
+              source: row.last_activation_source,
+              at: date(row.last_activation_at),
+            }
+            : null,
         };
       } catch (error) {
         try { await transaction.rollback(); } catch { /* Preserve the commit error. */ }

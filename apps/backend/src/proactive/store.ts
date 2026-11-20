@@ -365,7 +365,12 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
     },
     sources: {
       async list() { return sourceIds.flatMap((id) => sources.has(id) ? [sources.get(id)!] : []); },
-      async upsert(status) { sources.set(status.id, { ...status }); },
+      async upsert(status) {
+        const previous = sources.get(status.id);
+        if (previous?.observedAt && status.observedAt &&
+            Date.parse(previous.observedAt) > Date.parse(status.observedAt)) return;
+        sources.set(status.id, { ...status });
+      },
     },
     spend: {
       async record(input) { spend.push({ month: input.month, estimatedDkk: input.estimatedDkk }); },

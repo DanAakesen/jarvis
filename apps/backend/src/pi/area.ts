@@ -5,7 +5,7 @@ type VaultClient = ReturnType<typeof createGitHubVaultClient>;
 export type PiVault = Pick<VaultClient, 'read' | 'write' | 'tree' | 'move'>;
 
 export class PiAreaError extends Error {
-  constructor(readonly code: 'invalid' | 'refused' | 'too_large' | 'unavailable' | 'not_found', message: string) {
+  constructor(readonly code: 'invalid' | 'refused' | 'too_large' | 'unavailable' | 'not_found' | 'conflict', message: string) {
     super(message);
     this.name = 'PiAreaError';
   }
@@ -61,20 +61,28 @@ export function createPiArea(options: { readonly vault: PiVault }) {
   }
 
   /** Creates the note, or changes it from what it is now; retried on a concurrent change, never overwriting a stranger's edit. */
-  async function change(path: string, signal: AbortSignal, message: string, next: (current: string | null) => string): Promise<{ created: boolean }> {
+  async function change(
+    path: string,
+    signal: AbortSignal,
+    message: string,
+    next: (current: string | null) => string,
+  ): Promise<{ created: boolean; content: string }> {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const current = await read(path, signal);
       const content = next(current?.content ?? null);
       assertWritable(path, content);
       try {
         await vault.write(path, content, message, current?.sha, signal);
-        return { created: current === null };
+        return { created: current === null, content };
       } catch (error) {
         if (error instanceof VaultWriteConflictError && attempt < maxAttempts) continue;
+        if (error instanceof VaultWriteConflictError) {
+          throw new PiAreaError('conflict', 'That note changed again while it was being saved. Read it and try again; nothing was overwritten.');
+        }
         return unavailable(error);
       }
     }
-    return unavailable(new Error('conflict'));
+    throw new PiAreaError('conflict', 'That note changed again while it was being saved. Read it and try again.');
   }
 
   return {
@@ -98,16 +106,70 @@ export function createPiArea(options: { readonly vault: PiVault }) {
       if (Buffer.byteLength(content, 'utf8') > MAX_PI_NOTE_BYTES) throw new PiAreaError('too_large', 'That note is too large. Condense it. Nothing was written.');
       return change(path, signal, message, () => `${content.trimEnd()}\n`);
     },
+    /** Applies one minimal transform to the latest revision, retrying a concurrent edit without overwriting it. */
+    async transform(
+      path: string,
+      signal: AbortSignal,
+      message: string,
+      transform: (current: string | null) => string | null,
+    ): Promise<{ created: boolean; content: string | null; changed: boolean }> {
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const current = await read(path, signal);
+        const transformed = transform(current?.content ?? null);
+        if (transformed === null) return { created: false, content: current?.content ?? null, changed: false };
+        const content = `${transformed.trimEnd()}\n`;
+        if (content === current?.content) {
+          return { created: false, content, changed: false };
+        }
+        assertWritable(path, content);
+        try {
+          await vault.write(path, content, message, current?.sha, signal);
+          return { created: current === null, content, changed: true };
+        } catch (error) {
+          if (error instanceof VaultWriteConflictError && attempt < maxAttempts) continue;
+          if (error instanceof VaultWriteConflictError) {
+            throw new PiAreaError('conflict', 'That note changed again while it was being saved. Read it and try again; nothing was overwritten.');
+          }
+          return unavailable(error);
+        }
+      }
+      throw new PiAreaError('conflict', 'That note changed again while it was being saved. Read it and try again.');
+    },
+    /** Creates a note only when it still does not exist. */
+    async create(path: string, content: string, signal: AbortSignal, message = 'PI: note'): Promise<{ content: string }> {
+      if (Buffer.byteLength(content, 'utf8') > MAX_PI_NOTE_BYTES) throw new PiAreaError('too_large', 'That note is too large. Condense it. Nothing was written.');
+      const value = `${content.trimEnd()}\n`;
+      assertWritable(path, value);
+      try {
+        await vault.write(path, value, message, undefined, signal);
+        return { content: value };
+      } catch (error) {
+        if (error instanceof VaultWriteConflictError) {
+          throw new PiAreaError('conflict', 'That note was created while PI was choosing its name. Read the current watches and try again.');
+        }
+        return unavailable(error);
+      }
+    },
     /** Moves a note within the area as one commit (a watch closing), with new content if given. */
     async move(from: string, to: string, signal: AbortSignal, options: { content?: (current: string) => string; message?: string } = {}): Promise<void> {
       if (!isPiPath(from) || !isPiPath(to)) throw new PiAreaError('refused', 'PI may only move notes inside its own area.');
-      try {
-        const source = await vault.read(from, signal);
-        if (!source) throw new PiAreaError('not_found', 'That note does not exist.');
-        const content = options.content ? options.content(source.content) : source.content;
-        assertWritable(to, content);
-        await vault.move(from, to, content, source.sha, options.message ?? 'PI: move note', signal);
-      } catch (error) { unavailable(error); }
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          const source = await read(from, signal);
+          if (!source) throw new PiAreaError('not_found', 'That note does not exist.');
+          const content = options.content ? options.content(source.content) : source.content;
+          assertWritable(to, content);
+          await vault.move(from, to, content, source.sha, options.message ?? 'PI: move note', signal);
+          return;
+        } catch (error) {
+          if (error instanceof VaultWriteConflictError && attempt < maxAttempts) continue;
+          if (error instanceof VaultWriteConflictError) {
+            throw new PiAreaError('conflict', 'That watch changed again while it was being closed. Read it and try again; nothing was overwritten.');
+          }
+          return unavailable(error);
+        }
+      }
+      throw new PiAreaError('conflict', 'That watch changed again while it was being closed. Read it and try again.');
     },
   };
 }

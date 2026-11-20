@@ -82,17 +82,25 @@ export function createPiBackgroundSlotService(options: {
       const current = await status();
       const settings = await options.proactive.settings.read();
       if (settings.paused) return { allowed: false, reason: 'paused', status: current };
-      if (current.quiet && input.allowQuiet !== true) {
-        return { allowed: false, reason: 'quiet_hours', status: current };
-      }
-      if (current.used >= current.allowed) return { allowed: false, reason: 'daily_cap', status: current };
-      if (current.lastAt && at.getTime() - Date.parse(current.lastAt) < MIN_WAKE_GAP_MS) {
-        return { allowed: false, reason: 'spaced', status: current };
-      }
-      await options.queue.startBatch(input.runId, at, input.eventCount, {
+      const reservation = await options.queue.reserveBatch({
+        batchId: input.runId,
+        at,
+        dayStart: copenhagenDayStart(at),
+        eventCount: input.eventCount,
         activationType: input.activationType,
         satisfiedSlot: input.satisfiedSlot ?? null,
+        allowQuiet: input.allowQuiet === true,
+        quiet: current.quiet,
+        minimumGapMs: MIN_WAKE_GAP_MS,
+        fallbackAllowed: Math.min(DEFAULT_BACKGROUND_TURNS_PER_DAY, settings.backgroundTurnsPerDay),
       });
+      if (!reservation.allowed) {
+        return {
+          allowed: false,
+          reason: reservation.reason ?? 'paused',
+          status: await status(),
+        };
+      }
       const updated = await status();
       return { allowed: true, status: updated };
     },

@@ -655,7 +655,8 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           .query(`MERGE dbo.proactive_source_status WITH (HOLDLOCK) AS target
             USING (SELECT @owner AS owner_object_id, @source AS source_id) AS source
             ON target.owner_object_id = source.owner_object_id AND target.source_id = source.source_id
-            WHEN MATCHED THEN UPDATE SET state = @state, reason = @reason, observed_at = @observedAt
+            WHEN MATCHED AND @observedAt >= target.observed_at THEN UPDATE
+              SET state = @state, reason = @reason, observed_at = @observedAt
             WHEN NOT MATCHED THEN INSERT (owner_object_id, source_id, state, reason, observed_at)
               VALUES (@owner, @source, @state, @reason, @observedAt);`);
       },

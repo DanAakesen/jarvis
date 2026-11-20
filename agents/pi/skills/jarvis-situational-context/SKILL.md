@@ -15,13 +15,15 @@ The situational state is a compact, revisioned working model. It is not the sour
 4. Treat freshness and `stale`/`missing` labels as facts. Never turn missing data into a claim.
 5. A direct owner request may use the underlying source tool normally. A Proactive switch off does not grant automatic background reads: for wakes, skip the source and its stale state.
 6. Location is an independent, coarse, permissioned context source. It may ground hotel, flight, driving, traffic and map requests. It is not live GPS, and Weather being off does not disable it.
-7. Call `situation_commit` only for a material change to the model. Pass the exact revision, state hash and policy revision returned by `situation_read`. Do not call it on every turn.
-8. A stale commit is refused. Read the current revision and re-evaluate; never overwrite.
+7. Use `situation_patch` for a material change. Pass the exact revision, state hash and policy revision returned by `situation_read`, then include only changed refs, facts, sources, summary or follow-ups. Use the remove arrays to invalidate only affected evidence. Compatibility `situation_commit` is not the normal path because it replaces the whole model.
+8. A stale patch is refused. Read the current revision and re-evaluate; never overwrite unrelated facts.
 
 ## State quality
 
 - Keep the state useful at roughly 500–2000 tokens. Summarise; never copy full conversations, mail, notes or source archives.
 - Every material fact links to one or more raw refs with a source and observation time. A non-empty summary also names its `summaryRefIds`; if one becomes disabled or stale, the summary is withheld rather than copied as an unqualified claim.
-- Retain prior facts only with an explicit stale label and reason. Disabled-source facts must not be used proactively and are excluded from a new automatic contribution.
+- Retain prior facts only with an explicit stale label and reason. Disabled-source facts must not be used proactively and are excluded from a new automatic contribution. A failed refresh or activation only invalidates the facts tied to that source.
+- A follow-up with `dueAt` and raw refs is scheduled by the server in the existing event queue. Update or remove that one follow-up through a patch instead of recreating it in another note or timer.
+- When `message_dan` carries a suggestion that Dan may accept later, include the exact current evidence refs and any pending follow-up IDs. Chat and Voice recover that same bounded receipt for "do that".
 - Never put secrets, credentials, raw credentials, tokens or unnecessary personal detail in state.
 - A tool or commit failure is a failure. Report it as such; do not describe the old state as freshly confirmed.

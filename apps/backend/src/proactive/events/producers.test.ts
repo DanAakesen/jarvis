@@ -143,6 +143,19 @@ describe('mail and calendar change poller', () => {
     expect(factEvent('calendar', fact('x'), NOW).occurredAt).toEqual(NOW);
   });
 
+  it('keeps a provider identity stable when list position changes', () => {
+    const first = fact('Planning', {
+      ref: 'cal:1',
+      identity: 'calendar-event:42',
+      kind: 'event',
+      startsAt: '2026-11-16T09:00:00.000Z',
+    });
+    const movedPosition = { ...first, ref: 'cal:7' };
+    expect(factEvent('calendar', first, NOW).dedupeKey)
+      .toBe(factEvent('calendar', movedPosition, NOW).dedupeKey);
+    expect(factEvent('calendar', first, NOW).identity).toBe('calendar:calendar-event:42');
+  });
+
   it('skips an unavailable source without throwing', async () => {
     const queue = createMemoryEventQueueStore();
     const sink = { enqueue: vi.fn() };
@@ -168,5 +181,81 @@ describe('mail and calendar change poller', () => {
     await poller.poll();
     expect(read).not.toHaveBeenCalled();
     expect(sink.enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('event identity and scheduling', () => {
+  it('deduplicates by stable identity plus material and does not claim a future event early', async () => {
+    const queue = createMemoryEventQueueStore();
+    const dueAt = new Date(NOW.getTime() + 60_000);
+    const first = await queue.enqueue({
+      source: 'calendar',
+      kind: 'event.new_or_changed',
+      identity: 'calendar-event:42',
+      material: { title: 'Plan', startsAt: dueAt.toISOString() },
+      dedupeKey: 'calendar:42:v1',
+      summary: 'Plan',
+      occurredAt: dueAt,
+      notBeforeAt: dueAt,
+    }, NOW);
+    expect(await queue.hasWork(NOW)).toBe(false);
+    expect(await queue.enqueue({
+      source: 'calendar',
+      kind: 'event.new_or_changed',
+      identity: 'calendar-event:42',
+      material: { title: 'Plan', startsAt: dueAt.toISOString() },
+      dedupeKey: 'calendar:42:v1',
+      summary: 'Plan with different prose',
+      occurredAt: dueAt,
+      notBeforeAt: dueAt,
+    }, NOW)).toEqual({ id: first.id, inserted: false });
+    expect(await queue.enqueue({
+      source: 'calendar',
+      kind: 'event.new_or_changed',
+      identity: 'calendar-event:42',
+      material: { title: 'Plan', startsAt: new Date(dueAt.getTime() + 60_000).toISOString() },
+      dedupeKey: 'calendar:42:v2',
+      summary: 'Plan moved',
+      occurredAt: dueAt,
+      notBeforeAt: dueAt,
+    }, NOW)).toMatchObject({ inserted: true });
+    const claimed = await queue.claim(dueAt, 10, 60_000);
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]).toMatchObject({ identity: 'calendar-event:42', summary: 'Plan moved' });
+  });
+
+  it('cancels an active follow-up without deleting its evidence', async () => {
+    const queue = createMemoryEventQueueStore();
+    const input = {
+      source: 'followup', kind: 'commitment.due', identity: 'pi-followup:one',
+      material: { text: 'Do the thing', dueAt: NOW.toISOString() },
+      dedupeKey: 'followup:one:v1', summary: 'Do the thing', occurredAt: NOW, notBeforeAt: NOW,
+    } as const;
+    const first = await queue.enqueue(input, NOW);
+    expect(await queue.cancel('pi-followup:one', NOW, 'follow-up cancelled by Dan')).toBe(true);
+    expect(await queue.hasWork(NOW)).toBe(false);
+    expect(await queue.enqueue(input, new Date(NOW.getTime() + 1_000)))
+      .toEqual({ id: first.id, inserted: true });
+    expect(await queue.hasWork(new Date(NOW.getTime() + 1_000))).toBe(true);
+  });
+
+  it('queues an actual material reversion after an intermediate update', async () => {
+    const queue = createMemoryEventQueueStore();
+    const a = {
+      source: 'calendar', kind: 'event.new_or_changed', identity: 'calendar-event:revert',
+      material: { startsAt: 'A' }, dedupeKey: 'calendar:revert:a',
+      summary: 'Original time', occurredAt: NOW, notBeforeAt: NOW,
+    } as const;
+    const b = {
+      ...a, material: { startsAt: 'B' }, dedupeKey: 'calendar:revert:b',
+      summary: 'New time',
+    };
+    const first = await queue.enqueue(a, NOW);
+    await queue.enqueue(b, new Date(NOW.getTime() + 1));
+    const reverted = await queue.enqueue(a, new Date(NOW.getTime() + 2));
+    expect(reverted).toEqual({ id: first.id, inserted: true });
+    expect(await queue.claim(NOW, 10, 60_000)).toMatchObject([
+      { id: first.id, summary: 'Original time' },
+    ]);
   });
 });
