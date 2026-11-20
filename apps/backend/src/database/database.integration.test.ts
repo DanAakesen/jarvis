@@ -634,6 +634,8 @@ describe('real SQL Server migration contract', () => {
           revision: 2, hash: stored.hash, lastActivation: { id: activation.id, type: 'event' },
         });
 
+        const legacyOwner = randomUUID();
+        await situations.initialize(legacyOwner, situation, at, signal);
         const legacy = structuredClone(situation);
         legacy.summary = 'Legacy bearerToken=fixture-secret';
         legacy.summaryRefIds = ['memory:fact-ref'];
@@ -684,18 +686,18 @@ describe('real SQL Server migration contract', () => {
         });
         const legacyHash = piSituationHash(legacy);
         await pool.request()
-          .input('owner', sql.UniqueIdentifier, owner)
+          .input('owner', sql.UniqueIdentifier, legacyOwner)
           .input('state', sql.NVarChar(sql.MAX), JSON.stringify(legacy))
           .input('hash', sql.Char(64), legacyHash)
           .query(`UPDATE dbo.pi_situational_state
             SET state_json=@state, content_hash=@hash
             WHERE owner_object_id=@owner;`);
 
-        const proactive = createMemoryProactiveStore(owner);
+        const memoryProactive = createMemoryProactiveStore(legacyOwner);
         const situationService = createPiSituationService({
-          owner,
+          owner: legacyOwner,
           store: situations,
-          proactive,
+          proactive: memoryProactive,
           sources: [],
           now: () => at,
         });
@@ -709,7 +711,7 @@ describe('real SQL Server migration contract', () => {
           const started = await activations.begin({
             type,
             source,
-            ownerObjectId: owner,
+            ownerObjectId: legacyOwner,
             sessionId: `session-${type}`,
             messageId: type === 'scheduled' ? '' : `message-${type}`,
             signal,
@@ -721,7 +723,7 @@ describe('real SQL Server migration contract', () => {
           registry.close(started.grant.turn);
         }
         const migratedRow = await pool.request()
-          .input('owner', sql.UniqueIdentifier, owner)
+          .input('owner', sql.UniqueIdentifier, legacyOwner)
           .query<{ revision: string; state_json: string; content_hash: string }>(
             `SELECT revision, state_json, content_hash
               FROM dbo.pi_situational_state WHERE owner_object_id=@owner;`,

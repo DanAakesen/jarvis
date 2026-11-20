@@ -355,7 +355,7 @@ export function canonicalizePiSituationState(
 
 export function retainAuthoritativePiSituationState(
   state: PiSituationState,
-  authoritativeRefs: readonly PiSituationAuthorityRef[],
+  authoritativeRefs: readonly PiSituationAuthorityRef[] = [],
   includeInvalidated = false,
 ): PiSituationState {
   const authority = new Map(authoritativeRefs.map((ref) => [authorityKey(ref), structuredClone(ref)]));
@@ -663,7 +663,7 @@ export function createPiSituationService(options: {
 
   function visible(record: PiSituationRecord | null, settings: ProactiveSettings, statuses: readonly SourceStatus[], at: Date): PiSituationView {
     const raw = credentialSafeState(record
-      ? retainAuthoritativePiSituationState(record.state, record.authoritativeRefs)
+      ? retainAuthoritativePiSituationState(record.state, record.authoritativeRefs ?? [])
       : emptyState(at, settings, statuses));
     const byStatus = new Map(statuses.map((status) => [status.id, status]));
     const states = raw.sources.map((entry) => {
