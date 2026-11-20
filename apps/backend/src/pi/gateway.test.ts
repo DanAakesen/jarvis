@@ -5,6 +5,10 @@ import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
+import type {
+  PiCompletionEvidence, PiCompletionDomain, PiCompletionEvidenceKind, PiCompletionOperation,
+} from './completion.js';
+import { completionPlan } from './completion.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -16,6 +20,17 @@ const sse = (...frames: string[]) => new Response(new ReadableStream({
 }), { headers: { 'content-type': 'text/event-stream' } });
 const delta = (text: string) => frame({ type: 'response.output_text.delta', delta: text });
 const tool = frame({ type: 'response.output_item.added', item: { type: 'mcp_call' } });
+const completion = (
+  name: string,
+  kind: PiCompletionEvidenceKind,
+  domain: PiCompletionDomain,
+  targetHashes: readonly string[] = [],
+  operation: PiCompletionOperation = kind === 'retrieved' ? 'read'
+    : kind === 'durable_job' ? 'start' : 'generic',
+): PiCompletionEvidence => ({
+  tool: name, kind, domain, operation, argumentsHash: 'fixture-arguments',
+  targetHashes, identityHashes: [], identityTargets: [],
+});
 
 interface Call { url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
 
@@ -159,7 +174,7 @@ describe('PI gateway', () => {
     const openRead = retrieved.registry.open.bind(retrieved.registry);
     retrieved.registry.open = (input) => {
       const grant = openRead(input);
-      grant.evidence.push({ tool: 'calendar_list', kind: 'retrieved' });
+      grant.evidence.push(completion('calendar_list', 'retrieved', 'calendar'));
       return grant;
     };
     await expect(retrieved.run('what is on my calendar?')).resolves.toEqual(['Two meetings.']);
@@ -168,7 +183,7 @@ describe('PI gateway', () => {
     const openWrite = committed.registry.open.bind(committed.registry);
     committed.registry.open = (input) => {
       const grant = openWrite(input);
-      grant.evidence.push({ tool: 'vault_task_create', kind: 'committed' });
+      grant.evidence.push(completion('vault_task_create', 'committed', 'tasks', [], 'create'));
       return grant;
     };
     await expect(committed.run('create a task')).resolves.toEqual(['Created it.']);
@@ -177,10 +192,50 @@ describe('PI gateway', () => {
     const openJob = job.registry.open.bind(job.registry);
     job.registry.open = (input) => {
       const grant = openJob(input);
-      grant.evidence.push({ tool: 'create_task', kind: 'durable_job' });
+      grant.evidence.push(completion('start_issue', 'durable_job', 'factory', [], 'start'));
       return grant;
     };
-    await expect(job.run('implement issue 1967 in the background')).resolves.toEqual(['Task started.']);
+    await expect(job.run('implement my code in the background')).resolves.toEqual(['Task started.']);
+  });
+
+  it('does not let unrelated same-kind or same-domain evidence finish the request', async () => {
+    const wrongDomain = setup([() => sse(delta('No meetings.'), completed(1, 0, 1))]);
+    const openWrong = wrongDomain.registry.open.bind(wrongDomain.registry);
+    wrongDomain.registry.open = (input) => {
+      const grant = openWrong(input);
+      grant.evidence.push(completion('weather_read', 'retrieved', 'weather'));
+      return grant;
+    };
+    await expect(wrongDomain.run('what is on my calendar?')).rejects.toMatchObject({ code: 'pi_incomplete' });
+
+    const wrongTarget = setup([() => sse(delta('No meetings for Bob.'), completed(1, 0, 1))]);
+    const openTarget = wrongTarget.registry.open.bind(wrongTarget.registry);
+    wrongTarget.registry.open = (input) => {
+      const grant = openTarget(input);
+      grant.evidence.push(completion('calendar_read', 'retrieved', 'calendar'));
+      return grant;
+    };
+    await expect(wrongTarget.run('show Alice’s calendar')).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(completionPlan('show Alice’s calendar').requirements[0]!.targetHashes.length).toBeGreaterThan(0);
+  });
+
+  it('does not finish own-code work from an issue receipt without a durable task status', async () => {
+    const plan = completionPlan('Implement issue 1967 in my code.');
+    const ownCode = setup([() => sse(delta('Issue created.'), completed(1, 0, 1))]);
+    const open = ownCode.registry.open.bind(ownCode.registry);
+    ownCode.registry.open = (input) => {
+      const grant = open(input);
+      grant.evidence.push(completion(
+        'create_issue',
+        'committed',
+        'factory',
+        plan.requirements[0]!.targetHashes,
+        'create',
+      ));
+      return grant;
+    };
+    await expect(ownCode.run('Implement issue 1967 in my code.'))
+      .rejects.toMatchObject({ code: 'pi_incomplete' });
   });
 
   it('fails visibly when foreground spend cannot be read and never substitutes the Proactive budget', async () => {
@@ -220,7 +275,7 @@ describe('PI gateway', () => {
     const open = registry.open.bind(registry);
     registry.open = (input) => {
       const grant = open(input);
-      grant.evidence.push({ tool: 'fixture_read', kind: 'retrieved' });
+      grant.evidence.push(completion('fixture_read', 'retrieved', 'calendar'));
       return grant;
     };
     expect(await run('look up the calendar')).toEqual([

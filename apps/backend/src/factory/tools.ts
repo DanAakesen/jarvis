@@ -888,7 +888,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_issue',
-    description: 'Create a P11 issue and start requested project-code work. Execute the resolved owner request without another approval. Do not call for advice or plan-only requests. Attachments remain private unless publication is requested. Check existing work before retrying.',
+    description: 'Create a P11 issue and the handoff record for requested project-code work. Execute the resolved owner request without another approval. Do not call for advice or plan-only requests. The issue number and URL prove only the write: for implementation work, continue with start_issue unless this result contains a durable Factory task/job state; never say work started from the issue receipt alone. Attachments remain private unless publication is requested. Check existing work before retrying.',
     inputSchema: {
       type: 'object',
       properties: {

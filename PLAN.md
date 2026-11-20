@@ -113,13 +113,13 @@ Completion means the existing PI activation envelope and one background queue ow
 
 | Step | State |
 | --- | --- |
-| Make local discovery immediate and provider refresh asynchronous/on demand; add compact connection and capability status | Done |
+| Make local discovery immediate and provider refresh on demand with a bounded selected-provider wait/continuation; add compact connection and capability status | Done |
 | Add aliases, exact-name priority and callable compact matches while retaining per-turn visibility/source checks | Done |
-| Require retrieved, committed or durable-job evidence for evidence-dependent owner requests; retain ordinary and quiet completion | Done |
+| Require domain/operation/target-bound tool, argument and terminal-receipt evidence; enforce durable own-code task status while retaining ordinary and quiet completion | Done after independent review |
 | Decouple GPT-Live playback cancellation from PI work and preserve exact turn authority under concurrent proactive chat | Done |
 | Keep unrestricted owner actions, target-bound deletion checks and separate foreground/proactive budgets | Done |
-| Update focused tests and PI/product/architecture/agent/decision documentation | Done |
-| Run full offline backend build, test and lint; review and commit | Done: build and lint pass, 60 files / 666 backend tests pass; implementation commit `6b15dae` |
+| Update focused tests and PI/product/architecture/agent/decision documentation, including review regressions for same-kind, partial/cancelled, cold-provider and issue-only evidence | Done |
+| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after review: build and lint pass, 60 files / 679 backend tests pass |
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

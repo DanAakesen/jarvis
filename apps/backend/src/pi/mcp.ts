@@ -126,7 +126,7 @@ export function createPiMcpRoutes(options: {
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     if (done.outcome === 'ok') {
-      const evidence = completionEvidence({ name }, args, done.result);
+      const evidence = completionEvidence(grant.completion, { name }, args, done.result, grant.evidence);
       if (evidence) grant.evidence.push(evidence);
     }
     const body = JSON.stringify(done.result);
@@ -139,7 +139,7 @@ export function createPiMcpRoutes(options: {
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Jarvis tools are not listed. Look one up by a few English or Danish keywords naming what the thing is (azure resource, github issue, calendar, note, kalender, opgave, noter) to get its description and argument schema, then use call_tool. Exact tool names are ranked first. The compact otherMatches entries can also be called by exact name in this turn. Local matches return without waiting for an unrelated remote catalogue. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
+      description: 'Jarvis tools are not listed. Look one up by a few English or Danish keywords naming what the thing is (azure resource, github issue, calendar, note, kalender, opgave, noter) to get its description and argument schema, then use call_tool. Exact tool names are ranked first. The compact otherMatches entries can also be called by exact name in this turn. Local matches return without waiting for an unrelated remote catalogue. A provider-specific result that is still starting includes continuation: call find_tools again in this turn with that exact query. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, async (input, ctx) => {
@@ -154,12 +154,12 @@ export function createPiMcpRoutes(options: {
           return text({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
         }
       }
-      // Only a provider named by the request is loaded. A selected remote refresh starts in the background; local catalogue
-      // matches never wait for a stalled connector.
+      // Only a provider named by the request is loaded. It gets the bridge's bounded wait while unrelated/local-only searches
+      // never wait on it; a catalogue that is still cold returns an explicit same-turn continuation.
       const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
       const selectedBridges = bridges.filter(bridge => providerNeeded(input.query, bridge));
       const catalogues = await Promise.all(selectedBridges.map(async (bridge) => {
-        const tools = await bridge.tools(turnSignal, 0);
+        const tools = await bridge.tools(turnSignal);
         return { bridge, tools, status: bridge.status() };
       }));
       const azure = catalogues.find(({ bridge }) => bridge.prefix === azureToolPrefix);
@@ -198,12 +198,21 @@ export function createPiMcpRoutes(options: {
       const full = matches.slice(0, maxFullResults);
       const other = matches.slice(maxFullResults, maxFullResults + maxOtherResults);
       for (const tool of [...full, ...other]) grant.discovered.add(tool.name);
+      const loadingProviders = catalogues.filter(({ status }) => status.state === 'starting');
       return text({
         tool: 'find_tools', outcome: 'ok', result: {
           connections: piConnectionInventory(bridges),
           tools: full.map(tool => ({ name: tool.name, description: tool.description, parameters: shapeSchema(tool) })),
           otherMatches: matches.slice(maxFullResults, maxFullResults + maxOtherResults)
             .map(tool => ({ name: tool.name, description: shortenToolDescription(tool.description) })),
+          ...(loadingProviders.length > 0 ? {
+            continuation: {
+              action: 'find_tools',
+              query: input.query,
+              providers: loadingProviders.map(({ bridge }) => bridge.label),
+              instruction: 'This exact provider catalogue is still loading. Continue this same turn with find_tools using this query instead of answering without the requested capability.',
+            },
+          } : {}),
           ...notes(matches.length === 0),
         },
       });
@@ -275,7 +284,7 @@ export function createPiMcpRoutes(options: {
         const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
         grant.results.push({ tool: tool.name, outcome });
         if (outcome === 'ok') {
-          const evidence = completionEvidence(tool, input.arguments, parsed.result);
+          const evidence = completionEvidence(grant.completion, tool, input.arguments, parsed.result, grant.evidence);
           if (evidence) grant.evidence.push(evidence);
           if (toolEffect(tool, input.arguments) === 'action') grant.actions.count += 1;
         }

@@ -14,7 +14,7 @@ import {
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
 import type { PiActivationType } from './situation.js';
-import { completionRequirement, missingCompletionEvidence } from './completion.js';
+import { completionPlan, missingCompletionEvidence, type PiCompletionRequirement } from './completion.js';
 
 export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
@@ -159,11 +159,11 @@ function progressChunk(text: string, boundary: number): ConversationAgentChunk |
   return { type: boundary === 0 ? 'acknowledgment' : 'commentary', text: bounded };
 }
 
-const completionFailure = (requirement: ReturnType<typeof completionRequirement>) => {
-  if (requirement === 'retrieved') {
+const completionFailure = (requirement: PiCompletionRequirement) => {
+  if (requirement.kind === 'retrieved') {
     return 'PI did not retrieve verifiable evidence for this request, so no current answer was confirmed.';
   }
-  if (requirement === 'committed') {
+  if (requirement.kind === 'committed') {
     return 'PI did not receive a committed result for this action. The action is not confirmed as done.';
   }
   return 'PI did not create a durable task or job for this longer request. The work is not confirmed as started.';
@@ -461,6 +461,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   async function* stream(input: ConversationAgentInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
     const started = performance.now();
+    const completion = completionPlan(input.text);
     const notes: string[] = input.channel === 'voice' ? [voiceChannelNote] : [];
     if (input.visualContext !== undefined) {
       const description = input.visualContext.description;
@@ -538,6 +539,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal: deadline,
       });
       grant = activation.grant;
+      grant.completion = completion;
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
       const activationNote = capabilityInventory?.();
@@ -548,8 +550,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
-      const requirement = completionRequirement(input.text);
-      const streamWithoutToolEvidence = requirement === 'conversation';
+      const streamWithoutToolEvidence = completion.kind === 'conversation';
       for await (const event of respond(conversationId, text, deadline)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
@@ -569,7 +570,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           segment = '';
         } else usage = event.usage;
       }
-      const missing = grant ? missingCompletionEvidence(requirement, grant) : undefined;
+      const missing = grant ? missingCompletionEvidence(completion, grant) : undefined;
       if (missing) {
         completionUnverified = true;
         throw new PiGatewayError('pi_incomplete', completionFailure(missing), { detail: 'completion_evidence_missing' });

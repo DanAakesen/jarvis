@@ -6,8 +6,9 @@ import { coreModule } from '../core/index.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
-import type { RemoteMcpBridge } from './remote-mcp.js';
+import { createRemoteMcpBridge, type RemoteMcpBridge } from './remote-mcp.js';
 import type { PiSituationService } from './situation.js';
+import { completionPlan } from './completion.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -134,6 +135,33 @@ describe('PI MCP server', () => {
     expect(loads).toBe(0);
   });
 
+  it('waits within the bounded window for the specifically requested cold provider catalogue', async () => {
+    let requests = 0;
+    const bridge = createRemoteMcpBridge({
+      url: 'https://azure.example/mcp', prefix: 'az_', label: 'Azure', token: async () => 'token',
+      fetch: (async (_url: string, init: RequestInit) => {
+        requests += 1;
+        await new Promise(resolve => setTimeout(resolve, 20));
+        const body = JSON.parse(String(init.body)) as { id?: number; method: string };
+        if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
+        const result = body.method === 'tools/list'
+          ? { tools: [{
+            name: 'group_resource_list',
+            description: 'List resources in an Azure resource group.',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          }] }
+          : { protocolVersion: '2025-06-18', capabilities: {} };
+        return Response.json({ jsonrpc: '2.0', id: body.id, result });
+      }) as typeof fetch,
+    });
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
+    expect(found.body?.result.tools.map((entry: { name: string }) => entry.name)).toContain('az_group_resource_list');
+    expect(grant.discovered.has('az_group_resource_list')).toBe(true);
+    expect(requests).toBeGreaterThanOrEqual(2);
+  });
+
   it('executes an eligible exact tool shown in otherMatches without repeating discovery', async () => {
     const extras: JarvisTool[] = Array.from({ length: 5 }, (_, index) => ({
       name: `probe_${index}`,
@@ -151,6 +179,42 @@ describe('PI MCP server', () => {
     expect(recorded).toContainEqual({ messageId: '42', tool: exact });
   });
 
+  it('records only a terminal receipt bound to the classified tool arguments and target', async () => {
+    const mail: JarvisTool = {
+      name: 'mail_send',
+      description: 'Send one email.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          to: { type: 'array', items: { type: 'string' } },
+          subject: { type: 'string' },
+          body: { type: 'string' },
+        },
+        required: ['to', 'subject', 'body'],
+        additionalProperties: false,
+      },
+      execution: { defaultEffect: 'action' },
+      execute: async () => ({ status: 'completed', messageId: 'mail-1' }),
+    };
+    const { registry, tool } = setup([], { tools: [mail] });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(),
+    });
+    grant.completion = completionPlan('Email Alice about the build.');
+    await tool('find_tools', { turn: grant.turn, query: 'mail send' });
+    await tool('call_tool', {
+      turn: grant.turn, name: 'mail_send',
+      arguments: { to: ['alice@example.com'], subject: 'Build', body: 'The build is green.' },
+    });
+    expect(grant.evidence).toHaveLength(1);
+    expect(grant.evidence[0]).toMatchObject({ tool: 'mail_send', kind: 'committed', domain: 'mail' });
+    await tool('call_tool', {
+      turn: grant.turn, name: 'mail_send',
+      arguments: { to: ['bob@example.com'], subject: 'Another item', body: 'Unrelated.' },
+    });
+    expect(grant.evidence).toHaveLength(1);
+  });
+
   it('says a remote server is still loading, or could not be reached, instead of leaving the model to call it not attached', async () => {
     let status: ReturnType<RemoteMcpBridge['status']> = { state: 'starting' };
     const azure: RemoteMcpBridge = { prefix: 'az_', label: 'Azure', status: () => status, warm: () => {}, tools: async () => [], call: async () => ({ outcome: 'ok', result: {} }) };
@@ -158,6 +222,9 @@ describe('PI MCP server', () => {
     const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
     const loading = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
     expect(loading.body?.result.note).toMatch(/Azure tools are still loading.*attached, just not loaded yet/u);
+    expect(loading.body?.result.continuation).toMatchObject({
+      action: 'find_tools', query: 'azure resource group', providers: ['Azure'],
+    });
     expect(grant.azure.catalogue).toBe('starting');
     status = { state: 'unreachable', reason: 'no answer within 200 seconds' };
     const down = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
