@@ -6,6 +6,7 @@ import type {
   ToolCompletionDomain,
   ToolCompletionOperation,
 } from '../core/tool-registry.js';
+import { toolSchemaFieldNames } from '../core/tool-registry.js';
 import {
   durableTerminal, isPositiveResult, normalizeCompletionText as normalized, semanticOperation,
 } from '../core/tool-completion.js';
@@ -21,6 +22,7 @@ export interface PiCompletionRequirement {
   readonly domain: PiCompletionDomain;
   readonly operation: PiCompletionOperation;
   readonly targetHashes: readonly string[];
+  readonly payloadHashes?: readonly string[] | undefined;
 }
 
 export interface PiCompletionPlan {
@@ -29,6 +31,7 @@ export interface PiCompletionPlan {
   readonly contextual?: boolean;
   readonly requiresTrustedContext?: boolean;
   readonly runtimeTargetHashes?: readonly string[];
+  readonly runtimePayloadHashes?: readonly string[];
   readonly runtimeOperation?: PiCompletionOperation;
 }
 
@@ -41,6 +44,7 @@ export interface PiCompletionEvidence {
   readonly acceptedRequestOperations?: readonly PiCompletionOperation[] | undefined;
   readonly argumentsHash: string;
   readonly targetHashes: readonly string[];
+  readonly payloadHashes?: readonly string[] | undefined;
   readonly identityHashes: readonly string[];
   readonly identityTargets: readonly {
     readonly identityHash: string;
@@ -152,8 +156,18 @@ const fallbackTargetFields = [
   'path', 'repository', 'repo', 'url', 'sha', 'query', 'q', 'name', 'title', 'subject',
   'summary', 'to', 'from', 'location', 'value', 'issue', 'issueNumber', 'operation', 'action',
 ] as const;
+const mutablePayloadFields = new Set([
+  'body', 'content', 'description', 'message', 'note', 'prompt', 'reason', 'summary',
+  'subject', 'text', 'title',
+]);
 
-type CompletionTool = Pick<RegisteredTool, 'name' | 'execution'> & {
+function isMutablePayloadField(field: string): boolean {
+  const normalized = field.toLocaleLowerCase('en-US');
+  return mutablePayloadFields.has(normalized) ||
+    /(?:body|content|description|message|prompt|reason|subject|summary|text|title)$/u.test(normalized);
+}
+
+type CompletionTool = Pick<RegisteredTool, 'name' | 'execution' | 'inputSchema'> & {
   readonly completion?: ToolCompletionContract | CompiledToolExecutionContract | undefined;
 };
 function collectFieldValues(
@@ -175,14 +189,28 @@ function collectFieldValues(
   return output;
 }
 
+function toolPayloadTokens(
+  tool: CompletionTool,
+  args: Record<string, unknown>,
+): ReadonlySet<string> {
+  const metadata = tool.completion;
+  const fields = metadata?.requestPayloadFields ??
+    [...toolSchemaFieldNames(tool.inputSchema)].filter(isMutablePayloadField);
+  const output = new Set<string>();
+  for (const value of collectFieldValues(args, fields)) bindingTokens(value, 0, output);
+  return output;
+}
+
 function toolTargetTokens(
   tool: CompletionTool,
   args: Record<string, unknown>,
   result: unknown,
 ): ReadonlySet<string> {
   const metadata = tool.completion;
-  const argumentFields = metadata?.requestTargetFields ?? fallbackTargetFields;
-  const resultFields = metadata?.resultTargetFields ?? fallbackTargetFields;
+  const argumentFields = (metadata?.requestTargetFields ?? fallbackTargetFields)
+    .filter(field => !isMutablePayloadField(field));
+  const resultFields = (metadata?.resultTargetFields ?? fallbackTargetFields)
+    .filter(field => !isMutablePayloadField(field));
   const output = new Set<string>();
   if (metadata?.requestIdentities) bindingTokens(metadata.requestIdentities(args), 0, output);
   else for (const value of collectFieldValues(args, argumentFields)) bindingTokens(value, 0, output);
@@ -203,7 +231,10 @@ function rowTargetTokens(
   const output = new Set<string>();
   if (result && metadata?.resultIdentities) bindingTokens(metadata.resultIdentities(row), 0, output);
   else if (!result && metadata?.requestIdentities) bindingTokens(metadata.requestIdentities(row), 0, output);
-  else for (const value of collectFieldValues(row, fields)) bindingTokens(value, 0, output);
+  else for (const value of collectFieldValues(
+    row,
+    fields.filter(field => !isMutablePayloadField(field)),
+  )) bindingTokens(value, 0, output);
   return output;
 }
 
@@ -253,6 +284,7 @@ const ignoredTargetWords = new Set([
   'implement', 'inspect', 'keep', 'list', 'log', 'make', 'move', 'open', 'pause', 'publish', 'read', 'record', 'remember', 'correct',
   'remove', 'reply', 'save', 'schedule', 'search', 'send', 'set', 'show', 'start', 'stop', 'update', 'write',
   'merge', 'approve', 'review', 'resolve', 'unresolve', 'forward', 'push', 'star',
+  'fork', 'assign', 'dismiss', 'unstar', 'unhide',
   'click', 'type', 'select', 'pin', 'unpin', 'rename', 'dispatch', 'deploy', 'trigger', 'scale', 'restart',
   'find', 'check', 'fix', 'research', 'look', 'up', 'tjek', 'læs', 'læse', 'læst', 'søg', 'se', 'vis',
   'fortæl', 'fortælle', 'fortalt', 'sendt', 'sagt', 'opret', 'slet', 'gem', 'rediger', 'start',
@@ -265,7 +297,10 @@ const ignoredTargetWords = new Set([
   'pc', 'computer', 'app', 'application', 'item', 'report', 'saved', 'repo', 'code', 'jarvis', 'copilot', 'about',
   'preference', 'preferences', 'fact', 'facts', 'decision', 'decisions', 'unfinished',
   'invitation', 'request', 'change', 'thing', 'this', 'that', 'please', 'deal', 'draft', 'updated', 'teach',
+  'actually', 'prefer',
   'saying', 'says', 'tell', 'telling', 'called', 'named',
+  'body', 'content', 'description', 'message', 'note', 'prompt', 'reason', 'summary',
+  'subject', 'title', 'memory', 'sub-issue', 'id',
   'worker', 'workers', 'background', 'long-running', 'watch', 'watches', 'deploy', 'deployment', 'overvågning',
   'down', 'up', 'slow', 'offline', 'online', 'outage', 'unavailable', 'available', 'healthy', 'unhealthy',
   'working', 'broken', 'failed', 'failing', 'failure', 'changed', 'missing', 'stopped', 'pending', 'stale',
@@ -317,6 +352,77 @@ function targetTerms(text: string): { readonly term: string; readonly at: number
   const unique = new Map<string, { readonly term: string; readonly at: number }>();
   for (const term of terms) if (!unique.has(term.term)) unique.set(term.term, term);
   return [...unique.values()];
+}
+
+interface ClassifiedRequestTerms {
+  readonly targets: readonly { readonly term: string; readonly at: number }[];
+  readonly payloads: readonly { readonly term: string; readonly at: number }[];
+}
+
+function classifiedRequestTerms(
+  text: string,
+  allPayload = false,
+  createPayload = false,
+): ClassifiedRequestTerms {
+  const terms = targetTerms(text);
+  if (allPayload) {
+    const payloadText = text
+      .replace(/^(?:please\s+)?(?:do not|don['’]?t)\s+forget\s+(?:that\s+)?/iu, '')
+      .replace(/^(?:please\s+)?(?:remember|memorise|memorize)\s+(?:that|this)?\s*/iu, '')
+      .replace(/^(?:actually|correct that|correct this|correct it)[,:]?\s*/iu, '')
+      .replace(/^i\s+now\s+/iu, 'i ');
+    return {
+      targets: [],
+      payloads: targetTerms(payloadText).filter(({ term }) =>
+        !/^\d{1,18}$/u.test(term)),
+    };
+  }
+  const payloadRanges: { readonly start: number; readonly end: number }[] = [];
+  const labelled = /\b(?:about|body|comment|content|description|goal|message|note|prompt|reason|subject|summary|task|text|title|titled|called)\s*(?:is|to|as|=|:)?\s+([^,.!?;\n]+)/giu;
+  for (const match of text.matchAll(labelled)) {
+    const captured = match[1] ?? '';
+    const at = (match.index ?? 0) + match[0].indexOf(captured);
+    payloadRanges.push({ start: at, end: at + captured.length });
+  }
+  const quotedPayload = /["“”'‘’]([^"“”'‘’]{1,300})["“”'‘’]/gu;
+  for (const match of text.matchAll(quotedPayload)) {
+    const prefix = text.slice(Math.max(0, (match.index ?? 0) - 48), match.index);
+    if (!/\b(?:body|comment|content|description|message|note|prompt|subject|summary|task|text|title)\b/iu.test(prefix)) {
+      continue;
+    }
+    payloadRanges.push({
+      start: match.index ?? 0,
+      end: (match.index ?? 0) + match[0].length,
+    });
+  }
+  if (createPayload) {
+    const afterResource = /\b(?:event|file|memory|note|preference|reminder|repository|task|workspace)\s+(.+)/giu;
+    for (const match of text.matchAll(afterResource)) {
+      const captured = match[1] ?? '';
+      const at = (match.index ?? 0) + match[0].indexOf(captured);
+      payloadRanges.push({ start: at, end: at + captured.length });
+    }
+    const watchedSubject = /\b(?:keep\s+me\s+updated|updated|watch|watching)\s+(?:on|for)\s+(.+)/giu;
+    for (const match of text.matchAll(watchedSubject)) {
+      const captured = match[1] ?? '';
+      const at = (match.index ?? 0) + match[0].indexOf(captured);
+      payloadRanges.push({ start: at, end: at + captured.length });
+    }
+  }
+  const payloads = payloadRanges.flatMap(range =>
+    targetTerms(text.slice(range.start, range.end)).map(entry => ({
+      ...entry,
+      at: entry.at + range.start,
+    })));
+  let outside = text;
+  for (const range of [...payloadRanges].sort((left, right) => right.start - left.start)) {
+    outside = `${outside.slice(0, range.start)}${' '.repeat(range.end - range.start)}${outside.slice(range.end)}`;
+  }
+  const outsideTerms = targetTerms(outside);
+  const outsideNames = new Set(outsideTerms.map(({ term }) => term));
+  const targets = terms.filter(({ term }) => outsideNames.has(term));
+  const uniquePayloads = [...new Map(payloads.map(entry => [entry.term, entry])).values()];
+  return { targets, payloads: uniquePayloads };
 }
 
 function bindingTokens(value: unknown, depth = 0, output = new Set<string>()): ReadonlySet<string> {
@@ -419,12 +525,92 @@ function toolBindingIdentities(
     : bindingIdentities(value);
 }
 
-function oneIdentityTargetGroup(
-  candidate: Pick<PiCompletionEvidence, 'identityTargets'>,
+function identityTargetGroups(
+  bindings: PiCompletionEvidence['identityTargets'],
+): ReadonlyMap<string, {
+  readonly identities: ReadonlySet<string>;
+  readonly targets: ReadonlySet<string>;
+}> {
+  const groups = new Map<string, {
+    identities: Set<string>;
+    targets: Set<string>;
+  }>();
+  for (const binding of bindings) {
+    const group = groups.get(binding.identityGroupHash) ?? {
+      identities: new Set<string>(),
+      targets: new Set<string>(),
+    };
+    group.identities.add(binding.identityHash);
+    for (const target of binding.targetHashes) group.targets.add(target);
+    groups.set(binding.identityGroupHash, group);
+  }
+  return groups;
+}
+
+function completeContextBindings(
+  tool: CompletionTool,
+  args: Record<string, unknown>,
+  previous: readonly PiCompletionEvidence[],
+  result?: unknown,
+  explicitTargets: readonly string[] = [],
+): readonly {
+  readonly candidate: PiCompletionEvidence;
+  readonly targetHashes: readonly string[];
+}[] {
+  const domain = toolDomain(tool, args);
+  let requestGroups = [...identityTargetGroups(
+    identityTargets(tool, args, false),
+  ).values()];
+  if (requestGroups.length === 0 && result !== undefined) {
+    requestGroups = [...identityTargetGroups(
+      identityTargets(tool, result, true),
+    ).values()];
+  }
+  if (requestGroups.length === 0) return [];
+  return previous.flatMap(candidate => {
+    if (candidate.kind !== 'retrieved' || candidate.domain !== domain) return [];
+    const candidateGroups = [...identityTargetGroups(candidate.identityTargets).values()];
+    return candidateGroups.flatMap(group => {
+      const complete = requestGroups.some(request =>
+        request.identities.size > 0 &&
+        [...request.identities].every(identity => group.identities.has(identity)));
+      const explicitlySelected = explicitTargets.length > 0 &&
+        explicitTargets.every(target => group.targets.has(target));
+      return complete && (candidateGroups.length === 1 || explicitlySelected) ? [{
+        candidate,
+        targetHashes: [...group.targets],
+      }] : [];
+    });
+  });
+}
+
+function scopedReadIdentityTargets(
+  requestBindings: PiCompletionEvidence['identityTargets'],
+  resultBindings: PiCompletionEvidence['identityTargets'],
+): PiCompletionEvidence['identityTargets'] {
+  const requestGroups = [...identityTargetGroups(requestBindings).values()];
+  if (requestGroups.length !== 1) return resultBindings;
+  const request = requestGroups[0]!;
+  return [...identityTargetGroups(resultBindings).values()].flatMap(result => {
+    const identities = [...new Set([...request.identities, ...result.identities])];
+    const targets = [...new Set([...request.targets, ...result.targets])];
+    const identityGroupHash = hash(identities.slice().sort().join(':'));
+    return identities.map(identityHash => ({
+      identityHash,
+      identityGroupHash,
+      targetHashes: targets,
+    }));
+  });
+}
+
+function requestOperationAccepted(
+  tool: CompletionTool,
+  args: Record<string, unknown>,
+  operation: PiCompletionOperation,
 ): boolean {
-  const groups = new Set(candidate.identityTargets.map(binding =>
-    binding.identityGroupHash));
-  return groups.size === 1;
+  return receiptOperation(tool, args) === operation ||
+    tool.completion?.acceptsRequestOperation?.(args, operation) === true ||
+    (tool.completion?.acceptedRequestOperations ?? []).includes(operation);
 }
 
 function identityTargets(
@@ -546,7 +732,7 @@ function actionDomainsFor(matches: readonly DomainMatch[], text: string): readon
     tasks: /\b(?:add|complete|create|delete|edit|finish|log|reopen|reschedule|remember|tilføj|opret|slet|færdiggør|gem|husk)\b[^\n.!?]{0,60}\b(?:task|todo|reminder|opgave|pamindelse)\b/iu,
     health: /\b(?:log|record|save|complete|slet|log|gem)\b[^\n.!?]{0,60}\b(?:meal|food|health|gym|workout|training|mad|træning|sundhed)\b/iu,
     memory: /\b(?:remember|save|correct|change|update|forget|delete|capture|husk|gem|ret|opdater|slet)\b[^\n.!?]{0,60}\b(?:memory|fact|preference|hukommelse|præference)\b/iu,
-    github: /\b(?:create|close|reopen|comment|merge|approve|label|update|dispatch|opret|luk|kommenter|sammenføj|opdater|kør)\b[^\n.!?]{0,80}\b(?:github|issue|pull request|repository|workflow|kode|arbejdsgang)\b/iu,
+    github: /\b(?:add|assign|create|close|dismiss|fork|ignore|mark|reopen|remove|comment|merge|approve|label|request|unstar|unhide|update|watch|dispatch|opret|tilføj|luk|kommenter|sammenføj|opdater|kør)\b[^\n.!?]{0,80}\b(?:github|copilot|issue|sub-issue|pull request|repository|workflow|notification|kode|arbejdsgang)\b/iu,
     azure: /\b(?:create|delete|deploy|restart|start|stop|update|scale|opret|slet|start|stop|opdater)\b[^\n.!?]{0,80}\b(?:azure|resource|subscription|ressource)\b/iu,
     web: /\b(?:book|reserve|buy|order|purchase|reserve|bestil|køb|book)\b/iu,
     factory: /\b(?:implement|fix|build|review and fix|start work|start issue|create an issue|start en opgave|implementer|ret koden)\b/iu,
@@ -595,8 +781,30 @@ function assignedTargetHashes(
   request: string,
   requirementDomain: PiCompletionDomain,
   domains: readonly DomainMatch[],
+  allPayload = false,
+  createPayload = false,
 ): readonly string[] {
-  const terms = targetTerms(request);
+  const terms = classifiedRequestTerms(request, allPayload, createPayload).targets;
+  if (!domains.some(({ domain }) => domain === requirementDomain)) {
+    return targetHashes(terms.map(({ term }) => term));
+  }
+  const assigned = terms.filter(({ at }) => {
+    if (domains.length <= 1) return true;
+    const nearest = domains.reduce((best, candidate) =>
+      Math.abs(candidate.at - at) < Math.abs(best.at - at) ? candidate : best);
+    return nearest.domain === requirementDomain;
+  });
+  return targetHashes(assigned.map(({ term }) => term));
+}
+
+function assignedPayloadHashes(
+  request: string,
+  requirementDomain: PiCompletionDomain,
+  domains: readonly DomainMatch[],
+  allPayload = false,
+  createPayload = false,
+): readonly string[] {
+  const terms = classifiedRequestTerms(request, allPayload, createPayload).payloads;
   if (!domains.some(({ domain }) => domain === requirementDomain)) {
     return targetHashes(terms.map(({ term }) => term));
   }
@@ -655,17 +863,54 @@ function readIntent(value: string, source = value): boolean {
   return isReadCueTerm(first);
 }
 
+interface MemoryIntent {
+  readonly operation: Extract<PiCompletionOperation, 'create' | 'update' | 'delete'>;
+  readonly automatic: boolean;
+}
+
+function memoryIntent(text: string): MemoryIntent | undefined {
+  const value = normalized(text);
+  const explicitCapture =
+    /^(?:please\s+)?(?:remember|memorise|memorize)\b/iu.test(value) ||
+    /\b(?:remember|memorise|memorize)\s+(?:that|this|it|i\b|my\b|me\b|we\b)/iu.test(value) ||
+    /\b(?:do not|don['’]?t)\s+forget\b/iu.test(value) ||
+    /\b(?:glem ikke|husk|skal huske)\b/iu.test(value) ||
+    /\bkeep\s+(?:this|that|it)?\s*in\s+mind\b/iu.test(value);
+  if (explicitCapture) return { operation: 'create', automatic: false };
+  const forget =
+    /\b(?:forget|delete)\s+(?:this|that|the)?\s*(?:memory|preference|fact|decision)\b/iu.test(value) ||
+    /\bforget\s+(?:that|it|this)\b/iu.test(value);
+  if (forget && !/\b(?:do not|don['’]?t)\s+forget\b/iu.test(value)) {
+    return { operation: 'delete', automatic: false };
+  }
+  const correction =
+    /\b(?:actually|correct (?:that|this|it|memory)|i changed (?:my|that)|i now prefer|no longer prefer)\b/iu.test(value);
+  if (correction) return { operation: 'update', automatic: false };
+  const durableCapture =
+    /^(?:i|we)\s+(?:prefer|always prefer|never prefer|usually prefer|normally prefer)\b/iu.test(value) ||
+    /^my (?:standing |usual )?preference (?:is|for)\b/iu.test(value);
+  return durableCapture ? { operation: 'create', automatic: true } : undefined;
+}
+
 export function completionPlan(text: string): PiCompletionPlan {
   const source = withoutCourtesyPrefix(text);
   const value = normalized(source);
+  const memory = memoryIntent(value);
   const contextual = /\b(?:it|itself|that|that one|this|this one|den|det|den der)\b/iu.test(value);
   const readCued = readIntent(value, source) || externalLiveStateQuestion(value);
-  const runtimeTargetHashes = targetHashes(targetTerms(value).map(({ term }) => term));
-  const runtimeOperation = readCued ? 'read' : operationFamily(value);
+  const runtimeOperation = readCued ? 'read' : memory?.operation ?? operationFamily(value);
+  const classified = classifiedRequestTerms(
+    value,
+    memory?.operation === 'create',
+    runtimeOperation === 'create',
+  );
+  const runtimeTargetHashes = targetHashes(classified.targets.map(({ term }) => term));
+  const runtimePayloadHashes = targetHashes(classified.payloads.map(({ term }) => term));
   if (ordinaryConversation(value) ||
       /\b(?:do not reply|don't reply|stay quiet|be quiet|say nothing|ti stille|svar ikke|sig ingenting)\b/iu.test(value)) {
     return {
       kind: 'conversation', requirements: [], runtimeTargetHashes, runtimeOperation,
+      ...(runtimePayloadHashes.length > 0 ? { runtimePayloadHashes } : {}),
       ...(contextual ? { contextual: true } : {}),
     };
   }
@@ -675,9 +920,12 @@ export function completionPlan(text: string): PiCompletionPlan {
     (matches.some(({ domain }) => domain === 'factory' || domain === 'github') ||
       /\b(?:issue|repo|repository|code|jarvis|kode)\b/iu.test(value));
   const rawDomains = [...new Set(matches.map(({ domain }) => domain))];
+  if (memory && !rawDomains.includes('memory')) rawDomains.push('memory');
   const hasDomain = (domain: PiCompletionDomain) => rawDomains.includes(domain);
   const targetDomains = rawDomains.filter(domain =>
     !(domain === 'factory' && hasDomain('github') && !ownCodeWork) &&
+    !(domain === 'jobs' && hasDomain('github') &&
+      /\bwatch\b[^\n.!?]{0,60}\bnotifications?\b/iu.test(value)) &&
     !(domain === 'notes' && hasDomain('mail') &&
       /\binbox|indbakke\b/iu.test(value) && !/\b(?:note|vault|notat|noter)\b/iu.test(value)) &&
     !(domain === 'notes' && hasDomain('memory') &&
@@ -686,6 +934,9 @@ export function completionPlan(text: string): PiCompletionPlan {
     !((domain === 'notes' || domain === 'mail' || domain === 'factory') &&
       hasDomain('settings') && /\bcredential|credentials|login\b/iu.test(value)));
   const selectedMatches = matches.filter(({ domain }) => targetDomains.includes(domain));
+  if (memory && !selectedMatches.some(({ domain }) => domain === 'memory')) {
+    selectedMatches.push({ domain: 'memory', at: 0, term: 'memory' });
+  }
   const domains = targetDomains.length > 0 ? targetDomains : ['generic' as const];
   const durable =
     ownCodeWork ||
@@ -704,7 +955,10 @@ export function completionPlan(text: string): PiCompletionPlan {
     };
   }
 
-  const explicitActionDomains = actionDomainsFor(selectedMatches, value);
+  const explicitActionDomains = [...actionDomainsFor(selectedMatches, value)];
+  if (memory && !explicitActionDomains.includes('memory')) {
+    explicitActionDomains.push('memory');
+  }
   const directRequest = /^(?:please|can you|could you|would you|will you|I need you to|I want you to|vil du|kan du|please)\b/iu.test(value);
   const imperative = /^(?:add|archive|book|cancel|capture|change|close|comment|complete|correct|create|delete|deploy|dispatch|edit|email|fix|issue|log|make|move|open|pause|publish|remember|remove|reply|resume|retry|save|schedule|send|set|start|stop|update|write)\b/iu.test(value);
   const firstDomainAt = selectedMatches[0]?.at ?? 0;
@@ -717,12 +971,14 @@ export function completionPlan(text: string): PiCompletionPlan {
   if (targetDomains.length === 0 && !action && !readCued) {
     return {
       kind: 'conversation', requirements: [], runtimeTargetHashes, runtimeOperation,
+      ...(runtimePayloadHashes.length > 0 ? { runtimePayloadHashes } : {}),
       ...(contextual ? { contextual: true } : {}),
     };
   }
   if (targetDomains.length === 0) {
     return {
       kind: 'conversation', requirements: [], runtimeTargetHashes, runtimeOperation,
+      ...(runtimePayloadHashes.length > 0 ? { runtimePayloadHashes } : {}),
       ...(contextual ? { contextual: true } : {}),
     };
   }
@@ -732,19 +988,37 @@ export function completionPlan(text: string): PiCompletionPlan {
     for (const domain of domains) {
       const requirementDomain = domain;
       const operation = actionDomains.includes(requirementDomain)
-        ? operationForDomain(value, requirementDomain, selectedMatches)
+        ? requirementDomain === 'memory' && memory
+          ? memory.operation
+          : operationForDomain(value, requirementDomain, selectedMatches)
         : 'read';
       const assignedTargets = requirementDomain === 'memory'
         ? memoryTargetHashes(value, operation)
-        : assignedTargetHashes(value, requirementDomain, selectedMatches);
+        : assignedTargetHashes(
+          value,
+          requirementDomain,
+          selectedMatches,
+          false,
+          operation === 'create',
+        );
       const openDomainTarget = operation === 'open' && assignedTargets.length === 0
         ? selectedMatches.find(({ domain: candidate }) => candidate === requirementDomain)?.term
         : undefined;
+      const payloadHashes = actionDomains.includes(requirementDomain)
+        ? assignedPayloadHashes(
+          value,
+          requirementDomain,
+          selectedMatches,
+          requirementDomain === 'memory' && memory !== undefined,
+          operation === 'create',
+        )
+        : [];
       requirements.push({
         kind: actionDomains.includes(requirementDomain) ? 'committed' : 'retrieved',
         domain: requirementDomain,
         operation,
         targetHashes: openDomainTarget ? [hash(openDomainTarget)] : assignedTargets,
+        ...(payloadHashes.length > 0 ? { payloadHashes } : {}),
       });
     }
     const directMemoryCapture = requirements.length === 1 &&
@@ -795,35 +1069,32 @@ export function completionDispatchAllowed(
   if (operation === 'generic') return false;
   if (allowUnplannedAction) return true;
   const domain = toolDomain(tool, args);
-  const identities = targetHashes([...toolBindingIdentities(tool, args, false)]);
-  const linked = previous.flatMap(candidate =>
-    candidate.kind !== 'retrieved' || candidate.domain !== domain
-      ? []
-      : candidate.identityTargets
-        .filter(binding => identities.includes(binding.identityHash))
-        .map(binding => ({ candidate, binding })));
+  const explicitTargets = [
+    ...(plan.runtimeTargetHashes ?? []),
+    ...plan.requirements.flatMap(requirement => requirement.targetHashes),
+  ];
+  const linked = completeContextBindings(tool, args, previous, undefined, explicitTargets);
   const runtimeTargets = plan.runtimeTargetHashes ?? [];
-  const trustedLinkedContext = linked.some(({ candidate, binding }) =>
-    oneIdentityTargetGroup(candidate) ||
-    runtimeTargets.length > 0 && runtimeTargets.every(target => binding.targetHashes.includes(target)));
-  const linkedTargets = linked.flatMap(({ binding }) => binding.targetHashes);
+  const runtimePayloads = plan.runtimePayloadHashes ?? [];
+  const trustedLinkedContext = linked.length > 0;
+  const linkedTargets = linked.flatMap(binding => binding.targetHashes);
   const requestTargets = targetHashes([...toolTargetTokens(tool, args, undefined)]);
+  const requestPayloads = targetHashes([...toolPayloadTokens(tool, args)]);
   const targetSet = [...new Set([...requestTargets, ...linkedTargets])];
-  const matchesOperation = (requirement: PiCompletionRequirement) =>
-    requirement.operation === operation ||
-    (tool.completion?.acceptedRequestOperations ?? []).includes(requirement.operation);
   if (plan.kind === 'conversation') {
     const operationMatches = plan.runtimeOperation !== undefined &&
-      plan.runtimeOperation === operation;
+      requestOperationAccepted(tool, args, plan.runtimeOperation);
     if (!operationMatches) return false;
     if (plan.contextual || plan.requiresTrustedContext) return trustedLinkedContext;
-    return runtimeTargets.every(target => targetSet.includes(target));
+    return runtimeTargets.every(target => targetSet.includes(target)) &&
+      runtimePayloads.every(target => requestPayloads.includes(target));
   }
   return plan.requirements.some(requirement =>
     (requirement.kind === 'committed' || requirement.kind === 'durable_job') &&
     requirement.domain === domain &&
-    matchesOperation(requirement) &&
+    requestOperationAccepted(tool, args, requirement.operation) &&
     requirement.targetHashes.every(target => targetSet.includes(target)) &&
+    (requirement.payloadHashes ?? []).every(target => requestPayloads.includes(target)) &&
     (!plan.requiresTrustedContext || trustedLinkedContext));
 }
 
@@ -905,12 +1176,15 @@ function matchesRequirement(
 function matchesRequirementBinding(
   requirement: PiCompletionRequirement,
   evidence: PiCompletionEvidence,
+  tool: CompletionTool,
+  args: Record<string, unknown>,
 ): boolean {
   return evidence.domain === requirement.domain &&
     (evidence.kind === 'retrieved' ||
-      evidence.operation === requirement.operation ||
-      (evidence.acceptedRequestOperations ?? []).includes(requirement.operation)) &&
-    requirement.targetHashes.every(target => evidence.targetHashes.includes(target));
+      requestOperationAccepted(tool, args, requirement.operation)) &&
+    requirement.targetHashes.every(target => evidence.targetHashes.includes(target)) &&
+    (requirement.payloadHashes ?? []).every(target =>
+      (evidence.payloadHashes ?? []).includes(target));
 }
 
 export function completionEvidence(
@@ -960,23 +1234,28 @@ export function completionEvidence(
     ...(isRecord(result) ? toolBindingIdentities(tool, result, true) : []),
   ];
   const identityHashes = targetHashes(currentIdentities);
-  const linkedBindings = previous.flatMap(candidate =>
-    candidate.kind !== 'retrieved' || candidate.domain !== domain
-      ? []
-      : candidate.identityTargets
-        .filter(binding => identityHashes.includes(binding.identityHash))
-        .map(binding => ({ candidate, binding })));
-  const linkedTargets = linkedBindings.flatMap(({ binding }) => binding.targetHashes);
-  const runtimeTargets = plan.runtimeTargetHashes ?? [];
-  const trustedLinkedContext = linkedBindings.some(({ candidate, binding }) =>
-    oneIdentityTargetGroup(candidate) ||
-    runtimeTargets.length > 0 && runtimeTargets.every(target => binding.targetHashes.includes(target)));
+  const linkedBindings = completeContextBindings(
+    tool,
+    args,
+    previous,
+    isRecord(result) ? result : undefined,
+    [
+      ...(plan.runtimeTargetHashes ?? []),
+      ...plan.requirements.flatMap(requirement => requirement.targetHashes),
+    ],
+  );
+  const linkedTargets = linkedBindings.flatMap(binding => binding.targetHashes);
+  const trustedLinkedContext = linkedBindings.length > 0;
   const directTargets = identityTargets(tool, args, false);
   const resultTargets = identityTargets(tool, result, true);
   const evidenceTargets = [...new Set([
     ...targetHashes([...toolTargetTokens(tool, args, result)]),
     ...linkedTargets,
   ])];
+  const payloadHashes = targetHashes([...toolPayloadTokens(tool, args)]);
+  const scopedIdentityBindings = kind === 'retrieved'
+    ? scopedReadIdentityTargets(directTargets, resultTargets)
+    : [...directTargets, ...resultTargets];
   const evidence = {
     executionId: tool.completion && 'executionId' in tool.completion
       ? tool.completion.executionId
@@ -988,29 +1267,39 @@ export function completionEvidence(
     ...(tool.completion?.acceptedRequestOperations
       ? { acceptedRequestOperations: tool.completion.acceptedRequestOperations }
       : {}),
+    ...(tool.completion?.acceptsRequestOperation
+      ? {
+        acceptedRequestOperations: ([
+          'read', 'create', 'update', 'delete', 'send', 'open', 'start', 'generic',
+        ] as const).filter(operation =>
+          tool.completion!.acceptsRequestOperation!(args, operation)),
+      }
+      : {}),
     argumentsHash: hash(canonical(args)),
     targetHashes: evidenceTargets,
+    payloadHashes,
     identityHashes,
-    identityTargets: kind === 'retrieved'
-      ? resultTargets
-      : [...directTargets, ...resultTargets],
+    identityTargets: scopedIdentityBindings,
   } satisfies PiCompletionEvidence;
   if (plan.kind === 'conversation') {
     const operationMatches = plan.runtimeOperation === undefined ||
-      evidence.operation === plan.runtimeOperation;
+      requestOperationAccepted(tool, args, plan.runtimeOperation);
     if (kind !== 'retrieved' && !operationMatches) return undefined;
     const trustedTarget = plan.contextual
       ? trustedLinkedContext
       : kind === 'retrieved' ||
         (plan.runtimeTargetHashes ?? []).length > 0 &&
           (plan.runtimeTargetHashes ?? []).every(target => evidence.targetHashes.includes(target));
-    return !trustedTarget ? undefined : evidence;
+    const payloadMatches = (plan.runtimePayloadHashes ?? []).every(target =>
+      (evidence.payloadHashes ?? []).includes(target));
+    return !trustedTarget || !payloadMatches ? undefined : evidence;
   }
   if (plan.requiresTrustedContext &&
       (plan.contextual || kind !== 'retrieved') && !trustedLinkedContext) {
     return undefined;
   }
-  return plan.requirements.some(requirement => matchesRequirementBinding(requirement, evidence)) ? evidence : undefined;
+  return plan.requirements.some(requirement =>
+    matchesRequirementBinding(requirement, evidence, tool, args)) ? evidence : undefined;
 }
 
 export function missingCompletionEvidence(

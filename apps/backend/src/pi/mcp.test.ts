@@ -3,7 +3,7 @@ import { buildApp } from '../app.js';
 import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
-import type { JarvisTool } from '../core/tool-registry.js';
+import type { JarvisTool, RegisteredTool } from '../core/tool-registry.js';
 import { receipt } from '../core/tool-completion.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
@@ -270,6 +270,164 @@ describe('PI MCP server', () => {
         ? remote.completion.operation(args)
         : remote?.completion?.operation).toBe(operation);
     }
+    for (const [name, args, requestOperation] of [
+      ['gh_fork_repository', {}, 'create'],
+      ['gh_add_automation_to_group', {}, 'create'],
+      ['gh_add_comment_to_pending_review', {}, 'create'],
+      ['gh_add_issue_comment', {}, 'create'],
+      ['gh_add_reply_to_pull_request_comment', {}, 'create'],
+      ['gh_assign_copilot_to_issue', {}, 'update'],
+      ['gh_discussion_comment_write', { method: 'add' }, 'create'],
+      ['gh_issue_dependency_write', { method: 'remove' }, 'delete'],
+      ['gh_projects_write', { method: 'add_project_item' }, 'create'],
+      ['gh_pull_request_artifact_write', { method: 'delete' }, 'delete'],
+      ['gh_request_pull_request_reviewers', {}, 'send'],
+      ['gh_sub_issue_write', { method: 'add' }, 'create'],
+      ['gh_sub_issue_write', { method: 'remove' }, 'delete'],
+      ['gh_update_issue_state', {}, 'delete'],
+    ] as const) {
+      expect(grant.remoteTools.get(name)?.completion?.acceptsRequestOperation?.(
+        args,
+        requestOperation,
+      )).toBe(true);
+    }
+  });
+
+  it('dispatches natural provider verbs only through exact per-action operation aliases', async () => {
+    const calls: string[] = [];
+    const tools: JarvisTool[] = [
+      {
+        name: 'gh_fork_repository',
+        description: 'Fork a repository.',
+        inputSchema: {
+          type: 'object',
+          properties: { owner: { type: 'string' }, repo: { type: 'string' } },
+          required: ['owner', 'repo'], additionalProperties: false,
+        },
+        moduleId: 'github', execute: async () => ({}),
+      },
+      {
+        name: 'gh_sub_issue_write',
+        description: 'Add, remove, or reprioritize a sub-issue.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            method: { type: 'string' },
+            owner: { type: 'string' }, repo: { type: 'string' },
+            issue_number: { type: 'integer' }, sub_issue_id: { type: 'integer' },
+          },
+          required: ['method', 'owner', 'repo', 'issue_number', 'sub_issue_id'],
+          additionalProperties: false,
+        },
+        moduleId: 'github', execute: async () => ({}),
+      },
+      {
+        name: 'gh_assign_copilot_to_issue',
+        description: 'Assign Copilot to an issue.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' }, repo: { type: 'string' },
+            issue_number: { type: 'integer' },
+          },
+          required: ['owner', 'repo', 'issue_number'],
+          additionalProperties: false,
+        },
+        moduleId: 'github', execute: async () => ({}),
+      },
+      {
+        name: 'gh_update_issue_state',
+        description: 'Update an issue state.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            owner: { type: 'string' }, repo: { type: 'string' },
+            issue_number: { type: 'integer' }, state: { type: 'string' },
+          },
+          required: ['owner', 'repo', 'issue_number', 'state'],
+          additionalProperties: false,
+        },
+        moduleId: 'github', execute: async () => ({}),
+      },
+    ];
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => tools as RegisteredTool[],
+      call: async (name, args) => {
+        calls.push(`${name}:${String(args.method ?? '')}`);
+        if (name === 'gh_fork_repository') {
+          return { outcome: 'ok', result: { id: 'repo-id', url: 'https://github.com/Elsewhere/jarvis' } };
+        }
+        if (name === 'gh_sub_issue_write') {
+          return {
+            outcome: 'ok',
+            result: { method: 'add', issue: { id: 'issue-7', number: 7, url: 'https://github.com/o/r/issues/7' } },
+          };
+        }
+        if (name === 'gh_assign_copilot_to_issue') {
+          return {
+            outcome: 'ok',
+            result: {
+              issue_number: 7,
+              message: 'successfully assigned copilot to issue - pull request pending',
+              owner: 'DanAakesen', repo: 'jarvis',
+            },
+          };
+        }
+        return {
+          outcome: 'ok',
+          result: { id: 'issue-7', url: 'https://github.com/DanAakesen/jarvis/issues/7' },
+        };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const cases = [
+      {
+        text: 'Fork DanAakesen/jarvis on GitHub.',
+        query: 'github fork repository',
+        name: 'gh_fork_repository',
+        arguments: { owner: 'DanAakesen', repo: 'jarvis' },
+      },
+      {
+        text: 'Add sub-issue ID 8 to GitHub issue 7 in DanAakesen/jarvis.',
+        query: 'github sub issue write',
+        name: 'gh_sub_issue_write',
+        arguments: {
+          method: 'add', owner: 'DanAakesen', repo: 'jarvis',
+          issue_number: 7, sub_issue_id: 8,
+        },
+      },
+      {
+        text: 'Assign Copilot to GitHub issue 7 in DanAakesen/jarvis.',
+        query: 'github assign copilot issue',
+        name: 'gh_assign_copilot_to_issue',
+        arguments: { owner: 'DanAakesen', repo: 'jarvis', issue_number: 7 },
+      },
+      {
+        text: 'Close GitHub issue 7 in DanAakesen/jarvis.',
+        query: 'github issue state',
+        name: 'gh_update_issue_state',
+        arguments: {
+          owner: 'DanAakesen', repo: 'jarvis', issue_number: 7, state: 'closed',
+        },
+      },
+    ] as const;
+    for (const [index, item] of cases.entries()) {
+      const grant = registry.open({
+        ownerObjectId: config.auth.ownerObjectId,
+        sessionId: `alias-${index}`,
+        messageId: `${42 + index}`,
+        signal: live(),
+      });
+      grant.completion = completionPlan(item.text);
+      await tool('find_tools', { turn: grant.turn, query: item.query });
+      const result = await tool('call_tool', {
+        turn: grant.turn, name: item.name, arguments: item.arguments,
+      });
+      expect(result.body).toMatchObject({ outcome: 'ok' });
+      expect(grant.evidence.at(-1)).toMatchObject({ tool: item.name });
+    }
+    expect(calls).toHaveLength(cases.length);
   });
 
   it('opens only to the static PI credential, and only on its own route', async () => {
@@ -302,6 +460,144 @@ describe('PI MCP server', () => {
     expect(smuggled.body?.outcome).toBe('refused');
     expect(grant.results.at(-1)).toEqual({ tool: 'probe_echo', outcome: 'refused' });
     expect(recorded).toHaveLength(1);
+  });
+
+  it('maps narrow owner-source Memory intents to exact capture and correction tools', async () => {
+    let captures = 0;
+    let searches = 0;
+    let corrections = 0;
+    const memoryTools: JarvisTool[] = [
+      {
+        name: 'memory_remember',
+        description: 'Save one explicit or automatic Personal Memory fact.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            category: { type: 'string' },
+            key: { type: 'string' },
+            content: { type: 'string' },
+            sourceIntent: { type: 'string', enum: ['requested', 'automatic'] },
+          },
+          required: ['category', 'key', 'content'],
+          additionalProperties: false,
+        },
+        execution: { defaultEffect: 'action' },
+        completion: {
+          domain: 'memory', operation: 'create',
+          requestTargetFields: ['key'],
+          requestPayloadFields: ['category', 'content'],
+          resultTargetFields: ['id', 'key', 'revision'],
+          evaluate: receipt.memoryWrite,
+        },
+        execute: async () => {
+          captures += 1;
+          return { id: '77', key: 'people.dan.appointments', revision: captures };
+        },
+      },
+      {
+        name: 'memory_search',
+        description: 'Search Personal Memory.',
+        inputSchema: {
+          type: 'object',
+          properties: { query: { type: 'string' } },
+          required: ['query'], additionalProperties: false,
+        },
+        execution: { defaultEffect: 'read' },
+        completion: {
+          domain: 'memory', operation: 'read',
+          requestTargetFields: ['query'],
+          resultTargetFields: ['id', 'key'],
+          evaluate: receipt.read,
+        },
+        execute: async () => {
+          searches += 1;
+          return {
+            memories: [{
+              id: '77',
+              key: 'people.dan.appointments',
+              content: 'I prefer afternoon appointments.',
+            }],
+          };
+        },
+      },
+      {
+        name: 'memory_correct',
+        description: 'Correct one Personal Memory by stable ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            memoryId: { type: 'string' }, content: { type: 'string' },
+          },
+          required: ['memoryId', 'content'], additionalProperties: false,
+        },
+        execution: { defaultEffect: 'action' },
+        completion: {
+          domain: 'memory', operation: 'update',
+          requestTargetFields: ['memoryId'],
+          requestPayloadFields: ['content'],
+          resultTargetFields: ['id', 'key', 'revision'],
+          evaluate: receipt.memoryWrite,
+        },
+        execute: async () => {
+          corrections += 1;
+          return { id: '77', key: 'people.dan.appointments', revision: 2 };
+        },
+      },
+    ];
+    const { registry, tool } = setup([], { tools: memoryTools });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: 'memory', messageId: '42', signal: live(),
+    });
+
+    grant.completion = completionPlan('Don’t forget that I prefer afternoon appointments.');
+    await tool('find_tools', { turn: grant.turn, query: 'memory remember search correct' });
+    expect(await tool('call_tool', {
+      turn: grant.turn,
+      name: 'memory_remember',
+      arguments: {
+        category: 'preference',
+        key: 'people.dan.appointments',
+        content: 'I prefer afternoon appointments.',
+        sourceIntent: 'requested',
+      },
+    })).toMatchObject({ body: { outcome: 'ok' } });
+
+    grant.completion = completionPlan('I prefer morning appointments.');
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'memory_remember',
+      arguments: {
+        category: 'preference',
+        key: 'people.dan.appointments',
+        content: 'I prefer morning appointments.',
+        sourceIntent: 'automatic',
+      },
+    });
+    expect(captures).toBe(2);
+
+    grant.completion = completionPlan('Correct memory 77 to morning appointments.');
+    const wrong = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'memory_correct',
+      arguments: { memoryId: '88', content: 'I prefer morning appointments.' },
+    });
+    expect(wrong).toMatchObject({ body: { outcome: 'refused' } });
+    expect(corrections).toBe(0);
+
+    grant.completion = completionPlan('Actually, I now prefer morning appointments.');
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'memory_search',
+      arguments: { query: 'appointment preference' },
+    });
+    const corrected = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'memory_correct',
+      arguments: { memoryId: '77', content: 'I now prefer morning appointments.' },
+    });
+    expect(searches).toBe(1);
+    expect(corrected).toMatchObject({ body: { outcome: 'ok' } });
+    expect(corrections).toBe(1);
   });
 
   it('stores same-turn read bindings separately from verified contextual completion', async () => {
@@ -888,6 +1184,199 @@ describe('PI MCP server', () => {
     });
     expect(deleted.body).toMatchObject({ outcome: 'refused' });
     expect(calls).toEqual(['gh_get_file_contents']);
+  });
+
+  it('requires the complete Azure row identity for contextual writes, not a shared resource group', async () => {
+    let calls = 0;
+    const bridge: RemoteMcpBridge = {
+      prefix: 'az_', label: 'Azure', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [
+        {
+          name: 'az_monitor_webtests_get',
+          description: 'Read Azure Monitor web tests.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              subscription: { type: 'string' },
+              'resource-group': { type: 'string' },
+            },
+            required: ['subscription'],
+            additionalProperties: false,
+          },
+          moduleId: 'azure', execute: async () => ({}),
+        },
+        {
+          name: 'az_monitor_webtests_createorupdate',
+          description: 'Create or update an Azure Monitor web test.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              subscription: { type: 'string' },
+              'resource-group': { type: 'string' },
+              'webtest-resource': { type: 'string' },
+              description: { type: 'string' },
+            },
+            required: ['subscription', 'resource-group', 'webtest-resource'],
+            additionalProperties: false,
+          },
+          moduleId: 'azure', execute: async () => ({}),
+        },
+      ],
+      call: async (name, args) => {
+        if (name === 'az_monitor_webtests_createorupdate') {
+          calls += 1;
+          return {
+            outcome: 'ok',
+            result: {
+              webTest: {
+                id: `/subscriptions/sub/resourceGroups/jarvis-rg/providers/Microsoft.Insights/webtests/${String(args['webtest-resource'])}`,
+                resourceName: String(args['webtest-resource']),
+                resourceGroup: 'jarvis-rg',
+              },
+            },
+          };
+        }
+        return {
+          outcome: 'ok',
+          result: {
+            webTests: [{
+              id: '/subscriptions/sub/resourceGroups/jarvis-rg/providers/Microsoft.Insights/webtests/test-a',
+              resourceName: 'test-a',
+              resourceGroup: 'jarvis-rg',
+            }],
+          },
+        };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(),
+    });
+    grant.completion = completionPlan('Read Azure web test test-a in jarvis-rg.');
+    await tool('find_tools', { turn: grant.turn, query: 'azure monitor web test read update' });
+    await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_get',
+      arguments: { subscription: 'sub', 'resource-group': 'jarvis-rg' },
+    });
+    expect(grant.bindings.at(-1)?.identityTargets).not.toHaveLength(0);
+
+    grant.completion = completionPlan('Update it.');
+    const missingLeaf = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: {
+        subscription: 'sub',
+        'resource-group': 'jarvis-rg',
+        description: 'No resource name was supplied',
+      },
+    });
+    expect(missingLeaf.body).toMatchObject({ outcome: 'refused' });
+    expect(calls).toBe(0);
+
+    const wrong = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: {
+        subscription: 'sub',
+        'resource-group': 'jarvis-rg',
+        'webtest-resource': 'test-b',
+        description: 'Renamed in a mutable field to test-a',
+      },
+    });
+    expect(wrong.body).toMatchObject({ outcome: 'refused' });
+    expect(calls).toBe(0);
+    const valid = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'az_monitor_webtests_createorupdate',
+      arguments: {
+        subscription: 'sub',
+        'resource-group': 'jarvis-rg',
+        'webtest-resource': 'test-a',
+        description: 'Updated availability check',
+      },
+    });
+    expect(valid.body).toMatchObject({ outcome: 'ok' });
+    expect(calls).toBe(1);
+  });
+
+  it('refuses a provider target hidden only in mutable payload and allows matching payload preflight', async () => {
+    let calls = 0;
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [{
+        name: 'gh_issue_write',
+        description: 'Create or update an issue.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            method: { type: 'string', enum: ['create', 'update'] },
+            owner: { type: 'string' }, repo: { type: 'string' },
+            issue_number: { type: 'integer' }, title: { type: 'string' },
+            body: { type: 'string' },
+          },
+          required: ['method', 'owner', 'repo'],
+          additionalProperties: false,
+        },
+        moduleId: 'github', execute: async () => ({}),
+      }],
+      call: async () => {
+        calls += 1;
+        return {
+          outcome: 'ok',
+          result: {
+            method: 'update',
+            issue: {
+              id: 'issue-1967',
+              url: 'https://github.com/DanAakesen/jarvis/issues/1967',
+            },
+          },
+        };
+      },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(),
+    });
+    await tool('find_tools', { turn: grant.turn, query: 'github issue update' });
+    grant.completion = completionPlan(
+      'Update GitHub issue 1968 in DanAakesen/jarvis with title "Issue 1968".',
+    );
+    const wrong = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_issue_write',
+      arguments: {
+        method: 'update', owner: 'DanAakesen', repo: 'jarvis',
+        issue_number: 1967, title: 'Issue 1968',
+      },
+    });
+    expect(wrong.body).toMatchObject({ outcome: 'refused' });
+    expect(calls).toBe(0);
+
+    grant.completion = completionPlan(
+      'Update GitHub issue 1967 in DanAakesen/jarvis with title "Release candidate".',
+    );
+    const wrongPayload = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_issue_write',
+      arguments: {
+        method: 'update', owner: 'DanAakesen', repo: 'jarvis',
+        issue_number: 1967, title: 'Different title',
+      },
+    });
+    expect(wrongPayload.body).toMatchObject({ outcome: 'refused' });
+    expect(calls).toBe(0);
+
+    const valid = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'gh_issue_write',
+      arguments: {
+        method: 'update', owner: 'DanAakesen', repo: 'jarvis',
+        issue_number: 1967, title: 'Release candidate',
+      },
+    });
+    expect(valid.body).toMatchObject({ outcome: 'ok' });
+    expect(calls).toBe(1);
   });
 
   it('covers production GitHub star, review request and review thread operations', async () => {

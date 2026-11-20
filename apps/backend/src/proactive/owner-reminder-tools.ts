@@ -198,6 +198,7 @@ export function createOwnerReminderTool(options: {
         : args.operation === 'read' ? 'read'
           : args.operation === 'create' ? 'create' : 'update',
       requestTargetFields: ['operation', 'id', 'task', 'fireAt', 'cadence', 'untilTaskDone'],
+      requestPayloadFields: ['task', 'fireAt', 'cadence', 'untilTaskDone'],
       resultTargetFields: ['id', 'task', 'fireAt', 'state'], evaluate: receipt.reminderWrite,
     },
     description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Execute the owner’s request using the conversation context, including follow-up times and affirmative replies. Do not request another approval or prescribed sentence. Resolve natural dates, relative times and 17.10-style times to fireAt using Copenhagen time. A time without a date means TODAY, not tomorrow; if it has passed, report that instead of silently moving the date. Ask only for essential missing information. Use the saved task title from read/search, not a verbatim match to the owner’s wording. Choose a future time within a year. Explicitly requested reminder times are allowed during 22:00–07:00 Copenhagen quiet hours. Read first to obtain IDs for changes. Reminder times never change task deadlines.',

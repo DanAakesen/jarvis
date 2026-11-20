@@ -428,6 +428,34 @@ describe('PI gateway', () => {
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
   });
 
+  it('fails a brain wake when a successful action lacks compiled terminal receipt evidence', async () => {
+    const runtime = setup([
+      () => sse(delta('I changed the project.'), completed(2_000, 0, 30)),
+    ]);
+    const open = runtime.registry.open.bind(runtime.registry);
+    runtime.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'update_project', outcome: 'ok' });
+      grant.actions.count = 1;
+      grant.unverified.count = 1;
+      return grant;
+    };
+    const result = await runtime.gateway.runBrain(
+      { runId: 'unverified-action', body: 'Update the project if needed.' },
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      outcome: 'failed',
+      error: { code: 'pi_incomplete' },
+    });
+    expect(runtime.store.turns.at(-1)).toMatchObject({
+      kind: 'brain',
+      outcome: 'failed',
+    });
+    expect(runtime.registry.size).toBe(0);
+  });
+
   it('treats a completed deliberate quiet brain outcome as success', async () => {
     const { gateway, store } = setup([() => sse(completed(1, 0, 0))]);
     const result = await gateway.runBrain({ runId: 'quiet-1', body: 'Stay quiet if there is nothing useful.' }, new AbortController().signal);

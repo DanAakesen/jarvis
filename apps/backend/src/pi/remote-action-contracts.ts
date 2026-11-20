@@ -13,6 +13,12 @@ export type RemoteSelector = {
 export type RemoteActionSpec = {
   readonly operation: ToolCompletionOperation | ((args: Record<string, unknown>) => ToolCompletionOperation);
   readonly accepted?: readonly ToolCompletionOperation[];
+  readonly requestOperations?: (
+    args: Record<string, unknown>,
+  ) => readonly ToolCompletionOperation[];
+  readonly requiredIdentityFields?: (
+    args: Record<string, unknown>,
+  ) => readonly string[];
   readonly selector?: RemoteSelector;
   readonly identityFields: readonly string[];
   readonly resultIdentityFields?: readonly string[];
@@ -194,10 +200,15 @@ const selectorAction = (
   selector: { field, choices },
 });
 
+function accepts(...operations: ToolCompletionOperation[]) {
+  return () => operations;
+}
+
 export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
   add_automation_to_group: action('update', [
     ...repoIdentity, 'automation_id', 'group_id',
   ], automationGroupReceipt, {
+    requestOperations: accepts('create', 'update'),
     resultIdentityFields: ['id', 'automation_id', 'group_id'],
   }),
   actions_run_trigger: selectorAction('method', {
@@ -206,9 +217,16 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     rerun_failed_jobs: 'start',
     cancel_workflow_run: 'delete',
     delete_workflow_run_logs: 'delete',
-  }, [...repoIdentity, 'workflow_id', 'run_id', 'ref'], actionRunReceipt),
-  add_comment_to_pending_review: action('send', [...pullIdentity, 'path', 'line', 'startLine'], messageReceipt),
+  }, [...repoIdentity, 'workflow_id', 'run_id', 'ref'], actionRunReceipt, {
+    requiredIdentityFields: args => args.method === 'run_workflow'
+      ? [...repoIdentity, 'workflow_id']
+      : [...repoIdentity, 'run_id'],
+  }),
+  add_comment_to_pending_review: action('send', [...pullIdentity, 'path', 'line', 'startLine'], messageReceipt, {
+    requestOperations: accepts('create', 'send'),
+  }),
   add_issue_comment: action('send', [...issueIdentity, 'comment_id'], issueCommentReceipt, {
+    requestOperations: accepts('create', 'send'),
     resultIdentityFields: ['id', 'html_url'],
     identityMatches: issueMatches,
   }),
@@ -219,24 +237,32 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     resultIdentityFields: idUrlResult,
     identityMatches: issueMatches,
   }),
-  add_pull_request_review_comment: action('send', [...pullIdentity, 'path', 'line', 'startLine'], messageReceipt),
+  add_pull_request_review_comment: action('send', [...pullIdentity, 'path', 'line', 'startLine'], messageReceipt, {
+    requestOperations: accepts('create', 'send'),
+  }),
   add_pull_request_review_comment_reaction: action('create', [...repoIdentity, 'comment_id'], idUrlReceipt, {
     resultIdentityFields: idUrlResult,
   }),
   add_reply_to_pull_request_comment: action('send', [...pullIdentity, 'commentId', 'comment_id'], commentReplyReceipt, {
+    requestOperations: accepts('create', 'send'),
     resultIdentityFields: idUrlResult,
   }),
   add_sub_issue: action('update', [...issueIdentity, 'sub_issue_id'], fieldsReceipt(['issue'], ['method']), {
+    requestOperations: accepts('create', 'update'),
     resultIdentityFields: ['issue', 'id', 'number'],
     identityMatches: issueMatches,
   }),
   assign_copilot_to_issue: action('start', issueIdentity, assignCopilotReceipt, {
+    requestOperations: accepts('update', 'start'),
     resultIdentityFields: ['issue_number', 'issue_url'],
     identityMatches: issueMatches,
   }),
   assign_copilot_to_issue_with_intent: action(args =>
     args.is_suggestion === true ? 'update' : args.is_suggestion === false ? 'start' : 'generic',
   issueIdentity, assignCopilotReceipt, {
+    requestOperations: args => args.is_suggestion === true
+      ? ['update', 'create']
+      : ['update', 'start'],
     resultIdentityFields: ['issue_number', 'issue_url'],
     identityMatches: issueMatches,
   }),
@@ -281,6 +307,16 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     mark_answer: 'update',
     unmark_answer: 'update',
   }, [...repoIdentity, 'discussionNumber', 'discussion_number', 'commentNodeID', 'comment_node_id'], discussionCommentReceipt, {
+    requiredIdentityFields: args => args.method === 'add'
+      ? [...repoIdentity, 'discussionNumber']
+      : args.method === 'reply'
+        ? [...repoIdentity, 'discussionNumber', 'commentNodeID']
+        : ['commentNodeID'],
+    requestOperations: args => args.method === 'add'
+      ? ['create', 'send']
+      : args.method === 'delete'
+        ? ['delete']
+        : ['send', 'update'],
     resultIdentityFields: ['id', 'discussionID', 'discussionNumber', 'commentNodeID', 'message'],
     identityMatches: [
       ['discussionNumber', 'discussion_number'],
@@ -289,6 +325,7 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
   }),
   dismiss_notification: action('update', ['notificationID', 'threadID'], messageReceipt),
   fork_repository: action('create', [...repoIdentity, 'organization'], messageOrIdReceipt, {
+    requestOperations: accepts('create', 'update'),
     resultIdentityFields: idUrlResult,
   }),
   hide_issue_comment: action('update', [...repoIdentity, 'comment_id'], minimizedReceipt(true), {
@@ -314,12 +351,18 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
   }, [
     ...issueIdentity, 'related_issue_number', 'related_owner', 'related_repo',
   ], dependencyReceipt, {
+    requestOperations: args => args.method === 'remove'
+      ? ['delete', 'update']
+      : ['create', 'update'],
     resultIdentityFields: ['blocked_issue', 'blocking_issue', 'issue', 'number'],
   }),
   issue_write: selectorAction('method', {
     create: 'create',
     update: 'update',
   }, issueIdentity, issueWriteReceipt, {
+    requiredIdentityFields: args => args.method === 'update'
+      ? [...issueIdentity]
+      : [...repoIdentity],
     resultIdentityFields: ['issue', 'id', 'number', 'url'],
     identityMatches: issueMatches,
   }),
@@ -335,13 +378,21 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     watch: 'update',
     delete: 'delete',
   }, ['notificationID'], (args, result) =>
-    messageReceipt(args, result) || present(nestedValue(result, ['subscription']))),
+    messageReceipt(args, result) || present(nestedValue(result, ['subscription'])), {
+    requestOperations: args => args.action === 'delete'
+      ? ['delete', 'update']
+      : ['create', 'update', 'start'],
+  }),
   manage_repository_notification_subscription: selectorAction('action', {
     ignore: 'update',
     watch: 'update',
     delete: 'delete',
   }, repoIdentity, (args, result) =>
-    messageReceipt(args, result) || present(nestedValue(result, ['subscription']))),
+    messageReceipt(args, result) || present(nestedValue(result, ['subscription'])), {
+    requestOperations: args => args.action === 'delete'
+      ? ['delete', 'update']
+      : ['create', 'update', 'start'],
+  }),
   mark_all_notifications_read: action('update', [...repoIdentity], messageReceipt),
   merge_pull_request: action('update', [...pullIdentity, 'expectedHeadSha'], mergeReceipt, {
     resultIdentityFields: ['sha', 'message'],
@@ -361,6 +412,14 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     'owner', 'owner_type', 'project_number', 'item_id', 'item_owner', 'item_repo',
     'issue_number', 'pull_request_number', 'view_id',
   ], projectWriteReceipt, {
+    requestOperations: args => {
+      const method = String(args.method);
+      if (method === 'add_project_item') return ['create', 'update'];
+      if (method === 'delete_project_item' || method === 'delete_project_view') {
+        return ['delete', 'update'];
+      }
+      return [];
+    },
     resultIdentityFields: [
       'id', 'item', 'project', 'view', 'item_id', 'project_number', 'view_id',
       'issue_number', 'pull_request_number',
@@ -371,6 +430,9 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     upsert: 'update',
     delete: 'delete',
   }, [...pullIdentity, 'name', 'name_key'], artifactReceipt, {
+    requestOperations: args => args.method === 'delete'
+      ? ['delete', 'update']
+      : ['create', 'update'],
     resultIdentityFields: ['artifact', 'id', 'name', 'number'],
     identityMatches: [],
   }),
@@ -380,7 +442,12 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     delete_pending: 'delete',
     resolve_thread: 'update',
     unresolve_thread: 'update',
-  }, [...pullIdentity, 'threadId', 'thread_id'], messageReceipt),
+  }, [...pullIdentity, 'threadId', 'thread_id'], messageReceipt, {
+    requiredIdentityFields: args =>
+      args.method === 'resolve_thread' || args.method === 'unresolve_thread'
+        ? ['threadId']
+        : pullIdentity,
+  }),
   push_files: action('update', [...repoIdentity, 'branch'], branchReceipt, {
     accepted: ['create', 'update'],
     identityFiles: true,
@@ -393,9 +460,11 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
   remove_automation_from_group: action('update', [
     ...repoIdentity, 'automation_id', 'group_id',
   ], automationGroupReceipt, {
+    requestOperations: accepts('delete', 'update'),
     resultIdentityFields: ['id', 'automation_id', 'group_id'],
   }),
   remove_sub_issue: action('update', [...issueIdentity, 'sub_issue_id'], fieldsReceipt(['issue'], ['method']), {
+    requestOperations: accepts('delete', 'update'),
     identityMatches: issueMatches,
   }),
   reprioritize_sub_issue: action('update', [
@@ -407,6 +476,7 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     identityMatches: pullMatches,
   }),
   request_pull_request_reviewers: action('update', pullIdentity, idUrlReceipt, {
+    requestOperations: accepts('send', 'update', 'start'),
     resultIdentityFields: idUrlResult,
     identityMatches: pullMatches,
   }),
@@ -424,6 +494,11 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     remove: 'update',
     reprioritize: 'update',
   }, [...issueIdentity, 'sub_issue_id', 'after_id', 'before_id'], fieldsReceipt(['issue'], ['method']), {
+    requestOperations: args => args.method === 'add'
+      ? ['create', 'update']
+      : args.method === 'remove'
+        ? ['delete', 'update']
+        : ['update'],
     identityMatches: issueMatches,
   }),
   submit_pending_pull_request_review: action('send', pullIdentity, messageReceipt),
@@ -475,6 +550,7 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
     identityMatches: issueMatches,
   }),
   update_issue_state: action('update', issueIdentity, idUrlReceipt, {
+    requestOperations: accepts('delete', 'update'),
     resultIdentityFields: idUrlResult,
     identityMatches: issueMatches,
   }),
@@ -497,6 +573,7 @@ export const githubActionSpecs: Readonly<Record<string, RemoteActionSpec>> = {
   update_pull_request_branch: action('update', [...pullIdentity, 'expectedHeadSha'], messageReceipt),
   update_pull_request_draft_state: action('update', pullIdentity, messageReceipt),
   update_pull_request_state: action('update', pullIdentity, idUrlReceipt, {
+    requestOperations: accepts('delete', 'update'),
     resultIdentityFields: idUrlResult,
     identityMatches: pullMatches,
   }),

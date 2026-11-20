@@ -159,6 +159,20 @@ describe('PI completion planning', () => {
       kind: 'committed',
       requirements: [expect.objectContaining({ domain: 'github', operation: 'update' })],
     });
+    for (const [text, operation] of [
+      ['Fork DanAakesen/jarvis on GitHub.', 'create'],
+      ['Add a sub-issue to GitHub issue 7.', 'create'],
+      ['Remove a sub-issue from GitHub issue 7.', 'delete'],
+      ['Assign Copilot to GitHub issue 7.', 'update'],
+      ['Close GitHub issue 7.', 'delete'],
+      ['Watch GitHub repository notifications.', 'update'],
+      ['Dismiss a GitHub notification.', 'update'],
+    ] as const) {
+      expect(completionPlan(text)).toMatchObject({
+        kind: 'committed',
+        requirements: [expect.objectContaining({ domain: 'github', operation })],
+      });
+    }
     const asked = completionPlan('Did I send Alice an email?');
     expect(completionEvidence(
       asked,
@@ -306,7 +320,7 @@ describe('PI completion receipts', () => {
     )).toMatchObject({ kind: 'committed', domain: 'github' });
   });
 
-  it('never treats mail draft updates as send evidence and binds only draft/recipient fields', () => {
+  it('never treats mail draft updates as send evidence and binds mutable draft payload separately', () => {
     const update = completionPlan('Update draft draft-77 for Alice.');
     expect(completionEvidence(
       update,
@@ -336,6 +350,12 @@ describe('PI completion receipts', () => {
       bodyOnly,
       action('mail_update_draft'),
       { draftId: 'draft-77', to: ['bob@example.com'], subject: 'Gamma', body: 'Project Alpha details.' },
+      { status: 'completed' },
+    )).toMatchObject({ operation: 'update', kind: 'committed' });
+    expect(completionEvidence(
+      bodyOnly,
+      action('mail_update_draft'),
+      { draftId: 'draft-77', to: ['bob@example.com'], subject: 'Gamma', body: 'Project Beta details.' },
       { status: 'completed' },
     )).toBeUndefined();
   });

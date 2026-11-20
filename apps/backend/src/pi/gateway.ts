@@ -730,6 +730,14 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'The brain wake took too long and was stopped.', { cause: error })
         : new PiGatewayError('pi_failed', 'The brain wake failed.', { cause: error });
     }
+    if (outcome === 'ok' && grant &&
+        grant.actions.count > 0 && grant.unverified.count > 0) {
+      outcome = 'failed';
+      failure = new PiGatewayError(
+        'pi_incomplete',
+        'A background action did not return terminal evidence, so the wake is not confirmed as complete.',
+      );
+    }
     const toolResults = grant ? [...grant.results] : [];
     if (outcome !== 'ok' && grant) {
       await options.activations.failed(grant, now(), AbortSignal.timeout(10_000))

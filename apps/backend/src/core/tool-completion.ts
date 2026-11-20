@@ -42,8 +42,8 @@ export function semanticOperation(value: unknown): ToolCompletionOperation {
     ['send', /\b(?:send|sende|email|forward|reply|comment|svar|besvar)\b/iu],
     ['open', /\b(?:open|launch|focus|show|activate|abn|abne|fokus)\b/iu],
     ['start', /\b(?:start|run|deploy|dispatch|trigger|retry|resume|research|implement|build|fix|genoptag|kør)\b/iu],
-    ['create', /\b(?:create|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu],
-    ['update', /\b(?:update|change|correct|edit|move|push|reschedule|complete|reopen|resolve|unresolve|pause|pin|unpin|set|label|mark|merge|approve|review|star|rename|click|type|select|opdater|ret|rediger|flyt|færdiggør|sammenføj)\b/iu],
+    ['create', /\b(?:create|fork|add|book|schedule|reserve|bestil|reserver|capture|remember|save|write|log|record|opret|oprette|tilføj|planlæg|gem|skriv|husk)\b/iu],
+    ['update', /\b(?:update|change|correct|edit|move|push|reschedule|complete|reopen|resolve|unresolve|assign|dismiss|ignore|watch|pause|pin|unpin|set|label|mark|merge|approve|review|star|unstar|unhide|rename|click|type|select|opdater|ret|rediger|flyt|færdiggør|sammenføj)\b/iu],
     ['read', /\b(?:check|find|get|list|lookup|read|search|status|view|query|download|læs|læse|søg|tjek|vis)\b/iu],
   ];
   let selected: ToolCompletionOperation = 'generic';

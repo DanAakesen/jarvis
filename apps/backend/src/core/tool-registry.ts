@@ -62,8 +62,11 @@ export interface ToolCompletionContract {
   readonly operation: ToolCompletionOperation |
     ((args: Record<string, unknown>) => ToolCompletionOperation);
   readonly acceptedRequestOperations?: readonly ToolCompletionOperation[] | undefined;
+  readonly acceptsRequestOperation?:
+    ((args: Record<string, unknown>, operation: ToolCompletionOperation) => boolean) | undefined;
   readonly requestTargetFields: readonly string[];
   readonly resultTargetFields: readonly string[];
+  readonly requestPayloadFields?: readonly string[] | undefined;
   readonly requestIdentities?: ((args: Record<string, unknown>) => unknown) | undefined;
   readonly resultIdentities?: ((result: unknown) => unknown) | undefined;
   readonly evaluate: (args: Record<string, unknown>, result: unknown) => boolean;
@@ -221,15 +224,21 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       if (completionSource) {
         const propertyNames = toolSchemaFieldNames(tool.inputSchema);
         const validFields = (fields: readonly string[]) => fields.every(field =>
-          /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(field)) && new Set(fields).size === fields.length;
+          /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(field)) && new Set(fields).size === fields.length;
         if (!completionDomains.has(completionSource.domain) ||
             typeof completionSource.operation !== 'string' && typeof completionSource.operation !== 'function' ||
             typeof completionSource.operation === 'string' && !completionOperations.has(completionSource.operation) ||
             actionRequired && typeof completionSource.operation === 'string' && completionSource.operation === 'read' ||
             !Array.isArray(completionSource.requestTargetFields) ||
             !Array.isArray(completionSource.resultTargetFields) ||
+            completionSource.requestPayloadFields !== undefined &&
+              !Array.isArray(completionSource.requestPayloadFields) ||
             !validFields(completionSource.requestTargetFields) ||
             !validFields(completionSource.resultTargetFields) ||
+            completionSource.requestPayloadFields !== undefined &&
+              !validFields(completionSource.requestPayloadFields) ||
+            completionSource.acceptsRequestOperation !== undefined &&
+              typeof completionSource.acceptsRequestOperation !== 'function' ||
             completionSource.requestIdentities !== undefined &&
               typeof completionSource.requestIdentities !== 'function' ||
             completionSource.resultIdentities !== undefined &&
@@ -242,6 +251,9 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
         }
         if (completionSource.requestTargetFields.some(field => !propertyNames.has(field))) {
           throw new Error(`PI completion request fields diverge from ${tool.name}`);
+        }
+        if (completionSource.requestPayloadFields?.some(field => !propertyNames.has(field))) {
+          throw new Error(`PI completion payload fields diverge from ${tool.name}`);
         }
         if (execution?.operation && !completionSource.requestTargetFields.includes(execution.operation.field)) {
           throw new Error(`PI completion operation field is missing from ${tool.name}`);
@@ -273,6 +285,9 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
         ...completionSource,
         requestTargetFields: Object.freeze([...completionSource.requestTargetFields]),
         resultTargetFields: Object.freeze([...completionSource.resultTargetFields]),
+        ...(completionSource.requestPayloadFields
+          ? { requestPayloadFields: Object.freeze([...completionSource.requestPayloadFields]) }
+          : {}),
         ...(completionSource.acceptedRequestOperations
           ? { acceptedRequestOperations: Object.freeze([...completionSource.acceptedRequestOperations]) }
           : {}),

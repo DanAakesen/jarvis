@@ -153,6 +153,25 @@ function schemaSelectorValues(
   return output;
 }
 
+function schemaRequiredFields(schema: unknown, depth = 0): ReadonlySet<string> {
+  if (depth > 8 || !schema || typeof schema !== 'object' || Array.isArray(schema)) return new Set();
+  const record = schema as Record<string, unknown>;
+  const output = new Set<string>();
+  if (Array.isArray(record.required)) {
+    for (const field of record.required) {
+      if (typeof field === 'string') output.add(field);
+    }
+  }
+  for (const keyword of ['allOf', 'anyOf', 'oneOf'] as const) {
+    const branches = record[keyword];
+    if (!Array.isArray(branches)) continue;
+    for (const branch of branches) {
+      for (const field of schemaRequiredFields(branch, depth + 1)) output.add(field);
+    }
+  }
+  return output;
+}
+
 function actionSpecFor(bridge: RemoteMcpBridge, exactName: string): RemoteActionSpec | undefined {
   if (bridge.prefix === githubToolPrefix) return githubActionSpecs[exactName];
   if (bridge.prefix === azureToolPrefix) return azureActionSpecs[exactName];
@@ -203,6 +222,14 @@ function remoteOperationFromSchema(
   readonly resultIdentityFields?: readonly string[];
   readonly identityMatches?: readonly (readonly string[])[];
   readonly identityFiles?: boolean;
+  readonly requestPayloadFields?: readonly string[];
+  readonly acceptsRequestOperation?: (
+    args: Record<string, unknown>,
+    operation: ToolCompletionOperation,
+  ) => boolean;
+  readonly requiredIdentityFields?: (
+    args: Record<string, unknown>,
+  ) => readonly string[];
   readonly receipt?: (args: Record<string, unknown>, result: unknown) => boolean;
 } {
   const words = normalizeCompletionText(tool.name.slice(bridge.prefix.length)).split(/[_-]+/u).filter(Boolean);
@@ -211,11 +238,30 @@ function remoteOperationFromSchema(
   const actionSpec = actionSpecFor(bridge, exactName);
   if (actionSpec) {
     validateActionSpecSchema(tool, actionSpec);
-    return {
-      operation: args => typeof actionSpec.operation === 'function'
+    const operationFor = (args: Record<string, unknown>) =>
+      typeof actionSpec.operation === 'function'
         ? actionSpec.operation(args)
-        : actionSpec.operation,
+        : actionSpec.operation;
+    const schemaRequiredIdentities = [...schemaRequiredFields(tool.inputSchema)]
+      .filter(field => actionSpec.identityFields.includes(field));
+    const requiredIdentityFields = actionSpec.requiredIdentityFields ??
+      (() => schemaRequiredIdentities);
+    return {
+      operation: operationFor,
       ...(actionSpec.accepted ? { accepted: actionSpec.accepted } : {}),
+      requestPayloadFields: [...toolSchemaFieldNames(tool.inputSchema)].filter(field => {
+        if (actionSpec.identityFields.includes(field) || field === actionSpec.selector?.field) {
+          return false;
+        }
+        return field === 'files' ? actionSpec.identityFiles === true : true;
+      }),
+      acceptsRequestOperation: (args, requestOperation) => {
+        if (requestOperation === operationFor(args)) return true;
+        return actionSpec.requestOperations?.(args).includes(requestOperation) ??
+          actionSpec.accepted?.includes(requestOperation) ??
+          false;
+      },
+      requiredIdentityFields,
       identityFields: actionSpec.identityFields,
       ...(actionSpec.resultIdentityFields ? { resultIdentityFields: actionSpec.resultIdentityFields } : {}),
       ...(actionSpec.identityMatches ? { identityMatches: actionSpec.identityMatches } : {}),
@@ -247,7 +293,9 @@ const remoteIdentityFields = new Set([
   'discussion_number', 'automation_id', 'group_id', 'taskId', 'task_id', 'jobId', 'job_id',
   'runId', 'run_id', 'release_id', 'tag_name', 'sha', 'path', 'branch', 'ref', 'head', 'base',
   'workflow', 'workflow_id', 'repository', 'repo', 'owner', 'resourceId', 'resource_id',
-  'resourceGroup', 'resourceName', 'name', 'url', 'label',
+  'resourceGroup', 'resource-group', 'resourceName', 'resource-name', 'resource', 'name',
+  'subscription', 'webtest-resource', 'workspace', 'container', 'containerapp',
+  'url', 'label',
 ]);
 
 function remoteIdentityKey(key: string): boolean {
@@ -274,6 +322,16 @@ function canonicalRemoteRepository(identities: Record<string, unknown>): void {
   if (typeof identities.repository === 'string') identities.repository = identities.repository.toLowerCase();
 }
 
+function canonicalAzureResourceIdentity(identities: Record<string, unknown>): void {
+  if (typeof identities.id !== 'string') return;
+  const match = /^\/subscriptions\/([^/]+)\/resourceGroups\/([^/]+)\/providers\/[^/]+\/[^/]+\/([^/]+)(?:\/.*)?$/iu
+    .exec(identities.id);
+  if (!match) return;
+  identities.subscription ??= match[1]!.toLowerCase();
+  identities['resource-group'] ??= match[2]!.toLowerCase();
+  identities.resourceName ??= match[3]!.toLowerCase();
+}
+
 function remoteRequestIdentities(
   operation: (args: Record<string, unknown>) => ToolCompletionOperation,
   args: Record<string, unknown>,
@@ -281,11 +339,13 @@ function remoteRequestIdentities(
   identityFiles = false,
 ): Record<string, unknown> {
   if (operation(args) === 'read') {
-    const readTargets = structuredClone(args);
-    delete readTargets.method;
-    delete readTargets.operation;
-    delete readTargets.action;
+    const readTargets: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(args)) {
+      if (!remoteIdentityKey(key)) continue;
+      readTargets[key] = canonicalRemoteIdentity(key, value);
+    }
     canonicalRemoteRepository(readTargets);
+    canonicalAzureResourceIdentity(readTargets);
     return readTargets;
   }
   const identities: Record<string, unknown> = {};
@@ -387,12 +447,14 @@ function collectRemoteResultIdentityRows(
     }
   }
   canonicalRemoteRepository(own);
+  canonicalAzureResourceIdentity(own);
   if (nested.length === 0) {
     return !containsRemoteCollection(value) && Object.keys(own).length > 0 ? [own] : [];
   }
   return nested.map(row => {
     const merged = { ...own, ...row };
     canonicalRemoteRepository(merged);
+    canonicalAzureResourceIdentity(merged);
     return merged;
   });
 }
@@ -435,24 +497,36 @@ function compileRemoteTools(
       const completion: ToolCompletionContract = {
         domain,
         operation,
+        ...(operationSpec.acceptsRequestOperation
+          ? { acceptsRequestOperation: operationSpec.acceptsRequestOperation }
+          : {}),
         ...(operationSpec.accepted ? { acceptedRequestOperations: operationSpec.accepted } : {}),
         requestTargetFields: [...toolSchemaFieldNames(tool.inputSchema)].filter(field =>
           remoteIdentityKey(field) || ['files', 'query', 'q', 'search', 'term'].includes(field)),
+        ...(operationSpec.requestPayloadFields
+          ? { requestPayloadFields: operationSpec.requestPayloadFields }
+          : {}),
         resultTargetFields: [
           'id', 'number', 'issueNumber', 'issue_number', 'pullNumber', 'pull_number', 'repository',
           'repo', 'owner', 'resourceId', 'resource_id', 'resourceGroup', 'resourceName', 'url',
           'html_url', 'path', 'sha', 'commit', 'branch', 'ref', 'runId', 'jobId',
           'name',
         ],
-        requestIdentities: args => remoteRequestIdentities(
-          operation, args, operationSpec.identityFields, operationSpec.identityFiles,
-        ),
+        requestIdentities: args => {
+          const required = operationSpec.requiredIdentityFields?.(args) ?? [];
+          if (required.some(field => args[field] === undefined || args[field] === '')) return {};
+          return remoteRequestIdentities(
+            operation, args, operationSpec.identityFields, operationSpec.identityFiles,
+          );
+        },
         resultIdentities: result => collectRemoteResultIdentityRows(
           result,
           operationSpec.resultIdentityFields ?? operationSpec.identityFields,
           operationSpec.identityFiles,
         ),
         evaluate: (args, result) => {
+          const required = operationSpec.requiredIdentityFields?.(args) ?? [];
+          if (required.some(field => args[field] === undefined || args[field] === '')) return false;
           const requested = remoteRequestIdentities(
             operation, args, operationSpec.identityFields, operationSpec.identityFiles,
           );
@@ -579,9 +653,11 @@ export function createPiMcpRoutes(options: {
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     if (done.outcome === 'ok') {
+      if (toolEffect(tool, args) === 'action') grant.actions.count += 1;
       const binding = completionEvidence(tool, args, done.result);
       const evidence = completionEvidence(grant.completion, tool, args, done.result, grant.bindings);
       if (evidence) grant.evidence.push(evidence);
+      else if (grant.brain && binding && binding.kind !== 'retrieved') grant.evidence.push(binding);
       else if (!((grant.completion.contextual || grant.completion.requiresTrustedContext) &&
           binding?.kind === 'retrieved')) grant.unverified.count += 1;
       if (binding?.kind === 'retrieved') grant.bindings.push(binding);
@@ -769,6 +845,7 @@ export function createPiMcpRoutes(options: {
           const binding = completionEvidence(tool, input.arguments, parsed.result);
           const evidence = completionEvidence(grant.completion, tool, input.arguments, parsed.result, grant.bindings);
           if (evidence) grant.evidence.push(evidence);
+          else if (grant.brain && binding && binding.kind !== 'retrieved') grant.evidence.push(binding);
           else if (!((grant.completion.contextual || grant.completion.requiresTrustedContext) &&
               binding?.kind === 'retrieved')) grant.unverified.count += 1;
           if (binding?.kind === 'retrieved') grant.bindings.push(binding);

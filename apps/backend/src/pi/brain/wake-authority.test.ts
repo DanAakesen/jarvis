@@ -51,5 +51,11 @@ describe('a wake acts without an owner message', () => {
     const done = await tool('call_tool', { turn: grant.turn, name: 'archive_project', arguments: { projectId: '5' } });
     expect(done).toMatchObject({ outcome: 'ok', result: { status: 'archived', projectId: '5' } });
     expect(archived).toEqual(['5']);
+    expect(grant.evidence).toMatchObject([{
+      tool: 'archive_project',
+      kind: 'committed',
+      operation: 'delete',
+    }]);
+    expect(grant.unverified.count).toBe(0);
   });
 });
