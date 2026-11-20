@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationAttachmentReference, ConversationMessage } from '../../core/conversation-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
+import { receipt } from '../../core/tool-completion.js';
 import { exactLabelIntent, favoriteIntent } from '../nutrition/intent.js';
 import { canonicalJson, prepareMeal, type FoodDefinition } from '../nutrition/model.js';
 import type { NutritionStore } from '../nutrition/store.js';
@@ -93,6 +94,10 @@ export function foodReceipt(row: Record<string, unknown>, key: string, sourceFin
 export function healthFoodTool(nutrition: DirectNutrition, now: () => number = Date.now): JarvisTool {
   return {
     name: 'health_food',
+    completion: {
+      domain: 'health', operation: 'create', requestTargetFields: ['operation'],
+      resultTargetFields: ['status', 'record'], evaluate: receipt.healthWrite,
+    },
     description: 'Log intake only from the current verified Dan message. log_favorite derives the saved name/alias from an explicit "Log [my] [favourite] NAME" request; quantities come only from that owned favourite. log_exact derives all values from an explicit label such as "Log yoghurt: 200 kcal, protein 10 g, carbs 20 g". Supply only the operation: no food name, nutrients, IDs, dates or confirmation flags. No extra approval for these direct explicit requests. Natural requests such as “can you log” and a trailing “today” are supported. Route new photo/portion estimates to health_food_review. Conditional requests and unsupported dates are not inferred. Repeating the same message cannot create another intake. Active browser chat/browser voice on desktop or mobile are supported; a mobile browser is NOT a telephone call. Telephone calls and Health export are unsupported.',
     inputSchema: {
       type: 'object',

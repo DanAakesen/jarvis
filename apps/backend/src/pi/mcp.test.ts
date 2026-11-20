@@ -4,6 +4,7 @@ import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import type { JarvisTool } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
 import { createRemoteMcpBridge, type RemoteMcpBridge } from './remote-mcp.js';
@@ -120,6 +121,34 @@ describe('PI MCP server', () => {
     expect(recorded).toHaveLength(1);
   });
 
+  it('stores same-turn read bindings separately from verified contextual completion', async () => {
+    const mailSearch: JarvisTool = {
+      name: 'mail_search',
+      description: 'Read the requested mail identity for the contextual fixture.',
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        required: ['query'],
+        additionalProperties: false,
+      },
+      execution: { defaultEffect: 'read' },
+      execute: async () => ({
+        messages: [{ id: 'mail-1', from: 'Alice <alice@example.com>', subject: 'Build' }],
+      }),
+    };
+    const { registry, tool } = setup([], { tools: [mailSearch] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    grant.completion = completionPlan('Read it.');
+    await tool('find_tools', { turn: grant.turn, query: 'mail_search' });
+    await tool('call_tool', { turn: grant.turn, name: 'mail_search', arguments: { query: 'from:alice@example.com' } });
+    expect(grant.bindings).toHaveLength(1);
+    expect(grant.evidence).toHaveLength(0);
+    expect(grant.unverified.count).toBe(0);
+    await tool('call_tool', { turn: grant.turn, name: 'mail_search', arguments: { query: 'mail-1' } });
+    expect(grant.bindings).toHaveLength(2);
+    expect(grant.evidence).toHaveLength(1);
+  });
+
   it('returns local matches without starting or waiting for an unrelated remote catalogue', async () => {
     let loads = 0;
     const stalled: RemoteMcpBridge = {
@@ -179,6 +208,29 @@ describe('PI MCP server', () => {
     expect(recorded).toContainEqual({ messageId: '42', tool: exact });
   });
 
+  it('refuses remote action names before invoking a provider without a co-located contract', async () => {
+    let calls = 0;
+    const bridge: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [{
+        name: 'gh_issue_update',
+        description: 'Update an issue.',
+        inputSchema: { type: 'object', properties: { number: { type: 'integer' } }, additionalProperties: false },
+        moduleId: 'github',
+        execute: async () => ({}),
+      }],
+      call: async () => { calls += 1; return { outcome: 'ok', result: {} }; },
+    };
+    const { registry, tool } = setup([bridge]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    await tool('find_tools', { turn: grant.turn, query: 'github issue update' });
+    const result = await tool('call_tool', {
+      turn: grant.turn, name: 'gh_issue_update', arguments: { number: 1967 },
+    });
+    expect(result.body).toMatchObject({ outcome: 'refused' });
+    expect(calls).toBe(0);
+  });
+
   it('records only a terminal receipt bound to the classified tool arguments and target', async () => {
     const mail: JarvisTool = {
       name: 'mail_send',
@@ -194,6 +246,10 @@ describe('PI MCP server', () => {
         additionalProperties: false,
       },
       execution: { defaultEffect: 'action' },
+      completion: {
+        domain: 'mail', operation: 'send', requestTargetFields: ['to', 'subject'],
+        resultTargetFields: ['id', 'messageId'], evaluate: receipt.completed,
+      },
       execute: async () => ({ status: 'completed', messageId: 'mail-1' }),
     };
     const { registry, tool } = setup([], { tools: [mail] });
@@ -207,7 +263,9 @@ describe('PI MCP server', () => {
       arguments: { to: ['alice@example.com'], subject: 'Build', body: 'The build is green.' },
     });
     expect(grant.evidence).toHaveLength(1);
-    expect(grant.evidence[0]).toMatchObject({ tool: 'mail_send', kind: 'committed', domain: 'mail' });
+    expect(grant.evidence[0]).toMatchObject({
+      executionId: 'probe:mail_send', tool: 'mail_send', kind: 'committed', domain: 'mail',
+    });
     await tool('call_tool', {
       turn: grant.turn, name: 'mail_send',
       arguments: { to: ['bob@example.com'], subject: 'Another item', body: 'Unrelated.' },
@@ -244,7 +302,11 @@ describe('PI MCP server', () => {
     const mail: JarvisTool = {
       name: 'mail_search',
       description: 'Search owner mail. Keyword: inbox.',
-      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        additionalProperties: false,
+      },
       execution: { defaultEffect: 'read' },
       execute: async () => ({ found: 1 }),
     };

@@ -109,17 +109,17 @@ Completion means the existing PI activation envelope and one background queue ow
 
 ## PI execution integrity — 20 November 2026 (#1967)
 
-**Status: implemented and qualified offline.** The PI path now loads remote catalogues only on provider-specific discovery, supports English/Danish aliases and exact `otherMatches`, records completion evidence, separates Voice Live playback interruption from PI work, and binds tool authority to the exact owner message. No live model/provider, `measure_pi`, external message, deployment or spend was used.
+**Status: implemented and qualified offline.** The PI path now loads remote catalogues only on provider-specific discovery, supports NFKD-aligned English/Danish request handling and exact `otherMatches`, buffers provider answer deltas until completion is verified, records completion evidence, separates Voice Live playback interruption from PI work, and binds tool authority to the exact owner message. Registry construction rejects action contracts that are missing or divergent from a tool's schema/execution contract. No live model/provider, `measure_pi`, external message, deployment or spend was used.
 
 | Step | State |
 | --- | --- |
 | Make local discovery immediate and provider refresh on demand with a bounded selected-provider wait/continuation; add compact connection and capability status | Done |
 | Add aliases, exact-name priority and callable compact matches while retaining per-turn visibility/source checks | Done |
-| Require domain/operation/target-bound tool, argument and terminal-receipt evidence; add trusted contextual resolution, read-first interrogatives and explicit per-tool metadata/receipts; enforce durable own-code task status | Done after round-two review |
+| Require domain/operation/target-bound tool, argument and terminal-receipt evidence; add trusted contextual resolution, read-first NFKD Danish interrogatives and co-located per-tool contracts; enforce durable own-code task status | Done after round-four review, including unique same-turn read bindings, compiled execution IDs and construction validation across optional registries |
 | Decouple GPT-Live playback cancellation from PI work and preserve exact turn authority under concurrent proactive chat | Done |
 | Keep unrestricted owner actions, target-bound deletion checks and separate foreground/proactive budgets | Done |
 | Update focused tests and PI/product/architecture/agent/decision documentation, including review regressions for same-kind, partial/cancelled, cold-provider and issue-only evidence | Done |
-| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after round-two review: build and lint pass, 60 files / 683 backend tests pass |
+| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after round-four review: build and lint pass, 60 files / 692 backend tests pass |
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

@@ -3,6 +3,7 @@ import type { SystemHealth, SystemHealthComponent, SystemStatusValue, WorkStatus
 import { systemSmokeCheckIds } from '@jarvis/contracts';
 import { JARVIS_REPOSITORY } from '../factory/project-context.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 
 const hourMs = 60 * 60_000;
 const staleMs = 5 * 60_000;
@@ -171,6 +172,12 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
 
 export const getSystemHealthTool: JarvisTool = {
   name: 'get_system_health',
+  completion: {
+    domain: 'settings',
+    operation: args => args.operation === 'confirmation_test' ? 'update' : 'read',
+    requestTargetFields: ['operation'], resultTargetFields: ['executed'],
+    evaluate: receipt.systemConfirmation,
+  },
   description: 'Diagnose cached system and smoke checks, credential expiry, recent failed jobs, recorded deployment, work evidence and tool failure counts. Returns bounded safe reasons and available recovery tools only; never runs probes or repairs.',
   execution: {
     defaultEffect: 'unclassified',

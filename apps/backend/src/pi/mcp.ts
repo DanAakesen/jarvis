@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import {
   isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
-  type RegisteredTool, type ToolRegistry,
+  type CompiledToolExecutionContract, type RegisteredTool, type ToolRegistry,
 } from '../core/tool-registry.js';
+import { normalizeCompletionText, receipt } from '../core/tool-completion.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
@@ -20,6 +21,12 @@ const maxOtherResults = 5;
 const maxResultCharacters = 200_000;
 const notFound = 'Unknown tool, or not looked up yet. Call find_tools first, then call_tool. Nothing was done.';
 const unknownTurn = 'This turn is not active, so nothing was done. Use the exact turn reference from the current message.';
+const remoteReadWords = new Set(['check', 'compare', 'diff', 'download', 'find', 'get', 'list', 'lookup', 'read', 'search', 'status', 'view']);
+const remoteActionWords = new Set([
+  'add', 'archive', 'assign', 'cancel', 'close', 'comment', 'complete', 'create', 'delete', 'dispatch', 'edit',
+  'merge', 'move', 'open', 'publish', 'remove', 'rename', 'reply', 'resume', 'retry', 'revoke', 'send', 'set',
+  'start', 'stop', 'trigger', 'update', 'write',
+]);
 
 const turn = z.string().regex(piTurnPattern, 'The turn reference is the jt- value from the current message.');
 const findSchema = z.object({ turn, query: z.string().min(2).max(100) }).strict();
@@ -34,7 +41,31 @@ function text(value: unknown, isError = false): CallToolResult {
   return { ...(isError ? { isError: true } : {}), content: [{ type: 'text', text: body }] };
 }
 
-/** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. */
+function remoteReadContract(
+  bridge: RemoteMcpBridge,
+  name: string,
+  args: Record<string, unknown>,
+): CompiledToolExecutionContract | undefined {
+  const words = normalizeCompletionText(name.slice(bridge.prefix.length)).split(/[_-]+/u).filter(Boolean);
+  if (!words.some(word => remoteReadWords.has(word)) || words.some(word => remoteActionWords.has(word))) {
+    return undefined;
+  }
+  const domain = bridge.prefix === githubToolPrefix ? 'github' as const
+    : bridge.prefix === azureToolPrefix ? 'azure' as const : 'generic' as const;
+  return Object.freeze({
+    executionId: `remote:${bridge.prefix}:${name}`,
+    domain,
+    operation: 'read',
+    requestTargetFields: Object.freeze(Object.keys(args).filter(field =>
+      /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(field))),
+    resultTargetFields: Object.freeze([
+      'id', 'number', 'repository', 'url', 'path', 'sha', 'branch', 'runId', 'title', 'name',
+    ]),
+    evaluate: receipt.read,
+  });
+}
+
+/** Chat never shows the capability-discovery operation selector; the voice and chat catalogues stay aligned. */
 function shapeSchema(tool: RegisteredTool): unknown {
   if (tool.name !== 'get_system_health') return tool.inputSchema;
   const { properties, ...rest } = tool.inputSchema as { properties?: Record<string, unknown> };
@@ -123,12 +154,24 @@ export function createPiMcpRoutes(options: {
       grant.results.push({ tool: name, outcome: 'refused' });
       return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
     }
+    const completion = remoteReadContract(bridge, name, args);
+    if (!completion) {
+      grant.results.push({ tool: name, outcome: 'refused' });
+      return text({
+        tool: name, outcome: 'refused',
+        result: { refused: 'Remote action tools are refused. Use the exact Jarvis action tool contract instead.' },
+      }, true);
+    }
+    const remoteTool = { name, completion, execution: { defaultEffect: 'read' as const } };
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     if (done.outcome === 'ok') {
-      const evidence = completionEvidence(grant.completion, { name }, args, done.result, grant.evidence);
+      const binding = completionEvidence(remoteTool, args, done.result);
+      const evidence = completionEvidence(grant.completion, remoteTool, args, done.result, grant.bindings);
       if (evidence) grant.evidence.push(evidence);
-      else grant.unverified.count += 1;
+      else if (!((grant.completion.contextual || grant.completion.requiresTrustedContext) &&
+          binding?.kind === 'retrieved')) grant.unverified.count += 1;
+      if (binding?.kind === 'retrieved') grant.bindings.push(binding);
     }
     const body = JSON.stringify(done.result);
     const result = body.length > maxResultCharacters
@@ -170,7 +213,8 @@ export function createPiMcpRoutes(options: {
           providerPrefixNeeded(input.query, azureToolPrefix)) {
         grant.azure.catalogue = 'not_configured';
       }
-      const remoteTools = catalogues.flatMap(({ tools }) => tools);
+      const remoteTools = catalogues.flatMap(({ bridge, tools }) =>
+        tools.filter(tool => remoteReadContract(bridge, tool.name, {}) !== undefined));
       const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
@@ -285,9 +329,12 @@ export function createPiMcpRoutes(options: {
         const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
         grant.results.push({ tool: tool.name, outcome });
         if (outcome === 'ok') {
-          const evidence = completionEvidence(grant.completion, tool, input.arguments, parsed.result, grant.evidence);
+          const binding = completionEvidence(tool, input.arguments, parsed.result);
+          const evidence = completionEvidence(grant.completion, tool, input.arguments, parsed.result, grant.bindings);
           if (evidence) grant.evidence.push(evidence);
-          else grant.unverified.count += 1;
+          else if (!((grant.completion.contextual || grant.completion.requiresTrustedContext) &&
+              binding?.kind === 'retrieved')) grant.unverified.count += 1;
+          if (binding?.kind === 'retrieved') grant.bindings.push(binding);
           if (toolEffect(tool, input.arguments) === 'action') grant.actions.count += 1;
         }
         if (serialized.length > maxResultCharacters) {

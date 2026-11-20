@@ -19,6 +19,7 @@ import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { defaultSettings, readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 import { workspaceResultDelivery } from './jobs.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
 import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
@@ -561,6 +562,10 @@ export function createHtmlResearchModule(
     tools: [
       {
         name: 'research',
+        completion: {
+          domain: 'web', operation: 'start', requestTargetFields: ['topic', 'title'],
+          resultTargetFields: ['jobId', 'id', 'status'], evaluate: receipt.durableActive,
+        },
         description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
           'Choose quick, standard, or deep depth; omit depth to use the saved research default. ' +
           'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
@@ -570,6 +575,10 @@ export function createHtmlResearchModule(
       },
       {
         name: 'retry_job',
+        completion: {
+          domain: 'jobs', operation: 'start', requestTargetFields: ['jobId'],
+          resultTargetFields: ['jobId', 'status'], evaluate: receipt.durableActive,
+        },
         description: 'Retry a failed research job by its jobId. The saved topic and research depth are reused.',
         inputSchema: {
           type: 'object',

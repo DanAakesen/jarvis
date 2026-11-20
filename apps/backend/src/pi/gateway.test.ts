@@ -28,7 +28,7 @@ const completion = (
   operation: PiCompletionOperation = kind === 'retrieved' ? 'read'
     : kind === 'durable_job' ? 'start' : 'generic',
 ): PiCompletionEvidence => ({
-  tool: name, kind, domain, operation, argumentsHash: 'fixture-arguments',
+  executionId: `fixture:${name}`, tool: name, kind, domain, operation, argumentsHash: 'fixture-arguments',
   targetHashes, identityHashes: [], identityTargets: [],
 });
 
@@ -104,7 +104,7 @@ describe('PI gateway', () => {
       () => sse(delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),
       () => sse(delta('Again'), completed(11_100, 11_000, 10)),
     ]);
-    expect(await run('hi')).toEqual(['Hello', ' Dan']);
+    expect(await run('hi')).toEqual(['Hello Dan']);
     await run('more');
     expect(conversations()).toBe(1);
     const responses = calls.filter(call => call.url.includes('/responses'));
@@ -123,6 +123,28 @@ describe('PI gateway', () => {
     expect(store.turns[0]!.costDkk).toBeCloseTo(11_000 * 6.5785 / 1e6 + 20 * 32.8925 / 1e6, 5);
     expect(usage[0]).toMatchObject({ model: 'gpt-6.1-terra', inputTokens: 11_000, outputTokens: 20 });
     expect(registry.size).toBe(0);
+  });
+
+  it('buffers provider deltas until the response can be verified and completed', async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const { gateway } = setup([() => new Response(new ReadableStream({
+      start(controller) {
+        stream = controller;
+        controller.enqueue(new TextEncoder().encode(delta('A false early claim.')));
+      },
+    }), { headers: { 'content-type': 'text/event-stream' } })]);
+    const iterator = gateway.stream(
+      { messageId: '42', sessionId: '7', text: 'hello' },
+      'Bearer x',
+      new AbortController().signal,
+    )[Symbol.asyncIterator]();
+    let settled = false;
+    const pending = iterator.next().then(value => { settled = true; return value; });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    expect(settled).toBe(false);
+    stream.enqueue(new TextEncoder().encode(completed(1, 0, 1)));
+    stream.close();
+    await expect(pending).resolves.toMatchObject({ done: false, value: 'A false early claim.' });
   });
 
   it('hands the agent a live turn reference during the turn and ends it with the turn', async () => {
@@ -178,10 +200,39 @@ describe('PI gateway', () => {
       grant.unverified.count += 1;
       return grant;
     };
-    await expect(runtimeTool.run('Hello.')).rejects.toMatchObject({
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of runtimeTool.gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'Hello.' }, '', new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({
       code: 'pi_incomplete',
       detail: 'completion_evidence_missing',
     });
+    expect(chunks).toEqual([]);
+  });
+
+  it('publishes only structured progress before an incomplete tool result', async () => {
+    const runtimeTool = setup([() => sse(
+      delta('I am checking.'),
+      tool,
+      delta('It is done.'),
+      completed(1, 0, 1),
+    )]);
+    const open = runtimeTool.registry.open.bind(runtimeTool.registry);
+    runtimeTool.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'mail_send', outcome: 'ok' });
+      grant.unverified.count += 1;
+      return grant;
+    };
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of runtimeTool.gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'Send it.' }, '', new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(chunks).toEqual([{ type: 'acknowledgment', text: 'I am checking.' }]);
   });
 
   it('accepts retrieved, committed and durable-job evidence only for the matching request', async () => {
@@ -211,6 +262,28 @@ describe('PI gateway', () => {
       return grant;
     };
     await expect(job.run('implement my code in the background')).resolves.toEqual(['Task started.']);
+  });
+
+  it('does not yield a verified final answer while another successful execution is unverified', async () => {
+    const runtime = setup([() => sse(delta('Email sent.'), completed(1, 0, 1))]);
+    const open = runtime.registry.open.bind(runtime.registry);
+    runtime.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'vault_task_create', outcome: 'ok' });
+      grant.results.push({ tool: 'mail_send', outcome: 'ok' });
+      grant.evidence.push(completion('vault_task_create', 'committed', 'tasks', [], 'create'));
+      grant.unverified.count += 1;
+      return grant;
+    };
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of runtime.gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'create a task' },
+        '',
+        new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(chunks).toEqual([]);
   });
 
   it('does not let unrelated same-kind or same-domain evidence finish the request', async () => {
@@ -409,13 +482,15 @@ describe('PI gateway', () => {
       () => sse(delta('ok'), completed(2, 0, 1)),
     ]);
     const received: ConversationAgentChunk[] = [];
-    await expect((async () => {
+    const turn = (async () => {
       for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'long' }, 'Bearer x', controller.signal)) {
         received.push(chunk);
-        controller.abort();
       }
-    })()).rejects.toBeDefined();
-    expect(received).toEqual(['first']);
+    })();
+    await new Promise(resolve => setTimeout(resolve, 5));
+    controller.abort();
+    await expect(turn).rejects.toBeDefined();
+    expect(received).toEqual([]);
     expect(store.turns[0]).toMatchObject({ outcome: 'cancelled' });
     expect(registry.size).toBe(0);
     const next: ConversationAgentChunk[] = [];
@@ -500,7 +575,8 @@ describe('PI gateway', () => {
     const first = gateway.stream(
       { messageId: '42', sessionId: '7', text: 'first' }, '', controller.signal,
     );
-    expect((await first.next()).value).toBe('first');
+    const pendingFirst = first.next();
+    await new Promise(resolve => setTimeout(resolve, 5));
     const second = async () => {
       for await (const chunk of gateway.stream(
         { messageId: '43', sessionId: '7', text: 'second' }, '', new AbortController().signal,
@@ -512,6 +588,7 @@ describe('PI gateway', () => {
       channel: 'chat', outcome: 'failed', source: 'turn', reason: 'busy',
     }));
     controller.abort();
+    await pendingFirst.catch(() => undefined);
     await first.return(undefined).catch(() => undefined);
   });
 

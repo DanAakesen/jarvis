@@ -42,6 +42,8 @@ export interface PiTurnGrant {
   readonly results: { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
   /** Content-free hashes and terminal kind proving a tool/arguments/target binding for this exact turn. */
   readonly evidence: PiCompletionEvidence[];
+  /** Server-created read observations available only to bind later contextual operations in this turn. */
+  readonly bindings: PiCompletionEvidence[];
   /** Server-classified completion contract for the exact owner request attached to this grant. */
   completion: PiCompletionPlan;
   /** Content-free diagnostics from the latest completed discovery and from authenticated Azure call attempts. */
@@ -72,7 +74,7 @@ export interface PiTurnGrant {
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'evidence' | 'completion' | 'azure' | 'actions' | 'pushes' | 'unverified'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'evidence' | 'bindings' | 'completion' | 'azure' | 'actions' | 'pushes' | 'unverified'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
@@ -92,7 +94,7 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       if (grants.size >= maxOpenTurns) throw new Error('Too many open PI turns');
       const turn = `jt-${randomBytes(16).toString('base64url')}`;
       const grant: PiTurnGrant = {
-        ...input, turn, discovered: new Set(), results: [], evidence: [],
+        ...input, turn, discovered: new Set(), results: [], evidence: [], bindings: [],
         completion: { kind: 'conversation', requirements: [] },
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
         actions: { count: 0 }, pushes: { count: 0 }, unverified: { count: 0 },

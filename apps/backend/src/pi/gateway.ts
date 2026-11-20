@@ -550,14 +550,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
-      const streamWithoutToolEvidence = completion.kind === 'conversation';
       for await (const event of respond(conversationId, text, deadline)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;
           streamedCharacters += event.text.length;
           segment += event.text;
-          if (streamWithoutToolEvidence) yield event.text;
         } else if (event.kind === 'tools_listed') {
           if (event.failed) log('pi.mcp_list_failed', { server: event.server });
         } else if (event.kind === 'tool_done') {
@@ -570,9 +568,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           segment = '';
         } else usage = event.usage;
       }
-      if (completion.kind === 'conversation' && grant &&
-          grant.results.some(result => result.outcome === 'ok') &&
-          (grant.unverified.count > 0 || grant.evidence.length === 0)) {
+      if (grant && grant.results.some(result => result.outcome === 'ok') &&
+          (grant.unverified.count > 0 ||
+            completion.kind === 'conversation' && grant.evidence.length === 0)) {
         completionUnverified = true;
         throw new PiGatewayError(
           'pi_incomplete',
@@ -597,7 +595,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         completionUnverified = true;
         throw new PiGatewayError('pi_incomplete', completionFailure(missing), { detail: 'completion_evidence_missing' });
       }
-      if (segment && !streamWithoutToolEvidence) yield segment;
+      if (segment) yield segment;
       outcome = 'ok';
       await options.store.markWarm(options.owner, activationHash, now(), signal).catch(() => log('pi.mark_warm_failed', {}));
     } catch (error) {

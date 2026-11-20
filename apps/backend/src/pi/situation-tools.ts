@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import {
   isSituationActivationTool, ToolFailure, ToolRefusal, type JarvisTool,
 } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import { sourceIds, type SourceId } from '../proactive/types.js';
 import { PiSituationError, type PiSituationService } from './situation.js';
 import type { PiTurnRegistry } from './turns.js';
@@ -163,6 +164,11 @@ export function createSituationTools(options: {
     },
     {
       name: 'situation_commit',
+      completion: {
+        domain: 'memory', operation: 'update',
+        requestTargetFields: ['expectedRevision', 'expectedHash', 'policyRevision', 'state'],
+        resultTargetFields: ['committed', 'revision', 'hash'], evaluate: receipt.situationCommit,
+      },
       description: [
         'Compatibility commit for one material whole-state change. Prefer situation_patch and preserve sources/facts not changed in this turn.',
         'Send the exact revision, hash and proactive-policy revision from situation_read, plus the complete bounded state schema.',

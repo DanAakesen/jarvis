@@ -1,5 +1,6 @@
 import type { ReasoningEffort } from '@jarvis/contracts';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 import { readSettings } from './settings.js';
 import { applySettingsPatch } from './settings-tools.js';
 import { isRoleModelSupported, modelsForRole, reasoningForModel } from './model-catalog.js';
@@ -11,6 +12,10 @@ interface SetJarvisModelInput {
 
 export const setJarvisModelTool: JarvisTool = {
   name: 'set_jarvis_model',
+  completion: {
+    domain: 'settings', operation: 'update', requestTargetFields: ['model', 'reasoning'],
+    resultTargetFields: ['model', 'reasoning'], evaluate: receipt.modelSetting,
+  },
   description: 'Compatibility alias for update_settings: set the chat model or reasoning for the next chat or Danish voice session.',
   inputSchema: {
     type: 'object',

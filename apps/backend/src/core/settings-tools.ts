@@ -5,6 +5,7 @@ import {
   validateSettingsPatch, type SettingsPatch,
 } from './settings.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 
 const getSettingsSchema = {
   type: 'object',
@@ -110,6 +111,10 @@ export const getSettingsTool: JarvisTool = {
 
 export const updateSettingsTool: JarvisTool = {
   name: 'update_settings',
+  completion: {
+    domain: 'settings', operation: 'update', requestTargetFields: ['settings'],
+    resultTargetFields: ['settings'], evaluate: receipt.settings,
+  },
   description: 'Update supported non-secret Jarvis settings; read get_settings first when unsure of fields or values. Execute requested model-role and vision-budget changes directly.',
   inputSchema: updateSettingsSchema,
   sensitive: true,

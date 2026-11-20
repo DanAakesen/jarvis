@@ -1,13 +1,107 @@
 import { describe, expect, it } from 'vitest';
+import { createToolRegistry, type JarvisTool } from '../core/tool-registry.js';
+import { createBrowserAgentModule } from '../core/browser-agent.js';
+import { createHtmlResearchModule } from '../core/research.js';
+import { createWorkspacesModule } from '../core/workspaces.js';
+import { factoryModule } from '../factory/index.js';
+import { createGoogleModule } from '../google/tools.js';
+import { createHealthModules } from '../health/index.js';
+import { createInboxModule } from '../inbox/module.js';
+import { createPcBridgeModule } from '../pc-bridge/bridge.js';
+import { createOwnerReminderTool } from '../proactive/owner-reminder-tools.js';
 import type { PiCompletionEvidence } from './completion.js';
 import {
   completionEvidence, completionPlan, completionRequirement, missingCompletionEvidence,
 } from './completion.js';
 
-const action = (name: string, defaultEffect: 'read' | 'action' = 'action') => ({
+const healthModules = () => createHealthModules(
+  true,
+  { query: {}, gymTools: {}, health: {}, nutrition: {}, coach: {} } as never,
+  undefined,
+  {} as never,
+  {} as never,
+  {} as never,
+);
+const completionModules = () => [
+  createGoogleModule({} as never, { timeZone: 'Europe/Copenhagen' }),
+  createPcBridgeModule(),
+  createBrowserAgentModule({} as never),
+  createWorkspacesModule({} as never, {} as never),
+  createInboxModule({
+    store: {} as never, memoryStore: {} as never,
+    credentials: {} as never, ops: {} as never,
+  }),
+  {
+    id: 'reminders',
+    tools: [createOwnerReminderTool({
+      ownerObjectId: '11111111-1111-4111-8111-111111111111',
+      store: {} as never, vault: {} as never, now: () => new Date(),
+    })],
+    registerRoutes: async () => {},
+  },
+  createHtmlResearchModule(() => ({} as never), 'fixture-model', {} as never),
+  factoryModule,
+  ...healthModules(),
+];
+let completionRegistry: ReturnType<typeof createToolRegistry> | undefined;
+const contracts = () => completionRegistry ??= createToolRegistry(completionModules());
+
+const action = (name: string, defaultEffect: 'read' | 'action' = 'action') =>
+  contracts().get(name) ?? { name, execution: { defaultEffect } } as const;
+
+const tool = (name: string, defaultEffect: 'read' | 'action'): JarvisTool => ({
   name,
+  description: 'Completion contract fixture.',
+  inputSchema: {
+    type: 'object',
+    properties: name === 'mail_send'
+      ? { to: { type: 'array', items: { type: 'string' } }, subject: { type: 'string' }, body: { type: 'string' } }
+      : {},
+    additionalProperties: false,
+  },
   execution: { defaultEffect },
-} as const);
+  completion: contracts().get(name)?.completion,
+  execute: async () => ({}),
+});
+
+describe('PI completion contract registry', () => {
+  it('compiles authoritative contracts and rejects missing or divergent action contracts', () => {
+    const registry = createToolRegistry([{ id: 'fixture', tools: [tool('mail_send', 'action')] }]);
+    expect(registry.get('mail_send')?.completion).toMatchObject({
+      domain: 'mail', operation: 'send',
+      requestTargetFields: ['to', 'subject'],
+      executionId: 'fixture:mail_send',
+    });
+    expect(() => createToolRegistry([{ id: 'fixture', tools: [tool('send_probe', 'action')] }]))
+      .toThrow('missing PI completion contract');
+    expect(() => createToolRegistry([{ id: 'fixture', tools: [tool('mail_send', 'read')] }]))
+      .toThrow('diverges from tool execution');
+    expect(() => createToolRegistry([{ id: 'fixture', tools: [{
+      ...tool('mail_send', 'action'),
+      inputSchema: {
+        type: 'object',
+        properties: { to: { type: 'array', items: { type: 'string' } } },
+        additionalProperties: false,
+      },
+    }] }])).toThrow('request fields diverge');
+    expect(() => createToolRegistry([{ id: 'fixture', tools: [{
+      name: 'inbox_nudge_style',
+      description: 'Divergent operation fixture.',
+      inputSchema: {
+        type: 'object',
+        properties: { operation: { type: 'string', enum: ['get'] }, text: { type: 'string' } },
+        additionalProperties: false,
+      },
+      execution: { defaultEffect: 'unclassified', operation: { field: 'operation', effects: { get: 'action' } } },
+      completion: contracts().get('inbox_nudge_style')?.completion,
+      execute: async () => ({}),
+    }] }])).toThrow('diverges from tool execution');
+  });
+
+  it('constructs all registered optional action contracts with matching schemas and execution effects', () => {
+    expect(() => createToolRegistry(completionModules())).not.toThrow();
+  });
+});
 
 describe('PI completion planning', () => {
   it('treats ordinary questions as conversation but external requests as evidence-dependent', () => {
@@ -21,6 +115,8 @@ describe('PI completion planning', () => {
     expect(completionRequirement('Please deal with the email from Bob.')).toBe('committed');
     expect(completionRequirement('Forward this email to Alice.')).toBe('committed');
     expect(completionRequirement('Book a hotel room in Paris.')).toBe('committed');
+    expect(completionRequirement('Opret en påmindelse for Alice.')).toBe('committed');
+    expect(completionRequirement('Kan du venligst åbne Chrome på min pc?')).toBe('committed');
     expect(completionRequirement('Research the latest battery chemistry.')).toBe('durable_job');
     expect(completionRequirement('Implement issue 1967 in my repo')).toBe('durable_job');
     for (const question of [
@@ -33,6 +129,18 @@ describe('PI completion planning', () => {
       const plan = completionPlan(question);
       expect(plan.kind).toBe('retrieved');
       expect(plan.requirements.every(requirement => requirement.operation === 'read')).toBe(true);
+    }
+    for (const question of [
+      'Kan du venligst læse e-mailen fra Alice?',
+      'Kan du se kalenderaftalen?',
+      'Hvor mange e-mails har jeg?',
+      'Har du sendt e-mailen til Alice?',
+      'Er kalenderaftalen ændret?',
+      'Hvad stod der i den?',
+    ]) {
+      expect(completionPlan(question)).toMatchObject({
+        kind: question === 'Hvad stod der i den?' ? 'conversation' : 'retrieved',
+      });
     }
     const asked = completionPlan('Did I send Alice an email?');
     expect(completionEvidence(
@@ -215,6 +323,103 @@ describe('PI completion receipts', () => {
     )).toBeUndefined();
   });
 
+  it('keeps provider-specific operations aligned for calendar, mail and browser work', () => {
+    expect(completionEvidence(
+      completionPlan('Create calendar event Project Alpha.'),
+      action('calendar_create_event'),
+      { subject: 'Project Alpha', startDateTime: '2026-11-21T10:00:00Z', endDateTime: '2026-11-21T11:00:00Z' },
+      { status: 'completed' },
+    )).toMatchObject({ operation: 'create', domain: 'calendar' });
+
+    const archivePlan = completionPlan('Archive Alice’s email.');
+    const aliceMessage = completionEvidence(
+      archivePlan,
+      action('mail_search', 'read'),
+      { query: 'from:alice@example.com' },
+      { messages: [{ id: 'mail-1', from: 'Alice <alice@example.com>', subject: 'Build' }] },
+    );
+    expect(completionEvidence(
+      archivePlan,
+      action('mail_archive'),
+      { messageId: 'mail-1' },
+      { status: 'completed' },
+      aliceMessage ? [aliceMessage] : [],
+    )).toMatchObject({ operation: 'delete', domain: 'mail' });
+
+    expect(completionEvidence(
+      completionPlan('Book a hotel in Paris.'),
+      action('browser_do'),
+      { goal: 'Book a hotel in Paris' },
+      { status: 'completed', tabId: 'tab-1' },
+    )).toMatchObject({ operation: 'create', domain: 'web' });
+
+    expect(completionEvidence(
+      completionPlan('Create a reminder for Alice tomorrow.'),
+      action('owner_reminders'),
+      { operation: 'create', task: 'Alice', fireAt: '2026-11-21T09:00:00Z' },
+      { created: true, reminder: { id: 'reminder-1', task: 'Alice', state: 'scheduled' } },
+    )).toMatchObject({ operation: 'create', domain: 'tasks' });
+    expect(completionEvidence(
+      completionPlan('Cancel Alice’s reminder.'),
+      action('owner_reminders'),
+      { operation: 'cancel', id: 'reminder-1', task: 'Alice' },
+      { cancelled: true, reminder: { id: 'reminder-1', task: 'Alice', state: 'cancelled' } },
+    )).toMatchObject({ operation: 'delete', domain: 'tasks' });
+    const cancelPlan = completionPlan('Cancel worker 77.');
+    expect(cancelPlan).toMatchObject({
+      kind: 'committed',
+      requirements: [{ kind: 'committed', domain: 'factory', operation: 'delete' }],
+    });
+    const cancelTool = action('cancel_task');
+    expect(cancelTool).toMatchObject({
+      completion: { domain: 'factory', operation: 'delete' },
+    });
+    expect(cancelTool.completion?.evaluate(
+      { taskId: '77' },
+      { id: '77', state: 'Cancelled' },
+    )).toBe(true);
+    expect(completionEvidence(
+      action('cancel_task'),
+      { taskId: '77' },
+      { id: '77', state: 'Cancelled' },
+    )).toMatchObject({ kind: 'durable_job', operation: 'delete', domain: 'factory' });
+    expect(completionEvidence(
+      cancelPlan,
+      action('cancel_task'),
+      { taskId: '77' },
+      { id: '77', state: 'Cancelled' },
+    )).toMatchObject({ operation: 'delete', kind: 'durable_job', domain: 'factory' });
+
+    expect(completionEvidence(
+      completionPlan('Issue an inbox credential for iPhone.'),
+      action('inbox_capture_credential'),
+      { operation: 'issue', label: 'iPhone', scope: 'write' },
+      { credential: 'shown-once', id: 'abcdef123456', label: 'iPhone', scope: 'write' },
+    )).toMatchObject({ operation: 'create', domain: 'settings' });
+
+    const click = completionPlan('Click Checkout on my PC.');
+    const snapshot = completionEvidence(
+      click,
+      action('pc_browser_snapshot', 'read'),
+      { tabId: 'tab-1' },
+      { tabId: 'tab-1', snapshotId: 'snapshot-1', elements: [{ index: 2, name: 'Checkout' }] },
+    );
+    expect(completionEvidence(
+      click,
+      action('pc_browser_act'),
+      { tabId: 'tab-1', snapshotId: 'snapshot-1', elementIndex: 2, action: 'click' },
+      { clicked: true },
+      snapshot ? [snapshot] : [],
+    )).toMatchObject({ operation: 'update', domain: 'pc' });
+    expect(completionEvidence(
+      click,
+      action('pc_browser_act'),
+      { tabId: 'tab-1', snapshotId: 'snapshot-1', elementIndex: 2, action: 'click' },
+      { typed: true },
+      snapshot ? [snapshot] : [],
+    )).toBeUndefined();
+  });
+
   it('accepts an exact opened true receipt but not a false or unrelated one', () => {
     const plan = completionPlan('Open the saved workspace report Alpha.');
     expect(completionEvidence(
@@ -301,7 +506,6 @@ describe('PI completion receipts', () => {
     expect(direct).toBeUndefined();
 
     const read = completionEvidence(
-      deletion,
       action('workspaces_search', 'read'),
       { query: 'Old report' },
       { items: [{ id: '77', title: 'Old report', kind: 'research' }] },
@@ -324,7 +528,6 @@ describe('PI completion receipts', () => {
     )).toBeUndefined();
 
     const ambiguousRead = completionEvidence(
-      deletion,
       action('workspaces_search', 'read'),
       { query: 'recent report' },
       {
@@ -341,6 +544,52 @@ describe('PI completion receipts', () => {
       { id: '77', title: 'Old report', deleted: true },
       ambiguousRead ? [ambiguousRead] : [],
     )).toBeUndefined();
+  });
+
+  it('requires a unique trusted prior identity for contextual reads', () => {
+    const plan = completionPlan('Read it.');
+    const result = {
+      messages: [{ id: 'mail-1', from: 'Alice <alice@example.com>', subject: 'Build' }],
+    };
+    const readBinding = completionEvidence(
+      action('mail_search', 'read'),
+      { query: 'from:alice@example.com' },
+      result,
+    );
+    expect(readBinding).toMatchObject({ kind: 'retrieved', domain: 'mail' });
+    expect(completionEvidence(
+      plan,
+      action('mail_search', 'read'),
+      { query: 'mail-1' },
+      result,
+    )).toBeUndefined();
+    expect(completionEvidence(
+      plan,
+      action('mail_search', 'read'),
+      { query: 'mail-1' },
+      result,
+      readBinding ? [readBinding] : [],
+    )).toMatchObject({ kind: 'retrieved', domain: 'mail' });
+
+    const ambiguousBinding = completionEvidence(
+      action('mail_search', 'read'),
+      { query: 'recent mail' },
+      {
+        messages: [
+          ...result.messages,
+          { id: 'mail-2', from: 'Bob <bob@example.com>', subject: 'Other' },
+        ],
+      },
+    );
+    expect(completionEvidence(
+      completionPlan('What did it say?'),
+      action('mail_search', 'read'),
+      { query: 'mail-1' },
+      result,
+      ambiguousBinding ? [ambiguousBinding] : [],
+    )).toBeUndefined();
+    expect(missingCompletionEvidence(plan, { evidence: [] }))
+      .toMatchObject({ kind: 'retrieved', domain: 'generic', operation: 'read' });
   });
 });
 

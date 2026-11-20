@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
+import { receipt, semanticOperation } from '../core/tool-completion.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
 import { readAttachedOwnerMessage } from '../core/owner-message.js';
@@ -617,6 +618,21 @@ function makeOperationTool(
   const byName = new Map(definitions.map((definition) => [definition.name, definition]));
   return {
     name,
+    ...(name === 'github_write'
+      ? {
+          completion: {
+            domain: 'github' as const,
+            operation: (args: Record<string, unknown>) => {
+              if (args.operation === 'file_write') return args.sha === undefined ? 'create' as const : 'update' as const;
+              if (args.operation === 'workflow_dispatch' || args.operation === 'workflow_rerun') return 'start' as const;
+              return semanticOperation(args.operation);
+            },
+            requestTargetFields: ['operation', 'repository', 'number', 'branch', 'path', 'workflow'],
+            resultTargetFields: ['repository', 'number', 'branch', 'path', 'sha', 'runId', 'url'],
+            evaluate: receipt.githubWrite,
+          },
+        }
+      : {}),
     description: warning(`${summary} Choose one operation: ${definitions.map((definition) =>
       `${definition.name}(${definition.required.join(', ')}) ${definition.description}`).join(' ')}`),
     inputSchema: rootOperationSchema(definitions),

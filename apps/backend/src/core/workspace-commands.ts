@@ -14,6 +14,7 @@ import {
   type GeneratedView,
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
+import { receipt } from './tool-completion.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { explainedArgumentsMessage, toolArgumentRefusal } from './tool-arguments.js';
 import { isJarvisToolCall } from './tool-origin.js';
@@ -474,6 +475,18 @@ export function explainWorkspaceCommand(input: unknown, app: FastifyInstance): s
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
+  completion: {
+    domain: 'workspace', operation: args => {
+      if (args.operation === 'create') return 'create';
+      if (args.operation === 'close' || args.operation === 'close-all') return 'delete';
+      if (args.operation === 'navigate' || args.operation === 'show' ||
+          args.operation === 'restore' || args.operation === 'restore-all' ||
+          args.operation === 'focus') return 'open';
+      return args.operation === undefined ? 'generic' : 'update';
+    },
+    requestTargetFields: ['operation', 'commandId', 'viewId', 'page', 'view'],
+    resultTargetFields: ['commandId', 'viewId'], evaluate: receipt.applied,
+  },
   description: 'Show Dan something on his screen and control it. In a voice conversation this is how to show a visual: operation create with a commandId, a viewId and a view (text, list, table, chart, timeline, status, detail or image) whose title names the content; it appears in a panel on his phone. In typed chat use show_in_chat. ' +
     'Target defaults to active: the tab with the latest snapshot, or the first connected tab if none has reported. Use desktop or phone for the latest-reporting tab of that kind, or all to broadcast. An unavailable kind is refused with the connected devices. ' +
     'For window requests, act by intent rather than coordinates: resolve names and "that one" from snapshot titles and front, then use their viewIds. Place a window in a named region; arrange with auto ("tidy up"), side-by-side (left to right; "X right, Y left" uses viewIds [Y, X]), grid, or cascade ("stack"; viewIds are front-to-back, first frontmost—put the desired top window first). On phones, geometry requests focus the named window. Minimise, restore or close everything with minimise-all, restore-all or close-all. Pin or unpin on request; report it applied only when the result confirms storage succeeded, otherwise relay the result. ' +

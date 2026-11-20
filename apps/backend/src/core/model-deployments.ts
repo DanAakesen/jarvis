@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { SettingsStore } from './settings.js';
 import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 import type { ModelCatalogueReader } from './model-catalog.js';
 
 const armScope = 'https://management.azure.com/.default';
@@ -288,6 +289,11 @@ function reportPendingOperation(
 
 export const manageModelDeploymentTool: JarvisTool = {
   name: 'manage_model_deployment',
+  completion: {
+    domain: 'settings', operation: args => args.action === 'delete' ? 'delete' : 'create',
+    requestTargetFields: ['action', 'name', 'model', 'version', 'sku', 'capacity'],
+    resultTargetFields: ['name', 'status'], evaluate: receipt.modelDeployment,
+  },
   description: 'Create or delete a Foundry model deployment when Dan requests it, without another approval.',
   // Tool-facing model APIs reject combinators on the root schema (L121); execute
   // enforces the per-action requirements instead.

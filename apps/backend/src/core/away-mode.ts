@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { presenceModes, type PresenceMode, type PresenceSource } from '@jarvis/contracts';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 
 export { presenceModes };
 export type { PresenceMode };
@@ -122,6 +123,10 @@ function presenceModeTool(name: string, legacy = false): JarvisTool {
   const modes = legacy ? ['on', 'off'] : presenceModes;
   return {
     name,
+    completion: {
+      domain: 'settings', operation: 'update', requestTargetFields: ['mode'],
+      resultTargetFields: ['mode'], evaluate: receipt.settingsPresence,
+    },
     description: legacy
       ? 'Compatibility alias for set_presence_mode. Use it only to set away or present.'
       : 'Use away for heading out, on_the_move for driving, and present when Dan is back. The change is reversible, needs no confirmation, and should be announced.',
