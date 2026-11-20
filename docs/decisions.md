@@ -54,8 +54,8 @@
   capacity 10. The two 2.1 deployments leave the Bicep template.
 - **Voice agent:** Deploy provisions and pins one immutable
   `kind: voice` / `sub_protocol: live` / `model_type: self_deployed` agent named
-  `jarvis-pi-live`. It uses PCM 24 kHz, `marin`, and
-  `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
+  `jarvis-pi-live`. It uses PCM 24 kHz, `marin` (seed only, see the 2026-11-20
+  decision at the end of this file), and `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
   used because it would create a separate prompt conversation and bypass the
   stored-message/per-turn PI grant.
 - **Boundary:** the owner `/voice` socket stays unchanged. The backend alone
@@ -13728,3 +13728,10 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 - Data and colours: only real notes and edges are drawn (self links and unknown ends dropped, one edge per pair, an explicit link beats a similarity edge). Clusters are top-level folders. Work, Personal and General use amber, green and muted violet; every other folder is neutral. This follows the handover's three colours and does not add the brief's People blue. The preview shows the service's own open task count, and "Task count unavailable" when it sends none.
 - Motion: no auto-rotation; no Alive state (the Notes page cannot read Jarvis's activity, so it is dropped rather than faked); pulses run on explicit links only. Reduce Motion or Background motion off gives one still pose with no inertia and no flights.
 - Removed: the old 2D layout `graphPositions` and the unused `notesGraph*` size and opacity tokens.
+
+## 2026-11-20 Voice agent instructions, voice and greeting are Foundry-owned
+
+- Decision: Dan tunes `jarvis-pi-live` in the Foundry portal, so Deploy no longer writes, compares or fails on its instructions, output voice, greeting or any other field the app does not depend on. Previously a portal edit was overwritten by the next Deploy (new version plus re-pin) or failed it on readback.
+- Bootstrap only: if the agent does not exist, `provision_pi_agent.py` creates version 1 once from `agents/pi/voice-definition.json` and `voice-instructions.md` and pins it. Those files are only that initial seed; editing them later changes nothing. The `marin` requirement was removed from `load_voice_spec`.
+- If the agent exists, Deploy never posts a version and never patches the pin. It reads the effective version (the pinned version if a pin rule exists, otherwise `versions.latest`) and verifies only the contract the backend relay depends on: model `gpt-live-1` and its deployment, `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, `delegation: { type: "client" }`, `store: false`, audio format `audio/pcm` at 24,000 Hz. Drift fails with a `voice_readback_*_mismatch` or `voice_agent_*` code and is never auto-fixed.
+- Tests are offline (`.github/scripts/tests/test_pi_agent.py`); no live Foundry call was made.

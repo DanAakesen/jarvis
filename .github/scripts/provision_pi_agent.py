@@ -6,6 +6,9 @@ that carries the instructions, the Jarvis MCP server (by connection) and the ski
 that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
 
+The voice agent `jarvis-pi-live` is different: Foundry owns its instructions, voice and greeting. This script creates its first
+version from the files in agents/pi once, and afterwards only verifies the technical contract the backend relay depends on.
+
 Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scale to zero) are
 attached when their inputs exist. Neither is a harness tool: listing every tool of every server in each turn cost seconds and
 tokens (GitHub's alone about 13k tokens), and a server that is slow to start or to authenticate failed the whole turn. The
@@ -47,6 +50,7 @@ FINGERPRINT_KEY = "jarvis_pi_fingerprint"
 GITHUB_TOKEN_PATTERN = re.compile(r"github_pat_[A-Za-z0-9_]{50,255}")
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 VOICE_FINGERPRINT_KEY = "jarvis_pi_voice_fingerprint"
+VOICE_AUDIO_FORMAT = {"type": "audio/pcm", "rate": 24000}
 DEPLOYMENTS_API = "2024-10-01"
 REPLACED_VOICE_DEPLOYMENTS = ("gpt-realtime-2.1", "gpt-realtime-2.1-mini")
 
@@ -88,10 +92,10 @@ def load_voice_spec() -> tuple[dict, str, dict]:
     require(spec["delegation"] == {"type": "client"}, "voice_delegation_invalid")
     require(spec["store"] is False, "voice_store_invalid")
     audio = spec["audio"]
-    require(audio == {
-        "format": {"type": "audio/pcm", "rate": 24000},
-        "output": {"voice": "marin"},
-    }, "voice_audio_invalid")
+    # The format is a contract with the relay. The output voice only seeds a first version; Foundry owns it after that.
+    require(isinstance(audio, dict) and audio.get("format") == VOICE_AUDIO_FORMAT, "voice_audio_invalid")
+    output = audio.get("output")
+    require(isinstance(output, dict) and isinstance(output.get("voice"), str) and output["voice"].strip() != "", "voice_audio_invalid")
     instructions_file = spec["instructionsFile"]
     require(re.fullmatch(r"[A-Za-z0-9._-]+\.md", instructions_file) is not None, "voice_instructions_file_invalid")
     instructions = (PI / instructions_file).read_text(encoding="utf-8").strip() + "\n"
@@ -526,10 +530,28 @@ def verify(readback: dict, spec: dict, expected: str) -> None:
         require(mcp[label].get("project_connection_id") == connection and not mcp[label].get("headers"), "readback_mcp_connection_mismatch")
 
 
-def verify_voice_agent(readback: dict, definition: dict) -> None:
+def voice_contract(spec: dict) -> dict:
+    """The part of the voice agent's definition the backend relay depends on. Everything else is owned in Foundry."""
+    return {
+        "kind": "voice",
+        "sub_protocol": "live",
+        "model_type": "self_deployed",
+        "model": spec["model"],
+        "audio_format": VOICE_AUDIO_FORMAT,
+        "delegation": spec["delegation"],
+        "store": spec["store"],
+    }
+
+
+def verify_voice_agent(readback: dict, spec: dict) -> None:
+    """Fail on drift in the technical contract. Instructions, voice, greeting and the rest are never read."""
+    require(readback.get("status") == "active", "voice_agent_not_active")
     actual = readback.get("definition") or {}
-    for key in ("kind", "sub_protocol", "model_type", "model", "instructions", "audio", "delegation", "store"):
-        require(actual.get(key) == definition[key], f"voice_readback_{key}_mismatch")
+    wanted = voice_contract(spec)
+    for key in ("kind", "sub_protocol", "model_type", "model", "delegation", "store"):
+        require(actual.get(key) == wanted[key], f"voice_readback_{key}_mismatch")
+    audio = actual.get("audio")
+    require(isinstance(audio, dict) and audio.get("format") == wanted["audio_format"], "voice_readback_audio_format_mismatch")
 
 
 def verify_voice_deployment(deployment: dict | None, spec: dict) -> None:
@@ -550,6 +572,28 @@ def verify_voice_deployment(deployment: dict | None, spec: dict) -> None:
     )
 
 
+def effective_voice_version(azure: Az, name: str) -> str | None:
+    """The version that serves traffic: the pinned one if a pin rule exists, otherwise the latest. None when the agent is absent."""
+    try:
+        agent = azure.rest("GET", f"/agents/{name}", features=VOICE_FEATURES)
+    except Blocked as error:
+        if ":not_found" in str(error):
+            return None
+        raise
+    rules = ((agent.get("agent_endpoint") or {}).get("version_selector") or {}).get("version_selection_rules") or []
+    if rules:
+        pinned = rules[0].get("agent_version") if isinstance(rules[0], dict) else None
+        version = as_version(pinned)
+    else:
+        latest = (agent.get("versions") or {}).get("latest")
+        version = as_version(latest.get("version") if isinstance(latest, dict) else latest)
+    require(
+        isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
+        "voice_agent_version_unknown",
+    )
+    return version
+
+
 def provision_voice_agent(
     azure: Az,
     spec: dict,
@@ -558,27 +602,24 @@ def provision_voice_agent(
     group: str,
     subscription: str,
 ) -> dict:
+    """Seed the voice agent once; afterwards only verify the technical contract.
+
+    Instructions, voice and greeting are edited in Foundry. An existing agent is never given a new version, never re-pinned
+    and never auto-fixed: drift fails with a reason code.
+    """
     name = spec["agentName"]
     verify_voice_deployment(
         arm_deployment_request("GET", account, spec["model"], group, subscription),
         spec,
     )
-    wanted = sha256(canonical(definition))
-    state = current_state(azure, name, VOICE_FEATURES)
-    unchanged = bool(
-        state and state["pinned"] and state["metadata"].get(VOICE_FINGERPRINT_KEY) == wanted
-        and state.get("status") == "active"
-    )
-    if unchanged:
-        verify_voice_agent(
-            azure.rest("GET", f"/agents/{name}/versions/{state['pinned']}", features=VOICE_FEATURES),
-            definition,
-        )
-        return {"agent": name, "version": state["pinned"], "created": False, "model": spec["model"]}
+    existing = effective_voice_version(azure, name)
+    if existing is not None:
+        verify_voice_agent(azure.rest("GET", f"/agents/{name}/versions/{existing}", features=VOICE_FEATURES), spec)
+        return {"agent": name, "version": existing, "created": False, "model": spec["model"]}
     version = as_version(azure.rest(
         "POST",
         f"/agents/{name}/versions",
-        {"metadata": {VOICE_FINGERPRINT_KEY: wanted}, "definition": definition},
+        {"metadata": {VOICE_FINGERPRINT_KEY: sha256(canonical(voice_contract(spec)))}, "definition": definition},
         features=VOICE_FEATURES,
     ).get("version"))
     require(
@@ -586,7 +627,7 @@ def provision_voice_agent(
         and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
         "voice_agent_version_unknown",
     )
-    verify_voice_agent(wait_active(azure, name, version, VOICE_FEATURES), definition)
+    verify_voice_agent(wait_active(azure, name, version, VOICE_FEATURES), spec)
     pin(azure, name, version, VOICE_FEATURES)
     pinned = current_state(azure, name, VOICE_FEATURES)
     require(

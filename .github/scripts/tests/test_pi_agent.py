@@ -1,5 +1,6 @@
 import argparse
 import json
+import pathlib
 import unittest
 from unittest import mock
 
@@ -173,6 +174,110 @@ class DefinitionTest(unittest.TestCase):
         readback["definition"]["tools"][0]["default_config"]["enabled"] = False
         with self.assertRaises(pi.Blocked):
             pi.verify(readback, self.spec, self.instructions)
+
+
+class VoiceAgentTest(unittest.TestCase):
+    def setUp(self):
+        self.spec, _instructions, self.seed = pi.load_voice_spec()
+
+    def foundry(self, agent, versions):
+        calls = []
+
+        class Fake:
+            def rest(_self, method, path, body=None, **options):
+                calls.append((method, path))
+                if method == "GET" and path == "/agents/jarvis-pi-live":
+                    if agent is None:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi-live:not_found [code=NotFound]")
+                    return agent
+                if method == "GET" and path.startswith("/agents/jarvis-pi-live/versions/"):
+                    return versions[path.rsplit("/", 1)[-1]]
+                if method == "POST":
+                    versions["1"] = {"status": "active", "definition": body["definition"]}
+                    return {"version": "1"}
+                return {}
+
+        return Fake(), calls
+
+    def edited(self, **changes):
+        definition = json.loads(json.dumps(self.seed))
+        definition["instructions"] = "Edited in the Foundry portal."
+        definition["audio"]["output"]["voice"] = "cedar"
+        definition["greeting"] = "Evening, Dan."
+        definition.update(changes)
+        return {"status": "active", "definition": definition}
+
+    def provision(self, agent, versions):
+        foundry, calls = self.foundry(agent, versions)
+        with mock.patch.object(pi, "arm_deployment_request", return_value={
+            "name": "gpt-live-1", "sku": {"name": "GlobalStandard", "capacity": 10},
+            "properties": {"provisioningState": "Succeeded", "model": {"format": "OpenAI", "name": "gpt-live-1", "version": "2026-09-10"}},
+        }):
+            return pi.provision_voice_agent(foundry, self.spec, self.seed, "acct", "rg", "sub"), calls
+
+    def pinned(self, version):
+        rule = {"type": "FixedRatio", "agent_version": version, "traffic_percentage": 100}
+        return {"agent_endpoint": {"version_selector": {"version_selection_rules": [rule]}}}
+
+    def test_the_voice_is_no_longer_required_to_be_marin(self):
+        spec = json.loads((pi.PI / "voice-definition.json").read_text(encoding="utf-8"))
+        spec["audio"]["output"]["voice"] = "cedar"
+        with mock.patch.object(pathlib.Path, "read_text", side_effect=[json.dumps(spec), (pi.PI / "voice-instructions.md").read_text(encoding="utf-8")]):
+            self.assertEqual(pi.load_voice_spec()[2]["audio"]["output"]["voice"], "cedar")
+
+    def test_an_existing_agent_edited_in_foundry_passes_without_any_write(self):
+        versions = {"1": {"status": "active", "definition": self.seed}, "2": self.edited()}
+        agent = {**self.pinned("2"), "versions": {"latest": {"version": "3"}}}
+        result, calls = self.provision(agent, versions)
+        self.assertEqual((result["version"], result["created"]), ("2", False))
+        self.assertEqual({method for method, _ in calls}, {"GET"})
+
+    def test_without_a_pin_rule_the_latest_version_is_verified(self):
+        versions = {"1": {"status": "active", "definition": self.seed}, "3": self.edited(delegation={"type": "server"})}
+        for latest in ({"version": "3"}, 3):
+            with self.assertRaisesRegex(pi.Blocked, "voice_readback_delegation_mismatch"):
+                self.provision({"versions": {"latest": latest}}, versions)
+        versions["3"] = self.edited()
+        result, calls = self.provision({"versions": {"latest": {"version": "3"}}}, versions)
+        self.assertEqual(result["version"], "3")
+        self.assertIn(("GET", "/agents/jarvis-pi-live/versions/3"), calls)
+        self.assertEqual({method for method, _ in calls}, {"GET"})
+
+    def test_drift_in_the_technical_contract_fails_with_its_reason_and_fixes_nothing(self):
+        drift = {
+            "voice_readback_delegation_mismatch": {"delegation": {"type": "server"}},
+            "voice_readback_audio_format_mismatch": {"audio": {"format": {"type": "audio/pcm", "rate": 16000}}},
+            "voice_readback_model_mismatch": {"model": "gpt-live-2"},
+            "voice_readback_store_mismatch": {"store": True},
+            "voice_readback_kind_mismatch": {"kind": "prompt"},
+        }
+        for code, change in drift.items():
+            foundry, calls = self.foundry(self.pinned("2"), {"2": self.edited(**change)})
+            with mock.patch.object(pi, "arm_deployment_request", return_value={
+                "name": "gpt-live-1", "sku": {"name": "GlobalStandard", "capacity": 10},
+                "properties": {"provisioningState": "Succeeded", "model": {"format": "OpenAI", "name": "gpt-live-1", "version": "2026-09-10"}},
+            }), self.assertRaisesRegex(pi.Blocked, code):
+                pi.provision_voice_agent(foundry, self.spec, self.seed, "acct", "rg", "sub")
+            self.assertEqual({method for method, _ in calls}, {"GET"}, code)
+
+    def test_an_existing_agent_without_a_usable_version_fails_instead_of_being_reseeded(self):
+        with self.assertRaisesRegex(pi.Blocked, "voice_agent_version_unknown"):
+            self.provision({"versions": {}}, {})
+
+    def test_a_missing_agent_is_created_from_the_seed_and_pinned_once(self):
+        versions = {}
+        foundry, calls = self.foundry(None, versions)
+        patched = []
+        with mock.patch.object(pi, "arm_deployment_request", return_value={
+            "name": "gpt-live-1", "sku": {"name": "GlobalStandard", "capacity": 10},
+            "properties": {"provisioningState": "Succeeded", "model": {"format": "OpenAI", "name": "gpt-live-1", "version": "2026-09-10"}},
+        }), mock.patch.object(pi, "pin", side_effect=lambda *args: patched.append(args[2])), \
+                mock.patch.object(pi, "current_state", return_value={"pinned": "1", "status": "active"}):
+            result = pi.provision_voice_agent(foundry, self.spec, self.seed, "acct", "rg", "sub")
+        self.assertEqual((result["version"], result["created"]), ("1", True))
+        self.assertEqual([call for call in calls if call[0] == "POST"], [("POST", "/agents/jarvis-pi-live/versions")])
+        self.assertEqual(patched, ["1"])
+        self.assertEqual(versions["1"]["definition"]["audio"]["output"]["voice"], "marin")
 
 
 class ReachTest(unittest.TestCase):
