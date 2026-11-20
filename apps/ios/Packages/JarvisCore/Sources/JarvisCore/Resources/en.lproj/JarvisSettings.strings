@@ -78,7 +78,7 @@
 "settings.instructions" = "Custom instructions";
 "settings.identityDescription" = "Description";
 "settings.showWork" = "Show work";
-"settings.speechToText" = "Speech-to-text model";
+"settings.voice.minimizeWindows" = "Minimise windows when Voice starts";
 "settings.researchDepth" = "Research depth";
 "settings.maximumSources" = "Maximum sources";
 "settings.proactiveSuggestions" = "Automatic proactive suggestions";
@@ -162,7 +162,6 @@
 "settings.role.vision" = "Vision";
 "settings.role.research" = "Research";
 "settings.role.voice" = "Voice";
-"settings.role.transcription" = "Transcription";
 "settings.role.embedding" = "Embedding";
 "settings.role.codex" = "Codex";
 "settings.role.copilot" = "Copilot";

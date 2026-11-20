@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sanitizeManagedProviderCause, type ManagedProviderCause } from '../managed-provider-cause.js';
-import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+import { normalizeFoundryProjectEndpoint } from '../voice/live-protocol.js';
 import type { VisualContext } from './visual-context.js';
 
 export const CHAT_AGENT_PHASES = [

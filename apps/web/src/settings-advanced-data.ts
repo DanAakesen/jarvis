@@ -1,16 +1,15 @@
 import {
-  memorySettingsBounds, modelRoles, researchDepths, researchSettingsBounds, timeoutSettingsBounds, voiceTuningSettingsBounds,
+  memorySettingsBounds, modelRoles, researchDepths, researchSettingsBounds, timeoutSettingsBounds,
   type MemorySettings, type ModelCatalogue, type ModelRole, type ReasoningEffort, type ResearchSettings, type TimeoutSettings,
-  type VoiceTuningSettings,
 } from '@jarvis/contracts';
 
 /**
- * Settings for models per role, voice tuning, research, memory and retrieval, and timeouts (P9-13, #507). Roles are
+ * Settings for models per role, research, memory and retrieval, and timeouts (P9-13, #507). Roles are
  * the source of truth on the backend; when a backend sends them, they replace the older per-area model choices.
  */
 export type RoleSettings = Record<ModelRole, { model: string; reasoningEffort: ReasoningEffort }>;
 export interface RoleOptions { models: string[]; reasoningEffortsByModel: Record<string, string[]> }
-export type { MemorySettings, ModelCatalogue, ModelRole, ResearchSettings, TimeoutSettings, VoiceTuningSettings };
+export type { MemorySettings, ModelCatalogue, ModelRole, ResearchSettings, TimeoutSettings };
 export { modelRoles, researchDepths };
 
 export const roleLabels: Record<ModelRole, { label: string }> = {
@@ -18,7 +17,6 @@ export const roleLabels: Record<ModelRole, { label: string }> = {
   vision: { label: 'Vision' },
   research: { label: 'Research' },
   voice: { label: 'Voice' },
-  transcription: { label: 'Transcription' },
   embedding: { label: 'Embeddings' },
   codex: { label: 'Codex' },
   copilot: { label: 'Copilot' },
@@ -29,11 +27,10 @@ export const effortLabels: Record<string, string> = {
 };
 
 export const capabilityLabels: Record<string, string> = {
-  chat: 'Chat', responses: 'Responses', realtime: 'Realtime', transcription: 'Transcription', embeddings: 'Embeddings', image: 'Image',
+  chat: 'Chat', responses: 'Responses', realtime: 'Realtime live', embeddings: 'Embeddings', image: 'Image',
 };
 
 export const bounds = {
-  voice: voiceTuningSettingsBounds,
   research: researchSettingsBounds,
   memory: memorySettingsBounds,
   timeouts: timeoutSettingsBounds,
@@ -61,13 +58,12 @@ export function isRoleOptions(value: unknown): value is Record<ModelRole, RoleOp
 
 /** Problems with the advanced values, keyed by `area.key`, so fields can explain them and Save can wait. */
 export function advancedProblems(settings: {
-  voice: Partial<VoiceTuningSettings>; research?: ResearchSettings; memory?: MemorySettings; timeouts?: TimeoutSettings;
+  research?: ResearchSettings; memory?: MemorySettings; timeouts?: TimeoutSettings;
 }): Record<string, string> {
   const problems: Record<string, string> = {};
   const check = (key: string, value: unknown, range: { minimum: number; maximum: number }, integer = false) => {
     if (value !== undefined && !within(value, range, integer)) problems[key] = `Use ${range.minimum}–${range.maximum}${integer ? ' (whole number)' : ''}.`;
   };
-  check('voice.maxSpokenReplyTokens', settings.voice.maxSpokenReplyTokens, bounds.voice.maxSpokenReplyTokens, true);
   if (settings.research) {
     check('research.maxSources', settings.research.maxSources, bounds.research.maxSources, true);
     check('research.timeoutSeconds', settings.research.timeoutSeconds, bounds.research.timeoutSeconds, true);

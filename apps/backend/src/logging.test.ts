@@ -49,7 +49,7 @@ describe('structured log export', () => {
       stages: [{ stage: 'proactive_context_loaded', elapsedMs: 5, instructions: 'private' },
         { stage: 'upstream_open', elapsedMs: 10, instructions: 'private' },
         { stage: 'private', elapsedMs: 20 }, { stage: 'session_updated', elapsedMs: -1 }],
-      events: ['session.created', 'private', 'session.created', 'error'],
+      events: ['session.started', 'private', 'session.started', 'error'],
       largestTools: [{ name: 'list_projects', bytes: 300, parameters: 'private' },
         { name: 'private tool content', bytes: 20 }, { name: 'invalid', bytes: Infinity }],
       transcript: 'private', instructions: 'private', arguments: 'private', payload: 'private',
@@ -58,7 +58,7 @@ describe('structured log export', () => {
       language: 'en', closedBy: 'relay', closeCode: 4010, durationMs: 15_000,
       toolCount: 2, totalBytes: 4096,
       stages: [{ stage: 'proactive_context_loaded', elapsedMs: 5 }, { stage: 'upstream_open', elapsedMs: 10 }],
-      events: ['session.created', 'error'], largestTools: [{ name: 'list_projects', bytes: 300 }],
+      events: ['session.started', 'error'], largestTools: [{ name: 'list_projects', bytes: 300 }],
     };
     expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'voice.session_summary', ...expected });
     expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({

@@ -16,7 +16,7 @@ interface Measured {
   readonly text: string;
   /** True when the reply read as speech: no markdown or list marks and a short word count. Judged on the whole reply. */
   readonly spokenShape: boolean;
-  /** True when PI wrote a sentence before its first tool call (what Voice Live speaks while the tool runs). */
+  /** True when PI wrote a sentence before its first tool call (the short commentary spoken while the tool runs). */
   readonly textBeforeTool: boolean;
   readonly usage: PiUsage;
   readonly costDkk: number;
@@ -46,7 +46,7 @@ export interface PiSmokeCoreReport extends PiSmokePartReport {
   readonly cancel: { readonly abortToCloseMs: number; readonly partialCharacters: number; readonly followUpOk: boolean };
 }
 
-/** The PI leg of a voice turn: the same agent and conversation with the voice channel note. Voice Live's own audio time is not in it. */
+/** The PI leg of a voice turn: the same agent and conversation with the voice channel note. Native GPT-Live audio time is not in it. */
 export interface PiSmokeVoiceReport extends PiSmokePartReport {
   readonly part: 'voice';
   readonly voice: { readonly plain: Measured; readonly tools: Measured };

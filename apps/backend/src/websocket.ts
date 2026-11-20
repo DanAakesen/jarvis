@@ -5,7 +5,7 @@ import type {
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
-export const VOICE_SUBPROTOCOL = 'jarvis.voice.v1';
+export const VOICE_SUBPROTOCOL = 'jarvis.voice.v2';
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 
 export const MAX_WEBSOCKET_PAYLOAD_BYTES = 1_050_000;
@@ -38,6 +38,7 @@ export function registerWebSocketPlugin<Logger extends FastifyBaseLogger>(
         const expected = path === '/pc-bridge/connect'
           ? PC_BRIDGE_SUBPROTOCOL
           : path === '/voice' ? VOICE_SUBPROTOCOL : undefined;
+        if (path === '/voice' && protocols.has('jarvis.voice.v1')) return false;
         return expected && protocols.has(expected) ? expected : false;
       },
     },

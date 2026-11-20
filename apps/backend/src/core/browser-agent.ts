@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { FOUNDRY_SCOPE } from '../foundry/client.js';
-import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+import { normalizeFoundryProjectEndpoint } from '../voice/live-protocol.js';
 import { defaultSettings, readSettings } from './settings.js';
 import type { RoleModelSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';

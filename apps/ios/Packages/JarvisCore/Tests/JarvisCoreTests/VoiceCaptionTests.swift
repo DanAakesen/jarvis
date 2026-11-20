@@ -5,7 +5,7 @@ final class VoiceCaptionTests: XCTestCase {
     func testUserDeltasDecodeAndAccumulateUntilFinalTranscript() {
         var captions = VoiceCaptions()
         let first = VoiceServerMessage.decode(
-            #"{"type":"conversation.item.input_audio_transcription.delta","item_id":"user-1","delta":"Hello "}"#
+            #"{"type":"jarvis.voice.input_transcript.delta","itemId":"user-1","delta":"Hello "}"#
         )
         XCTAssertEqual(first, .transcriptionDelta(delta: "Hello ", itemID: "user-1"))
         captions.receive(first)
@@ -34,8 +34,8 @@ final class VoiceCaptionTests: XCTestCase {
         XCTAssertEqual(captions.assistant, "")
         XCTAssertEqual(captions.user, chunk + chunk)
         captions.receive(.assistantTranscriptDelta("New reply"))
-        captions.receive(.speechStarted)
-        XCTAssertEqual(captions.user, "")
+        captions.receive(.transcriptionDelta(delta: "Next turn", itemID: "user-next"))
+        XCTAssertEqual(captions.user, "Next turn")
         XCTAssertEqual(captions.assistant, "")
     }
 

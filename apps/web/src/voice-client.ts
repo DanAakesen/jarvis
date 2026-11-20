@@ -47,6 +47,7 @@ export interface VoiceClientOptions {
   onVisionLimit?: (limit: { itemId: string; code: 'frame_rate_limited' | 'daily_limit' | 'budget_exhausted' | 'budget_unavailable'; retryAfterMs?: number }) => void;
   onVisualResult?: (result: VisualResult & { itemId?: string }) => void;
   onVisualResultError?: (itemId?: string) => void;
+  onVisualUnsupported?: (source: 'camera' | 'screen' | undefined, itemId?: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -479,6 +480,8 @@ export class BrowserVoiceClient {
   private stopOpenHandler: (() => void) | undefined;
   private screenSessionReady = false;
   private cameraState: boolean | undefined;
+  private readonly visionSourceByItem = new Map<string, 'camera' | 'screen'>();
+  private latestVisionSource: 'camera' | 'screen' | undefined;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.audio = options.createAudio?.() ?? browserAudio();
@@ -517,7 +520,7 @@ export class BrowserVoiceClient {
     if (!this.running || this.stopping) return;
     const socket = this.socket;
     if (!socket || socket.readyState === WebSocket.CLOSED) {
-      this.finishStop(false);
+      this.finishStop(false, true);
       return;
     }
     this.stopping = true;
@@ -665,7 +668,7 @@ export class BrowserVoiceClient {
       await this.audio.open((audio) => {
         if (this.running && !this.stopping && this.microphoneOpen && socket === this.socket &&
             socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
+          socket.send(JSON.stringify({ type: 'jarvis.voice.input_audio.append', audio }));
         }
       });
       if (!this.running || this.stopping || !this.sessionReady || socket !== this.socket ||
@@ -734,11 +737,11 @@ export class BrowserVoiceClient {
             return;
           }
           const url = voiceUrl(this.options.backendUrl);
-          socket = this.makeSocket(url, ['jarvis.voice.v1', `jarvis.auth.${token}`]);
+          socket = this.makeSocket(url, ['jarvis.voice.v2', `jarvis.auth.${token}`]);
           this.socket = socket;
           socket.addEventListener('message', this.receiveBound);
           await waitForSocketEvent(socket, 'open', signal, CONNECTION_TIMEOUT_MS);
-          await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
+          await waitForVoiceEvent(socket, ['jarvis.session.ready'], signal, WARMUP_TIMEOUT_MS);
           if (!this.running || signal.aborted) break;
           if (this.stopping) {
             await waitForClose(socket, signal);
@@ -765,7 +768,9 @@ export class BrowserVoiceClient {
           if (socket) {
             socket.removeEventListener('message', this.receiveBound);
             if (this.socket === socket) this.socket = undefined;
-            socket.close();
+            if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+              socket.close(1011, 'Voice connection ended');
+            }
           }
           this.microphoneOpen = false;
           this.sessionReady = false;
@@ -802,12 +807,29 @@ export class BrowserVoiceClient {
     if (!event || typeof event.type !== 'string') return;
     if (event.type === 'jarvis.session.ready') {
       if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
+        this.visionSourceByItem.clear();
+        this.latestVisionSource = undefined;
         this.screenSessionReady = true;
         this.sendCameraState();
         this.options.onSessionReady?.(event.sessionId);
       }
-    } else if (event.type === 'jarvis.session.ended') {
+    } else if (event.type === 'jarvis.session.ended' && this.running) {
       this.finishStop(true);
+    } else if (event.type === 'jarvis.session.failed' &&
+        typeof event.retryable === 'boolean' && typeof event.closeCode === 'number') {
+      this.audio.stopPlayback();
+      this.playbackAllowed = false;
+      this.responseFinished = false;
+      if (event.retryable && !this.stopping) {
+        this.sessionReady = false;
+        this.screenSessionReady = false;
+        this.microphoneOpen = false;
+        this.audio.detachInput();
+        if (this.microphone === 'live') this.setMicrophone('granted');
+        this.publish('reconnecting', 'Voice connection failed. Reconnecting…');
+      } else {
+        this.finishStop(false, true);
+      }
     } else if (event.type === 'jarvis.visual_context') {
       const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
       if (event.itemId !== undefined && itemId === undefined) {
@@ -823,6 +845,13 @@ export class BrowserVoiceClient {
         ...result, ...(itemId === undefined ? {} : { itemId }),
       });
       else this.options.onVisualResultError?.(itemId);
+    } else if (event.type === 'jarvis.screen.context.unavailable' && event.reason === 'not_supported') {
+      const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
+      const source = (itemId ? this.visionSourceByItem.get(itemId) : undefined) ??
+        (this.cameraState === true ? 'camera' : this.latestVisionSource);
+      if (itemId) this.visionSourceByItem.delete(itemId);
+      this.latestVisionSource = undefined;
+      this.options.onVisualUnsupported?.(source, itemId);
     } else if (event.type === 'jarvis.screen.context.unavailable' && this.cameraState === true &&
         isTranscriptionItemId(event.itemId) &&
         (event.reason === 'frame_rate_limited' || event.reason === 'daily_limit' ||
@@ -834,45 +863,46 @@ export class BrowserVoiceClient {
         itemId: event.itemId, code: event.reason,
         ...(typeof retryAfterMs === 'number' ? { retryAfterMs } : {}),
       });
-    } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
+    } else if (event.type === 'jarvis.voice.input_transcript.completed' &&
         typeof event.transcript === 'string') {
       if (!event.transcript.trim()) return;
-      const itemId = isTranscriptionItemId(event.item_id) ? event.item_id : undefined;
+      const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
       if (itemId === undefined) this.options.onUserTurn?.(event.transcript);
       else this.options.onUserTurn?.(event.transcript, itemId);
       const requestedSource = requestedVisionSource(event.transcript);
       const source = this.cameraState === true ? 'camera'
         : this.cameraState === false && requestedSource === 'camera' ? undefined : requestedSource;
       if (source) {
+        this.latestVisionSource = source;
+        if (itemId) {
+          this.visionSourceByItem.set(itemId, source);
+          if (this.visionSourceByItem.size > 64) {
+            const oldest = this.visionSourceByItem.keys().next().value;
+            if (oldest) this.visionSourceByItem.delete(oldest);
+          }
+        }
         if (itemId === undefined) this.options.onVisionRequest?.(source, event.transcript);
         else this.options.onVisionRequest?.(source, event.transcript, itemId);
       }
-    } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
-      this.sendPlaybackCompletion(false);
-      this.audio.stopPlayback();
-      this.playbackAllowed = false;
-      this.responseFinished = false;
-      if (this.running && this.microphoneOpen) this.publish('listening', 'Listening for your voice.');
-    } else if (event.type === 'response.created') {
-      const response = event.response as { id?: unknown } | undefined;
-      this.responseId = typeof response?.id === 'string' ? response.id : undefined;
+    } else if (event.type === 'jarvis.voice.response.started') {
+      this.responseId = typeof event.responseId === 'string' ? event.responseId : undefined;
       this.responseAudioQueued = false;
       this.responseAudioDrained = false;
       this.playbackCompletionSent = false;
       this.playbackAllowed = true;
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
-    } else if (event.type === 'response.audio.delta' || event.type === 'response.output_audio.delta') {
+    } else if (event.type === 'jarvis.voice.audio.delta') {
       if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
         // Speaking is published by the audio adapter when this chunk actually becomes audible.
         this.audio.play(event.delta);
         this.responseAudioQueued = true;
         this.responseAudioDrained = false;
       }
-    } else if ((event.type === 'response.done' || event.type === 'response.cancelled') &&
+    } else if ((event.type === 'jarvis.voice.response.completed' || event.type === 'jarvis.voice.response.cancelled') &&
                this.running && this.microphoneOpen) {
       this.responseFinished = true;
-      if (event.type === 'response.cancelled') {
+      if (event.type === 'jarvis.voice.response.cancelled') {
         this.audio.stopPlayback();
         this.sendPlaybackCompletion(false);
       } else if (!this.audio.hasPlayback()) {
@@ -911,7 +941,7 @@ export class BrowserVoiceClient {
     this.stopOpenHandler = undefined;
     this.controller?.abort();
     this.controller = undefined;
-    this.socket?.close(1000, 'Voice stopped');
+    this.socket?.close(sessionEnded ? 1000 : 1011, sessionEnded ? 'Voice ended' : 'Voice end failed');
     this.socket = undefined;
     this.audio.dispose();
     this.setMicrophone('off');

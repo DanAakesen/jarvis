@@ -324,15 +324,13 @@ jobs:
             fi
             sleep 15
           done
-          # Voice Live needs voiceLiveCompatible metadata and the invocations_ws protocol on a Bridge target (L99).
           definition=$(jq -cn --arg image "$AGENT_IMAGE" --arg backend "$BACKEND_URL" '{
-            metadata: {voiceLiveCompatible: "true", bridgeProtocolVersion: "1.0"},
             definition: {
               kind: "hosted",
               cpu: "1",
               memory: "2Gi",
               container_configuration: {image: $image},
-              protocol_versions: [{protocol: "invocations", version: "2.0.0"}, {protocol: "invocations_ws", version: "1.0.0"}],
+              protocol_versions: [{protocol: "invocations", version: "2.0.0"}],
               environment_variables: {
                 AZURE_AI_MODEL_DEPLOYMENT_NAME: "gpt-5.6-luna",
                 JARVIS_BACKEND_URL: $backend
@@ -359,7 +357,7 @@ jobs:
           patch=$(jq -cn --arg version "$version" '{
             agent_endpoint: {
               version_selector: {version_selection_rules: [{agent_version: $version, traffic_percentage: 100, type: "FixedRatio"}]},
-              protocol_configuration: {invocations: {}, invocations_ws: {}}
+              protocol_configuration: {invocations: {}}
             }
           }')
           az rest --method patch --url "$FOUNDRY_ADMIN/agents/jarvis?api-version=v1" --resource https://ai.azure.com/ --headers Content-Type=application/merge-patch+json --body "$patch" --output none --only-show-errors
@@ -579,7 +577,7 @@ jobs:
     # handoff blocks readiness because normal chat and voice have no fallback route.
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       backend-revision: ${{ steps.provision.outputs.backend_revision }}
       attempt: ${{ github.run_attempt }}
@@ -607,7 +605,7 @@ jobs:
             echo "FOUNDRY_PROJECT=$(jq -er .foundryProjectName.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "AZURE_MCP_URL=$(jq -r '.azureMcpUrl.value // ""' "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
-      - name: Define the PI agent, skills and MCP connections, and give the backend its name and MCP secret
+      - name: Define PI and GPT-Live, configure the backend, then remove replaced deployments
         id: provision
         env:
           # The owner's fine-grained GitHub token, handed to the backend. Absent: GitHub is not attached and the summary says so.
@@ -631,6 +629,8 @@ jobs:
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Reach: $(jq -r '.reach | to_entries | map("\(.key): \(.value)") | join("; ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Experiment: $(jq -r .experiment "$RUNNER_TEMP/pi-agent.json") (anything but none is a measurement variant: Deploy again without it to restore the full agent)"
+            echo "- Voice agent: \`$(jq -r .voiceAgent.agent "$RUNNER_TEMP/pi-agent.json")\` version \`$(jq -r .voiceAgent.version "$RUNNER_TEMP/pi-agent.json")\` on \`$(jq -r .voiceAgent.model "$RUNNER_TEMP/pi-agent.json")\`"
+            echo "- Replaced deployments deleted: $(jq -r '.replacedVoiceDeploymentsDeleted | if length == 0 then "none (already absent)" else join(", ") end' "$RUNNER_TEMP/pi-agent.json")"
             echo "- PI is the only normal chat and voice engine."
           } >>"$GITHUB_STEP_SUMMARY"
           exit "${status:-0}"

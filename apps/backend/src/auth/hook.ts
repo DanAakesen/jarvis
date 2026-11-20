@@ -19,6 +19,7 @@ import { ownerSessionTokenPrefix } from './session/token.js';
 import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
 import { inboxCapturePath, inboxCapturePrefix, inboxMcpPath, InboxCaptureCredentialUnavailable, type InboxCaptureCredentials } from './inbox-capture-credential.js';
 import { piMcpCredential, piMcpPath, piMcpPrefix, secretsMatch, type PiAuth } from './pi-credential.js';
+import { VOICE_SUBPROTOCOL } from '../websocket.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -52,7 +53,6 @@ declare module 'fastify' {
   }
 }
 
-const VOICE_PROTOCOL = 'jarvis.voice.v1';
 const VOICE_AUTH_PREFIX = 'jarvis.auth.';
 const VOICE_ROUTES = new Set(['/voice']);
 
@@ -65,7 +65,8 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   const header = request.headers['sec-websocket-protocol'];
   if (duplicates || typeof header !== 'string' || header.length > 16_384) return undefined;
   const protocols = header.split(',').map((protocol) => protocol.trim());
-  if (protocols.length !== 2 || new Set(protocols).size !== 2 || !protocols.includes(VOICE_PROTOCOL)) return undefined;
+  if (protocols.length !== 2 || new Set(protocols).size !== 2 ||
+      !protocols.includes(VOICE_SUBPROTOCOL) || protocols.includes('jarvis.voice.v1')) return undefined;
   const tokenProtocol = protocols.find((protocol) => protocol.startsWith(VOICE_AUTH_PREFIX));
   const token = tokenProtocol?.slice(VOICE_AUTH_PREFIX.length);
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;

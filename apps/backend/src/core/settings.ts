@@ -7,11 +7,10 @@ import { builtInModeInstructions } from './presence-instructions.js';
 import {
   homeLocationSettingsSchema, isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
   memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
-  timeoutSettingsBounds, timeoutSettingsSchema, voiceTuningSettingsBounds, voiceTuningSettingsSchema,
+  timeoutSettingsBounds, timeoutSettingsSchema,
 } from '@jarvis/contracts';
 import type {
   HomeLocationSettings, MemorySettings, ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, TimeoutSettings,
-  VoiceTuningSettings,
 } from '@jarvis/contracts';
 import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
@@ -60,8 +59,7 @@ export interface Settings {
     customInstructions: string;
     modeInstructions: Record<'present' | 'away' | 'on_the_move', string>;
   };
-  voice: VoiceTuningSettings & {
-    speechToTextModel: string;
+  voice: {
     minimizeWindowsOnVoiceStart: boolean;
   };
   research: ResearchSettings;
@@ -138,10 +136,7 @@ export const defaultSettings: Settings = {
     modeInstructions: { ...builtInModeInstructions },
   },
   voice: {
-    speechToTextModel: 'azure-speech',
     minimizeWindowsOnVoiceStart: false,
-    bargeInEnabled: true,
-    maxSpokenReplyTokens: 4_096,
   },
   research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
   timeouts: {
@@ -189,7 +184,6 @@ export const settingsOptions = {
   reasoningEfforts,
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
   personalityResponseStyles: ['concise', 'balanced', 'detailed'],
-  voiceTuning: voiceTuningSettingsBounds,
   researchDepths,
   researchSettings: researchSettingsBounds,
   timeoutSettings: timeoutSettingsBounds,
@@ -227,10 +221,7 @@ const settingKeys = {
     },
   },
   voice: {
-    speechToTextModel: 'voice.stt.model',
     minimizeWindowsOnVoiceStart: 'voice.minimize_windows_on_voice_start',
-    bargeInEnabled: 'voice.barge_in_enabled',
-    maxSpokenReplyTokens: 'voice.max_spoken_reply_tokens',
   },
   research: {
     depth: 'research.depth',
@@ -341,14 +332,7 @@ function validSetting(
     }
   }
   if (area === 'voice') {
-    if (key === 'speechToTextModel') return typeof value === 'string' && modelsForRole(catalogue, 'transcription').includes(value);
     if (key === 'minimizeWindowsOnVoiceStart') return typeof value === 'boolean';
-    if (key === 'maxSpokenReplyTokens') {
-      const bounds = voiceTuningSettingsBounds[key];
-      return typeof value === 'number' && Number.isSafeInteger(value) &&
-        value >= bounds.minimum && value <= bounds.maximum;
-    }
-    if (key === 'bargeInEnabled') return typeof value === 'boolean';
   }
   if (area === 'research') {
     if (key === 'depth') return isOption(value, researchDepths);
@@ -532,9 +516,7 @@ const settingsPatchSchema = {
         voice: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
-            speechToTextModel: boundedModelSchema,
             minimizeWindowsOnVoiceStart: { type: 'boolean' },
-            ...voiceTuningSettingsSchema.properties,
           },
         },
         research: {
@@ -614,7 +596,6 @@ const settingsFieldSchemas = settingsPatchSchema.properties.settings.properties 
 const modelFieldRoles: Record<string, ModelRole> = {
   'jarvis.model': 'chat',
   'jarvis.reasoning': 'chat',
-  'voice.speechToTextModel': 'transcription',
   'codex.model': 'codex',
   'codex.reasoning': 'codex',
   'copilot.model': 'copilot',
@@ -630,7 +611,7 @@ export function settingsFieldsForCatalogue(catalogue: ModelCatalogue, current: S
         continue;
       }
       const role = path.startsWith('roles.') ? path.split('.')[1] as ModelRole : modelFieldRoles[path];
-      const modelField = key === 'model' || key === 'speechToTextModel';
+      const modelField = key === 'model';
       const allowedValues = role
         ? modelField ? modelsForRole(catalogue, role)
           : [
@@ -812,16 +793,14 @@ function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fa
       ? { model: stored.jarvis?.model, reasoningEffort: stored.jarvis?.reasoning }
       : role === 'voice'
         ? {}
-        : role === 'transcription'
-          ? { model: stored.voice?.speechToTextModel }
-          : role === 'codex'
-            ? {
-              model: stored.codex?.model,
-              reasoningEffort: stored.codex?.reasoning === 'default' ? 'none' : stored.codex?.reasoning,
-            }
-            : role === 'copilot'
-              ? { model: stored.copilot?.model }
-              : {};
+        : role === 'codex'
+          ? {
+            model: stored.codex?.model,
+            reasoningEffort: stored.codex?.reasoning === 'default' ? 'none' : stored.codex?.reasoning,
+          }
+          : role === 'copilot'
+            ? { model: stored.copilot?.model }
+            : {};
     const saved = stored.roles?.[role];
     const model = saved?.model ?? legacy.model ?? merged.roles[role].model;
     const supported = modelsForRole(catalogue, role).includes(model);
@@ -837,7 +816,6 @@ function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fa
     model: merged.roles.chat.model,
     reasoning: merged.roles.chat.reasoningEffort,
   };
-  merged.voice.speechToTextModel = merged.roles.transcription.model;
   merged.codex = {
     model: merged.roles.codex.model,
     reasoning: merged.roles.codex.reasoningEffort === 'none' ? 'default' : merged.roles.codex.reasoningEffort,
@@ -948,11 +926,6 @@ function withRoleSettings(settings: SettingsPatch): SettingsPatch {
       ...(settings.jarvis.reasoning === undefined ? {} : { reasoningEffort: settings.jarvis.reasoning as ReasoningEffort }),
     });
   }
-  if (settings.voice) {
-    if (settings.voice.speechToTextModel !== undefined) {
-      merge('transcription', { model: settings.voice.speechToTextModel });
-    }
-  }
   if (settings.codex) {
     merge('codex', {
       ...(settings.codex.model === undefined ? {} : { model: settings.codex.model }),
@@ -991,7 +964,6 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
     ...settingsOptions,
     roles,
     jarvisModels: modelsForRole(catalogue, 'chat'),
-    speechToTextModels: modelsForRole(catalogue, 'transcription'),
     codexModels: modelsForRole(catalogue, 'codex'),
     codexReasoningEfforts: ['default', ...reasoningForModel(catalogue, 'codex', defaultRoleModels.codex)],
     copilotModels: modelsForRole(catalogue, 'copilot'),
@@ -1221,16 +1193,6 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       // Zero disables summaries, so null, booleans and strings must not coerce to it.
       if (summaryLimit !== undefined && typeof summaryLimit !== 'number') {
         return reply.code(400).send({ error: 'Invalid setting value' });
-      }
-      const voice = (request.body as {
-        settings?: { voice?: Record<string, unknown> };
-      } | undefined)?.settings?.voice;
-      if (voice && typeof voice === 'object' && !Array.isArray(voice)) {
-        const numericTuning = ['maxSpokenReplyTokens'];
-        if (numericTuning.some((key) => voice[key] !== undefined && typeof voice[key] !== 'number') ||
-            (voice.bargeInEnabled !== undefined && typeof voice.bargeInEnabled !== 'boolean')) {
-          return reply.code(400).send({ error: 'Invalid setting value' });
-        }
       }
       const research = (request.body as {
         settings?: { research?: Record<string, unknown> };

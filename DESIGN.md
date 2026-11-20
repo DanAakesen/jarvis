@@ -1,3 +1,26 @@
+## GPT-Live P0 client contract — 20 November 2026
+
+Voice keeps the existing screen composition, orb, captions, microphone/plus/CC/
+End controls and responsive states. The provider change is not exposed as a
+new visual concept: the backend normalises native GPT-Live readiness, caption
+deltas, output audio and bounded response completion into Jarvis's existing
+`jarvis.voice.v2` boundary. Listening, thinking and speaking remain labelled in
+text; GPT-Live may listen and speak concurrently, so the UI never claims the
+microphone was disabled by speaking.
+
+Settings removes the separate speech-to-text role/selector and the old longest
+reply/barge-in controls. The Voice row retains only real product behaviour,
+currently **Minimise windows when Voice starts**. Models exposes exactly one
+voice-role option, `gpt-live-1`; it is not a fallback selector. Web, iPhone and
+Watch keep `/voice`; physical-device audio, captions, barge-in and rendering
+remain owner acceptance items.
+
+Camera and screen requests are refused by this voice backend. On the first
+`not_supported` response, the client stops active capture, disables the visual
+actions for the rest of that session and shows an explicit audio-only notice.
+The control state, notification and capture teardown are part of the product
+contract; silence after a rejected upload is not accepted.
+
 ## Background PI in Proactive — 19 November 2026
 
 This is an extension of the existing Proactive settings and status surfaces, not a new screen. The iOS sheet keeps the existing page scaffold, shared rows, glass, toggle and slider language; the web page uses its existing Proactive blocks and shared primary/secondary controls.
@@ -109,9 +132,9 @@ switch while a query is present; clearing the query restores the previous folder
 
 ## PI-only normal Chat and Voice (#1966)
 
-No engine selection is drawn and no saved device choice is read. Chat keeps its normal header, composer and error recovery; the PI test badge is gone. Voice keeps the existing screen, orb and controls, and connects without an engine query. PI remains unavailable rather than falling back to another engine.
+No engine selection is drawn and no saved device choice is read. Chat keeps its normal header, composer and error recovery; the PI test badge is gone. Voice keeps the existing screen, orb and controls, connects to `/voice` without an engine query, and receives the normalised Jarvis voice events. PI remains unavailable rather than falling back to another engine.
 
-In Voice, the first answer may take a few seconds. A turn that needs a tool opens with one short spoken sentence before the result. Replies remain one to three short sentences; longer material is offered in Chat. Native rendering and Voice behaviour still require exact-head Apple CI and owner-device acceptance.
+In Voice, GPT-Live owns the native audio loop. A delegated turn that needs a tool opens with one short PI sentence before the result. Replies remain one to three short sentences; longer material is offered in Chat. Native rendering and Voice behaviour still require exact-head Apple CI and owner-device acceptance.
 
 ## PI standing watches — 16 November 2026 (#1886, P15-175)
 
@@ -3384,6 +3407,9 @@ Search spans all four segments and keeps the selected segment when cleared.
 At accessibility text sizes the segments scroll horizontally and row values stack
 below their labels. Detail editors, explicit saves, approval flows, authentication
 and sign-out confirmation retain their existing behavior.
+
+The Voice editor has no provider or speech-to-text choice; GPT-Live owns those
+fixed settings, and only the window-minimisation preference remains.
 
 The root intentionally keeps drill-down editors for settings with save/approval
 behavior instead of copying the board's sample-only immediate controls. It shows

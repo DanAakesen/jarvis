@@ -78,7 +78,12 @@ export interface ConversationStore {
     readonly ownerObjectId?: string;
   }): Promise<ConversationSession>;
   getSession(sessionId: string): Promise<ConversationSession | null>;
-  endSession(sessionId: string): Promise<boolean>;
+  endSession(sessionId: string, voiceUsage?: {
+    /** Cumulative provider-reported live audio duration. */
+    readonly providerVoiceSeconds?: number;
+    /** Opt in only after a clean provider-confirmed voice terminal. Defaults to false. */
+    readonly allowWallClockFallback?: boolean;
+  }): Promise<boolean>;
   addMessage(input: {
     /** Cancels an uncommitted plain-text write; already committed messages remain history. */
     readonly signal?: AbortSignal;
@@ -101,7 +106,12 @@ export interface ConversationStore {
     readonly messageId: string;
     readonly visualContext: VisualContext;
   }): Promise<boolean>;
-  updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
+  updateMessage?(input: {
+    readonly messageId: string;
+    readonly sessionId: string;
+    readonly role: ConversationRole;
+    readonly text: string;
+  }): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
   getMessageSessionId?(messageId: string): Promise<string | null>;
   getLatestDanMessageText?(sessionId: string): Promise<string | null>;

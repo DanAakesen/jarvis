@@ -136,47 +136,61 @@ flowchart LR
 
 ## PI-only normal route — #1887, P15-176, #1966
 
-Normal chat always uses PI; the only accepted compatibility field is `engine: "pi"`. `current` and all other values fail validation. Isolated runtime-test sessions still use the runtime selected for that session and reject explicit PI. iOS, Watch and web do not send an engine. The obsolete device preference, client parameters, Settings selector and Chat test badge are removed. The PI voice relay has the same rule: `/voice` and `/voice?engine=pi` use PI, while every other engine query closes with 1008. Camera and screen context still return `not_supported`; there is no automatic fallback.
+Normal chat always uses PI. Isolated runtime-test sessions still use the runtime selected for that session. iOS, Watch and web do not send an engine; any query selector on `/voice` is refused. The obsolete device preference, client parameters, Settings selector and Chat test badge are removed. Camera and screen context still return `not_supported`; there is no automatic fallback.
 
 Because PI is the only normal route, the `pi-agent` Deploy job is a required
 pre-readiness and release-receipt check. A failed, cancelled or stale
 provisioning result cannot produce an accepted release.
 
-## PI voice (default) — 16 November 2026 (#1887, P15-176)
+## PI voice on GPT-Live — 20 November 2026 (P0 cutover)
 
-Voice Live stays the realtime speech layer. A voice socket opened without an
-engine query runs PI; an older client may name `pi`, and every other value
-closes the socket (1008).
+The normal client remains `/voice` with the authenticated `jarvis.voice.v2`
+subprotocol. The backend derives one Foundry agent route from the project
+endpoint:
+`/agents/jarvis-pi-live/endpoint/protocols/voice/live/sessions?api-version=v1`.
+It sends `https://ai.azure.com/.default` authentication and
+`Foundry-Features: VoiceAgents=V1Preview`. There is no engine query, model
+fallback, old route or client provider token.
 
 ```mermaid
 sequenceDiagram
     participant A as iOS app
     participant R as Voice relay (/voice)
-    participant V as Voice Live
+    participant V as Foundry GPT-Live voice agent
     participant G as PI gateway
     participant P as PI agent (one conversation, shared with chat)
     A->>R: connect (owner token)
     R->>G: warm (skips when fresh, over the cap or after failures)
-    R->>V: session.update (speech-only prompt, no tools)
-    A->>V: audio (through the relay)
-    V-->>R: final transcript
-    R->>R: store Dan's message (owner message for tool proof)
-    R->>G: stream(text, channel voice, message id)
-    G->>P: turn with the voice note
+    R->>V: service-owned Live session
+    V-->>R: session.started
+    R-->>A: jarvis.session.ready
+    A->>R: PCM16LE 24 kHz
+    R->>V: session.input_audio.append
+    V-->>R: input transcript deltas
+    V-->>R: session.delegation.created (client target)
+    R->>R: 0.6 s quiet, max 3 s; persist Dan's exact message
+    R->>G: stream(text, voice channel, stored message id)
+    G->>P: same PI conversation / owner turn grant
     P-->>G: sentence before a tool call
-    G-->>R: acknowledgment
-    R->>V: response.create (read this text, tools off)
+    G-->>R: short commentary
+    R->>V: session.commentary.append (delegation id)
     P-->>G: answer
     G-->>R: text
-    R->>V: response.create (read this text, tools off)
-    V-->>A: audio
+    R->>V: session.commentary.append (delegation id)
+    V-->>R: session.output_audio.delta
+    R-->>A: jarvis.voice.audio.delta
 ```
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; Dan starting to speak (`speech_started`) or a newer utterance cancels the turn in flight, and the next turn waits for it to release the gateway; 90 s deadline; speaks the first progress note at once and the answer at the end; failures become one honest spoken sentence (`PiGatewayError.userMessage`, never provider text); cancelled and superseded turns say nothing |
-| Relay route | `apps/backend/src/voice/relay.ts` | Owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). `current` and unknown query values close 1008. PI has no tool-budget rung ladder, partial-speech reflex or speech recognizer, calendar, food or camera path; typed client `conversation.item.create` or `response.create` closes the socket, camera/screen frames get `not_supported`, and Voice Live has no function calls. Status announcements still speak while no PI turn is in flight |
-| Voice Live session | `voice/realtime.ts` (`capabilityMode: 'pi'`) | Identity kernel plus a short "you are only the voice" prompt; no `tools`, no `tool_choice`. Turn detection is unchanged (the relay still creates every response) |
+| PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; a newer transcript input cancels the turn in flight, and the next waits for it to release the gateway. It keeps the 90-second deadline, sends the first progress note immediately and the answer at completion; failures become one honest spoken sentence, while cancelled/superseded turns say nothing. |
+| Relay route | `apps/backend/src/voice/relay.ts` | Owner only; maps `jarvis.voice.input_audio.append` to `session.input_audio.append`, maps native deltas to Jarvis events, and translates client microphone state to native mute/unmute. Camera/screen context returns `not_supported`. |
+| Session terminal state | `live-protocol.ts`, `relay.ts`, web/iOS voice clients | One server state machine permits native `session.close` only on a ready provider. `1000` remains unreachable until `session.closed`, cleanup and the Jarvis `jarvis.session.ended` acknowledgement are complete. Pre-provider, connecting, send, drain, transport, acknowledgement and cleanup failures use 1011; codes 4010/1011/1012 emit `jarvis.session.failed` with `retryable: true`, while policy/protocol failures use `false`. Clients retain End success only after that Jarvis terminal event (or an already-ended state), tear down failed ownership, and never let a late acknowledgement resurrect a failure. |
+| Audio format | `voice-definition.json`, `relay.ts` | The pinned agent owns PCM 24 kHz. `session.started` may omit the optional format echo; an explicit start/started format is accepted only when it matches `audio/pcm` at 24,000 Hz. |
+| Commentary bound | `voice/relay.ts` | PI commentary is appended in chunks of at most 256 UTF-8 bytes. Because byte-pair tokenisation cannot produce more tokens than bytes, every append is conservatively below 500 tokens. |
+| Provider usage | `relay.ts`, `ConversationStore.endSession` | `session.usage.updated` and `session.closed.usage.seconds` are cumulative. Event IDs are deduplicated, the maximum is retained, and the final provider seconds replace wall-clock lifetime in the single voice-minutes row. |
+| Voice-agent definition | `agents/pi/voice-definition.json`, `.github/scripts/provision_pi_agent.py` | Immutable `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, model `gpt-live-1`, PCM 24 kHz and output voice `marin`; `delegation: { type: "client" }`. No Foundry-managed prompt conversation is used. |
+| Turn boundary | `apps/backend/src/voice/relay.ts` | GPT-Live supplies transcript deltas but no transcript-done/output-done events. Native `event_id` and `start_ms`/`end_ms` keep fragments in the same candidate through pauses; delegation `offset_ms` assigns the exact owner turn. After assignment, 0.6-second quiet (max three seconds) closes and persists it before PI. Output grouping/persistence follows the bounded rule. |
 | Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
 | Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
@@ -184,7 +198,11 @@ sequenceDiagram
 | Deploy measurement | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | `measure_pi` adds two voice-channel turns (plain, with a Jarvis tool) in the smoke conversation and the checks `voice_spoken_shape` and `voice_tools_over_mcp`; reports first text, total and DKK. It is the PI leg only |
 | iOS | `VoiceEndpoint.url(baseURL:)`, `VoiceSessionClient`, `VoiceScreenModel` | The client connects to `/voice` without a selector and reuses that endpoint on reconnect; Watch follows the same route |
 
-Not done on purpose: camera and screen sharing with PI, Watch voice on PI, a canned "one moment" line, a second fast path. Rollback is a reviewed revert and redeploy; there is no runtime engine fallback.
+Deploy ordering is deliberate: Bicep creates `gpt-live-1`; `pi-agent` provisions
+and pins `jarvis-pi-live`, then waits for the configured backend revision and
+only then deletes the replaced 2.1 deployments through ARM. Barge-in is native.
+Physical/provider audio and device acceptance are still open; no live call was
+made for this source cutover.
 
 ## PI standing watches (#1886, P15-175, part 3)
 
@@ -470,7 +488,11 @@ While foregrounded, Watch retries activation and unavailable passive dashboard r
 
 Watch voice sends approximately 250 ms PCM packets with at most four acknowledged requests in flight. A capture-stream ID and sequence numbers let the phone discard stale, duplicate or late packets and count gaps, including when a session is resumed; it admits packets in arrival order and serializes accepted audio to the voice socket. Capture keeps the newest buffered audio and tolerates short losses, while five seconds without audio-send progress ends the session. Dictation keeps its separate fail-on-overflow policy. Phone-to-Watch events also use a bounded four-message window, prioritize queued playback over nonterminal voice updates, and preserve interruption and playback-completion barriers. The start reply negotiates pipelining; either older peer falls back to one in-flight message. Audio progress suppresses redundant heartbeats while unmuted. Aggregate RTT, in-flight and drop counts are logged without audio. Both directions still require the paired iPhone; actual throughput, interruption and playback behavior need paired-device validation.
 
-The `/voice` relay starts conversation-session creation, Voice Live credential acquisition and optional proactive-context loading concurrently. A process-local managed-identity token cache is prewarmed at route registration, shares in-flight requests and refreshes ahead of token expiry; failed refreshes are logged and retried. Proactive context has a 1.5-second diagnostic bound and falls back without gating session startup. `voice.session_stage` distinguishes context completion/fallback from credential completion, while timeout and refresh failures remain visible without logging tokens.
+The `/voice` relay starts conversation-session creation, Foundry credential
+acquisition and optional proactive-context loading concurrently. A process-local
+managed-identity token cache is prewarmed at route registration, shares in-flight
+requests and refreshes ahead of expiry. Proactive context has a 1.5-second
+diagnostic bound and falls back without gating the provider session.
 
 Watch voice shows Starting voice or Connecting to iPhone with a Cancel control while waiting up to 15 seconds for its paired iPhone, repeats a quick unavailable or busy start with the same request ID (the phone answers a repeated ID from its reply cache), and keeps a live session through a WatchConnectivity gap: it shows Reconnecting, waits up to 10 seconds after a 3-second debounce and confirms with a heartbeat, while the phone waits 15 seconds. The server request retains its existing 25-second transport deadline. Capture termination logs interruption, route change, cancellation, companion loss, sustained link stalls or unexpected stream completion, and user-facing errors describe the observed cause. Dictation retains its separate capture state and eight-second companion wait. Paired-device audio and production latency remain unverified.
 
@@ -703,7 +725,9 @@ deployments preserve a complete validated tuple from the existing backend
 configuration. Missing configuration remains absent; partial or invalid target
 metadata blocks the infrastructure apply. This persistence does not change the
 production runtime default. SQL personal memory, blob artifacts, the
-Voice Live relay and subscription-backed Factory are unchanged.
+Normal voice is unchanged in its PI-only authority; its GPT-Live speech adapter
+is documented in the current P0 section above. Subscription-backed Factory is
+unchanged.
 
 After the live endpoint rejected a top-level instructions override, managed
 requests carry the complete composed policy in a typed developer input message.
@@ -2071,7 +2095,7 @@ WebSocket adapter against the #1391 core seam.
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
-| Voice | One backend-owned Voice Live realtime route (`/voice`) uses `gpt-realtime-2.1`, Ryan HD and Azure Speech transcription with automatic language detection for both English and Danish. Browser and iPhone traffic use the authenticated backend WebSocket relay; provider credentials stay server-side. | Realtime camera hand-off built and mock-verified; deployed image acceptance remains unverified |
+| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with `marin`; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Source compile/static qualification only; provider audio and physical-device acceptance are open |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
@@ -2395,7 +2419,7 @@ PCM16/base64 helpers, session state machine, and bounded reconnect coordinator.
 `WebSocketTransport` remains an abstract seam; the app supplies the platform
 adapter. Both spoken languages connect to `/voice`, preserving the configured
 backend base path and sending the supplied access token through the same
-`jarvis.voice.v1` and `jarvis.auth.TOKEN` subprotocols as the web client.
+`jarvis.voice.v2` and `jarvis.auth.TOKEN` subprotocols as the web client.
 Speech-start events interrupt the current response immediately and report
 playback completion as inaudible. Microphone activation, mute, end, and
 reconnection are handled without capturing or playing audio in this package.
@@ -2414,12 +2438,14 @@ mute/add/end controls, camera preview/viewfinder, minimized session bar, and the
 system ReplayKit broadcast picker. The app target owns AVAudioEngine capture and
 playback, AVAudioSession voice configuration, the URLSession WebSocket adapter,
 and AVCaptureSession camera capture; session protocol and state remain in
-`JarvisCore`. Starting speech interrupts the player immediately. Reduced Motion
+`JarvisCore`. GPT-Live owns acoustic barge-in; the client does not invent a
+server-turn stop from an external STT detector. Reduced Motion
 removes orb and minimization animation; system text styles and VoiceOver labels
 remain available.
 
-Voice captions accumulate user transcription deltas and assistant transcript
-deltas in `JarvisCore`; completed user transcripts replace the partial text.
+Voice captions accumulate backend-normalised GPT-Live input and output transcript
+deltas in `JarvisCore`; bounded completed user transcripts replace the partial
+text.
 The phone follows the bottom of its bounded-height caption area. Watch receives
 user and assistant text in wire-sized chunks and follows its existing chat view.
 These are session display state, not an additional persisted transcript.
@@ -3244,9 +3270,9 @@ remains omitted from the Dashboard; no iOS-specific route or payload is added.
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
   partial update transactionally to whitelisted `dbo.settings` rows.
-  P9-97's Danish voice setting is removed. Legacy `voice.da.voice` entries are
-  ignored, and unsupported `mai-transcribe` selections fall back to the current
-  `azure-speech` transcription role without a migration or storage write.
+  Legacy Danish voice, speech-to-text and old tuning settings are ignored.
+  Voice has no persisted provider/STT role; no storage migration or backfill is
+  performed.
   The `appearance.theme` value accepts only `light` or `dark` and reuses the
   global `dbo.settings` key/value table without a migration. The `newProjects`
   settings area validates owner, visibility, templates
@@ -3274,20 +3300,19 @@ remains omitted from the Dashboard; no iOS-specific route or payload is added.
   name, model, version, SKU, capacity, inferred capabilities and supported
   reasoning efforts. Settings persist `roles.<role>.model` and
   `roles.<role>.reasoning_effort` in the existing key/value table; no migration
-  is needed. The eight roles are chat, vision, research, voice, transcription,
-  embedding, Codex and Copilot. Legacy `jarvis.model`/`jarvis.reasoning` values
+  is needed. The seven roles are chat, vision, research, voice, embedding, Codex
+  and Copilot. Legacy `jarvis.model`/`jarvis.reasoning` values
   resolve to the chat role and remain available through the previous settings
   keys. `GET /agent/settings` returns the resolved role settings to the
   `Jarvis.Tools` principal. The hosted agent reads chat model/effort before
   acknowledging a new session and keeps that snapshot for the session.
   Dispatcher task starts, web research, screen/camera vision, browser text
-  reasoning, PC-act visual targeting, and new voice sessions resolve
-  their corresponding role settings. Research snapshots its model and reasoning
-  effort when the job starts; voice snapshots its model and transcription model
-  when the session starts. Updates apply to the next turn or session. Vision
-  role options are limited to models with known cost rates; Voice Live choices
-  are `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and input transcription
-  uses Azure Speech with automatic language detection. Codex and Copilot retain
+  reasoning and PC-act visual targeting resolve their corresponding role
+  settings. Research snapshots its model and reasoning effort when the job
+  starts. Voice has one fixed `gpt-live-1` role and no external transcription
+  role; the GPT-Live agent definition owns PCM/audio/voice configuration.
+  Updates apply to the next turn or session. Vision role options are limited to
+  models with known cost rates. Codex and Copilot retain
   their provider `default` option until their provider model catalogues are
   available. Embedding defaults to `text-embedding-3-small`; Bicep deploys both
   supported embedding deployments. Requests explicitly ask for 1,536 dimensions,
@@ -4745,12 +4770,9 @@ provides the active mode and timestamp alongside the base
 first-person built-ins in `agents/jarvis/presence-instructions.json`, packaged in
 both backend and hosted-agent images. Settings reads resolve empty stored mode
 text to those defaults without writes; custom text remains a style preference
-alongside fixed hands-free rules. Chat and realtime voice refresh presence
-each turn, retaining session model/reasoning choices, and rebuild instructions
-after successful mode tools. Realtime voice sends a new `session.update` on
-mode changes and synchronises successful mode tools before continuing. Every
-relay `response.create`, including custom overrides, carries
-the one-line current-mode statement and built-in behavior. All modes use tools
+alongside fixed hands-free rules. Chat and delegated GPT-Live voice turns read
+the current presence each PI invocation; successful mode tools are included in
+the same owner turn grant before PI continues. All modes use tools
 to retrieve content rather than require a paste; missing permissions are reported.
 
 The backend does not poll Graph or require `Presence.Read.All`; away mode is
@@ -5431,6 +5453,11 @@ browser timing includes independent completion verification.
 
 ### Act on the shared Chrome tab (P7-19)
 
+> **Current boundary:** GPT-Live PI voice intentionally reports camera/screen as
+> `not_supported`. The chat and frame infrastructure below remains available to
+> its existing chat clients; the old voice-image handoff rows in this historical
+> subsection are not a current GPT-Live promise.
+
 P9-81/P9-82/P9-83/P9-85's per-turn visual contracts are:
 
 - `POST /screen/frames`: `{sessionId, frame, question?, turnId?}` returns
@@ -5446,7 +5473,7 @@ P9-81/P9-82/P9-83/P9-85's per-turn visual contracts are:
   `capturedAt` is server request-receipt time in ISO 8601 UTC, not device time
   or model-completion time. `turnId` is optional client correlation, echoed
   unchanged, with 1–128 ASCII letters, digits, `_` or `-`; voice clients use the
-  transcription `itemId` as `turnId`.
+  a Jarvis-generated grouped transcript ID as `turnId`.
   Questions are untrusted data and never logged.
   `frameId` is an opaque, server-generated, 32-character unpadded base64url
   encoding of 24 cryptographically random bytes (`[A-Za-z0-9_-]{32}`).
@@ -6493,7 +6520,8 @@ flowchart LR
         SWA["Static Web Apps<br/>board (React/Vite)"]
         BE["Container Apps<br/>Jarvis backend (Node.js)"]
         subgraph Foundry["Foundry"]
-            VL["Voice Live realtime<br/>gpt-realtime-2.1 + Ryan HD<br/>Azure Speech auto-detect"]
+            VL["Voice agent: jarvis-pi-live<br/>gpt-live-1 + marin<br/>native 24 kHz Live"]
+            PI["PI agent: jarvis-pi<br/>tools + stored owner turn"]
             JA["Hosted agent: Jarvis<br/>gpt-5.6-luna"]
             SB["Hosted agents: sandboxes<br/>one per task, Codex / Copilot"]
         end
@@ -6510,8 +6538,10 @@ flowchart LR
     end
     BR --> SWA
     BR <-->|"API + SSE"| BE
-    BR <-->|"audio"| VL
-    VL <--> JA
+    BR <-->|"/voice: Jarvis protocol audio"| BE
+    BE <-->|"voice/live/sessions + Entra"| VL
+    VL -->|"client delegation"| BE
+    BE <-->|"same PI gateway/conversation"| PI
     BE <-->|"Foundry Invocations: streamed chat + delegated auth payload"| JA
     JA -->|"tool calls"| BE
     BE <--> DB
@@ -7352,7 +7382,12 @@ flowchart LR
 - The graph reader uses a repository-scoped installation token with `contents:read`, at most 20 branches and 30 commits per branch, and a 25-second overall deadline; it does not persist GitHub commit data. The UI exposes keyboard-focusable, 44-pixel commit links and keeps a wide graph in its own horizontal scroll region.
 - Copy-ready managed-project examples live in [`templates/github-actions/`](../templates/github-actions/), with Azure OIDC setup and customization steps in [github-actions-templates.md](github-actions-templates.md). PR checks have read-only permissions; the release build and tests precede an artifact upload, and only the `main`-gated deploy job receives `id-token: write`. Azure federation and deployment in an adopting project remain unverified.
 
-## Voice
+## Voice — historical direct-speech implementation (superseded 20 November 2026)
+
+> **Historical record only.** This section describes the retired direct
+> model/tool configuration path. It is not runtime or deployment guidance for
+> the GPT-Live cutover. The current architecture is documented in
+> [PI voice on GPT-Live](#pi-voice-on-gpt-live--20-november-2026-p0-cutover).
 
 Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-prototype/REPORT.md)).
 
@@ -7819,31 +7854,33 @@ call linkage remain the post-merge P4-09 acceptance check.
 | Key Vault | `kv-jarvis-{suffix}` | Sweden Central; Standard, RBAC authorization |
 | Storage account | `stjarvis{suffix}` | Sweden Central; StorageV2, Standard_LRS, Hot; HTTPS only, shared-key access and public Blob access disabled |
 | Azure Speech | `speechjarvis{suffix}` | Sweden Central; SpeechServices F0; local key authentication disabled |
-| Foundry AIServices | `jarvis-{timestamp}-{suffix}` | Sweden Central; S0, custom subdomain, local key authentication disabled; Voice Live and P7-24 Speech recognition |
+| Foundry AIServices | `jarvis-{timestamp}-{suffix}` | Sweden Central; S0, custom subdomain, local key authentication disabled; GPT-Live voice agent plus PI and other model deployments |
 | Blob containers | `artifacts`, `logs`, `task-events` | Private; created under the Storage account |
 | Container Registry | `crjarvis{suffix}` | Sweden Central; Basic (≈33 DKK/month); admin account disabled |
 | SQL server | `sql-jarvis-{suffix}` | Sweden Central; Entra administrator `jarvis-sql-admins`; Entra-only authentication |
 | SQL database | `jarvis` | General Purpose serverless, Gen5, 1 vCore; 32-GB max size, 0.5 minimum capacity, 60-minute auto-pause; SQL free limit enabled and pauses on quota exhaustion |
 | Container Apps environment | `cae-jarvis-{suffix}` | Sweden Central; Consumption; logs sent to Log Analytics |
-| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica (SSE, dispatcher, browser confirmations and P7-15 one-use upload keys use process-local state; more copies require shared state/Web PubSub); external HTTPS ingress to port 3000; `/health` startup (up to about 310 s, covering migrations and SQL auto-resume), liveness and readiness probes; settings `STATIC_WEB_APP_ORIGIN`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, `KEY_VAULT_URI`, `SQL_SERVER`, `SQL_DATABASE`, `SQL_MANAGED_IDENTITY_CLIENT_ID` (`id-jarvis-backend`), `TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT`, `FOUNDRY_ADMIN_ENDPOINT`, `FOUNDRY_RUNTIME_ENDPOINT`, `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_RUNNER_AGENT_NAME`, `JARVIS_CODEX_TOOL_MODEL`, `BACKEND_CONTAINER_APP_RESOURCE_ID`, and optional `ENTRA_JARVIS_AGENT_OBJECT_ID`, `JARVIS_GOOGLE_TIME_ZONE`, `ENTRA_PC_BRIDGE_CLIENT_ID` |
+| Backend Container App | `ca-jarvis-backend-{suffix}` | Sweden Central; 0.25 vCPU / 0.5 GiB, exactly 1 replica; external HTTPS ingress to port 3000. Bicep supplies `FOUNDRY_PROJECT_ENDPOINT`; the PI provisioner adds `JARVIS_VOICE_AGENT_NAME=jarvis-pi-live` only after active/pinned-agent evidence. |
 | Static Web App | `swa-jarvis-{suffix}` | West Europe; Free |
 | Azure Monitor action group | `jarvis-alerts` | Email receivers from required `budgetContactEmails`; no SMS/voice receivers |
 | Log alert rules | Deployment failure, sandbox crash, credential expiry | Stateful scheduled-query rules on `AppTraces`; group by hashed alert condition and send through `jarvis-alerts` |
 | Monthly budget | `jarvis-monthly` | Resource-group scoped; 300 in the subscription billing currency, monthly from 1 October 2026 (fixed start date; Azure rejects changing it), actual-cost alerts above 80 % and 100 % to `jarvis-alerts` |
 
-The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** and **Storage Blob Delegator** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (runtime status polling and `codex-tool` invocations), **Cognitive Services User** on the Foundry account (P7-24 Speech recognition), **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
+The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **AcrPull** at the registry, **Storage Blob Data Contributor** and **Storage Blob Delegator** at the Storage account, **Key Vault Secrets User** at the vault, **Foundry User** on the Foundry project (PI, voice agent and runtime status), **Cognitive Services User** on the Foundry account, **Cost Management Reader** at the resource group for budget reads, and a custom role with only `Microsoft.App/containerApps/read` and `Microsoft.App/containerApps/write` at the backend Container App. It reads `jarvis-repo-admin` only for repository creation; the sandbox identity cannot read it. `infra/bootstrap.ps1` creates the scale role definition, because the deploy identity cannot (L54). The configured resource ID prevents the API from accepting a caller-selected target. The existing `jarvis-sql-admins` group ID is used as the SQL server administrator; bootstrap already adds Dan and the backend identity to that group. The SQL server firewall rule permits Azure services (`0.0.0.0` to `0.0.0.0`); live role assignment and ARM behavior remain unverified until the change is deployed.
 
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. `JARVIS_GOOGLE_TIME_ZONE` is an optional GitHub variable set by [`infra/setup-google.ps1`](../infra/setup-google.ps1); when set, Bicep enables the Google tools. The OAuth client ID, client secret and refresh token are never deployment variables and stay in Key Vault. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed. `pcBridgeClientId` is optional: Main Deploy passes it from the nonsecret Actions variable `JARVIS_PC_BRIDGE_CLIENT_ID`, and Bicep omits `ENTRA_PC_BRIDGE_CLIENT_ID` until it is provisioned.
 
-PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. The deployments started at Global Standard capacity 1. Dan's first live chat on 5 October hit `rate_limit_exceeded` (capacity 1 = 1,000 tokens and 1 request per minute), so `gpt-5.6-luna` now uses capacity 100, `gpt-realtime-2.1` and `gpt-realtime-2.1-mini` use capacity 10 each, and `text-embedding-3-small` uses 20. Global Standard bills per token, so capacity changes the rate limit only, not the cost (L91). Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+The model chain is serial because Foundry accepts one account operation at a
+time. `gpt-live-1` version `2026-09-10` follows `gpt-5.6-luna` at
+`GlobalStandard` capacity 10; embeddings and every other deployment remain in
+the existing sequence after it.
 
-P7-13 added a sequential Global Standard `text-embedding-3-small` deployment after
-`gpt-realtime-2.1`, with the backend deployment name supplied to the Container App
-by Bicep. Its current capacity is 20. It is used for conversation and vault-index
-embeddings; a model or vector capability failure falls back to lexical retrieval.
-Normal Bicep deployment is idempotent and does not require a portal step.
-
-The deploy script explicitly uses ARM **Incremental** mode. In that mode, resources omitted from a deployment template are left unchanged, so runtime-created Foundry deployments not declared in Bicep are preserved. Bicep continues to reconcile its explicitly declared model deployments.
+The deploy script uses ARM **Incremental** mode. Omitting the two replaced 2.1
+deployments from Bicep therefore does not delete live resources. The normal
+`pi-agent` phase verifies the GPT-Live deployment, creates/pins
+`jarvis-pi-live`, waits for the configured backend revision, and then issues
+idempotent ARM deletes for those two old deployments. A 404 is success. Cleanup
+is never executed by a coding session.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `600`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 
@@ -7855,7 +7892,7 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 | Container Registry | ≈33 per month | Measured |
 | Backend always on | ≈30 per month (0.25 vCPU / 0.5 GiB idle rate) | List price |
 | Voice (Danish bridge) | ≈4 per 30-minute day | Estimated; billed meters to confirm |
-| Speech to speech | ≈11 per 30-minute day (`gpt-realtime-2.1`) or ≈3.4 (`-mini`) | List price |
+| GPT-Live voice | Not locally measured | Provider/audio acceptance and billed meter remain open |
 | Google Gmail and Calendar APIs | No additional charge expected | API quotas and Google's OAuth consent/verification policies apply; live account acceptance remains unverified |
 | Image generation | No per-image API charge | Uses Dan's existing ChatGPT/Codex subscription; allowance is shared with coding tasks, and actual quota/availability remain live-unverified |
 | Static Web Apps, SQL free offer | 0 | Free tiers; the database pauses when idle |
@@ -7945,6 +7982,11 @@ flowchart LR
 - **Infra:** [`deploy_bicep.sh`](../.github/scripts/deploy_bicep.sh) deploys `infra/main.bicep` as the fixed deployment `jarvis-infra`, keeping the running backend image. Later jobs and Runner deploy read its outputs.
 - **Backend:** builds `apps/backend/Dockerfile` in ACR, then updates the Container App to the image digest. On the first deploy the app does not exist yet, so Bicep creates it with that image. The job waits until the new revision is the latest ready revision; the previous revision serves until then.
 - **Agent:** builds `agents/jarvis` in ACR and creates a Foundry hosted-agent version from the image digest with `JARVIS_BACKEND_URL` and the `gpt-5.6-luna` deployment. It routes traffic to the active version, updates the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to its instance identity, and waits for backend health. The deploy identity receives Foundry project roles; Dan runs bootstrap once with the reported principal ID to grant `Jarvis.Tools` and persist it for future Bicep deployments.
+- **PI and GPT-Live:** the required `pi-agent` job provisions/pins PI and the
+  immutable `jarvis-pi-live` voice agent, then waits for the backend revision
+  configured for that name. Only after that revision is ready does it
+  idempotently delete the two replaced voice deployments. The smoke and release
+  receipt consume this exact revision; cleanup is not a separate operator step.
 - **Web:** builds with `VITE_BACKEND_URL` from the `backendFqdn` output and uploads `apps/web/dist` with the Static Web Apps deployment token (masked, read with the deploy identity). `staticwebapp.config.json` rewrites client routes to `index.html`. The job checks `/` and a deep link.
 - **Smoke:** `/health` must return 200; the backend listens only after its managed-identity SQL connection and migrations succeed. After an infra deploy, [`deploy_smoke.py`](../.github/scripts/deploy_smoke.py) grants the deploy identity Foundry User on the project, requires the administration host's `connections` to include `container-registry` and `application-insights`, and requires the runtime host to stop answering "Project not found" (sessions list of a placeholder agent; creates nothing).
 - **Acceptance/evidence:** deterministic runtime readiness also checks web root
@@ -7963,7 +8005,7 @@ flowchart LR
 
 ## References
 
-- Microsoft: [Hosted Agents](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents), [sessions](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions), [Container Apps Jobs](https://learn.microsoft.com/en-us/azure/container-apps/jobs), [Container Apps scaling](https://learn.microsoft.com/en-us/azure/container-apps/scale-app), [voice bridge](https://learn.microsoft.com/en-us/azure/foundry/how-to/voice-first-with-hosted-agent), [Voice Live languages](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live-language-support), [Voice Live models and pricing](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/voice-live), [resilience](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience).
+- Microsoft: [Hosted Agents](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents), [sessions](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/manage-hosted-sessions), [Container Apps Jobs](https://learn.microsoft.com/en-us/azure/container-apps/jobs), [Container Apps scaling](https://learn.microsoft.com/en-us/azure/container-apps/scale-app), [GPT-Live voice-agent integration](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/gpt-live-integration), [GPT-Live events](https://learn.microsoft.com/en-us/azure/foundry/openai/gpt-live-reference), [client delegation](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/gpt-live-delegation), [resilience](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience).
 - Costs: [Container Apps](https://azure.microsoft.com/en-us/pricing/details/container-apps/), [SQL free offer](https://learn.microsoft.com/en-us/azure/azure-sql/database/free-offer), [Foundry](https://azure.microsoft.com/en-us/pricing/details/foundry-agent-service/).
 - Authentication: [Codex](https://learn.chatgpt.com/docs/auth), [Codex in automation](https://learn.chatgpt.com/docs/auth/ci-cd-auth), [Codex renewal logic](https://github.com/openai/codex/blob/main/codex-rs/login/src/auth/manager.rs), [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli), [GitHub App tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app).
 - Agent protocol: [Copilot CLI ACP](https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server), [codex-acp](https://github.com/agentclientprotocol/codex-acp), [ACP Python SDK](https://github.com/agentclientprotocol/python-sdk).

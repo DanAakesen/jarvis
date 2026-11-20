@@ -46,6 +46,164 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(urls.map(\.absoluteString), ["wss://example.invalid/api/voice"])
     }
 
+    func testVoiceTerminalStateTableNeverResurrectsAFailedSession() {
+        struct Row {
+            let events: [VoiceSessionEvent]
+            let expected: VoiceSessionState
+        }
+        let rows = [
+            Row(
+                events: [.start, .connected, .sessionReady, .endRequested, .sessionEnded],
+                expected: .ended
+            ),
+            Row(
+                events: [.start, .connected, .sessionReady, .endRequested, .failed, .sessionEnded],
+                expected: .failed
+            ),
+            Row(
+                events: [.endRequested, .sessionEnded],
+                expected: .idle
+            ),
+            Row(
+                events: [.start, .connected, .sessionReady, .sessionEnded, .failed],
+                expected: .ended
+            ),
+            Row(
+                events: [.start, .connectionDropped, .reconnectAttempt(1), .endRequested, .failed],
+                expected: .failed
+            ),
+        ]
+
+        for row in rows {
+            var machine = VoiceSessionStateMachine()
+            for event in row.events { machine.apply(event) }
+            XCTAssertEqual(machine.state, row.expected)
+        }
+    }
+
+    func testVoiceEndWaitsForTheServerTerminalBeforeClosing() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket,
+            endAcknowledgementTimeout: .seconds(2)
+        )
+        try await client.start(accessToken: "a.b.c")
+        await socket.emit(#"{"type":"jarvis.session.ready","sessionId":"42"}"#)
+        let ending = Task { try await client.end() }
+        let sentEnd = await socket.waitForText(
+            #"{"type":"jarvis.session.end"}"#,
+            timeout: .seconds(1)
+        )
+        XCTAssertTrue(sentEnd)
+        let closedBeforeAcknowledgement = await socket.wasClosed()
+        let stateBeforeAcknowledgement = await client.state()
+        XCTAssertFalse(closedBeforeAcknowledgement)
+        XCTAssertNotEqual(stateBeforeAcknowledgement, .ended)
+
+        await socket.emit(#"{"type":"jarvis.session.ended"}"#)
+        try await ending.value
+        let endedState = await client.state()
+        let closedAfterAcknowledgement = await socket.wasClosed()
+        XCTAssertEqual(endedState, .ended)
+        XCTAssertTrue(closedAfterAcknowledgement)
+        let closeCodes = await socket.closeCodes()
+        XCTAssertTrue(closeCodes.allSatisfy { $0 == 1000 })
+    }
+
+    func testVoiceEndTimesOutInsteadOfClaimingAnUnacknowledgedEnd() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket,
+            endAcknowledgementTimeout: .milliseconds(20)
+        )
+        try await client.start(accessToken: "a.b.c")
+        do {
+            try await client.end()
+            XCTFail("Expected the missing terminal acknowledgement to time out")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endTimedOut)
+        }
+        let closed = await socket.wasClosed()
+        XCTAssertTrue(closed)
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011])
+    }
+
+    func testVoiceEndBeforeConnectionCannotClaimSuccess() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        do {
+            try await client.end()
+            XCTFail("Expected a pre-connect End to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        do {
+            try await client.end()
+            XCTFail("Expected a repeated pre-connect End to retain its failure")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011])
+    }
+
+    func testVoiceEndSendFailureCannotClaimSuccessOrCloseCleanly() async throws {
+        let socket = VoiceEndSocket(failSessionEnd: true)
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        try await client.start(accessToken: "a.b.c")
+        do {
+            try await client.end()
+            XCTFail("Expected the End send to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011])
+    }
+
+    func testVoiceEndDuringConnectionFailsTheStartAndCannotCloseCleanly() async throws {
+        let socket = VoiceConnectingSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        let starting = Task { try await client.start(accessToken: "a.b.c") }
+        await socket.waitUntilConnecting()
+
+        do {
+            try await client.end()
+            XCTFail("Expected End during connection to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        await socket.releaseConnection()
+        do {
+            try await starting.value
+            XCTFail("Expected the interrupted Start to fail")
+        } catch {
+            XCTAssertEqual(error as? VoiceProtocolError, .endFailed)
+        }
+        let state = await client.state()
+        let closeCodes = await socket.closeCodes()
+        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(closeCodes, [1011, 1011])
+    }
+
     func testWarmThrottleAllowsOneAttemptPerInterval() {
         var throttle = PiWarmThrottle(interval: 300)
         let start = Date(timeIntervalSince1970: 1_000)
@@ -256,6 +414,97 @@ private actor VoiceRecordingSocket: WebSocketTransport {
     func close(code: UInt16) async {}
 
     func connectedURLs() -> [URL] { urls }
+}
+
+private actor VoiceEndSocket: WebSocketTransport {
+    private let failSessionEnd: Bool
+    private var continuation: AsyncThrowingStream<String, any Error>.Continuation?
+    private var pending: [String] = []
+    private var sent: [String] = []
+    private var closes: [UInt16] = []
+
+    init(failSessionEnd: Bool = false) {
+        self.failSessionEnd = failSessionEnd
+    }
+
+    func connect(url: URL, subprotocols: [String]) async throws {}
+
+    func send(text: String) async throws {
+        if failSessionEnd && text == #"{"type":"jarvis.session.end"}"# {
+            throw VoiceProtocolError.endFailed
+        }
+        sent.append(text)
+    }
+
+    func receive() async -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { continuation in
+            self.continuation = continuation
+            for text in self.pending { continuation.yield(text) }
+            self.pending.removeAll()
+        }
+    }
+
+    func close(code: UInt16) async {
+        closes.append(code)
+    }
+
+    func emit(_ text: String) {
+        if let continuation {
+            continuation.yield(text)
+        } else {
+            pending.append(text)
+        }
+    }
+
+    func sentTexts() -> [String] { sent }
+    func waitForText(_ expected: String, timeout: Duration) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while !sent.contains(expected), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        return sent.contains(expected)
+    }
+    func wasClosed() -> Bool { !closes.isEmpty }
+    func closeCodes() -> [UInt16] { closes }
+}
+
+private actor VoiceConnectingSocket: WebSocketTransport {
+    private var connection: CheckedContinuation<Void, Never>?
+    private var connectWaiters: [CheckedContinuation<Void, Never>] = []
+    private var closes: [UInt16] = []
+
+    func connect(url: URL, subprotocols: [String]) async throws {
+        await withCheckedContinuation {
+            connection = $0
+            let waiters = connectWaiters
+            connectWaiters.removeAll()
+            for waiter in waiters { waiter.resume() }
+        }
+    }
+
+    func send(text: String) async throws {
+        throw VoiceProtocolError.invalidState
+    }
+
+    func receive() async -> AsyncThrowingStream<String, any Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func close(code: UInt16) async {
+        closes.append(code)
+    }
+
+    func waitUntilConnecting() async {
+        if connection != nil { return }
+        await withCheckedContinuation { connectWaiters.append($0) }
+    }
+
+    func releaseConnection() {
+        connection?.resume()
+        connection = nil
+    }
+
+    func closeCodes() -> [UInt16] { closes }
 }
 
 private actor RecordingTransport: HTTPTransport {

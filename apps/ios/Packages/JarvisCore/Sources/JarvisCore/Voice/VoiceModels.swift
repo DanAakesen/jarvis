@@ -1,7 +1,7 @@
 import Foundation
 
 public enum VoiceEndpoint {
-    public static let subprotocol = "jarvis.voice.v1"
+    public static let subprotocol = "jarvis.voice.v2"
 
     /// Normal voice always connects to the PI route; isolated runtime tests use their separate endpoints.
     public static func url(baseURL: URL) throws -> URL {
@@ -69,7 +69,7 @@ extension VoiceClientMessage: Encodable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .appendAudio(let audio):
-            try container.encode("input_audio_buffer.append", forKey: .type)
+            try container.encode("jarvis.voice.input_audio.append", forKey: .type)
             try container.encode(audio, forKey: .audio)
         case .microphoneActive:
             try container.encode("jarvis.microphone.active", forKey: .type)
@@ -104,8 +104,8 @@ extension VoiceClientMessage: Encodable {
 public enum VoiceServerMessage: Equatable, Sendable {
     case sessionReady(sessionID: UInt64)
     case sessionEnded
+    case sessionFailed(retryable: Bool, closeCode: Int)
     case transcriptionCompleted(transcript: String, itemID: String?)
-    case speechStarted
     case responseCreated(responseID: String?)
     case audioDelta(type: String, delta: String)
     case transcriptionDelta(delta: String, itemID: String?)
@@ -133,34 +133,37 @@ public enum VoiceServerMessage: Equatable, Sendable {
             return .sessionReady(sessionID: payload.sessionID.value)
         case "jarvis.session.ended":
             return .sessionEnded
-        case "conversation.item.input_audio_transcription.completed":
+        case "jarvis.session.failed":
+            guard let payload = try? JSONDecoder().decode(SessionFailedPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .sessionFailed(retryable: payload.retryable, closeCode: payload.closeCode)
+        case "jarvis.voice.input_transcript.completed":
             guard let payload = try? JSONDecoder().decode(TranscriptionPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
             return .transcriptionCompleted(transcript: payload.transcript, itemID: payload.itemID)
-        case "conversation.item.input_audio_transcription.delta":
+        case "jarvis.voice.input_transcript.delta":
             guard let payload = try? JSONDecoder().decode(TranscriptionDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
             return .transcriptionDelta(delta: payload.delta, itemID: payload.itemID)
-        case "input_audio_buffer.speech_started", "speech_started":
-            return .speechStarted
-        case "response.created":
+        case "jarvis.voice.response.started":
             let payload = try? JSONDecoder().decode(ResponseCreatedPayload.self, from: data)
-            return .responseCreated(responseID: payload?.response?.id)
-        case "response.audio.delta", "response.output_audio.delta":
+            return .responseCreated(responseID: payload?.responseID)
+        case "jarvis.voice.audio.delta":
             guard let payload = try? JSONDecoder().decode(AudioDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
             return .audioDelta(type: type, delta: payload.delta)
-        case "response.audio_transcript.delta", "response.output_audio_transcript.delta":
+        case "jarvis.voice.output_transcript.delta":
             guard let payload = try? JSONDecoder().decode(TextDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
             return .assistantTranscriptDelta(payload.delta)
-        case "response.done":
+        case "jarvis.voice.response.completed":
             return .responseDone
-        case "response.cancelled":
+        case "jarvis.voice.response.cancelled":
             return .responseCancelled
         case "jarvis.visual_context":
             guard let payload = try? JSONDecoder().decode(VisualContextPayload.self, from: data),
@@ -182,6 +185,8 @@ public enum VoiceProtocolError: Error, Equatable, Sendable {
     case invalidToken
     case invalidState
     case invalidScreenContext
+    case endFailed
+    case endTimedOut
 }
 
 private struct SessionReadyPayload: Decodable {
@@ -190,6 +195,12 @@ private struct SessionReadyPayload: Decodable {
     enum CodingKeys: String, CodingKey {
         case sessionID = "sessionId"
     }
+
+}
+
+private struct SessionFailedPayload: Decodable {
+    let retryable: Bool
+    let closeCode: Int
 }
 
 private struct SessionID: Decodable {
@@ -215,7 +226,7 @@ private struct TranscriptionPayload: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case transcript
-        case itemID = "item_id"
+        case itemID = "itemId"
     }
 }
 
@@ -225,15 +236,15 @@ private struct TranscriptionDeltaPayload: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case delta
-        case itemID = "item_id"
+        case itemID = "itemId"
     }
 }
 
 private struct ResponseCreatedPayload: Decodable {
-    let response: Response?
+    let responseID: String?
 
-    struct Response: Decodable {
-        let id: String?
+    enum CodingKeys: String, CodingKey {
+        case responseID = "responseId"
     }
 }
 

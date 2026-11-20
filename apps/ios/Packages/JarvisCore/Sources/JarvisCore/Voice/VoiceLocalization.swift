@@ -6,7 +6,7 @@ public enum JarvisVoiceLocalizationKey: String, CaseIterable, Sendable {
     case enableVideo
     case camera, stopCamera, cameraSettings, viewfinder, add, photoReady, takePhoto, close
     case shareScreen, stopSharing, sharingScreen, stop, broadcastPicker
-    case unavailable, cameraUnavailable, frameUnavailable, playbackUnavailable, microphoneUnavailable
+    case unavailable, visualUnavailable, cameraUnavailable, frameUnavailable, playbackUnavailable, microphoneUnavailable
     case signInError, tryLater, imageLimit, imageRateLimit, imageUnavailable
     case preview
     case screenShareUnavailable

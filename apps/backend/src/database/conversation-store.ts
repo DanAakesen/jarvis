@@ -249,9 +249,19 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return row ? sessionFromRow(row) : null;
     },
 
-    async endSession(sessionId) {
+    async endSession(sessionId, voiceUsage) {
+      if (voiceUsage?.providerVoiceSeconds !== undefined && (!Number.isFinite(voiceUsage.providerVoiceSeconds) ||
+          voiceUsage.providerVoiceSeconds < 0 || voiceUsage.providerVoiceSeconds > 24 * 60 * 60)) {
+        throw new RangeError('Provider voice usage is invalid');
+      }
       const result = await pool.request()
         .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input(
+          'providerVoiceMinutes',
+          sql.Decimal(19, 6),
+          voiceUsage?.providerVoiceSeconds === undefined ? null : voiceUsage.providerVoiceSeconds / 60,
+        )
+        .input('allowWallClockFallback', sql.Bit, voiceUsage?.allowWallClockFallback ?? false)
         .query<{ session_exists: number }>(`DECLARE @ended TABLE (
             id bigint NOT NULL,
             channel nvarchar(16) NOT NULL,
@@ -268,10 +278,12 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
             INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, source_event_id, at)
             SELECT id, N'voice', N'minutes',
-              CONVERT(decimal(19,6), DATEDIFF_BIG(MILLISECOND, started_at, ended_at)) / 60000.0,
+              COALESCE(@providerVoiceMinutes,
+                CONVERT(decimal(19,6), DATEDIFF_BIG(MILLISECOND, started_at, ended_at)) / 60000.0),
               CONVERT(nvarchar(300), id), ended_at
             FROM @ended
-            WHERE channel = N'voice';
+            WHERE channel = N'voice'
+              AND (@providerVoiceMinutes IS NOT NULL OR @allowWallClockFallback = 1);
 
             DECLARE @session_exists int = CONVERT(int, CASE WHEN EXISTS (
               SELECT 1 FROM dbo.jarvis_sessions WHERE id = @sessionId
@@ -326,16 +338,18 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.rowsAffected[0] === 1;
     },
 
-    async updateMessage(messageId, text) {
+    async updateMessage({ messageId, sessionId, role, text }) {
       const result = await pool.request()
         .input('messageId', sql.BigInt, BigInt(messageId))
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input('role', sql.NVarChar(16), role)
         .input('text', sql.NVarChar(sql.MAX), text)
         .query<MessageRow>(`UPDATE dbo.messages
           SET text = @text
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
             INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
-          WHERE id = @messageId AND role = N'dan';`);
+          WHERE id = @messageId AND jarvis_session_id = @sessionId AND role = @role;`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
     },

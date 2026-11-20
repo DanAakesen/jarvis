@@ -18,6 +18,8 @@ export interface PiVoiceTurn {
   /** The stored owner message of this utterance; PI's tools attribute their writes to it. */
   readonly messageId: string;
   readonly sessionId: string;
+  /** Native GPT-Live client-delegation identifier returned with any commentary for this turn. */
+  readonly delegationId?: string;
   readonly proactiveContext?: string | undefined;
   /** `performance.now()` when the final transcript arrived, so the log can say how long Dan waited. */
   readonly startedAt: number;
@@ -34,8 +36,8 @@ export interface PiVoiceTurnsOptions {
   readonly agent: PiVoiceAgent;
   /** Ends with the voice session. */
   readonly signal: AbortSignal;
-  /** Hand a finished sentence to Voice Live, which only reads it out. */
-  readonly speak: (text: string) => void;
+  /** Hand a finished sentence to GPT-Live for the matching client delegation. */
+  readonly speak: (text: string, delegationId?: string) => void;
   /** True while a PI turn is in flight, so the relay keeps the session open and shows that Jarvis is thinking. */
   readonly busy: (active: boolean) => void;
   readonly log: (turn: PiVoiceTurnLog) => void;
@@ -53,7 +55,7 @@ export interface PiVoiceTurns {
 }
 
 /**
- * Every voice turn goes to the one PI agent, in its one long conversation. Voice Live is only the ears and the voice: this
+ * Every voice turn goes to the one PI agent, in its one long conversation. GPT-Live is only the ears and the voice: this
  * runs the turn, speaks PI's own short note before a tool call (if it wrote one) and then its answer, and says failures
  * plainly. Nothing here answers for PI and nothing falls back to another engine.
  */
@@ -92,7 +94,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
         if (at >= 0) partial = partial.slice(0, at) + partial.slice(at + note.length);
         if (chunk.type === 'acknowledgment' && !acknowledged && chunk.text.trim() && !signal.aborted && at >= 0) {
           acknowledged = true;
-          options.speak(chunk.text.trim());
+          options.speak(chunk.text.trim(), turn.delegationId);
         }
       }
       reply = partial.trim();
@@ -104,7 +106,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
     }
     if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = emptyReply; }
     // A cancelled or superseded turn says nothing: the session ended, or Dan has already moved on.
-    if (reply && !options.signal.aborted && !superseded()) options.speak(reply);
+    if (reply && !options.signal.aborted && !superseded()) options.speak(reply, turn.delegationId);
     options.log({ outcome, transcriptToFirstTextMs: firstTextMs, transcriptToDoneMs: Math.round(now() - turn.startedAt), acknowledged });
   }
 

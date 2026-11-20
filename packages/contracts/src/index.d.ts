@@ -140,11 +140,11 @@ export interface PresenceState {
 export const presenceUpdateSchema: Readonly<Record<string, unknown>>;
 export const presenceStateSchema: Readonly<Record<string, unknown>>;
 export function isPresenceState(value: unknown): value is PresenceState;
-export const modelRoles: readonly ['chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot'];
+export const modelRoles: readonly ['chat', 'vision', 'research', 'voice', 'embedding', 'codex', 'copilot'];
 export type ModelRole = typeof modelRoles[number];
 export const reasoningEfforts: readonly ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
 export type ReasoningEffort = typeof reasoningEfforts[number];
-export const modelCapabilities: readonly ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image'];
+export const modelCapabilities: readonly ['chat', 'responses', 'realtime', 'embeddings', 'image'];
 export type ModelCapability = typeof modelCapabilities[number];
 export const clipboardTextMaxBytes: 20480;
 export interface ClipboardReadResult {
@@ -156,19 +156,6 @@ export interface ClipboardWriteResult {
 export function isClipboardText(value: unknown): value is string;
 export function isClipboardReadResult(value: unknown): value is ClipboardReadResult;
 export function isClipboardWriteResult(value: unknown): value is ClipboardWriteResult;
-export interface VoiceTuningSettings {
-  bargeInEnabled: boolean;
-  maxSpokenReplyTokens: number;
-}
-export const voiceTuningSettingsBounds: Readonly<{
-  maxSpokenReplyTokens: Readonly<{ minimum: 1; maximum: 4096 }>;
-}>;
-export const voiceTuningSettingsSchema: Readonly<{
-  type: 'object';
-  minProperties: 1;
-  additionalProperties: false;
-  properties: Readonly<Record<keyof VoiceTuningSettings, Readonly<Record<string, unknown>>>>;
-}>;
 export const researchDepths: readonly ['quick', 'standard', 'deep'];
 export type ResearchDepth = typeof researchDepths[number];
 export interface ResearchSettings {

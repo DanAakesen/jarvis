@@ -55,10 +55,12 @@ import {
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import {
-  createVoiceLiveConnector,
   createVoiceRelayModule,
-  normalizeFoundryProjectEndpoint,
 } from './voice/relay.js';
+import {
+  createFoundryVoiceAgentConnector,
+  normalizeFoundryProjectEndpoint,
+} from './voice/live-protocol.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
 import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
@@ -161,7 +163,7 @@ import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createConfirmationStore } from './database/confirmation-store.js';
 import { createOwnerInteractionService } from './core/owner-interactions.js';
-import { createAzureSpeechPartialRecognizerFactory, SPEECH_AUTH_SCOPE } from './voice/speech-recognizer.js';
+import { SPEECH_AUTH_SCOPE } from './voice/speech-recognizer.js';
 import { createAzureWatchTranscriber } from './voice/watch-transcription.js';
 import { createVoiceCredentialCache } from './voice/credential-cache.js';
 import { createWatchCredentialStore, WatchCredentials } from './auth/watch-credential.js';
@@ -329,7 +331,7 @@ try {
     alertNotifier,
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
-  const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
+  const credential = archiveStorageAccount || config.keyVaultUri || config.foundryVoiceAgentName || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone ||
     config.phone || sleepResourceId || config.backendLogs || config.backendLogProbe
     ? new DefaultAzureCredential(managedIdentityClientId
@@ -1136,46 +1138,15 @@ try {
     visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
     visionWatchModule = createVisionWatchModule(visionWatch);
   }
-  const voiceRelayModule = config.voiceLiveEndpoint && credential
+  const voiceRelayModule = config.foundryProjectEndpoint && config.foundryVoiceAgentName && credential
     ? createVoiceRelayModule({
-      frameStore,
-      ...(screenVision && settingsStore ? {
-        reserveImageBudget: async (input) => {
-          if (input.signal.aborted) throw new Error('Image budget admission was cancelled');
-          const settings = await readSettings(settingsStore, await modelCatalogue.read());
-          return await screenVision!.reserveImage({ ...input, limitUsd: settings.global.visionDailyBudgetUsd });
-        },
-        recordImageUsage: (input) => screenVision!.recordImageUsage(input),
-        captionFrame: async (input) => {
-          if (input.signal.aborted) throw new Error('Camera caption was cancelled');
-          const settings = await readSettings(settingsStore, await modelCatalogue.read());
-          return screenVision!.caption({
-            ...input,
-            model: settings.roles.vision.model,
-            reasoningEffort: settings.roles.vision.reasoningEffort,
-            limitUsd: settings.global.visionDailyBudgetUsd,
-          });
-        },
-      } : {}),
       ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Voice identity unavailable');
         return token.token;
       },
-      connect: createVoiceLiveConnector(config.voiceLiveEndpoint),
-      ...(config.foundryEndpoints
-        ? {
-          createPartialRecognizer: createAzureSpeechPartialRecognizerFactory(
-            config.foundryEndpoints.runtime,
-            async (scope, signal) => {
-              const token = await credential.getToken(scope, { abortSignal: signal });
-              if (!token) throw new Error('Speech identity unavailable');
-              return token.token;
-            },
-          ),
-        }
-        : {}),
+      connect: createFoundryVoiceAgentConnector(config.foundryProjectEndpoint, config.foundryVoiceAgentName),
     })
     : undefined;
   let scheduleOwnerReminderWake: (fireAt: Date) => void = () => {};
@@ -1425,7 +1396,7 @@ try {
     }),
     'foundry.voice': async () => {
       const configured = Boolean(piGateway && credential &&
-        (config.voiceLiveEndpoint || config.foundryProjectEndpoint));
+        config.foundryProjectEndpoint && config.foundryVoiceAgentName);
       return {
         status: configured ? 'unknown' : 'down',
         details: {

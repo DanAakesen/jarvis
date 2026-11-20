@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
-"""Response execution and terminal sequencing for Voice Live Bridge sessions."""
+"""Historical response sequencing for the isolated hosted bridge, not the normal GPT-Live route."""
 
 from __future__ import annotations
 

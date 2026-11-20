@@ -13,13 +13,81 @@
 - **UI freshness:** committed `memory_remember`, `memory_correct` and `memory_forget` activity invalidates Memory pagination. Web reloads page zero and supports Load more using the raw server page count, while filtering any legacy Vault records only for display; iPhone invalidates Settings caches and reloads an open Memory screen. No unavailable or failed operation is represented as a successful write.
 - **Evidence:** deterministic backend, web and Swift checks only. No live provider/model call, deployment, paid smoke or physical-device acceptance is authorized by this decision.
 
+## 20 November 2026 — GPT-Live review corrections (post-2db2a87)
+
+- Model activation is read from ARM, matching the Foundry deployment resource
+  schema; the project data-plane session API is not treated as the deployment
+  source of truth.
+- Long assistant transcripts update only the matching message/session/role row.
+  The client protocol is `jarvis.voice.v2`; v1 is explicitly refused with no
+  alias.
+- Native transcript deltas remain in one candidate across silence. `event_id`
+  deduplicates delivery, and `start_ms`/`end_ms` plus delegation `offset_ms`
+  associate the owner turn. Raw PCM never refreshes inactivity; transcript and
+  explicit control activity do.
+- Bicep does not configure `JARVIS_VOICE_AGENT_NAME`. The provisioner sets it
+  only after the voice agent is active/pinned and then waits for the backend.
+- Camera/screen rejection is visible and terminal for that session's visual
+  controls: clients stop capture and disable retries instead of continuing an
+  unacknowledged audio-only upload flow.
+- SQL startup rejection is consumed immediately. Only clean completion emits
+  `jarvis.session.ended`; provider/restart/startup failures emit an explicit
+  retryable/non-retryable failure and reconnect only when the event allows it.
+- A single terminal state machine owns clean versus failed completion. A clean
+  path can send `session.close` only after provider readiness, must observe
+  `session.closed`, finish persistence and enqueue `jarvis.session.ended`
+  before it emits a `1000` terminal close. Pre-provider, connecting, send,
+  drain, transport, acknowledgement and cleanup failures remain 1011 and
+  forbid wall-clock voice usage. Web, iPhone and Watch release successful
+  ownership only after Jarvis terminal evidence (or an already-ended state);
+  failed ownership is always torn down without publishing Ended.
+- Optional Live format echoes are not readiness proof or a rejection when
+  absent; an explicit conflict is rejected against provisioned PCM 24 kHz.
+  Commentary chunks are at most 256 UTF-8 bytes, below 500 tokens even at one
+  token per byte. Provider cumulative audio seconds are retained, deduplicated
+  and written as the session's voice minutes.
+
+## 20 November 2026 — Replace direct Voice Live with one PI-delegated GPT-Live agent
+
+- **Model:** the Sweden Central Foundry account has one voice deployment,
+  `gpt-live-1`, model `gpt-live-1`, version `2026-09-10`, `GlobalStandard`,
+  capacity 10. The two 2.1 deployments leave the Bicep template.
+- **Voice agent:** Deploy provisions and pins one immutable
+  `kind: voice` / `sub_protocol: live` / `model_type: self_deployed` agent named
+  `jarvis-pi-live`. It uses PCM 24 kHz, `marin`, and
+  `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
+  used because it would create a separate prompt conversation and bypass the
+  stored-message/per-turn PI grant.
+- **Boundary:** the owner `/voice` socket stays unchanged. The backend alone
+  connects to the exact GPT-Live Foundry route with managed identity and
+  `VoiceAgents=V1Preview`, translates Jarvis PCM to native Live audio, translates
+  microphone state to native mute/unmute, and emits Jarvis-normalised captions,
+  audio, readiness and playback groups to web/iOS/Watch.
+- **Authority:** on client delegation, the relay groups the current transcript
+  for 0.6 seconds with a three-second bound, persists Dan's owner message, then
+  uses the existing PI gateway and `dbo.pi_conversation`. PI's commentary and
+  final answer return under the same delegation ID; existing MCP discovery,
+  call, cap, receipt, cancellation and storage contracts remain authoritative.
+- **Cleanup:** the normal `pi-agent` Deploy phase runs after Bicep/backend/agent
+  deployment. It provisions/pins the voice agent, confirms a ready configured
+  backend revision, and only then idempotently deletes both replaced 2.1
+  deployments through ARM. Omitting them from incremental Bicep is not treated
+  as deletion.
+- **Acceptance:** source compile/static checks are complete when recorded in
+  `PLAN.md`; no paid model call, voice session, Azure probe, deploy or smoke was
+  run. Dan's physical iPhone/Watch/web audio, latency, acoustic barge-in,
+  captions and provider acceptance are explicitly open. Direct Voice Live
+  entries below are dated historical evidence, not current routing guidance.
+
 ## 19 November 2026 — One PI route and an exact, release-owned backend configuration (#1966)
 
 - **Normal route:** PI is the only Chat and Voice engine. The old saved device selector, test badge and normal-client `engine` parameters are removed. An older Chat client may explicitly send `pi`; `current` and unknown values are refused. Isolated runtime-test sessions keep their separately selected runtime and are not a fallback for normal Chat or Voice.
 - **Release state:** ordinary infrastructure deployment owns preservation, not post-deploy repair. `deploy_bicep.sh` captures the previous complete PI tuple into a private secure parameter; Bicep restores PI core, GitHub, Azure MCP and monthly-cap settings. A missing/mismatched tuple fails closed before deployment instead of becoming a green but stripped backend.
 - **Readiness receipt:** the `pi-agent` job runs before readiness, waits for and returns the exact backend revision it configured, and `release_state.py` records that revision with the PI job attempt. A smoke or receipt based on an older backend revision is not acceptable evidence.
 - **Owner controls:** engine selection is gone. Background PI remains a distinct, off-by-default policy switch in Proactive settings with independent read/save loading and Retry; Status expansion shows checked time and evidence instead of repeating its subtitle.
-- **Scope boundary:** this removes the selector, not the old harness/resources or isolated runtime-test support. That retirement remains behind the separately documented cutover deletion gate.
+- **Scope boundary at that time:** this removed the selector, not the old
+  voice deployment resources. The 20 November GPT-Live decision above is the
+  explicit approved cutover and supersedes that deferred deletion gate.
 - **Evidence:** offline deployment-script, backend, web, contracts, Bicep and Swift checks are required. Live provider, deploy, TestFlight and physical-device verification remain separate owner/Dispatcher evidence.
 
 ## 19 November 2026 — PI situational intelligence uses SQL truth, one grant and one combined slot ledger
@@ -1558,7 +1626,9 @@ deployment remains unverified.
 ## 30 October 2026 — keep the voice protocol in JarvisCore (P15-06 / #1391)
 
 Use the web client's `/voice` and `/voice/da` routes and its
-`jarvis.voice.v1` plus `jarvis.auth.TOKEN` subprotocols. Keep the WebSocket
+Historical v1 decision: the client then used `jarvis.voice.v1` plus
+`jarvis.auth.TOKEN`. The 20 November GPT-Live wire cutover supersedes this with
+v2 and explicitly rejects v1. Keep the WebSocket
 replaceable for Linux tests; do not add an iOS backend route or Apple framework
 to `JarvisCore`. The core models known client/server messages, retains unknown
 server JSON, and owns only protocol state and PCM16/base64 conversion—not audio

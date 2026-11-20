@@ -64,6 +64,63 @@ session tokens or hashes.
 
 ## Voice startup diagnosis
 
+The current route is Foundry GPT-Live agent `jarvis-pi-live` behind the
+authenticated `/voice` socket. `voice.session_stage` reports request start,
+SQL session creation, credential acquisition, upstream open and
+`session_started`. One exactly-once `voice.session_summary` records the
+allowlisted native GPT-Live event names, first closer, close code and durations;
+it contains no transcript, instructions or audio.
+
+Startup has one route and no tool-budget rung or representation fallback. A
+token failure, upstream error, invalid PCM negotiation or missing
+`session.started` closes with a visible error and the existing client retry
+backoff. Do not infer readiness from a WebSocket open alone. The next event must
+be the service-owned `session.started`, after which Jarvis sends
+`jarvis.session.ready` to the phone/browser.
+The pinned agent owns PCM 24 kHz. The optional `session.audio.format` echo may
+be absent; omission is accepted, while an explicit type/rate conflict fails.
+
+`jarvis.session.ended` is terminal and is sent only for a clean owner/time-limit
+end. A retryable failure (startup, provider disconnect, service restart) sends
+`jarvis.session.failed` with `retryable: true`, stops queued playback and then
+closes with the retry code. Web/iOS reconnect; a permanent policy/protocol
+failure sends the same event with `retryable: false` and ends the client. SQL
+session creation has an immediate rejection consumer so a startup failure can
+never become an unhandled Node 22 promise rejection.
+
+Clean owner, time-limit and lost-browser termination send native
+`session.close` once and wait up to five seconds for `session.closed`. A socket
+close, socket error or timeout before that terminal event is a retryable 1011,
+not a clean 1000, and no wall-clock voice usage row is invented. iOS and Watch
+keep their receive loop alive until the Jarvis terminal acknowledgement or a
+bounded End timeout; failed End is surfaced instead of publishing Ended.
+
+At a client delegation, expect this source-only sequence in logs: native input
+transcript deltas, one stored owner message, `voice.pi_turn` and the PI
+turn/receipt logs, then native output audio/transcript deltas. `voice.pi_turn`
+includes no text; use the matching conversation history to inspect the saved
+owner message and provider-spoken reply. The first PI commentary and final
+answer carry the same delegation identifier upstream. An input transcript that
+arrives while PI is running cancels that stale turn.
+
+Transcript pauses do not split an owner turn. Native event IDs and timeline
+offsets stay in one candidate until client delegation; the 0.6-second quiet
+settlement then runs with a three-second bound. GPT-Live has no
+transcript-done or output-audio-done event, so later output is split/persisted
+on 0.6-second quiet or a three-second persistence bound. If no provider audio
+was exercised, none of this is provider or acoustic acceptance.
+Each delegated commentary append is at most 256 UTF-8 bytes, a conservative
+below-500-token bound. Native `session.usage.updated` events and
+`session.closed.usage.seconds` are cumulative: event IDs are deduplicated, the
+largest value is retained, and the final provider audio seconds become the
+voice-minutes usage row.
+
+The physical/provider acceptance is intentionally open. Dan must make the real
+voice attempt on a device after a future Deploy; this coding session did not
+connect to Foundry, open a voice session, invoke a model or run a paid smoke.
+
+## Historical pre-GPT-Live diagnosis (superseded; do not use as runtime guidance)
+
 After deployment, the owner should make one voice attempt, end it, and find its
 `voice.session_summary` by `reqId`. `voice.session_stage` records each stage with
 milliseconds since `request.started`: session creation, credential, settings,
@@ -129,7 +186,7 @@ combined-context limit was verified for the deployed API version in this change.
 The harmless `connection.upgrade_failed` duplicate-registration noise is tracked
 separately and is not a voice-stage failure.
 
-## Live partial-transcription diagnosis
+## Historical parallel-transcription diagnosis (removed with the 2.1 path)
 
 For the separately authorized live acceptance, speak once with the microphone
 active, end the session, and inspect that session's `voice.partials_unavailable`

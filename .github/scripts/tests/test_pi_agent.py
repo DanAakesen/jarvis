@@ -140,6 +140,10 @@ class DefinitionTest(unittest.TestCase):
 
         with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43), \
                 mock.patch.object(pi, "wait_ready", return_value="ca-jarvis--revision-1"), \
+                mock.patch.object(pi, "provision_voice_agent", return_value={
+                    "agent": "jarvis-pi-live", "version": "2", "created": True, "model": "gpt-live-1",
+                }), mock.patch.object(pi, "configure_voice_backend", return_value="ca-jarvis--revision-1"), \
+                mock.patch.object(pi, "delete_replaced_voice_deployments", return_value=[]), \
                 mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         # The Jarvis connection is written, and the two old harness connections (GitHub with the token, Azure) are removed.
@@ -272,6 +276,10 @@ class ReachTest(unittest.TestCase):
         with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True), mock.patch.object(pi, "Az", Fake), \
                 mock.patch.object(pi, "configure_backend", configure), \
                 mock.patch.object(pi, "wait_ready", return_value="ca-jarvis--revision-2"), \
+                mock.patch.object(pi, "provision_voice_agent", return_value={
+                    "agent": "jarvis-pi-live", "version": "2", "created": True, "model": "gpt-live-1",
+                }), mock.patch.object(pi, "configure_voice_backend", return_value="ca-jarvis--revision-2"), \
+                mock.patch.object(pi, "delete_replaced_voice_deployments", return_value=[]), \
                 mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         self.assertEqual([tool["server_label"] for tool in stored["definition"]["tools"] if tool["type"] == "mcp"], ["jarvis"])

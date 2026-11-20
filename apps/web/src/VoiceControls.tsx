@@ -90,6 +90,8 @@ export function VoiceControls({
   const [clientMessage, setClientMessage] = useState(initialMessage);
   const [microphone, setMicrophone] = useState<MicrophoneState>('off');
   const [muted, setMuted] = useState(false);
+  const [visualInputUnsupported, setVisualInputUnsupported] = useState(false);
+  const visualInputUnsupportedRef = useRef(false);
   const stopButton = useRef<HTMLButtonElement>(null);
   const stopWaiters = useRef(new Set<() => void>());
   const voiceBar = useRef<HTMLDivElement>(null);
@@ -199,6 +201,8 @@ export function VoiceControls({
     setStaleActivity(voiceActivity);
     dismissNotification();
     setMuted(false);
+    setVisualInputUnsupported(false);
+    visualInputUnsupportedRef.current = false;
     setMicrophone('off');
     const voice = new BrowserVoiceClient({
       backendUrl: config.backendUrl,
@@ -215,7 +219,9 @@ export function VoiceControls({
         setScreenSessionId(sessionId);
       },
       onVisionRequest: (source, transcript, itemId) => {
-        if (client.current === voice) void inspectAndSendVision(source, transcript, itemId);
+        if (client.current === voice && !visualInputUnsupportedRef.current) {
+          void inspectAndSendVision(source, transcript, itemId);
+        }
       },
       onVisionLimit: (limit) => {
         if (client.current !== voice || visualResultItem.current !== limit.itemId) return;
@@ -237,6 +243,18 @@ export function VoiceControls({
         if (client.current !== voice || !captures.current.camera?.sharing ||
             visualResultItem.current === null || itemId && visualResultItem.current !== itemId) return;
         notify('Jarvis could not confirm the visual input for this turn.', true);
+      },
+      onVisualUnsupported: () => {
+        if (client.current !== voice) return;
+        visualInputUnsupportedRef.current = true;
+        setVisualInputUnsupported(true);
+        visionRequest.current += 1;
+        visualResultItem.current = null;
+        visionController.current?.abort();
+        captures.current.screenShare?.stop();
+        captures.current.camera?.stop();
+        voice.setCameraState(false);
+        notify('Camera and screen sharing are unavailable in this GPT-Live voice session. Voice remains audio-only.', true);
       },
       onMicrophoneState: (state) => {
         if (client.current === voice) setMicrophone(state);
@@ -284,6 +302,7 @@ export function VoiceControls({
   };
 
   const inspectAndSendVision = async (source: 'camera' | 'screen', question?: string, itemId?: string) => {
+    if (visualInputUnsupportedRef.current) return;
     if (source === 'screen' && captures.current.camera?.conversation && captures.current.camera.sharing) {
       notify('Turn off the camera to inspect the shared screen in voice.');
       return;
@@ -443,16 +462,18 @@ export function VoiceControls({
     label: screenShare.inspecting ? 'Looking at screen…' : 'Look at screen',
     icon: <MenuGlyph name="screen" />,
     onSelect: () => { void inspectAndSendVision('screen'); },
-    disabled: cameraOwnsVoiceContext || !screenSessionId || pending || screenShare.inspecting,
-    ...(cameraOwnsVoiceContext ? { description: 'Turn off the camera to inspect the shared screen in voice.' }
+    disabled: visualInputUnsupported || cameraOwnsVoiceContext || !screenSessionId || pending || screenShare.inspecting,
+    ...(visualInputUnsupported ? { description: 'Visual input is unavailable in this GPT-Live voice session.' }
+      : cameraOwnsVoiceContext ? { description: 'Turn off the camera to inspect the shared screen in voice.' }
       : !screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
     id: 'screen-watch',
     label: screenWatch.watching ? `Stop watching the screen${formatWatchBudget(screenWatch.budget) ? ` · ${formatWatchBudget(screenWatch.budget)}` : ''}` : 'Watch the screen',
     icon: <MenuGlyph name="screen" />,
     onSelect: () => { if (screenWatch.watching) screenWatch.stop(); else screenWatch.start(); },
-    disabled: !screenSessionId || pending,
-    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+    disabled: visualInputUnsupported || !screenSessionId || pending,
+    ...(visualInputUnsupported ? { description: 'Visual input is unavailable in this GPT-Live voice session.' }
+      : !screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
     id: 'stop-screen',
     label: 'Stop sharing screen',
@@ -464,8 +485,9 @@ export function VoiceControls({
     icon: <MenuGlyph name="screen" />,
     // Request permission directly in the click gesture; capture errors become toasts.
     onSelect: () => { void screenShare?.start((message) => notify(message, true)); },
-    disabled: !screenShare || screenShare.starting,
-    ...(!screenShare ? { description: 'Screen sharing is unavailable.' } : {}),
+    disabled: visualInputUnsupported || !screenShare || screenShare.starting,
+    ...(visualInputUnsupported ? { description: 'Visual input is unavailable in this GPT-Live voice session.' }
+      : !screenShare ? { description: 'Screen sharing is unavailable.' } : {}),
   }];
   const cameraActions: MoreMenuAction[] = camera?.sharing ? [{
     id: 'stop-camera',
@@ -479,8 +501,9 @@ export function VoiceControls({
     icon: <MenuGlyph name="camera" />,
     // Request permission directly in the click gesture; capture errors become toasts.
     onSelect: () => { void camera?.start((message) => notify(message, true)); },
-    disabled: !camera || camera.starting,
-    ...(!camera ? { description: 'Camera access is unavailable.' } : {}),
+    disabled: visualInputUnsupported || !camera || camera.starting,
+    ...(visualInputUnsupported ? { description: 'Visual input is unavailable in this GPT-Live voice session.' }
+      : !camera ? { description: 'Camera access is unavailable.' } : {}),
   }];
   const microphoneReady = microphone === 'live' || microphone === 'granted';
   const menuActions: MoreMenuAction[] = [

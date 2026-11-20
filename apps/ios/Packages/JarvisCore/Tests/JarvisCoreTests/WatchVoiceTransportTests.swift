@@ -75,11 +75,13 @@ final class WatchVoiceTransportTests: XCTestCase {
         let audio = WatchEvent(.voiceAudio, requestID: id)
         let state = WatchEvent(.voiceState, requestID: id, text: "Listening")
         let finished = WatchEvent(.voiceState, requestID: id, text: "Playback finished")
+        let endFailed = WatchEvent(.voiceState, requestID: id, text: "End failed")
         let interrupted = WatchEvent(.interrupt, requestID: id)
         XCTAssertEqual(WatchEventScheduling.insertionIndex(for: audio, in: [audio, state]), 1)
         XCTAssertEqual(WatchEventScheduling.insertionIndex(for: audio, in: [audio, finished, state]), 2)
         XCTAssertEqual(WatchEventScheduling.insertionIndex(for: audio, in: [interrupted]), 1)
         XCTAssertTrue(WatchEventScheduling.isBarrier(finished))
+        XCTAssertTrue(WatchEventScheduling.isBarrier(endFailed))
         XCTAssertTrue(WatchEventScheduling.isBarrier(interrupted))
         XCTAssertFalse(WatchEventScheduling.isBarrier(state))
     }

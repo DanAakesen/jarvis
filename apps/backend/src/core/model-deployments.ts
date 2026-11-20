@@ -289,7 +289,7 @@ function reportPendingOperation(
 export const manageModelDeploymentTool: JarvisTool = {
   name: 'manage_model_deployment',
   description: 'Create or delete a Foundry model deployment when Dan requests it, without another approval.',
-  // Voice Live and the Responses API reject combinators on the root schema (L121); execute
+  // Tool-facing model APIs reject combinators on the root schema (L121); execute
   // enforces the per-action requirements instead.
   inputSchema: {
     type: 'object',

@@ -4,6 +4,7 @@ import sql from 'mssql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from './app.js';
 import { loadConfig } from './config.js';
+import type { ConversationStore } from './core/conversation-store.js';
 import { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
 import { createLogger } from './logging.js';
 import type { WatchTranscriber } from './voice/watch-transcription.js';
@@ -41,6 +42,25 @@ function attachmentStoreFixture() {
 }
 
 describe('Fastify backend', () => {
+  it('ends generic conversation sessions without wall-clock voice usage', async () => {
+    const endSession = vi.fn(async () => true);
+    const onConversationSessionEnded = vi.fn();
+    const { app } = fixture({
+      conversationStore: { endSession } as unknown as ConversationStore,
+      onConversationSessionEnded,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/7/end',
+      headers: { authorization: 'Bearer a.b.c' },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(endSession).toHaveBeenCalledWith('7', { allowWallClockFallback: false });
+    expect(onConversationSessionEnded).toHaveBeenCalledWith('7');
+  });
+
   it('protects watch transcription and rejects unsafe audio without logging content', async () => {
     const transcribe = vi.fn<WatchTranscriber>(async () => 'private transcript');
     const { app, records } = fixture({ watchTranscriber: transcribe });

@@ -53,7 +53,7 @@ struct JarvisSettingsEditorView: View {
             ]
         case .voice:
             return [
-                choice("voice.speechToTextModel", .speechToText, response?.options["speechToTextModels"]?.arrayValues ?? []),
+                toggle("voice.minimizeWindowsOnVoiceStart", .voiceMinimizeWindows),
             ]
         case .research:
             return [
@@ -322,7 +322,6 @@ struct JarvisSettingsEditorView: View {
         case "vision": .roleVision
         case "research": .roleResearch
         case "voice": .roleVoice
-        case "transcription": .roleTranscription
         case "embedding": .roleEmbedding
         case "codex": .roleCodex
         case "copilot": .roleCopilot

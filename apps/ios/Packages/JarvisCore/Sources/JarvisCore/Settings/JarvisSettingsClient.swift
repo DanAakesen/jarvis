@@ -742,7 +742,7 @@ public enum JarvisSettingsLogic {
 
     public static func validateSettingsPatch(_ patch: JarvisSettingsPatch) throws {
         guard !patch.areas.isEmpty else { throw JarvisSettingsClientError.invalidRequest }
-        let roles: Set<String> = ["chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot"]
+        let roles: Set<String> = ["chat", "vision", "research", "voice", "embedding", "codex", "copilot"]
         let reasoning: [String] = ["none", "minimal", "low", "medium", "high", "xhigh"]
         for (area, fields) in patch.areas {
             guard !fields.isEmpty else { throw JarvisSettingsClientError.invalidRequest }
@@ -784,14 +784,15 @@ public enum JarvisSettingsLogic {
                     } else { valid = false }
                 case ("presentation", "showWork"):
                     valid = validSettingsFieldValue(value)
+                case ("voice", "minimizeWindowsOnVoiceStart"):
+                    valid = validSettingsFieldValue(value)
                 case ("decisions", "provider"):
                     valid = validSettingsFieldValue(value, options: ["jev", "microsoft"])
                 case ("jarvis", "reasoning"):
                     valid = validSettingsFieldValue(value, options: reasoning)
                 case ("codex", "reasoning"):
                     valid = validSettingsFieldValue(value, options: ["default"] + reasoning)
-                case ("jarvis", "model"), ("codex", "model"), ("copilot", "model"),
-                     ("voice", "speechToTextModel"):
+                case ("jarvis", "model"), ("codex", "model"), ("copilot", "model"):
                     valid = validSettingsFieldValue(value, maximumLength: 128, allowEmpty: false)
                 case ("location", "city"):
                     valid = validSettingsFieldValue(value, maximumLength: 100) &&

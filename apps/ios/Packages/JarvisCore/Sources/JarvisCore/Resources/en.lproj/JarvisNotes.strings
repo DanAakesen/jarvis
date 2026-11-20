@@ -144,6 +144,7 @@
 "voice.stop" = "Stop";
 "voice.broadcastPicker" = "Start or stop screen sharing";
 "voice.unavailable" = "Voice unavailable.";
+"voice.visualUnavailable" = "Camera and screen sharing are unavailable in this voice session. Voice remains audio-only.";
 "voice.cameraUnavailable" = "Camera unavailable.";
 "voice.frameUnavailable" = "Camera frame unavailable.";
 "voice.playbackUnavailable" = "Audio playback unavailable.";

@@ -3,7 +3,7 @@ import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
 import { loadBackendLogsConfig, type BackendLogsConfig } from './operations/backend-logs.js';
 import { loadBackendLogProbeConfig, type BackendLogProbeConfig } from './operations/backend-log-authorization.js';
-import { normalizeFoundryProjectEndpoint, normalizeVoiceLiveEndpoint } from './voice/relay.js';
+import { JARVIS_VOICE_AGENT_NAME, normalizeFoundryProjectEndpoint } from './voice/live-protocol.js';
 export { ConfigurationError } from './configuration-error.js';
 
 export interface BackendConfig {
@@ -14,7 +14,7 @@ export interface BackendConfig {
   backendLogs?: BackendLogsConfig;
   backendLogProbe?: BackendLogProbeConfig;
   keyVaultUri?: string;
-  voiceLiveEndpoint?: string;
+  foundryVoiceAgentName?: string;
   foundryEndpoints?: {
     admin: string;
     runtime: string;
@@ -130,15 +130,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     }
   }
 
-  let voiceLiveEndpoint: string | undefined;
-  if (env.VOICE_LIVE_ENDPOINT !== undefined) {
-    try {
-      voiceLiveEndpoint = normalizeVoiceLiveEndpoint(env.VOICE_LIVE_ENDPOINT.trim());
-    } catch {
-      throw new ConfigurationError('VOICE_LIVE_ENDPOINT must be a secure Azure Voice Live WebSocket URL');
-    }
-  }
-
   let foundryProjectEndpoint: string | undefined;
   if (env.FOUNDRY_PROJECT_ENDPOINT !== undefined) {
     try {
@@ -153,6 +144,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   }
   if (foundryChatAgentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_CHAT_AGENT_NAME is configured');
+  }
+  const foundryVoiceAgentName = env.JARVIS_VOICE_AGENT_NAME || undefined;
+  if (foundryVoiceAgentName !== undefined && foundryVoiceAgentName !== JARVIS_VOICE_AGENT_NAME) {
+    throw new ConfigurationError(`JARVIS_VOICE_AGENT_NAME must be ${JARVIS_VOICE_AGENT_NAME}`);
+  }
+  if (foundryVoiceAgentName !== undefined && foundryProjectEndpoint === undefined) {
+    throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_VOICE_AGENT_NAME is configured');
   }
   const copilotAgentName = env.FOUNDRY_COPILOT_AGENT_NAME || undefined;
   const copilotVersion = env.FOUNDRY_COPILOT_AGENT_VERSION || undefined;
@@ -318,7 +316,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
     ...(connectionString === undefined ? {} : { applicationInsightsConnectionString: connectionString }),
     ...(keyVaultUri === undefined ? {} : { keyVaultUri }),
-    ...(voiceLiveEndpoint === undefined ? {} : { voiceLiveEndpoint }),
+    ...(foundryVoiceAgentName === undefined ? {} : { foundryVoiceAgentName }),
     ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
     }),

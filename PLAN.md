@@ -18,6 +18,53 @@
 
 No live model/provider smoke, deployment or spending is authorized. Physical Chat, Voice and device acceptance remains an owner check.
 
+## GPT-Live P0 replacement — 20 November 2026
+
+**Status: approved source cutover implemented and statically verified on the current `main`-based branch.** No issue or PR is created by this work, no provider/resource is deployed or deleted now, and no test suite, voice session, model call, `measure_pi`, paid smoke or live provider probe is run.
+
+| Step | State |
+| --- | --- |
+| Replace the two 2.1 Bicep deployments with `gpt-live-1` `2026-09-10`, GlobalStandard capacity 10, in the existing sequential Sweden Central chain | Done in source |
+| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, `marin`, client delegation, through `provision_pi_agent.py` | Done in source |
+| Replace the direct model WebSocket with the exact Foundry agent Live route and backend-only Entra/preview headers | Done in source |
+| Preserve native full duplex and the existing `/voice` client route; normalise provider events to `jarvis.voice.*` and use native mute/unmute | Done in source |
+| Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, use 0.6-second quiet (max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source |
+| Remove the external STT role/selector and old reply/barge-in controls; make the voice catalogue and role only `gpt-live-1` | Done in source |
+| In Deploy, wait for the active voice agent and configured ready backend, then idempotently delete both replaced deployments through ARM | Done in source |
+| Update product/design/architecture/context/decision references and keep older direct-path records explicitly historical | Done |
+| Compile backend/contracts/web, parse/compile Swift, compile/lint Bicep 0.44.1, compile Python/YAML/JSON and scan forbidden runtime references | Done |
+| Inspect and commit the complete source diff | Done |
+| Dan validates real web/iPhone/Watch microphone, speaker, acoustic barge-in, captions, latency and provider deployment | **Open** |
+
+Completion for the committed source means the future Deploy can create/configure
+the GPT-Live deployment and agent, switch the backend, and perform final old
+deployment cleanup. It does not claim physical-device or provider acceptance.
+
+Static commands run: `npm run build --workspace @jarvis/contracts`; backend
+`build` and `lint`; web `build` and `lint`; Swift 6.2 `swift build` for
+JarvisCore plus `swiftc -frontend -parse` for changed app files; Python
+`py_compile`; Node YAML/JSON parse; and Bicep 0.44.1 `build` plus `lint`.
+
+Post-commit review fixes on the same branch replace ARM/project readback
+confusion, make assistant transcript updates role/session scoped, cut to
+`jarvis.voice.v2`, retain transcript fragments through pauses by event/timeline
+correlation, remove infra-time voice targeting, stop raw-silence inactivity
+refresh, and make visual rejection stop/disable capture visibly. These fixes are
+committed separately and do not amend `2db2a87`.
+
+Final protocol hardening accepts an omitted optional format echo but rejects an
+explicit 24 kHz conflict, caps every commentary append at 256 UTF-8 bytes, and
+retains/deduplicates cumulative provider audio seconds in voice usage. Focused
+offline protocol tests cover all three boundaries.
+
+Final termination hardening now uses one guarded backend state table for
+provider close, persistence and Jarvis acknowledgement. Only that completed
+clean sequence can publish Ended/1000; pre-provider, connecting, send, timeout,
+transport and cleanup failures use 1011 and full teardown. The web, iPhone and
+Watch clients keep failed ownership distinct, reject late Ended resurrection,
+and close failed transport with 1011. Table-driven backend and Swift coverage
+plus browser pre-connect/send/failure/ack coverage passes offline.
+
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.

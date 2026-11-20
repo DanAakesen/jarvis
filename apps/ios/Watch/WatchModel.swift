@@ -40,6 +40,7 @@ final class WatchModel: ObservableObject {
     private var voiceGeneration = UUID()
     private var voiceStartToken: UUID?
     private var voiceRecovery: Task<Void, Never>?
+    private var endingVoice = false
     private var dictationGeneration = UUID()
     private var dictationID: UUID?
     private var dictationCapture: Task<Bool, Never>?
@@ -151,7 +152,7 @@ final class WatchModel: ObservableObject {
             voiceLogger.info("Voice start: phone reachable after \(elapsedMs()) ms")
             let request = WatchRequest(action: .startVoice, flag: true)
             // Accept early state events while the phone opens the socket.
-            voiceID = request.id; voiceState = "Connecting"
+            voiceID = request.id; voiceState = "Connecting"; endingVoice = false
             var reply: WatchReply?
             var attempt = 1
             while reply == nil {
@@ -203,7 +204,7 @@ final class WatchModel: ObservableObject {
                         self.recordCaptureEnd(self.voiceGeneration == epoch ? "cancelled" : "session_cancelled")
                         return
                     }
-                    if self.muted || self.voiceRecovery != nil {
+                    if self.muted || self.voiceRecovery != nil || self.endingVoice {
                         batch.removeAll(keepingCapacity: true)
                         self.audioBackpressure.progressed(at: Date())
                         continue
@@ -254,6 +255,7 @@ final class WatchModel: ObservableObject {
                     self.recordCaptureEnd(self.voiceGeneration == epoch ? "cancelled" : "session_cancelled")
                     return
                 }
+                if self.endingVoice { return }
                 self.recordCaptureEnd("capture_stream_ended")
                 self.error = NSLocalizedString("Audio capture stopped unexpectedly. Tap the voice icon to try again.", comment: "")
                 await self.endVoice()
@@ -433,7 +435,7 @@ final class WatchModel: ObservableObject {
             return true
         } catch WatchFailure.invalidRequest {
             guard epoch == voiceGeneration else { throw CancellationError() }
-            stopLocalVoice(state: "Ended", captureEndReason: "phone_session_ended")
+            stopLocalVoice(state: "Disconnected", captureEndReason: "phone_session_missing")
             return false
         }
     }
@@ -451,12 +453,20 @@ final class WatchModel: ObservableObject {
         catch { show(error) }
     }
     func endVoice(captureEndReason: String = "user_ended") async {
-        let id = voiceID
-        stopLocalVoice(state: "Ended", captureEndReason: captureEndReason)
-        guard let id else { return }
-        do { _ = try await connection.request(.init(action: .endVoice, itemID: id.uuidString), waitForReadiness: false) }
+        guard let id = voiceID, !endingVoice else { return }
+        let epoch = voiceGeneration
+        beginLocalVoiceEnd(captureEndReason: captureEndReason)
+        do {
+            _ = try await connection.request(.init(action: .endVoice, itemID: id.uuidString), waitForReadiness: false)
+            guard epoch == voiceGeneration, voiceID == id else { return }
+            stopLocalVoice(state: "Ended", captureEndReason: captureEndReason)
+        }
         catch {
-            if self.error == nil { self.error = "Audio stopped. The iPhone session will expire if unreachable." }
+            guard epoch == voiceGeneration, voiceID == id else { return }
+            stopLocalVoice(state: "Disconnected", captureEndReason: "phone_end_failed")
+            if self.error == nil {
+                self.error = "Voice did not end cleanly. The iPhone session will require recovery."
+            }
         }
     }
     func cancelVoiceStart() async {
@@ -523,11 +533,20 @@ final class WatchModel: ObservableObject {
     }
     private func stopLocalVoice(state: String, captureEndReason: String = "cancelled") {
         voiceRecovery?.cancel(); voiceRecovery = nil
+        endingVoice = false
         voiceGeneration = UUID()
         if capture != nil { recordCaptureEnd(captureEndReason) }
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
         audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
+    }
+    private func beginLocalVoiceEnd(captureEndReason: String) {
+        voiceRecovery?.cancel(); voiceRecovery = nil
+        endingVoice = true
+        if capture != nil { recordCaptureEnd(captureEndReason) }
+        heartbeat?.cancel(); heartbeat = nil
+        audioSends.removeAll()
+        audio.stop(); voiceState = "Ending…"; muted = false
     }
     func handleVoiceAudioInterruption(reason: UInt?) {
         let detail: String
@@ -572,10 +591,15 @@ final class WatchModel: ObservableObject {
         case .voiceState:
             if let muted = event.muted { self.muted = muted }
             if event.text == "Audio connection unavailable" {
-                stopLocalVoice(state: "Ended", captureEndReason: "playback_link_stalled")
+                stopLocalVoice(state: "Disconnected", captureEndReason: "playback_link_stalled")
                 error = "Voice stopped because the iPhone audio connection was unavailable. Try again."
-            } else if event.text == "Ended" || event.text == "Disconnected" {
-                stopLocalVoice(state: event.text ?? "Ended", captureEndReason: event.text == "Disconnected" ? "phone_disconnected" : "phone_ended")
+            } else if event.text == "Ended" {
+                stopLocalVoice(state: "Ended", captureEndReason: "phone_ended")
+            } else if event.text == "End failed" || event.text == "Disconnected" {
+                stopLocalVoice(state: "Disconnected", captureEndReason: "phone_end_failed")
+                if error == nil {
+                    error = "Voice did not end cleanly on the iPhone. Try again after it reconnects."
+                }
             }
             else if event.text == "Playback finished" { audio.finishPlayback(responseID: event.responseID) }
             else { voiceState = event.text ?? "" }

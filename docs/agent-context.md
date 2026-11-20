@@ -80,19 +80,23 @@
 - Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
 - Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
 
-## PI cutover: flip, roll back, delete (#1887, P15-176)
+## GPT-Live P0 cutover (20 November 2026)
 
-- [#1910](https://github.com/DanAakesen/jarvis/pull/1910) made PI the chat and voice default. Main Deploy run 44348929578 applied commit `318b923be74e601719ebd03c839c823dd6d4cbfd` on 18 November 2026. #1966 removes Current from the normal route and makes Bicep retain the exact PI configuration.
-- Confirm normal Chat and Voice on Watch, web and iPhone, isolated runtime-test sessions, and `not_supported` for camera/screen context on PI web voice. There is no saved engine choice or normal runtime fallback. Check actual spoken audio, interruption and follow-up on device; the smoke does not exercise audio. If rollback is needed, revert and redeploy the previous qualified release.
-- Before phase 8: repeat the reference scan (the commands are in cutover.md, section 5), run the full backend, Python and Swift suites after each move in section 4.1, and keep the manual Foundry steps (4.7) for last, after a week of zero requests to the old agents.
-
-## PI voice: test it and measure it (#1887, P15-176)
-
-- Needs PI configured (the Deploy `pi-agent` job) and the Deploy that contains this change, because the agent instructions gained a Voice section (a new agent version).
-- Test: start normal Voice; there is no engine control. The first answer takes a few seconds; later turns are about as fast as warm chat. Say something that needs a tool ("what is on my calendar today") to hear PI's short sentence before the answer. Interrupt it: the newest sentence wins. A failure stays a PI failure; rollback requires a reviewed revert and deploy.
-- Measure: Deploy by hand with `measure_pi`; the job summary and log add "voice: plain" and "voice: with a tool" rows, a "fixed prompt, new conversation" row (the base prompt on its own, to read prompt growth against) and the checks `voice_spoken_shape` and `voice_tools_over_mcp`. This is the PI leg only (about 0.3 to 0.5 DKK for the whole smoke). Real audio latency: backend logs `voice.pi_turn` (`transcriptToFirstTextMs`, `transcriptToDoneMs`) and `voice.turn_timing` (`firstAudioDeltaMs`), cost per turn in `pi.turn` (`channel: voice`) or Settings, "Last turn".
-- Local checks: `cd apps/backend && npx vitest run src/voice src/pi src/logging.test.ts`; `npx tsc --noEmit -p tsconfig.json`; `npx eslint src`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux, the `swift:6.2` image). The relay test (`voice/relay-pi.test.ts`) drives the real relay against a local WebSocket standing in for Voice Live; it does not speak audio. SwiftUI changes compile only in the macOS `watch` job.
-- Not verifiable here: Voice Live accepting a session with no `tools` (the relay omits the keys instead of sending an empty list), real audio and echo behaviour with spoken replies, and what a real PI says in voice.
+- PI remains the only normal Chat and Voice engine. `/voice` has no engine
+  selector. The backend uses fixed Foundry agent `jarvis-pi-live`; old clients
+  cannot choose a different provider path.
+- The normal Deploy order is Bicep (`gpt-live-1`), backend, hosted chat agent,
+  then `pi-agent`. The last job provisions/pins `jarvis-pi-live`, waits for the
+  backend revision configured with the name and only then removes the two old
+  voice deployments by ARM. Failure blocks readiness; there is no runtime
+  fallback.
+- Allowed coding-session checks are TypeScript/Vite/static builds, Swift parse
+  or package compile, Python compile/static checks and Bicep build. Do not run a
+  test suite, `measure_pi`, model/provider smoke, voice session or Azure delete
+  for this change. Dan owns the future device/provider acceptance.
+- Open physical checks: one future Deploy, real microphone capture and PCM
+  playback, `marin` output, acoustic barge-in while PI is busy, transcripts and
+  captions, Watch/phone handoff, failure/retry and provider latency/cost.
 
 ## PI built-ins and wake actions (#1886, P15-175)
 
@@ -5668,12 +5672,18 @@ and SQL selection/admission with
 `npm run test:database --workspace @jarvis/backend -- src/database/dispatcher.integration.test.ts`
 only under the isolated loopback SQL Server configuration.
 
-The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
-Voice Live WebSocket endpoint without credentials in its URL. The backend pins
-`gpt-realtime-2.1`, gets the `https://ai.azure.com/.default` token with
-`DefaultAzureCredential`, and owns session settings and tool execution. P0-16
-must configure this endpoint and provider identity before live use. Local voice
-tests use a mock WebSocket and do not verify Azure access or browser audio.
+`FOUNDRY_PROJECT_ENDPOINT` plus the provisioner-set
+`JARVIS_VOICE_AGENT_NAME=jarvis-pi-live` enables `/voice`. Bicep deliberately
+leaves the voice name absent; the `pi-agent` phase adds it only after the agent
+is active and pinned. The backend derives
+the exact
+`/agents/jarvis-pi-live/endpoint/protocols/voice/live/sessions?api-version=v1`
+route, gets the `https://ai.azure.com/.default` token with
+`DefaultAzureCredential`, and sends
+`Foundry-Features: VoiceAgents=V1Preview`. The agent uses `gpt-live-1`, PCM
+24 kHz and `marin`; it has client delegation and no Foundry-managed prompt
+conversation. Browser, iPhone and Watch provider events remain server-internal.
+No live/provider smoke is part of this source cutover.
 
 `JARVIS_CHAT_AGENT_NAME` names the hosted chat agent (`jarvis` in production);
 `FOUNDRY_PROJECT_ENDPOINT` is the secure Azure AI project endpoint supplied by
@@ -6245,7 +6255,7 @@ in the P4-01 Copilot session (Docker was available there):
 | Lint and tests, from `agents/jarvis/` | `.venv/bin/python -m ruff check .`; `.venv/bin/python -m pytest -q` (100 passed) |
 | Same check as CI, from the root | `bash .github/scripts/python-ci.sh agents/jarvis` |
 | Image, from the root | `docker build --tag jarvis-agent:local agents/jarvis` |
-| Model-free voice turn | Run the image with the variables below, then `agents/jarvis/.venv/bin/python agents/jarvis/scripts/smoke_test.py` (default `ws://127.0.0.1:8088/invocations_ws`, text `/help`) |
+| Historical isolated bridge check | `agents/jarvis` no longer advertises a voice WebSocket in Deploy. The normal voice path is `jarvis-pi-live`; do not use this bridge for GPT-Live acceptance. |
 | Regenerate the hash locks, from the root, after editing a `.in` file | `uv pip compile --python-version 3.12 --generate-hashes agents/jarvis/requirements.in -o agents/jarvis/requirements.txt`, then the same for `requirements-dev.in` → `requirements-dev.txt` |
 
 P4-04 fetches `GET /factory/context` before each model turn; it contains at most
@@ -6256,20 +6266,34 @@ secret. SQL-backed context behavior is covered by the database integration suite
 
 ### Bilingual realtime voice
 
-Browser and iPhone sessions use only the authenticated `/voice` WebSocket with
-`gpt-realtime-2.1`, Ryan HD and the shared prompt. Final Voice Live transcription
-uses `azure-speech` without a fixed language hint; parallel Azure Speech interim
-recognition detects `da-DK` or `en-GB`. Removed settings that reference
-`mai-transcribe` fall back to `azure-speech`; the legacy Danish voice setting is
-ignored. App copy and voice configuration are English-only; Danish chat, notes
-and speech remain user content and conversation input.
+Browser, iPhone and Watch voice use the authenticated `/voice` WebSocket.
+GPT-Live native input/output transcript and audio deltas cross the backend only;
+clients receive bounded `jarvis.voice.*` events. There is no external
+speech-to-text role, model selector, language pin, provider-session override,
+direct tool catalogue or response-creation path. App copy is English; Danish and English
+speech remain native model input.
 
-The provisioning workflow and its script are removed. Do not edit Azure
-resources manually: the Foundry hosted agent `jarvis-voice-mai`, MAI Transcribe
-deployment and MAI Voice deployment are unused and require later manual cleanup.
-The ACS phone-call bridge used the hosted-agent `session.start`/`session.ready`
-protocol and is not registered; it needs a separate protocol bridge before
-phone voice can be re-enabled.
+The provisioned agent pins PCM 24 kHz; an omitted `session.started` format echo
+is valid, while an explicit conflict fails. Commentary is split at most 256
+UTF-8 bytes per append, and cumulative provider audio seconds replace wall-clock
+voice minutes when present.
+
+Native `event_id` and transcript timeline offsets keep one owner-turn candidate
+through pauses. At `session.delegation.created`, the relay uses `offset_ms` to
+associate it, waits for 0.6 seconds of transcript quiet (at most three seconds),
+stores Dan's message, then invokes the existing PI gateway with that exact
+message ID and the shared `dbo.pi_conversation`.
+`session.commentary.append` returns PI's acknowledgement/final answer under the
+delegation ID. New transcript input cancels stale PI work. Output deltas are
+grouped and persisted on 0.6-second quiet with a three-second persistence bound.
+
+The normal `pi-agent` Deploy phase provisions and pins one immutable
+`jarvis-pi-live` voice agent, configures and waits for the backend revision, then
+idempotently deletes the two replaced 2.1 deployments. This ordering is in
+`.github/scripts/provision_pi_agent.py`; incremental Bicep alone cannot perform
+that cleanup. Do not invoke this phase from a coding session or edit Foundry
+resources manually. Physical microphone, speaker, barge-in and provider
+acceptance remain Dan's open checks.
 
 Agent configuration (environment variables, no secrets):
 

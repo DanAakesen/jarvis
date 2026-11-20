@@ -18,6 +18,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
     @Published private(set) var isScreenSharing = false
+    @Published private(set) var visualInputUnavailable = false
     @Published private(set) var captions = VoiceCaptions()
     var userCaption: String { captions.user }
     var assistantCaption: String { captions.assistant }
@@ -86,6 +87,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     + "The newest line stays readable while earlier lines fade at the top."
                 ))
                 errorMessage = nil
+                visualInputUnavailable = false
             }
 #endif
         }
@@ -209,6 +211,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         liveActivitySessionID = UUID()
         VoiceLiveActivityActions.session = self
         errorMessage = nil
+        visualInputUnavailable = false
         microphoneDenied = false
         signInRequired = false
         voiceState = .connecting
@@ -245,9 +248,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                         guard let self, self.sessionGeneration == generation else { return }
                         self.receive(message)
                     }
-                },
-                onAction: { action in
-                    if case .interruptPlayback = action { audio.stopPlayback() }
                 },
                 onStateChange: { [weak self] state in
                     Task { @MainActor in
@@ -394,14 +394,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 UIApplication.shared.endBackgroundTask(backgroundTask)
             }
         }
-        sessionGeneration += 1
-        returnToChatRequested = returnToChat
-        liveActivitySessionID = nil
-        connectionPresentationState = connectionPresentationMachine.apply(.ended)
         isStarting = false
         let endingClient = sessionClient
-        sessionClient = nil
-        voiceState = returnToChat ? .ended : .idle
         isMinimized = false
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
@@ -410,19 +404,30 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        visualInputUnavailable = false
         updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
         sentMedia = []
-        httpClient = nil
-        captions = VoiceCaptions()
         if let endingClient {
             do {
                 try await endingClient.end()
             } catch {
-                errorMessage = Self.message(for: error)
+                await tearDownFailedEnd(error)
+                return
             }
+        } else if voiceState != .ended {
+            await tearDownFailedEnd(VoiceProtocolError.endFailed)
+            return
         }
+        sessionGeneration += 1
+        returnToChatRequested = returnToChat
+        liveActivitySessionID = nil
+        connectionPresentationState = connectionPresentationMachine.apply(.ended)
+        sessionClient = nil
+        voiceState = returnToChat ? .ended : .idle
+        httpClient = nil
+        captions = VoiceCaptions()
         await liveActivity.end()
         sessionClient = nil
         voiceSessionID = nil
@@ -431,8 +436,25 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isMuted = false
     }
 
+    private func tearDownFailedEnd(_ error: any Error) async {
+        errorMessage = Self.message(for: error)
+        sessionGeneration += 1
+        returnToChatRequested = false
+        liveActivitySessionID = nil
+        if VoiceLiveActivityActions.session === self {
+            VoiceLiveActivityActions.session = nil
+        }
+        sessionClient = nil
+        voiceSessionID = nil
+        responseID = nil
+        voiceState = .failed
+        httpClient = nil
+        isMuted = false
+        await liveActivity.end()
+    }
+
     func startCamera() async {
-        guard canUseControls, !isCameraEnabled else { return }
+        guard canUseControls, !visualInputUnavailable, !isCameraEnabled else { return }
         let generation = sessionGeneration
         let cameraAllowed = await VoiceCameraCapture.requestAccess()
         guard sessionGeneration == generation, canUseControls else { return }
@@ -466,7 +488,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     /// Camera for a single photo while live video is off. Nothing is streamed and the session is not told that
     /// video is on; `endPhotoSession` releases the camera again.
     func beginPhotoSession() async -> Bool {
-        guard canUseControls else { return false }
+        guard canUseControls, !visualInputUnavailable else { return false }
         if camera != nil { return true }
         let generation = sessionGeneration
         let allowed = await VoiceCameraCapture.requestAccess()
@@ -526,6 +548,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     func setScreenSharing(_ enabled: Bool) async {
+        guard !visualInputUnavailable || !enabled else { return }
         guard enabled != isScreenSharing else { return }
         let generation = sessionGeneration
         if enabled, isCameraEnabled {
@@ -598,7 +621,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     private func receive(_ message: VoiceServerMessage) {
         switch message {
-        case .speechStarted, .transcriptionDelta, .assistantTranscriptDelta:
+        case .transcriptionDelta, .assistantTranscriptDelta:
             captions.receive(message)
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
@@ -609,6 +632,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             Task {
                 guard sessionGeneration == generation else { return }
                 await end()
+            }
+        case .sessionFailed(let retryable, _):
+            audio.stopPlayback()
+            responseID = nil
+            if !retryable {
+                errorMessage = JarvisVoiceLocalization.string(.unavailable)
             }
         case .transcriptionCompleted(let transcript, let itemID):
             captions.receive(message)
@@ -636,7 +665,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             // The caption path is a working fallback, not a failure.
             break
         case .screenContextUnavailable(_, let reason):
-            if let reason, let message = Self.visualFailure(reason) { errorMessage = message }
+            if reason == "not_supported" {
+                disableVisualInput()
+            } else if let reason, let message = Self.visualFailure(reason) {
+                errorMessage = message
+            }
         case .unknown:
             break
         }
@@ -893,6 +926,23 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return JarvisVoiceLocalization.string(.imageUnavailable)
         default:
             return nil
+        }
+    }
+
+    private func disableVisualInput() {
+        guard !visualInputUnavailable else { return }
+        visualInputUnavailable = true
+        camera?.stop()
+        camera = nil
+        isCameraEnabled = false
+        photoForNextTurn = nil
+        photoIsReady = false
+        isScreenSharing = false
+        screenShareBridge.requestStop()
+        updateLiveStream()
+        errorMessage = JarvisVoiceLocalization.string(.visualUnavailable)
+        Task {
+            try? await sessionClient?.setCameraState(on: false)
         }
     }
 }
