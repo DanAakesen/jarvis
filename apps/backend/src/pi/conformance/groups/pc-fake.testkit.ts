@@ -22,7 +22,7 @@ class Refused extends Error {
 }
 
 /** How the PC behaves. `healthy` answers; the others reproduce what a real PC does when it goes wrong mid-command. */
-export type PcMode = 'healthy' | 'silent' | 'drops' | 'failing' | 'garbled';
+export type PcMode = 'healthy' | 'silent' | 'drops' | 'failing' | 'garbled' | 'inconsistent';
 
 export interface DesktopApp {
   readonly application: string;
@@ -152,7 +152,8 @@ export class FakePc {
   /** Brings the fake in line with the dependency tokens a case asks to fail. Called before every tool runs. */
   sync(down: ReadonlySet<string>): void {
     if (down.has('pc-bridge')) { this.detach(); return; }
-    this.mode = down.has('pc-bridge-drops') ? 'drops' : down.has('pc-bridge-failing') ? 'failing' : down.has('pc-bridge-garbled') ? 'garbled' : 'healthy';
+    this.mode = down.has('pc-bridge-drops') ? 'drops' : down.has('pc-bridge-failing') ? 'failing' : down.has('pc-bridge-garbled') ? 'garbled'
+      : down.has('pc-bridge-inconsistent') ? 'inconsistent' : 'healthy';
     this.chromeOff = down.has('pc-chrome');
     if (!this.attached) this.attach();
   }
@@ -167,8 +168,10 @@ export class FakePc {
     if (this.mode === 'failing') reply = { id: message.id, type: 'error', error: 'failed' };
     else if (this.mode === 'garbled') reply = { id: message.id, type: 'result', result: { unexpected: true } };
     else {
-      try { reply = { id: message.id, type: 'result', result: this.execute(message.command, message.arguments) }; }
-      catch (error) {
+      try {
+        const result = this.execute(message.command, message.arguments);
+        reply = { id: message.id, type: 'result', result: this.mode === 'inconsistent' ? this.skewed(message.command, result) : result };
+      } catch (error) {
         if (!(error instanceof Refused)) throw error;
         reply = { id: message.id, type: 'error', error: error.code };
       }
@@ -176,6 +179,13 @@ export class FakePc {
     setImmediate(() => {
       if (socket.readyState === 1) socket.emit('message', Buffer.from(JSON.stringify(reply)), false);
     });
+  }
+
+  /** An answer the bridge's reply check accepts but that is not what was asked: another tab's snapshot, another action's acknowledgement. */
+  private skewed(command: string, result: Result): Result {
+    if (command === 'browser_snapshot') return { ...result, tabId: 'tab-other' };
+    if (command === 'browser_act' && result.acted === true) return { ...result, action: result.action === 'wait' ? 'scroll' : 'wait' };
+    return result;
   }
 
   // ---- The desktop -------------------------------------------------------------------------------------------------------

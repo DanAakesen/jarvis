@@ -73,6 +73,13 @@ describe('the PC tools fail cleanly when Dan’s PC is not there', () => {
     expect(done.message).toMatch(/could not read/iu);
   });
 
+  // The bridge's reply check accepts these answers; the tool then finds they are not the tab or the action it asked for.
+  it.each(['pc_browser_snapshot', 'pc_browser_act'])('%s fails with a plain message when Chrome answers another tab or action than asked', async (name) => {
+    const done = await failing(name, 'pc-bridge-inconsistent');
+    expect(done.outcome).toBe('error');
+    expect(done.message).toMatch(/could not read/iu);
+  });
+
   it.each(browserTools)('%s says so when the Chrome extension is off in the bridge settings', async (name) => {
     const done = await failing(name, 'pc-chrome');
     expect(done.outcome).toBe('refused');
@@ -81,16 +88,36 @@ describe('the PC tools fail cleanly when Dan’s PC is not there', () => {
 });
 
 describe('a PC that stops answering', () => {
-  it('fails the command with a plain message once the bridge stops waiting', async () => {
-    const bridge = createPcBridgeModule({ timeoutMs: 30 });
+  const silentPc = (timeoutMs: number) => {
+    const bridge = createPcBridgeModule({ timeoutMs });
     const pc = new FakePc(bridge.connection);
     pc.mode = 'silent';
     pc.attach();
+    return bridge;
+  };
+  const log = { info: () => {} } as never;
+
+  it('fails the command with a plain message once the bridge stops waiting', async () => {
+    const bridge = silentPc(30);
     const open = bridge.tools.find((tool) => tool.name === 'pc_open')!;
-    const request = { log: { info: () => {} } } as unknown as FastifyRequest;
+    const request = { log } as unknown as FastifyRequest;
     const failure = await open.execute({ target: 'app', value: 'Spotify' }, request, new AbortController().signal).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(ToolFailure);
     expect((failure as ToolFailure).message).toMatch(/did not answer in time/u);
+    await bridge.connection.close();
+  });
+
+  // The tab lookup behind pc_browser_snapshot and pc_browser_act runs under its own 15 s deadline, which expires before the command timeout.
+  it('reports a command that ran out of its own deadline as the PC not answering, and a caller that left as cancelled', async () => {
+    const bridge = silentPc(10_000);
+    const command = { name: 'browser_tabs', arguments: {} } as const;
+    const outOfTime = await bridge.connection.execute(command, AbortSignal.timeout(30), log).catch((error: unknown) => error);
+    expect(outOfTime).toBeInstanceOf(ToolFailure);
+    expect((outOfTime as ToolFailure).message).toMatch(/did not answer in time/u);
+    const left = new AbortController();
+    const gone = bridge.connection.execute(command, left.signal, log).catch((error: unknown) => error);
+    left.abort();
+    expect(await gone).not.toBeInstanceOf(ToolFailure);
     await bridge.connection.close();
   });
 });

@@ -23,7 +23,7 @@ import {
  * production connection and every tool run unchanged. Dependency tokens in `context.down` make it fail the way a real PC does:
  *   pc-bridge          the PC is offline (no socket)         pc-bridge-drops    the socket drops mid-command
  *   pc-bridge-failing  it answers its generic "failed" error pc-bridge-garbled  it answers something unreadable
- *   pc-chrome          the Chrome extension is off in the bridge settings
+ *   pc-bridge-inconsistent  it answers another tab or action than asked   pc-chrome  the Chrome extension is off in the bridge settings
  * Models (Jev's planners, the text and vision deployments) are deterministic fakes (pc-stubs.testkit.ts).
  */
 
