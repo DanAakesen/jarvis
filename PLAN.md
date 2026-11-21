@@ -1,7 +1,6 @@
 ## GPT-Live voice fidelity — 20 November 2026 (#1988)
 
-**Status: implemented and independently reviewed; offline qualification and
-the exact-head aggregate CI gate are green, including macOS JarvisCore.** The
+**Status: rebased on the Foundry-owned voice agent (#1992/#1994) and offline-qualified; the PR's exact-head aggregate CI, including macOS JarvisCore, is the gate.** The
 work preserves the native GPT-Live route and full-duplex
 behaviour, with no old voice fallback or provider-output semantic approval gate.
 
@@ -12,7 +11,7 @@ behaviour, with no old voice fallback or provider-output semantic approval gate.
 | Preserve exact caption speaker/order by stable input, response and delivery identities | Implemented; backend and portable Swift coverage added |
 | Serialize voice transcript persistence as Dan → Jarvis → Dan → Jarvis and order restored history by canonical message ID | Implemented; integration regression added |
 | Keep GPT-Live natural for duplex/backchannels while delegated tool/action turns continue through the same PI gateway | Implemented; focused no-switch/no-fallback checks added |
-| Run provisioner, backend, web, contracts and Swift gates | Focused backend 42/42 plus build/lint; web 57/57 plus build/lint; contracts and JSON/YAML pass. Exact-head aggregate CI, including macOS JarvisCore, is green |
+| Run provisioner, backend, web, contracts and Swift gates | Backend voice/PI 256/256 plus build/lint; web 57/57 plus build/lint; contracts and provisioner (main's, unchanged) pass. Swift runs in CI (macOS JarvisCore) |
 | Independently review async persistence, reconnect, state and Watch ordering; inspect final diff and commit | Done; all reported defects fixed and covered |
 | Dan verifies the Foundry-chosen voice, Danish/English audio, iPhone/Watch reconnect and physical caption behaviour | Open; no live/paid test authorized |
 
