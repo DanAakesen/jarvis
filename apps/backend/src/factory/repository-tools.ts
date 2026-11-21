@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { FastifyRequest } from 'fastify';
 import type { JarvisTool } from '../core/tool-registry.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import { projectSelectorSchema, resolveRepository } from './project-context.js';
 
@@ -124,7 +124,11 @@ async function githubJson(
     signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
     redirect: 'error',
   });
-  if (!response.ok) throw new Error('GitHub repository request failed');
+  if (!response.ok) {
+    // A path the model guessed wrong is a refusal it can correct, not the dispatcher's generic "Tool execution failed".
+    if (response.status === 404) throw new ToolRefusal('I couldn’t find that file, folder or repository on GitHub.');
+    throw new ToolFailure('I couldn’t read from GitHub just now. Try again shortly.');
+  }
   const body = await readResponse(response, limit);
   try {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)) as unknown;
