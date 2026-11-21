@@ -158,6 +158,8 @@ const label = (value: unknown): string => typeof value === 'string' && /^[A-Za-z
 const harnessLabel = (value: unknown): string | undefined =>
   typeof value !== 'string' ? undefined : /^[a-z0-9_.-]{1,64}$/u.test(value) ? value : 'other';
 const harnessListLimit = 25;
+/** Most `unknown_item` events one stream may emit, so a hostile or buggy stream cannot flood the log. */
+const unknownItemLogLimit = 5;
 /** Output item types the gateway expects; anything else is logged once per stream as `pi.harness_item`. */
 const knownItemTypes = new Set(['message', 'reasoning', 'mcp_call', 'mcp_list_tools']);
 
@@ -417,10 +419,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
             remember(phase.itemTypes, harnessLabel(itemType));
-            if (typeof itemType === 'string' && !knownItemTypes.has(itemType) && itemType !== 'mcp_approval_request' && itemType !== 'function_call' &&
-              !phase.unknownItemTypes.has(itemType)) {
-              phase.unknownItemTypes.add(itemType);
-              logHarnessItem('unknown_item', payload.item, phase, attempt);
+            if (typeof itemType === 'string' && !knownItemTypes.has(itemType) && itemType !== 'mcp_approval_request' && itemType !== 'function_call') {
+              // Deduplicated on the sanitised label, so every non-token type counts once as `other`.
+              const unknown = harnessLabel(itemType)!;
+              if (!phase.unknownItemTypes.has(unknown) && phase.unknownItemTypes.size < unknownItemLogLimit) {
+                phase.unknownItemTypes.add(unknown);
+                logHarnessItem('unknown_item', payload.item, phase, attempt);
+              }
             }
             if (itemType === 'mcp_call') { phase.sawTool = true; yield { kind: 'tool', server: label(payload.item.server_label) }; }
             else if (itemType === 'mcp_approval_request' || itemType === 'function_call') {

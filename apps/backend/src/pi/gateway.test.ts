@@ -649,6 +649,42 @@ describe('PI gateway', () => {
       expect(logs.map(([event]) => event)).not.toContain('pi.stream_failed');
     });
 
+    it('caps unknown item events per stream and counts every non-token type once as other', async () => {
+      const added = (type: string) => frame({ type: 'response.output_item.added', item: { type } });
+      const many = capture();
+      const flood = setup([() => sse(created, ...Array.from({ length: 500 }, (_, index) => added(`t_${index}`)), delta('ok'), completed(1, 0, 1))], { log: many.log });
+      await flood.run('hi');
+      expect(many.logs.filter(([event]) => event === 'pi.harness_item')).toHaveLength(5);
+      const odd = capture();
+      const oddRun = setup([() => sse(created, added('Not A Token'), added('another one!'), added('UPPER'), delta('ok'), completed(1, 0, 1))], { log: odd.log });
+      await oddRun.run('hi');
+      expect(odd.logs.filter(([event]) => event === 'pi.harness_item').map(([, fields]) => fields.itemType)).toEqual(['other']);
+    });
+
+    it.each([
+      ['a very long name', { type: 'function_call', name: 'n'.repeat(1_000_000), arguments: 'a'.repeat(1_000_000) }, { name: 'other', argumentsLength: 1_000_000 }],
+      ['object arguments', { type: 'function_call', arguments: { q: 'secret' } }, { argumentsLength: 14 }],
+      ['array arguments', { type: 'mcp_approval_request', arguments: ['secret'] }, { argumentsLength: 10 }],
+      ['a non-string type value', { type: 'function_call', name: 42, status: {}, server_label: [] }, {}],
+    ])('still fails the same way with %s and logs no content', async (_name, item, expected) => {
+      const { logs, log } = capture();
+      const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), delta('x'), completed(1, 0, 1))], { log });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(logs.filter(([event]) => event === 'pi.harness_item')).toEqual([['pi.harness_item', expect.objectContaining(expected)]]);
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item', sawTool: true, sawOutput: true });
+      expect(JSON.stringify(logs).length).toBeLessThan(2_000);
+    });
+
+    it.each([['null', null], ['a string', 'function_call'], ['a number', 7], ['an array', ['function_call']]])(
+      'ignores a malformed item that is %s without failing or logging it', async (_name, item) => {
+        const { logs, log } = capture();
+        const { run } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), delta('ok'), completed(1, 0, 1))], { log });
+        await run('hi');
+        expect(logs.map(([event]) => event)).not.toContain('pi.harness_item');
+        expect(logs.map(([event]) => event)).not.toContain('pi.stream_failed');
+      });
+
     it('never retries a function call or approval request, and never an HTTP failure or a missing stream', async () => {
       const { logs, log } = capture();
       const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call' } })), () => sse(delta('x'), completed(1, 0, 1))], { log });
