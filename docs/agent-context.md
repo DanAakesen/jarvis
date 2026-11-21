@@ -202,9 +202,9 @@
   cannot choose a different provider path.
 - The normal Deploy order is Bicep (`gpt-live-1`), backend, hosted chat agent,
   then `pi-agent`. The last job seeds `jarvis-pi-live` only if it is missing (its
-  instructions, voice and greeting are Foundry-owned and never written, compared
-  or reset by Deploy; it only fails on drift in the technical contract: kind,
-  sub-protocol, model, delegation `client`, `store` false, PCM 24 kHz; tune it in
+  instructions, voice, greeting and `store` are Foundry-owned and never written,
+  compared or reset by Deploy; it only fails on drift in the technical contract:
+  kind, sub-protocol, model type, model, delegation `client`, PCM 24 kHz; tune it in
   the Foundry portal), waits for the
   backend revision configured with the name and only then removes the two old
   voice deployments by ARM. Failure blocks readiness; there is no runtime
