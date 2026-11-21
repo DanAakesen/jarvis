@@ -120,7 +120,7 @@ function childrenOf(repo: FakeRepo, directory: string): { name: string; path: st
 
 const wrapBase64 = (content: string) => (Buffer.from(content).toString('base64').match(/.{1,60}/gu) ?? []).join('\n');
 
-export function createFakeGitHub(options: { readonly delegate: () => typeof fetch | undefined }): FakeGitHub {
+export function createFakeGitHub(options: { readonly delegate: () => typeof fetch | undefined; readonly mode?: () => 'up' | 'unreachable' | 'unavailable' }): FakeGitHub {
   const repos = new Map<string, FakeRepo>();
   const key = (fullName: string) => fullName.toLowerCase();
 
@@ -146,7 +146,7 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
 
   // ---- Rendering ---------------------------------------------------------------------------------------------------------
 
-  const issueUrl = (name: string, item: FakeItem) => `${'https://github.com'}/${name}/${item.pull ? 'pull' : 'issues'}/${item.number}`;
+  const issueUrl = (name: string, item: FakeItem) => `https://github.com/${name}/${item.pull ? 'pull' : 'issues'}/${item.number}`;
 
   function issueJson(name: string, item: FakeItem): Json {
     return {
@@ -190,11 +190,6 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
   /** A branch name or a commit id, as GitHub accepts either for a ref. */
   const resolveRef = (repo: FakeRepo, ref: string): string | undefined => repo.branches.get(ref)
     ?? (repo.commits.some((commit) => commit.sha === ref) || [...repo.checkRuns.keys()].includes(ref) ? ref : undefined);
-
-  function recordItem(repo: FakeRepo, name: string, number: number): FakeItem | undefined {
-    void name;
-    return repo.items.get(number);
-  }
 
   // ---- Search ------------------------------------------------------------------------------------------------------------
 
@@ -413,7 +408,7 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
       return json(201, issueJson(name, item));
     }
     if ((match = /^\/issues\/(\d+)(\/comments|\/labels(?:\/(.+))?)?$/u.exec(rest))) {
-      const item = recordItem(repo, name, Number(match[1]));
+      const item = repo.items.get(Number(match[1]));
       if (!item) return notFound();
       const sub = match[2];
       if (!sub) {
@@ -550,7 +545,7 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
       const job = repo.jobs.find((candidate) => candidate.id === Number(match![1]));
       if (!job) return notFound();
       if (!match[2]) return json(200, jobJson(name, job));
-      return new Response(null, { status: 302, headers: { location: `https://${'pipelines.actions.githubusercontent.com'}/${repo.fullName}/job/${job.id}/logs.zip` } });
+      return new Response(null, { status: 302, headers: { location: `https://pipelines.actions.githubusercontent.com/${repo.fullName}/job/${job.id}/logs.zip` } });
     }
     if (method === 'POST' && (match = /^\/actions\/workflows\/([^/]+)\/dispatches$/u.exec(rest))) {
       const ref = text(input.ref);
@@ -570,6 +565,11 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
 
   const fake = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    const ours = url.hostname === 'api.github.com' || url.hostname === 'pipelines.actions.githubusercontent.com';
+    const mode = ours ? options.mode?.() ?? 'up' : 'up';
+    // `unreachable` is what fetch does when the network is gone; `unavailable` is GitHub answering 503.
+    if (mode === 'unreachable') throw new TypeError('fetch failed');
+    if (mode === 'unavailable') return json(503, { message: 'Service Unavailable' });
     if (url.hostname === 'api.github.com') {
       const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
       if (!/^Bearer \S+$/u.test(new Headers(init?.headers).get('authorization') ?? '')) return json(401, { message: 'Requires authentication' });

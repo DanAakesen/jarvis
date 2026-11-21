@@ -340,23 +340,30 @@ export function createFakeBoardReader(github: FakeGitHub): FactoryBoardReader {
 
 export const appToken = 'ghs_conformance0000000000000000000000';
 
-/** A healthy installation: it can read and write everything the Factory tools ask for. */
-export function createFakeTokenIssuer(): GitHubAppTokenIssuer & { readonly permissions: Record<string, 'read' | 'write' | 'admin'> } {
+/** A healthy installation: it can read and write everything the Factory tools ask for. `down` makes minting a token fail, as it does when GitHub is out. */
+export function createFakeTokenIssuer(down: () => boolean = () => false): GitHubAppTokenIssuer & { readonly permissions: Record<string, 'read' | 'write' | 'admin'> } {
   const permissions: Record<string, 'read' | 'write' | 'admin'> = {
     metadata: 'read', contents: 'write', issues: 'write', pull_requests: 'write', checks: 'read', statuses: 'read', actions: 'write',
   };
-  const token = async () => appToken;
+  const token = async () => {
+    if (down()) throw new TypeError('fetch failed');
+    return appToken;
+  };
   return {
     permissions,
     issue: token, issueWithPermissions: token, issueForActions: token, issueForChecks: token, issueForContents: token,
     issueForRepositoryRead: token, issueForContentsWrite: token, issueForIssuesWrite: token,
-    async readInstallationPermissions() { return { ...permissions }; },
+    async readInstallationPermissions() {
+      if (down()) throw new TypeError('fetch failed');
+      return { ...permissions };
+    },
   };
 }
 
-export function createFakeRepositoryCatalog(github: FakeGitHub, extra: readonly GitHubRepository[]): GitHubRepositoryCatalog {
+export function createFakeRepositoryCatalog(github: FakeGitHub, extra: readonly GitHubRepository[], down: () => boolean = () => false): GitHubRepositoryCatalog {
   return {
     async list(owner) {
+      if (down()) throw new TypeError('fetch failed');
       const known = [...github.repos.values()].map((repo): GitHubRepository => ({
         fullName: repo.fullName, name: repo.fullName.split('/')[1]!, defaultBranch: repo.defaultBranch, pushedAt: timestamps.now, language: 'TypeScript',
       }));
@@ -369,9 +376,10 @@ export function createFakeRepositoryCatalog(github: FakeGitHub, extra: readonly 
 }
 
 /** Creating a repository adds it to the fake GitHub; a name that is taken is a conflict, as on GitHub. */
-export function createFakeRepositoryCreator(github: FakeGitHub): RepositoryCreator {
+export function createFakeRepositoryCreator(github: FakeGitHub, down: () => boolean = () => false): RepositoryCreator {
   return {
     async create(input: RepositoryCreationInput) {
+      if (down()) throw new TypeError('fetch failed');
       const fullName = `${input.owner}/${input.name}`;
       if (github.repos.has(fullName.toLowerCase())) throw Object.assign(new Error('Repository exists'), { kind: 'conflict' });
       github.addRepository(fullName, { defaultBranch: input.defaultBranch, isPrivate: input.visibility === 'private' });
