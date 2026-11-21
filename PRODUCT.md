@@ -57,7 +57,7 @@ physical iPhone/Watch tap acceptance remain owner device checks.
 
 ## PI situational intelligence — 19 November 2026
 
-PI has one owner-scoped situational loop around the managed `jarvis-pi` Foundry agent. Normal Chat and Voice turns, scheduled sweeps and event activations use the same agent definition, Skills and Jarvis MCP tools; only trusted activation metadata differs. A wake is one PI invocation and one turn-ledger row. Tool and model iterations stay inside that invocation.
+PI has one owner-scoped situational loop around the managed `jarvis-pi` Foundry agent. Normal Chat and Voice turns, scheduled sweeps and event activations use the same agent definition, Skills and Jarvis MCP tools; only trusted activation metadata differs. A wake opens with the same trusted context, environment note and tool overview a new Chat conversation gets, and `find_tools` shows it the same tools plus its own. A wake is one PI invocation and one turn-ledger row. Tool and model iterations stay inside that invocation.
 
 Normal Chat and Voice have one engine: PI. The iPhone no longer stores or presents a Current/PI choice; older clients may still explicitly name `pi`, but naming `current` is refused rather than routed to the old harness. Isolated runtime-test conversations remain separate. Chat opens PI without a test badge, while ordinary Voice connects to the same `/voice` route with no engine query.
 
