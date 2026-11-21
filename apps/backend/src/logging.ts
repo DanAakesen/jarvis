@@ -110,7 +110,7 @@ const events = new Set([
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable',
-  'pi.stream_failed', 'pi.stream_retry', 'pi.mcp_list_failed', 'pi.mcp_call_failed',
+  'pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed',
   'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'voice.late_session_ended',
   'voice.late_session_cleanup_failed', 'watch_transcription.stage',
@@ -547,6 +547,28 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (smallCount(input.evicted)) fields.evicted = input.evicted;
     if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
         input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
+  if (input.msg === 'pi.harness_item') {
+    // The shape of an item the harness sent that Jarvis does not handle: lowercase tokens, booleans and numbers only. Never arguments, output, ids, URLs or free text.
+    const fields: Record<string, unknown> = {};
+    const token = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9_.-]{1,64}$/u.test(value);
+    if (input.trigger === 'rejected_item' || input.trigger === 'unknown_item') fields.trigger = input.trigger;
+    for (const key of ['itemType', 'name', 'serverLabel', 'itemStatus']) if (token(input[key])) fields[key] = input[key];
+    for (const key of ['hasCallId', 'hasId', 'sawText', 'sawTool', 'sawOutput', 'previousCancelled']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 2) fields.attempt = input.attempt;
+    if (Number.isInteger(input.argumentsLength) && Number(input.argumentsLength) >= 0 && Number(input.argumentsLength) <= 100_000_000) {
+      fields.argumentsLength = input.argumentsLength;
+    }
+    for (const key of ['elapsedMs', 'firstEventMs']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 600_000) fields[key] = value;
+    }
+    for (const key of ['eventTypes', 'itemTypes']) {
+      if (Array.isArray(input[key])) fields[key] = input[key].filter(token).slice(0, 25);
+    }
     return fields;
   }
   if (input.msg === 'pi.stream_failed' || input.msg === 'pi.stream_retry' ||

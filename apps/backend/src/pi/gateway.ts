@@ -154,6 +154,15 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 /** A server label or tool name from the provider, kept short and plain before it reaches a log or a report. */
 const label = (value: unknown): string => typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/u.test(value) ? value : '';
 
+/** A harness event or item type kept to one plain lowercase token before it reaches a log; anything else is `other`. */
+const harnessLabel = (value: unknown): string | undefined =>
+  typeof value !== 'string' ? undefined : /^[a-z0-9_.-]{1,64}$/u.test(value) ? value : 'other';
+const harnessListLimit = 25;
+/** Most `unknown_item` events one stream may emit, so a hostile or buggy stream cannot flood the log. */
+const unknownItemLogLimit = 5;
+/** Output item types the gateway expects; anything else is logged once per stream as `pi.harness_item`. */
+const knownItemTypes = new Set(['message', 'reasoning', 'mcp_call', 'mcp_list_tools']);
+
 /** A stalled provider stream must not outlive a cancel or the turn deadline, whether or not the transport reacts to the signal. */
 function readUnlessAborted(reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>> {
   if (signal.aborted) return Promise.reject(signal.reason);
@@ -208,6 +217,14 @@ interface StreamPhase {
   responseId: string | null;
   failure: string | null;
   failureFields: Record<string, string>;
+  /** Distinct event and output item types seen so far, in order, for `pi.harness_item`. */
+  eventTypes: string[];
+  itemTypes: string[];
+  unknownItemTypes: Set<string>;
+}
+
+function remember(list: string[], value: string | undefined): void {
+  if (value !== undefined && list.length < harnessListLimit && !list.includes(value)) list.push(value);
 }
 
 /** The harness's own code and HTTP status for a failed item, when it sent short plain ones; never its message. */
@@ -330,6 +347,23 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     });
   }
 
+  /** The shape of an item the harness sent that the gateway does not handle: types, names and lengths only, never arguments, output or ids. */
+  function logHarnessItem(trigger: 'rejected_item' | 'unknown_item', item: Record<string, unknown>, phase: StreamPhase, attempt: number): void {
+    const itemType = harnessLabel(item.type);
+    const name = harnessLabel(item.name);
+    const serverLabel = harnessLabel(item.server_label);
+    const itemStatus = harnessLabel(item.status);
+    let argumentsLength: number | undefined;
+    if (typeof item.arguments === 'string') argumentsLength = item.arguments.length;
+    else if (isObject(item.arguments)) { try { argumentsLength = JSON.stringify(item.arguments).length; } catch { /* unreadable: omitted */ } }
+    log('pi.harness_item', {
+      trigger, attempt, ...(itemType ? { itemType } : {}), ...(name ? { name } : {}), ...(serverLabel ? { serverLabel } : {}),
+      hasCallId: item.call_id !== undefined && item.call_id !== null, hasId: item.id !== undefined && item.id !== null,
+      ...(argumentsLength !== undefined ? { argumentsLength } : {}), ...(itemStatus ? { itemStatus } : {}),
+      eventTypes: [...phase.eventTypes], itemTypes: [...phase.itemTypes], ...phaseFields(phase),
+    });
+  }
+
   function phaseFields(phase: StreamPhase) {
     return {
       elapsedMs: Math.round(performance.now() - phase.startedAt),
@@ -375,6 +409,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           if (!isObject(payload)) { phase.sawOutput = true; continue; }
           const type = typeof payload.type === 'string' ? payload.type : frame.event;
           phase.firstEventMs ??= Math.round(performance.now() - phase.startedAt);
+          remember(phase.eventTypes, harnessLabel(type));
           if (!isQuietEvent(type, payload)) phase.sawOutput = true;
           if (type === 'response.created' && isObject(payload.response) && typeof payload.response.id === 'string') {
             phase.responseId = payload.response.id;
@@ -383,9 +418,19 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             yield { kind: 'delta', text: payload.delta };
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
+            remember(phase.itemTypes, harnessLabel(itemType));
+            if (typeof itemType === 'string' && !knownItemTypes.has(itemType) && itemType !== 'mcp_approval_request' && itemType !== 'function_call') {
+              // Deduplicated on the sanitised label, so every non-token type counts once as `other`.
+              const unknown = harnessLabel(itemType)!;
+              if (!phase.unknownItemTypes.has(unknown) && phase.unknownItemTypes.size < unknownItemLogLimit) {
+                phase.unknownItemTypes.add(unknown);
+                logHarnessItem('unknown_item', payload.item, phase, attempt);
+              }
+            }
             if (itemType === 'mcp_call') { phase.sawTool = true; yield { kind: 'tool', server: label(payload.item.server_label) }; }
             else if (itemType === 'mcp_approval_request' || itemType === 'function_call') {
               phase.sawTool = true;
+              logHarnessItem('rejected_item', payload.item, phase, attempt);
               logStreamFailure('approval_or_function_call_item', phase, attempt);
               throw new PiGatewayError('pi_failed', 'PI asked for an approval or client tool the gateway does not answer. The agent definition must run Jarvis tools without harness approval.');
             }
@@ -453,7 +498,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
         startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
-        responseId: null, failure: null, failureFields: {},
+        responseId: null, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
       try {
         yield* respondOnce(conversationId, input, signal, phase, attempt);
