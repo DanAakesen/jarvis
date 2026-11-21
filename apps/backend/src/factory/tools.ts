@@ -1064,7 +1064,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'list_projects',
-    description: 'List active Software Factory projects and their IDs for selecting a project.',
+    description: 'List active Software Factory projects and their IDs for selecting a project. Use when Dan asks which projects exist.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     reflexSafe: true,
     execute: async (_input, request) => {
@@ -1143,7 +1143,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'get_task',
-    description: 'Get a task and bounded event summaries without exposing event payloads.',
+    description: 'Get a task and bounded event summaries without exposing event payloads. Use when Dan asks how a worker or task is doing.',
     execution: { defaultEffect: 'read' },
     inputSchema: {
       type: 'object',
@@ -1169,7 +1169,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'list_releases',
-    description: 'List the recorded releases for an active Software Factory project.',
+    description: 'List the recorded releases for an active Software Factory project. Use when Dan asks which releases a project has shipped.',
     inputSchema: {
       type: 'object',
       properties: { projectId: idSchema },
@@ -1189,7 +1189,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'get_release',
-    description: 'Get a recorded release and its linked workflow and deployment status.',
+    description: 'Get a recorded release and its linked workflow and deployment status. Use when Dan asks about one release or whether it is deployed.',
     inputSchema: {
       type: 'object',
       properties: { releaseId: idSchema },
@@ -1321,7 +1321,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'set_task_model',
-    description: 'Set the coding agent, model, or reasoning for a Ready task; running tasks are not changed.',
+    description: 'Set the coding agent, model, or reasoning for a Ready task; running tasks are not changed. Use when Dan asks to change a task’s model or agent.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1411,7 +1411,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'steer_task',
-    description: 'Send a correction to the current turn of a running task.',
+    description: 'Send a correction to the current turn of a running task. Use when Dan wants to redirect a running worker.',
     inputSchema: {
       type: 'object',
       properties: {
