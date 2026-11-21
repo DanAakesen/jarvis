@@ -124,6 +124,33 @@ describe('owner_reminders delivery evidence', () => {
     expect(read.deliveryNote).toMatch(/Scheduling is separate/u);
   });
 
+  it('saves every reminder one message asks for, and answers "already saved" only for the same request', async () => {
+    const store = createMemoryOwnerReminderStore();
+    const path = 'Personal/Tasks.md';
+    const content = `- [ ] ${taskTitle} 🆔 reminder-tool-task\n- [ ] Book the train 🆔 reminder-tool-train`;
+    const tool = createOwnerReminderTool({
+      ownerObjectId: owner,
+      store,
+      vault: {
+        tree: async () => [{ path, sha: 'fixture-sha', size: Buffer.byteLength(content) }],
+        read: async () => ({ path, sha: 'fixture-sha', content }),
+      } as never,
+      now: () => now,
+    });
+    const ask = (task: string, fireAt: string) => tool.execute(
+      { operation: 'create', task, fireAt }, ownerRequest(), AbortSignal.timeout(1_000),
+    ) as Promise<{ created: boolean; reminder: { id: string; task: string } }>;
+
+    const draft = await ask(taskTitle, '2026-11-20T10:05:00.000Z');
+    const train = await ask('Book the train', '2026-11-20T11:00:00.000Z');
+    const repeat = await ask(taskTitle, '2026-11-20T10:05:00.000Z');
+
+    expect([draft.created, train.created, repeat.created]).toEqual([true, true, false]);
+    expect(train.reminder.task).toBe('Book the train');
+    expect(repeat.reminder.id).toBe(draft.reminder.id);
+    expect(await store.list(20)).toHaveLength(2);
+  });
+
   it('returns an actionable invalid-token reason rather than an unexplained row', async () => {
     const store = createMemoryOwnerReminderStore();
     const { schedule } = await store.create({

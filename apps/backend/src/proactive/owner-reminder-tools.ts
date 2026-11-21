@@ -340,8 +340,8 @@ export function createOwnerReminderTool(options: {
         if (matches.length !== 1) throw new ToolRefusal('That task is ambiguous. Identify its unique task name before scheduling.');
         const task = matches[0]!;
         const candidate: NewOwnerReminder = {
-          // A wake has no message to tell its reminders apart, so each task and time is its own request.
-          idempotencyKey: createHash('sha256').update(isPiWake(request) ? `${message.id}:${input.task}:${input.fireAt}` : message.id).digest('hex'),
+          // One message can ask for several reminders, so a request is the message, the task and everything the reminder says.
+          idempotencyKey: createHash('sha256').update([message.id, task.taskIdentity, input.fireAt, intent.cadence ?? 'once', intent.untilTaskDone].join(':')).digest('hex'),
           taskIdentity: task.taskIdentity,
           taskTitle: task.text,
           fireAt: intent.fireAt,
