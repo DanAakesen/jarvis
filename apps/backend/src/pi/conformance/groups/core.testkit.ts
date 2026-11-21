@@ -138,6 +138,11 @@ export const coreGroup: GroupFactory = (context) => {
       { label: 'show the conversation', arguments: { commandId: 'conversation-show', operation: 'conversation', action: 'show' } },
       { label: 'turn the camera off', arguments: { commandId: 'session-camera', operation: 'session', action: 'camera', value: 'off' } },
       { label: 'end the voice session', arguments: { commandId: 'session-voice', operation: 'session', action: 'voice', value: 'end' } },
+      {
+        label: 'a language switch is refused with the actions the page supports',
+        arguments: { commandId: 'session-language', operation: 'session', action: 'language', value: 'en' }, expect: 'refused',
+        check: (result) => { if (!isObject(result) || !String(result.refused).includes('action: must be voice or camera')) throw new Error(`expected the supported session actions, got ${JSON.stringify(result)}`); },
+      },
       { label: 'open the context panel on a view', arguments: { commandId: 'panel-open', operation: 'context-panel', action: 'open', view: textView('Context', 'Notes for the meeting.') } },
       { label: 'close the context panel', arguments: { commandId: 'panel-close', operation: 'context-panel', action: 'close' } },
       { label: 'close a window', arguments: { commandId: 'close-notes', operation: 'close', viewId: tabWindows.notes } },
