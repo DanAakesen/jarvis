@@ -8,6 +8,10 @@ import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { RemoteMcpBridge } from './remote-mcp.js';
 import type { PiSituationService } from './situation.js';
+import { brainOnlyTools } from './brain/policy.js';
+import { createBrainTools } from './brain/tools.js';
+import { createSituationTools } from './situation-tools.js';
+import { createWatchTools } from './watch/tools.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -339,6 +343,53 @@ describe('PI MCP server', () => {
       arguments: { source: 'daily.nutrition.meals' },
     });
     expect(blocked.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
+  });
+
+  it('finds through find_tools what chat finds, plus exactly the tools only a wake has', async () => {
+    // The tools are only listed in this test, never run: the stores behind them stay empty and any turn registry will do.
+    const empty = {} as never;
+    const turns = createPiTurnRegistry();
+    const now = () => new Date('2026-11-21T12:00:00Z');
+    const brainTools = createBrainTools({ registry: turns, comms: empty, proactive: empty, area: empty, inbox: empty, now });
+    const standIn = (name: string): JarvisTool => ({ ...probe, name });
+    const remote = (prefix: string, label: string, name: string): RemoteMcpBridge => ({
+      prefix, label, status: () => ({ state: 'ready' }), warm: () => {},
+      tools: async () => [{ name: `${prefix}${name}`, description: `${label} tool ${name}`, inputSchema: { type: 'object' }, moduleId: 'remote', execute: async () => ({}) }],
+      call: async () => ({ outcome: 'ok', result: {} }),
+    });
+    const { app, registry, tool } = setup([remote('gh_', 'GitHub', 'issue_write'), remote('az_', 'Azure', 'group_list')], { tools: [
+      ...brainTools,
+      ...createWatchTools({ watches: empty, registry: turns, memoryStore: empty }),
+      ...createSituationTools({ registry: turns, service: empty, now }),
+      // The older approval flow: registered, but no turn may find it.
+      ...['get_pending_issue', 'confirm_create_issue', 'confirm_project_archive', 'calendar_get_pending_change', 'calendar_confirm_change', 'mail_confirm_action'].map(standIn),
+    ] });
+    const chat = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const wake = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', signal: live(),
+      brain: { runId: '00000000-0000-4000-8000-000000000003', sent: [], wrote: [], looked: [] },
+    });
+    // A tool is discoverable when a search for its exact name returns it: an exact name always ranks first.
+    const candidates = [...app.jarvisTools.list().map(({ name }) => name), 'gh_issue_write', 'az_group_list'];
+    const discoverable = async (turn: string) => {
+      const found: string[] = [];
+      for (const name of candidates) {
+        const { result } = (await tool('find_tools', { turn, query: name })).body!;
+        const listed: Array<{ name: string }> = [...result.tools, ...result.otherMatches];
+        if (listed.some((entry) => entry.name === name)) found.push(name);
+      }
+      return found.sort();
+    };
+    const inChat = await discoverable(chat.turn);
+    const inWake = await discoverable(wake.turn);
+    const missingFrom = (names: string[], others: string[]) => names.filter((name) => !others.includes(name));
+    // Only a wake has: what the brain registers, the watch tool that records a look, and anything else brainOnlyTools lists.
+    const wakeOnly = [...new Set([...brainTools.map(({ name }) => name), 'watch_look', ...brainOnlyTools])].sort();
+    // A failure lists the tools that differ. The Proactive source switches are the one thing that narrows a wake, and none is off here.
+    expect({ 'only in a wake': missingFrom(inWake, inChat), 'only in chat': missingFrom(inChat, inWake) })
+      .toEqual({ 'only in a wake': wakeOnly, 'only in chat': [] });
+    // The catalogue is real: chat finds ordinary, situation and remote tools.
+    expect(inChat).toEqual(expect.arrayContaining(['get_settings', 'probe_echo', 'situation_read', 'gh_issue_write', 'az_group_list']));
   });
 
   it('shows chat the system-health tool without its smoke-only operation selector', async () => {
