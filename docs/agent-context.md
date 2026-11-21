@@ -6415,8 +6415,14 @@ associate it, waits for 0.6 seconds of transcript quiet (at most three seconds),
 stores Dan's message, then invokes the existing PI gateway with that exact
 message ID and the shared `dbo.pi_conversation`.
 `session.commentary.append` returns PI's acknowledgement/final answer under the
-delegation ID. New transcript input cancels stale PI work. Output deltas are
-grouped and persisted on 0.6-second quiet with a three-second persistence bound.
+delegation ID. Later speech does not cancel PI work; only a new delegation or the session
+ending does. Output deltas are grouped and persisted on 0.6-second quiet with a
+three-second persistence bound. A direct (non-delegated) owner turn is stored
+only after 0.6 seconds of input quiet, never because output started, and before
+the reply that answers it. An empty delegated turn waits up to three seconds for
+its transcript before the "did not catch that" reply. Backend logs for this path
+carry ids and lengths only: `voice.delegation_received`,
+`voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started`.
 
 The normal `pi-agent` Deploy phase seeds `jarvis-pi-live` once (then only
 verifies its technical contract; its instructions and voice are tuned in Foundry), configures and waits for the backend revision, then

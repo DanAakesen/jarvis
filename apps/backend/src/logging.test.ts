@@ -137,6 +137,33 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('private');
   });
 
+  it('exports voice request tracing as ids and lengths and never the transcript', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, undefined, output);
+    const text = { transcript: 'private words', text: 'private words', delta: 'private' };
+    logger.info({
+      ...text, delegationId: 'delegate_1', groupId: 'input_abc', offsetMs: 900, textLength: 31,
+      reusedGroup: true, outcome: 'attached', language: 'en',
+    }, 'voice.delegation_received');
+    logger.info({
+      ...text, groupId: 'input_abc', delegationId: 'delegate_1', textLength: 31, quietMs: 640,
+      reason: 'delegated', language: 'en',
+    }, 'voice.owner_group_persisted');
+    logger.info({ ...text, delegationId: 'delegate_1', groupId: 'input_abc', waitedMs: 3_001 }, 'voice.did_not_catch');
+    logger.info({ ...text, delegationId: 'delegate 1', groupId: 'input_abc', textLength: 31 }, 'voice.pi_turn_started');
+    const [received, persisted, missed, started] = records.map((record) => JSON.parse(record));
+    expect(received).toMatchObject({
+      msg: 'voice.delegation_received', delegationId: 'delegate_1', groupId: 'input_abc', offsetMs: 900,
+      textLength: 31, reusedGroup: true, outcome: 'attached', language: 'en',
+    });
+    expect(persisted).toMatchObject({ msg: 'voice.owner_group_persisted', reason: 'delegated', quietMs: 640 });
+    expect(missed).toMatchObject({ msg: 'voice.did_not_catch', waitedMs: 3_001 });
+    expect(started).toMatchObject({ msg: 'voice.pi_turn_started', textLength: 31 });
+    expect(started).not.toHaveProperty('delegationId');
+    expect(records.join('')).not.toContain('private');
+  });
+
   it('exports only fixed probe names, counts, sizes and timings', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

@@ -343,10 +343,9 @@ describe('GPT-Live authoritative client events', () => {
       { role: 'dan', text: 'Hello Jarvis' },
       { role: 'jarvis', text: 'Hello Dan.' },
     ]);
-    expect(relay.received).toContainEqual(expect.objectContaining({
-      type: 'jarvis.voice.input_transcript.completed',
-      transcript: 'Hello Jarvis',
-    }));
+    await until(() => relay.received.some(event =>
+      event.type === 'jarvis.voice.input_transcript.completed' && event.transcript === 'Hello Jarvis'
+    ), 'completed input transcript');
   });
 
   it('does not let continuous input PCM overwrite delegated thinking', async () => {
@@ -877,5 +876,201 @@ describe('GPT-Live authoritative client events', () => {
       await until(() => runs[0]!.aborted(), 'PI turn cancelled by session end');
       expect(commentary(relay)).toEqual([]);
     }, 15_000);
+  });
+
+  describe("Dan's sentence arrives word by word while GPT-Live is already answering", () => {
+    type Relay = Awaited<ReturnType<typeof startRelay>>;
+    const recordingStore = (writes: Array<{ role: string; text: string; sourceItemId?: string }>) => ({
+      createSession: async () => ({
+        id: '78', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => true,
+      addMessage: async (input: {
+        sessionId: string;
+        role: string;
+        text: string;
+        model: string | null;
+        sourceItemId?: string;
+      }) => {
+        writes.push({
+          role: input.role,
+          text: input.text,
+          ...(input.sourceItemId ? { sourceItemId: input.sourceItemId } : {}),
+        });
+        return {
+          id: String(7800 + writes.length), sessionId: input.sessionId, role: input.role,
+          text: input.text, model: input.model, at: new Date(),
+        } as ConversationMessage;
+      },
+    } as unknown as ConversationStore);
+    const gatedAgent = () => {
+      const runs: Array<{ text: string; aborted: () => boolean; reply: (text: string) => void }> = [];
+      const agent: PiVoiceAgent = {
+        async *stream(input, _authorization, signal) {
+          let reply!: (text: string) => void;
+          const answer = new Promise<string>((resolve, reject) => {
+            reply = resolve;
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+          runs.push({ text: input.text, aborted: () => signal.aborted, reply });
+          yield await answer;
+        },
+      };
+      return { agent, runs };
+    };
+    const send = (relay: Relay, event: Record<string, unknown>) =>
+      relay.upstreamSockets[0]!.send(JSON.stringify(event));
+    const word = (relay: Relay, id: string, delta: string, from: number, to: number) =>
+      send(relay, {
+        type: 'session.input_transcript.delta', event_id: id, delta, start_ms: from, end_ms: to,
+      });
+    const speak = (relay: Relay, id: string, delta?: string) => {
+      if (delta) send(relay, { type: 'session.output_transcript.delta', event_id: `${id}-text`, delta });
+      send(relay, { type: 'session.output_audio.delta', event_id: `${id}-audio`, delta: 'AAE=' });
+    };
+    const delegate = (relay: Relay, id: string, offset: number) =>
+      send(relay, {
+        type: 'session.delegation.created', event_id: `${id}-event`, offset_ms: offset,
+        delegation: { id, target: 'client' },
+      });
+    const commentary = (relay: Relay) =>
+      relay.upstreamEvents.filter(event => event.type === 'session.commentary.append');
+    const captionDeltas = (relay: Relay) =>
+      relay.received.filter(event => event.type === 'jarvis.voice.input_transcript.delta');
+    const activity = (relay: Relay) =>
+      relay.received.filter(event => event.type === 'jarvis.voice.activity').map(event => event.state);
+
+    it('keeps one owner message and one PI turn when the delegation lands mid-sentence', async () => {
+      const writes: Array<{ role: string; text: string; sourceItemId?: string }> = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+
+      word(relay, 'w1', 'Check ', 0, 200);
+      await sleep(30);
+      speak(relay, 'a1', 'OK, ');
+      await sleep(30);
+      word(relay, 'w2', 'my ', 200, 400);
+      speak(relay, 'a2');
+      await sleep(30);
+      word(relay, 'w3', 'Azure ', 400, 600);
+      await sleep(30);
+      delegate(relay, 'delegate-azure', 900);
+      speak(relay, 'a3', 'checking now. ');
+      await sleep(30);
+      word(relay, 'w4', 'resource ', 600, 800);
+      speak(relay, 'a4');
+      await sleep(30);
+      word(relay, 'w5', 'groups', 800, 900);
+      speak(relay, 'a5');
+      await until(() => activity(relay).includes('speaking'), 'speaking activity');
+      expect(writes).toEqual([]);
+
+      await until(() => runs.length === 1, 'delegated PI turn');
+      expect(runs[0]!.text).toBe('Check my Azure resource groups');
+      // PI is working and the reply is still playing: the screen must not fall back to listening.
+      expect(activity(relay).slice(activity(relay).indexOf('speaking')).includes('listening')).toBe(false);
+
+      word(relay, 'mm', 'mm-hm', 1_000, 1_050);
+      await sleep(100);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]!.aborted()).toBe(false);
+
+      runs[0]!.reply('You have three resource groups.');
+      await until(() => commentary(relay).some(event => event.content === 'You have three resource groups.'),
+        'PI result commentary');
+      await until(() => writes.some(write => write.role === 'jarvis'), 'assistant message');
+
+      const owner = writes.filter(write => write.role === 'dan' && write.text.includes('Check'));
+      expect(owner).toHaveLength(1);
+      expect(owner[0]!.text).toBe('Check my Azure resource groups');
+      expect(writes.findIndex(write => write.role === 'dan')).toBeLessThan(
+        writes.findIndex(write => write.role === 'jarvis'),
+      );
+      expect(runs).toHaveLength(1);
+      expect(commentary(relay).some(event =>
+        typeof event.content === 'string' && event.content.includes('did not catch'))).toBe(false);
+      const sentence = captionDeltas(relay).filter(event => event.delta !== 'mm-hm');
+      expect(sentence.map(event => event.delta)).toEqual(['Check ', 'my ', 'Azure ', 'resource ', 'groups']);
+      expect(new Set(sentence.map(event => event.itemId)).size).toBe(1);
+      expect(owner[0]!.sourceItemId).toBe(sentence[0]!.itemId);
+    }, 20_000);
+
+    it('still stops the whole-sentence PI turn when Dan ends the session', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore([]), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      word(relay, 'e1', 'Check ', 0, 200);
+      speak(relay, 'e-a1', 'OK. ');
+      await sleep(30);
+      word(relay, 'e2', 'Azure', 200, 400);
+      delegate(relay, 'delegate-end-words', 400);
+      await until(() => runs.length === 1, 'PI turn start');
+      expect(runs[0]!.text).toBe('Check Azure');
+
+      relay.browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+      await until(() => runs[0]!.aborted(), 'PI turn cancelled by session end');
+    }, 20_000);
+
+    it('waits for a transcript that trails the delegation instead of asking Dan to repeat', async () => {
+      const writes: Array<{ role: string; text: string }> = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+
+      delegate(relay, 'delegate-late', 600);
+      speak(relay, 'late-a1', 'OK, checking. ');
+      await sleep(800);
+      expect(commentary(relay)).toEqual([]);
+      word(relay, 'late-w1', 'Check Azure ', 0, 400);
+      await sleep(50);
+      word(relay, 'late-w2', 'resource groups', 400, 600);
+
+      await until(() => runs.length === 1, 'PI turn from the trailing transcript');
+      expect(runs[0]!.text).toBe('Check Azure resource groups');
+      expect(commentary(relay)).toEqual([]);
+      expect(writes.filter(write => write.role === 'dan').map(write => write.text))
+        .toEqual(['Check Azure resource groups']);
+      runs[0]!.reply('Done.');
+      await until(() => commentary(relay).length === 1, 'PI result');
+    }, 20_000);
+
+    it('only falls back to the did-not-catch reply when no words ever arrive', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore([]), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+
+      delegate(relay, 'delegate-silent', 300);
+      await sleep(1_500);
+      expect(commentary(relay)).toEqual([]);
+      await until(() => commentary(relay).length === 1, 'did-not-catch fallback', 1_000);
+      expect(commentary(relay)[0]).toEqual(expect.objectContaining({
+        delegation_id: 'delegate-silent',
+        content: 'I did not catch that. Please say it again.',
+      }));
+      expect(runs).toHaveLength(0);
+    }, 20_000);
+
+    it('stores a direct sentence whole when GPT-Live answers before Dan has finished', async () => {
+      const writes: Array<{ role: string; text: string; sourceItemId?: string }> = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream() { yield 'PI is not used for a direct reply.'; },
+      });
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+
+      word(relay, 'd1', 'Tell ', 0, 200);
+      for (const [index, text] of ['me ', 'about ', 'the ', 'weather'].entries()) {
+        await sleep(250);
+        speak(relay, `d-a${index}`, index === 0 ? 'Sure. ' : undefined);
+        word(relay, `d${index + 2}`, text, 200 * (index + 1), 200 * (index + 2));
+      }
+      await until(() => writes.length === 2, 'direct owner and reply messages', 1_000);
+
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Tell me about the weather',
+        'jarvis:Sure. ',
+      ]);
+      expect(new Set(captionDeltas(relay).map(event => event.itemId)).size).toBe(1);
+    }, 20_000);
   });
 });
