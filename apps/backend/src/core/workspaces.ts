@@ -174,8 +174,14 @@ function workspaceItemTools(
         authorizeTool(request);
         if (!isObject(input)) throw new ToolRefusal('Choose a Workspaces item to open.');
         const id = await resolveId(input, request, signal);
-        const item = await openItem(store, htmlArtifacts, imageArtifacts, request, id, signal);
-        return { id: item.id, title: item.title, kind: item.kind, opened: true };
+        try {
+          const item = await openItem(store, htmlArtifacts, imageArtifacts, request, id, signal);
+          return { id: item.id, title: item.title, kind: item.kind, opened: true };
+        } catch (error) {
+          if (error instanceof WorkspaceItemNotFound || error instanceof WorkspaceHtmlArtifactNotFound ||
+              error instanceof WorkspaceArtifactNotFound) throw new ToolRefusal('That Workspaces item was not found.');
+          throw error;
+        }
       },
     },
     {
