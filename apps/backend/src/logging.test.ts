@@ -379,6 +379,24 @@ describe('structured log export', () => {
     expect(JSON.parse(records[5]!)).toMatchObject({ reason: 'client_tool_round_limit' });
   });
 
+  it('exports only the bounded fields of a weather.phase and drops places, queries and anything else', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = { phase: 'forecast', outcome: 'http_status', status: 429, attempt: 2, elapsedMs: 3012, host: 'open-meteo-forecast' };
+    logger.info({
+      ...fields, location: 'Private Town', name: 'private', latitude: 55.1, longitude: 12.3, url: 'https://private.example/?q=private', body: 'private body', reqId: 'private',
+    }, 'weather.phase');
+    expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'weather.phase', ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'weather.phase', properties: { service: 'jarvis-backend', ...fields } }));
+    logger.info({ phase: 'Private Town', outcome: 'private', status: 99, attempt: 3, elapsedMs: -1, host: 'private.example' }, 'weather.phase');
+    logger.info({ phase: 'home_location', outcome: 'ok', status: 200.5, elapsedMs: Infinity }, 'weather.phase');
+    expect(JSON.parse(records[1]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'weather.phase' });
+    expect(JSON.parse(records[2]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'weather.phase', phase: 'home_location', outcome: 'ok' });
+    expect(records.join('')).not.toContain('private');
+  });
+
   it('keeps the tool count and Azure catalogue on pi.turn and drops an unknown catalogue state', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

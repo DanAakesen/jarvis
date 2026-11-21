@@ -633,13 +633,19 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       const rounds = respondRound(conversationId, next, signal, grant, round === 1);
       let finished: Awaited<ReturnType<typeof rounds.next>>;
       let roundDone: PiEvent | undefined;
-      while (!(finished = await rounds.next()).done) {
-        if (finished.value.kind === 'round_done') {
-          total.inputTokens += finished.value.usage.inputTokens;
-          total.cachedTokens += finished.value.usage.cachedTokens;
-          total.outputTokens += finished.value.usage.outputTokens;
-          roundDone = finished.value;
-        } else yield finished.value;
+      try {
+        while (!(finished = await rounds.next()).done) {
+          if (finished.value.kind === 'round_done') {
+            total.inputTokens += finished.value.usage.inputTokens;
+            total.cachedTokens += finished.value.usage.cachedTokens;
+            total.outputTokens += finished.value.usage.outputTokens;
+            roundDone = finished.value;
+          } else yield finished.value;
+        }
+      } catch (error) {
+        // A response that completed and then failed on an item it cannot answer still reported its real usage.
+        if (roundDone) yield roundDone;
+        throw error;
       }
       const { items, phase, attempt } = finished.value;
       if (items.length === 0) {

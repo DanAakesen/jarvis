@@ -930,12 +930,31 @@ describe('PI gateway', () => {
       expect(responsesOf(ended.calls)).toHaveLength(1);
     });
 
-    it('fails an item it cannot answer and caps the items of one response', async () => {
+    it('answers up to 16 client items in one response and fails with the 17th', async () => {
+      const calls = (count: number) => Array.from({ length: count }, (_, index) => functionCall('task', `call_${index}`, '{}')).flat();
+      const within = setup([
+        () => sse(created('resp_1'), ...calls(16), completed(1, 0, 1)),
+        () => sse(created('resp_2'), delta('Done'), completed(1, 0, 1)),
+      ]);
+      await within.run('hi');
+      expect(responsesOf(within.calls)[1]!.body!.input).toHaveLength(16);
       const { logs, log } = capture();
-      const flood = setup([() => sse(created('resp_1'), ...Array.from({ length: 17 }, (_, index) => functionCall('task', `call_${index}`, '{}')).flat(), completed(1, 0, 1))], { log });
-      await expect(flood.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      const flood = setup([() => sse(created('resp_1'), ...calls(17), completed(7_000, 0, 70))], { log });
+      await expect(flood.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('more client tools') });
       expect(responsesOf(flood.calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
+      // The cap fires mid-stream, before the response completed, so the turn is charged the estimate for it.
+      expect(flood.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 12_000 });
+    });
+
+    it('fails an item it cannot answer but charges the real usage of the response that carried it', async () => {
+      const { logs, log } = capture();
+      const first = frame({ type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', name: 'task', arguments: '{}' } });
+      const { run, calls, store } = setup([() => sse(created('resp_1'), first, completed(7_000, 0, 70))], { log });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
+      expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 7_000, outputTokens: 70 });
     });
   });
 
