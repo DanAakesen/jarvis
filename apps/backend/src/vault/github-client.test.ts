@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VaultWriteConflictError, createGitHubVaultClient } from './github-client.js';
+import { VaultFileTooLargeError, VaultWriteConflictError, createGitHubVaultClient } from './github-client.js';
 
 const head = '1'.repeat(40);
 const baseTree = '2'.repeat(40);
@@ -72,5 +72,18 @@ describe('vault client move', () => {
     const { client } = fixture({ refStatus: 422 });
     await expect(client.move('Inbox/a.md', 'Inbox/Closed/a.md', 'c', sourceSha, 'close', signal))
       .rejects.toBeInstanceOf(VaultWriteConflictError);
+  });
+});
+
+describe('vault client read', () => {
+  it.each([
+    ['announced by its length', () => new Response('{}', { headers: { 'content-length': String(1024 * 1024) } })],
+    ['streamed past the limit', () => new Response('x'.repeat(500 * 1024))],
+  ])('reports a note too large for one contents response (%s) as too large, not as an outage', async (_title, response) => {
+    const client = createGitHubVaultClient({
+      tokenIssuer: { issueForContentsWrite: async () => 'token' },
+      fetcher: (async () => response()) as typeof fetch,
+    });
+    await expect(client.read('General/huge.md', signal)).rejects.toBeInstanceOf(VaultFileTooLargeError);
   });
 });

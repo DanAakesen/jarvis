@@ -1584,6 +1584,9 @@ export function createVaultModule(options: {
           if (error instanceof VaultAppNotInstalledError) {
             throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
           }
+          if (error instanceof VaultFileTooLargeError) {
+            throw new ToolFailure('That note is larger than 256 KB, so it cannot be read here.');
+          }
           throw new ToolFailure('Vault read is temporarily unavailable.');
         }
         if (!note) throw new ToolRefusal('That vault note does not exist.');
@@ -1663,6 +1666,10 @@ export function createVaultModule(options: {
             logWrite('error');
             throw new ToolFailure('The note changed or its read version is missing. Reread with vault_read, reapply the intended changes, and supply expectedSha. Nothing was committed by this attempt.');
           }
+          if (error instanceof VaultFileTooLargeError) {
+            logWrite('error');
+            throw new ToolFailure('That note is larger than 256 KB, so it cannot be changed here. Nothing was written.');
+          }
           logWrite('error');
           throw new ToolFailure('Vault write could not be confirmed. Reread the note before reapplying; do not blindly repeat an append or creation.');
         }
@@ -1707,6 +1714,9 @@ export function createVaultModule(options: {
           } catch (error) {
             if (error instanceof VaultAppNotInstalledError) {
               throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+            }
+            if (error instanceof VaultFileTooLargeError) {
+              throw new ToolFailure('That note is larger than 256 KB, so it cannot be deleted here. Nothing was deleted.');
             }
             throw new ToolFailure('Vault deletion is temporarily unavailable.');
           }
