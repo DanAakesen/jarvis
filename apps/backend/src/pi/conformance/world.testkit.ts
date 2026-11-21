@@ -67,7 +67,11 @@ function mergeAppOptions(groups: readonly ConformanceGroup[], shared: Partial<Bu
  * The whole backend, offline: every production module composed from the groups' stubs, the real PI MCP door in front of the
  * real tool routes, and stub GitHub and Azure MCP servers behind the real bridges.
  */
-export async function buildConformanceWorld(options: { readonly groups?: readonly GroupFactory[] } = {}): Promise<ConformanceWorld> {
+export async function buildConformanceWorld(options: {
+  readonly groups?: readonly GroupFactory[];
+  /** For the bridge tests: a controllable clock and a short search wait. */
+  readonly bridge?: { readonly now?: () => number; readonly searchWaitMs?: number };
+} = {}): Promise<ConformanceWorld> {
   const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
   const registry = createPiTurnRegistry();
   const context: ConformanceContext = {
@@ -80,8 +84,8 @@ export async function buildConformanceWorld(options: { readonly groups?: readonl
   const github = createStubMcpServer(stubGithubTools, { sse: true });
   const azure = createStubMcpServer(stubAzureTools);
   const bridges = [
-    createRemoteMcpBridge({ url: 'https://github.example/mcp', prefix: githubToolPrefix, label: 'GitHub', token: async () => 'stub-token', fetch: github.fetch }),
-    createRemoteMcpBridge({ url: 'https://azure.example/mcp', prefix: azureToolPrefix, label: 'Azure', token: async () => 'stub-token', fetch: azure.fetch }),
+    createRemoteMcpBridge({ url: 'https://github.example/mcp', prefix: githubToolPrefix, label: 'GitHub', token: async () => 'stub-token', fetch: github.fetch, ...options.bridge }),
+    createRemoteMcpBridge({ url: 'https://azure.example/mcp', prefix: azureToolPrefix, label: 'Azure', token: async () => 'stub-token', fetch: azure.fetch, ...options.bridge }),
   ];
   const door: BackendModule = {
     id: 'pi-door', tools: [],

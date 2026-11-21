@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
 import { allGroups, buildConformanceWorld } from './conformance/world.testkit.js';
 import { goldenIntents, phraseTable } from './conformance/phrases.testkit.js';
@@ -215,6 +215,135 @@ describe('callable: every tool runs through the real call_tool over stubbed stor
     if (onlyGroup && group?.id !== onlyGroup) return context.skip();
     expect(group, `${name} belongs to a module no conformance group composes`).toBeDefined();
     callable.set(name, await exerciseTool(world, world.app.jarvisTools.get(name)!, group));
+  });
+});
+
+// ---- Remote bridges ----------------------------------------------------------------------------------------------------------
+
+/** A door with no local tools and fresh stub GitHub and Azure servers: the bridge behaviour is what is under test. */
+async function remoteWorld(bridge: { now?: () => number; searchWaitMs?: number } = {}) {
+  const remote = await buildConformanceWorld({ groups: [], bridge: { searchWaitMs: 150, ...bridge } });
+  const turn = remote.client.openTurn();
+  const found = async (query: string) => {
+    const answer = await remote.client.find(turn, query);
+    return { names: [...answer.tools, ...answer.otherMatches].map((tool) => tool.name), note: answer.note };
+  };
+  return { remote, turn, found, [Symbol.asyncDispose]: async () => { turn.close(); await remote.close(); } };
+}
+
+describe('remote: the gh_ and az_ bridges behind the door', () => {
+  it('loads nothing for a local search, and only the provider the query names', async () => {
+    await using door = await remoteWorld();
+    const { remote, found } = door;
+    await found('weather tomorrow');
+    expect(remote.remote.github.seen).toEqual([]);
+    expect(remote.remote.azure.seen).toEqual([]);
+    expect(remote.bridges.map((bridge) => bridge.status().state)).toEqual(['idle', 'idle']);
+    const github = await found('list my github pull requests');
+    expect(github.names).toContain('gh_list_pull_requests');
+    expect(remote.bridges.map((bridge) => bridge.status().state)).toEqual(['ready', 'idle']);
+    expect(remote.remote.azure.seen).toEqual([]);
+    const azure = await found('list my azure resource groups');
+    expect(azure.names).toContain('az_group_list');
+    expect(remote.bridges.map((bridge) => bridge.status().state)).toEqual(['ready', 'ready']);
+  });
+
+  it('says a server that is still waking is attached but not loaded (idle, starting, then ready)', async () => {
+    await using door = await remoteWorld();
+    const { remote, found } = door;
+    let wake!: () => void;
+    remote.remote.azure.controls.gate = new Promise<void>((resolve) => { wake = resolve; });
+    expect(remote.bridges[1]!.status()).toEqual({ state: 'idle' });
+    const starting = await found('azure resource groups');
+    expect(starting.names.filter((name) => name.startsWith('az_'))).toEqual([]);
+    expect(starting.note).toMatch(/Azure tools are still loading/u);
+    expect(starting.note).toMatch(/attached, just not loaded yet/u);
+    expect(remote.bridges[1]!.status()).toEqual({ state: 'starting' });
+    wake();
+    await vi.waitFor(async () => expect((await found('azure resource groups')).names).toContain('az_group_list'), { timeout: 2_000 });
+    expect(remote.bridges[1]!.status()).toEqual({ state: 'ready' });
+  });
+
+  it('keeps the last list and says so when a refresh fails (stale), and recovers at the next refresh', async () => {
+    let clock = 0;
+    await using door = await remoteWorld({ now: () => clock });
+    const { remote, found } = door;
+    expect((await found('github issues')).names).toContain('gh_issue_read');
+    clock += 31 * 60_000;
+    remote.remote.github.controls.listFailure = 503;
+    const stale = await found('github issues');
+    expect(stale.names).toContain('gh_issue_read');
+    expect(stale.note).toMatch(/last loaded tool list because the refresh failed \(the server answered HTTP 503\)/u);
+    expect(remote.bridges[0]!.status()).toEqual({ state: 'stale', reason: 'the server answered HTTP 503' });
+    remote.remote.github.controls.listFailure = undefined;
+    clock += 2 * 60_000;
+    expect((await found('github issues')).note).toBeUndefined();
+    expect(remote.bridges[0]!.status()).toEqual({ state: 'ready' });
+  });
+
+  it('says a server that cannot be reached is unreachable, never "not attached", and tries again at the next search', async () => {
+    await using door = await remoteWorld();
+    const { remote, turn, found } = door;
+    remote.remote.github.controls.listFailure = 'network';
+    const down = await found('github issues');
+    expect(down.names.filter((name) => name.startsWith('gh_'))).toEqual([]);
+    expect(down.note).toMatch(/GitHub could not be reached \(the connection failed\)\. Say so plainly; do not claim to have looked\./u);
+    expect(remote.bridges[0]!.status()).toEqual({ state: 'unreachable', reason: 'the connection failed' });
+    const refused = await remote.client.call(turn, 'gh_issue_read', { method: 'get', owner: 'o', repo: 'r', issue_number: 1 });
+    expect(refused.outcome).toBe('refused');
+    remote.remote.github.controls.listFailure = undefined;
+    expect((await found('github issues')).names).toContain('gh_issue_read');
+    expect(remote.bridges[0]!.status()).toEqual({ state: 'ready' });
+  });
+
+  it('runs a discovered remote tool and refuses one that was never looked up', async () => {
+    await using door = await remoteWorld();
+    const { remote, turn, found } = door;
+    const unknown = await remote.client.call(turn, 'gh_issue_read', { method: 'get', owner: 'o', repo: 'r', issue_number: 12 });
+    expect(unknown.outcome).toBe('refused');
+    await found('github issue');
+    const done = await remote.client.call(turn, 'gh_issue_read', { method: 'get', owner: 'o', repo: 'r', issue_number: 12 });
+    expect(done.outcome).toBe('ok');
+    expect(done.result).toMatchObject({ ok: true, tool: 'issue_read', echo: { issue_number: 12 } });
+    expect(remote.remote.github.seen.at(-1)).toEqual({ method: 'tools/call', tool: 'issue_read' });
+    expect(turn.grant.results.at(-1)).toEqual({ tool: 'gh_issue_read', outcome: 'ok' });
+  });
+
+  it('reports a remote tool that fails as an error with the server’s own words', async () => {
+    await using door = await remoteWorld();
+    const { remote, turn, found } = door;
+    await found('github issue');
+    remote.remote.github.controls.erroringTool = { name: 'issue_read', text: 'Not Found: no such issue' };
+    const failed = await remote.client.call(turn, 'gh_issue_read', { method: 'get', owner: 'o', repo: 'r', issue_number: 404 });
+    expect(failed.outcome).toBe('error');
+    expect(failed.isError).toBe(true);
+    expect(failed.result).toEqual({ error: 'Not Found: no such issue' });
+    expect(turn.grant.results.at(-1)).toEqual({ tool: 'gh_issue_read', outcome: 'error' });
+  });
+
+  it('cuts a very large remote result to a preview that says so, instead of flooding the turn', async () => {
+    await using door = await remoteWorld();
+    const { remote, turn, found } = door;
+    await found('gh_search_code');
+    remote.remote.github.controls.largeTool = { name: 'search_code', characters: 450_000 };
+    const big = await remote.client.call(turn, 'gh_search_code', { query: 'jarvis' });
+    expect(big.outcome).toBe('ok');
+    const result = big.result as { truncated: boolean; preview: string; note: string };
+    expect(result.truncated).toBe(true);
+    expect(result.preview).toHaveLength(200_000);
+    expect(result.note).toMatch(/too long; this is its start/u);
+    expect(big.raw.length).toBeLessThan(230_000);
+  });
+
+  it('answers cleanly when the remote server drops during a call', async () => {
+    await using door = await remoteWorld();
+    const { remote, turn, found } = door;
+    await found('azure resources');
+    remote.remote.azure.controls.gate = Promise.reject(new TypeError('fetch failed'));
+    remote.remote.azure.controls.gate.catch(() => {});
+    const dropped = await remote.client.call(turn, 'az_group_list', {});
+    expect(dropped.outcome).toBe('error');
+    expect(dropped.result).toEqual({ error: 'Azure could not be reached. Nothing is confirmed as done.' });
   });
 });
 
