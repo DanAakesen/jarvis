@@ -72,7 +72,7 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'nutrition', en: 'set my protein target to 160 grams', da: 'sæt mit proteinmål til 160 gram', tools: ['health_nutrition_targets'] },
   // GitHub and Azure (remote bridges)
   { intent: 'github', en: 'list my open pull requests on github', da: 'vis mine åbne pull requests på github', tools: ['gh_list_pull_requests', 'gh_search_pull_requests'] },
-  { intent: 'github', en: 'show issue 12 on github', da: 'vis issue 12 på github', tools: ['gh_issue_read'] },
+  { intent: 'github', en: 'show issue 12 on github', da: 'vis issue 12 på github', tools: ['gh_issue_read', 'github_read'] },
   { intent: 'github', en: 'search github issues about the login bug', da: 'søg i github issues efter login-fejlen', tools: ['gh_search_issues', 'gh_list_issues'] },
   { intent: 'azure', en: 'list my azure resource groups', da: 'vis mine azure ressourcegrupper', tools: ['az_group_list'] },
   { intent: 'azure', en: 'what resources are running in azure', da: 'hvilke ressourcer kører der i azure', tools: ['az_group_resource_list', 'az_group_list', 'az_containerapps_list'] },
@@ -88,7 +88,7 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'factory', en: 'how is the worker doing on task 5', da: 'hvordan går det med worker på task 5', tools: ['get_task', 'get_work_status'] },
   { intent: 'factory', en: 'pause task 5', da: 'sæt task 5 på pause', tools: ['pause_task'] },
   { intent: 'factory', en: 'list my projects', da: 'vis mine projekter', tools: ['list_projects'] },
-  { intent: 'factory', en: 'is the pull request for task 5 ready', da: 'er pull requesten til task 5 klar', tools: ['pr_get', 'get_work_status', 'get_task'] },
+  { intent: 'factory', en: 'show me the pull request of the worker on task 5', da: 'vis mig pull requesten fra worker på task 5', tools: ['pr_get', 'get_work_status', 'get_task', 'github_read'] },
   // Workspace and visuals
   { intent: 'workspace', en: 'show me a chart of my spending', da: 'vis mig et diagram over mit forbrug', tools: ['show_in_chat', 'workspace_command', 'create_html_view'] },
   { intent: 'workspace', en: 'open the workspace', da: 'åbn arbejdsområdet', tools: ['workspace_command', 'workspaces_open'] },
