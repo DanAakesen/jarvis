@@ -24,8 +24,9 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
   const store = createMemoryPiStore(() => new Date('2026-11-15T16:00:00Z'));
   const registry = createPiTurnRegistry();
   let activationSequence = 0;
+  let situationText = '';
   const activations: PiActivationService = {
-    situation: {} as never,
+    situation: { context: async () => ({ text: situationText, view: {} as never }) } as never,
     async begin(input) {
       activationSequence += 1;
       const id = input.id && /^[0-9a-f-]{36}$/iu.test(input.id)
@@ -44,7 +45,7 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
       });
       return {
         grant,
-        context: '',
+        context: situationText,
         situation: {
           state: null, revision: 0, hash: null, policyRevision: 'a'.repeat(64),
           staleSources: [], missingSources: [], disabledSources: [], freshSources: [], asOf: null, updatedAt: null,
@@ -75,7 +76,10 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text }, 'Bearer x', signal)) chunks.push(chunk);
     return chunks;
   };
-  return { gateway, store, registry, calls, usage, run, conversations: () => conversations, setCancel: (reply: () => Response) => { cancelReply = reply; } };
+  return {
+    gateway, store, registry, calls, usage, run, conversations: () => conversations, setCancel: (reply: () => Response) => { cancelReply = reply; },
+    setSituation: (text: string) => { situationText = text; },
+  };
 }
 
 describe('PI gateway', () => {
@@ -329,6 +333,29 @@ describe('PI gateway', () => {
     expect(store.turns.map(turn => turn.kind)).toEqual(['warm', 'warm']);
     const status = await gateway.status(new AbortController().signal);
     expect(status).toMatchObject({ enabled: true, reason: null, warm: { state: 'warm' }, agent: { name: 'jarvis-pi', effort: 'low' } });
+  });
+
+  it('sends the persona and the situational state once, whether a warm-up or a turn comes first', async () => {
+    const inputs = (calls: Call[]) => calls.filter(call => call.url.includes('/responses')).map(call => (call.body!.input as Array<{ content: string }>)[0]!.content);
+    const count = (text: string, part: string) => text.split(part).length - 1;
+    const warmFirst = setup([() => sse(delta('ready'), completed(11_000, 0, 2)), () => sse(delta('Hi'), completed(11_100, 11_000, 3))]);
+    warmFirst.setSituation('SITUATION BLOCK');
+    await warmFirst.gateway.warm(new AbortController().signal);
+    await warmFirst.run('hi');
+    const [warmInput, turnInput] = inputs(warmFirst.calls);
+    expect(warmInput).toContain('CONTEXT BLOCK\n\nSITUATION BLOCK');
+    expect([count(turnInput!, 'CONTEXT BLOCK'), count(turnInput!, 'SITUATION BLOCK')]).toEqual([0, 0]);
+
+    const turnFirst = setup([() => sse(delta('Hi'), completed(11_000, 0, 3)), () => sse(delta('ready'), completed(11_000, 9_000, 2))]);
+    turnFirst.setSituation('SITUATION BLOCK');
+    await turnFirst.run('hi');
+    expect(await turnFirst.gateway.warm(new AbortController().signal)).toMatchObject({ state: 'warm', alreadyWarm: true });
+    expect(inputs(turnFirst.calls)).toHaveLength(1);
+
+    // A changed situation is new context for the next turn, and for a warm-up before it.
+    turnFirst.setSituation('NEWER SITUATION');
+    expect(await turnFirst.gateway.warm(new AbortController().signal)).toMatchObject({ alreadyWarm: false });
+    expect(inputs(turnFirst.calls)[1]).toContain('NEWER SITUATION');
   });
 
   it('never lets a warm-up and a chat turn overlap on the one conversation, whichever starts first', async () => {

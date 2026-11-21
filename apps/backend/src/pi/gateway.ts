@@ -846,7 +846,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (spent.costDkk >= options.monthlyCapDkk) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: 'budget_exhausted' };
     const paused = await warmPause(signal);
     if (paused) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: paused };
-    const context = await options.context(signal);
+    // The context a turn sends: persona and situational state. The warm-up sends and records the same text, so a turn after it
+    // repeats nothing, and a warm-up right after a turn finds the conversation warm instead of sending it all again.
+    const context = [await options.context(signal), (await options.activations.situation.context(signal)).text].filter(Boolean).join('\n\n');
     const stored = await options.store.getConversation(options.owner, signal);
     const fresh = stored?.agentName === options.agentName && stored.warmedAt !== null && stored.contextHash === contextHash(context) &&
       now().getTime() - stored.warmedAt.getTime() < warmFreshMs;
