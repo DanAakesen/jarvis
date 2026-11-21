@@ -69,13 +69,13 @@ function mergeAppOptions(groups: readonly ConformanceGroup[], shared: Partial<Bu
  */
 export async function buildConformanceWorld(options: { readonly groups?: readonly GroupFactory[] } = {}): Promise<ConformanceWorld> {
   const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
+  const registry = createPiTurnRegistry();
   const context: ConformanceContext = {
-    config, owner: config.auth.ownerObjectId, down: new Set(),
+    config, owner: config.auth.ownerObjectId, down: new Set(), registry,
     ownerMessage: { text: defaultOwnerMessage, id: '42', sessionId: '7' },
   };
   const groups = (options.groups ?? allGroups).map((factory) => factory(context));
 
-  const registry = createPiTurnRegistry();
   const auth = createConformanceAuth(config.auth.tenantId);
   const github = createStubMcpServer(stubGithubTools, { sse: true });
   const azure = createStubMcpServer(stubAzureTools);

@@ -1,6 +1,7 @@
 import type { BuildAppOptions } from '../../app.js';
 import type { BackendConfig } from '../../config.js';
 import type { BackendModule } from '../../modules.js';
+import type { PiTurnRegistry } from '../turns.js';
 
 /**
  * The tool conformance suite (see ../tool-conformance.test.ts) composes every production backend module with in-memory or
@@ -22,6 +23,8 @@ export interface ConformanceContext {
   readonly ownerMessage: { text: string; readonly id: string; readonly sessionId: string };
   /** Dependency tokens the stubs must fail (network down, bridge offline) while they are in the set. */
   readonly down: Set<string>;
+  /** The turn registry the MCP door uses. Tools that prove the turn they run in (a PI activation, a brain wake) must be built with this one. */
+  readonly registry?: PiTurnRegistry;
 }
 
 /** One call through `call_tool`, with arguments that are valid for the schema the model sees. */
