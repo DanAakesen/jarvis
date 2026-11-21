@@ -19,6 +19,7 @@ import { piGroup } from './groups/pi.testkit.js';
 import { workspaceGroup } from './groups/workspace.testkit.js';
 import { createConformanceAuth, createMcpClient, type McpClient } from './mcp-client.testkit.js';
 import { createStubMcpServer, stubAzureTools, stubGithubTools, type StubServer } from './remote.testkit.js';
+import { createConformanceConversations } from './shared.testkit.js';
 import type { ConformanceContext, ConformanceGroup, GroupFactory } from './types.testkit.js';
 
 /** Every group, in the order modules are composed. A new production module must be claimed by one of them (`covers`). */
@@ -50,12 +51,12 @@ export interface ConformanceWorld {
 
 const ownerToken = 'owner.token.fixture';
 
-/** Merge the buildApp options of several groups; two groups supplying the same one is a composition error. */
-function mergeAppOptions(groups: readonly ConformanceGroup[]): Partial<BuildAppOptions> {
-  const merged: Record<string, unknown> = {};
+/** Merge the buildApp options of several groups; two groups (or a group and the world) supplying the same one is a composition error. */
+function mergeAppOptions(groups: readonly ConformanceGroup[], shared: Partial<BuildAppOptions>): Partial<BuildAppOptions> {
+  const merged: Record<string, unknown> = { ...shared };
   for (const group of groups) {
     for (const [key, value] of Object.entries(group.appOptions ?? {})) {
-      if (key in merged) throw new Error(`Conformance groups supply buildApp option "${key}" twice (second: ${group.id}).`);
+      if (key in merged) throw new Error(`Conformance group "${group.id}" supplies buildApp option "${key}", which another group or the world already supplies.`);
       merged[key] = value;
     }
   }
@@ -114,7 +115,7 @@ export async function buildConformanceWorld(options: { readonly groups?: readonl
     },
   });
   const app = buildApp(config, createLogger({ logLevel: 'info' }, undefined, log), {
-    ...mergeAppOptions(groups),
+    ...mergeAppOptions(groups, { conversationStore: createConformanceConversations(context) }),
     // The suite tests tools, not HTTP routes: only the core module keeps its routes because they include the tool dispatcher.
     modules: [...groups.flatMap((group) => group.modules).map((module) => watched(module.id === 'core' ? module : { ...module, registerRoutes: async () => {} })), door],
     auth: async (token) => {
