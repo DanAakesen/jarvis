@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
@@ -8,6 +8,7 @@ import { descriptionViolations, harnessManagedNames, nameViolations, schemaViola
 import type { ConformanceTurn } from './conformance/mcp-client.testkit.js';
 import { executeCase, exerciseTool, openTurn, turnKindFor, type CallableStatus } from './conformance/callable.testkit.js';
 import type { ConformanceGroup } from './conformance/types.testkit.js';
+import { largestSchemas, renderReport, summarize, type ToolRow } from './conformance/report.testkit.js';
 
 /**
  * Offline tool conformance: every tool the registry holds is checked against the harness contract (static), found by the
@@ -385,3 +386,43 @@ describe('golden scenarios: one turn, no confirmation step, found on the first s
 // Keep the module referenced for the groups listed in the report.
 void allGroups;
 void openTurn;
+
+// ---- The generated report ------------------------------------------------------------------------------------------------------
+
+describe('report', () => {
+  it('prints one row per tool and keeps docs/tool-conformance.md in step with the registry', () => {
+    const complete = tools.every((tool) => reports.has(tool.name) && callable.has(tool.name));
+    if (!complete || onlyGroup) {
+      console.info('Partial run (a test filter or CONFORMANCE_GROUP is set): the report is not compared with docs/tool-conformance.md.');
+      return;
+    }
+    const rows: ToolRow[] = tools.map((tool) => {
+      const entry = reportFor(tool.name);
+      const status = callable.get(tool.name);
+      const group = groupOfTool(tool.name);
+      return {
+        name: tool.name, group: group?.id ?? 'none', visibility: visibilityOf(tool.name),
+        effect: tool.execution?.defaultEffect ?? 'unclassified',
+        staticProblems: entry.static, discover: entry.discover, callable: status,
+        schemaTokens: tokensOf(tool.inputSchema), definitionTokens: tokensOf({ name: tool.name, description: tool.description, parameters: tool.inputSchema }),
+        notes: [
+          ...(largeSchemas[tool.name] ? [`large schema: ${largeSchemas[tool.name]!.reason}`] : []),
+          ...(status?.kind === 'requiresExternal' ? [`needs outside help: ${status.reason}`] : []),
+          ...(status?.kind === 'skipped' ? [`skipped: ${status.reason}`] : []),
+          ...(visibilityOf(tool.name) === 'legacy' ? ['kept for cached clients; the door refuses it'] : []),
+        ],
+      };
+    });
+    const summary = summarize(rows);
+    console.info(`Tool conformance summary: ${JSON.stringify(summary)}`);
+    console.info(`Largest schemas (tokens = characters / 4):\n${largestSchemas(rows).map((row, index) => `${String(index + 1).padStart(2)}. ${row.name.padEnd(26)} schema ${String(row.schemaTokens).padStart(6)}  definition ${String(row.definitionTokens).padStart(6)}`).join('\n')}`);
+    const markdown = renderReport(rows, { ceiling: defaultSchemaTokens, oversize: largeSchemas });
+    const file = resolve(import.meta.dirname, '../../../../docs/tool-conformance.md');
+    if (process.env.UPDATE_TOOL_CONFORMANCE === '1') {
+      writeFileSync(file, markdown);
+      return;
+    }
+    const committed = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    expect(committed === markdown, 'docs/tool-conformance.md is out of date with the registry. Regenerate it: cd apps/backend && UPDATE_TOOL_CONFORMANCE=1 npx vitest run src/pi/tool-conformance.test.ts').toBe(true);
+  });
+});
