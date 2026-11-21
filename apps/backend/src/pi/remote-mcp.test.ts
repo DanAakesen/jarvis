@@ -17,7 +17,9 @@ function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
       'tools/list': { tools: [{ name: 'issue_write', description: 'Create or update an issue', inputSchema: { type: 'object' } }, { name: 'bad name!', description: 'x' }] },
       'tools/call': body.params?.name === 'broken'
         ? { isError: true, content: [{ type: 'text', text: 'Not Found' }] }
-        : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] },
+        : body.params?.name === 'structured'
+          ? { content: [{ type: 'text', text: 'summary text' }], structuredContent: { items: [1, 2] } }
+          : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] },
     };
     const message = JSON.stringify({ jsonrpc: '2.0', id: body.id, result: results[body.method] });
     return options.sse
@@ -47,6 +49,12 @@ describe('the GitHub bridge', () => {
     expect(seen.at(-1)).toMatchObject({ method: 'tools/call', session: 's1' });
     expect(await bridge.call('gh_broken', {}, signal())).toEqual({ outcome: 'error', result: { error: 'Not Found' } });
     await expect(bridge.call('issue_read', {}, signal())).rejects.toThrow('not_a_remote_tool');
+  });
+
+  it('prefers structuredContent over the text rendering of a result', async () => {
+    const { fetchStub } = server();
+    const bridge = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: fetchStub });
+    expect(await bridge.call('gh_structured', {}, signal())).toEqual({ outcome: 'ok', result: { items: [1, 2] } });
   });
 
   it('does not make a search wait for a stalled GitHub, and stops waiting when the turn is cancelled', async () => {
@@ -87,7 +95,7 @@ describe('the GitHub bridge', () => {
 });
 
 describe('a server that scales from zero', () => {
-  it('reports starting while the first list loads and ready after, and warm() starts it without a search', async () => {
+  it('starts idle, reports starting while the first list loads and ready after, and warm() starts it without a search', async () => {
     const slow = server();
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -95,7 +103,7 @@ describe('a server that scales from zero', () => {
       url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't',
       fetch: (async (url: string, init: RequestInit) => { await gate; return slow.fetchStub(url, init); }) as unknown as typeof fetch,
     });
-    expect(bridge.status()).toEqual({ state: 'starting' });
+    expect(bridge.status()).toEqual({ state: 'idle' });
     bridge.warm();
     expect(await bridge.tools(signal(), 10)).toEqual([]);
     expect(bridge.status()).toEqual({ state: 'starting' });

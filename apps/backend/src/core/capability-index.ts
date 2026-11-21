@@ -67,7 +67,7 @@ function examplesFor(category: Category, tools: readonly RegisteredTool[], count
  * Compact index of what the tool catalogue offers, built from the registry so it cannot drift.
  * The model sees names only; schemas come from find_tools.
  */
-export function capabilityIndex(registry: ToolRegistry): string {
+export function capabilityIndex(registry: ToolRegistry, maxCharacters = MAX_INDEX_CHARACTERS): string {
   const tools = registry.list().filter((tool) => isCurrentAssistantTool(tool.name));
   const groups = new Map<string, RegisteredTool[]>();
   const other: RegisteredTool[] = [];
@@ -86,7 +86,7 @@ export function capabilityIndex(registry: ToolRegistry): string {
   ].join('\n');
   let result = lines(3);
   for (const count of [2, 1]) {
-    if (result.length <= MAX_INDEX_CHARACTERS) break;
+    if (result.length <= maxCharacters) break;
     result = lines(count);
   }
   return result;

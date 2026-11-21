@@ -153,6 +153,20 @@ Server host. Physical iPhone/Watch lock-screen acceptance remains with Dan.**
 
 No external push/provider test is part of this change.
 
+## PI finds and calls its tools reliably — 21 November 2026 (#1967)
+
+**Status: the seven approved items are implemented and checked offline; exact-head CI and Dan's physical acceptance are pending.** Scope was approved feature by feature; the rejected parts of PR #1987 are listed in `docs/decisions.md` and were not ported.
+
+| Step | State |
+| --- | --- |
+| Local-first loading: remote bridges start idle, load only when named, 8 s bounded wait then a try-again hint | Done |
+| Exact-name calls of `otherMatches`, Danish/English alias table, exact-name ranking | Done |
+| Tool overview note on the first turn and on a connection change only (at most 1,500 characters) | Done |
+| Chat/Voice spend read separately from Background PI; an unreadable spend does not fail the turn | Done |
+| Progress as separate events; a repeated or unmatched line never ends a turn | Done |
+| Owner-message binding to the exact attached message in the existing guards | Done |
+| Remote results prefer `structuredContent` | Done |
+
 ## PI situational state integrity — 20 November 2026 (#1969)
 
 **Status: implementation complete; local offline unit, replay, build, lint and isolated SQL qualification complete.** No live model/provider, deploy, push or paid operation was used.

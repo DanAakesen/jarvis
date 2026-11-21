@@ -14,6 +14,7 @@ import {
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
 import type { PiActivationType } from './situation.js';
+import type { PiCapabilityNote } from './capabilities.js';
 
 export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
@@ -22,7 +23,7 @@ export interface PiRuntimeTurnEvidence {
   readonly outcome: 'ok' | 'failed' | 'cancelled' | 'timeout';
   readonly at: string;
   readonly source: 'turn' | 'brain';
-  readonly reason?: 'budget_exhausted' | 'busy' | 'preflight_failed';
+  readonly reason?: 'budget_exhausted' | 'budget_unavailable' | 'busy' | 'preflight_failed';
 }
 
 export type PiEvent =
@@ -77,6 +78,8 @@ export interface PiGatewayOptions {
   readonly brainTimeoutMs?: number;
   /** Bounded runtime evidence for status pages; status consumers must not inspect turn text. */
   readonly onRuntimeTurn?: (evidence: PiRuntimeTurnEvidence) => void;
+  /** The tool overview note; production installs it after app setup (`setCapabilityNote`). */
+  readonly capabilityNote?: () => PiCapabilityNote;
 }
 
 export interface PiBrainRunResult {
@@ -112,6 +115,7 @@ export interface PiGateway extends ConversationAgent {
   /** Never spends when over the cap or after failures: it then returns `skipped` instead of calling the model. */
   warm(signal: AbortSignal): Promise<PiWarmResult>;
   status(signal: AbortSignal): Promise<PiStatus>;
+  setCapabilityNote?(read: () => PiCapabilityNote): void;
   /** Low-level streaming used by the deploy smoke; it never touches the owner's conversation. */
   readonly smokeKit: {
     createConversation(signal: AbortSignal): Promise<string>;
@@ -190,6 +194,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     } catch { /* Status observation must not change the turn outcome. */ }
   };
   let ensuring: Promise<string> | null = null;
+  let capabilityNote = options.capabilityNote;
+  /** The tool overview note last sent, and to which conversation: it is repeated only for a new conversation or a changed connection. */
+  let noteSent: { readonly conversationId: string; readonly signature: string } | undefined;
   // Single-flight lock for the one conversation: a warm-up and a chat turn can never both have a request in flight.
   // It is claimed synchronously (no await between the check and the claim), so two callers cannot both pass it.
   let busy: { readonly kind: 'chat' | 'warm'; readonly done: Promise<void> } | null = null;
@@ -334,14 +341,24 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return costs ? Number((costs.inputDkk + costs.outputDkk).toFixed(6)) : 0;
   };
 
-  async function assertBudget(signal: AbortSignal): Promise<void> {
-    const spent = await options.store.spendSince(monthStart(now()), chatTurnKinds, signal).catch((error: unknown) => {
-      throw new PiGatewayError('pi_unavailable', 'PI could not read its spend, so it did not run. No other engine was used.', { cause: error });
-    });
+  /**
+   * Chat and Voice count only their own turns (`chatTurnKinds`); Background PI wakes have their own budget. A spend that cannot be
+   * read never fails the turn: it is logged, reported as `unreadable` and the turn goes on.
+   */
+  async function assertBudget(signal: AbortSignal): Promise<'read' | 'unreadable'> {
+    let spent: { readonly costDkk: number; readonly turns: number };
+    try {
+      spent = await options.store.spendSince(monthStart(now()), chatTurnKinds, signal);
+    } catch {
+      signal.throwIfAborted();
+      log('pi.budget_unreadable', {});
+      return 'unreadable';
+    }
     if (spent.costDkk >= options.monthlyCapDkk) {
       throw new PiGatewayError('pi_budget_exhausted',
         `PI has used ${spent.costDkk.toFixed(2)} of its ${options.monthlyCapDkk.toFixed(0)} DKK monthly cap, so it stopped. Nothing was sent. No other engine was used.`);
     }
+    return 'read';
   }
 
   async function record(turn: PiTurnRecord, usage: PiUsage | undefined, eventId: string): Promise<void> {
@@ -433,8 +450,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (input.proactiveContext) notes.push(`[Jarvis recently told Dan this, and he may be replying to it]\n${input.proactiveContext}`);
     if (input.screenContext) notes.push(`[Shared screen context: ${JSON.stringify(input.screenContext)}]`);
 
+    let budget: Awaited<ReturnType<typeof assertBudget>>;
     try {
-      await assertBudget(signal);
+      budget = await assertBudget(signal);
     } catch (error) {
       reportRuntime(
         input.channel === 'voice' ? 'voice' : 'chat',
@@ -478,12 +496,20 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       grant = activation.grant;
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
+      const overview = capabilityNote?.();
+      let overviewSent: typeof noteSent;
+      if (overview && (noteSent?.conversationId !== conversationId || noteSent.signature !== overview.signature)) {
+        notes.push(overview.text);
+        overviewSent = { conversationId, signature: overview.signature };
+      }
       const text = formatTurn({
         ...(stored?.contextHash === activationHash ? {} : { context: activationContext }), turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
       });
       let segment = '';
       let boundaries = 0;
       for await (const event of respond(conversationId, text, deadline)) {
+        // The model has the message once the provider answers, so the overview is not sent again on the next turn.
+        if (overviewSent) { noteSent = overviewSent; overviewSent = undefined; }
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;
@@ -567,8 +593,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         azureCatalogue: grant?.azure.catalogue ?? 'not_searched',
         azureToolsOffered: [...(grant?.discovered ?? [])].filter(name => name.startsWith(azureToolPrefix)).length,
         azureCalls,
+        ...(budget === 'unreadable' ? { budgetRead: 'unavailable' } : {}),
       });
-      reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', outcome, 'turn');
+      reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', outcome, 'turn', budget === 'unreadable' ? 'budget_unavailable' : undefined);
     }
   }
 
@@ -701,6 +728,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   return {
     stream, warm, status, runBrain,
+    setCapabilityNote(read) { capabilityNote = read; },
     smokeKit: {
       createConversation,
       respond,

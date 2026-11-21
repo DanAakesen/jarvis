@@ -334,7 +334,7 @@ Two `measure_pi` Deploys on main failed after the voice-visuals merge: the first
 
 | Choice | Why |
 | --- | --- |
-| The backend starts loading each remote catalogue when it starts (`bridge.warm()`), and `/pi/warm` calls the same | The wake happens at deploy and when the app opens PI, not inside the owner's first question. The list is kept 30 minutes, so Azure questions after that do not need the server awake |
+| The backend starts loading each remote catalogue when it starts (`bridge.warm()`), and `/pi/warm` calls the same (superseded 21 November 2026: bridges start idle, see the #1967 decision) | The wake happens at deploy and when the app opens PI, not inside the owner's first question. The list is kept 30 minutes, so Azure questions after that do not need the server awake |
 | The refresh may run 200 s, not 90 s | The ingress holds a request for a stopped app up to 240 s; cancelling earlier killed a start that was about to finish |
 | A failed first list is not cached; the next search retries (single-flight). With a list in hand, a failed refresh keeps it and retries in a minute | The 60 s empty cache turned one slow start into a minute of "no tools" |
 | `find_tools` adds a note when a server is still loading or unreachable (with a reason that never repeats server text); the PI instructions say what to do with it | A server PI has not heard from yet is not "not attached". This is information for the model, not a gate: nothing is blocked or routed elsewhere |
@@ -13816,6 +13816,19 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 - The voice agent has neither gap: it verifies the effective version on every Deploy (no fingerprint skip) and never writes to an existing agent. A half-seeded one stays unpinned and serves the latest version, which is verified.
 - One-time effect: the fingerprint formula changed, so the first Deploy after this change publishes one new version carrying the live text forward and pins it. The same happens if a Foundry edit does not keep the version metadata (unverified; it settles after that Deploy).
 - Not verified live: no Foundry call, Deploy or provisioning run was made; tests are offline (`.github/scripts/tests/test_pi_agent.py`). Still reading the repo text as if it were live: `apps/backend/src/pi/definition.test.ts` (asserts the seed's capability-overview wording) and docs that cite `agents/pi/instructions.md` for behaviour.
+
+## 21 November 2026 — PI finds and calls its tools reliably: the approved baseline (#1967)
+
+- Decision: Dan reviewed the large earlier attempt (PR #1987, branch `danaakesen-fluffy-parakeet`) feature by feature and approved only seven items. They were implemented fresh on current main; the branch was only read. PI stays unrestricted: no guardrail, approval gate, read-only default or fail-closed behaviour was added.
+- 1 Local-first loading: `find_tools` never waits on a remote catalogue for a local search. GitHub and Azure bridges start idle (the startup and `/pi/warm` warm-ups are removed, which supersedes the #1910 choice to wake them at startup) and load only when the query names the provider or a `gh_`/`az_` tool; a named provider gets the existing 8 s bounded wait, then a keep-going/search-again-shortly note. Trade-off: the first Azure question after a quiet period now needs a second search while the container wakes.
+- 2 Exact-name calls: names shown by `find_tools`, including `otherMatches`, are callable in the same turn. Aliases did not exist on main (`tool-search.ts` only matched query words against tool names and descriptions), so a small plain table of English and Danish wording was added (`intentAliases`), plus exact-name priority.
+- 3 Tool overview note: first turn of a Foundry conversation and again only when the GitHub/Azure connection state changes, within the existing 1,500-character cap (measured 1,250 characters with every area present).
+- 4 Foreground budget: Chat and Voice already counted only the chat turn kinds on main, apart from Background PI. What changed: an unreadable spend no longer fails the turn; it is logged and noted in the turn's diagnostics and the turn continues. The earlier attempt's fail-closed `pi_budget_unavailable` was not ported.
+- 5 Progress events: a repeated or unmatched progress line never ends a turn. Reply text is still streamed as it arrives.
+- 6 Owner-message binding: tools check the exact owner message attached to the turn instead of the newest stored message.
+- 7 Remote tool results prefer `structuredContent`.
+- Deliberately NOT ported (Dan rejected them): the request/completion classifier, pre-call action refusal, per-tool contracts and the startup throw on missing contracts, withholding or buffering the final answer, `pi_incomplete`, Memory write contracts and payload checks, background wake receipts, durable-work enforcement, persona as a Foundry `pi_context` input, conversation rotation/replay, any GPT-Live output gate or exact-transcript matching, and any voice code change. The `jarvis-pi` instructions stay Foundry-owned.
+- Not verified: no live model, Foundry, MCP or provider call, and no `measure_pi`; tests are offline. Physical acceptance stays with Dan.
 
 ## 2026-11-21 Voice: speech never cancels PI's work
 

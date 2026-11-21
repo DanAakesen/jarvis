@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { isPiWake, piWakeSource } from '../core/pi-authority.js';
+import { readAttachedOwnerMessage } from '../core/owner-message.js';
 import type { BackendModule } from '../modules.js';
 import { GoogleApiError, type GoogleApiClient } from './api-client.js';
 import { gmailMessageContent } from './message-content.js';
@@ -378,9 +379,8 @@ async function currentDanMessage(request: FastifyRequest): Promise<ConversationM
       !request.server.conversationStore) {
     throw new ToolRefusal('A verified Dan message is required to approve this Google action.');
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan' || !message.sessionId) {
+  const message = await readAttachedOwnerMessage(request, AbortSignal.timeout(10_000));
+  if (!message || message.id !== id || !message.sessionId) {
     throw new ToolRefusal('A verified Dan message is required to approve this Google action.');
   }
   return message;

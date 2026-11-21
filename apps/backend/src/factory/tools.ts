@@ -8,6 +8,7 @@ import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
+import { readAttachedOwnerMessage } from '../core/owner-message.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import { projectFields, type Project, type UpdateProject } from './projects.js';
 import type { TaskDetail, TaskListFilters, TaskRecord } from './task-store.js';
@@ -220,9 +221,8 @@ async function currentDanMessage(request: FastifyRequest, operation = 'project a
       BigInt(id) > maxSqlBigInt || !request.agentPrincipal || !request.server.conversationStore) {
     throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan' || !hasSession(message)) {
+  const message = await readAttachedOwnerMessage(request, AbortSignal.timeout(10_000));
+  if (!message || message.id !== id || !hasSession(message)) {
     throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
   }
   return message;
