@@ -38,14 +38,17 @@ const daysAgo = (days: number) => new Date(Date.now() - days * day).toISOString(
 
 // ---- Settings, model catalogue and deployments ------------------------------------------------------------------------------
 
-/** The settings table: JSON text per flattened key, exactly what the SQL store keeps. */
+/** The settings table: JSON text per flattened key, exactly what the SQL store keeps. Dan has a saved home location, as the weather tool needs. */
 export function createSettingsFake(): SettingsStore {
   const values = new Map<string, string>();
   const store: SettingsStore = {
     async read() { return Object.fromEntries(values); },
     async write(patch) { for (const { key, value } of flattenSettings(patch)) values.set(key, value); },
   };
-  void store.write({ identity: { description: 'Dan lives in Aarhus, Denmark, and likes short answers.' } });
+  for (const { key, value } of flattenSettings({
+    identity: { description: 'Dan lives in Aarhus, Denmark, and likes short answers.' },
+    location: { city: 'Aarhus', latitude: 56.1629, longitude: 10.2039, observedAt: new Date().toISOString(), permission: 'granted' },
+  })) values.set(key, value);
   return store;
 }
 
