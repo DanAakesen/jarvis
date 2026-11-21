@@ -33,7 +33,7 @@ function validInput(input: unknown): boolean {
 
 export const getStatusSummaryTool: JarvisTool = {
   name: 'get_status_summary',
-  description: 'Get a concise summary of subsystem health and current task and activity counts.',
+  description: 'Get a concise summary of subsystem health and current task and activity counts. Use when Dan asks whether everything is working or for a quick status.',
   inputSchema,
   reflexSafe: true,
   execute: async (input: unknown, request: FastifyRequest) => {
