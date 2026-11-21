@@ -1,3 +1,31 @@
+## 20 November 2026 — Owner reminder scheduling is not device delivery (#1990)
+
+- **Authoritative request:** `dbo.owner_reminder_schedules` remains the exact
+  owner request and recurrence/lease authority. Tool creation may confirm only
+  saved/scheduled; it cannot claim APNs or phone delivery.
+- **Separate outcome:** migration `0102` stores one outbox row for each selected
+  native registration at the first due claim. Safe aggregate state, reason,
+  attempt count, provider outcome/status, recipient counts and next retry are
+  returned from `owner_reminders.read`; raw tokens, device data and provider
+  bodies remain internal.
+- **Recipient snapshot:** the first due selection is immutable for that
+  occurrence. A newly registered device never joins an in-flight reminder by
+  accident. Repair registration and explicitly reschedule if required.
+- **Retry boundary:** only APNs `429`, `5xx` or transport/reset is transient.
+  There is one five-minute retry (two total attempts). Original `fire_at`
+  remains stable; `next_attempt_at` moves. If the final outcome cannot be
+  persisted after its lease, evidence is explicitly unavailable rather than
+  being renamed to provider acceptance/rejection.
+- **Identity:** the APNs collapse ID is deterministic for schedule + original
+  occurrence, and SQL leases/unique rows prevent a concurrent or restarted
+  worker from opening a second outbox occurrence.
+- **Registration lifecycle:** invalid-token, expiry, unregister and direct
+  delete terminalize reminder rows by stable `device_reference` alongside
+  reply/approval outcomes and preserve tombstone exclusion.
+- **Acceptance boundary:** provider acceptance is not device display or owner
+  acknowledgement. A physical iPhone/Watch five-minute reminder, deep-link and
+  duplicate check is owned by Dan after parent PR/release qualification.
+
 ## 20 November 2026 — Personal Memory is SQL-owned, never a Vault bucket (#1968)
 
 - **Domain boundary:** Session context, Personal Memory and Vault Knowledge remain separate. `dbo.memories`/`memory_history` is the authoritative Personal Memory store; Vault notes are authoritative Knowledge and stay on the Notes/Graph API paths. `/memory` returns only numeric SQL memory identities.

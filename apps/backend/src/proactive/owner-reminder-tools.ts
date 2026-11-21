@@ -173,6 +173,73 @@ async function ownerMessage(request: FastifyRequest, ownerObjectId: string, sign
 function scheduleResult(schedule: OwnerReminderSchedule) {
   const repeat = schedule.cadence === null ? 'once'
     : `every ${schedule.cadence === 'daily' ? 'day' : 'week'}${schedule.untilTaskDone ? ' until the task is completed' : ''}`;
+  const active = schedule.state === 'scheduled' ||
+    schedule.state === 'sending' || schedule.state === 'retrying';
+  const nextActionAt = schedule.nextAttemptAt ?? (active ? schedule.fireAt : null);
+  const providerOutcome = schedule.lastProviderOutcome ??
+    (schedule.lastDelivery === 'provider_accepted' ? 'provider_accepted'
+      : schedule.lastDelivery === 'failed' ? 'delivery_failed'
+        : schedule.lastDelivery === 'retrying' ? 'provider_unavailable'
+          : schedule.lastDelivery === 'suppressed' ? schedule.reason : null);
+  const recovery = (() => {
+    if (schedule.state === 'retrying' && schedule.nextAttemptAt) {
+      if (schedule.reason === 'task_unavailable' || schedule.reason === 'verification_exhausted') {
+        return `Task verification is scheduled to retry at ${dayKey(schedule.nextAttemptAt)} ${localTimeLabel(schedule.nextAttemptAt)} Copenhagen time.`;
+      }
+      return `A transient delivery failure is scheduled to retry at ${dayKey(schedule.nextAttemptAt)} ${localTimeLabel(schedule.nextAttemptAt)} Copenhagen time.`;
+    }
+    switch (schedule.reason) {
+      case 'no_subscription':
+        return 'No valid reminder recipient was selected. Open Jarvis on the intended iPhone or Watch and register notifications, then reschedule the reminder.';
+      case 'apns_invalid_token':
+        return 'APNs rejected the device token. Open Jarvis on that device so it registers a new notification token, then reschedule the reminder.';
+      case 'registration_removed':
+        return 'The selected notification registration was removed. Reopen Jarvis on the device, confirm notifications are enabled, and reschedule.';
+      case 'registration_expired':
+        return 'The selected notification registration expired. Open Jarvis on the device to refresh it, then reschedule.';
+      case 'delivery_evidence_unavailable':
+        return 'Delivery evidence is unavailable after the bounded APNs attempt lease. Do not treat this as accepted or failed provider delivery; check device state and then explicitly reschedule if needed.';
+      case 'provider_rejected':
+        return 'APNs permanently rejected the send. Check the native push configuration and device registration before rescheduling.';
+      case 'provider_unavailable':
+      case 'retries_exhausted':
+        return 'The bounded provider retries did not succeed. Check native push status, then explicitly reschedule the reminder.';
+      case 'delivery_failed':
+        return 'The selected recipients ended with different terminal provider outcomes and none accepted the reminder. Check notification registration, then explicitly reschedule.';
+      case 'task_missing':
+        return 'The task was missing when the reminder became due. Restore the task or create a new reminder for the correct open task.';
+      case 'task_ambiguous':
+        return 'The task identity became ambiguous. Give the task a unique exact title, then create a new reminder.';
+      case 'task_completed':
+        return 'The task was already completed, so no reminder was sent.';
+      case 'missed_time':
+        return 'The reminder was too old to deliver. Reschedule it for a new future time.';
+      case 'task_unavailable':
+      case 'verification_exhausted':
+        return schedule.state === 'scheduled'
+          ? 'Task verification failed temporarily; Jarvis has scheduled another verification attempt.'
+          : 'Task verification remained unavailable, so the reminder was not sent.';
+      case 'cancelled':
+        return 'The reminder is cancelled.';
+    }
+    if (schedule.lastProviderOutcome === 'partial_acceptance') {
+      return `The ${schedule.lastProvider === 'apns' ? 'APNs' : 'push'} provider accepted the reminder for ${schedule.acceptedRecipientCount} of ${schedule.recipientCount} selected devices. Recheck or re-register the missing device before relying on that recipient.`;
+    }
+    if (schedule.lastDelivery === 'provider_accepted' && schedule.state === 'scheduled' &&
+        schedule.cadence !== null) {
+      return `The previous occurrence was accepted by ${schedule.lastProvider === 'web_push' ? 'Web Push' : schedule.lastProvider === 'apns' ? 'APNs' : 'the configured provider'}; the next occurrence is scheduled for ${dayKey(schedule.fireAt)} ${localTimeLabel(schedule.fireAt)} Copenhagen time. Device display remains unverified.`;
+    }
+    if (schedule.lastDelivery === 'provider_accepted' || schedule.state === 'completed') {
+      return `${schedule.lastProvider === 'web_push' ? 'Web Push' : schedule.lastProvider === 'apns' ? 'APNs' : 'The configured provider'} accepted the notification. Whether the device displayed or the owner acknowledged it remains unverified until a physical-device check.`;
+    }
+    if (schedule.state === 'scheduled') {
+      return 'The reminder is saved; device delivery has not been attempted at this point.';
+    }
+    if (schedule.state === 'sending') {
+      return 'The due reminder is leased for delivery. Read it again after the claim finishes or expires.';
+    }
+    return 'Durable delivery evidence is unavailable for this legacy or incomplete outcome.';
+  })();
   return {
     id: schedule.id,
     task: schedule.taskTitle,
@@ -181,6 +248,25 @@ function scheduleResult(schedule: OwnerReminderSchedule) {
     state: schedule.state,
     delivery: schedule.lastDelivery,
     reason: schedule.reason,
+    attempts: schedule.sendAttempts,
+    recipients: schedule.recipientCount,
+    acceptedRecipients: schedule.acceptedRecipientCount,
+    providerOutcome,
+    provider: schedule.lastProvider,
+    providerStatusCode: schedule.lastProviderStatusCode,
+    nextActionAt: nextActionAt === null
+      ? null
+      : `${dayKey(nextActionAt)} ${localTimeLabel(nextActionAt)} Copenhagen time`,
+    nextRetryAt: schedule.nextAttemptAt === null
+      ? null
+      : `${dayKey(schedule.nextAttemptAt)} ${localTimeLabel(schedule.nextAttemptAt)} Copenhagen time`,
+    deviceAcknowledgement: 'unavailable',
+    deliveryEvidence: schedule.recipientCount > 0 || schedule.lastProviderOutcome !== null
+      ? 'durable'
+      : schedule.sendAttempts > 0 || schedule.lastDelivery !== null
+        ? 'schedule_only'
+        : 'not_attempted',
+    recovery,
   };
 }
 
@@ -210,7 +296,7 @@ export function createOwnerReminderTool(options: {
           return {
             operation: 'read',
             reminders: schedules.map(scheduleResult),
-            deliveryNote: 'Provider acceptance does not confirm that a device displayed or acknowledged a notification.',
+            deliveryNote: 'Scheduling is separate from device delivery. Push-provider acceptance, including APNs, does not confirm display or acknowledgement; use state, provider outcome, attempts and next action for the exact durable evidence.',
           };
         } catch {
           throw new ToolFailure('Owner reminders are temporarily unavailable.');
@@ -265,7 +351,7 @@ export function createOwnerReminderTool(options: {
             operation: 'create',
             created: result.created,
             reminder: scheduleResult(result.schedule),
-            confirmation: `Reminder ${result.created ? 'scheduled' : 'already scheduled'} for ${dayKey(intent.fireAt)} at ${localTimeLabel(intent.fireAt)} Copenhagen time; ${result.schedule.cadence ?? 'one time'}${result.schedule.untilTaskDone ? ' until the task is completed' : ''}. The task deadline is unchanged.`,
+            confirmation: `Reminder ${result.created ? 'saved and scheduled' : 'already saved'} for ${dayKey(intent.fireAt)} at ${localTimeLabel(intent.fireAt)} Copenhagen time; ${result.schedule.cadence ?? 'one time'}${result.schedule.untilTaskDone ? ' until the task is completed' : ''}. Device delivery has not been attempted. The task deadline is unchanged.`,
           };
         } catch (error) {
           if (error instanceof RangeError) throw new ToolRefusal(error.message);

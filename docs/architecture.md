@@ -1,3 +1,53 @@
+## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
+
+```mermaid
+flowchart LR
+    M[Verified owner message] --> S[owner_reminder_schedules]
+    S --> T[Due claim and task revalidation]
+    T --> R[First-due recipient snapshot]
+    R --> O[Per-device owner_reminder_deliveries]
+    O --> A[Leased APNs attempt]
+    A -->|200| P[Provider accepted]
+    A -->|429 / 5xx / transport| B[One bounded 5-minute retry]
+    A -->|invalid or permanent rejection| F[Terminal safe outcome]
+    P --> H[Owner-facing aggregate evidence]
+    B --> A
+    F --> H
+    L[Legend: boxes = durable record or state; arrows = transition; no arrow implies device display]:::legend
+```
+
+- `owner_reminder_schedules` remains the authoritative owner request and next
+  fire/claim record. Migration
+  `0102_owner_reminder_delivery_outbox.sql` adds an independent
+  `retrying` state, `next_attempt_at`, safe provider summary fields and one
+  immutable recipient row per schedule occurrence in
+  `owner_reminder_deliveries`.
+- A tool `create` result means saved/scheduled only. The reminder ticker claims
+  the schedule, revalidates the exact open task identity, selects the current
+  native recipients once and queues stable per-device rows before APNs. No
+  recipient selected later joins that already-snapshotted occurrence.
+- The native APNs path uses one outbox claim/lease per registration. It records
+  attempt count, HTTP status, sanitized result and next retry in SQL. `429`,
+  `5xx` and transport failure are the only transient cases; total attempts stay
+  bounded at two with one five-minute retry. A final lease whose result was not
+  persisted becomes `delivery_evidence_unavailable`, never an invented APNs
+  rejection or acceptance.
+- The APNs collapse identity is stable for `(schedule ID, occurrence instant)`.
+  Schedule claims, outbox uniqueness and already-accepted rows recover a
+  concurrent worker or backend restart without issuing a new identity. The
+  original `fire_at` is not moved for delivery retries, while
+  `next_attempt_at` exposes the actual retry.
+- Invalid-token, expiry, unregister and direct registration-delete paths
+  terminalize reminder outbox rows by immutable `device_reference` and the
+  shared registration trigger, using the exact safe reason. Tombstoned tokens
+  cannot re-enter recipient selection after restart.
+- `owner_reminders.read` exposes only safe aggregate schedule evidence: state,
+  reason, attempts, provider outcome/status, recipient/accepted counts, next
+  action/retry, a recovery sentence and `deviceAcknowledgement:
+  unavailable`. APNs acceptance is not display or acknowledgement evidence.
+  The existing iPhone/Watch proactive item identity and tap route remain the
+  deep link; physical receipt remains a Dan-only acceptance check.
+
 ## Durable reply APNs outbox — 20 November 2026 (#1970)
 
 ```mermaid

@@ -2721,6 +2721,16 @@ operation-specific fields. Validation refusals should identify the relevant
 constraints or tool-specific correction so Jarvis can retry correctly. Preserve
 authorization, semantic refusals, private error handling and write idempotency.
 Owner reminders accept explicit once cadence and equivalent zoned ISO timestamps.
+Saving or scheduling one is not a claim that a device received it. Follow-up
+reads must distinguish `scheduled`, `sending`, `retrying`, provider acceptance,
+terminal failure, suppression and cancellation, with the exact reason, bounded
+attempt count, provider outcome/status, selected/accepted recipient counts and
+next fire/retry time. A provider acceptance is evidence that APNs accepted the
+request, never evidence that the phone displayed or the owner acknowledged it.
+Missing, ambiguous or completed tasks, absent recipients, invalid tokens and
+permanent/transient provider outcomes must remain distinguishable and include a
+concrete recovery action. Exact-time explicit reminders retain their quiet-hours
+bypass, and retries/restarts must not create a second occurrence.
 Voice must not claim microphone readiness before audio frames arrive or silently
 remain listening when capture/send startup fails.
 
