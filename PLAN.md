@@ -1,13 +1,14 @@
-## PI answers the harness's client-side tool calls — 21 November 2026 (#1967)
+## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
-**Status: gateway loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
+**Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
 
 | Step | State |
 | --- | --- |
-| Collect harness `function_call` / `mcp_approval_request` items while streaming, answer them in one follow-up on the same conversation, at most 8 responses per turn | Done |
-| Handler registry: default and `task` answer honestly that the tool is unavailable | Done |
-| `pi.harness_item` `client_tool` events (name, argument key names, round, outcome) and `rounds` / `clientItems` on `pi.turn` | Done |
-| Real sub-agent run in the `task` handler | Next; not started |
+| Never end or abort the stream for a `function_call` or approval; read to the terminal event | Done |
+| Classify each call native / client-owned / unknown by call id and stream order; log the rule | Done |
+| Answer only client-owned calls (one follow-up, same conversation, at most 8 responses); no `task` stub; a call id settles once per turn | Done |
+| `pi.harness_item` `harness_call` events and `rounds` / `clientItems` / `nativeCalls` on `pi.turn` | Done |
+| Confirm the native signals and the client-owned shape in a real trace | Open; needs a live turn |
 
 ## Explicit reminder delivery evidence — 20 November 2026 (#1990)
 

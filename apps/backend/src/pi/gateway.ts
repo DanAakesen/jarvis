@@ -36,6 +36,8 @@ export type PiEvent =
   | { readonly kind: 'tools_listed'; readonly server: string; readonly tools: number; readonly failed: boolean; readonly code?: string; readonly status?: number }
   /** A follow-up request is about to answer the harness's client-side items; `answered` counts every item answered so far in the turn. */
   | { readonly kind: 'round_start'; readonly round: number; readonly answered: number }
+  /** The harness ran this many calls itself in a response (a sub-agent `task`, shell, file tools); nothing was answered for them. */
+  | { readonly kind: 'round_calls'; readonly native: number }
   /** One response of the turn completed, with its own usage; `done` carries the sum, so only a failed turn needs these. */
   | { readonly kind: 'round_done'; readonly usage: PiUsage }
   | { readonly kind: 'done'; readonly usage: PiUsage; readonly responseId: string | null; readonly rounds?: number; readonly answered?: number };
@@ -200,35 +202,100 @@ const unknownItemLogLimit = 5;
 const knownItemTypes = new Set(['message', 'reasoning', 'mcp_call', 'mcp_list_tools']);
 /** Responses one turn may take: the first request plus at most seven follow-ups that answer the harness's client-side items. */
 const maxTurnRounds = 8;
-/** Client-side items one response may ask us to answer; more than this is not a tool loop but a runaway stream. */
+/** Client-owned items one follow-up may answer; more than this is not a tool loop but a runaway stream. */
 const maxClientItemsPerRound = 16;
-const clientItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
+/** Harness calls tracked per response. The harness runs most of them itself, so this is far above what a follow-up may answer. */
+const maxTrackedCalls = 64;
+const callItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
 
-/** A client-side item the harness emitted, merged from its `added`, argument and `done` events (later events win). */
-type ClientItem = Record<string, unknown>;
+/**
+ * What shows that the harness itself ran a call: a result for its `call_id`, an `output` on the item, or more output after it
+ * in the same response (text, reasoning or any other item). A call that has none of these when the response completes is
+ * waiting for the client.
+ */
+type NativeEvidence = 'result_item' | 'own_output' | 'later_output' | 'final_output';
+type HarnessCallRule = NativeEvidence | 'last_item_unanswered' | 'incomplete_item' | 'replayed';
+type HarnessCallClass = 'native' | 'client_owned' | 'unknown';
+
+/** A `function_call` or `mcp_approval_request` the harness emitted, merged from its `added`, argument and `done` events (later events win). */
+interface HarnessCall {
+  readonly item: Record<string, unknown>;
+  /** Its `output_item.done` or `function_call_arguments.done` arrived. */
+  done: boolean;
+  native?: NativeEvidence;
+}
 
 const plainId = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 && value.length <= 512 ? value : undefined;
 
-/** Adds the item to the list, or merges it into the one already there with the same `call_id` or `id`; `full` when the list is at its limit. */
-function mergeClientItem(list: ClientItem[], item: Record<string, unknown>): 'new' | 'merged' | 'full' {
+/** The id a call is resolved by: a function call's `call_id`, an approval request's `id`. */
+const callKey = (item: Record<string, unknown>): string | undefined => {
+  const id = plainId(item.type === 'function_call' ? item.call_id : item.id);
+  return id === undefined ? undefined : `${String(item.type)}:${id}`;
+};
+
+/** Adds the item, or merges it into the call already there with the same `call_id` or `id`; undefined when the response is at the tracking limit. */
+function trackCall(calls: HarnessCall[], item: Record<string, unknown>): { readonly call: HarnessCall; readonly created: boolean } | undefined {
   const callId = plainId(item.call_id);
   const id = plainId(item.id);
-  const known = list.find(entry => entry.type === item.type && ((callId !== undefined && entry.call_id === callId) || (id !== undefined && entry.id === id)));
-  if (known) { Object.assign(known, item); return 'merged'; }
-  if (list.length >= maxClientItemsPerRound) return 'full';
-  list.push({ ...item });
-  return 'new';
+  const known = calls.find(entry => entry.item.type === item.type && ((callId !== undefined && entry.item.call_id === callId) || (id !== undefined && entry.item.id === id)));
+  if (known) { Object.assign(known.item, item); return { call: known, created: false }; }
+  if (calls.length >= maxTrackedCalls) return undefined;
+  const call: HarnessCall = { item: { ...item }, done: false };
+  calls.push(call);
+  return { call, created: true };
+}
+
+/** Output that begins after the calls seen so far: the harness went on, so it ran them itself. */
+function markLaterOutput(calls: readonly HarnessCall[]): void {
+  for (const call of calls) call.native ??= 'later_output';
+}
+
+/** A `function_call_output` (or `mcp_approval_response`) in the stream is the result of the call it names. */
+function noteResult(calls: readonly HarnessCall[], item: Record<string, unknown>): void {
+  const target = item.type === 'function_call_output' ? plainId(item.call_id) : plainId(item.approval_request_id);
+  if (target === undefined) return;
+  for (const call of calls) {
+    if (callKey(call.item) === `${item.type === 'function_call_output' ? 'function_call' : 'mcp_approval_request'}:${target}`) call.native ??= 'result_item';
+  }
+}
+
+/** The completed response's own `output` list, when it has one, repeats the order of its items and can confirm what the events showed. */
+function applyFinalOutput(calls: HarnessCall[], output: readonly unknown[]): void {
+  output.forEach((entry, index) => {
+    if (!isObject(entry) || typeof entry.type !== 'string') return;
+    if (callItemTypes.has(entry.type)) {
+      const tracked = trackCall(calls, entry);
+      if (tracked && output.slice(index + 1).some(next => isObject(next) && typeof next.type === 'string' && !callItemTypes.has(next.type))) {
+        tracked.call.native ??= 'final_output';
+      }
+    } else if (entry.type === 'function_call_output' || entry.type === 'mcp_approval_response') noteResult(calls, entry);
+  });
+}
+
+/**
+ * Decides who owns a call once its response completed. Native: the harness ran it (see `NativeEvidence`). Client-owned: the
+ * response ended with it unanswered and its item is complete, so the client must answer. Unknown: its item never completed and
+ * nothing followed it; it is left alone, because answering a call the harness may be running could repeat its work.
+ * `resolved` holds the calls this turn already settled: a replayed one is never settled again.
+ */
+function classifyHarnessCall(call: HarnessCall, resolved: ReadonlySet<string>): { readonly classification: HarnessCallClass; readonly rule: HarnessCallRule } {
+  const key = callKey(call.item);
+  if (key !== undefined && resolved.has(key)) return { classification: 'unknown', rule: 'replayed' };
+  if (call.native === 'result_item') return { classification: 'native', rule: 'result_item' };
+  if (call.item.output !== undefined && call.item.output !== null) return { classification: 'native', rule: 'own_output' };
+  if (call.native) return { classification: 'native', rule: call.native };
+  const status = call.item.status;
+  return call.done || status === undefined || status === 'completed'
+    ? { classification: 'client_owned', rule: 'last_item_unanswered' }
+    : { classification: 'unknown', rule: 'incomplete_item' };
 }
 
 /** The arguments as the harness sent them: a string, or an object it did not stringify. */
-function argumentsOf(item: ClientItem): string {
+function argumentsOf(item: Record<string, unknown>): string {
   if (typeof item.arguments === 'string') return item.arguments;
   if (isObject(item.arguments)) { try { return JSON.stringify(item.arguments); } catch { /* unreadable: treated as empty */ } }
   return '';
 }
-
-/** A function call is answered by its `call_id`, an approval request by its `id`; without one there is nothing to answer. */
-const answerable = (item: ClientItem): boolean => plainId(item.type === 'function_call' ? item.call_id : item.id) !== undefined;
 
 /** A stalled provider stream must not outlive a cancel or the turn deadline, whether or not the transport reacts to the signal. */
 function readUnlessAborted(reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>> {
@@ -415,12 +482,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   /**
-   * The shape of an item the harness sent: types, names, lengths and, for a client tool the gateway answered, the round, the
-   * outcome and the argument key names. Never argument values, output or ids.
+   * The shape of an item the harness sent: types, names and lengths. For a `harness_call` (every function call and approval
+   * request) also who owned it, the rule that decided, the round, the argument key names and, when the gateway answered it, the
+   * outcome. Never argument values, output or ids.
    */
   function logHarnessItem(
-    trigger: 'rejected_item' | 'unknown_item' | 'client_tool', item: Record<string, unknown>, phase: StreamPhase, attempt: number,
-    answered?: { readonly round: number; readonly outcome: ClientToolOutcome | 'approved'; readonly argumentKeys: readonly string[] },
+    trigger: 'rejected_item' | 'unknown_item' | 'harness_call', item: Record<string, unknown>, phase: StreamPhase, attempt: number,
+    call?: {
+      readonly round: number; readonly classification: HarnessCallClass; readonly rule: HarnessCallRule;
+      readonly outcome?: ClientToolOutcome | 'approved'; readonly argumentKeys: readonly string[];
+    },
   ): void {
     const itemType = harnessLabel(item.type);
     const name = harnessLabel(item.name);
@@ -430,7 +501,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (typeof item.arguments === 'string') argumentsLength = item.arguments.length;
     else if (isObject(item.arguments)) { try { argumentsLength = JSON.stringify(item.arguments).length; } catch { /* unreadable: omitted */ } }
     log('pi.harness_item', {
-      trigger, attempt, ...(answered ? { round: answered.round, outcome: answered.outcome, argumentKeys: [...answered.argumentKeys] } : {}),
+      trigger, attempt,
+      ...(call ? {
+        round: call.round, classification: call.classification, rule: call.rule, ...(call.outcome ? { outcome: call.outcome } : {}),
+        argumentKeys: [...call.argumentKeys],
+      } : {}),
       ...(itemType ? { itemType } : {}), ...(name ? { name } : {}), ...(serverLabel ? { serverLabel } : {}),
       hasCallId: item.call_id !== undefined && item.call_id !== null, hasId: item.id !== undefined && item.id !== null,
       ...(argumentsLength !== undefined ? { argumentsLength } : {}), ...(itemStatus ? { itemStatus } : {}),
@@ -448,10 +523,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   /**
    * One request to the model. A stream that fails before any text, reasoning or tool call is tried once more (see `respond`),
-   * and every failure here logs why with `pi.stream_failed`. The harness's client-side items (`function_call`,
-   * `mcp_approval_request`) are collected while the response streams, and returned once it completed, for `respond` to answer.
+   * and every failure here logs why with `pi.stream_failed`. The harness's calls (`function_call`, `mcp_approval_request`) are
+   * collected while the response streams and never end it: the stream is read to its terminal event, so the harness can finish
+   * what it runs itself. They are returned once the response completed, for `respond` to classify.
    */
-  async function* respondOnce(conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number): AsyncGenerator<PiEvent, ClientItem[]> {
+  async function* respondOnce(
+    conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number,
+  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean }> {
     const response = await call('POST', '/responses', {
       conversation: conversationId, input, stream: true,
     }, signal, true);
@@ -463,12 +541,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const decoder = new TextDecoder();
     let buffer = '';
     let completed = false;
-    const clientItems: ClientItem[] = [];
-    const failTooManyClientItems = (item: Record<string, unknown>): never => {
-      logHarnessItem('rejected_item', item, phase, attempt);
-      logStreamFailure('approval_or_function_call_item', phase, attempt);
-      throw new PiGatewayError('pi_failed', 'PI asked for more client tools in one reply than the gateway answers.');
-    };
+    const calls: HarnessCall[] = [];
+    let overflow = false;
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
     const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
@@ -496,6 +570,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             phase.responseId = payload.response.id;
           } else if (type === 'response.output_text.delta' && typeof payload.delta === 'string' && payload.delta.length > 0) {
             phase.sawText = true;
+            markLaterOutput(calls);
             yield { kind: 'delta', text: payload.delta };
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
@@ -509,28 +584,39 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
               }
             }
             if (itemType === 'mcp_call') { phase.sawTool = true; yield { kind: 'tool', server: label(payload.item.server_label) }; }
-            else if (typeof itemType === 'string' && clientItemTypes.has(itemType)) {
+            else if (typeof itemType === 'string' && callItemTypes.has(itemType)) {
               phase.sawTool = true;
-              const merged = mergeClientItem(clientItems, payload.item);
-              if (merged === 'full') failTooManyClientItems(payload.item);
-              if (merged === 'new') yield { kind: 'tool', server: '' };
+              const tracked = trackCall(calls, payload.item);
+              if (!tracked) overflow = true;
+              else if (tracked.created) yield { kind: 'tool', server: '' };
+            } else {
+              noteResult(calls, payload.item);
+              markLaterOutput(calls);
             }
           } else if (type === 'response.function_call_arguments.done' && typeof payload.arguments === 'string') {
-            const target = clientItems.find(entry => entry.type === 'function_call' && plainId(payload.item_id) !== undefined && entry.id === payload.item_id);
-            if (target) target.arguments = payload.arguments;
+            const target = calls.find(entry => entry.item.type === 'function_call' && plainId(payload.item_id) !== undefined && entry.item.id === payload.item_id);
+            if (target) { target.item.arguments = payload.arguments; target.done = true; }
           } else if (type === 'response.output_item.done' && isObject(payload.item)) {
             const item = payload.item;
-            if (typeof item.type === 'string' && clientItemTypes.has(item.type)) {
-              const merged = mergeClientItem(clientItems, item);
-              if (merged === 'full') failTooManyClientItems(item);
-              if (merged === 'new') yield { kind: 'tool', server: '' };
+            if (typeof item.type === 'string' && callItemTypes.has(item.type)) {
+              const tracked = trackCall(calls, item);
+              if (!tracked) overflow = true;
+              else {
+                tracked.call.done = true;
+                if (tracked.created) yield { kind: 'tool', server: '' };
+              }
             } else if (item.type === 'mcp_call') {
+              markLaterOutput(calls);
               yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null, ...itemFailure(item) };
             } else if (item.type === 'mcp_list_tools') {
+              markLaterOutput(calls);
               yield {
                 kind: 'tools_listed', server: label(item.server_label), tools: Array.isArray(item.tools) ? item.tools.length : 0,
                 failed: item.error !== undefined && item.error !== null, ...itemFailure(item),
               };
+            } else {
+              noteResult(calls, item);
+              markLaterOutput(calls);
             }
           } else if (type === 'response.mcp_list_tools.failed') {
             yield { kind: 'tools_listed', server: '', tools: 0, failed: true };
@@ -538,6 +624,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const usage = isObject(payload.response.usage) ? payload.response.usage : {};
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
             completed = true;
+            if (Array.isArray(payload.response.output)) applyFinalOutput(calls, payload.response.output);
             yield {
               kind: 'round_done',
               usage: { inputTokens: count(usage.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(usage.output_tokens) },
@@ -555,13 +642,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         logStreamFailure('stream_ended_without_completed', phase, attempt);
         throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
       }
-      const unanswerable = clientItems.find(item => !answerable(item));
-      if (unanswerable) {
-        logHarnessItem('rejected_item', unanswerable, phase, attempt);
-        logStreamFailure('approval_or_function_call_item', phase, attempt);
-        throw new PiGatewayError('pi_failed', 'PI asked for an approval or client tool without an id the gateway can answer.');
-      }
-      return clientItems;
+      return { calls, overflow };
     } finally {
       await reader.cancel().catch(() => {});
       // Best effort: closing the stream is the real stop; this only helps when the service ran it in the background.
@@ -592,15 +673,15 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    */
   async function* respondRound(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, grant: PiTurnGrant | undefined, retryable: boolean,
-  ): AsyncGenerator<PiEvent, { readonly items: ClientItem[]; readonly phase: StreamPhase; readonly attempt: number }> {
+  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly phase: StreamPhase; readonly attempt: number }> {
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
         startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
         responseId: null, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
       try {
-        const items = yield* respondOnce(conversationId, input, signal, phase, attempt);
-        return { items, phase, attempt };
+        const { calls, overflow } = yield* respondOnce(conversationId, input, signal, phase, attempt);
+        return { calls, overflow, phase, attempt };
       } catch (error) {
         const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
           phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
@@ -619,58 +700,72 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   /**
-   * Sends one message and streams the reply. When a response ends with client-side items from the harness, they are answered
-   * here and the same turn goes on: one follow-up request on the same conversation carries a `function_call_output` for each
-   * function call and an `mcp_approval_response` for each approval request, for at most `maxTurnRounds` responses in all.
+   * Sends one message and streams the reply. The harness runs most of its own calls itself (a sub-agent `task`, shell and file
+   * tools): they stream, finish and are never answered here. Only a call its response ends with, unanswered, is client-owned
+   * (see `classifyHarnessCall`). Those are answered and the same turn goes on: one follow-up request on the same conversation
+   * carries a `function_call_output` per function call and an `mcp_approval_response` per approval request, for at most
+   * `maxTurnRounds` responses in all. A call id is settled once per turn, so a replayed call is never run or answered twice.
    * Callers see one stream and one `done` with the summed usage, so the turn is billed once; `round_done` reports each
    * response's own usage for a turn that fails part-way.
    */
   async function* respond(conversationId: string, input: string, signal: AbortSignal, grant?: PiTurnGrant): AsyncGenerator<PiEvent> {
     let next: readonly unknown[] = [{ role: 'user', content: input }];
     let answered = 0;
+    const resolved = new Set<string>();
     const total = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
     for (let round = 1; ; round += 1) {
       const rounds = respondRound(conversationId, next, signal, grant, round === 1);
       let finished: Awaited<ReturnType<typeof rounds.next>>;
       let roundDone: PiEvent | undefined;
-      try {
-        while (!(finished = await rounds.next()).done) {
-          if (finished.value.kind === 'round_done') {
-            total.inputTokens += finished.value.usage.inputTokens;
-            total.cachedTokens += finished.value.usage.cachedTokens;
-            total.outputTokens += finished.value.usage.outputTokens;
-            roundDone = finished.value;
-          } else yield finished.value;
-        }
-      } catch (error) {
-        // A response that completed and then failed on an item it cannot answer still reported its real usage.
-        if (roundDone) yield roundDone;
-        throw error;
+      while (!(finished = await rounds.next()).done) {
+        if (finished.value.kind === 'round_done') {
+          total.inputTokens += finished.value.usage.inputTokens;
+          total.cachedTokens += finished.value.usage.cachedTokens;
+          total.outputTokens += finished.value.usage.outputTokens;
+          roundDone = finished.value;
+        } else yield finished.value;
       }
-      const { items, phase, attempt } = finished.value;
-      if (items.length === 0) {
-        // A turn without client items looks exactly as it did before: one `done`, no round events.
+      const { calls, overflow, phase, attempt } = finished.value;
+      const owned: HarnessCall[] = [];
+      let native = 0;
+      for (const harnessCall of calls) {
+        const { classification, rule } = classifyHarnessCall(harnessCall, resolved);
+        const key = callKey(harnessCall.item);
+        if (classification === 'client_owned') { owned.push(harnessCall); continue; }
+        if (classification === 'native') { native += 1; if (key) resolved.add(key); }
+        logHarnessItem('harness_call', harnessCall.item, phase, attempt, { round, classification, rule, argumentKeys: argumentKeyNames(argumentsOf(harnessCall.item)) });
+      }
+      if (native > 0) yield { kind: 'round_calls', native };
+      if (owned.length === 0 && !overflow) {
+        // A turn without client-owned calls looks exactly as it did before: one `done`, no round events.
         yield { kind: 'done', usage: { ...total }, responseId: phase.responseId, ...(round > 1 ? { rounds: round, answered } : {}) };
         return;
       }
       if (roundDone) yield roundDone;
+      const unanswerable = owned.find(entry => callKey(entry.item) === undefined);
+      if (unanswerable || overflow || owned.length > maxClientItemsPerRound) {
+        if (unanswerable) logHarnessItem('rejected_item', unanswerable.item, phase, attempt);
+        logStreamFailure('approval_or_function_call_item', phase, attempt);
+        throw new PiGatewayError('pi_failed', unanswerable
+          ? 'PI asked for an approval or client tool without an id the gateway can answer.'
+          : 'PI asked for more client tools in one reply than the gateway answers.');
+      }
       if (round >= maxTurnRounds) {
         logStreamFailure('client_tool_round_limit', phase, attempt);
         throw new PiGatewayError('pi_failed', 'PI kept asking for client tools and was stopped. Check saved conversation and action status before trying again.');
       }
       const replies: unknown[] = [];
-      for (const item of items) {
+      for (const { item } of owned) {
         signal.throwIfAborted();
-        const argumentsText = argumentsOf(item);
-        const argumentKeys = argumentKeyNames(argumentsText);
+        resolved.add(callKey(item)!);
+        const argumentKeys = argumentKeyNames(argumentsOf(item));
         if (item.type === 'mcp_approval_request') {
           replies.push({ type: 'mcp_approval_response', approval_request_id: item.id, approve: true });
-          logHarnessItem('client_tool', item, phase, attempt, { round, outcome: 'approved', argumentKeys });
+          logHarnessItem('harness_call', item, phase, attempt, { round, classification: 'client_owned', rule: 'last_item_unanswered', outcome: 'approved', argumentKeys });
         } else {
-          const name = typeof item.name === 'string' ? item.name : '';
-          const reply = await answerClientTool({ name, arguments: argumentsText, signal });
+          const reply = answerClientTool(typeof item.name === 'string' ? item.name : '');
           replies.push({ type: 'function_call_output', call_id: item.call_id, output: reply.output });
-          logHarnessItem('client_tool', item, phase, attempt, { round, outcome: reply.outcome, argumentKeys });
+          logHarnessItem('harness_call', item, phase, attempt, { round, classification: 'client_owned', rule: 'last_item_unanswered', outcome: reply.outcome, argumentKeys });
         }
       }
       answered += replies.length;
@@ -827,6 +922,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const spend = createSpendTracker();
     let rounds = 1;
     let clientItems = 0;
+    let nativeCalls = 0;
     try {
       const conversationId = await ensureConversation(signal);
       const context = await options.context(signal);
@@ -879,6 +975,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             boundaries += 1;
           }
           segment = '';
+        } else if (event.kind === 'round_calls') {
+          nativeCalls += event.native;
         } else if (event.kind === 'round_start') {
           rounds = event.round;
           clientItems = event.answered;
@@ -941,7 +1039,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
         estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0,
         activationId: grant?.activation?.id ?? null,
-        rounds, clientItems,
+        rounds, clientItems, nativeCalls,
         activationType: grant?.activation?.type ?? (input.channel === 'voice' ? 'voice' : 'chat'),
         activationSource: grant?.activation?.source ?? 'chat',
         stateRevision: grant?.activation?.stateRevision ?? null,
