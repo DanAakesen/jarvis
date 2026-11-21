@@ -297,6 +297,14 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           FROM dbo.reply_notification_deliveries d
           INNER JOIN @invalid invalid ON invalid.device_reference = d.device_reference
           WHERE d.owner_object_id = @owner AND d.state IN (N'pending', N'sending');
+          UPDATE o
+            SET state = N'invalid_token', last_result = N'apns_invalid_token',
+                last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
+                updated_at = SYSUTCDATETIME(), next_attempt_at = NULL,
+                lease_owner = NULL, lease_until = NULL
+          FROM dbo.owner_reminder_deliveries o
+          INNER JOIN @invalid invalid ON invalid.device_reference = o.device_reference
+          WHERE o.owner_object_id = @owner AND o.state IN (N'pending', N'sending', N'retrying');
           DELETE registration
           FROM dbo.approval_notification_registrations registration
           INNER JOIN @invalid invalid ON invalid.registration_id = registration.registration_id;
@@ -363,6 +371,14 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           FROM dbo.reply_notification_deliveries d
           INNER JOIN @expired expired ON expired.device_reference = d.device_reference
           WHERE d.state IN (N'pending', N'sending');
+          UPDATE o
+            SET state = N'failed', last_result = N'registration_expired',
+                completed_at = @now, updated_at = SYSUTCDATETIME(),
+                next_attempt_at = NULL, lease_owner = NULL, lease_until = NULL
+          FROM dbo.owner_reminder_deliveries o
+          INNER JOIN @expired expired ON expired.device_reference = o.device_reference
+          WHERE o.owner_object_id = @owner
+            AND o.state IN (N'pending', N'sending', N'retrying');
           DELETE registration
           FROM dbo.approval_notification_registrations registration
           INNER JOIN @expired expired ON expired.registration_id = registration.registration_id;
@@ -555,6 +571,14 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           FROM dbo.reply_notification_deliveries d
           INNER JOIN @invalid invalid ON invalid.device_reference = d.device_reference
           WHERE d.owner_object_id = @owner AND d.state IN (N'pending', N'sending');
+          UPDATE o
+            SET state = N'invalid_token', last_result = N'apns_invalid_token',
+                last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
+                updated_at = SYSUTCDATETIME(), next_attempt_at = NULL,
+                lease_owner = NULL, lease_until = NULL
+          FROM dbo.owner_reminder_deliveries o
+          INNER JOIN @invalid invalid ON invalid.device_reference = o.device_reference
+          WHERE o.owner_object_id = @owner AND o.state IN (N'pending', N'sending', N'retrying');
           DELETE registration
           FROM dbo.approval_notification_registrations registration
           INNER JOIN @invalid invalid ON invalid.registration_id = registration.registration_id;

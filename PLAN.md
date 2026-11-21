@@ -1,3 +1,28 @@
+## Explicit reminder delivery evidence — 20 November 2026 (#1990)
+
+**Status: implementation, focused offline unit/fixture/build/lint gates and the
+isolated loopback SQL Server 2022 integration suite (`npm run test:database`,
+37 tests including a 0102 rollback/reapply cycle) pass on the current head.
+Re-verification found and fixed two migration defects that offline tests could
+not see: constraints referencing new columns in the same batch and a
+pending-row `next_attempt_at` check. Physical iPhone/Watch acceptance remains
+Dan-only and open.**
+
+| Step | State |
+| --- | --- |
+| Trace owner message, schedule row, due claim, task revalidation, recipient selection, APNs call and follow-up read | Done |
+| Keep schedule creation distinct from delivery; add safe reason/state/attempt/provider/retry evidence to `owner_reminders.read` | Done |
+| Add migration `0102` per-device APNs outbox, immutable registration reference, schedule retry state and guarded down batch | Done |
+| Preserve first-recipient snapshot, stable collapse identity, two-attempt transient retry, exact-token invalidation and restart recovery | Done |
+| Add unit, table fixture, ticker, migration and isolated loopback SQL tests | Done; loopback SQL suite passed against a disposable SQL Server 2022 container |
+| Update PRODUCT, architecture, agent context, migration guide and decision record | Done |
+| Backend build/lint and full backend unit suite | Done (793 tests) |
+| Post-due read states an overdue unattempted or stale-lease reminder has no delivery evidence | Done |
+| Dan verifies one five-minute Copenhagen reminder, physical iPhone/Watch display, deep link and absence of duplicates | **Open** |
+
+No external push/provider test, merge, deploy or publish belongs to this task.
+Parent owns PR/release after independent review and exact-head gates.
+
 ## Personal Memory restoration — 20 November 2026 (#1968)
 
 **Status: implemented and qualified offline; live Chat/Voice and physical-device acceptance remain owner checks.** The work is limited to the existing SQL Personal Memory boundary and does not move or copy Vault notes into memory.
