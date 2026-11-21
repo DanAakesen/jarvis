@@ -1,3 +1,14 @@
+## PI answers the harness's client-side tool calls — 21 November 2026 (#1967)
+
+**Status: gateway loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
+
+| Step | State |
+| --- | --- |
+| Collect harness `function_call` / `mcp_approval_request` items while streaming, answer them in one follow-up on the same conversation, at most 8 responses per turn | Done |
+| Handler registry: default and `task` answer honestly that the tool is unavailable | Done |
+| `pi.harness_item` `client_tool` events (name, argument key names, round, outcome) and `rounds` / `clientItems` on `pi.turn` | Done |
+| Real sub-agent run in the `task` handler | Next; not started |
+
 ## Explicit reminder delivery evidence — 20 November 2026 (#1990)
 
 **Status: implementation, focused offline unit/fixture/build/lint gates and the

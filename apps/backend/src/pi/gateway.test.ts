@@ -282,7 +282,8 @@ describe('PI gateway', () => {
     expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
     const unfinished = setup([() => sse(delta('half'))]);
     await expect(unfinished.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
-    const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request' } }))]);
+    // An approval request without an id cannot be answered, so it still fails the turn.
+    const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request' } }), completed(1, 0, 1))]);
     await expect(approval.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
   });
 
@@ -608,11 +609,11 @@ describe('PI gateway', () => {
     });
 
     it.each([
-      ['an mcp_approval_request', { type: 'mcp_approval_request', id: 'mcpr_secret', server_label: 'jarvis', name: 'read_file', arguments: '{"path":"secret"}', status: 'in_progress' },
-        { itemType: 'mcp_approval_request', name: 'read_file', serverLabel: 'jarvis', hasCallId: false, hasId: true, argumentsLength: 17, itemStatus: 'in_progress' }],
-      ['a function_call', { type: 'function_call', call_id: 'call_secret', name: 'shell', arguments: '{}' },
-        { itemType: 'function_call', name: 'shell', hasCallId: true, hasId: false, argumentsLength: 2 }],
-    ])('logs only the safe shape of %s and fails as before', async (_name, item, expected) => {
+      ['an mcp_approval_request without an id', { type: 'mcp_approval_request', server_label: 'jarvis', name: 'read_file', arguments: '{"path":"secret"}', status: 'in_progress' },
+        { itemType: 'mcp_approval_request', name: 'read_file', serverLabel: 'jarvis', hasCallId: false, hasId: false, argumentsLength: 17, itemStatus: 'in_progress' }],
+      ['a function_call without a call_id', { type: 'function_call', id: 'fc_secret', name: 'shell', arguments: '{}' },
+        { itemType: 'function_call', name: 'shell', hasCallId: false, hasId: true, argumentsLength: 2 }],
+    ])('logs only the safe shape of %s and fails because it cannot be answered', async (_name, item, expected) => {
       const { logs, log } = capture();
       const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), delta('x'), completed(1, 0, 1))], { log });
       await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
@@ -620,9 +621,10 @@ describe('PI gateway', () => {
       const harness = logs.filter(([event]) => event === 'pi.harness_item');
       expect(harness).toHaveLength(1);
       expect(harness[0]![1]).toEqual({
-        trigger: 'rejected_item', attempt: 1, ...expected, eventTypes: ['response.created', 'response.output_item.added'],
+        trigger: 'rejected_item', attempt: 1, ...expected,
+        eventTypes: ['response.created', 'response.output_item.added', 'response.output_text.delta', 'response.completed'],
         itemTypes: [expected.itemType], elapsedMs: expect.any(Number), firstEventMs: expect.any(Number),
-        sawText: false, sawTool: true, sawOutput: true, previousCancelled: false,
+        sawText: true, sawTool: true, sawOutput: true, previousCancelled: false,
       });
       expect(JSON.stringify(logs)).not.toMatch(/secret|example\.com/u);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
@@ -687,7 +689,7 @@ describe('PI gateway', () => {
 
     it('never retries a function call or approval request, and never an HTTP failure or a missing stream', async () => {
       const { logs, log } = capture();
-      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call' } })), () => sse(delta('x'), completed(1, 0, 1))], { log });
+      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call' } }), completed(1, 0, 1)), () => sse(delta('x'), completed(1, 0, 1))], { log });
       await expect(call.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
       expect(responsesOf(call.calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item', sawTool: true, sawOutput: true });
@@ -758,6 +760,182 @@ describe('PI gateway', () => {
       await expect(first).rejects.toBeDefined();
       await expect(run('two')).rejects.toMatchObject({ code: 'pi_failed' });
       expect(logs.filter(([event]) => event === 'pi.stream_failed').map(([, fields]) => fields.previousCancelled)).toEqual([true, true]);
+    });
+  });
+
+  describe('the harness client-side tool loop', () => {
+    const created = (id: string) => frame({ type: 'response.created', response: { id } });
+    const functionCall = (name: string, callId: string, args: string) => [
+      frame({ type: 'response.output_item.added', item: { type: 'function_call', id: `fc_${callId}`, call_id: callId, name, arguments: '', status: 'in_progress' } }),
+      frame({ type: 'response.function_call_arguments.done', item_id: `fc_${callId}`, arguments: args }),
+      frame({ type: 'response.output_item.done', item: { type: 'function_call', id: `fc_${callId}`, call_id: callId, name, arguments: args, status: 'completed' } }),
+    ];
+    const approval = (id: string, args = '{"path":"/x"}') => [
+      frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request', id, server_label: 'jarvis', name: 'read_file', arguments: '' } }),
+      frame({ type: 'response.output_item.done', item: { type: 'mcp_approval_request', id, server_label: 'jarvis', name: 'read_file', arguments: args } }),
+    ];
+    const unavailable = (name: string) =>
+      `The ${name} tool is not available in this environment. Continue without it and use the Jarvis tools through find_tools and call_tool.`;
+    const stalled = (id: string) => () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(created(id))); } }), { headers: { 'content-type': 'text/event-stream' } });
+    const responsesOf = (calls: Call[]) => calls.filter(call => call.url.includes('/responses') && !call.url.includes('/cancel'));
+    const capture = () => {
+      const logs: Array<[string, Record<string, unknown>]> = [];
+      return { logs, log: (event: string, fields: Record<string, unknown>) => { logs.push([event, fields]); } };
+    };
+
+    it('answers a task call, continues the same turn on the same conversation and bills each round once', async () => {
+      const { logs, log } = capture();
+      const args = '{"description":"Check the calendar","prompt":"private calendar request","agent type":"x"}';
+      const { run, calls, store, usage, registry } = setup([
+        () => sse(created('resp_1'), delta('Let me check. '), ...functionCall('task', 'call_secret_1', args), completed(10_000, 2_000, 50)),
+        () => sse(created('resp_2'), delta('Nothing today.'), completed(11_000, 10_000, 30)),
+      ], { log });
+      expect(await run('use a sub-agent to check my calendar')).toEqual(['Let me check. ', { type: 'acknowledgment', text: 'Let me check. ' }, 'Nothing today.']);
+      const responses = responsesOf(calls);
+      expect(responses).toHaveLength(2);
+      expect(responses[1]!.url).toBe(responses[0]!.url);
+      expect(responses[1]!.body).toEqual({
+        conversation: 'conv_1', stream: true,
+        input: [{ type: 'function_call_output', call_id: 'call_secret_1', output: unavailable('task') }],
+      });
+      expect(store.turns).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'ok', inputTokens: 21_000, cachedTokens: 12_000, outputTokens: 80 });
+      expect(usage).toEqual([expect.objectContaining({ inputTokens: 21_000, outputTokens: 80 })]);
+      expect(registry.size).toBe(0);
+      expect(logs.filter(([event]) => event === 'pi.harness_item')).toEqual([['pi.harness_item', {
+        trigger: 'client_tool', attempt: 1, round: 1, outcome: 'answered_task_stub', argumentKeys: ['description', 'prompt'],
+        itemType: 'function_call', name: 'task', itemStatus: 'completed', hasCallId: true, hasId: true, argumentsLength: args.length,
+        eventTypes: expect.arrayContaining(['response.output_item.added', 'response.function_call_arguments.done']), itemTypes: ['function_call'],
+        elapsedMs: expect.any(Number), firstEventMs: expect.any(Number), sawText: true, sawTool: true, sawOutput: true, previousCancelled: false,
+      }]]);
+      expect(logs.find(([event]) => event === 'pi.turn')![1]).toMatchObject({ outcome: 'ok', rounds: 2, clientItems: 1, inputTokens: 21_000 });
+      expect(logs.map(([event]) => event)).not.toContain('pi.stream_failed');
+      expect(JSON.stringify(logs)).not.toMatch(/private|secret|agent type/u);
+    });
+
+    it('answers an unknown function name with the honest default and never runs it', async () => {
+      const { logs, log } = capture();
+      const { run, calls } = setup([
+        () => sse(created('resp_1'), ...functionCall('shell', 'call_1', '{"command":"rm -rf /"}'), completed(1, 0, 1)),
+        () => sse(created('resp_2'), delta('Done'), completed(1, 0, 1)),
+      ], { log });
+      await run('hi');
+      expect(responsesOf(calls)[1]!.body!.input).toEqual([{ type: 'function_call_output', call_id: 'call_1', output: unavailable('shell') }]);
+      expect(logs.find(([event]) => event === 'pi.harness_item')![1]).toMatchObject({ name: 'shell', outcome: 'answered_default', argumentKeys: ['command'] });
+      const odd = setup([
+        () => sse(created('resp_1'), ...functionCall('Not A Token!', 'call_2', '[1]'), completed(1, 0, 1)),
+        () => sse(created('resp_2'), delta('Done'), completed(1, 0, 1)),
+      ]);
+      await odd.run('hi');
+      expect(responsesOf(odd.calls)[1]!.body!.input).toEqual([expect.objectContaining({ output: unavailable('requested') })]);
+    });
+
+    it('approves an mcp_approval_request and continues', async () => {
+      const { logs, log } = capture();
+      const { run, calls } = setup([
+        () => sse(created('resp_1'), ...approval('mcpr_1'), completed(1, 0, 1)),
+        () => sse(created('resp_2'), delta('Read it'), completed(1, 0, 1)),
+      ], { log });
+      expect(await run('hi')).toContain('Read it');
+      expect(responsesOf(calls)[1]!.body).toEqual({
+        conversation: 'conv_1', stream: true, input: [{ type: 'mcp_approval_response', approval_request_id: 'mcpr_1', approve: true }],
+      });
+      expect(logs.find(([event]) => event === 'pi.harness_item')![1]).toMatchObject({
+        trigger: 'client_tool', itemType: 'mcp_approval_request', serverLabel: 'jarvis', outcome: 'approved', argumentKeys: ['path'], round: 1,
+      });
+    });
+
+    it('answers every client item of one response in one follow-up, in the order they came', async () => {
+      const { run, calls, logs } = (() => { const c = capture(); return { ...setup([
+        () => sse(created('resp_1'), ...functionCall('task', 'call_a', '{}'), ...approval('mcpr_b'), ...functionCall('web', 'call_c', '{"q":"x"}'), completed(1, 0, 1)),
+        () => sse(created('resp_2'), delta('All done'), completed(1, 0, 1)),
+      ], { log: c.log }), logs: c.logs }; })();
+      await run('hi');
+      expect(responsesOf(calls)).toHaveLength(2);
+      expect(responsesOf(calls)[1]!.body!.input).toEqual([
+        { type: 'function_call_output', call_id: 'call_a', output: unavailable('task') },
+        { type: 'mcp_approval_response', approval_request_id: 'mcpr_b', approve: true },
+        { type: 'function_call_output', call_id: 'call_c', output: unavailable('web') },
+      ]);
+      expect(logs.filter(([event]) => event === 'pi.harness_item').map(([, fields]) => fields.outcome)).toEqual(['answered_task_stub', 'approved', 'answered_default']);
+      expect(logs.find(([event]) => event === 'pi.turn')![1]).toMatchObject({ rounds: 2, clientItems: 3 });
+    });
+
+    it('keeps answering across rounds, with a fresh follow-up for each response', async () => {
+      const { run, calls } = setup([
+        () => sse(created('resp_1'), ...functionCall('task', 'call_1', '{}'), completed(1, 0, 1)),
+        () => sse(created('resp_2'), ...functionCall('task', 'call_2', '{}'), completed(1, 0, 1)),
+        () => sse(created('resp_3'), delta('Finally'), completed(1, 0, 1)),
+      ]);
+      expect(await run('hi')).toContain('Finally');
+      expect(responsesOf(calls).map(call => call.body!.input)).toEqual([
+        expect.any(Array),
+        [{ type: 'function_call_output', call_id: 'call_1', output: unavailable('task') }],
+        [{ type: 'function_call_output', call_id: 'call_2', output: unavailable('task') }],
+      ]);
+    });
+
+    it('stops cleanly with its own reason instead of a ninth response, charging all eight', async () => {
+      const { logs, log } = capture();
+      const { run, calls, store, registry } = setup(
+        Array.from({ length: 9 }, (_, index) => () => sse(created(`resp_${index}`), ...functionCall('task', `call_${index}`, '{}'), completed(100, 0, 10))), { log },
+      );
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('client tools') });
+      expect(responsesOf(calls)).toHaveLength(8);
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'client_tool_round_limit', attempt: 1 });
+      expect(store.turns).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 800, outputTokens: 80 });
+      expect(logs.find(([event]) => event === 'pi.turn')![1]).toMatchObject({ outcome: 'failed', rounds: 8, clientItems: 7, inputTokens: 800 });
+      expect(registry.size).toBe(0);
+    });
+
+    it('ends at once when the turn is cancelled during a follow-up, charging the finished round', async () => {
+      const controller = new AbortController();
+      const { run, calls, store, registry } = setup([
+        () => sse(created('resp_1'), ...functionCall('task', 'call_1', '{}'), completed(1_000, 0, 10)),
+        () => { setTimeout(() => controller.abort(), 10); return stalled('resp_2')(); },
+      ]);
+      await expect(run('hi', controller.signal)).rejects.toBeDefined();
+      expect(responsesOf(calls)).toHaveLength(2);
+      expect(store.turns[0]).toMatchObject({ outcome: 'cancelled', inputTokens: 1_000, outputTokens: 10 });
+      expect(registry.size).toBe(0);
+    });
+
+    it('times out when the follow-up outlives the turn deadline', async () => {
+      const { run, calls, store } = setup([
+        () => sse(created('resp_1'), ...functionCall('task', 'call_1', '{}'), completed(1, 0, 1)),
+        stalled('resp_2'),
+      ], { turnTimeoutMs: 80 });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_timeout' });
+      expect(responsesOf(calls)).toHaveLength(2);
+      expect(store.turns[0]).toMatchObject({ outcome: 'timeout' });
+    });
+
+    it('never retries a stream that carried a client item, nor a failed follow-up', async () => {
+      const failed = frame({ type: 'response.failed', response: { error: { code: 'server_error' } } });
+      const { logs, log } = capture();
+      const first = setup([() => sse(created('resp_1'), ...functionCall('task', 'call_1', '{}'), failed), () => sse(delta('again'), completed(1, 0, 1))], { log });
+      await expect(first.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(first.calls)).toHaveLength(1);
+      const followUp = setup([
+        () => sse(created('resp_1'), ...functionCall('task', 'call_1', '{}'), completed(1, 0, 1)),
+        () => sse(created('resp_2'), failed),
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ], { log });
+      await expect(followUp.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(followUp.calls)).toHaveLength(2);
+      expect(logs.map(([event]) => event)).not.toContain('pi.stream_retry');
+      const ended = setup([() => sse(created('resp_1'), ...functionCall('task', 'call_1', '{}')), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(ended.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(ended.calls)).toHaveLength(1);
+    });
+
+    it('fails an item it cannot answer and caps the items of one response', async () => {
+      const { logs, log } = capture();
+      const flood = setup([() => sse(created('resp_1'), ...Array.from({ length: 17 }, (_, index) => functionCall('task', `call_${index}`, '{}')).flat(), completed(1, 0, 1))], { log });
+      await expect(flood.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(flood.calls)).toHaveLength(1);
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
     });
   });
 

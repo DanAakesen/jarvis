@@ -5,6 +5,7 @@ import {
 } from '../core/chat-agent.js';
 import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
+import { answerClientTool, argumentKeyNames, type ClientToolOutcome } from './client-tools.js';
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
@@ -33,7 +34,11 @@ export type PiEvent =
   | { readonly kind: 'tool_done'; readonly server: string; readonly name: string; readonly failed: boolean; readonly code?: string; readonly status?: number }
   /** The harness listed a server's tools at the start of a response: the proof that a server is attached and reachable. */
   | { readonly kind: 'tools_listed'; readonly server: string; readonly tools: number; readonly failed: boolean; readonly code?: string; readonly status?: number }
-  | { readonly kind: 'done'; readonly usage: PiUsage; readonly responseId: string | null };
+  /** A follow-up request is about to answer the harness's client-side items; `answered` counts every item answered so far in the turn. */
+  | { readonly kind: 'round_start'; readonly round: number; readonly answered: number }
+  /** One response of the turn completed, with its own usage; `done` carries the sum, so only a failed turn needs these. */
+  | { readonly kind: 'round_done'; readonly usage: PiUsage }
+  | { readonly kind: 'done'; readonly usage: PiUsage; readonly responseId: string | null; readonly rounds?: number; readonly answered?: number };
 
 export interface PiWarmResult {
   readonly state: 'warm' | 'cold';
@@ -148,6 +153,37 @@ const transientFoundryCodes: ReadonlySet<string> = new Set([
 /** What the retry decision needs from a turn's grant: any trace that the model reached a tool. */
 const toolMayHaveRun = (grant: PiTurnGrant): boolean =>
   grant.requests.count > 0 || grant.results.length > 0 || grant.actions.count > 0 || grant.pushes.count > 0;
+/**
+ * What a turn that fails part-way has spent: the usage of every response that completed, plus the conservative estimate for
+ * the one in flight when it had produced text or a tool call. A turn that completes bills the summed usage of `done` instead.
+ */
+function createSpendTracker() {
+  let completed: PiUsage | undefined;
+  let characters = 0;
+  let started = false;
+  return {
+    note(event: PiEvent): void {
+      if (event.kind === 'delta') { started = true; characters += event.text.length; }
+      else if (event.kind === 'tool') started = true;
+      else if (event.kind === 'round_done') {
+        completed = {
+          inputTokens: (completed?.inputTokens ?? 0) + event.usage.inputTokens,
+          cachedTokens: (completed?.cachedTokens ?? 0) + event.usage.cachedTokens,
+          outputTokens: (completed?.outputTokens ?? 0) + event.usage.outputTokens,
+        };
+        characters = 0;
+        started = false;
+      }
+    },
+    estimate(): PiUsage | undefined {
+      if (!started) return completed;
+      return {
+        inputTokens: (completed?.inputTokens ?? 0) + estimatedPromptTokens, cachedTokens: completed?.cachedTokens ?? 0,
+        outputTokens: (completed?.outputTokens ?? 0) + Math.ceil(characters / 3),
+      };
+    },
+  };
+}
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -162,6 +198,37 @@ const harnessListLimit = 25;
 const unknownItemLogLimit = 5;
 /** Output item types the gateway expects; anything else is logged once per stream as `pi.harness_item`. */
 const knownItemTypes = new Set(['message', 'reasoning', 'mcp_call', 'mcp_list_tools']);
+/** Responses one turn may take: the first request plus at most seven follow-ups that answer the harness's client-side items. */
+const maxTurnRounds = 8;
+/** Client-side items one response may ask us to answer; more than this is not a tool loop but a runaway stream. */
+const maxClientItemsPerRound = 16;
+const clientItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
+
+/** A client-side item the harness emitted, merged from its `added`, argument and `done` events (later events win). */
+type ClientItem = Record<string, unknown>;
+
+const plainId = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 && value.length <= 512 ? value : undefined;
+
+/** Adds the item to the list, or merges it into the one already there with the same `call_id` or `id`; `full` when the list is at its limit. */
+function mergeClientItem(list: ClientItem[], item: Record<string, unknown>): 'new' | 'merged' | 'full' {
+  const callId = plainId(item.call_id);
+  const id = plainId(item.id);
+  const known = list.find(entry => entry.type === item.type && ((callId !== undefined && entry.call_id === callId) || (id !== undefined && entry.id === id)));
+  if (known) { Object.assign(known, item); return 'merged'; }
+  if (list.length >= maxClientItemsPerRound) return 'full';
+  list.push({ ...item });
+  return 'new';
+}
+
+/** The arguments as the harness sent them: a string, or an object it did not stringify. */
+function argumentsOf(item: ClientItem): string {
+  if (typeof item.arguments === 'string') return item.arguments;
+  if (isObject(item.arguments)) { try { return JSON.stringify(item.arguments); } catch { /* unreadable: treated as empty */ } }
+  return '';
+}
+
+/** A function call is answered by its `call_id`, an approval request by its `id`; without one there is nothing to answer. */
+const answerable = (item: ClientItem): boolean => plainId(item.type === 'function_call' ? item.call_id : item.id) !== undefined;
 
 /** A stalled provider stream must not outlive a cancel or the turn deadline, whether or not the transport reacts to the signal. */
 function readUnlessAborted(reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>> {
@@ -347,8 +414,14 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     });
   }
 
-  /** The shape of an item the harness sent that the gateway does not handle: types, names and lengths only, never arguments, output or ids. */
-  function logHarnessItem(trigger: 'rejected_item' | 'unknown_item', item: Record<string, unknown>, phase: StreamPhase, attempt: number): void {
+  /**
+   * The shape of an item the harness sent: types, names, lengths and, for a client tool the gateway answered, the round, the
+   * outcome and the argument key names. Never argument values, output or ids.
+   */
+  function logHarnessItem(
+    trigger: 'rejected_item' | 'unknown_item' | 'client_tool', item: Record<string, unknown>, phase: StreamPhase, attempt: number,
+    answered?: { readonly round: number; readonly outcome: ClientToolOutcome | 'approved'; readonly argumentKeys: readonly string[] },
+  ): void {
     const itemType = harnessLabel(item.type);
     const name = harnessLabel(item.name);
     const serverLabel = harnessLabel(item.server_label);
@@ -357,7 +430,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (typeof item.arguments === 'string') argumentsLength = item.arguments.length;
     else if (isObject(item.arguments)) { try { argumentsLength = JSON.stringify(item.arguments).length; } catch { /* unreadable: omitted */ } }
     log('pi.harness_item', {
-      trigger, attempt, ...(itemType ? { itemType } : {}), ...(name ? { name } : {}), ...(serverLabel ? { serverLabel } : {}),
+      trigger, attempt, ...(answered ? { round: answered.round, outcome: answered.outcome, argumentKeys: [...answered.argumentKeys] } : {}),
+      ...(itemType ? { itemType } : {}), ...(name ? { name } : {}), ...(serverLabel ? { serverLabel } : {}),
       hasCallId: item.call_id !== undefined && item.call_id !== null, hasId: item.id !== undefined && item.id !== null,
       ...(argumentsLength !== undefined ? { argumentsLength } : {}), ...(itemStatus ? { itemStatus } : {}),
       eventTypes: [...phase.eventTypes], itemTypes: [...phase.itemTypes], ...phaseFields(phase),
@@ -374,11 +448,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   /**
    * One request to the model. A stream that fails before any text, reasoning or tool call is tried once more (see `respond`),
-   * and every failure here logs why with `pi.stream_failed`.
+   * and every failure here logs why with `pi.stream_failed`. The harness's client-side items (`function_call`,
+   * `mcp_approval_request`) are collected while the response streams, and returned once it completed, for `respond` to answer.
    */
-  async function* respondOnce(conversationId: string, input: string, signal: AbortSignal, phase: StreamPhase, attempt: number): AsyncGenerator<PiEvent> {
+  async function* respondOnce(conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number): AsyncGenerator<PiEvent, ClientItem[]> {
     const response = await call('POST', '/responses', {
-      conversation: conversationId, input: [{ role: 'user', content: input }], stream: true,
+      conversation: conversationId, input, stream: true,
     }, signal, true);
     if (!response.body) {
       logStreamFailure('no_stream', phase, attempt);
@@ -388,6 +463,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const decoder = new TextDecoder();
     let buffer = '';
     let completed = false;
+    const clientItems: ClientItem[] = [];
+    const failTooManyClientItems = (item: Record<string, unknown>): never => {
+      logHarnessItem('rejected_item', item, phase, attempt);
+      logStreamFailure('approval_or_function_call_item', phase, attempt);
+      throw new PiGatewayError('pi_failed', 'PI asked for more client tools in one reply than the gateway answers.');
+    };
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
     const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
@@ -428,15 +509,22 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
               }
             }
             if (itemType === 'mcp_call') { phase.sawTool = true; yield { kind: 'tool', server: label(payload.item.server_label) }; }
-            else if (itemType === 'mcp_approval_request' || itemType === 'function_call') {
+            else if (typeof itemType === 'string' && clientItemTypes.has(itemType)) {
               phase.sawTool = true;
-              logHarnessItem('rejected_item', payload.item, phase, attempt);
-              logStreamFailure('approval_or_function_call_item', phase, attempt);
-              throw new PiGatewayError('pi_failed', 'PI asked for an approval or client tool the gateway does not answer. The agent definition must run Jarvis tools without harness approval.');
+              const merged = mergeClientItem(clientItems, payload.item);
+              if (merged === 'full') failTooManyClientItems(payload.item);
+              if (merged === 'new') yield { kind: 'tool', server: '' };
             }
+          } else if (type === 'response.function_call_arguments.done' && typeof payload.arguments === 'string') {
+            const target = clientItems.find(entry => entry.type === 'function_call' && plainId(payload.item_id) !== undefined && entry.id === payload.item_id);
+            if (target) target.arguments = payload.arguments;
           } else if (type === 'response.output_item.done' && isObject(payload.item)) {
             const item = payload.item;
-            if (item.type === 'mcp_call') {
+            if (typeof item.type === 'string' && clientItemTypes.has(item.type)) {
+              const merged = mergeClientItem(clientItems, item);
+              if (merged === 'full') failTooManyClientItems(item);
+              if (merged === 'new') yield { kind: 'tool', server: '' };
+            } else if (item.type === 'mcp_call') {
               yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null, ...itemFailure(item) };
             } else if (item.type === 'mcp_list_tools') {
               yield {
@@ -451,7 +539,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
             completed = true;
             yield {
-              kind: 'done', responseId: phase.responseId,
+              kind: 'round_done',
               usage: { inputTokens: count(usage.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(usage.output_tokens) },
             };
             break;
@@ -467,6 +555,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         logStreamFailure('stream_ended_without_completed', phase, attempt);
         throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
       }
+      const unanswerable = clientItems.find(item => !answerable(item));
+      if (unanswerable) {
+        logHarnessItem('rejected_item', unanswerable, phase, attempt);
+        logStreamFailure('approval_or_function_call_item', phase, attempt);
+        throw new PiGatewayError('pi_failed', 'PI asked for an approval or client tool without an id the gateway can answer.');
+      }
+      return clientItems;
     } finally {
       await reader.cancel().catch(() => {});
       // Best effort: closing the stream is the real stop; this only helps when the service ran it in the background.
@@ -487,26 +582,29 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   /**
-   * Sends one message and streams the reply. A stream that dies before anything observable happened is tried once more on
-   * the same conversation with the same message, so the retry can never repeat work. That needs all of: the turn's grant
+   * One response of a turn. A stream that dies before anything observable happened is tried once more on
+   * the same conversation with the same input, so the retry can never repeat work. That needs all of: the turn's grant
    * (a call without one never retries), no byte of output or unreadable frame, no MCP request, tool result, action or push
    * on the grant (checked again after the pause), a stream-level failure (ended or broke) or a Foundry `response.failed` or
    * `error` with a code in `transientFoundryCodes`, and, for a stream that merely stopped, a confirmed cancel of the old
-   * response. Cancel and the turn deadline end it as before. Callers see one stream and one `done`, so the turn is billed once.
+   * response. Cancel and the turn deadline end it as before. Only the first response of a turn may be retried: a follow-up
+   * answers client-side items, and asking again could repeat what a handler did.
    */
-  async function* respond(conversationId: string, input: string, signal: AbortSignal, grant?: PiTurnGrant): AsyncGenerator<PiEvent> {
+  async function* respondRound(
+    conversationId: string, input: readonly unknown[], signal: AbortSignal, grant: PiTurnGrant | undefined, retryable: boolean,
+  ): AsyncGenerator<PiEvent, { readonly items: ClientItem[]; readonly phase: StreamPhase; readonly attempt: number }> {
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
         startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
         responseId: null, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
       try {
-        yield* respondOnce(conversationId, input, signal, phase, attempt);
-        return;
+        const items = yield* respondOnce(conversationId, input, signal, phase, attempt);
+        return { items, phase, attempt };
       } catch (error) {
         const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
           phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
-        if (attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
+        if (!retryable || attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
           !grant || toolMayHaveRun(grant)) throw error;
         if (phase.failure !== 'foundry_response_failed') {
           // A stream that merely stopped may still be running on Foundry's side. Without a confirmed stop, or with events whose
@@ -517,6 +615,61 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         if (toolMayHaveRun(grant)) throw error;
         log('pi.stream_retry', { reason: phase.failure, ...phase.failureFields, attempt, ...phaseFields(phase) });
       }
+    }
+  }
+
+  /**
+   * Sends one message and streams the reply. When a response ends with client-side items from the harness, they are answered
+   * here and the same turn goes on: one follow-up request on the same conversation carries a `function_call_output` for each
+   * function call and an `mcp_approval_response` for each approval request, for at most `maxTurnRounds` responses in all.
+   * Callers see one stream and one `done` with the summed usage, so the turn is billed once; `round_done` reports each
+   * response's own usage for a turn that fails part-way.
+   */
+  async function* respond(conversationId: string, input: string, signal: AbortSignal, grant?: PiTurnGrant): AsyncGenerator<PiEvent> {
+    let next: readonly unknown[] = [{ role: 'user', content: input }];
+    let answered = 0;
+    const total = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
+    for (let round = 1; ; round += 1) {
+      const rounds = respondRound(conversationId, next, signal, grant, round === 1);
+      let finished: Awaited<ReturnType<typeof rounds.next>>;
+      let roundDone: PiEvent | undefined;
+      while (!(finished = await rounds.next()).done) {
+        if (finished.value.kind === 'round_done') {
+          total.inputTokens += finished.value.usage.inputTokens;
+          total.cachedTokens += finished.value.usage.cachedTokens;
+          total.outputTokens += finished.value.usage.outputTokens;
+          roundDone = finished.value;
+        } else yield finished.value;
+      }
+      const { items, phase, attempt } = finished.value;
+      if (items.length === 0) {
+        // A turn without client items looks exactly as it did before: one `done`, no round events.
+        yield { kind: 'done', usage: { ...total }, responseId: phase.responseId, ...(round > 1 ? { rounds: round, answered } : {}) };
+        return;
+      }
+      if (roundDone) yield roundDone;
+      if (round >= maxTurnRounds) {
+        logStreamFailure('client_tool_round_limit', phase, attempt);
+        throw new PiGatewayError('pi_failed', 'PI kept asking for client tools and was stopped. Check saved conversation and action status before trying again.');
+      }
+      const replies: unknown[] = [];
+      for (const item of items) {
+        signal.throwIfAborted();
+        const argumentsText = argumentsOf(item);
+        const argumentKeys = argumentKeyNames(argumentsText);
+        if (item.type === 'mcp_approval_request') {
+          replies.push({ type: 'mcp_approval_response', approval_request_id: item.id, approve: true });
+          logHarnessItem('client_tool', item, phase, attempt, { round, outcome: 'approved', argumentKeys });
+        } else {
+          const name = typeof item.name === 'string' ? item.name : '';
+          const reply = await answerClientTool({ name, arguments: argumentsText, signal });
+          replies.push({ type: 'function_call_output', call_id: item.call_id, output: reply.output });
+          logHarnessItem('client_tool', item, phase, attempt, { round, outcome: reply.outcome, argumentKeys });
+        }
+      }
+      answered += replies.length;
+      next = replies;
+      yield { kind: 'round_start', round: round + 1, answered };
     }
   }
 
@@ -665,8 +818,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let firstTextMs: number | null = null;
     let outcome: PiTurnRecord['outcome'] = 'failed';
     let sawText = false;
-    let sawTool = false;
-    let streamedCharacters = 0;
+    const spend = createSpendTracker();
+    let rounds = 1;
+    let clientItems = 0;
     try {
       const conversationId = await ensureConversation(signal);
       const context = await options.context(signal);
@@ -694,12 +848,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       let segment = '';
       let boundaries = 0;
       for await (const event of respond(conversationId, text, deadline, grant)) {
+        spend.note(event);
         // The model has the message once the provider answers, so the overview is not sent again on the next turn.
         if (overviewSent) { noteSent = overviewSent; overviewSent = undefined; }
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;
-          streamedCharacters += event.text.length;
           segment += event.text;
           yield event.text;
         } else if (event.kind === 'tools_listed') {
@@ -713,14 +867,20 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             elapsedMs: Math.round(performance.now() - started),
           });
         } else if (event.kind === 'tool') {
-          sawTool = true;
           // Text before a tool call is a progress note; very long text stays in the answer.
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
             boundaries += 1;
           }
           segment = '';
-        } else usage = event.usage;
+        } else if (event.kind === 'round_start') {
+          rounds = event.round;
+          clientItems = event.answered;
+        } else if (event.kind === 'done') {
+          usage = event.usage;
+          rounds = event.rounds ?? rounds;
+          clientItems = event.answered ?? clientItems;
+        }
       }
       outcome = 'ok';
       await options.store.markWarm(options.owner, activationHash, now(), signal).catch(() => log('pi.mark_warm_failed', {}));
@@ -740,8 +900,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       const totalMs = Math.round(performance.now() - started);
       // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
       // conservative estimate (the measured fixed prompt plus what streamed) so the monthly stop cannot be dodged.
-      const billed = usage ?? (sawText || sawTool
-        ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: Math.ceil(streamedCharacters / 3) } : undefined);
+      const billed = usage ?? spend.estimate();
       const failedActivation = outcome !== 'ok' && grant
         ? options.activations.failed(grant, now(), AbortSignal.timeout(10_000))
           .catch(() => log('pi.situation_stale_failed', { activation: grant?.activation?.id ?? '' }))
@@ -776,6 +935,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
         estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0,
         activationId: grant?.activation?.id ?? null,
+        rounds, clientItems,
         activationType: grant?.activation?.type ?? (input.channel === 'voice' ? 'voice' : 'chat'),
         activationSource: grant?.activation?.source ?? 'chat',
         stateRevision: grant?.activation?.stateRevision ?? null,
@@ -813,8 +973,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let usage: PiUsage | undefined;
     let firstTextMs: number | null = null;
     let outcome: PiTurnRecord['outcome'];
-    let sawModel = false;
-    let streamed = 0;
+    const spend = createSpendTracker();
     let text = '';
     let failure: PiGatewayError | undefined;
     try {
@@ -837,13 +996,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
       });
       for await (const event of respond(conversationId, message, deadline, grant)) {
+        spend.note(event);
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
-          sawModel = true;
-          streamed += event.text.length;
           text += event.text;
-        } else if (event.kind === 'tool') sawModel = true;
-        else if (event.kind === 'done') usage = event.usage;
+        } else if (event.kind === 'done') usage = event.usage;
       }
       outcome = 'ok';
     } catch (error) {
@@ -859,7 +1016,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
     if (grant) options.registry.close(grant.turn);
     // As for chat: a wake that reached the model without a usage report is charged at an estimate, so the stop cannot be dodged.
-    const billed = usage ?? (sawModel ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: Math.ceil(streamed / 3) } : undefined);
+    const billed = usage ?? spend.estimate();
     const totalMs = Math.round(performance.now() - started);
     const costDkk = billed ? costOf(billed) : 0;
     await record({

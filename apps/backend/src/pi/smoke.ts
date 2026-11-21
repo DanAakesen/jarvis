@@ -119,7 +119,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
         else if (event.kind === 'tool_done') {
           if (event.server !== PI_MCP_SERVER_LABEL) reachCalls.push({ server: event.server, name: event.name, failed: event.failed });
         } else if (event.kind === 'tools_listed') listed.set(event.server, { tools: event.tools, failed: event.failed });
-        else usage = event.usage;
+        else if (event.kind === 'done') usage = event.usage;
       }
     } catch (error) {
       if (!(config.abortAfterFirstText && controller.signal.aborted)) throw error;

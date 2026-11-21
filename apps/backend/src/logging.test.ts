@@ -348,6 +348,37 @@ describe('structured log export', () => {
     expect(JSON.parse(records[2]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item' });
   });
 
+  it('exports the answered client tool of a pi.harness_item with key names only, and the rounds of pi.turn', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = {
+      trigger: 'client_tool', attempt: 1, round: 2, outcome: 'answered_task_stub', argumentKeys: ['description', 'agent_type', 'prompt.v-2'],
+      itemType: 'function_call', name: 'task', hasCallId: true, hasId: true, argumentsLength: 40,
+    };
+    logger.info({ ...fields, arguments: '{"prompt":"private"}', output: 'private output', call_id: 'private id' }, 'pi.harness_item');
+    expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item', ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'pi.harness_item', properties: { service: 'jarvis-backend', ...fields } }));
+    logger.info({
+      trigger: 'client_tool', round: 9, outcome: 'executed shell',
+      argumentKeys: ['ok_key', 'has space', 'https://private.example/x', 'Upper', 'k'.repeat(33), '', 7, null, ...Array.from({ length: 20 }, (_, index) => `k${index}`)],
+    }, 'pi.harness_item');
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item', trigger: 'client_tool',
+      argumentKeys: ['ok_key', ...Array.from({ length: 11 }, (_, index) => `k${index}`)],
+    });
+    logger.info({ trigger: 'client_tool', argumentKeys: 'private', round: 0 }, 'pi.harness_item');
+    expect(JSON.parse(records[2]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item', trigger: 'client_tool' });
+    expect(records.slice(1).join('')).not.toContain('private');
+    logger.info({ channel: 'chat', outcome: 'ok', rounds: 3, clientItems: 2, azureCatalogue: 'idle' }, 'pi.turn');
+    logger.info({ channel: 'chat', outcome: 'ok', rounds: 9, clientItems: -1 }, 'pi.turn');
+    logger.info({ reason: 'client_tool_round_limit', attempt: 1 }, 'pi.stream_failed');
+    expect(JSON.parse(records[3]!)).toMatchObject({ rounds: 3, clientItems: 2 });
+    expect(JSON.parse(records[4]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.turn', channel: 'chat', outcome: 'ok' });
+    expect(JSON.parse(records[5]!)).toMatchObject({ reason: 'client_tool_round_limit' });
+  });
+
   it('keeps the tool count and Azure catalogue on pi.turn and drops an unknown catalogue state', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
