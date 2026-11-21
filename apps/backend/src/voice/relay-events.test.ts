@@ -769,6 +769,8 @@ describe('GPT-Live authoritative client events', () => {
         type: 'session.delegation.created', event_id: `${id}-event`, offset_ms: offset,
         delegation: { id, target: 'client' },
       }));
+    const heard = (relay: Awaited<ReturnType<typeof startRelay>>, text: string) =>
+      relay.received.some(event => event.type === 'jarvis.voice.input_transcript.delta' && event.delta === text);
     const commentary = (relay: Awaited<ReturnType<typeof startRelay>>) =>
       relay.upstreamEvents.filter(event => event.type === 'session.commentary.append');
 
@@ -781,7 +783,7 @@ describe('GPT-Live authoritative client events', () => {
       await until(() => runs.length === 1, 'PI turn start');
 
       say(relay, 'backchannel-input', 'mm-hm', 201, 250);
-      await sleep(150);
+      await until(() => heard(relay, 'mm-hm'), 'relay to take the backchannel transcript');
       expect(runs).toHaveLength(1);
       expect(runs[0]!.aborted()).toBe(false);
 
@@ -814,6 +816,51 @@ describe('GPT-Live authoritative client events', () => {
       expect(runs.map(run => run.text)).toEqual(['Check the build', 'Check the deploy instead']);
       expect(commentary(relay)).toEqual([expect.objectContaining({
         delegation_id: 'delegate-second',
+        content: 'The deploy is fine.',
+      })]);
+    }, 15_000);
+
+    it('starts the request exactly once when Dan backchannels while the delegation is still settling', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(storeFor('76'), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      say(relay, 'settle-input', 'Check the build', 0, 100);
+      delegate(relay, 'delegate-settle', 100);
+      say(relay, 'settle-backchannel', 'mm-hm', 201, 250);
+      await until(() => heard(relay, 'mm-hm'), 'relay to take the backchannel transcript');
+      expect(runs).toHaveLength(0);
+
+      await until(() => runs.length === 1, 'delegated PI turn after settling');
+      await sleep(150);
+      expect(runs.map(run => run.text)).toEqual(['Check the build']);
+      expect(runs[0]!.aborted()).toBe(false);
+
+      runs[0]!.reply('The build is green.');
+      await until(() => commentary(relay).length > 0, 'PI result commentary');
+      await sleep(50);
+      expect(commentary(relay)).toEqual([expect.objectContaining({
+        delegation_id: 'delegate-settle',
+        content: 'The build is green.',
+      })]);
+    }, 15_000);
+
+    it('lets a correction delegated while the first is settling take over and answers once', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(storeFor('77'), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      say(relay, 'early-input', 'Check the build', 0, 100);
+      delegate(relay, 'delegate-early', 100);
+      say(relay, 'correction-input', 'Check the deploy instead', 201, 300);
+      delegate(relay, 'delegate-correction', 300);
+      await until(() => runs.length === 1, 'corrected PI turn');
+      await sleep(800);
+
+      expect(runs.map(run => run.text)).toEqual(['Check the deploy instead']);
+      runs[0]!.reply('The deploy is fine.');
+      await until(() => commentary(relay).length > 0, 'corrected PI result');
+      await sleep(50);
+      expect(commentary(relay)).toEqual([expect.objectContaining({
+        delegation_id: 'delegate-correction',
         content: 'The deploy is fine.',
       })]);
     }, 15_000);

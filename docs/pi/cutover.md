@@ -17,7 +17,7 @@ flowchart LR
 | Area | How | What good looks like | Reference |
 | --- | --- | --- | --- |
 | Chat | Use normal Chat for a day; there is no engine choice | Quality at least as good as today; first text about 1.1 to 1.3 s warm, about 3.3 s cold; honest errors; approvals work | `docs/harness-trial/spike-results.md` (16 November measurements) |
-| Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, interrupt it, ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; the newest sentence wins; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
+| Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, say a backchannel ("mm-hm") while it works, then ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; speech alone never stops PI, and only a new delegated request (the newest one wins) or ending the session does; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
 | Brain | Settings > Proactive, Background PI on | Messages worth reading, no storms, budget inside 100 DKK | `docs/agent-context.md`, "PI brain" |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, cost per watch shown, no storm | `docs/agent-context.md`, "PI standing watches" |
 | Reach | After the owner provides `PI_GITHUB_TOKEN` (fine-grained token, see `docs/agent-context.md`) and runs `infra/setup-azure-mcp.ps1` | Reads and actions work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |

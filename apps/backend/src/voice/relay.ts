@@ -450,12 +450,6 @@ function registerVoiceRoute(
       },
     });
 
-    const cancelPendingDelegation = () => {
-      pendingDelegation?.abort();
-      pendingDelegation = undefined;
-      pendingDelegationGroup = undefined;
-    };
-
     const requestGracefulEnd = (reason: string, notifyClient = true) => {
       if (!termination.isActive) return;
       pendingDelegation?.abort();
@@ -470,7 +464,6 @@ function registerVoiceRoute(
     };
 
     const newInputGroup = (): InputGroup => {
-      cancelPendingDelegation();
       if (activeOutput) finishOutputGroup(activeOutput, 'cancelled');
       lastCommentaryDelegation = null;
       if (seenDelegations.size >= MAX_TRANSCRIPTS_PER_SESSION) {
@@ -553,7 +546,8 @@ function registerVoiceRoute(
       else if (pendingDelegationGroup && timelineEnd !== undefined &&
           pendingDelegationGroup.delegationOffsetMs !== undefined &&
           timelineEnd > pendingDelegationGroup.delegationOffsetMs) {
-        group = newInputGroup();
+        // Later speech never drops the delegation still settling; only a new delegation supersedes it.
+        if (!group || group === pendingDelegationGroup || group.persisted || group.locked) group = newInputGroup();
       } else if (!group || group.persisted || group.locked) group = newInputGroup();
       if (!group) group = newInputGroup();
       group.text += delta;

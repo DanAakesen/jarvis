@@ -13797,4 +13797,4 @@ Dan's rule: a backchannel such as "mm-hm", or any transcript that is not a deleg
 - A new delegation while PI works still supersedes the turn in flight (`createPiVoiceTurns.start`, unchanged). Chat's steering route does the same: it aborts the model round and continues with the new message. Chat's plain send is refused while a turn is active (409), and the gateway's single-flight lock refuses overlapping turns.
 - Cancellation remains the session ending (`jarvis.session.end`, disconnect, teardown) and a new delegation (for example "stop that" reaches PI as its own turn). The voice protocol has no separate stop command; none was added.
 - This supersedes the earlier choice that Dan starting to speak cancels the turn in flight (#1908, `docs/decisions.md` voice section).
-- Open: a delegation still waiting for its transcript to settle (before PI starts) is dropped if a later utterance opens a new input group. That path was not changed here.
+- A delegation still settling (before PI starts) is not dropped by later speech either: the new utterance gets its own input group and the delegation proceeds with its own owner text. Only a new delegation supersedes it.
