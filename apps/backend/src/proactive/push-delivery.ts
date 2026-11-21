@@ -1,5 +1,10 @@
 import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPair, type WebPushResult, type WebPushTransport } from '../push/webpush.js';
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
+import type {
+  OwnerReminderDeliverySummary,
+  OwnerReminderProvider,
+  OwnerReminderProviderOutcome,
+} from './owner-reminder-store.js';
 import { copenhagenDayStart, dayKey, isQuietHour, localTimeLabel } from './time.js';
 
 export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed' | 'owner_reminder' | 'insight';
@@ -14,6 +19,13 @@ export interface SystemPushRequest {
   /** The owner's phone handles night itself (Do Not Disturb), so event outreach is never held back. */
   bypassQuietHours?: true;
   details?: readonly { title: string; body?: string; dueAt: string | null }[];
+  ownerReminderDelivery?: {
+    scheduleId: string;
+    claimToken: string;
+    occurrenceAt: Date;
+    notificationId: string;
+    expiresAt: Date;
+  };
 }
 
 export interface SystemPushOutcome {
@@ -22,6 +34,9 @@ export interface SystemPushOutcome {
   attempted: number;
   accepted: number;
   statusCode: number | null;
+  deliveryEvidence?: OwnerReminderDeliverySummary;
+  providerOutcome?: OwnerReminderProviderOutcome;
+  provider?: OwnerReminderProvider;
 }
 
 export interface SystemPushLogger {
@@ -198,12 +213,13 @@ export function createSystemPushSender(dependencies: {
   return async (request, signal) => {
     const startedAt = now().getTime();
     const outcome = (status: SystemPushOutcome['status'], reason: string | null,
-      attempted = 0, accepted = 0, statusCode: number | null = null): SystemPushOutcome => {
+      attempted = 0, accepted = 0, statusCode: number | null = null,
+      delivery: Pick<SystemPushOutcome, 'deliveryEvidence' | 'providerOutcome' | 'provider'> = {}): SystemPushOutcome => {
       log(status === 'failed' ? 'warn' : 'info', {
         reason: reason ?? 'none', attempted, accepted,
         durationMs: Math.max(0, now().getTime() - startedAt),
       });
-      return { status, reason, attempted, accepted, statusCode };
+      return { status, reason, attempted, accepted, statusCode, ...delivery };
     };
 
     if (signal.aborted) return outcome('skipped', 'aborted');
@@ -212,7 +228,18 @@ export function createSystemPushSender(dependencies: {
     if (isQuietHour(now()) && !explicitReminder && request.bypassQuietHours !== true) return outcome('skipped', 'quiet_hours');
     try {
       const native = await dependencies.nativeSend?.(request, signal);
-      if (native) return outcome(native.status, native.reason, native.attempted, native.accepted, native.statusCode);
+      if (native) return outcome(
+        native.status,
+        native.reason,
+        native.attempted,
+        native.accepted,
+        native.statusCode,
+        {
+          ...(native.deliveryEvidence ? { deliveryEvidence: native.deliveryEvidence } : {}),
+          ...(native.providerOutcome ? { providerOutcome: native.providerOutcome } : {}),
+          ...(native.provider ? { provider: native.provider } : {}),
+        },
+      );
       const subscriptions = await dependencies.store.listSubscriptions(dependencies.ownerObjectId);
       if (subscriptions.length === 0) return outcome('skipped', 'no_subscription');
       if (signal.aborted) return outcome('skipped', 'aborted');
@@ -233,16 +260,25 @@ export function createSystemPushSender(dependencies: {
       const attempted = deliveries.reduce((total, delivery) => total + delivery.attempted, 0);
       const statusCode = deliveries.find(({ accepted: didAccept }) => didAccept)?.statusCode ??
         deliveries.find(({ statusCode: status }) => status !== null)?.statusCode ?? null;
-      if (accepted > 0) return outcome('sent', null, attempted, accepted, statusCode);
+      if (accepted > 0) return outcome('sent', null, attempted, accepted, statusCode, { provider: 'web_push' });
       if (signal.aborted) return outcome('skipped', 'aborted', attempted, accepted, statusCode);
       if (deliveries.length > 0 && deliveries.every(({ removed }) => removed)) {
-        return outcome('skipped', 'no_subscription', attempted, accepted, statusCode);
+        return outcome('skipped', 'no_subscription', attempted, accepted, statusCode, { provider: 'web_push' });
       }
       const rejected = deliveries.some(({ statusCode: status }) =>
         status !== null && status !== 404 && status !== 410 && status !== 429 && status < 500);
-      return outcome('failed', rejected ? 'provider_rejected' : 'provider_unavailable', attempted, accepted, statusCode);
+      return outcome(
+        'failed',
+        rejected ? 'provider_rejected' : 'provider_unavailable',
+        attempted,
+        accepted,
+        statusCode,
+        { provider: 'web_push' },
+      );
     } catch {
-      return outcome('failed', 'provider_unavailable');
+      return request.ownerReminderDelivery
+        ? outcome('skipped', 'delivery_evidence_unavailable')
+        : outcome('failed', 'provider_unavailable');
     }
   };
 }
