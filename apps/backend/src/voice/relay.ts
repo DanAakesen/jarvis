@@ -454,7 +454,6 @@ function registerVoiceRoute(
       pendingDelegation?.abort();
       pendingDelegation = undefined;
       pendingDelegationGroup = undefined;
-      piTurns.cancel();
     };
 
     const requestGracefulEnd = (reason: string, notifyClient = true) => {
@@ -567,7 +566,6 @@ function registerVoiceRoute(
         group.lastTimelineEndMs = Math.max(group.lastTimelineEndMs ?? 0, timelineEnd);
       }
       limits.touch();
-      if (group.text === delta) piTurns.cancel();
       const normalizedEventId = eventId ?? `${group.id}:${group.nextEventSequence++}`;
       sendClient({
         type: 'jarvis.voice.input_transcript.delta',

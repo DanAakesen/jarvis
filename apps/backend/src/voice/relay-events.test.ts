@@ -726,4 +726,109 @@ describe('GPT-Live authoritative client events', () => {
     ]);
     expect(relay.received.some(event => event.type === 'jarvis.session.failed')).toBe(false);
   });
+
+  describe('PI work in flight', () => {
+    const storeFor = (id: string) => ({
+      createSession: async () => ({
+        id, channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => true,
+      addMessage: async (input: { sessionId: string; role: string; text: string; model: string | null }) => ({
+        id: `${id}0`,
+        sessionId: input.sessionId,
+        role: input.role,
+        text: input.text,
+        model: input.model,
+        at: new Date(),
+      } as ConversationMessage),
+    } as unknown as ConversationStore);
+
+    // Each PI turn waits until the test hands it a reply, and records whether it was aborted first.
+    const gatedAgent = () => {
+      const runs: Array<{ text: string; aborted: () => boolean; reply: (text: string) => void }> = [];
+      const agent: PiVoiceAgent = {
+        async *stream(input, _authorization, signal) {
+          let reply!: (text: string) => void;
+          const answer = new Promise<string>((resolve, reject) => {
+            reply = resolve;
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+          runs.push({ text: input.text, aborted: () => signal.aborted, reply });
+          yield await answer;
+        },
+      };
+      return { agent, runs };
+    };
+
+    const say = (relay: Awaited<ReturnType<typeof startRelay>>, id: string, text: string, from: number, to: number) =>
+      relay.upstreamSockets[0]!.send(JSON.stringify({
+        type: 'session.input_transcript.delta', event_id: id, delta: text, start_ms: from, end_ms: to,
+      }));
+    const delegate = (relay: Awaited<ReturnType<typeof startRelay>>, id: string, offset: number) =>
+      relay.upstreamSockets[0]!.send(JSON.stringify({
+        type: 'session.delegation.created', event_id: `${id}-event`, offset_ms: offset,
+        delegation: { id, target: 'client' },
+      }));
+    const commentary = (relay: Awaited<ReturnType<typeof startRelay>>) =>
+      relay.upstreamEvents.filter(event => event.type === 'session.commentary.append');
+
+    it('leaves the running PI turn alone when Dan speaks without delegating', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(storeFor('73'), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      say(relay, 'work-input', 'Check the build', 0, 100);
+      delegate(relay, 'delegate-work', 100);
+      await until(() => runs.length === 1, 'PI turn start');
+
+      say(relay, 'backchannel-input', 'mm-hm', 201, 250);
+      await sleep(150);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]!.aborted()).toBe(false);
+
+      runs[0]!.reply('The build is green.');
+      await until(() => commentary(relay).length > 0, 'PI result commentary');
+      expect(commentary(relay)).toEqual([expect.objectContaining({
+        delegation_id: 'delegate-work',
+        content: 'The build is green.',
+      })]);
+      expect(runs).toHaveLength(1);
+    }, 15_000);
+
+    it('lets a new delegation take over the running PI turn, as a steering message does in Chat', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(storeFor('74'), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      say(relay, 'first-input', 'Check the build', 0, 100);
+      delegate(relay, 'delegate-first', 100);
+      await until(() => runs.length === 1, 'first PI turn');
+
+      say(relay, 'second-input', 'Check the deploy instead', 201, 300);
+      delegate(relay, 'delegate-second', 300);
+      await until(() => runs.length === 2, 'second PI turn');
+      expect(runs[0]!.aborted()).toBe(true);
+      expect(runs[1]!.aborted()).toBe(false);
+
+      runs[1]!.reply('The deploy is fine.');
+      await until(() => commentary(relay).length > 0, 'second PI result');
+      await sleep(50);
+      expect(runs.map(run => run.text)).toEqual(['Check the build', 'Check the deploy instead']);
+      expect(commentary(relay)).toEqual([expect.objectContaining({
+        delegation_id: 'delegate-second',
+        content: 'The deploy is fine.',
+      })]);
+    }, 15_000);
+
+    it('still stops the running PI turn when Dan ends the session', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(storeFor('75'), agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      say(relay, 'end-input', 'Check the build', 0, 100);
+      delegate(relay, 'delegate-end', 100);
+      await until(() => runs.length === 1, 'PI turn start');
+
+      relay.browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+      await until(() => runs[0]!.aborted(), 'PI turn cancelled by session end');
+      expect(commentary(relay)).toEqual([]);
+    }, 15_000);
+  });
 });

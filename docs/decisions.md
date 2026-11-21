@@ -13788,3 +13788,13 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 - The voice agent has neither gap: it verifies the effective version on every Deploy (no fingerprint skip) and never writes to an existing agent. A half-seeded one stays unpinned and serves the latest version, which is verified.
 - One-time effect: the fingerprint formula changed, so the first Deploy after this change publishes one new version carrying the live text forward and pins it. The same happens if a Foundry edit does not keep the version metadata (unverified; it settles after that Deploy).
 - Not verified live: no Foundry call, Deploy or provisioning run was made; tests are offline (`.github/scripts/tests/test_pi_agent.py`). Still reading the repo text as if it were live: `apps/backend/src/pi/definition.test.ts` (asserts the seed's capability-overview wording) and docs that cite `agents/pi/instructions.md` for behaviour.
+
+## 2026-11-21 Voice: speech never cancels PI's work
+
+Dan's rule: a backchannel such as "mm-hm", or any transcript that is not a delegation, must leave the running PI turn alone, so a voice request ends the same way as the same request typed in chat.
+
+- The relay no longer calls `piTurns.cancel()` when an input transcript starts or a new input group opens (`apps/backend/src/voice/relay.ts`). It does not classify the utterance: GPT-Live decides whether to delegate, and the relay stops cancelling on speech.
+- A new delegation while PI works still supersedes the turn in flight (`createPiVoiceTurns.start`, unchanged). Chat's steering route does the same: it aborts the model round and continues with the new message. Chat's plain send is refused while a turn is active (409), and the gateway's single-flight lock refuses overlapping turns.
+- Cancellation remains the session ending (`jarvis.session.end`, disconnect, teardown) and a new delegation (for example "stop that" reaches PI as its own turn). The voice protocol has no separate stop command; none was added.
+- This supersedes the earlier choice that Dan starting to speak cancels the turn in flight (#1908, `docs/decisions.md` voice section).
+- Open: a delegation still waiting for its transcript to settle (before PI starts) is dropped if a later utterance opens a new input group. That path was not changed here.
