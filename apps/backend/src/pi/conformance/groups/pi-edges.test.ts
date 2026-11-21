@@ -33,8 +33,21 @@ describe('calls that must be refused or fail in plain English', () => {
   });
 });
 
+describe('arguments generated from the schema', () => {
+  // The suite generates arguments only for tools without explicit cases, and every PI tool has some: keep that check here.
+  it.each(Object.keys(fixtures.group.cases!))('%s: the schema accepts them and the tool answers without crashing', async (name) => {
+    for (const set of sampleArgumentSets(tool(name).inputSchema as Record<string, unknown>)) {
+      const done = await executeCase(world, tool(name), turnKindFor(name), { label: set.label, arguments: set.arguments });
+      expect(done.message ?? '', `${name} [${set.label}]`).not.toMatch(/^Invalid arguments:/u);
+    }
+  });
+});
+
 describe('a wake-only tool in a chat turn', () => {
   it.each(['message_dan', 'pi_note', 'inbox_trail', 'watch_look'])('%s is not offered, and the door refuses it even if the model names it', async (name) => {
+    const ran = () => world.recorded.filter((entry) => entry.tool === name).length;
+    const files = () => [...fixtures.brain.vault.files.keys()].sort();
+    const before = { ran: ran(), pushes: fixtures.brain.pushes.length, files: files() };
     const chat = world.client.openTurn();
     try {
       const found = await world.client.find(chat, name);
@@ -44,10 +57,10 @@ describe('a wake-only tool in a chat turn', () => {
       expect(call.status).toBe(200);
       expect(call.outcome).toBe('refused');
       expect(plainEnglishProblems((call.result as { refused?: string }).refused)).toEqual([]);
-      expect(world.recorded.filter((entry) => entry.tool === name), 'the tool must not have run').toEqual([]);
     } finally { chat.close(); }
-    expect(fixtures.brain.pushes).toEqual([]);
-    expect([...fixtures.brain.vault.files.keys()].filter((path) => path.startsWith('PI/Notes/'))).toEqual([]);
+    expect(ran(), 'the tool must not have run').toBe(before.ran);
+    expect(fixtures.brain.pushes).toHaveLength(before.pushes);
+    expect(files()).toEqual(before.files);
   });
 });
 
