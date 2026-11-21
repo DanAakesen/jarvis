@@ -21,6 +21,7 @@ import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspac
 import { readWindowTool } from './read-window.js';
 import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
 import { findChatReflexReplay } from './reflex.js';
+import { sharedScreenForMessage } from './shared-screen.js';
 import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
@@ -235,6 +236,12 @@ export const coreModule: BackendModule = {
         }
         if (messageHeader === undefined && messageId !== undefined && validMessageId) {
           request.jarvisMemorySourceMessageId = messageId;
+        }
+        // The page Dan shares with a chat message belongs to the PI turn for that message, never to anything a caller sends.
+        const sharedScreen = request.jarvisPi === 'turn' && validMessageId ? sharedScreenForMessage(messageId!) : undefined;
+        if (sharedScreen) {
+          request.requireSharedScreenContext = true;
+          request.sharedScreenContext = sharedScreen;
         }
         if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
         if (validMessageId && phoneSessionId === undefined && voiceItemHeader === undefined &&
