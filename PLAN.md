@@ -10,6 +10,23 @@
 | Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
 | Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
 
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+**Status: implemented and qualified offline (fixtures only); the live GitHub App subscription to `Release` and Dan's observation of real events behind the PI switch are open.** Producers only record what happened; the brain decides whether Dan hears it. No model call at ingestion, and no new guardrail, approval or setting; the only exact check is Dan's existing source switch.
+
+| Step | State |
+| --- | --- |
+| Map GitHub `release`, `issues` (opened, closed, reopened), `issue_comment`, `pull_request` (opened, merged, review requested) and failed default-branch `check_run` to queue events with stable keys and summaries of at most 400 characters | Done |
+| List the `release` subscription in `docs/github-app-manifest.json`; a test requires every accepted event to be listed | Done (file only; no GitHub call) |
+| `reminder.delivery_failed` from the reminder ticker when delivery ended failed after its retries, identity the reminder ID | Done |
+| `calendar.clash` from the 15-minute calendar poll, one event per overlapping pair, keyed by pair and times | Done |
+| Queue entrance respects the Factory (GitHub, Worker) and Calendar source switches; one `eventSourceSwitch` replaces two private copies | Done |
+| Payload fixtures through the real route, replays and redeliveries, a reminder-failure fixture, clash fixtures and disabled-source cases | Done |
+| Update PRODUCT, architecture, agent context and decisions | Done |
+| Dan ticks `Release` in the live GitHub App and watches the brain's handling of the new events | **Open** |
+
+Not built: polling GitHub, cancelling a pending clash whose entries moved apart, filtering Jarvis's own GitHub activity, health, location and weather events, any UI.
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**

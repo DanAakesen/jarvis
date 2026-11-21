@@ -16,7 +16,7 @@ import { createFoundryEventReasoner } from './reasoner.js';
 import { createSourceChangePoller, createTimerProducer } from './scheduled-producers.js';
 import { ConfigurationError } from '../../configuration-error.js';
 import type { EventQueueStore } from './event-queue.js';
-import type { OutreachChannel, ProactiveEventSink } from './types.js';
+import { eventSourceSwitch, type OutreachChannel, type ProactiveEventSink } from './types.js';
 import type { PiSituationService } from '../../pi/situation.js';
 
 /** What reads the queue: the old one-shot pipeline, or the PI brain. */
@@ -104,8 +104,12 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
     });
   }
   options.situation?.attachEvents(queue, () => pipeline.wake());
+  // The queue's one entrance. An event whose source Dan switched off in the Proactive settings (GitHub and Worker results
+  // follow Factory) is not queued; one already queued when he switches it off is settled by the reader.
   const sink: ProactiveEventSink = {
     async enqueue(event) {
+      const governing = eventSourceSwitch(event.source);
+      if (governing && !(await options.store.settings.read()).sources[governing]) return;
       const result = await queue.enqueue(event, options.now());
       if (result.inserted && event.baseline !== true) pipeline.wake();
     },

@@ -1,3 +1,9 @@
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+Jarvis pushes to Dan when something needs his attention, and his list for that is GitHub issue and release updates, reminders and the calendar. The proactive queue now hears, in addition to build and deploy results: a published release, an issue opened, closed or reopened, a comment on an issue or pull request, a pull request opened, merged or sent to him for review, a check that failed on a default branch, an explicit reminder whose push delivery ended without reaching a device after its retries, and two timed calendar entries that overlap. Whether Dan is told about any of them is the brain's decision; nothing before the queue filters or ranks them, and no new switch exists. Events follow the existing Factory (GitHub) and Calendar source switches in Proactive settings: a source that is off is not queued.
+
+Limits: only repositories Jarvis tracks (the vault and active Factory projects) reach the queue; Jarvis's own comments, issues and pull requests also arrive, labelled with the actor; the live GitHub App must subscribe to `Release`. Success looks like Dan hearing about a release, a merged pull request, a failed reminder or a double-booked hour once, and not twice when GitHub redelivers.
+
 ## Personal Memory stays separate from Vault Knowledge — 20 November 2026 (#1968)
 
 Jarvis has three distinct information layers. **Session context** is the current conversation, recent turns, active task and tool results. **Personal Memory** is small, durable owner-scoped facts, preferences, decisions, corrections and unfinished commitments in Azure SQL, with a stable identity, exact source-message attribution and history. **Knowledge / Vault** is Dan's Obsidian/GitHub notes, tasks, plans and research; the Vault remains authoritative and its indexes are retrieval aids.

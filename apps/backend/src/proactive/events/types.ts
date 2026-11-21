@@ -1,3 +1,5 @@
+import { sourceIds, type SourceId } from '../types.js';
+
 export const outreachTiers = ['low', 'medium', 'high'] as const;
 export type OutreachTier = typeof outreachTiers[number];
 export type OutreachRating = 'up' | 'down';
@@ -6,6 +8,12 @@ export const EVENT_SUMMARY_MAX = 400;
 export const EVENT_DETAIL_MAX_BYTES = 4_096;
 export const EVENT_SOURCE_PATTERN = /^[a-z][a-z0-9_.-]{0,63}$/u;
 export const EVENT_KIND_PATTERN = /^[a-z][a-z0-9_.:-]{0,95}$/u;
+
+/** The Proactive source switch that governs events from an event source, if there is one: GitHub and Worker results belong to Factory. */
+export function eventSourceSwitch(source: string): SourceId | undefined {
+  if ((sourceIds as readonly string[]).includes(source)) return source as SourceId;
+  return source === 'github' || source === 'worker' ? 'factory' : undefined;
+}
 
 /** Source and kind are free text on purpose: a new producer needs no schema or enum change. */
 export interface ProactiveEventInput {

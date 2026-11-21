@@ -4,7 +4,7 @@ import {
 } from '../../proactive/budget.js';
 import type { EventQueueStore } from '../../proactive/events/event-queue.js';
 import { MAX_EVENT_ATTEMPTS } from '../../proactive/events/rules.js';
-import type { QueuedEvent } from '../../proactive/events/types.js';
+import { eventSourceSwitch, type QueuedEvent } from '../../proactive/events/types.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import {
   copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
@@ -90,12 +90,7 @@ export function createBrain(options: BrainOptions) {
 
   const wake = (at: Date) => { if (nextWorkAt === null || at < nextWorkAt) nextWorkAt = at; };
   const eventSources = (event: QueuedEvent): SourceId[] => {
-    const fromName = (value: string): SourceId | undefined => {
-      if ((sourceIds as readonly string[]).includes(value)) return value as SourceId;
-      if (value === 'github' || value === 'worker') return 'factory';
-      return undefined;
-    };
-    const direct = fromName(event.source);
+    const direct = eventSourceSwitch(event.source);
     const evidence = Array.isArray(event.detail.evidenceSources)
       ? event.detail.evidenceSources.filter((value): value is SourceId =>
         typeof value === 'string' && (sourceIds as readonly string[]).includes(value))

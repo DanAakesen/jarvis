@@ -1,3 +1,11 @@
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+- GitHub releases, issues, comments, pull requests and failed default-branch checks, failed reminder deliveries and calendar clashes now reach the proactive event queue as plain events (`docs/architecture.md`, "Signals that matter to Dan"). No migration, setting or switch was added: the events follow the existing **Factory** (GitHub, Worker) and **Calendar** source switches, and the queue's entrance does not queue an event whose source is off.
+- Manual step for Dan, not done here: in the GitHub App's settings subscribe to **Release** and confirm **Issue comment**, **Issues**, **Pull request** and **Check run** are ticked. `docs/github-app-manifest.json` is only the setup reference; nothing in this change calls GitHub. Only tracked repositories (the vault and active Factory projects) reach the queue.
+- Offline gates (Node 22, `.nvmrc`): `npm test --workspace @jarvis/backend -- --run src/github/webhook.test.ts src/proactive/events src/proactive/owner-reminder-ticker.test.ts src/pi/brain`, then `npm run build`, `npm run lint` and `npm test` with `--workspace @jarvis/backend`. The webhook test posts signed payload fixtures through the real route and mapping into the memory queue; it also fails when the receiver accepts an event the App manifest does not list.
+- No model, GitHub, Azure, APNs or live webhook call is made or authorized. Whether the brain handles the new events well is Dan's to judge behind the PI switch.
+- Operate: events show in `proactive_events` with source `github`, `reminder` or `calendar`. A lost reminder signal logs `delivery_failed_event_unavailable` on `proactive.reminder_tick`; the schedule row stays the record of the delivery.
+
 ## Explicit owner-reminder delivery evidence — 20 November 2026 (#1990)
 
 - Migration `0102_owner_reminder_delivery_outbox.sql` is required before this
@@ -5159,7 +5167,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Actions | Read-only | Read workflow runs |
 | Deployments | Read-only | Read deployment status |
 
-Subscribe to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
+Subscribe to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, `release`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
 
 Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL. A GitHub App ID is not a secret; the private key and webhook secret are.
 
