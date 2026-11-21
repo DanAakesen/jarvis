@@ -1149,7 +1149,7 @@ extension JarvisOrbActivity {
         }
         switch voiceState {
         case .listening: self = .listening
-        case .ready: self = .thinking
+        case .thinking: self = .thinking
         case .speaking: self = .speaking
         case .reconnecting: self = .reconnecting
         case .failed, .ended: self = .offline

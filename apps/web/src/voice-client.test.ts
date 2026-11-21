@@ -110,6 +110,28 @@ function makeClient(failEnd = false) {
 }
 
 describe('BrowserVoiceClient terminal ownership', () => {
+  it('follows authoritative relay activity instead of a stale speaking default', async () => {
+    const fixture = makeClient();
+    fixture.client.start();
+    await until(() => {
+      try { return fixture.socket.readyState === OPEN; } catch { return false; }
+    }, 'open voice socket');
+    fixture.socket.emit({
+      type: 'jarvis.session.ready',
+      sessionId: '42',
+      audio: { format: 'pcm16le', sampleRate: 24_000, channels: 1 },
+    });
+    await until(() => fixture.statuses.includes('listening'), 'voice listening');
+
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'thinking' });
+    expect(fixture.statuses.at(-1)).toBe('thinking');
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'speaking' });
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'listening' });
+    expect(fixture.statuses.at(-1)).toBe('listening');
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'reconnecting' });
+    expect(fixture.statuses.at(-1)).toBe('reconnecting');
+  });
+
   it.each([
     ['server failure', false, false],
     ['send failure', true, true],

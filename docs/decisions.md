@@ -26,6 +26,33 @@
   acknowledgement. A physical iPhone/Watch five-minute reminder, deep-link and
   duplicate check is owned by Dan after parent PR/release qualification.
 
+## 20 November 2026 — GPT-Live voice fidelity (#1988)
+
+- **Voice:** the immutable `jarvis-pi-live` definition's output voice and instructions
+  are Foundry-owned (2026-11-20 decision below). The provider remains the native full-duplex speech front end;
+  client delegation stays `type: client`, with the same PI conversation,
+  grants, tools and result path used by Chat. The runtime does not compare or
+  buffer approved provider text, and it does not add a second semantic answer
+  gate.
+- **State:** GPT-Live readiness, transcript/delegation events, microphone state
+  and actual output playback drive explicit Listening, Thinking, Speaking,
+  Reconnecting and Ended evidence. A transport failure is visible and bounded;
+  late callbacks cannot revive an ended or failed session.
+- **Transcript identity:** input/output deltas carry stable event IDs and
+  assistant output carries one response ID. Native output stays one ordered
+  group across its pauses; a new owner turn closes that group before its
+  persistence and the next owner message, so restored history retains
+  Dan/Jarvis order. Duplicate/replayed Watch events are suppressed by stable
+  delivery ID.
+- **Watch/history:** Watch history carries explicit `dan`/`jarvis` role instead
+  of deriving owner colour from incidental transport state. History with equal
+  timestamps is ordered by the canonical numeric message ID. The paired v2 Watch
+  event wire requires a delivery ID and serializes state/caption barriers; there
+  is no mixed-version compatibility shim.
+- **Evidence:** offline provisioner, backend, web and portable Swift checks are
+  part of the source change. No live model call, provider/audio probe, Deploy,
+  physical iPhone/Watch acceptance or paid smoke is authorized.
+
 ## 20 November 2026 — Personal Memory is SQL-owned, never a Vault bucket (#1968)
 
 - **Domain boundary:** Session context, Personal Memory and Vault Knowledge remain separate. `dbo.memories`/`memory_history` is the authoritative Personal Memory store; Vault notes are authoritative Knowledge and stay on the Notes/Graph API paths. `/memory` returns only numeric SQL memory identities.
@@ -82,7 +109,7 @@
   capacity 10. The two 2.1 deployments leave the Bicep template.
 - **Voice agent:** Deploy provisions and pins one immutable
   `kind: voice` / `sub_protocol: live` / `model_type: self_deployed` agent named
-  `jarvis-pi-live`. It uses PCM 24 kHz, `marin` (seed only, see the 2026-11-20
+  `jarvis-pi-live`. It uses PCM 24 kHz, a first-seed output voice (Foundry-owned afterwards, see the 2026-11-20
   decision at the end of this file), and `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
   used because it would create a separate prompt conversation and bypass the
   stored-message/per-turn PI grant.

@@ -60,9 +60,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var running = Set<UUID>()
     private var generation = UUID()
     private var eventQueue: [WatchEvent] = []
-    private var voiceUserTranscriptID = UUID().uuidString
-    private var voiceCaptionResponseID = UUID().uuidString
     private var eventInFlight: [UUID: (event: WatchEvent, started: Date, timeout: Task<Void, Never>)] = [:]
+    private var eventDeliveryAttempts: [UUID: Int] = [:]
     private var playbackFailureSince: Date?
     private var lastPlaybackFailure: Date?
     private var lastPlaybackLog = Date()
@@ -142,7 +141,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         dashboardSnapshot = nil; dashboardBrief = nil
         chatTask?.cancel(); chatTask = nil
         for item in eventInFlight.values { item.timeout.cancel() }
-        eventInFlight.removeAll(); eventQueue.removeAll()
+        eventInFlight.removeAll(); eventQueue.removeAll(); eventDeliveryAttempts.removeAll()
         resetInboundAudio()
         await stopVoice(); replies.removeAll(); running.removeAll()
         await pendingCredentialRefresh?.value
@@ -233,7 +232,16 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private func emit(_ original: WatchEvent) {
         var event = original
         if event.kind != .voiceAudio, let text = event.text { event.text = WatchLimits.displayText(text) }
-        guard WCSession.default.isReachable || [.chatDelta, .chatDone, .chatError].contains(event.kind) else { return }
+        let recoverableText = [
+            WatchEvent.Kind.voiceState,
+            .voiceTranscript,
+            .voiceUserTranscript,
+            .voiceUserTranscriptDelta,
+            .interrupt,
+        ].contains(event.kind)
+        guard WCSession.default.isReachable ||
+                [.chatDelta, .chatDone, .chatError].contains(event.kind) ||
+                recoverableText else { return }
         guard eventQueue.count < 128 else {
             if event.kind == .voiceAudio {
                 playbackDrops += 1
@@ -281,6 +289,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard let item = eventInFlight.removeValue(forKey: token) else { return }
         item.timeout.cancel()
         if success {
+            eventDeliveryAttempts.removeValue(forKey: item.event.deliveryID)
             if item.event.kind == .voiceAudio { playbackFailureSince = nil; lastPlaybackFailure = nil }
             if item.event.kind == .voiceAudio, Date().timeIntervalSince(lastPlaybackLog) >= 5 {
                 let milliseconds = Int(Date().timeIntervalSince(item.started) * 1_000)
@@ -289,6 +298,21 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             }
         } else if item.event.kind == .chatDone || item.event.kind == .chatError {
             eventQueue.insert(item.event, at: 0)
+            return
+        } else if [
+            WatchEvent.Kind.voiceState,
+            .voiceTranscript,
+            .voiceUserTranscript,
+            .voiceUserTranscriptDelta,
+        ].contains(item.event.kind) {
+            let attempts = eventDeliveryAttempts[item.event.deliveryID, default: 0] + 1
+            eventDeliveryAttempts[item.event.deliveryID] = attempts
+            if attempts <= 3 {
+                eventQueue.insert(item.event, at: 0)
+                deliverEvents()
+                return
+            }
+            if voiceID != nil { Task { await self.stopVoice(audioLinkStalled: true) } }
             return
         } else if item.event.kind == .voiceAudio, item.event.requestID == voiceID {
             playbackDrops += 1
@@ -437,21 +461,22 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                     found = page.messages.contains { $0.id == target.messageID }
                     before = page.nextCursor
                 } while !found && before != nil && pages < 100
-                let ordered = history.reduce(into: [String: ChatHistoryMessage]()) { result, message in
+                let unique = history.reduce(into: [String: ChatHistoryMessage]()) { result, message in
                     result[message.id] = message
-                }.values.sorted { $0.at < $1.at }
+                }
+                let ordered = ChatHistoryOrdering.ordered(Array(unique.values))
                 guard found, let index = ordered.firstIndex(where: { $0.id == target.messageID }) else {
                     return try encode([WatchHistoryMessage]())
                 }
                 let start = max(0, index - 3)
                 let end = min(ordered.count, index + 4)
                 return try encode(ordered[start..<end].map {
-                    WatchHistoryMessage(id: $0.id, user: $0.role == .dan, text: $0.text)
+                    WatchHistoryMessage(id: $0.id, role: $0.role, text: $0.text)
                 })
             }
             let history = try await chat.history(limit: 20).messages
-            var compact = history.sorted { $0.at < $1.at }.suffix(6).map {
-                WatchHistoryMessage(id: $0.id, user: $0.role == .dan, text: $0.text)
+            var compact = ChatHistoryOrdering.ordered(history).suffix(6).map {
+                WatchHistoryMessage(id: $0.id, role: $0.role, text: $0.text)
             }
             while !compact.isEmpty {
                 let data = try encode(compact)
@@ -594,7 +619,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                         switch state {
                         case .listening: label = "Listening"
                         case .speaking: label = "Speaking"
-                        case .ready: label = "Thinking"
+                        case .thinking: label = "Thinking"
+                        case .reconnecting: label = "Reconnecting"
                         case .ended: label = "Ended"
                         case .failed: label = "Disconnected"
                         default: label = "Connecting"
@@ -791,7 +817,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         voice = nil; voiceID = nil; voiceResponseID = nil
         if VoiceLiveActivityActions.session === self { VoiceLiveActivityActions.session = nil }
         if let id {
-            eventQueue.removeAll { $0.requestID == id }
+            eventQueue.removeAll { $0.requestID == id && $0.kind == .voiceAudio }
             let state = audioLinkStalled
                 ? "Audio connection unavailable"
                 : endError == nil ? "Ended" : "End failed"
@@ -808,41 +834,40 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard voiceID == id else { return }
         switch message {
         case .sessionReady:
-            voiceCaptionResponseID = UUID().uuidString
             emit(.init(.voiceState, requestID: id, text: "Listening"))
-        case .responseCreated(let response):
+        case .responseCreated(let response, _):
             voiceResponseID = response
-            voiceCaptionResponseID = response ?? UUID().uuidString
-        case .audioDelta(_, let base64):
+        case .audioDelta(_, let base64, let responseID, _):
             // WCSession caps messages at 64 KB; retain PCM16 alignment across fragments.
             guard let data = Data(base64Encoded: base64) else { return }
             for start in stride(from: 0, to: data.count, by: 24_000) {
                 let part = data.subdata(in: start..<min(start + 24_000, data.count))
-                emit(.init(.voiceAudio, requestID: id, text: part.base64EncodedString(), responseID: voiceResponseID))
+                emit(.init(.voiceAudio, requestID: id, text: part.base64EncodedString(), responseID: responseID))
             }
-        case .assistantTranscriptDelta(let text):
+        case .assistantTranscriptDelta(let text, let responseID, _):
             for chunk in WatchLimits.voiceTextChunks(text) {
-                emit(.init(.voiceTranscript, requestID: id, text: chunk, responseID: voiceCaptionResponseID))
+                emit(.init(.voiceTranscript, requestID: id, text: chunk, responseID: responseID))
             }
-        case .transcriptionDelta(let text, let itemID):
+        case .transcriptionDelta(let text, let itemID, _):
             for chunk in WatchLimits.voiceTextChunks(text) {
-                emit(.init(.voiceUserTranscriptDelta, requestID: id, text: chunk, responseID: itemID ?? voiceUserTranscriptID))
+                emit(.init(.voiceUserTranscriptDelta, requestID: id, text: chunk, responseID: itemID))
             }
         case .transcriptionCompleted(let text, let itemID):
             let final = WatchEvent(.voiceUserTranscript, requestID: id, text: text,
-                                   responseID: itemID ?? voiceUserTranscriptID)
+                                   responseID: itemID)
             if text.utf8.count <= 16_000, (try? encode(WatchWire.event(final))) != nil {
                 emit(final)
                 break
             }
             for (index, chunk) in WatchLimits.voiceTextChunks(text).enumerated() {
                 emit(.init(index == 0 ? .voiceUserTranscript : .voiceUserTranscriptDelta,
-                           requestID: id, text: chunk, responseID: itemID ?? voiceUserTranscriptID))
+                           requestID: id, text: chunk, responseID: itemID))
             }
-        case .responseDone: emit(.init(.voiceState, requestID: id, text: "Playback finished", responseID: voiceResponseID))
-        case .responseCancelled:
-            emit(.init(.interrupt, requestID: id, responseID: voiceResponseID))
-            voiceResponseID = nil
+        case .responseDone(let responseID):
+            emit(.init(.voiceState, requestID: id, text: "Playback finished", responseID: responseID))
+        case .responseCancelled(let responseID):
+            emit(.init(.interrupt, requestID: id, responseID: responseID))
+            if voiceResponseID == responseID { voiceResponseID = nil }
         case .sessionFailed(let retryable, _):
             emit(.init(.interrupt, requestID: id, responseID: voiceResponseID))
             voiceResponseID = nil

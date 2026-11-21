@@ -146,24 +146,43 @@ public struct WatchReply: Codable, Sendable {
 }
 
 public struct WatchEvent: Codable, Sendable {
-    public var version = 1
+    public var version = 2
     public enum Kind: String, Codable, Sendable { case chatDelta, chatDone, chatError, voiceState, voiceAudio, voiceTranscript, voiceUserTranscript, voiceUserTranscriptDelta, interrupt }
+    public var deliveryID: UUID
     public var kind: Kind
     public var requestID: UUID
     public var text: String?
     public var responseID: String?
     public var muted: Bool?
-    public init(_ kind: Kind, requestID: UUID, text: String? = nil, responseID: String? = nil, muted: Bool? = nil) {
-        self.kind = kind; self.requestID = requestID; self.text = text; self.responseID = responseID; self.muted = muted
+    public init(
+        _ kind: Kind,
+        requestID: UUID,
+        text: String? = nil,
+        responseID: String? = nil,
+        muted: Bool? = nil,
+        deliveryID: UUID = UUID()
+    ) {
+        self.deliveryID = deliveryID
+        self.kind = kind
+        self.requestID = requestID
+        self.text = text
+        self.responseID = responseID
+        self.muted = muted
     }
 }
 
 public enum WatchEventScheduling {
     public static func isBarrier(_ event: WatchEvent) -> Bool {
-        [.chatDelta, .chatDone, .chatError, .interrupt].contains(event.kind) ||
-            (event.kind == .voiceState &&
-             ["Playback finished", "Ended", "End failed", "Disconnected", "Audio connection unavailable"]
-                .contains(event.text ?? ""))
+        [
+            .chatDelta,
+            .chatDone,
+            .chatError,
+            .voiceState,
+            .voiceTranscript,
+            .voiceUserTranscript,
+            .voiceUserTranscriptDelta,
+            .interrupt,
+        ].contains(event.kind)
     }
 
     public static func insertionIndex(for event: WatchEvent, in queue: [WatchEvent]) -> Int {
@@ -268,10 +287,12 @@ public struct WatchComposer: Equatable, Sendable {
 
 public struct WatchHistoryMessage: Codable, Sendable {
     public var id: String
-    public var user: Bool
+    public var role: ConversationRole
     public var text: String
-    public init(id: String, user: Bool, text: String) {
-        self.id = id; self.user = user; self.text = WatchLimits.displayText(text, maximumBytes: 3_000)
+    public init(id: String, role: ConversationRole, text: String) {
+        self.id = id
+        self.role = role
+        self.text = WatchLimits.displayText(text, maximumBytes: WatchLimits.payloadBytes / 2)
     }
 }
 

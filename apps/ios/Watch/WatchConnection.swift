@@ -376,7 +376,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         Task { @MainActor in self.updateReachability(); if self.reachable { await self.refresh() } }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
-        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { return }
+        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 2 else { return }
         DispatchQueue.main.async { self.onEvent?(event) }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
@@ -395,7 +395,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         return false
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
-        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { replyHandler(Data()); return }
+        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 2 else { replyHandler(Data()); return }
         DispatchQueue.main.async { self.onEvent?(event); replyHandler(Data([1])) }
     }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
@@ -406,7 +406,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             if self.receiveCredentials(applicationContext) { return }
             if let data = voiceData, data.count <= WatchLimits.payloadBytes,
                let event = try? JSONDecoder().decode(WatchEvent.self, from: data),
-               event.version == 1, event.kind == .voiceState,
+               event.version == 2, event.kind == .voiceState,
                ["Ended", "End failed", "Audio connection unavailable"].contains(event.text ?? "") {
                 self.onEvent?(event)
             }

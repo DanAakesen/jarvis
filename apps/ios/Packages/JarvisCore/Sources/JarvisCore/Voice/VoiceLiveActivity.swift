@@ -11,7 +11,7 @@ public enum VoiceLiveActivityPhase: String, Codable, CaseIterable, Sendable {
         } else if isMuted {
             self = .muted
         } else {
-            self = state == .speaking ? .speaking : state == .ready ? .thinking : .listening
+            self = state == .speaking ? .speaking : state == .thinking ? .thinking : .listening
         }
     }
 }
