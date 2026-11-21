@@ -1,3 +1,19 @@
+## Chat and Voice parity replay — 21 November 2026 (#1967, #1988)
+
+**Status: harness, 24 scenarios and three fixes done and qualified offline; the exact-head CI run and one live Chat plus one live Voice trace of the same request are pending.**
+
+| Step | State |
+| --- | --- |
+| Drive one scripted scenario through the real chat route and the real `/voice` relay on the same gateway, MCP door and tool route; print a side-by-side table; fail on any undeclared difference | Done (`voice/chat-voice-parity.test.ts`) |
+| Dan's daily-core requests: Jarvis work and issue, notes, tasks, workouts, nutrition; one tool failure; non-delete write in one turn with no confirmation | Done (notes, tasks, gym, calendar run production tool code; Factory/GitHub and nutrition are contract fixtures) |
+| Native `task` call, client-owned call (one follow-up), very large result, Danish, stop/supersede, owner-message binding with a proactive message, replay/reconnect, blocks once per conversation, wake, cap, error mapping | Done |
+| Fix: voice warm-up delivered the persona twice; warm-up now sends and records what a turn sends | Done |
+| Fix: the same failure was told two ways; one `piTurnFailedMessage` in both channels | Done |
+| Fix: a voice turn's tool activity was labelled `chat`; the MCP door sends the channel and the route labels it `voice` | Done |
+| List existing non-delete confirmation gates for Dan | Done (PR body); none is reachable from a Chat or Voice PI turn |
+| Dan decides: chat-only nutrition-list rewrite, chat-only reflex path, voice session language, no `pi.turn` for refused turns | **Open** |
+| One live Chat and one live Voice trace of the same request (GPT-Live speech, Foundry signals, `source: "voice"` rendering) | **Open**; needs a live turn |
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
