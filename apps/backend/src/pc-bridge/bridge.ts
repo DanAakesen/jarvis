@@ -584,7 +584,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_active_window',
-        description: 'Return the title of the active window on Dan’s PC.',
+        description: 'Return the title of the active window on Dan’s PC. Use when Dan asks which window or app is in front on his PC.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         execute: async (_input, request, signal) => {
           const before = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
