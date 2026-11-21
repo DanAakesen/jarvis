@@ -1,0 +1,130 @@
+import type { FastifyInstance } from 'fastify';
+import { createPiAuth, type PiAuth } from '../../auth/pi-credential.js';
+import type { PiTurnGrant, PiTurnRegistry } from '../turns.js';
+
+export const mcpSecret = 'C'.repeat(43);
+
+type Json = Record<string, unknown>;
+
+export interface FoundTool { readonly name: string; readonly description: string; readonly parameters: Json }
+export interface OtherMatch { readonly name: string; readonly description: string }
+
+export interface FindResult {
+  readonly outcome: string;
+  readonly tools: readonly FoundTool[];
+  readonly otherMatches: readonly OtherMatch[];
+  readonly note: string | undefined;
+  readonly raw: string;
+}
+
+export interface CallResult {
+  readonly status: number;
+  /** The outcome the tool reported through call_tool: ok, refused or error. `unknown` when the answer was not an envelope. */
+  readonly outcome: 'ok' | 'refused' | 'error' | 'unknown';
+  readonly result: unknown;
+  readonly isError: boolean;
+  readonly truncated: boolean;
+  readonly raw: string;
+  readonly durationMs: number;
+  readonly timedOut: boolean;
+}
+
+/** A live PI turn: the MCP door only accepts `find_tools` and `call_tool` with its reference. */
+export interface ConformanceTurn { readonly grant: PiTurnGrant; close(): void }
+
+export interface McpClient {
+  /** A chat or voice turn, or (`wake`) a background brain wake that also sees the wake-only tools. */
+  openTurn(options?: { readonly wake?: boolean }): ConformanceTurn;
+  find(turn: ConformanceTurn, query: string): Promise<FindResult>;
+  call(turn: ConformanceTurn, name: string, args: Json, timeoutMs?: number): Promise<CallResult>;
+  /** The tools/list answer, which must stay exactly the two door tools. */
+  listDoorTools(): Promise<readonly string[]>;
+}
+
+const bearer = (value: string) => `${['Bear', 'er'].join('')} ${value}`;
+
+/** The same client the managed agent is: JSON-RPC over the real `/pi/mcp` route with the static PI credential. */
+export function createMcpClient(options: {
+  readonly app: FastifyInstance;
+  readonly registry: PiTurnRegistry;
+  readonly auth: PiAuth;
+  readonly owner: string;
+  readonly sessionId: string;
+  readonly messageId: string;
+  readonly secret?: string;
+}): McpClient {
+  const { app, registry, owner } = options;
+  const secret = options.secret ?? mcpSecret;
+  let counter = 0;
+
+  async function rpc(method: string, params: Json = {}, timeoutMs = 20_000): Promise<{ status: number; body: Json | undefined; raw: string; timedOut: boolean }> {
+    counter += 1;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    try {
+      const response = await app.inject({
+        method: 'POST', url: '/pi/mcp', remoteAddress: '10.0.0.9', signal: abort.signal,
+        headers: {
+          'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18',
+          authorization: bearer(`jp.${secret}`),
+        },
+        payload: { jsonrpc: '2.0', id: counter, method, params },
+      });
+      const data = response.body.includes('data:')
+        ? response.body.split('\n').find((line) => line.startsWith('data:'))!.slice(5) : response.body;
+      let body: Json | undefined;
+      try { body = data ? JSON.parse(data) as Json : undefined; } catch { body = undefined; }
+      return { status: response.statusCode, body, raw: response.body, timedOut: false };
+    } catch {
+      return { status: 0, body: undefined, raw: '', timedOut: abort.signal.aborted };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  const contentText = (body: Json | undefined): string | undefined => {
+    const result = body?.result as { content?: { text?: string }[] } | undefined;
+    return result?.content?.[0]?.text;
+  };
+
+  return {
+    openTurn(turnOptions = {}) {
+      const controller = new AbortController();
+      const grant = registry.open({
+        ownerObjectId: owner, sessionId: options.sessionId, messageId: options.messageId, signal: controller.signal,
+        ...(turnOptions.wake ? { brain: { runId: 'conformance-wake', sent: [], wrote: [], looked: [] } } : {}),
+      });
+      return { grant, close: () => { registry.close(grant.turn); controller.abort(); } };
+    },
+    async find(turn, query) {
+      const answer = await rpc('tools/call', { name: 'find_tools', arguments: { turn: turn.grant.turn, query } });
+      const text = contentText(answer.body);
+      let parsed: { outcome?: string; result?: { tools?: FoundTool[]; otherMatches?: OtherMatch[]; note?: string } } = {};
+      try { parsed = text ? JSON.parse(text) as typeof parsed : {}; } catch { parsed = {}; }
+      return {
+        outcome: parsed.outcome ?? 'unknown', tools: parsed.result?.tools ?? [], otherMatches: parsed.result?.otherMatches ?? [],
+        note: parsed.result?.note, raw: text ?? answer.raw,
+      };
+    },
+    async call(turn, name, args, timeoutMs = 20_000) {
+      const started = performance.now();
+      const answer = await rpc('tools/call', { name: 'call_tool', arguments: { turn: turn.grant.turn, name, arguments: args } }, timeoutMs);
+      const durationMs = performance.now() - started;
+      const text = contentText(answer.body);
+      let envelope: { outcome?: string; result?: unknown; truncated?: boolean } | undefined;
+      try { envelope = text ? JSON.parse(text) as typeof envelope : undefined; } catch { envelope = undefined; }
+      const outcome = envelope?.outcome === 'ok' || envelope?.outcome === 'refused' || envelope?.outcome === 'error' ? envelope.outcome : 'unknown';
+      return {
+        status: answer.status, outcome, result: envelope?.result, isError: (answer.body?.result as { isError?: boolean } | undefined)?.isError === true,
+        truncated: envelope?.truncated === true, raw: text ?? answer.raw, durationMs, timedOut: answer.timedOut,
+      };
+    },
+    async listDoorTools() {
+      const answer = await rpc('tools/list');
+      const tools = (answer.body?.result as { tools?: { name: string }[] } | undefined)?.tools ?? [];
+      return tools.map((tool) => tool.name).sort();
+    },
+  };
+}
+
+export function createConformanceAuth(tenantId: string): PiAuth { return createPiAuth(tenantId, mcpSecret); }
