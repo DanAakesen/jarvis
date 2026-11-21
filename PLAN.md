@@ -15,7 +15,7 @@ Dan's design layers work by weight. PI reaches the Jarvis tools through one door
 | Deep or durable | Factory workers: coding sessions started and followed with Jarvis tools | a code change that ends in a pull request |
 | Knowledge | Vault notes and SQL Personal Memory | "remember that…", plans, research |
 
-Goal (P0): PI finds the right tool, calls it, finishes the request and says honestly what happened, in Chat and in Voice, with no errors. PI has no guardrails or read-only defaults, and the only approvals anywhere are for delete actions (Dan, as relayed).
+PI has no guardrails or read-only defaults. Dan's rule, as relayed and not audited against the code: the only approvals anywhere are for delete actions.
 
 ### Completed 20–21 November
 
