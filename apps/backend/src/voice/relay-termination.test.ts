@@ -17,8 +17,8 @@ afterEach(async () => {
   await Promise.all(cleanups.splice(0).map(cleanup => cleanup()));
 });
 
-async function until(check: () => boolean, label: string) {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+async function until(check: () => boolean, label: string, attempts = 200) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (check()) return;
     await sleep(5);
   }
@@ -117,7 +117,8 @@ describe('GPT-Live graceful termination', () => {
       offset_ms: 100,
       delegation: { id: 'delegate-1', target: 'client' },
     }));
-    await until(() => inputs.length === 1, 'native delegated PI turn');
+    // The delegated turn is sent after 1.5 s without new transcript, so it needs more than the default second.
+    await until(() => inputs.length === 1, 'native delegated PI turn', 600);
     expect(reads).toBeGreaterThanOrEqual(2);
     expect(inputs[0]).toMatchObject({
       text: 'Do that',

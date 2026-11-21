@@ -13,7 +13,7 @@ import {
   commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
   endLateVoiceSession, LiveVoiceUsageTracker, parseVoiceEvent,
   settleVoiceSessionCreation, VoiceTerminationStateMachine,
-  validPcm24Base64, VOICE_DIRECT_TURN_QUIET_MS, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
+  validPcm24Base64, VOICE_TURN_QUIET_MS, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
   type VoiceConnectionFactory, type VoiceFailureCloseCode, type VoiceTerminationEffect,
 } from './live-protocol.js';
 export { VOICE_SUBPROTOCOL } from '../websocket.js';
@@ -29,6 +29,8 @@ const TOKEN_TIMEOUT_MS = 10_000;
 const CLEAN_END_TIMEOUT_MS = 5_000;
 const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 const MAX_PROVIDER_EVENT_IDS = 4_096;
+// A stored direct turn can still be the request of a delegation that follows it; an older one cannot.
+const ADOPTABLE_TURN_MAX_AGE_MS = 10_000;
 
 type ActivityReason =
   | 'response_started' | 'response_completed' | 'pi_started' | 'pi_finished' | 'delegation_received'
@@ -44,6 +46,8 @@ interface InputGroup {
   delegationId?: string;
   persisted?: ConversationMessage;
   persistence?: Promise<ConversationMessage>;
+  // A completed reply has been given to this turn, so a later delegation is a new request.
+  answered?: boolean;
   nextEventSequence: number;
 }
 
@@ -206,6 +210,7 @@ function registerVoiceRoute(
     let finalization: Promise<void> | undefined;
     let proactiveContext: string | undefined;
     let currentInput: InputGroup | undefined;
+    let latestInput: InputGroup | undefined;
     let activeOutput: OutputGroup | undefined;
     let pendingDelegation: AbortController | undefined;
     let pendingDelegationGroup: InputGroup | undefined;
@@ -355,6 +360,7 @@ function registerVoiceRoute(
       if (group.persistenceTimer) clearTimeout(group.persistenceTimer);
       if (activeOutput === group) activeOutput = undefined;
       outputActive = false;
+      if (terminal === 'completed' && group.answers) group.answers.answered = true;
       if (terminal === 'cancelled' && termination.isActive && !controller.signal.aborted) {
         sendClient({ type: 'jarvis.voice.response.cancelled', responseId: group.id });
       }
@@ -522,6 +528,7 @@ function registerVoiceRoute(
         nextEventSequence: 0,
       };
       currentInput = group;
+      latestInput = group;
       return group;
     };
 
@@ -625,9 +632,11 @@ function registerVoiceRoute(
           await delay(Math.min(deadline - now, EMPTY_TRANSCRIPT_POLL_MS), signal);
           continue;
         }
+        // A turn that is already stored cannot grow, so there is nothing left to wait for.
+        if (group.locked) break;
         const quietFor = now - group.lastDeltaAt;
-        if (quietFor >= VOICE_INPUT_QUIET_MS) break;
-        await delay(Math.min(deadline - now, VOICE_INPUT_QUIET_MS - quietFor), signal);
+        if (quietFor >= VOICE_TURN_QUIET_MS) break;
+        await delay(Math.min(deadline - now, VOICE_TURN_QUIET_MS - quietFor), signal);
       }
       signal.throwIfAborted();
       if (!group.text.trim()) {
@@ -688,9 +697,17 @@ function registerVoiceRoute(
       // transcript is still arriving, so it is not where his words end. A turn already stored, locked or owned by
       // a delegation that has started is never reused; one still settling is taken over by the newer delegation.
       const candidate = currentInput;
-      const reusable = candidate && !candidate.persisted && !candidate.persistence && !candidate.locked &&
+      const open = candidate && !candidate.persisted && !candidate.persistence && !candidate.locked &&
         (!candidate.delegationId || candidate === pendingDelegationGroup);
-      const group = reusable ? candidate : newInputGroup();
+      // GPT-Live can start answering before it delegates, which stores Dan's words as a direct turn. With no reply
+      // completed for it and nothing newer said, that stored turn is the request: PI answers its stored message.
+      const stored = !open && latestInput && (candidate === undefined || candidate === latestInput) &&
+        (latestInput.persisted || latestInput.persistence) && !latestInput.delegationId && !latestInput.answered &&
+        latestInput.text.trim() !== '' &&
+        performance.now() - latestInput.lastDeltaAt <= ADOPTABLE_TURN_MAX_AGE_MS
+        ? latestInput : undefined;
+      const reusable = open ? candidate : stored;
+      const group = reusable ?? newInputGroup();
       seenDelegations.add(value.id);
       log.info({
         delegationId: value.id,
@@ -698,7 +715,7 @@ function registerVoiceRoute(
         ...(offsetMs === undefined ? {} : { offsetMs }),
         textLength: group.text.length,
         reusedGroup: Boolean(reusable),
-        outcome: 'attached',
+        outcome: stored ? 'adopted_stored_turn' : 'attached',
         language,
       }, 'voice.delegation_received');
       group.delegationId = value.id;
@@ -744,7 +761,7 @@ function registerVoiceRoute(
     const persistDirectOwnerTurn = () => {
       const group = currentInput;
       if (!group?.text.trim() || group.persisted || group.persistence || group === pendingDelegationGroup) return;
-      if (performance.now() - group.lastDeltaAt < VOICE_DIRECT_TURN_QUIET_MS) return;
+      if (performance.now() - group.lastDeltaAt < VOICE_TURN_QUIET_MS) return;
       void persistDirectGroup(group, 'direct_quiet');
     };
 
@@ -768,14 +785,14 @@ function registerVoiceRoute(
         if (!hasText && !waiting) return;
         const now = performance.now();
         const quietFor = now - owner.lastDeltaAt;
-        if (hasText && !waiting && quietFor >= VOICE_DIRECT_TURN_QUIET_MS) {
+        if (hasText && !waiting && quietFor >= VOICE_TURN_QUIET_MS) {
           void persistDirectGroup(owner, 'before_output');
           continue;
         }
         if (now >= deadline) return;
         const pauseMs = Math.min(
           deadline - now,
-          waiting || !hasText ? 25 : VOICE_DIRECT_TURN_QUIET_MS - quietFor,
+          waiting || !hasText ? 25 : VOICE_TURN_QUIET_MS - quietFor,
         );
         await new Promise<void>(resolve => {
           const wake = () => {
@@ -917,6 +934,9 @@ function registerVoiceRoute(
         }
         await sessionReady;
         await Promise.allSettled([...delegationTasks]);
+        // Words Dan said that no reply or delegation has stored yet are still part of the conversation.
+        const open = currentInput;
+        if (open?.text.trim() && !open.persisted && !open.persistence) await persistOwnerGroup(open, 'session_end');
         await persistenceQueue;
         const transcriptsPersisted = !persistenceFailed;
         if (!sessionId || !await store.endSession(

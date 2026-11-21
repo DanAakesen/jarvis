@@ -6413,15 +6413,17 @@ voice minutes when present.
 Every input transcript delta joins one open owner turn (one caption `itemId`)
 until PI has started for it or the reply to it has begun. At
 `session.delegation.created` the relay takes that whole turn (`offset_ms` is
-only logged, never used to cut words), waits for 0.6 seconds since the last
-input delta (at most three seconds), stores Dan's message, then invokes the
-existing PI gateway once with that exact message ID and the shared
-`dbo.pi_conversation`. Words after PI started are the next turn.
+only logged, never used to cut words), waits until the turn has been quiet
+since its last input delta (`VOICE_TURN_QUIET_MS`, 1.5 seconds; at most three
+seconds), stores Dan's message, then invokes the existing PI gateway once with
+that exact message ID and the shared `dbo.pi_conversation`. A delegation that
+follows a direct turn with no completed reply reuses that stored message.
+Words after PI started are the next turn.
 `session.commentary.append` returns PI's acknowledgement/final answer under the
 delegation ID. Later speech does not cancel PI work; only a new delegation or the session
 ending does. Output deltas are grouped and persisted on 0.6-second quiet with a
 three-second persistence bound. A direct (non-delegated) owner turn is stored
-only after 1.5 seconds of input quiet (`VOICE_DIRECT_TURN_QUIET_MS`), never
+only after 1.5 seconds of input quiet (`VOICE_TURN_QUIET_MS`), never
 because output started, and before the reply that answers it; phrases with no
 reply or delegation between them stay one message. An empty delegated turn waits
 up to three seconds for its transcript before the "did not catch that" reply.

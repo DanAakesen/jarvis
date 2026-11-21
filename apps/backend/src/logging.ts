@@ -729,7 +729,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.reusedGroup === 'boolean') fields.reusedGroup = input.reusedGroup;
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
     if (input.msg === 'voice.delegation_received' &&
-        ['attached', 'ignored_newer_owner_turn'].includes(String(input.outcome))) fields.outcome = input.outcome;
+        ['attached', 'adopted_stored_turn', 'ignored_newer_owner_turn'].includes(String(input.outcome))) fields.outcome = input.outcome;
     if (input.msg === 'voice.owner_group_persisted' &&
         ['delegated', 'direct_quiet', 'before_output', 'session_end'].includes(String(input.reason))) {
       fields.reason = input.reason;

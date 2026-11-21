@@ -5,14 +5,15 @@ export const FOUNDRY_VOICE_FEATURES = 'VoiceAgents=V1Preview';
 export const GPT_LIVE_DEPLOYMENT = 'gpt-live-1';
 export const JARVIS_VOICE_AGENT_NAME = 'jarvis-pi-live';
 export const VOICE_SAMPLE_RATE = 24_000;
-/** Quiet since the last input delta before a delegated request goes to PI: the words are in and PI should not wait longer. */
+/** Quiet since the last output delta before a reply is closed and stored. */
 export const VOICE_INPUT_QUIET_MS = 600;
 /**
- * Quiet since the last input delta before a direct (undelegated) owner turn is closed and stored. Pauses inside a sentence
- * run to about a second, so closing at 600 ms split one sentence into several messages; 1.5 s clears them and still stays
- * under the 3 s bound. It only delays when the transcript is stored, never speech or PI.
+ * Quiet since the last input delta before Dan's turn is closed: a delegated request goes to PI and a direct turn is stored.
+ * Pauses inside a sentence run to about a second, so 600 ms cut one request into a fragment for PI and the rest into a new
+ * message; 1.5 s clears them and a delegation still waits no longer than the three-second bound. It delays only when PI
+ * starts or the transcript is stored, never speech.
  */
-export const VOICE_DIRECT_TURN_QUIET_MS = 1_500;
+export const VOICE_TURN_QUIET_MS = 1_500;
 export const VOICE_TRANSCRIPT_MAX_WAIT_MS = 3_000;
 export const MAX_COMMENTARY_UTF8_BYTES = 256;
 export const MAX_PROVIDER_VOICE_SECONDS = 24 * 60 * 60;
