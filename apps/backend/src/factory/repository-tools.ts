@@ -285,7 +285,7 @@ async function featuresDocument(): Promise<string> {
 
 function getTokenIssuer(request: FastifyRequest): GitHubAppTokenIssuer {
   const tokenIssuer = request.server.githubAppTokenIssuer;
-  if (!tokenIssuer) throw new Error('GitHub App service unavailable');
+  if (!tokenIssuer) throw new ToolFailure('GitHub repository access is unavailable.');
   return tokenIssuer;
 }
 
