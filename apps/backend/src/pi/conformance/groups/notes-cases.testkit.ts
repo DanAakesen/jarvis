@@ -1,4 +1,5 @@
 import { expect } from 'vitest';
+import { localDateTimeInstant } from '../../../proactive/time.js';
 import { parseTodosWithContext } from '../../../proactive/todo-file.js';
 import type { ToolCase } from '../types.testkit.js';
 import { calendarDay, inboxIds, personalTasks, workTasks, type NotesFixtures } from './notes-fixtures.testkit.js';
@@ -242,6 +243,18 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         get ownerMessage() { return `mark ${findingIds[0]} as seen`; },
         arguments: live(() => ({ itemId: findingIds[0] ?? unknownFinding, action: 'seen' })),
         check: (result) => { expect(record(result)).toMatchObject({ saved: true, state: 'seen' }); },
+      },
+      {
+        label: 'rates a finding useful',
+        get ownerMessage() { return `rate ${findingIds[1]} useful`; },
+        arguments: live(() => ({ itemId: findingIds[1] ?? unknownFinding, action: 'useful' })),
+        check: (result) => { expect(record(result)).toMatchObject({ saved: true, feedback: 'useful' }); },
+      },
+      {
+        label: 'snoozes a finding until a time Dan names',
+        get ownerMessage() { return `snooze ${findingIds[2]} until tomorrow 09:00`; },
+        arguments: live(() => ({ itemId: findingIds[2] ?? unknownFinding, action: 'snooze', snoozeUntil: localDateTimeInstant(calendarDay(1), '09:00').toISOString() })),
+        check: (result) => { expect(record(result)).toMatchObject({ saved: true, state: 'snoozed' }); },
       },
     ],
     owner_reminders: [

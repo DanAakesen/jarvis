@@ -7,9 +7,9 @@ import { personalTasks, type NotesFixtures } from './notes-fixtures.testkit.js';
 export type NotesProbe = ToolCase & { readonly expect: 'refused' | 'error' };
 
 const refused = (label: string, args: Record<string, unknown>, extra: Partial<ToolCase> = {}): NotesProbe =>
-  ({ label, arguments: args, expect: 'refused', ...extra });
+  ({ label, arguments: args, ...extra, expect: 'refused' });
 const failed = (label: string, args: Record<string, unknown>, extra: Partial<ToolCase> = {}): NotesProbe =>
-  ({ label, arguments: args, expect: 'error', ...extra });
+  ({ label, arguments: args, ...extra, expect: 'error' });
 
 const missingNote = { path: 'Personal/No such note.md', reason: 'Dan asked to save a note', automaticCapture: false };
 const hugeNote = 'General/Huge export.md';
