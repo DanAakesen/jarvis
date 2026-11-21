@@ -78,7 +78,7 @@ extension JarvisOrbActivity {
     }
 
     /// The Watch only receives the iPhone's status words ("Listening", "Speaking", "Thinking", "Connecting",
-    /// "Ended", "Disconnected") and whether the microphone is muted.
+    /// "Reconnecting", "Ended", "Disconnected") and whether the microphone is muted.
     public init(watchVoiceStatus status: String, isMuted: Bool) {
         let word = status.lowercased()
         if word.contains("disconnect") || word.contains("ended") || word.contains("unavailable") {
@@ -91,6 +91,8 @@ extension JarvisOrbActivity {
             self = .speaking
         } else if word.contains("think") {
             self = .thinking
+        } else if word.contains("reconnect") {
+            self = .reconnecting
         } else {
             self = .calm
         }

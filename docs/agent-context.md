@@ -1,3 +1,46 @@
+## Explicit owner-reminder delivery evidence — 20 November 2026 (#1990)
+
+- Migration `0102_owner_reminder_delivery_outbox.sql` is required before this
+  backend. Keep `owner_reminder_schedules` as the authoritative owner request;
+  `owner_reminder_deliveries` is the per-occurrence/per-registration APNs
+  outbox. Never mark a newly created schedule as delivered.
+- Recipient selection is a first-due snapshot. A late registration must not be
+  added to an already queued occurrence; a user can explicitly reschedule after
+  repairing registration. Queue insertion, row claims and result writes are
+  owner-scoped and lease-fenced.
+- Explicit reminder APNs keeps the quiet-hours exception, but only after the
+  ticker has revalidated the exact open task and the sender has verified
+  owner-requested reminder provenance. The stable collapse ID is derived from
+  schedule ID + original occurrence. Delivery retries use `next_attempt_at`;
+  never mutate `fire_at` for an APNs retry.
+- Retry only `429`, `5xx` or transport failure, two total attempts with one
+  five-minute retry. Apple invalid-token rejection, registration removal/expiry,
+  permanent rejection and missing recipient evidence are terminal. A lost final
+  result persists `delivery_evidence_unavailable`; never rename uncertainty to
+  provider success/failure.
+- `owner_reminders.read` also says, for a `scheduled` row more than 90 seconds
+  past its fire time with no attempt, or a `sending` row whose lease expired,
+  that delivery evidence is unavailable rather than implying a push.
+- `owner_reminders.read` reports safe aggregate state, reason, attempts,
+  provider outcome/status, recipient/accepted counts and next fire/retry plus a
+  recovery action. It never exposes token/device secret material. APNs
+  acceptance is not physical display or owner acknowledgement.
+- Registration removal paths (upsert cleanup, unregister, reply-worker expiry,
+  invalid-token rejection and direct delete trigger) terminalize owner-reminder
+  rows by immutable `device_reference`. Preserve the owner application lock and
+  tombstone checks when extending these paths.
+- Offline gates:
+  `npm test --workspace @jarvis/backend -- --run src/proactive/owner-reminder-store.test.ts src/proactive/owner-reminder-tools.test.ts src/proactive/native-delivery.test.ts src/proactive/owner-reminder-ticker.test.ts`;
+  targeted migration manifest test; backend build and lint; loopback SQL
+  `npm run test:database --workspace @jarvis/backend` (needs a disposable
+  SQL Server 2022 on 127.0.0.1 with the CI fixture variables from
+  `.github/workflows/database-ci.yml`). Migration `0102` is one batch without
+  `GO`: constraints on newly added columns must run inside `EXEC(N'...')`.
+  Older migration reversal tests must unwind `0102` first.
+- No Apple/APNs/provider call, deploy, PR, merge or release is authorized here.
+  A signed iPhone/Watch check is the only physical display and duplicate
+  acceptance.
+
 ## Personal Memory restoration — 20 November 2026 (#1968)
 
 - `apps/backend/src/core/memory.ts` is the live Memory module. It owns the six `memory_*` tools and the owner-only `/memory` routes and is registered in production whenever SQL exists. `core/memory-policy.ts` is the shared credential/sensitivity classifier for Memory, proactive facts, PI situation and embedding backfill; do not duplicate it.
@@ -170,13 +213,21 @@
   backend revision configured with the name and only then removes the two old
   voice deployments by ARM. Failure blocks readiness; there is no runtime
   fallback.
-- Allowed coding-session checks are TypeScript/Vite/static builds, Swift parse
-  or package compile, Python compile/static checks and Bicep build. Do not run a
-  test suite, `measure_pi`, model/provider smoke, voice session or Azure delete
-  for this change. Dan owns the future device/provider acceptance.
-- Open physical checks: one future Deploy, real microphone capture and PCM
-  playback, `marin` output, acoustic barge-in while PI is busy, transcripts and
-  captions, Watch/phone handoff, failure/retry and provider latency/cost.
+- Allowed coding-session checks are the focused offline backend/provisioner/web
+  voice tests, TypeScript/Vite builds, Swift parse/package checks and Python/JSON
+  validation. Do not run `measure_pi`, a live model/provider smoke, a voice
+  session, Deploy or an Azure delete. Dan owns future device/provider acceptance.
+- The agent's voice and instructions are Foundry-owned (see above). Backend activity and transcript events
+  carry explicit state/event/response identities. Focused checks:
+  `npx vitest run src/voice/relay-events.test.ts src/voice/pi-voice.test.ts
+  src/voice/live-protocol.test.ts src/voice/relay-termination.test.ts` from
+  `apps/backend`; `python -m unittest discover -s .github/scripts/tests -p
+  'test_pi_agent.py'`; `swift test --filter
+  'PiRuntimeTests|VoiceCaptionTests|JarvisOrbTests'` from JarvisCore.
+- Open physical checks: one future Deploy, the Foundry-chosen voice in
+  English and Danish, real microphone capture and PCM playback, acoustic
+  barge-in while PI is busy, caption sequence/speaker on iPhone and Watch,
+  reconnect continuity, failure/retry and provider latency/cost.
 
 ## PI built-ins and wake actions (#1886, P15-175)
 
@@ -5761,7 +5812,7 @@ the exact
 route, gets the `https://ai.azure.com/.default` token with
 `DefaultAzureCredential`, and sends
 `Foundry-Features: VoiceAgents=V1Preview`. The agent uses `gpt-live-1`, PCM
-24 kHz and `marin`; it has client delegation and no Foundry-managed prompt
+24 kHz and a Foundry-chosen voice; it has client delegation and no Foundry-managed prompt
 conversation. Browser, iPhone and Watch provider events remain server-internal.
 No live/provider smoke is part of this source cutover.
 

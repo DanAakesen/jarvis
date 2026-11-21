@@ -27,6 +27,7 @@ const OUTPUT_PERSIST_BOUND_MS = VOICE_TRANSCRIPT_MAX_WAIT_MS;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CLEAN_END_TIMEOUT_MS = 5_000;
 const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
+const MAX_PROVIDER_EVENT_IDS = 4_096;
 
 interface InputGroup {
   readonly id: string;
@@ -38,6 +39,8 @@ interface InputGroup {
   delegationId?: string;
   delegationOffsetMs?: number;
   persisted?: ConversationMessage;
+  persistence?: Promise<ConversationMessage>;
+  nextEventSequence: number;
 }
 
 interface OutputGroup {
@@ -51,6 +54,7 @@ interface OutputGroup {
   quietTimer?: ReturnType<typeof setTimeout>;
   persistenceTimer?: ReturnType<typeof setTimeout>;
   completed: boolean;
+  nextEventSequence: number;
 }
 
 export interface VoiceRelayOptions {
@@ -182,7 +186,8 @@ function registerVoiceRoute(
     let endTimer: ReturnType<typeof setTimeout> | undefined;
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
-    const seenInputEventIds = new Set<string>();
+    const seenProviderEventIds = new Set<string>();
+    const recentInputGroups: InputGroup[] = [];
     let persistedOutputGroups = 0;
     let persistenceFailed = false;
     const seenDelegations = new Set<string>();
@@ -229,6 +234,9 @@ function registerVoiceRoute(
       if (type === activityState) return;
       activityState = type === 'failed' || type === 'ended' ? null : type;
       app.jarvisActivityHub.publish({ type, activityId, source: 'voice' });
+      if (type !== 'interrupted') {
+        sendClient({ type: 'jarvis.voice.activity', state: type });
+      }
     };
 
     const sendClient = (event: Record<string, unknown>, callback?: (error?: Error) => void) => {
@@ -265,6 +273,12 @@ function registerVoiceRoute(
         }
         return false;
       }
+    };
+
+    const serializePersistence = <T>(operation: () => Promise<T>): Promise<T> => {
+      const result = persistenceQueue.then(operation);
+      persistenceQueue = result.then(() => undefined, () => undefined);
+      return result;
     };
 
     let sessionStartupAbandoned = false;
@@ -310,16 +324,19 @@ function registerVoiceRoute(
             type: 'jarvis.voice.response.completed',
             responseId: group.id,
           });
-          if (microphoneActive && !piBusy) publishActivity('listening');
+          if (microphoneActive && !piBusy && !outputActive &&
+              pendingDelegation === undefined) {
+            publishActivity('listening');
+          }
         }
       });
     };
 
     const persistOutput = (group: OutputGroup): Promise<void> => {
-      const text = group.text.trim();
-      if (!text || group.persistedTextLength === text.length) return persistenceQueue;
+      const text = group.text;
+      if (!text.trim() || group.persistedTextLength === text.length) return persistenceQueue;
       group.persistedTextLength = text.length;
-      persistenceQueue = persistenceQueue.then(async () => {
+      return serializePersistence(async () => {
         if (!sessionId) throw new Error('Voice session was not created');
         if (group.messageId && store.updateMessage) {
           const updated = await store.updateMessage({
@@ -338,6 +355,7 @@ function registerVoiceRoute(
             role: 'jarvis',
             text,
             model: GPT_LIVE_DEPLOYMENT,
+            sourceItemId: group.id,
           });
           if (!message) throw new Error('Voice transcript was not stored');
           persistedOutputGroups += 1;
@@ -349,7 +367,6 @@ function registerVoiceRoute(
         log.warn({ failure: safeFailure(error), language }, 'voice.transcript_persistence_failed');
         if (termination.isActive && !controller.signal.aborted) closeSession(1011, 'Voice transcript could not be saved');
       });
-      return persistenceQueue;
     };
 
     const scheduleOutputPersistence = (group: OutputGroup) => {
@@ -376,6 +393,7 @@ function registerVoiceRoute(
         lastDeltaAt: performance.now(),
         persistedTextLength: 0,
         completed: false,
+        nextEventSequence: 0,
       };
       activeOutput = group;
       outputActive = true;
@@ -384,6 +402,7 @@ function registerVoiceRoute(
         responseId: group.id,
         ...(delegationId ? { delegationId } : {}),
       });
+      publishActivity('thinking');
       scheduleOutputPersistence(group);
       return group;
     };
@@ -409,7 +428,9 @@ function registerVoiceRoute(
       busy: (active) => {
         piBusy = active;
         if (active && microphoneActive) publishActivity('thinking');
-        else if (!active && microphoneActive && !outputActive) publishActivity('listening');
+        else if (!active && microphoneActive && !outputActive && pendingDelegation === undefined) {
+          publishActivity('listening');
+        }
         if (!active) statusAnnouncer?.flush();
       },
       log: (turn) => {
@@ -429,13 +450,6 @@ function registerVoiceRoute(
       },
     });
 
-    const cancelPendingDelegation = () => {
-      pendingDelegation?.abort();
-      pendingDelegation = undefined;
-      pendingDelegationGroup = undefined;
-      piTurns.cancel();
-    };
-
     const requestGracefulEnd = (reason: string, notifyClient = true) => {
       if (!termination.isActive) return;
       pendingDelegation?.abort();
@@ -450,8 +464,8 @@ function registerVoiceRoute(
     };
 
     const newInputGroup = (): InputGroup => {
-      cancelPendingDelegation();
       if (activeOutput) finishOutputGroup(activeOutput, 'cancelled');
+      lastCommentaryDelegation = null;
       if (seenDelegations.size >= MAX_TRANSCRIPTS_PER_SESSION) {
         closeSession(1008, 'Too many voice turns');
       }
@@ -461,7 +475,10 @@ function registerVoiceRoute(
         lastDeltaAt: performance.now(),
         quietSent: false,
         locked: false,
+        nextEventSequence: 0,
       };
+      recentInputGroups.push(group);
+      if (recentInputGroups.length > 32) recentInputGroups.shift();
       currentInput = group;
       return group;
     };
@@ -476,6 +493,32 @@ function registerVoiceRoute(
       });
     };
 
+    const persistOwnerGroup = (group: InputGroup): Promise<ConversationMessage> => {
+      if (group.persisted) return Promise.resolve(group.persisted);
+      if (group.persistence) return group.persistence;
+      sendInputCompletion(group);
+      group.locked = true;
+      const turnText = group.text;
+      const persistence = (async () => {
+        await sessionReady;
+        if (!sessionId) throw new Error('Voice session was not created');
+        const activeSessionId = sessionId;
+        const message = await serializePersistence(async () => await store.addMessage({
+          sessionId: activeSessionId,
+          role: 'dan',
+          text: turnText,
+          model: null,
+          sourceItemId: group.id,
+        }));
+        if (!message) throw new Error('Voice owner message was not stored');
+        group.persisted = message;
+        app.nowEventHub.publish({ type: 'refresh' });
+        return message;
+      })();
+      group.persistence = persistence;
+      return persistence;
+    };
+
     const receiveInputTranscript = (event: Record<string, unknown>) => {
       const delta = event.delta;
       if (typeof delta !== 'string' || delta.length > MAX_TRANSCRIPT_CHARACTERS) {
@@ -484,7 +527,6 @@ function registerVoiceRoute(
       }
       const eventId = typeof event.event_id === 'string' &&
         /^[A-Za-z0-9_-]{1,128}$/u.test(event.event_id) ? event.event_id : undefined;
-      if (eventId && seenInputEventIds.has(eventId)) return;
       const startMs = typeof event.start_ms === 'number' && Number.isSafeInteger(event.start_ms) && event.start_ms >= 0
         ? event.start_ms : undefined;
       const endMs = typeof event.end_ms === 'number' && Number.isSafeInteger(event.end_ms) && event.end_ms >= 0
@@ -495,13 +537,6 @@ function registerVoiceRoute(
         closeSession(1008, 'Invalid voice transcript timeline');
         return;
       }
-      if (eventId) {
-        if (seenInputEventIds.size >= MAX_TRANSCRIPTS_PER_SESSION) {
-          const oldest = seenInputEventIds.values().next().value;
-          if (oldest) seenInputEventIds.delete(oldest);
-        }
-        seenInputEventIds.add(eventId);
-      }
       let group = currentInput;
       const timelineEnd = endMs ?? startMs;
       const belongsToPending = pendingDelegationGroup && !pendingDelegationGroup.locked &&
@@ -511,7 +546,8 @@ function registerVoiceRoute(
       else if (pendingDelegationGroup && timelineEnd !== undefined &&
           pendingDelegationGroup.delegationOffsetMs !== undefined &&
           timelineEnd > pendingDelegationGroup.delegationOffsetMs) {
-        group = newInputGroup();
+        // Later speech never drops the delegation still settling; only a new delegation supersedes it.
+        if (!group || group === pendingDelegationGroup || group.persisted || group.locked) group = newInputGroup();
       } else if (!group || group.persisted || group.locked) group = newInputGroup();
       if (!group) group = newInputGroup();
       group.text += delta;
@@ -524,12 +560,14 @@ function registerVoiceRoute(
         group.lastTimelineEndMs = Math.max(group.lastTimelineEndMs ?? 0, timelineEnd);
       }
       limits.touch();
-      if (group.text === delta) piTurns.cancel();
+      const normalizedEventId = eventId ?? `${group.id}:${group.nextEventSequence++}`;
       sendClient({
         type: 'jarvis.voice.input_transcript.delta',
         itemId: group.id,
         delta,
+        eventId: normalizedEventId,
       });
+      if (microphoneActive) publishActivity('listening');
     };
 
     const persistDelegatedTurn = async (group: InputGroup, delegationId: string, signal: AbortSignal) => {
@@ -548,21 +586,8 @@ function registerVoiceRoute(
         sendCommentary('I did not catch that. Please say it again.', delegationId);
         return;
       }
-      sendInputCompletion(group);
-      group.locked = true;
       const turnText = group.text;
-      await sessionReady;
-      if (!sessionId) throw new Error('Voice session was not created');
-      const message = await store.addMessage({
-        sessionId,
-        role: 'dan',
-        text: turnText,
-        model: null,
-        sourceItemId: group.id,
-      });
-      if (!message) throw new Error('Voice owner message was not stored');
-      group.persisted = message;
-      app.nowEventHub.publish({ type: 'refresh' });
+      const message = await persistOwnerGroup(group);
       if (signal.aborted || controller.signal.aborted || !termination.isActive ||
           pendingDelegationGroup !== group) return;
       const turnProactiveContext = await refreshProactiveContext();
@@ -571,7 +596,7 @@ function registerVoiceRoute(
       piTurns.start({
         text: turnText,
         messageId: message.id,
-        sessionId,
+        sessionId: message.sessionId,
         delegationId,
         ...(turnProactiveContext ? { proactiveContext: turnProactiveContext } : {}),
         startedAt: performance.now(),
@@ -590,18 +615,43 @@ function registerVoiceRoute(
         return;
       }
       if (seenDelegations.has(value.id)) return;
-      seenDelegations.add(value.id);
-      const group = currentInput && !currentInput.persisted ? currentInput : newInputGroup();
-      group.delegationId = value.id;
       const offsetMs = typeof event.offset_ms === 'number' &&
         Number.isSafeInteger(event.offset_ms) && event.offset_ms >= 0
         ? event.offset_ms : undefined;
+      if (event.offset_ms !== undefined && offsetMs === undefined) {
+        closeSession(1008, 'Invalid voice delegation timeline');
+        return;
+      }
+      const timelineMatch = offsetMs === undefined
+        ? undefined
+        : recentInputGroups
+          .filter(group => group.lastTimelineEndMs !== undefined &&
+            group.lastTimelineEndMs <= offsetMs)
+          .sort((left, right) => right.lastTimelineEndMs! - left.lastTimelineEndMs!)[0];
+      const hasNewerOwnerTurn = timelineMatch && offsetMs !== undefined &&
+        (
+          recentInputGroups.indexOf(timelineMatch) < recentInputGroups.length - 1 ||
+          recentInputGroups.some(group => group.id !== timelineMatch.id &&
+            group.lastTimelineEndMs !== undefined && group.lastTimelineEndMs > offsetMs)
+        );
+      if (hasNewerOwnerTurn) {
+        return;
+      }
+      // The delegation can precede its owner transcript. A turn that is already
+      // persisted, being persisted or owned by another delegation must never be reused.
+      const candidate = timelineMatch ?? currentInput;
+      const reusable = candidate && !candidate.persisted && !candidate.persistence &&
+        !candidate.locked && !candidate.delegationId;
+      const group = reusable ? candidate : newInputGroup();
+      seenDelegations.add(value.id);
+      group.delegationId = value.id;
       if (offsetMs !== undefined) group.delegationOffsetMs = offsetMs;
       currentInput = undefined;
       const pending = new AbortController();
       pendingDelegation?.abort();
       pendingDelegation = pending;
       pendingDelegationGroup = group;
+      publishActivity('thinking');
       const work = persistDelegatedTurn(group, value.id, AbortSignal.any([controller.signal, pending.signal]))
         .catch((error: unknown) => {
           if (controller.signal.aborted || pending.signal.aborted) return;
@@ -625,6 +675,16 @@ function registerVoiceRoute(
       queuedAudioBytes = 0;
     };
 
+    const persistDirectOwnerTurn = () => {
+      const group = currentInput;
+      if (!group?.text.trim() || group.persisted || group.persistence) return;
+      void persistOwnerGroup(group).catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        log.warn({ failure: safeFailure(error), language }, 'voice.direct_transcript_failed');
+        closeSession(1011, 'Voice turn could not be saved');
+      });
+    };
+
     const receiveProvider = (data: RawData, isBinary: boolean) => {
       if (!termination.isActive && termination.phase !== 'awaiting-provider-close') return;
       const event = parseVoiceEvent(data, isBinary);
@@ -634,6 +694,17 @@ function registerVoiceRoute(
         return;
       }
       const type = event.type;
+      const eventId = typeof event.event_id === 'string' && VALID_ITEM_PATTERN.test(event.event_id)
+        ? event.event_id
+        : undefined;
+      if (eventId) {
+        if (seenProviderEventIds.has(eventId)) return;
+        if (seenProviderEventIds.size >= MAX_PROVIDER_EVENT_IDS) {
+          const oldest = seenProviderEventIds.values().next().value;
+          if (oldest) seenProviderEventIds.delete(oldest);
+        }
+        seenProviderEventIds.add(eventId);
+      }
       if (seenEventTypes.size < 40) seenEventTypes.add(type);
       diagnostics.event(type);
       if ((type === 'session.start' || type === 'session.started') &&
@@ -686,6 +757,7 @@ function registerVoiceRoute(
           closeSession(1008, 'Invalid voice output transcript');
           return;
         }
+        persistDirectOwnerTurn();
         const group = ensureOutputGroup();
         group.text += event.delta;
         group.lastDeltaAt = performance.now();
@@ -697,6 +769,7 @@ function registerVoiceRoute(
           type: 'jarvis.voice.output_transcript.delta',
           responseId: group.id,
           delta: event.delta,
+          eventId: eventId ?? `${group.id}:${group.nextEventSequence++}`,
         });
         scheduleOutputPersistence(group);
         return;
@@ -706,15 +779,18 @@ function registerVoiceRoute(
           closeSession(1008, 'Invalid voice audio');
           return;
         }
+        persistDirectOwnerTurn();
         const group = ensureOutputGroup();
         group.lastDeltaAt = performance.now();
-        sendClient({
+        const audio = {
           type: 'jarvis.voice.audio.delta',
           responseId: group.id,
           delta: event.delta,
+          eventId: eventId ?? `${group.id}:${group.nextEventSequence++}`,
           ...(typeof event.start_ms === 'number' ? { startMs: event.start_ms } : {}),
           ...(typeof event.end_ms === 'number' ? { endMs: event.end_ms } : {}),
-        });
+        };
+        sendClient(audio);
         if (microphoneActive) publishActivity('speaking');
         scheduleOutputPersistence(group);
         return;
@@ -903,6 +979,9 @@ function registerVoiceRoute(
         const providerEvent = { type: 'session.input_audio.unmute' };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent);
+        if (!piBusy && !outputActive && pendingDelegation === undefined) {
+          publishActivity('listening');
+        }
         return;
       }
       if (event.type === 'jarvis.microphone.muted') {
@@ -922,7 +1001,9 @@ function registerVoiceRoute(
         const providerEvent = { type: 'session.input_audio.append', audio: event.audio };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent, Buffer.byteLength(event.audio, 'base64'));
-        if (microphoneActive && !outputActive) publishActivity('listening');
+        if (microphoneActive && !outputActive && !piBusy && pendingDelegation === undefined) {
+          publishActivity('listening');
+        }
         return;
       }
       if (event.type === 'jarvis.voice.playback.completed') {
@@ -930,6 +1011,9 @@ function registerVoiceRoute(
             typeof event.audible !== 'boolean') {
           closeSession(1008, 'Invalid voice playback receipt');
           return;
+        }
+        if (microphoneActive && !piBusy && !outputActive && pendingDelegation === undefined) {
+          publishActivity('listening');
         }
         return;
       }

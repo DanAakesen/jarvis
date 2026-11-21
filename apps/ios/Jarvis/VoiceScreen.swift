@@ -170,7 +170,7 @@ struct VoiceScreenView: View {
     }
 
     private var hasCaptions: Bool {
-        !model.userCaption.isEmpty || !model.assistantCaption.isEmpty || !model.sentMedia.isEmpty
+        model.captionEntries.contains(where: { !$0.text.isEmpty }) || !model.sentMedia.isEmpty
     }
 
     private func startVoice() async {
@@ -338,16 +338,13 @@ struct VoiceScreenView: View {
                     if !model.sentMedia.isEmpty {
                         sentMediaStrip
                     }
-                    if !model.userCaption.isEmpty {
+                    ForEach(model.captionEntries.filter { !$0.text.isEmpty }) { caption in
                         captionLine(
-                            label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
-                            text: model.userCaption
-                        )
-                    }
-                    if !model.assistantCaption.isEmpty {
-                        captionLine(
-                            label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
-                            text: model.assistantCaption
+                            label: JarvisNotesLocalization.string(
+                                caption.speaker == .dan ? .voiceCaptionYou : .voiceCaptionJarvis,
+                                language: appLanguage
+                            ),
+                            text: caption.text
                         )
                     }
                     // Include the clear margin in the scroll target so the latest words stay above the fade.
@@ -373,10 +370,7 @@ struct VoiceScreenView: View {
                 default: break
                 }
             }
-            .onChange(of: model.userCaption) { _, _ in
-                if captionFollow.shouldFollow { proxy.scrollTo("caption.latest", anchor: .bottom) }
-            }
-            .onChange(of: model.assistantCaption) { _, _ in
+            .onChange(of: model.captionEntries) { _, _ in
                 if captionFollow.shouldFollow { proxy.scrollTo("caption.latest", anchor: .bottom) }
             }
         }
@@ -405,8 +399,16 @@ struct VoiceScreenView: View {
     private var captionAccessibilityLabel: String {
         [
             JarvisNotesLocalization.string(.voiceCaptionsLabel, language: appLanguage),
-            model.userCaption,
-            model.assistantCaption,
+            model.captionEntries
+                .filter { !$0.text.isEmpty }
+                .map { entry in
+                    let speaker = JarvisNotesLocalization.string(
+                        entry.speaker == .dan ? .voiceCaptionYou : .voiceCaptionJarvis,
+                        language: appLanguage
+                    )
+                    return "\(speaker). \(entry.text)"
+                }
+                .joined(separator: ". "),
         ]
             .filter { !$0.isEmpty }
             .joined(separator: ". ")

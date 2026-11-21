@@ -1,3 +1,45 @@
+## Explicit reminder delivery evidence — 20 November 2026 (#1990)
+
+**Status: implementation, focused offline unit/fixture/build/lint gates and the
+isolated loopback SQL Server 2022 integration suite (`npm run test:database`,
+37 tests including a 0102 rollback/reapply cycle) pass on the current head.
+Re-verification found and fixed two migration defects that offline tests could
+not see: constraints referencing new columns in the same batch and a
+pending-row `next_attempt_at` check. Physical iPhone/Watch acceptance remains
+Dan-only and open.**
+
+| Step | State |
+| --- | --- |
+| Trace owner message, schedule row, due claim, task revalidation, recipient selection, APNs call and follow-up read | Done |
+| Keep schedule creation distinct from delivery; add safe reason/state/attempt/provider/retry evidence to `owner_reminders.read` | Done |
+| Add migration `0102` per-device APNs outbox, immutable registration reference, schedule retry state and guarded down batch | Done |
+| Preserve first-recipient snapshot, stable collapse identity, two-attempt transient retry, exact-token invalidation and restart recovery | Done |
+| Add unit, table fixture, ticker, migration and isolated loopback SQL tests | Done; loopback SQL suite passed against a disposable SQL Server 2022 container |
+| Update PRODUCT, architecture, agent context, migration guide and decision record | Done |
+| Backend build/lint and full backend unit suite | Done (793 tests) |
+| Post-due read states an overdue unattempted or stale-lease reminder has no delivery evidence | Done |
+| Dan verifies one five-minute Copenhagen reminder, physical iPhone/Watch display, deep link and absence of duplicates | **Open** |
+
+No external push/provider test, merge, deploy or publish belongs to this task.
+Parent owns PR/release after independent review and exact-head gates.
+
+## GPT-Live voice fidelity — 20 November 2026 (#1988)
+
+**Status: rebased on the Foundry-owned voice agent (#1992/#1994) and offline-qualified; the PR's exact-head aggregate CI, including macOS JarvisCore, is the gate.** The
+work preserves the native GPT-Live route and full-duplex
+behaviour, with no old voice fallback or provider-output semantic approval gate.
+
+| Step | State |
+| --- | --- |
+| Leave the `jarvis-pi-live` instructions, output voice and greeting to Foundry (#1992); this work adds no repo requirement on them | Confirmed; no provisioner or voice-file change |
+| Emit explicit activity evidence and keep iPhone/web/Watch state derived from authoritative transport, delegation, playback and terminal events | Implemented; focused offline contracts added |
+| Preserve exact caption speaker/order by stable input, response and delivery identities | Implemented; backend and portable Swift coverage added |
+| Serialize voice transcript persistence as Dan → Jarvis → Dan → Jarvis and order restored history by canonical message ID | Implemented; integration regression added |
+| Keep GPT-Live natural for duplex/backchannels while delegated tool/action turns continue through the same PI gateway | Implemented; focused no-switch/no-fallback checks added |
+| Run provisioner, backend, web, contracts and Swift gates | Backend voice/PI 256/256 plus build/lint; web 57/57 plus build/lint; contracts and provisioner (main's, unchanged) pass. Swift runs in CI (macOS JarvisCore) |
+| Independently review async persistence, reconnect, state and Watch ordering; inspect final diff and commit | Done; all reported defects fixed and covered |
+| Dan verifies the Foundry-chosen voice, Danish/English audio, iPhone/Watch reconnect and physical caption behaviour | Open; no live/paid test authorized |
+
 ## Personal Memory restoration — 20 November 2026 (#1968)
 
 **Status: implemented and qualified offline; live Chat/Voice and physical-device acceptance remain owner checks.** The work is limited to the existing SQL Personal Memory boundary and does not move or copy Vault notes into memory.
@@ -25,7 +67,7 @@ No live model/provider smoke, deployment or spending is authorized. Physical Cha
 | Step | State |
 | --- | --- |
 | Replace the two 2.1 Bicep deployments with `gpt-live-1` `2026-09-10`, GlobalStandard capacity 10, in the existing sequential Sweden Central chain | Done in source |
-| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, `marin`, client delegation, through `provision_pi_agent.py` (since 2026-11-20 seeded once; instructions and voice are Foundry-owned) | Done in source |
+| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, client delegation, through `provision_pi_agent.py` (since 2026-11-20 seeded once; instructions and voice are Foundry-owned) | Done in source |
 | Replace the direct model WebSocket with the exact Foundry agent Live route and backend-only Entra/preview headers | Done in source |
 | Preserve native full duplex and the existing `/voice` client route; normalise provider events to `jarvis.voice.*` and use native mute/unmute | Done in source |
 | Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, use 0.6-second quiet (max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source |

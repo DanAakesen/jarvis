@@ -830,6 +830,15 @@ export class BrowserVoiceClient {
       } else {
         this.finishStop(false, true);
       }
+    } else if (event.type === 'jarvis.voice.activity' && typeof event.state === 'string' &&
+        this.running && !this.stopping && this.microphoneOpen) {
+      if (event.state === 'thinking') {
+        this.publish('thinking', 'Jarvis is thinking.');
+      } else if (event.state === 'listening' && !this.audio.hasPlayback()) {
+        this.publish('listening', 'Listening for your voice.');
+      } else if (event.state === 'reconnecting') {
+        this.publish('reconnecting', 'Voice connection failed. Reconnecting…');
+      }
     } else if (event.type === 'jarvis.visual_context') {
       const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
       if (event.itemId !== undefined && itemId === undefined) {
@@ -885,7 +894,8 @@ export class BrowserVoiceClient {
         else this.options.onVisionRequest?.(source, event.transcript, itemId);
       }
     } else if (event.type === 'jarvis.voice.response.started') {
-      this.responseId = typeof event.responseId === 'string' ? event.responseId : undefined;
+      if (!isTranscriptionItemId(event.responseId)) return;
+      this.responseId = event.responseId;
       this.responseAudioQueued = false;
       this.responseAudioDrained = false;
       this.playbackCompletionSent = false;
@@ -893,14 +903,15 @@ export class BrowserVoiceClient {
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
     } else if (event.type === 'jarvis.voice.audio.delta') {
-      if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
+      if (typeof event.delta === 'string' && event.responseId === this.responseId &&
+          this.running && this.microphoneOpen && this.playbackAllowed) {
         // Speaking is published by the audio adapter when this chunk actually becomes audible.
         this.audio.play(event.delta);
         this.responseAudioQueued = true;
         this.responseAudioDrained = false;
       }
     } else if ((event.type === 'jarvis.voice.response.completed' || event.type === 'jarvis.voice.response.cancelled') &&
-               this.running && this.microphoneOpen) {
+               event.responseId === this.responseId && this.running && this.microphoneOpen) {
       this.responseFinished = true;
       if (event.type === 'jarvis.voice.response.cancelled') {
         this.audio.stopPlayback();

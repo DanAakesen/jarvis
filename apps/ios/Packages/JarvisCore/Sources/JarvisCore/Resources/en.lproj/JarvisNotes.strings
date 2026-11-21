@@ -120,6 +120,7 @@
 "voice.listening" = "Listening";
 "voice.thinking" = "Thinking";
 "voice.speaking" = "Speaking";
+"voice.ended" = "Ended";
 "voice.openSettings" = "Open Settings";
 "voice.signInRequired" = "Sign in required";
 "voice.reconnect" = "Reconnect";

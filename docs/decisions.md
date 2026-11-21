@@ -1,3 +1,58 @@
+## 20 November 2026 — Owner reminder scheduling is not device delivery (#1990)
+
+- **Authoritative request:** `dbo.owner_reminder_schedules` remains the exact
+  owner request and recurrence/lease authority. Tool creation may confirm only
+  saved/scheduled; it cannot claim APNs or phone delivery.
+- **Separate outcome:** migration `0102` stores one outbox row for each selected
+  native registration at the first due claim. Safe aggregate state, reason,
+  attempt count, provider outcome/status, recipient counts and next retry are
+  returned from `owner_reminders.read`; raw tokens, device data and provider
+  bodies remain internal.
+- **Recipient snapshot:** the first due selection is immutable for that
+  occurrence. A newly registered device never joins an in-flight reminder by
+  accident. Repair registration and explicitly reschedule if required.
+- **Retry boundary:** only APNs `429`, `5xx` or transport/reset is transient.
+  There is one five-minute retry (two total attempts). Original `fire_at`
+  remains stable; `next_attempt_at` moves. If the final outcome cannot be
+  persisted after its lease, evidence is explicitly unavailable rather than
+  being renamed to provider acceptance/rejection.
+- **Identity:** the APNs collapse ID is deterministic for schedule + original
+  occurrence, and SQL leases/unique rows prevent a concurrent or restarted
+  worker from opening a second outbox occurrence.
+- **Registration lifecycle:** invalid-token, expiry, unregister and direct
+  delete terminalize reminder rows by stable `device_reference` alongside
+  reply/approval outcomes and preserve tombstone exclusion.
+- **Acceptance boundary:** provider acceptance is not device display or owner
+  acknowledgement. A physical iPhone/Watch five-minute reminder, deep-link and
+  duplicate check is owned by Dan after parent PR/release qualification.
+
+## 20 November 2026 — GPT-Live voice fidelity (#1988)
+
+- **Voice:** the immutable `jarvis-pi-live` definition's output voice and instructions
+  are Foundry-owned (2026-11-20 decision below). The provider remains the native full-duplex speech front end;
+  client delegation stays `type: client`, with the same PI conversation,
+  grants, tools and result path used by Chat. The runtime does not compare or
+  buffer approved provider text, and it does not add a second semantic answer
+  gate.
+- **State:** GPT-Live readiness, transcript/delegation events, microphone state
+  and actual output playback drive explicit Listening, Thinking, Speaking,
+  Reconnecting and Ended evidence. A transport failure is visible and bounded;
+  late callbacks cannot revive an ended or failed session.
+- **Transcript identity:** input/output deltas carry stable event IDs and
+  assistant output carries one response ID. Native output stays one ordered
+  group across its pauses; a new owner turn closes that group before its
+  persistence and the next owner message, so restored history retains
+  Dan/Jarvis order. Duplicate/replayed Watch events are suppressed by stable
+  delivery ID.
+- **Watch/history:** Watch history carries explicit `dan`/`jarvis` role instead
+  of deriving owner colour from incidental transport state. History with equal
+  timestamps is ordered by the canonical numeric message ID. The paired v2 Watch
+  event wire requires a delivery ID and serializes state/caption barriers; there
+  is no mixed-version compatibility shim.
+- **Evidence:** offline provisioner, backend, web and portable Swift checks are
+  part of the source change. No live model call, provider/audio probe, Deploy,
+  physical iPhone/Watch acceptance or paid smoke is authorized.
+
 ## 20 November 2026 — Personal Memory is SQL-owned, never a Vault bucket (#1968)
 
 - **Domain boundary:** Session context, Personal Memory and Vault Knowledge remain separate. `dbo.memories`/`memory_history` is the authoritative Personal Memory store; Vault notes are authoritative Knowledge and stay on the Notes/Graph API paths. `/memory` returns only numeric SQL memory identities.
@@ -54,7 +109,7 @@
   capacity 10. The two 2.1 deployments leave the Bicep template.
 - **Voice agent:** Deploy provisions and pins one immutable
   `kind: voice` / `sub_protocol: live` / `model_type: self_deployed` agent named
-  `jarvis-pi-live`. It uses PCM 24 kHz, `marin` (seed only, see the 2026-11-20
+  `jarvis-pi-live`. It uses PCM 24 kHz, a first-seed output voice (Foundry-owned afterwards, see the 2026-11-20
   decision at the end of this file), and `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
   used because it would create a separate prompt conversation and bypass the
   stored-message/per-turn PI grant.
@@ -13774,3 +13829,13 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 - 7 Remote tool results prefer `structuredContent`.
 - Deliberately NOT ported (Dan rejected them): the request/completion classifier, pre-call action refusal, per-tool contracts and the startup throw on missing contracts, withholding or buffering the final answer, `pi_incomplete`, Memory write contracts and payload checks, background wake receipts, durable-work enforcement, persona as a Foundry `pi_context` input, conversation rotation/replay, any GPT-Live output gate or exact-transcript matching, and any voice code change. The `jarvis-pi` instructions stay Foundry-owned.
 - Not verified: no live model, Foundry, MCP or provider call, and no `measure_pi`; tests are offline. Physical acceptance stays with Dan.
+
+## 2026-11-21 Voice: speech never cancels PI's work
+
+Dan's rule: a backchannel such as "mm-hm", or any transcript that is not a delegation, must leave the running PI turn alone, so a voice request ends the same way as the same request typed in chat.
+
+- The relay no longer calls `piTurns.cancel()` when an input transcript starts or a new input group opens (`apps/backend/src/voice/relay.ts`). It does not classify the utterance: GPT-Live decides whether to delegate, and the relay stops cancelling on speech.
+- A new delegation while PI works still supersedes the turn in flight (`createPiVoiceTurns.start`, unchanged). Chat's steering route does the same: it aborts the model round and continues with the new message. Chat's plain send is refused while a turn is active (409), and the gateway's single-flight lock refuses overlapping turns.
+- Cancellation remains the session ending (`jarvis.session.end`, disconnect, teardown) and a new delegation (for example "stop that" reaches PI as its own turn). The voice protocol has no separate stop command; none was added.
+- This supersedes the earlier choice that Dan starting to speak cancels the turn in flight (#1908, `docs/decisions.md` voice section).
+- A delegation still settling (before PI starts) is not dropped by later speech either: the new utterance gets its own input group and the delegation proceeds with its own owner text. Only a new delegation supersedes it.

@@ -322,7 +322,7 @@ Voice status, controls and recovery copy are English-only; Reduced
 Motion keeps the centre still.
 Voice uses the single authenticated `/voice` route. The backend connects it to
 Foundry agent `jarvis-pi-live`, which runs native GPT-Live full duplex on
-`gpt-live-1` with 24 kHz PCM and the built-in `marin` voice. GPT-Live follows
+`gpt-live-1` with 24 kHz PCM and an output voice chosen in Foundry. GPT-Live follows
 the spoken language, owns listening and barge-in, and delegates owner turns to
 the existing PI gateway. The browser, iPhone and Watch keep Jarvis's
 `jarvis.voice.v2` boundary; provider events stay inside the backend. No
@@ -1206,7 +1206,7 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
 | Voice | Speech and playback | Native GPT-Live 24 kHz PCM; no separate speech-to-text selector |
-| Voice | Spoken voice | GPT-Live built-in `marin`; the model follows the spoken language |
+| Voice | Spoken voice | A GPT-Live voice chosen in Foundry; the model follows the spoken language |
 | Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
 | Codex | Model and reasoning effort | Codex default |
@@ -1239,7 +1239,14 @@ conservative bound below the provider's 500-token append limit.
 GPT-Live has no transcript-done or output-audio-done event: the relay explicitly
 groups native deltas and emits bounded Jarvis readiness, caption, activity and
 playback events. New input cancels stale PI work; GPT-Live owns acoustic
-barge-in and continuous listening/speaking.
+barge-in and continuous listening/speaking. Activity changes come from the
+provider, transcript/delegation and playback evidence, so the UI reports
+Listening, Thinking, Speaking, Reconnecting and Ended instead of retaining a
+stale default. Each input/output delta carries an event identity, and each
+assistant group has a response identity. The phone, Watch and restored Chat
+history keep the original speaker and event order through overlap or reconnect.
+Direct conversational turns persist Dan's transcript before the first natural
+provider reply; delegated turns retain the existing quiet boundary before PI.
 Provider `usage.updated` and final closed usage are cumulative: the relay keeps
 the maximum deduplicated `usage.seconds` value and writes it as voice minutes
 instead of counting the wall-clock sitting time when real usage exists.
@@ -1248,7 +1255,7 @@ During voice sessions, Jarvis announces task completion, tasks needing attention
 
 English and Danish speech use the authenticated backend `/voice` WebSocket and
 the GPT-Live voice agent. Its immutable definition pins `gpt-live-1`, 24 kHz
-PCM and `marin`, while Jarvis remains the sole tool and action authority.
+PCM, while Jarvis remains the sole tool and action authority.
 Provider transcript deltas are normalised for the iPhone, web and Watch UI. A
 normal Deploy provisions the voice agent before deleting the two replaced 2.1
 model deployments; no runtime fallback is retained.
@@ -2723,6 +2730,16 @@ operation-specific fields. Validation refusals should identify the relevant
 constraints or tool-specific correction so Jarvis can retry correctly. Preserve
 authorization, semantic refusals, private error handling and write idempotency.
 Owner reminders accept explicit once cadence and equivalent zoned ISO timestamps.
+Saving or scheduling one is not a claim that a device received it. Follow-up
+reads must distinguish `scheduled`, `sending`, `retrying`, provider acceptance,
+terminal failure, suppression and cancellation, with the exact reason, bounded
+attempt count, provider outcome/status, selected/accepted recipient counts and
+next fire/retry time. A provider acceptance is evidence that APNs accepted the
+request, never evidence that the phone displayed or the owner acknowledged it.
+Missing, ambiguous or completed tasks, absent recipients, invalid tokens and
+permanent/transient provider outcomes must remain distinguishable and include a
+concrete recovery action. Exact-time explicit reminders retain their quiet-hours
+bypass, and retries/restarts must not create a second occurrence.
 Voice must not claim microphone readiness before audio frames arrive or silently
 remain listening when capture/send startup fails.
 

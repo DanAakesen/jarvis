@@ -196,6 +196,20 @@ public struct ChatHistoryMessage: Codable, Equatable, Sendable {
     }
 }
 
+public enum ChatHistoryOrdering {
+    public static func ordered(_ messages: [ChatHistoryMessage]) -> [ChatHistoryMessage] {
+        messages.sorted(by: isBefore)
+    }
+
+    public static func isBefore(_ lhs: ChatHistoryMessage, _ rhs: ChatHistoryMessage) -> Bool {
+        if let leftID = UInt64(lhs.id), let rightID = UInt64(rhs.id), leftID != rightID {
+            return leftID < rightID
+        }
+        if lhs.at != rhs.at { return lhs.at < rhs.at }
+        return lhs.id < rhs.id
+    }
+}
+
 public struct ChatHistoryPage: Codable, Equatable, Sendable {
     public let messages: [ChatHistoryMessage]
     public let nextCursor: String?

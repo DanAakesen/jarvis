@@ -22,6 +22,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var captions = VoiceCaptions()
     var userCaption: String { captions.user }
     var assistantCaption: String { captions.assistant }
+    var captionEntries: [VoiceCaptionEntry] { captions.entries }
     @Published private(set) var errorMessage: String?
     @Published private(set) var camera: VoiceCameraCapture?
     @Published private(set) var photoIsReady = false
@@ -46,7 +47,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var httpClient: JarvisClient?
     private var voiceSessionID: String?
     private var liveStreamTask: Task<Void, Never>?
-    private var responseID: String?
+    private var activeResponseID: String?
     private var photoForNextTurn: Data?
     private var sessionGeneration = 0
     private var isStarting = false
@@ -67,7 +68,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             .split(separator: "=").last {
             switch state {
             case "listening": voiceState = .listening
-            case "thinking": voiceState = .ready
+            case "thinking": voiceState = .thinking
             case "speaking": voiceState = .speaking
             default: break
             }
@@ -81,10 +82,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     transcript: "Can you show me the rainfall chart and then bring up Wednesday's outlook?",
                     itemID: "fixture"
                 ))
+                let responseID = "fixture-assistant"
+                captions.receive(.responseCreated(responseID: responseID, delegationID: nil))
                 captions.receive(.assistantTranscriptDelta(
-                    "This is a synthetic conversation for the simulator. The rainfall chart is still in the carousel. "
+                    delta: "This is a synthetic conversation for the simulator. The rainfall chart is still in the carousel. "
                     + "Swipe back to compare it with the outlook. The controls stay below the captions in the compact layout. "
-                    + "The newest line stays readable while earlier lines fade at the top."
+                    + "The newest line stays readable while earlier lines fade at the top.",
+                    responseID: responseID,
+                    eventID: nil
                 ))
                 errorMessage = nil
                 visualInputUnavailable = false
@@ -142,7 +147,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         switch voiceState {
         case .idle, .connecting:
             return JarvisVoiceLocalization.string(.connecting)
-        case .ready:
+        case .thinking:
             return JarvisVoiceLocalization.string(.thinking)
         case .listening:
             return JarvisVoiceLocalization.string(.listening)
@@ -150,14 +155,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return JarvisVoiceLocalization.string(.speaking)
         case .reconnecting:
             return JarvisVoiceLocalization.string(.reconnecting)
-        case .ended, .failed:
+        case .failed:
             return JarvisVoiceLocalization.string(.offline)
+        case .ended:
+            return JarvisVoiceLocalization.string(.ended)
         }
     }
 
     var isSessionActive: Bool {
         switch voiceState {
-        case .connecting, .ready, .listening, .speaking, .reconnecting:
+        case .connecting, .thinking, .listening, .speaking, .reconnecting:
             return true
         case .idle, .ended, .failed:
             return false
@@ -431,7 +438,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         await liveActivity.end()
         sessionClient = nil
         voiceSessionID = nil
-        responseID = nil
+        activeResponseID = nil
         voiceState = returnToChat ? .ended : .idle
         isMuted = false
     }
@@ -446,7 +453,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
         sessionClient = nil
         voiceSessionID = nil
-        responseID = nil
+        activeResponseID = nil
         voiceState = .failed
         httpClient = nil
         isMuted = false
@@ -623,6 +630,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         switch message {
         case .transcriptionDelta, .assistantTranscriptDelta:
             captions.receive(message)
+        case .responseCreated(let responseID, _):
+            captions.receive(message)
+            activeResponseID = responseID
+        case .activity:
+            break
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
             updateLiveStream()
@@ -635,18 +647,15 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             }
         case .sessionFailed(let retryable, _):
             audio.stopPlayback()
-            responseID = nil
+            activeResponseID = nil
             if !retryable {
                 errorMessage = JarvisVoiceLocalization.string(.unavailable)
             }
         case .transcriptionCompleted(let transcript, let itemID):
             captions.receive(message)
-            if (isCameraEnabled || photoForNextTurn != nil), let itemID { inspectCameraTurn(transcript, itemID: itemID) }
+            if isCameraEnabled || photoForNextTurn != nil { inspectCameraTurn(transcript, itemID: itemID) }
             else if isScreenSharing { inspectScreenTurn() }
-        case .responseCreated(let id):
-            captions.receive(message)
-            responseID = id
-        case .audioDelta(_, let base64):
+        case .audioDelta(_, let base64, let responseID, _):
             do {
                 try audio.enqueuePlayback(base64, responseID: responseID)
                 if let pcm16 = try? VoiceAudioCodec.decodePCM16(base64) {
@@ -655,12 +664,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             } catch {
                 errorMessage = JarvisVoiceLocalization.string(.playbackUnavailable)
             }
-        case .responseDone:
+        case .responseDone(let responseID):
+            captions.receive(message)
             audio.finishPlayback(responseID: responseID)
-            responseID = nil
-        case .responseCancelled:
-            audio.stopPlayback()
-            responseID = nil
+            if activeResponseID == responseID { activeResponseID = nil }
+        case .responseCancelled(let responseID):
+            captions.receive(message)
+            if activeResponseID == responseID {
+                audio.stopPlayback()
+                activeResponseID = nil
+            }
         case .visualContext:
             // The caption path is a working fallback, not a failure.
             break
@@ -750,7 +763,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     private var canSendAudio: Bool {
         switch voiceState {
-        case .ready, .listening, .speaking:
+        case .thinking, .listening, .speaking:
             return true
         case .idle, .connecting, .reconnecting, .ended, .failed:
             return false
@@ -768,10 +781,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     private func receiveSessionState(_ state: VoiceSessionState) {
         switch state {
-        case .ready, .listening:
+        case .thinking, .listening:
             connectionPresentationState = connectionPresentationMachine.apply(.connected)
         case .reconnecting:
             connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+            activeResponseID = nil
+            audio.stopPlayback()
         case .connecting where connectionPresentationState == .lost:
             connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
         case .failed:
@@ -814,7 +829,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         sessionClient = nil
         httpClient = nil
         voiceSessionID = nil
-        responseID = nil
+        activeResponseID = nil
         isMuted = false
         photoForNextTurn = nil
         photoIsReady = false
