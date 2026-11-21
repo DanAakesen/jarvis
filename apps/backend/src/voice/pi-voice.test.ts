@@ -35,6 +35,28 @@ describe('PI voice turns', () => {
     expect(busy).toEqual([true, false]);
   });
 
+  it('speaks the PI result on the matching client delegation', async () => {
+    const spoken: Array<{ text: string; delegationId?: string }> = [];
+    const agent = replying('  Authoritative PI result.  ');
+    const session = new AbortController();
+    const turns = createPiVoiceTurns({
+      agent,
+      signal: session.signal,
+      speak: (text, delegationId) => spoken.push({ text, ...(delegationId ? { delegationId } : {}) }),
+      busy: () => undefined,
+      log: () => undefined,
+      now: () => 100,
+    });
+
+    turns.start({ ...turn, delegationId: 'delegate-7' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    expect(spoken).toEqual([{
+      text: 'Authoritative PI result.',
+      delegationId: 'delegate-7',
+    }]);
+  });
+
   it('speaks the note before a tool call at once and the answer after it, without repeating the note', async () => {
     const { turns, spoken, logs, settled } = setup(replying(
       'Let me check your calendar. ', { type: 'acknowledgment', text: 'Let me check your calendar. ' },

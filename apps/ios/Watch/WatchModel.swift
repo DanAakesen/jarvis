@@ -6,7 +6,12 @@ import OSLog
 
 @MainActor
 final class WatchModel: ObservableObject {
-    struct Message: Identifiable { var id = UUID().uuidString; var user: Bool; var text: String }
+    struct Message: Identifiable {
+        var id = UUID().uuidString
+        var role: ConversationRole
+        var text: String
+        var user: Bool { role == .dan }
+    }
     enum DictationState: Equatable { case idle, connecting, listening, finishing }
     @Published var messages: [Message] = []
     @Published private var composer = WatchComposer()
@@ -50,22 +55,39 @@ final class WatchModel: ObservableObject {
     private let transcriptionDeadline = WatchDictationDeadline()
     private var dictationAudio = Data()
     private var dictationTranscription: Task<String, Error>?
+    private var seenVoiceDeliveryIDs = Set<UUID>()
     init() {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
-            messages = [.init(user: true, text: "What should I train today?"), .init(user: false, text: "Upper body: bench press, rows and shoulder press."), .init(user: true, text: "What weight for bench?"), .init(user: false, text: "Your last entry was 60 kg for 8 reps.")]
+            messages = [
+                .init(role: .dan, text: "What should I train today?"),
+                .init(role: .jarvis, text: "Upper body: bench press, rows and shoulder press."),
+                .init(role: .dan, text: "What weight for bench?"),
+                .init(role: .jarvis, text: "Your last entry was 60 kg for 8 reps."),
+            ]
             if let state = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--watch-voice-fixture=") }) {
                 voiceID = UUID(); muted = state.hasSuffix("muted")
                 voiceState = state.hasSuffix("speaking") ? "Speaking" : "Listening"
-                messages = [.init(user: false, text: state.hasSuffix("listening") ? "Your next meeting starts at 10:30." : "You have time to review your notes.")]
+                messages = [
+                    .init(
+                        role: .jarvis,
+                        text: state.hasSuffix("listening")
+                            ? "Your next meeting starts at 10:30."
+                            : "You have time to review your notes."
+                    ),
+                ]
             }
             if ProcessInfo.processInfo.arguments.contains("--watch-chat-long") {
-                messages = [.init(user: false, text: "Hello Dan, nice to be talking with you."), .init(user: true, text: "What is next today?"),
-                            .init(user: false, text: "Your next meeting starts at 10:30. You have time to review the notes before you leave."),
-                            .init(user: false, text: "I can help you prepare."), .init(user: false, text: "Would you like me to summarise them?"),
-                            .init(user: true, text: "Yes, please."),
-                            .init(user: false, text: "Two items need a decision before noon: the budget review and the venue. Nothing else is due today."),
-                            .init(user: false, text: "I will remind you at 10:00.")]
+                messages = [
+                    .init(role: .jarvis, text: "Hello Dan, nice to be talking with you."),
+                    .init(role: .dan, text: "What is next today?"),
+                    .init(role: .jarvis, text: "Your next meeting starts at 10:30. You have time to review the notes before you leave."),
+                    .init(role: .jarvis, text: "I can help you prepare."),
+                    .init(role: .jarvis, text: "Would you like me to summarise them?"),
+                    .init(role: .dan, text: "Yes, please."),
+                    .init(role: .jarvis, text: "Two items need a decision before noon: the budget review and the venue. Nothing else is due today."),
+                    .init(role: .jarvis, text: "I will remind you at 10:00."),
+                ]
             }
         }
         #endif
@@ -162,7 +184,7 @@ final class WatchModel: ObservableObject {
                 throw WatchFailure.failed
             }
             guard replyRoute.isCurrent(target) else { return false }
-            messages = decoded.map { Message(id: $0.id, user: $0.user, text: $0.text) }
+            messages = decoded.map { Message(id: $0.id, role: $0.role, text: $0.text) }
             guard decoded.contains(where: { $0.id == target.messageID }) else {
                 historyError = "This exact reply is no longer available. Open Jarvis on your iPhone."
                 return false
@@ -182,7 +204,7 @@ final class WatchModel: ObservableObject {
         do {
             let history: [WatchHistoryMessage] = try await connection.load(.history)
             guard read == historyRequest, !busy, voiceID == nil else { return false }
-            messages = history.map { Message(id: $0.id, user: $0.user, text: $0.text) }
+            messages = history.map { Message(id: $0.id, role: $0.role, text: $0.text) }
             return true
         } catch {
             guard read == historyRequest, !busy, voiceID == nil else { return false }
@@ -207,7 +229,8 @@ final class WatchModel: ObservableObject {
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id
         let responseID = UUID().uuidString; replyID = responseID
-        messages.append(.init(user: true, text: text)); messages.append(.init(id: responseID, user: false, text: "Working…"))
+        messages.append(.init(role: .dan, text: text))
+        messages.append(.init(id: responseID, role: .jarvis, text: "Working…"))
         do {
             _ = try await connection.request(request)
             composer.finishSend(success: true)
@@ -246,6 +269,7 @@ final class WatchModel: ObservableObject {
             let request = WatchRequest(action: .startVoice, flag: true)
             // Accept early state events while the phone opens the socket.
             voiceID = request.id; voiceState = "Connecting"; endingVoice = false
+            seenVoiceDeliveryIDs.removeAll(keepingCapacity: true)
             var reply: WatchReply?
             var attempt = 1
             while reply == nil {
@@ -684,6 +708,11 @@ final class WatchModel: ObservableObject {
             }
         }
         guard event.requestID == voiceID else { return }
+        guard seenVoiceDeliveryIDs.insert(event.deliveryID).inserted else { return }
+        if seenVoiceDeliveryIDs.count > 8_192 {
+            seenVoiceDeliveryIDs.removeAll(keepingCapacity: true)
+            seenVoiceDeliveryIDs.insert(event.deliveryID)
+        }
         switch event.kind {
         case .voiceState:
             if let muted = event.muted { self.muted = muted }
@@ -705,23 +734,23 @@ final class WatchModel: ObservableObject {
             catch { Task { await endVoice() }; show(error) }
         case .voiceTranscript:
             let id = event.responseID ?? event.requestID.uuidString
-            if let index = messages.lastIndex(where: { $0.id == id && !$0.user }) {
+            if let index = messages.lastIndex(where: { $0.id == id && $0.role == .jarvis }) {
                 messages[index].text += event.text ?? ""
             }
-            else { messages.append(.init(id: id, user: false, text: event.text ?? "")) }
+            else { messages.append(.init(id: id, role: .jarvis, text: event.text ?? "")) }
         case .voiceUserTranscriptDelta:
             let id = event.responseID ?? event.requestID.uuidString
-            if let index = messages.lastIndex(where: { $0.id == id && $0.user }) {
+            if let index = messages.lastIndex(where: { $0.id == id && $0.role == .dan }) {
                 messages[index].text += event.text ?? ""
             } else {
-                messages.append(.init(id: id, user: true, text: event.text ?? ""))
+                messages.append(.init(id: id, role: .dan, text: event.text ?? ""))
             }
         case .voiceUserTranscript:
             let id = event.responseID ?? UUID().uuidString
-            if let index = messages.lastIndex(where: { $0.id == id && $0.user }) {
+            if let index = messages.lastIndex(where: { $0.id == id && $0.role == .dan }) {
                 messages[index].text = event.text ?? ""
             } else {
-                messages.append(.init(id: id, user: true, text: event.text ?? ""))
+                messages.append(.init(id: id, role: .dan, text: event.text ?? ""))
             }
         case .interrupt: audio.stopPlayback()
         default: break
