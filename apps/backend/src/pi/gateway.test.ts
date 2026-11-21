@@ -1153,6 +1153,182 @@ describe('PI gateway', () => {
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
       expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 7_000, outputTokens: 70 });
     });
+
+    describe('stream contract shapes, each fed as random-sized byte chunks over seeds 0 to 19', () => {
+      const seeds = Array.from({ length: 20 }, (_, seed) => seed);
+      // Non-ASCII text with a four-byte emoji, so chunk boundaries also fall inside UTF-8 sequences.
+      const first = 'Pr\u00F8ve 3 \u{1F327}\uFE0F. ';
+      const second = 'Nu med regn \u{1F327}\uFE0F.';
+      const cut = 'Pr\u00F8ve 3'.length;
+      /** The stream as one body that arrives in pieces of 1 to 67 bytes, cut by a seeded LCG, so frames and characters are split anywhere. */
+      const fragmented = (seed: number, frames: readonly string[]) => {
+        const bytes = new TextEncoder().encode(frames.join(''));
+        const pieces: Uint8Array[] = [];
+        let state = seed;
+        for (let at = 0; at < bytes.length;) {
+          state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+          const size = 1 + (state >>> 16) % 67;
+          pieces.push(bytes.slice(at, at + size));
+          at += size;
+        }
+        return new Response(new ReadableStream({ start(controller) { for (const piece of pieces) controller.enqueue(piece); controller.close(); } }), { headers: { 'content-type': 'text/event-stream' } });
+      };
+      /** One turn whose responses are these frame lists: everything the contract is about, in one comparable value. */
+      const play = async (rounds: ReadonlyArray<readonly string[]>, seed: number) => {
+        const { logs, log } = capture();
+        const { run, calls, store } = setup(rounds.map(frames => () => fragmented(seed, frames)), { log });
+        let reply = '';
+        let failed = false;
+        try { for (const chunk of await run('hi')) if (typeof chunk === 'string') reply += chunk; } catch { failed = true; }
+        const requests = responsesOf(calls);
+        const turn = store.turns[0];
+        return {
+          failed, reply, requests: requests.length,
+          billed: turn ? [turn.inputTokens, turn.cachedTokens, turn.outputTokens] : null,
+          envelopes: requests.map(request => ({ conversation: request.body!.conversation, stream: request.body!.stream, keys: Object.keys(request.body!).sort() })),
+          followUps: requests.slice(1).map(request => request.body!.input),
+          calls: harnessCalls(logs).map(fields => `${String(fields.classification)}:${String(fields.rule)}`),
+        };
+      };
+      const envelope = { conversation: 'conv_1', stream: true, keys: ['conversation', 'input', 'stream'] };
+      const answer = (callId: string, name = 'lookup') => [{ type: 'function_call_output', call_id: callId, output: unavailable(name) }];
+      /** The exact result of a turn that ended normally: one request, plus one per follow-up. */
+      const ok = (reply: string, billed: number[], followUps: unknown[] = [], calls: string[] = []) => ({
+        failed: false, reply, requests: followUps.length + 1, billed, envelopes: followUps.map(() => envelope).concat(envelope), followUps, calls,
+      });
+      const finished = (output: unknown[], input: number, cached: number, out: number) => frame({
+        type: 'response.completed',
+        response: { status: 'completed', output, usage: { input_tokens: input, input_tokens_details: { cached_tokens: cached }, output_tokens: out } },
+      });
+      const finalMessage = (text: string, id = 'msg_1') => ({ type: 'message', id, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
+      const textDelta = (text: string, id = 'msg_1', index = 0) => frame({ type: 'response.output_text.delta', item_id: id, output_index: index, content_index: 0, delta: text });
+      const textDone = (text: string, id = 'msg_1', index = 0) => frame({ type: 'response.output_text.done', item_id: id, output_index: index, content_index: 0, text });
+      const statusless = { type: 'function_call', id: 'fc_call_1', call_id: 'call_1', name: 'lookup', arguments: '{}' };
+      const added = (item: unknown, index?: number) => frame({ type: 'response.output_item.added', ...(index === undefined ? {} : { output_index: index }), item });
+      const finishedItem = (item: unknown, index?: number) => frame({ type: 'response.output_item.done', ...(index === undefined ? {} : { output_index: index }), item });
+      const mcpCall = { type: 'mcp_call', id: 'mcp_1', server_label: 'jarvis', name: 'find_tools' };
+      /** The item that is opened before a call and closed after it, named by its id, its output index or both. */
+      const earlierMessage = (by: 'id' | 'index' | 'both') => {
+        const item = { type: 'message', ...(by === 'index' ? {} : { id: 'msg_1' }) };
+        const index = by === 'id' ? undefined : 0;
+        return { opened: added(item, index), closed: finishedItem(item, index) };
+      };
+
+      type Shape = [string, ReadonlyArray<readonly string[]>, ReturnType<typeof ok>];
+      const gaps: Shape[] = [
+        ['1. a statusless call that was only added: no done event, nothing after it', [
+          [created('resp_1'), delta(first), added(statusless), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])],
+        ['2. reply text only in the terminal event, with no text deltas', [
+          [created('resp_1'), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['3. reply text only in response.output_text.done, with no text deltas', [
+          [created('resp_1'), textDone(first), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['4. an mcp_call that was only added after a completed call', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), added(mcpCall), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['native:later_output'])],
+        ...(['id', 'index', 'both'] as const).map((by): Shape => [`5. the message opened before the call is closed after it, named by ${by}`, [
+          [created('resp_1'), earlierMessage(by).opened, delta(first), ...functionCall('lookup', 'call_1', '{}'), earlierMessage(by).closed, completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])]),
+        ['5. the text of the message opened before the call is closed after it too', [
+          [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), textDelta(first), ...functionCall('lookup', 'call_1', '{}'),
+            textDone(first), finishedItem({ type: 'message', id: 'msg_1' }, 0), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+      ];
+
+      const kept: Shape[] = [
+        ['a statusless call with a done event is complete, so it is answered once', [
+          [created('resp_1'), delta(first), added(statusless), finishedItem(statusless), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['a statusless call in the completed response output is complete, so it is answered once', [
+          [created('resp_1'), delta(first), added(statusless), finished([statusless], 10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['native: text follows the call', [
+          [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), ...message(second), completed(11, 2, 7)],
+        ], ok(first + second, [11, 2, 7], [], ['native:later_output'])],
+        ['native: a result item follows the call', [
+          [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), ...result('call_1'), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['native:result_item'])],
+        ['native: an item first seen after the call is closed', [
+          [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), finishedItem({ type: 'message', id: 'msg_9' }, 3), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['native:later_output'])],
+        ['client-owned: nothing follows the call', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['client-owned replay: the same call id again is answered once', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), ...functionCall('lookup', 'call_1', '{}'), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered', 'unknown:replayed'])],
+        ...(['failed', 'incomplete', 'cancelled', 'in_progress'] as const).map((status): Shape => [`unknown: the call item finished with the status ${status}`, [
+          [created('resp_1'), delta(first), added(callItem('lookup', 'call_1', '', 'in_progress')), finishedItem(callItem('lookup', 'call_1', '{}', status)), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])]),
+        ['a null item is ignored', [
+          [created('resp_1'), delta(first), added(null), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7])],
+        ['shell_call and shell_call_output items are unknown and left alone', [
+          [created('resp_1'), delta(first), added({ type: 'shell_call', id: 'sh_1', call_id: 'sh_call_1', status: 'in_progress' }),
+            finishedItem({ type: 'shell_call', id: 'sh_1', call_id: 'sh_call_1', status: 'completed' }),
+            added({ type: 'shell_call_output', call_id: 'sh_call_1', output: 'done' }), finishedItem({ type: 'shell_call_output', call_id: 'sh_call_1', output: 'done' }),
+            delta(second), completed(11, 2, 7)],
+        ], ok(first + second, [11, 2, 7])],
+      ];
+
+      // How a done event and the completed output add to the streamed text: only what is missing, and never when they disagree.
+      const texts: Shape[] = [
+        ['a terminal-only reply still lets the client-owned call after it be answered', [
+          [created('resp_1'), finished([finalMessage(first), { ...statusless, status: 'completed' }], 10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['text in the done event and again in the completed output arrives once', [
+          [created('resp_1'), textDone(first), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas followed by the same text in the completed output arrive once', [
+          [created('resp_1'), textDelta(first.slice(0, cut)), textDelta(first.slice(cut)), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas that name no item, followed by the same text in the completed output, arrive once', [
+          [created('resp_1'), delta(first.slice(0, cut)), delta(first.slice(cut)), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas that name no item, followed by the same text in the done event and the completed output, arrive once', [
+          [created('resp_1'), delta(first), textDone(first), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['only the missing end of the completed output text is added to the streamed start', [
+          [created('resp_1'), textDelta(first.slice(0, cut)), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['only the missing end of the done event text is added to the streamed start', [
+          [created('resp_1'), textDelta(first.slice(0, cut)), textDone(first), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a final text that does not start with the streamed text adds nothing', [
+          [created('resp_1'), textDelta(first), textDone('Something else entirely'), finished([finalMessage('Another text')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a final text shorter than the streamed text adds nothing', [
+          [created('resp_1'), textDelta(first), finished([finalMessage(first.slice(0, cut))], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['each message of the completed output is reconciled on its own', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_1'), finalMessage(second, 'msg_2')], 9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+      ];
+
+      it.each([...gaps, ...texts, ...kept])('%s', async (_name, rounds, expected) => {
+        for (const seed of seeds) expect(await play(rounds, seed), `seed ${seed}`).toEqual(expected);
+      });
+
+      it.each([
+        ['a failed response', [created('resp_1'), delta(first), frame({ type: 'response.failed', response: { error: { code: 'server_error' } } })]],
+        ['an incomplete response', [created('resp_1'), delta(first), frame({ type: 'response.incomplete', response: { status: 'incomplete', error: { code: 'server_error' } } })]],
+        ['a truncated frame', [created('resp_1'), delta(first), 'event: response.completed\ndata: {"type":"response.completed","response":{"status":"comp']],
+      ])('ends the turn as an error, with one request and no follow-up, on %s', async (_name, frames) => {
+        for (const seed of seeds) {
+          expect(await play([frames, [created('resp_2'), delta(second), completed(1, 0, 1)]], seed), `seed ${seed}`)
+            .toMatchObject({ failed: true, requests: 1, followUps: [], calls: [] });
+        }
+      });
+    });
   });
 
   it('answers an unconfigured PI selection with its own error', async () => {
