@@ -158,6 +158,39 @@ describe('PI MCP server', () => {
     expect(nothing.body?.result.note).toMatch(/GitHub and Azure tools load only when the search names them/u);
   });
 
+  it.each([
+    ['github-issues', 'gh_'], ['pull-request', 'gh_'], ['pullrequest', 'gh_'], ['PR list', 'gh_'], ['my PRs', 'gh_'],
+    ['list commits', 'gh_'], ['commits in jarvis', 'gh_'], ['åbne pull requests', 'gh_'],
+    ['azure-resources', 'az_'], ['container-app', 'az_'], ['resource-group list', 'az_'], ['ressourcegruppe', 'az_'],
+  ])('wakes the bridge a query like "%s" names, even when a local tool also matches', async (query, prefix) => {
+    const make = (p: string, label: string): RemoteMcpBridge => ({
+      prefix: p, label, status: () => ({ state: 'ready' }), warm: vi.fn(), tools: vi.fn(async () => []),
+      call: async () => ({ outcome: 'ok', result: {} }),
+    });
+    const github = make('gh_', 'GitHub');
+    const azure = make('az_', 'Azure');
+    const { registry, tool } = setup([github, azure], { tools: [{ ...probe, name: 'probe_list', description: 'List things. Keyword: list.' }] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    await tool('find_tools', { turn: grant.turn, query: `${query} list` });
+    expect(github.tools).toHaveBeenCalledTimes(prefix === 'gh_' ? 1 : 0);
+    expect(azure.tools).toHaveBeenCalledTimes(prefix === 'az_' ? 1 : 0);
+  });
+
+  it.each(['what is on my calendar list', 'remind me in 5 minutes list', 'hvad er i min kalender', 'påmind mig om fem minutter'])(
+    'does not wake any bridge for the local query "%s"', async (query) => {
+      const make = (p: string, label: string): RemoteMcpBridge => ({
+        prefix: p, label, status: () => ({ state: 'idle' }), warm: vi.fn(), tools: vi.fn(async () => []),
+        call: async () => ({ outcome: 'ok', result: {} }),
+      });
+      const github = make('gh_', 'GitHub');
+      const azure = make('az_', 'Azure');
+      const { registry, tool } = setup([github, azure]);
+      const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+      await tool('find_tools', { turn: grant.turn, query });
+      expect(github.tools).not.toHaveBeenCalled();
+      expect(azure.tools).not.toHaveBeenCalled();
+    });
+
   it('gives a provider the search names one bounded wait and then says to keep going and try again shortly', async () => {
     let state: ReturnType<RemoteMcpBridge['status']> = { state: 'idle' };
     const tools = vi.fn(async () => {

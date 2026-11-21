@@ -19,7 +19,7 @@ export function shortenToolDescription(text: string): string {
 
 /**
  * English and Danish wording for the common intents, as a plain table. A query word that equals a stem (or starts with it when
- * the stem ends in `*`: "kalenderen*") adds the row's `terms` to the search, so "vejr" finds `weather`. A row with a `provider`
+ * the stem ends in `*`: "kalender*"; words are split on hyphens too, so "github-issues" is "github" and "issues") adds the row's `terms` to the search, so "vejr" finds `weather`. A row with a `provider`
  * also names that remote provider (`gh_` GitHub, `az_` Azure): only then is its catalogue loaded for the search.
  */
 interface IntentAlias {
@@ -33,19 +33,20 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['remember', 'memory', 'husk*', 'hukommelse*', 'erindring*'], terms: ['memory'] },
   { stems: ['remind*', 'paaminde*', 'paamindelse*', 'påmind*'], terms: ['reminders'] },
   { stems: ['calendar*', 'kalender*', 'aftale*', 'meeting*', 'møde*', 'moede*'], terms: ['calendar'] },
-  { stems: ['mail', 'mails', 'email*', 'e-mail*', 'gmail'], terms: ['mail'] },
+  { stems: ['mail', 'mails', 'email*', 'gmail'], terms: ['mail'] },
   { stems: ['task', 'tasks', 'todo*', 'opgave*'], terms: ['task'] },
   { stems: ['note', 'notes', 'noter*', 'vault'], terms: ['vault', 'notes'] },
   { stems: ['health*', 'sundhed*', 'sleep', 'søvn', 'soevn'], terms: ['health'] },
-  { stems: ['github', 'git-hub', 'gh', 'issue*', 'pull', 'repo', 'repos', 'repository', 'workflow*', 'arbejdsgang*'],
+  { stems: ['github*', 'git', 'gh', 'issue*', 'pull', 'pullrequest*', 'pullanmodning*', 'pr', 'prs', 'commit*', 'branch*',
+    'repo', 'repos', 'repositor*', 'workflow*', 'arbejdsgang*'],
     terms: ['github', 'issue', 'pull'], provider: 'gh_' },
-  { stems: ['azure*', 'az', 'ressource*', 'resource*', 'subscription*', 'abonnement*'],
+  { stems: ['azure*', 'az', 'ressource*', 'resource*', 'subscription*', 'abonnement*', 'container*'],
     terms: ['azure', 'resource'], provider: 'az_' },
 ];
 
 const stemMatches = (token: string, stem: string): boolean => stem.endsWith('*') ? token.startsWith(stem.slice(0, -1)) : token === stem;
 const aliasesFor = (query: string): IntentAlias[] => {
-  const found = query.toLowerCase().split(/[^\p{L}\p{N}-]+/u).filter(Boolean);
+  const found = query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   return intentAliases.filter((alias) => alias.stems.some((stem) => found.some((token) => stemMatches(token, stem))));
 };
 

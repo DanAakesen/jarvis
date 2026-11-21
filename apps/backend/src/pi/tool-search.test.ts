@@ -47,4 +47,25 @@ describe('tool search wording', () => {
     expect([...providersNamedBy('gh_issue_read')]).toEqual(['gh_']);
     expect([...providersNamedBy('weather kalender noter mail report')]).toEqual([]);
   });
+
+  it.each([
+    'github-issues', 'GitHub issues', 'pull-request', 'pull request', 'pullrequest', 'PR list', 'my PRs', 'list commits',
+    'commits in jarvis', 'branches', 'åbne pull requests', 'vis pullanmodninger', 'mine issues på github', 'git-hub',
+  ])('names GitHub for "%s"', (query) => {
+    expect([...providersNamedBy(query)]).toEqual(['gh_']);
+  });
+
+  it.each([
+    'azure-resources', 'az-resources', 'resource-group', 'resource group', 'container-app', 'container app',
+    'ressourcegruppe', 'ressourcegruppen', 'mine ressourcer', 'abonnement',
+  ])('names Azure for "%s"', (query) => {
+    expect([...providersNamedBy(query)]).toEqual(['az_']);
+  });
+
+  it.each([
+    'what is on my calendar', 'remind me in 5 minutes', 'hvad er i min kalender', 'påmind mig om fem minutter',
+    'list my tasks', 'e-mail from Anna', 'weather in Aarhus', 'show the report',
+  ])('names no provider for the local query "%s"', (query) => {
+    expect([...providersNamedBy(query)]).toEqual([]);
+  });
 });
