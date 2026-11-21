@@ -13775,7 +13775,7 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 
 - Decision: Dan tunes `jarvis-pi-live` in the Foundry portal, so Deploy no longer writes, compares or fails on its instructions, output voice, greeting or any other field the app does not depend on. Previously a portal edit was overwritten by the next Deploy (new version plus re-pin) or failed it on readback.
 - Bootstrap only: if the agent does not exist, `provision_pi_agent.py` creates version 1 once from `agents/pi/voice-definition.json` and `voice-instructions.md` and pins it. Those files are only that initial seed; editing them later changes nothing. The `marin` requirement was removed from `load_voice_spec`.
-- If the agent exists, Deploy never posts a version and never patches the pin. It reads the effective version (the pinned version if a pin rule exists, otherwise `versions.latest`) and verifies only the contract the backend relay depends on: model `gpt-live-1` and its deployment, `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, `delegation: { type: "client" }`, `store: false`, audio format `audio/pcm` at 24,000 Hz. Drift fails with a `voice_readback_*_mismatch` or `voice_agent_*` code and is never auto-fixed.
+- If the agent exists, Deploy never posts a version and never patches the pin. It reads the effective version (the pinned version if a pin rule exists, otherwise `versions.latest`) and verifies only the contract the backend relay depends on: model `gpt-live-1` and its deployment, `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, `delegation: { type: "client" }`, audio format `audio/pcm` at 24,000 Hz (`store` was verified until 2026-11-21; see the entry at the end of this file). Drift fails with a `voice_readback_*_mismatch` or `voice_agent_*` code and is never auto-fixed.
 - Tests are offline (`.github/scripts/tests/test_pi_agent.py`); no live Foundry call was made.
 
 ## 2026-11-20 Main agent (`jarvis-pi`) instructions are Foundry-owned
@@ -13788,3 +13788,10 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 - The voice agent has neither gap: it verifies the effective version on every Deploy (no fingerprint skip) and never writes to an existing agent. A half-seeded one stays unpinned and serves the latest version, which is verified.
 - One-time effect: the fingerprint formula changed, so the first Deploy after this change publishes one new version carrying the live text forward and pins it. The same happens if a Foundry edit does not keep the version metadata (unverified; it settles after that Deploy).
 - Not verified live: no Foundry call, Deploy or provisioning run was made; tests are offline (`.github/scripts/tests/test_pi_agent.py`). Still reading the repo text as if it were live: `apps/backend/src/pi/definition.test.ts` (asserts the seed's capability-overview wording) and docs that cite `agents/pi/instructions.md` for behaviour.
+
+## 2026-11-21 Voice agent `store` is Foundry-owned
+
+- Decision: `store` on `jarvis-pi-live` is owned in Foundry like instructions, voice and greeting. Deploy no longer verifies or compares it. Reason: the Foundry portal saves new versions with `store: true` (portal version 13 did, the seeded version 1 had `false`), which failed Deploy run 44915193797 with `voice_readback_store_mismatch`. Dan owns his Foundry project and wants Traces for tuning.
+- Bootstrap only: when the agent does not exist, version 1 is still seeded with `store: false` from `agents/pi/voice-definition.json`.
+- Still verified on every Deploy: kind, sub-protocol, model type, model, delegation `{type: client}`, audio format PCM 24 kHz, and the `gpt-live-1` deployment. Unknown extra fields (for example `greeting`) are ignored. The `jarvis-pi` provisioning is unchanged.
+- Tests are offline (`.github/scripts/tests/test_pi_agent.py`); no live Foundry call was made.
