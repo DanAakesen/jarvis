@@ -163,7 +163,7 @@ interface SetTaskModelInput {
 }
 
 function requireStore<T>(store: T | null, name: string): T {
-  if (!store) throw new Error(`${name} unavailable`);
+  if (!store) throw new ToolFailure(`${name} cannot be reached right now, so nothing was done. Try again shortly.`);
   return store;
 }
 
