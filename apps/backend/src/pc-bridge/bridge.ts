@@ -12,7 +12,8 @@ import {
   type JarvisVoiceWakeEvent,
 } from '@jarvis/contracts';
 import { defaultSettings, readSettings } from '../core/settings.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolRefusal, type ToolCompletionContract } from '../core/tool-registry.js';
+import { receipt, semanticOperation } from '../core/tool-completion.js';
 import type { BackendModule } from '../modules.js';
 import {
   isIrreversibleKeySequence,
@@ -33,6 +34,45 @@ export { PC_BRIDGE_SUBPROTOCOL } from '../websocket.js';
 
 const MAX_MESSAGE_BYTES = 128 * 1024;
 const MAX_CAPTURE_RESPONSE_BYTES = MAX_WEBSOCKET_PAYLOAD_BYTES;
+const pcCompletion = {
+  pc_open: {
+    domain: 'pc', operation: 'open', requestTargetFields: ['target', 'value'],
+    resultTargetFields: ['app'], evaluate: receipt.opened,
+  },
+  pc_close: {
+    domain: 'pc', operation: 'delete', requestTargetFields: ['app'],
+    resultTargetFields: ['app'], evaluate: receipt.pcClose,
+  },
+  pc_media: {
+    domain: 'pc', operation: 'update', requestTargetFields: ['action'],
+    resultTargetFields: ['action'], evaluate: receipt.pcMedia,
+  },
+  pc_clipboard_write: {
+    domain: 'pc', operation: 'update', requestTargetFields: ['text'],
+    resultTargetFields: ['written'], evaluate: receipt.clipboardWrite,
+  },
+  pc_browser_tabs: {
+    domain: 'pc', operation: 'read', requestTargetFields: ['offset'],
+    resultTargetFields: ['tabId', 'title', 'url'], evaluate: receipt.read,
+  },
+  pc_browser_snapshot: {
+    domain: 'pc', operation: 'read', requestTargetFields: ['tabId'],
+    resultTargetFields: ['tabId', 'snapshotId', 'title', 'elements'], evaluate: receipt.read,
+  },
+  pc_browser_act: {
+    domain: 'pc', operation: 'update',
+    requestTargetFields: ['tabId', 'snapshotId', 'elementIndex', 'action', 'text', 'keys', 'value', 'direction'],
+    resultTargetFields: ['acted', 'action'], evaluate: receipt.pcBrowserAct,
+  },
+  pc_act: {
+    domain: 'pc', operation: args => semanticOperation(args.goal),
+    requestTargetFields: ['goal'], resultTargetFields: ['status'], evaluate: receipt.browserTask,
+  },
+  codex_prompt: {
+    domain: 'pc', operation: 'send', requestTargetFields: ['prompt'],
+    resultTargetFields: ['status'], evaluate: receipt.browserTask,
+  },
+} satisfies Record<string, ToolCompletionContract>;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_STARTUP_GRACE_MS = 2 * 60_000;
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
@@ -542,6 +582,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
     tools: [
       {
         name: 'pc_open',
+        completion: pcCompletion.pc_open,
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a folder or file under C:\\Repo in VS Code, or a window on Dan’s PC. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
@@ -561,6 +602,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_close',
+        completion: pcCompletion.pc_close,
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Close an app on Dan’s PC by its name (e.g. Visual Studio Code - Insiders, Spotify). The app is asked to close normally, so it can still offer to save unsaved work; no confirmation is needed.',
         inputSchema: {
           type: 'object',
@@ -572,6 +614,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_media',
+        completion: pcCompletion.pc_media,
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Control Windows media playback or volume with play_pause, next, previous, volume_up, volume_down, or mute.',
         inputSchema: {
           type: 'object',
@@ -617,6 +660,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_clipboard_write',
+        completion: pcCompletion.pc_clipboard_write,
         description: 'Write the exact text Dan provides in the current message to the Windows clipboard. Call only when he explicitly asks; never infer text from earlier context. Text is limited to 20 KiB. An empty string clears the clipboard.',
         inputSchema: {
           type: 'object',
@@ -640,6 +684,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_browser_tabs',
+        completion: pcCompletion.pc_browser_tabs,
         description: 'List open tabs in Dan’s Chrome with their title, URL, and whether each is focused. If nextOffset is non-null, request the next page with that offset. This reads tab metadata only.',
         inputSchema: {
           type: 'object',
@@ -662,6 +707,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_browser_snapshot',
+        completion: pcCompletion.pc_browser_snapshot,
         description: 'Take a fresh snapshot of visible actionable controls in one listed Chrome tab. Use only its returned element indexes for actions; never provide selectors, coordinates, or scripts.',
         inputSchema: {
           type: 'object',
@@ -686,6 +732,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_browser_act',
+        completion: pcCompletion.pc_browser_act,
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Act on a fresh Chrome snapshot with click, type, select, scroll, wait, a bounded keys sequence, or explicit type_focused text. Keyboard input goes only to the focused Chrome window, never sensitive fields; execute requested actions without asking for another approval.',
         inputSchema: {
           type: 'object',
@@ -725,6 +772,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
+        completion: pcCompletion.pc_act,
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Execute requested actions without another approval.',
         inputSchema: {
           type: 'object',
@@ -793,6 +841,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       }] : []),
       ...(options.pcActPlanner ? [{
         name: 'codex_prompt',
+        completion: pcCompletion.codex_prompt,
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. The owner request authorizes submission without another approval.',
         inputSchema: {
           type: 'object',

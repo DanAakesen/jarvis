@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import type { RegisteredTool } from '../core/tool-registry.js';
+import type { PiCompletionEvidence, PiCompletionPlan } from './completion.js';
 import type { RemoteMcpStatus } from './remote-mcp.js';
 import type { PiActivationType } from './situation.js';
 import type { PiProactiveEvidence } from './store.js';
@@ -35,10 +37,18 @@ export interface PiTurnGrant {
   readonly smoke?: boolean;
   /** A brain wake: there is no owner message. It has the chat tools plus the brain's own (message to Dan, notes, trail, looks). */
   readonly brain?: PiBrainRun;
-  /** Tools find_tools returned in this turn; call_tool refuses anything else, as the current agent does. */
+  /** Tools find_tools showed in this turn, including compact other matches; call_tool refuses anything else. */
   readonly discovered: Set<string>;
   /** What each tool this turn actually ran returned, recorded by the MCP server itself, never taken from model text. */
   readonly results: { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
+  /** Content-free hashes and terminal kind proving a tool/arguments/target binding for this exact turn. */
+  readonly evidence: PiCompletionEvidence[];
+  /** Server-created read observations available only to bind later contextual operations in this turn. */
+  readonly bindings: PiCompletionEvidence[];
+  /** Registry-compiled remote tools actually returned to this exact turn. */
+  readonly remoteTools: Map<string, RegisteredTool>;
+  /** Server-classified completion contract for the exact owner request attached to this grant. */
+  completion: PiCompletionPlan;
   /** Content-free diagnostics from the latest completed discovery and from authenticated Azure call attempts. */
   readonly azure: {
     catalogue: RemoteMcpStatus['state'] | 'empty' | 'not_configured' | 'not_searched';
@@ -62,10 +72,12 @@ export interface PiTurnGrant {
   readonly actions: { count: number };
   /** Successful chat pushes from message_dan, recorded by the wake itself. */
   readonly pushes: { count: number };
+  /** Successful tool calls that did not yield terminal, request-bound evidence. */
+  readonly unverified: { count: number };
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'pushes'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'evidence' | 'bindings' | 'remoteTools' | 'completion' | 'azure' | 'actions' | 'pushes' | 'unverified'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
@@ -85,9 +97,10 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       if (grants.size >= maxOpenTurns) throw new Error('Too many open PI turns');
       const turn = `jt-${randomBytes(16).toString('base64url')}`;
       const grant: PiTurnGrant = {
-        ...input, turn, discovered: new Set(), results: [],
+        ...input, turn, discovered: new Set(), results: [], evidence: [], bindings: [], remoteTools: new Map(),
+        completion: { kind: 'conversation', requirements: [] },
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
-        actions: { count: 0 }, pushes: { count: 0 },
+        actions: { count: 0 }, pushes: { count: 0 }, unverified: { count: 0 },
       };
       grants.set(turn, grant);
       return grant;

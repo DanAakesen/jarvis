@@ -2,7 +2,9 @@ import { isPiWake, piWakeSource } from '../core/pi-authority.js';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import { explainedArgumentsMessage } from '../core/tool-arguments.js';
+import { attachedOwnerMessageId, readAttachedOwnerMessage } from '../core/owner-message.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
 import { dayKey, localTimeLabel } from './time.js';
@@ -150,16 +152,13 @@ async function ownerMessage(request: FastifyRequest, ownerObjectId: string, sign
     }
     return { id: direct.id, text: direct.text };
   }
-  const id = request.jarvisMemorySourceMessageId ?? request.headers['x-jarvis-message-id'];
+  const id = attachedOwnerMessageId(request);
   const conversations = request.server.conversationStore;
-  if (!request.agentPrincipal || typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
-      BigInt(id) > 9_223_372_036_854_775_807n || !conversations) {
+  if (!request.agentPrincipal || !id || !conversations) {
     throw new ToolRefusal('A direct, current owner request is required to change reminders.');
   }
-  const page = await conversations.getHistory({ limit: 1 });
-  signal.throwIfAborted();
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') {
+  const message = await readAttachedOwnerMessage(request, signal);
+  if (!message || message.id !== id) {
     throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
   }
   const session = await conversations.getSession(message.sessionId);
@@ -193,8 +192,24 @@ export function createOwnerReminderTool(options: {
 }): JarvisTool {
   return {
     name: 'owner_reminders',
+    completion: {
+      domain: 'tasks',
+      operation: args => args.operation === 'cancel' ? 'delete'
+        : args.operation === 'read' ? 'read'
+          : args.operation === 'create' ? 'create' : 'update',
+      requestTargetFields: ['operation', 'id', 'task', 'fireAt', 'cadence', 'untilTaskDone'],
+      requestPayloadFields: ['task', 'fireAt', 'cadence', 'untilTaskDone'],
+      resultTargetFields: ['id', 'task', 'fireAt', 'state'], evaluate: receipt.reminderWrite,
+    },
     description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Execute the owner’s request using the conversation context, including follow-up times and affirmative replies. Do not request another approval or prescribed sentence. Resolve natural dates, relative times and 17.10-style times to fireAt using Copenhagen time. A time without a date means TODAY, not tomorrow; if it has passed, report that instead of silently moving the date. Ask only for essential missing information. Use the saved task title from read/search, not a verbatim match to the owner’s wording. Choose a future time within a year. Explicitly requested reminder times are allowed during 22:00–07:00 Copenhagen quiet hours. Read first to obtain IDs for changes. Reminder times never change task deadlines.',
     inputSchema,
+    execution: {
+      defaultEffect: 'unclassified',
+      operation: {
+        field: 'operation',
+        effects: { read: 'read', create: 'action', update: 'action', snooze: 'action', cancel: 'action' },
+      },
+    },
     sensitive: true,
     validateInput: (input) => parseInput(input) !== undefined,
     explainInvalidInput: inputHint,

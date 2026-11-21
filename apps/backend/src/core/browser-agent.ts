@@ -7,6 +7,7 @@ import { normalizeFoundryProjectEndpoint } from '../voice/live-protocol.js';
 import { defaultSettings, readSettings } from './settings.js';
 import type { RoleModelSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { receipt, semanticOperation } from './tool-completion.js';
 import {
   createRecipeSession,
   recipeSiteKey,
@@ -1387,6 +1388,11 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
     tools: [
       {
         name: 'browser_do',
+        completion: {
+          domain: 'web', operation: args => semanticOperation(args.goal),
+          requestTargetFields: ['goal', 'url', 'tabId'],
+          resultTargetFields: ['tabId'], evaluate: receipt.browserTask,
+        },
         description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; requested actions execute without another confirmation. Stops on unsafe input, low confidence, time or step limits.',
         inputSchema: {
           type: 'object',
@@ -1426,6 +1432,11 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
       },
       {
         name: 'browser_do_shared',
+        completion: {
+          domain: 'web', operation: args => semanticOperation(args.goal),
+          requestTargetFields: ['goal', 'tabTitle'],
+          resultTargetFields: ['tabId'], evaluate: receipt.browserTask,
+        },
         description: 'When Dan asks you to act on the page he is sharing, use the current shared-screen context already supplied for this turn. Provide only the goal and, if Dan explicitly named a tab in this message, its exact title. It matches listed Chrome tabs, asks Dan to choose if ambiguous, and runs the bounded Jev browser agent on the match. The owner request authorizes the action without another confirmation.',
         inputSchema: {
           type: 'object',

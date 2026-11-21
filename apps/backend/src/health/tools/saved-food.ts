@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
+import { receipt } from '../../core/tool-completion.js';
 import { canonicalJson, normalizeSearchText, preparePlan, storedMeal, type FavoriteInput, type PlanRequest } from '../nutrition/model.js';
 import type { NutritionStore } from '../nutrition/store.js';
 import { internalSavedInput, internalSavedInputSchema, savedChangeSchema, savedReadSchema } from '../nutrition/saved-schema.js';
@@ -40,6 +41,15 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
   const pending = new Set<string>();
   return {
     name: 'health_saved_food',
+    completion: {
+      domain: 'health',
+      operation: args => args.operation === 'lookup_saved' || args.operation === 'read_preferences'
+        ? 'read'
+        : args.operation === 'delete_plan' ? 'delete'
+          : args.operation === 'save_favorite' || args.operation === 'save_plan' ? 'create' : 'update',
+      requestTargetFields: ['operation', 'name', 'id', 'favoriteId'],
+      resultTargetFields: ['status', 'operation', 'record', 'after', 'id'], evaluate: receipt.healthWrite,
+    },
     description: 'Read owned saved food by exact name/alias (lookup_saved) or canonical favourite preferences (read_preferences). Save favourite/aliases from an owned intake or a proposed definition; save a plan from owned favourites; soft-delete a plan; set like/dislike/null feedback on an exact favourite. Reads need no review; requested mutations execute without another approval. Read current revisions first (0 means new); plans require one breakfast, lunch and dinner. Never supply operation IDs, owners, confidence, provenance or confirmation flags. Writes require a current verified chat/browser-voice source; no phone or Teams. Definitions/plans/preferences never log intake or export Health. Keep the same source and revision on retry.',
     inputSchema: internalSavedInputSchema,
     execution: {

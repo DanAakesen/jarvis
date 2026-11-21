@@ -2,6 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import { isPiWake } from '../core/pi-authority.js';
 import { readSettings } from '../core/settings.js';
 import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import type { CreateProject } from './projects.js';
 
 export interface RepositoryCreationInput {
@@ -53,6 +54,12 @@ function messageId(request: FastifyRequest): string | undefined {
 
 export const createProjectTool: JarvisTool = {
   name: 'create_project',
+  completion: {
+    domain: 'factory', operation: 'create',
+    requestTargetFields: ['name', 'description'],
+    resultTargetFields: ['projectId', 'repository', 'repositoryUrl', 'taskId'],
+    evaluate: receipt.durableActive,
+  },
   description: 'Create and scaffold a new managed project from its name and description.',
   inputSchema,
   async execute(input, request, signal) {

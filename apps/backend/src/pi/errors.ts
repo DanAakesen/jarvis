@@ -1,5 +1,6 @@
 export type PiErrorCode =
-  | 'pi_not_configured' | 'pi_budget_exhausted' | 'pi_unavailable' | 'pi_timeout' | 'pi_failed' | 'pi_unsupported';
+  | 'pi_not_configured' | 'pi_budget_exhausted' | 'pi_budget_unavailable' | 'pi_incomplete' |
+    'pi_unavailable' | 'pi_timeout' | 'pi_failed' | 'pi_unsupported';
 
 /** A failure with a fixed, honest message for Dan. Provider text never reaches it. */
 export class PiGatewayError extends Error {

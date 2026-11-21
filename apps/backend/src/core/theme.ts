@@ -1,4 +1,5 @@
 import type { JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 import { settingsOptions, type SettingsPatch } from './settings.js';
 import { applySettingsPatch } from './settings-tools.js';
 
@@ -64,6 +65,10 @@ function settingsPatch(value: unknown): SettingsPatch {
 
 export const setThemeTool: JarvisTool = {
   name: 'set_theme',
+  completion: {
+    domain: 'settings', operation: 'update', requestTargetFields: ['tokens'],
+    resultTargetFields: ['tokens'], evaluate: receipt.settingsTheme,
+  },
   description: 'Set allowlisted Jarvis appearance tokens. Set a colour to null to remove its override and use the theme default, or use reset: true to remove all three colour overrides.',
   inputSchema,
   async execute(input, request, signal) {

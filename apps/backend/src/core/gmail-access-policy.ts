@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { readAttachedOwnerMessage } from './owner-message.js';
 
 export const GMAIL_DIRECT_ACCESS_REASON = 'Gmail access requires the direct mail integration. PC, Chrome and browser automation are unavailable for Gmail, including after failed or incomplete reads. Report the integration or permission failure, or the missing content.';
 
@@ -108,16 +109,8 @@ export function gmailAccessGuard(): (tool: JarvisTool) => JarvisTool['execute'] 
     let message = request.jarvisConversationMessage;
     if (computer && !nestedIndependent && !message && request.agentPrincipal &&
         request.server?.conversationStore && typeof id === 'string') {
-      const page = await request.server.conversationStore.getHistory({ limit: 1 });
-      signal.throwIfAborted();
-      let current = page.messages[0];
-      if (current?.role === 'jarvis' && current.interrupted) {
-        const previous = await request.server.conversationStore.getHistory({ limit: 1, before: current.id });
-        signal.throwIfAborted();
-        const sourceMessage = previous.messages[0];
-        current = sourceMessage?.sessionId === current.sessionId ? sourceMessage : undefined;
-      }
-      if (!current || current.id !== id || current.role !== 'dan') {
+      const current = await readAttachedOwnerMessage(request, signal);
+      if (!current || current.id !== id) {
         throw new ToolRefusal('The current Dan message could not be verified for computer use.');
       }
       message = current;

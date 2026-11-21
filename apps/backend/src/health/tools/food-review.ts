@@ -1,4 +1,5 @@
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
+import { receipt } from '../../core/tool-completion.js';
 import { prepareMeal, storedMeal, type MealInput } from '../nutrition/model.js';
 import { exactLabelIntent, favoriteIntent } from '../nutrition/intent.js';
 import { foodRecordRevision, foodReviewFingerprint, foodReviewInputSchema, foodReviewSchema, foodReviewSummary, nutritionSummary, hasFoodReview, reviewedCorrection } from '../nutrition/review.js';
@@ -39,6 +40,18 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
   const pending = new Set<string>();
   return {
     name: 'health_food_review',
+    completion: {
+      domain: 'health',
+      operation: args => {
+        const operation = String((args.change as Record<string, unknown> | undefined)?.operation ?? '');
+        return operation === 'lookup_components' ? 'read'
+          : operation === 'delete' ? 'delete'
+            : operation === 'correct' ? 'update'
+              : operation === 'log_estimate' ? 'create' : 'generic';
+      },
+      requestTargetFields: ['change'], resultTargetFields: ['status', 'record', 'presentation'],
+      evaluate: receipt.healthWrite,
+    },
     description: 'For food photos, use the existing image input only to propose generic food components and estimated grams; Frida is a nutrient reference, not image or portion recognition. Never describe estimates as measured. If an image is unreadable or not food, say so and ask for a clearer photo or description. If Frida fails, report that reference failure without guessing nutrition and offer a retry or text description. Use lookup_components with 1-25 {name, grams|null, preparationMethod|null} values to resolve references. Always present actual returned protein (g), calories (kcal) and fat (g) as a bulleted list, including for lookup-only estimates. Use the returned presentation; never stop at an acknowledgment. Show unknown nutrients as unknown, never zero or invented numbers. Present component/portion estimates and uncertainty and invite edits. Ask about missing quantities or preparation where needed. If identity, preparation or grams change, look up the edited components again. When Dan requests logging, call log_estimate with referenceComponents and mealName; the server resolves references and saves the estimate without another approval. For a question or preview, only look up and present the estimate. Report lookup estimates immediately; only claim intake was logged after a committed tool receipt. Never supply totals, provider provenance, capture method, owner or confirmation flags for a reference estimate. Use health_food for exact labels/favourites. Corrections/deletions require the exact owned intake key/current revision. Authenticated browser chat/browser voice on desktop or mobile are supported; a mobile browser is NOT a telephone call. Telephone calls, Teams and Health export are unsupported.',
     inputSchema: foodReviewInputSchema,
     bodyLimit: 96 * 1024,

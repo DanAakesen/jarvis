@@ -11,6 +11,7 @@ import {
 } from '@jarvis/contracts';
 import type { JarvisActivityHub } from './activity.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 import type {
   BackgroundJobStore,
   BackgroundJobDismissalResult,
@@ -480,6 +481,10 @@ function matchingJobs(jobs: readonly BackgroundJob[], query: string): Background
 /** Cancels a running job by id or by words from its title ("stop the Ignite research"). */
 export const cancelJobTool: JarvisTool = {
   name: 'cancel_job',
+  completion: {
+    domain: 'jobs', operation: 'delete', requestTargetFields: ['jobId', 'query'],
+    resultTargetFields: ['jobId', 'cancelled'], evaluate: receipt.jobCancel,
+  },
   description: 'Cancel a running background job. Pass jobId from list_jobs, or query with words from its title ' +
     '(for example "Ignite"). Cancelling only stops the work; nothing else is changed, so no confirmation is needed. ' +
     'If several running jobs match, ask Dan which one.',

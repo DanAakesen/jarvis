@@ -17,6 +17,11 @@ function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
       'tools/list': { tools: [{ name: 'issue_write', description: 'Create or update an issue', inputSchema: { type: 'object' } }, { name: 'bad name!', description: 'x' }] },
       'tools/call': body.params?.name === 'broken'
         ? { isError: true, content: [{ type: 'text', text: 'Not Found' }] }
+        : body.params?.name === 'structured'
+          ? {
+            content: [{ type: 'text', text: '' }],
+            structuredContent: { status: 'requested' },
+          }
         : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] },
     };
     const message = JSON.stringify({ jsonrpc: '2.0', id: body.id, result: results[body.method] });
@@ -44,6 +49,9 @@ describe('the GitHub bridge', () => {
     const { seen, fetchStub } = server({ sse: true });
     const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: fetchStub });
     expect(await bridge.call('gh_issue_read', { issue_number: 700 }, signal())).toEqual({ outcome: 'ok', result: { number: 700, title: 'Hello' } });
+    expect(await bridge.call('gh_structured', {}, signal())).toEqual({
+      outcome: 'ok', result: { status: 'requested' },
+    });
     expect(seen.at(-1)).toMatchObject({ method: 'tools/call', session: 's1' });
     expect(await bridge.call('gh_broken', {}, signal())).toEqual({ outcome: 'error', result: { error: 'Not Found' } });
     await expect(bridge.call('issue_read', {}, signal())).rejects.toThrow('not_a_remote_tool');
@@ -95,8 +103,9 @@ describe('a server that scales from zero', () => {
       url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't',
       fetch: (async (url: string, init: RequestInit) => { await gate; return slow.fetchStub(url, init); }) as unknown as typeof fetch,
     });
-    expect(bridge.status()).toEqual({ state: 'starting' });
+    expect(bridge.status()).toEqual({ state: 'idle' });
     bridge.warm();
+    expect(bridge.status()).toEqual({ state: 'starting' });
     expect(await bridge.tools(signal(), 10)).toEqual([]);
     expect(bridge.status()).toEqual({ state: 'starting' });
     release();
@@ -119,6 +128,23 @@ describe('a server that scales from zero', () => {
     expect(bridge.status()).toEqual({ state: 'unreachable', reason: 'the server answered HTTP 401' });
     expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
     expect(bridge.status()).toEqual({ state: 'ready' });
+  });
+
+  it('marks a retained catalogue stale when its background refresh fails', async () => {
+    const ok = server();
+    let clock = 0;
+    let fail = false;
+    const bridge = createRemoteMcpBridge({
+      url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't',
+      now: () => clock,
+      fetch: (async (url: string, init: RequestInit) =>
+        fail ? new Response('offline', { status: 503 }) : ok.fetchStub(url, init)) as unknown as typeof fetch,
+    });
+    await expect(bridge.tools(signal(), 2_000)).resolves.toMatchObject([{ name: 'az_issue_write' }]);
+    clock = 31 * 60_000;
+    fail = true;
+    await expect(bridge.tools(signal(), 2_000)).resolves.toMatchObject([{ name: 'az_issue_write' }]);
+    expect(bridge.status()).toEqual({ state: 'stale', reason: 'the server answered HTTP 503' });
   });
 });
 

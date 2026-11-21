@@ -37,6 +37,7 @@ export interface JarvisTool {
   /** Refuse phone calls before approval, even when the tool is otherwise public. */
   readonly denyOnPhone?: boolean;
   readonly bodyLimit?: number;
+  readonly completion?: ToolCompletionContract | undefined;
   /**
    * Names the concrete problem when the arguments fail schema validation, so a refusal tells the model what to
    * fix. The text must be value-free (static wording, enumerations, counts and known property names only):
@@ -50,6 +51,30 @@ export interface JarvisTool {
 }
 
 export type ToolEffect = 'read' | 'action' | 'unclassified';
+export type ToolCompletionOperation =
+  | 'read' | 'create' | 'update' | 'delete' | 'send' | 'open' | 'start' | 'generic';
+export type ToolCompletionDomain =
+  | 'calendar' | 'mail' | 'weather' | 'notes' | 'tasks' | 'health' | 'memory' | 'github' | 'azure'
+  | 'web' | 'factory' | 'pc' | 'workspace' | 'jobs' | 'settings' | 'generic';
+
+export interface ToolCompletionContract {
+  readonly domain: ToolCompletionDomain;
+  readonly operation: ToolCompletionOperation |
+    ((args: Record<string, unknown>) => ToolCompletionOperation);
+  readonly acceptedRequestOperations?: readonly ToolCompletionOperation[] | undefined;
+  readonly acceptsRequestOperation?:
+    ((args: Record<string, unknown>, operation: ToolCompletionOperation) => boolean) | undefined;
+  readonly requestTargetFields: readonly string[];
+  readonly resultTargetFields: readonly string[];
+  readonly requestPayloadFields?: readonly string[] | undefined;
+  readonly requestIdentities?: ((args: Record<string, unknown>) => unknown) | undefined;
+  readonly resultIdentities?: ((result: unknown) => unknown) | undefined;
+  readonly evaluate: (args: Record<string, unknown>, result: unknown) => boolean;
+}
+
+export interface CompiledToolExecutionContract extends ToolCompletionContract {
+  readonly executionId: string;
+}
 
 export interface ToolExecutionMetadata {
   readonly defaultEffect: ToolEffect;
@@ -84,6 +109,7 @@ export class ToolFailure extends Error {
 
 export interface RegisteredTool extends JarvisTool {
   readonly moduleId: string;
+  readonly completion?: CompiledToolExecutionContract | undefined;
 }
 
 /** Read-only after composition; this catalogue does not expose an HTTP dispatcher. */
@@ -117,12 +143,60 @@ function validExecutionMetadata(value: unknown): value is ToolExecutionMetadata 
     /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(name) && (effect === 'read' || effect === 'action'));
 }
 
+export function toolSchemaFieldNames(value: unknown, output = new Set<string>(), depth = 0): ReadonlySet<string> {
+  if (depth > 8 || value === null || typeof value !== 'object' || Array.isArray(value)) return output;
+  const record = value as Record<string, unknown>;
+  const properties = record.properties;
+  if (properties && typeof properties === 'object' && !Array.isArray(properties)) {
+    for (const name of Object.keys(properties)) output.add(name);
+  }
+  for (const keyword of ['allOf', 'anyOf', 'oneOf', 'if', 'then', 'else'] as const) {
+    const branch = record[keyword];
+    if (Array.isArray(branch)) for (const child of branch) toolSchemaFieldNames(child, output, depth + 1);
+    else toolSchemaFieldNames(branch, output, depth + 1);
+  }
+  return output;
+}
+
+const completionActionWords = new Set([
+  'add', 'archive', 'assign', 'cancel', 'capture', 'close', 'complete', 'correct', 'create', 'delete', 'dispatch',
+  'edit', 'forget', 'generate', 'manage', 'merge', 'move', 'open', 'pause', 'pin', 'publish', 'remember', 'remove',
+  'rename', 'renew', 'reply', 'restore', 'resume', 'retry', 'revoke', 'save', 'schedule', 'send', 'set', 'start',
+  'steer', 'stop', 'update', 'write',
+]);
+const completionActionTools = new Set([
+  'browser_do', 'browser_do_shared', 'pc_act', 'pc_browser_act', 'codex_prompt', 'workspace_command',
+  'mail_confirm_action', 'calendar_confirm_change', 'inbox_nudge_style', 'inbox_capture_credential',
+  'owner_reminders', 'proactive_item_feedback', 'watch_for', 'stop_watching_for',
+  'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets',
+  'health_coach_profile', 'health_meal_preference', 'health_recovery_period',
+  'health_nutrition_history', 'health_coach_status', 'gym_lifts', 'gym_sessions',
+]);
+const completionDomains = new Set<ToolCompletionDomain>([
+  'calendar', 'mail', 'weather', 'notes', 'tasks', 'health', 'memory', 'github', 'azure',
+  'web', 'factory', 'pc', 'workspace', 'jobs', 'settings', 'generic',
+]);
+const completionOperations = new Set<ToolCompletionOperation>([
+  'read', 'create', 'update', 'delete', 'send', 'open', 'start', 'generic',
+]);
+
+function actionContractRequired(tool: {
+  readonly name: string;
+  readonly execution?: ToolExecutionMetadata | undefined;
+}): boolean {
+  if (completionActionTools.has(tool.name) || tool.execution?.defaultEffect === 'action') return true;
+  if (tool.execution?.operation &&
+      Object.values(tool.execution.operation.effects).includes('action')) return true;
+  return tool.name.split(/[_-]+/u).some(word => completionActionWords.has(word));
+}
+
 /** agents/jarvis/limits.json is the single source; a test fails if these limits drift from it. */
 export const MAX_TOOL_DESCRIPTION_CHARACTERS = 4_000;
 export const MAX_CATALOGUE_BYTES = 1024 * 1024;
 
 export function createToolRegistry(modules: readonly { id: string; tools: readonly JarvisTool[] }[]): ToolRegistry {
   const tools = new Map<string, RegisteredTool>();
+  const executionIds = new Set<string>();
   const guardGmailAccess = gmailAccessGuard();
   for (const module of modules) {
     for (const tool of module.tools) {
@@ -142,9 +216,86 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       freezeSchema(inputSchema);
       const execution = tool.execution === undefined ? undefined : structuredClone(tool.execution);
       if (execution) freezeSchema(execution);
+      const completionSource = tool.completion;
+      const actionRequired = actionContractRequired({ name: tool.name, execution });
+      if (actionRequired && !completionSource) {
+        throw new Error(`Action tool ${tool.name} is missing PI completion contract`);
+      }
+      if (completionSource) {
+        const propertyNames = toolSchemaFieldNames(tool.inputSchema);
+        const validFields = (fields: readonly string[]) => fields.every(field =>
+          /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(field)) && new Set(fields).size === fields.length;
+        if (!completionDomains.has(completionSource.domain) ||
+            typeof completionSource.operation !== 'string' && typeof completionSource.operation !== 'function' ||
+            typeof completionSource.operation === 'string' && !completionOperations.has(completionSource.operation) ||
+            actionRequired && typeof completionSource.operation === 'string' && completionSource.operation === 'read' ||
+            !Array.isArray(completionSource.requestTargetFields) ||
+            !Array.isArray(completionSource.resultTargetFields) ||
+            completionSource.requestPayloadFields !== undefined &&
+              !Array.isArray(completionSource.requestPayloadFields) ||
+            !validFields(completionSource.requestTargetFields) ||
+            !validFields(completionSource.resultTargetFields) ||
+            completionSource.requestPayloadFields !== undefined &&
+              !validFields(completionSource.requestPayloadFields) ||
+            completionSource.acceptsRequestOperation !== undefined &&
+              typeof completionSource.acceptsRequestOperation !== 'function' ||
+            completionSource.requestIdentities !== undefined &&
+              typeof completionSource.requestIdentities !== 'function' ||
+            completionSource.resultIdentities !== undefined &&
+              typeof completionSource.resultIdentities !== 'function' ||
+            typeof completionSource.evaluate !== 'function' ||
+            completionSource.acceptedRequestOperations !== undefined &&
+              (!Array.isArray(completionSource.acceptedRequestOperations) ||
+                completionSource.acceptedRequestOperations.some(operation => !completionOperations.has(operation)))) {
+          throw new Error(`Invalid PI completion contract for ${tool.name}`);
+        }
+        if (completionSource.requestTargetFields.some(field => !propertyNames.has(field))) {
+          throw new Error(`PI completion request fields diverge from ${tool.name}`);
+        }
+        if (completionSource.requestPayloadFields?.some(field => !propertyNames.has(field))) {
+          throw new Error(`PI completion payload fields diverge from ${tool.name}`);
+        }
+        if (execution?.operation && !completionSource.requestTargetFields.includes(execution.operation.field)) {
+          throw new Error(`PI completion operation field is missing from ${tool.name}`);
+        }
+        const staticOperation = typeof completionSource.operation === 'string'
+          ? completionSource.operation
+          : undefined;
+        if (execution?.defaultEffect === 'read' && staticOperation !== undefined &&
+            staticOperation !== 'read' ||
+            execution?.defaultEffect === 'action' && staticOperation === 'read') {
+          throw new Error(`PI completion contract diverges from tool execution for ${tool.name}`);
+        }
+        if (execution?.operation) {
+          for (const [value, effect] of Object.entries(execution.operation.effects)) {
+            const operation = typeof completionSource.operation === 'function'
+              ? completionSource.operation({ [execution.operation.field]: value })
+              : completionSource.operation;
+            if (!completionOperations.has(operation) ||
+                (effect === 'read' ? operation !== 'read' : operation === 'read')) {
+              throw new Error(`PI completion contract diverges from tool execution for ${tool.name}`);
+            }
+          }
+        }
+      }
+      const executionId = `${module.id}:${tool.name}`;
+      if (executionIds.has(executionId)) throw new Error(`Duplicate PI completion execution ID ${executionId}`);
+      executionIds.add(executionId);
+      const completion = completionSource ? Object.freeze({
+        ...completionSource,
+        requestTargetFields: Object.freeze([...completionSource.requestTargetFields]),
+        resultTargetFields: Object.freeze([...completionSource.resultTargetFields]),
+        ...(completionSource.requestPayloadFields
+          ? { requestPayloadFields: Object.freeze([...completionSource.requestPayloadFields]) }
+          : {}),
+        ...(completionSource.acceptedRequestOperations
+          ? { acceptedRequestOperations: Object.freeze([...completionSource.acceptedRequestOperations]) }
+          : {}),
+        executionId,
+      }) satisfies CompiledToolExecutionContract : undefined;
       tools.set(tool.name, Object.freeze({
         ...tool, execute: guardGmailAccess(tool), inputSchema, ...(execution ? { execution } : {}),
-        moduleId: module.id,
+        moduleId: module.id, completion,
       }));
     }
   }

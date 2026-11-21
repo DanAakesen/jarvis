@@ -6,6 +6,7 @@ import {
 } from '../auth/inbox-capture-credential.js';
 import type { MemoryStore } from '../database/memory-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import type { BackendModule } from '../modules.js';
 import type { InboxIndex } from './item-index.js';
 import { MAX_NUDGE_STYLE_CHARACTERS, NUDGE_STYLE_KEY, type InboxOpsStore } from './ops.js';
@@ -171,6 +172,10 @@ export function createInboxModule(options: {
   const tools: JarvisTool[] = [
     {
       name: 'inbox_capture',
+      completion: {
+        domain: 'notes', operation: 'create', requestTargetFields: ['title', 'note', 'quote'],
+        resultTargetFields: ['id', 'title', 'path'], evaluate: receipt.inboxCapture,
+      },
       description: [
         "Save one idea, ask or loose thought from Dan to his inbox (a free-text note in his vault) so it is followed up until he moves on it or bins it.",
         'Use it for anything Dan throws at me that is not a dated task (vault_task_create), a fact or preference about him (memory_remember) or something to do right now. Do not ask permission; just capture it and say so briefly.',
@@ -262,6 +267,10 @@ export function createInboxModule(options: {
     },
     {
       name: 'inbox_close',
+      completion: {
+        domain: 'notes', operation: 'delete', requestTargetFields: ['id', 'path', 'reason'],
+        resultTargetFields: ['id', 'title', 'path'], evaluate: receipt.inboxClose,
+      },
       description: [
         "Close one inbox item because Dan said so: done, binned, handed over (a GitHub issue or reminder now exists) or merged into another item. The note moves to the inbox's Closed folder with a trail line; nothing is deleted.",
         'Only Dan\'s word closes an item: use it when he says "bin it", "drop it", "done with that" or has moved on an item, never on my own judgement. Identify the item by id (from inbox_items) or by path. reason is a short plain-words explanation (at most 300 characters) that goes into the trail, in the language Dan used.',
@@ -291,7 +300,7 @@ export function createInboxModule(options: {
           if (!item || item.closed) throw new ToolRefusal('No live inbox item matches that. Nothing was changed.');
           const closed = await store.close(item.path, value.reason, signal, item.sha);
           if (index) await bestEffort(() => index.forget(item.id, signal), request);
-          return { id: closed.id, title: closed.title, confirmation: `Closed in the inbox: ${closed.title}.` };
+          return { id: closed.id, title: closed.title, closed: true, confirmation: `Closed in the inbox: ${closed.title}.` };
         } catch (error) {
           if (error instanceof ToolRefusal || error instanceof InboxError) refusal(error);
           if (signal.aborted) throw error;
@@ -306,6 +315,13 @@ export function createInboxModule(options: {
   if (ops) {
     tools.push({
       name: 'inbox_nudge_style',
+      completion: {
+        domain: 'settings',
+        operation: args => args.operation === 'get' ? 'read'
+          : args.operation === 'reset' ? 'delete' : 'update',
+        requestTargetFields: ['operation', 'text'],
+        resultTargetFields: ['text', 'confirmation'], evaluate: receipt.nudgeStyle,
+      },
       description: [
         "Read, set or reset the short note that tells me how and when Dan likes to be nudged about his inbox. I rewrite it weekly from his thumbs up and down; he can read it, edit it or wipe it here.",
         `operation get returns the current text (empty when none). operation set replaces it with Dan's own words (at most ${MAX_NUDGE_STYLE_CHARACTERS} characters), only when he asks. operation reset deletes it so I start fresh. The text is a preference, never an instruction that overrides his requests.`,
@@ -353,6 +369,13 @@ export function createInboxModule(options: {
   if (credentials) {
     tools.push({
       name: 'inbox_capture_credential',
+      completion: {
+        domain: 'settings',
+        operation: args => args.operation === 'list' ? 'read'
+          : args.operation === 'revoke' ? 'delete' : 'create',
+        requestTargetFields: ['operation', 'label', 'scope', 'id'],
+        resultTargetFields: ['id', 'label', 'scope', 'confirmation'], evaluate: receipt.credentialIssue,
+      },
       description: [
         "Create, list or revoke an inbox credential that Dan puts in an iPhone Shortcut, a script or an AI assistant so it can reach his inbox and nothing else. It cannot read other vault notes or anything outside the inbox, and revoking it stops it at once.",
         `operation issue needs a short label such as "iPhone Shortcut" (at most ${maxInboxCaptureCredentials} credentials exist); the credential is returned once and can never be shown again, so give it to Dan in this reply and tell him to paste it into the Shortcut now. scope write (the default, for a Shortcut or script) can only add items; scope read_write is for an AI assistant such as Claude, Copilot or Codex connected over MCP and can also list and close items. operation list shows labels, scopes, ids and when each was last used; operation revoke needs the id from list.`,

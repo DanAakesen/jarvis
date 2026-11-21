@@ -192,6 +192,23 @@ describe('PI is the default engine on the chat turn', () => {
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'from PI', model: 'pi' });
   });
 
+  it('keeps repeated structured progress distinct without terminating the turn', async () => {
+    const { turn, messages } = setup({
+      piAgent: {
+        async *stream() {
+          yield { type: 'acknowledgment', text: 'Checking now.' };
+          yield { type: 'commentary', text: 'Checking now.' };
+          yield 'Finished.';
+        },
+      },
+    });
+    const result = await turn({ text: 'hi' });
+    expect(result.events.map(event => event.name)).toEqual([
+      'user', 'acknowledgment', 'commentary', 'delta', 'done',
+    ]);
+    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'Finished.' });
+  });
+
   it('does not fall back when PI is the default and is not set up', async () => {
     const { turn, messages } = setup();
     const result = await turn({ text: 'hi' });

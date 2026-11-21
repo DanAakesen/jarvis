@@ -4,6 +4,7 @@ import type { BackendModule } from '../modules.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import { readSettings } from '../core/settings.js';
 import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import { DKK_PER_USD } from '../core/usage-pricing.js';
 import { VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
 import {
@@ -308,6 +309,11 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
   const tools: JarvisTool[] = [
     {
       name: 'watch_for',
+      completion: {
+        domain: 'workspace', operation: 'create',
+        requestTargetFields: ['source', 'what', 'continuousDescription'],
+        resultTargetFields: ['source', 'instructionsSaved'], evaluate: receipt.visionWatch,
+      },
       description: 'Set standing instructions for incoming sampled images. Enable video automatically delivers camera frames; screen watching is separately enabled by Dan. For requests to keep describing, set continuousDescription=true. This tool cannot enable capture. Only claim updates are arriving if feed status is receiving; instructionsSaved alone is pending. Video continues until stopped or closed, subject to spending limits, session teardown and browser/device availability. Omit source for both.',
       sensitive: true,
       inputSchema: { type: 'object', properties: { source: sourceSchema, what: { type: 'string', minLength: 1, maxLength: 300 }, continuousDescription: { type: 'boolean' } },
@@ -323,6 +329,10 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
     },
     {
       name: 'stop_watching_for',
+      completion: {
+        domain: 'workspace', operation: 'delete', requestTargetFields: ['source'],
+        resultTargetFields: ['stopped'], evaluate: receipt.visionStop,
+      },
       description: 'Clear watch instructions for the shared screen, camera, or both when source is omitted. Does not change Dan’s sharing toggles.',
       sensitive: true,
       inputSchema: { type: 'object', properties: { source: sourceSchema }, additionalProperties: false },

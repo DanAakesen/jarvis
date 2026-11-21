@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
+import { receipt, semanticOperation } from '../core/tool-completion.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
+import { readAttachedOwnerMessage } from '../core/owner-message.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -377,9 +379,8 @@ async function danMessage(request: FastifyRequest): Promise<ConversationMessage>
       !request.server.conversationStore) {
     throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  const latest = page.messages[0];
-  if (!latest || latest.id !== id || latest.role !== 'dan' || !hasSession(latest)) {
+  const latest = await readAttachedOwnerMessage(request, AbortSignal.timeout(10_000));
+  if (!latest || latest.id !== id || !hasSession(latest)) {
     throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
   return latest;
@@ -617,6 +618,28 @@ function makeOperationTool(
   const byName = new Map(definitions.map((definition) => [definition.name, definition]));
   return {
     name,
+    ...(name === 'github_write'
+      ? {
+          completion: {
+            domain: 'github' as const,
+            operation: (args: Record<string, unknown>) => {
+              if (args.operation === 'file_write') return args.sha === undefined ? 'create' as const : 'update' as const;
+              if (args.operation === 'workflow_dispatch' || args.operation === 'workflow_rerun') return 'start' as const;
+              if (args.operation === 'pr_ready') return 'update' as const;
+              return semanticOperation(args.operation);
+            },
+            requestTargetFields: [
+              'operation',
+              ...new Set(definitions.flatMap(definition => Object.keys(definition.properties))),
+            ],
+            resultTargetFields: [
+              'repository', 'number', 'branch', 'path', 'sha', 'runId', 'url', 'name',
+              'ref', 'title', 'state', 'reviewId', 'color',
+            ],
+            evaluate: receipt.githubWrite,
+          },
+        }
+      : {}),
     description: warning(`${summary} Choose one operation: ${definitions.map((definition) =>
       `${definition.name}(${definition.required.join(', ')}) ${definition.description}`).join(' ')}`),
     inputSchema: rootOperationSchema(definitions),

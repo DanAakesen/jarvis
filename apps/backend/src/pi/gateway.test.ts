@@ -5,6 +5,10 @@ import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
+import type {
+  PiCompletionEvidence, PiCompletionDomain, PiCompletionEvidenceKind, PiCompletionOperation,
+} from './completion.js';
+import { completionPlan } from './completion.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -16,6 +20,17 @@ const sse = (...frames: string[]) => new Response(new ReadableStream({
 }), { headers: { 'content-type': 'text/event-stream' } });
 const delta = (text: string) => frame({ type: 'response.output_text.delta', delta: text });
 const tool = frame({ type: 'response.output_item.added', item: { type: 'mcp_call' } });
+const completion = (
+  name: string,
+  kind: PiCompletionEvidenceKind,
+  domain: PiCompletionDomain,
+  targetHashes: readonly string[] = [],
+  operation: PiCompletionOperation = kind === 'retrieved' ? 'read'
+    : kind === 'durable_job' ? 'start' : 'generic',
+): PiCompletionEvidence => ({
+  executionId: `fixture:${name}`, tool: name, kind, domain, operation, argumentsHash: 'fixture-arguments',
+  targetHashes, identityHashes: [], identityTargets: [],
+});
 
 interface Call { url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
 
@@ -89,7 +104,7 @@ describe('PI gateway', () => {
       () => sse(delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),
       () => sse(delta('Again'), completed(11_100, 11_000, 10)),
     ]);
-    expect(await run('hi')).toEqual(['Hello', ' Dan']);
+    expect(await run('hi')).toEqual(['Hello Dan']);
     await run('more');
     expect(conversations()).toBe(1);
     const responses = calls.filter(call => call.url.includes('/responses'));
@@ -98,7 +113,9 @@ describe('PI gateway', () => {
     expect(responses[0]!.body).toMatchObject({ conversation: 'conv_1', stream: true });
     const first = (responses[0]!.body!.input as Array<{ content: string }>)[0]!.content;
     const second = (responses[1]!.body!.input as Array<{ content: string }>)[0]!.content;
-    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\nhi$/u);
+    expect(first).toMatch(/^\[Turn jt-[A-Za-z0-9_-]{22} \| 2026-11-15 17:00 Europe\/Copenhagen\]\nCONTEXT BLOCK\n\n/u);
+    expect(first).toContain('Foreground PI budget');
+    expect(first).toMatch(/\n\nhi$/u);
     expect(second).not.toContain('CONTEXT BLOCK');
     expect(store.turns.map(turn => [turn.kind, turn.outcome, turn.inputTokens, turn.cachedTokens, turn.outputTokens])).toEqual([
       ['chat', 'ok', 11_000, 9_000, 20], ['chat', 'ok', 11_100, 11_000, 10],
@@ -106,6 +123,28 @@ describe('PI gateway', () => {
     expect(store.turns[0]!.costDkk).toBeCloseTo(11_000 * 6.5785 / 1e6 + 20 * 32.8925 / 1e6, 5);
     expect(usage[0]).toMatchObject({ model: 'gpt-6.1-terra', inputTokens: 11_000, outputTokens: 20 });
     expect(registry.size).toBe(0);
+  });
+
+  it('buffers provider deltas until the response can be verified and completed', async () => {
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const { gateway } = setup([() => new Response(new ReadableStream({
+      start(controller) {
+        stream = controller;
+        controller.enqueue(new TextEncoder().encode(delta('A false early claim.')));
+      },
+    }), { headers: { 'content-type': 'text/event-stream' } })]);
+    const iterator = gateway.stream(
+      { messageId: '42', sessionId: '7', text: 'hello' },
+      'Bearer x',
+      new AbortController().signal,
+    )[Symbol.asyncIterator]();
+    let settled = false;
+    const pending = iterator.next().then(value => { settled = true; return value; });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    expect(settled).toBe(false);
+    stream.enqueue(new TextEncoder().encode(completed(1, 0, 1)));
+    stream.close();
+    await expect(pending).resolves.toMatchObject({ done: false, value: 'A false early claim.' });
   });
 
   it('hands the agent a live turn reference during the turn and ends it with the turn', async () => {
@@ -120,9 +159,178 @@ describe('PI gateway', () => {
     const { gateway, calls } = setup([() => sse(delta('x'), completed(1, 0, 1)), () => sse(delta('y'), completed(1, 0, 1))]);
     const input = () => (calls.at(-1)!.body!.input as Array<{ content: string }>)[0]!.content;
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'hi', channel: 'voice' }, '', new AbortController().signal)) void chunk;
-    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]\n\nhi$/u);
+    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]/u);
+    expect(input()).toContain('Foreground PI budget');
+    expect(input()).toMatch(/\n\nhi$/u);
     for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'again' }, '', new AbortController().signal)) void chunk;
     expect(input()).not.toContain('Channel: voice');
+  });
+
+  it('adds the connected capability inventory to every activation', async () => {
+    const { run, calls } = setup(
+      [() => sse(delta('Hello.'), completed(1, 0, 1))],
+      { activationCapabilities: () => 'Jarvis=ready; GitHub=starting; Azure=not_configured' },
+    );
+    await run('hello');
+    const sent = (calls.find(call => call.url.includes('/responses'))!.body!.input as Array<{ content: string }>)[0]!.content;
+    expect(sent).toContain('Jarvis=ready; GitHub=starting; Azure=not_configured');
+  });
+
+  it('does not deliver a current-data answer without successful retrieval evidence', async () => {
+    const { gateway, store } = setup([() => sse(
+      delta('Your calendar is clear.'),
+      completed(1, 0, 1),
+    )]);
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'what is on my calendar today?' }, '', new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(chunks).toEqual([]);
+    expect(store.turns.at(-1)).toMatchObject({ outcome: 'failed' });
+  });
+
+  it('does not finish an ordinary conversation turn after an unverified tool execution', async () => {
+    const runtimeTool = setup([() => sse(delta('It is done.'), completed(1, 0, 1))]);
+    const open = runtimeTool.registry.open.bind(runtimeTool.registry);
+    runtimeTool.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'mail_send', outcome: 'ok' });
+      grant.unverified.count += 1;
+      return grant;
+    };
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of runtimeTool.gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'Hello.' }, '', new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({
+      code: 'pi_incomplete',
+      detail: 'completion_evidence_missing',
+    });
+    expect(chunks).toEqual([]);
+  });
+
+  it('publishes only structured progress before an incomplete tool result', async () => {
+    const runtimeTool = setup([() => sse(
+      delta('I am checking.'),
+      tool,
+      delta('It is done.'),
+      completed(1, 0, 1),
+    )]);
+    const open = runtimeTool.registry.open.bind(runtimeTool.registry);
+    runtimeTool.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'mail_send', outcome: 'ok' });
+      grant.unverified.count += 1;
+      return grant;
+    };
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of runtimeTool.gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'Send it.' }, '', new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(chunks).toEqual([{ type: 'acknowledgment', text: 'I am checking.' }]);
+  });
+
+  it('accepts retrieved, committed and durable-job evidence only for the matching request', async () => {
+    const retrieved = setup([() => sse(delta('Two meetings.'), completed(1, 0, 1))]);
+    const openRead = retrieved.registry.open.bind(retrieved.registry);
+    retrieved.registry.open = (input) => {
+      const grant = openRead(input);
+      grant.evidence.push(completion('calendar_list', 'retrieved', 'calendar'));
+      return grant;
+    };
+    await expect(retrieved.run('what is on my calendar?')).resolves.toEqual(['Two meetings.']);
+
+    const committed = setup([() => sse(delta('Created it.'), completed(1, 0, 1))]);
+    const openWrite = committed.registry.open.bind(committed.registry);
+    committed.registry.open = (input) => {
+      const grant = openWrite(input);
+      grant.evidence.push(completion('vault_task_create', 'committed', 'tasks', [], 'create'));
+      return grant;
+    };
+    await expect(committed.run('create a task')).resolves.toEqual(['Created it.']);
+
+    const job = setup([() => sse(delta('Task started.'), completed(1, 0, 1))]);
+    const openJob = job.registry.open.bind(job.registry);
+    job.registry.open = (input) => {
+      const grant = openJob(input);
+      grant.evidence.push(completion('start_issue', 'durable_job', 'factory', [], 'start'));
+      return grant;
+    };
+    await expect(job.run('implement my code in the background')).resolves.toEqual(['Task started.']);
+  });
+
+  it('does not yield a verified final answer while another successful execution is unverified', async () => {
+    const runtime = setup([() => sse(delta('Email sent.'), completed(1, 0, 1))]);
+    const open = runtime.registry.open.bind(runtime.registry);
+    runtime.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'vault_task_create', outcome: 'ok' });
+      grant.results.push({ tool: 'mail_send', outcome: 'ok' });
+      grant.evidence.push(completion('vault_task_create', 'committed', 'tasks', [], 'create'));
+      grant.unverified.count += 1;
+      return grant;
+    };
+    const chunks: ConversationAgentChunk[] = [];
+    await expect((async () => {
+      for await (const chunk of runtime.gateway.stream(
+        { messageId: '42', sessionId: '7', text: 'create a task' },
+        '',
+        new AbortController().signal,
+      )) chunks.push(chunk);
+    })()).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(chunks).toEqual([]);
+  });
+
+  it('does not let unrelated same-kind or same-domain evidence finish the request', async () => {
+    const wrongDomain = setup([() => sse(delta('No meetings.'), completed(1, 0, 1))]);
+    const openWrong = wrongDomain.registry.open.bind(wrongDomain.registry);
+    wrongDomain.registry.open = (input) => {
+      const grant = openWrong(input);
+      grant.evidence.push(completion('weather_read', 'retrieved', 'weather'));
+      return grant;
+    };
+    await expect(wrongDomain.run('what is on my calendar?')).rejects.toMatchObject({ code: 'pi_incomplete' });
+
+    const wrongTarget = setup([() => sse(delta('No meetings for Bob.'), completed(1, 0, 1))]);
+    const openTarget = wrongTarget.registry.open.bind(wrongTarget.registry);
+    wrongTarget.registry.open = (input) => {
+      const grant = openTarget(input);
+      grant.evidence.push(completion('calendar_read', 'retrieved', 'calendar'));
+      return grant;
+    };
+    await expect(wrongTarget.run('show Alice’s calendar')).rejects.toMatchObject({ code: 'pi_incomplete' });
+    expect(completionPlan('show Alice’s calendar').requirements[0]!.targetHashes.length).toBeGreaterThan(0);
+  });
+
+  it('does not finish own-code work from an issue receipt without a durable task status', async () => {
+    const plan = completionPlan('Implement issue 1967 in my code.');
+    const ownCode = setup([() => sse(delta('Issue created.'), completed(1, 0, 1))]);
+    const open = ownCode.registry.open.bind(ownCode.registry);
+    ownCode.registry.open = (input) => {
+      const grant = open(input);
+      grant.evidence.push(completion(
+        'create_issue',
+        'committed',
+        'factory',
+        plan.requirements[0]!.targetHashes,
+        'create',
+      ));
+      return grant;
+    };
+    await expect(ownCode.run('Implement issue 1967 in my code.'))
+      .rejects.toMatchObject({ code: 'pi_incomplete' });
+  });
+
+  it('fails visibly when foreground spend cannot be read and never substitutes the Proactive budget', async () => {
+    const { run, store, calls } = setup([]);
+    store.spendSince = async () => { throw new Error('database unavailable'); };
+    await expect(run('hello')).rejects.toMatchObject({ code: 'pi_budget_unavailable' });
+    expect(calls).toEqual([]);
   });
 
   it('records only bounded runtime evidence for chat and voice turns', async () => {
@@ -151,9 +359,17 @@ describe('PI gateway', () => {
   });
 
   it('marks text before a tool call as an acknowledgment, then commentary', async () => {
-    const { run } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
-    expect(await run('look')).toEqual([
-      'Checking.', { type: 'acknowledgment', text: 'Checking.' }, 'Still on it.', { type: 'commentary', text: 'Still on it.' }, 'Done.',
+    const { run, registry } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
+    const open = registry.open.bind(registry);
+    registry.open = (input) => {
+      const grant = open(input);
+      grant.evidence.push(completion('fixture_read', 'retrieved', 'calendar'));
+      return grant;
+    };
+    expect(await run('look up the calendar')).toEqual([
+      { type: 'acknowledgment', text: 'Checking.' },
+      { type: 'commentary', text: 'Still on it.' },
+      'Done.',
     ]);
   });
 
@@ -164,7 +380,7 @@ describe('PI gateway', () => {
     const failed = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'github', name: 'get_issue', error: { code: 'x' } } });
     const odd = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'bad label with spaces', name: 'x', error: null } });
     const { run } = setup([() => sse(listed, listFailed, tool, failed, odd, delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
-    expect(await run('look')).toEqual(['ok']);
+    expect(await run('hello')).toEqual(['ok']);
     expect(logs.filter(([event]) => event !== 'pi.turn')).toEqual([
       ['pi.mcp_list_failed', { server: 'azure' }], ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue' }],
     ]);
@@ -210,6 +426,41 @@ describe('PI gateway', () => {
     expect(result.costDkk).toBeGreaterThan(0);
     expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'failed' });
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+  });
+
+  it('fails a brain wake when a successful action lacks compiled terminal receipt evidence', async () => {
+    const runtime = setup([
+      () => sse(delta('I changed the project.'), completed(2_000, 0, 30)),
+    ]);
+    const open = runtime.registry.open.bind(runtime.registry);
+    runtime.registry.open = (input) => {
+      const grant = open(input);
+      grant.results.push({ tool: 'update_project', outcome: 'ok' });
+      grant.actions.count = 1;
+      grant.unverified.count = 1;
+      return grant;
+    };
+    const result = await runtime.gateway.runBrain(
+      { runId: 'unverified-action', body: 'Update the project if needed.' },
+      new AbortController().signal,
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      outcome: 'failed',
+      error: { code: 'pi_incomplete' },
+    });
+    expect(runtime.store.turns.at(-1)).toMatchObject({
+      kind: 'brain',
+      outcome: 'failed',
+    });
+    expect(runtime.registry.size).toBe(0);
+  });
+
+  it('treats a completed deliberate quiet brain outcome as success', async () => {
+    const { gateway, store } = setup([() => sse(completed(1, 0, 0))]);
+    const result = await gateway.runBrain({ runId: 'quiet-1', body: 'Stay quiet if there is nothing useful.' }, new AbortController().signal);
+    expect(result).toMatchObject({ ok: true, text: '', outcome: 'ok' });
+    expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'ok' });
   });
 
   it('stops before sending anything once the monthly cap is reached', async () => {
@@ -259,13 +510,15 @@ describe('PI gateway', () => {
       () => sse(delta('ok'), completed(2, 0, 1)),
     ]);
     const received: ConversationAgentChunk[] = [];
-    await expect((async () => {
+    const turn = (async () => {
       for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'long' }, 'Bearer x', controller.signal)) {
         received.push(chunk);
-        controller.abort();
       }
-    })()).rejects.toBeDefined();
-    expect(received).toEqual(['first']);
+    })();
+    await new Promise(resolve => setTimeout(resolve, 5));
+    controller.abort();
+    await expect(turn).rejects.toBeDefined();
+    expect(received).toEqual([]);
     expect(store.turns[0]).toMatchObject({ outcome: 'cancelled' });
     expect(registry.size).toBe(0);
     const next: ConversationAgentChunk[] = [];
@@ -350,7 +603,8 @@ describe('PI gateway', () => {
     const first = gateway.stream(
       { messageId: '42', sessionId: '7', text: 'first' }, '', controller.signal,
     );
-    expect((await first.next()).value).toBe('first');
+    const pendingFirst = first.next();
+    await new Promise(resolve => setTimeout(resolve, 5));
     const second = async () => {
       for await (const chunk of gateway.stream(
         { messageId: '43', sessionId: '7', text: 'second' }, '', new AbortController().signal,
@@ -362,6 +616,7 @@ describe('PI gateway', () => {
       channel: 'chat', outcome: 'failed', source: 'turn', reason: 'busy',
     }));
     controller.abort();
+    await pendingFirst.catch(() => undefined);
     await first.return(undefined).catch(() => undefined);
   });
 

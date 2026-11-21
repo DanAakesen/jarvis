@@ -16,6 +16,7 @@ import {
 } from './memory-policy.js';
 import type { UsageStore } from './usage.js';
 import { ToolRefusal } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 
 const MAX_MEMORY_RESULTS = 5;
 const MAX_LIST_RESULTS = 25;
@@ -356,6 +357,12 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
   const tools = [
     {
       name: 'memory_remember',
+      completion: {
+        domain: 'memory', operation: 'create',
+        requestTargetFields: ['key'],
+        requestPayloadFields: ['category', 'content'],
+        resultTargetFields: ['id', 'key', 'revision'], evaluate: receipt.memoryWrite,
+      },
       description: 'Save a preference, project fact, decision or unfinished task that Dan clearly stated in this owner message or its resolved context. Explicit remember, don’t forget, remember this and equivalent English or Danish requests always use Personal Memory, never Vault. sourceIntent labels the model’s interpretation but the stored Dan message proves authority. Never save a secret or credential. Automatic capture saves only clearly stated durable facts while automatic capture is enabled, and never sensitive health or financial details. Use a stable key; search first and preserve corrections under the same key.',
       execution: { defaultEffect: 'action' },
       inputSchema: {
@@ -499,6 +506,11 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     },
     {
       name: 'memory_correct',
+      completion: {
+        domain: 'memory', operation: 'update',
+        requestTargetFields: ['memoryId'], requestPayloadFields: ['content'],
+        resultTargetFields: ['id', 'key', 'revision'], evaluate: receipt.memoryWrite,
+      },
       description: 'Correct an existing memory after Dan corrects or updates it. Keep its category and stable key, verify this message is from Dan, and preserve the previous source-linked version.',
       execution: { defaultEffect: 'action' },
       inputSchema: {
@@ -539,6 +551,10 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     },
     {
       name: 'memory_forget',
+      completion: {
+        domain: 'memory', operation: 'delete', requestTargetFields: ['memoryId'],
+        resultTargetFields: ['id', 'category', 'key'], evaluate: receipt.memoryDelete,
+      },
       description: 'Forget one confirmed saved memory. Search or list first, ask Dan to disambiguate multiple matches, then use the matching ID. This deletes the memory and its stored revisions, not the original conversation or source message.',
       execution: { defaultEffect: 'action' },
       inputSchema: {

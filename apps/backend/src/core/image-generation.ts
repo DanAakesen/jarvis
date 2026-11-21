@@ -11,6 +11,7 @@ import {
 import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 
 const promptLengthLimit = 4096;
 const uploadBodyLimit = 7_100_000;
@@ -56,6 +57,10 @@ function imageTool(options: ImageGenerationOptions): BackendModule['tools'][numb
   const timeoutMs = options.timeoutMs ?? jobTimeoutMs;
   return {
     name: 'image_generation',
+    completion: {
+      domain: 'workspace', operation: 'create', requestTargetFields: ['prompt'],
+      resultTargetFields: ['artifactId'], evaluate: receipt.workspaceView,
+    },
     description: 'Generate one image from Dan’s description using the OpenAI Images API and open it in the active workspace.',
     inputSchema,
     sensitive: true,

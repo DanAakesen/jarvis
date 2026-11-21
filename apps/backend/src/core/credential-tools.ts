@@ -1,4 +1,5 @@
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { receipt } from './tool-completion.js';
 
 const renewCredentialSchema = {
   type: 'object',
@@ -13,6 +14,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const renewCredentialTool: JarvisTool = {
   name: 'renew_credential',
+  completion: {
+    domain: 'settings', operation: 'update', requestTargetFields: ['name'],
+    resultTargetFields: ['outcome'], evaluate: receipt.credentialRenewal,
+  },
   description: 'Start renewal of the Jarvis Codex login when Dan requests it. Only codex-login is supported. Report the outcome and any sign-in step; never request credentials, tokens, or codes.',
   inputSchema: renewCredentialSchema,
   sensitive: true,

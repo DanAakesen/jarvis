@@ -1,7 +1,10 @@
 import type { FastifyRequest } from 'fastify';
 import { healthQuerySources, isHealthQuery } from '@jarvis/contracts';
 import type { HealthCursor } from '../health/read-model.js';
-import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
+import {
+  ToolFailure, ToolRefusal, type JarvisTool, type ToolCompletionContract,
+} from '../../core/tool-registry.js';
+import { receipt } from '../../core/tool-completion.js';
 import { dateOnly } from '../health/value.js';
 import { activeEnergyMetric } from '../nutrition/budget.js';
 import type { NutritionStore } from '../nutrition/store.js';
@@ -335,6 +338,11 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
     });
   const coachProfileTool: JarvisTool = {
     name: 'health_coach_profile',
+    completion: {
+      domain: 'health', operation: args => args.operation === 'read' ? 'read' : 'update',
+      requestTargetFields: ['operation', 'patch'],
+      resultTargetFields: ['status', 'profile'], evaluate: receipt.healthWrite,
+    },
     description: 'Read the saved coach profile, or update only fields explicitly requested in ordinary conversation. Execute requested updates directly; caller-supplied confirmation flags are not accepted. An unconfigured profile stays unconfigured and is not filled with invented defaults.',
     inputSchema: schema({
       operation: { type: 'string', enum: ['read', 'update'] },
@@ -367,6 +375,11 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
   };
   const mealPreferenceTool: JarvisTool = {
     name: 'health_meal_preference',
+    completion: {
+      domain: 'health', operation: 'update',
+      requestTargetFields: ['mealKey', 'preference'],
+      resultTargetFields: ['status', 'mealKey', 'preference'], evaluate: receipt.healthWrite,
+    },
     description: 'Set or clear the owner’s like/dislike for one exact favorite or meal key. This changes feedback only, never intake or Health. Execute requested changes directly; null clears the preference. No caller-supplied confirmation or owner fields.',
     inputSchema: schema({ mealKey: { type: 'string', minLength: 3, maxLength: 200 }, preference: { type: ['string', 'null'], enum: ['like', 'dislike', null] } }, ['mealKey', 'preference']),
     sensitive: true, denyOnPhone: true, bodyLimit: 2 * 1024,
@@ -395,6 +408,11 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
   };
   const recoveryTool: JarvisTool = {
     name: 'health_recovery_period',
+    completion: {
+      domain: 'health', operation: 'update',
+      requestTargetFields: ['startDate', 'endDate', 'state', 'context'],
+      resultTargetFields: ['status', 'startDate', 'endDate'], evaluate: receipt.healthWrite,
+    },
     description: 'Mark or clear one to 365 past or current dates as recovery days, without modifying measured health, sleep, workout or food data. Recovery markers are excluded from selected analytical totals. Execute requested writes directly; clear cannot include context. No caller-supplied confirmation or owner fields.',
     inputSchema: schema({ startDate: dateSchema, endDate: dateSchema, state: { type: 'string', enum: ['sick', 'clear'] }, context: { type: 'string', minLength: 1, maxLength: 280 } }, ['startDate', 'endDate']),
     sensitive: true, denyOnPhone: true, bodyLimit: 2 * 1024,
@@ -425,7 +443,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       }, signal, { channel: 'browser', lifetimeSeconds: 120 });
     },
   };
-  const grouped = (name: string, description: string, routes: readonly {
+  const grouped = (name: string, description: string, completion: ToolCompletionContract, routes: readonly {
     operation: string; tool: JarvisTool; required?: readonly string[]; injected?: Record<string, unknown>; exclude?: readonly string[];
   }[]): JarvisTool => {
     const variants = routes.map(route => {
@@ -440,6 +458,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
     const routeByOperation = new Map(routes.map(route => [route.operation, route]));
     return {
       name, description, inputSchema: { type: 'object', oneOf: variants }, sensitive: true, denyOnPhone: true, bodyLimit: 16 * 1024,
+      completion,
       execute: async (raw, request, signal) => {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof (raw as Input).operation !== 'string') {
           throw new ToolRefusal('Choose one supported Health capability operation.');
@@ -457,16 +476,35 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
   return [
     grouped('health_summary',
       'Read source-compatible health summary or historical health. Set operation to get_health_summary or get_health_history. Each history call reads one window of at most 93 dates/100 rows per category. For wider periods or more rows, replay coverage.continuation with the original explicit startDate/endDate until exhausted or the assistant tool/time budget is reached. Null category cursors mean exhausted, not restart. Fetch subsequent pages when the answer requires them; otherwise disclose actual loaded windows/records and remaining limits. A first page is not the full year/history; failed, interrupted or budget-limited traversal is partial. Source completeness stays unknown even after retained exhaustion.',
+      {
+        domain: 'health', operation: 'read',
+        requestTargetFields: ['operation', 'startDate', 'endDate', 'continuation'],
+        resultTargetFields: ['operation', 'coverage'], evaluate: receipt.read,
+      },
       [{ operation: 'get_health_summary', tool: healthSummaryTool },
         { operation: 'get_health_history', tool: healthHistoryTool }]),
     grouped('health_nutrition_history',
       'Read canonical named-meal history, analyze nutrition totals/trends, calculate known calorie balance, or set one meal preference. Use operation get_nutrition_history, analyze_nutrition, get_calorie_balance, or set_meal_preference. History reads one bounded window/page per call; replay coverage.continuation with the original explicit startDate/endDate when the requested answer needs more. Never call a first page the full year/history. Disclose actual loaded windows/records and remaining limits; stop at the assistant tool/time budget and label failed, interrupted or budget-limited traversal partial. Retained exhaustion is not source completeness, which stays unknown. Execute requested writes directly. Health nutrient observations are not named meals; unknown values remain null.',
+      {
+        domain: 'health', operation: args => args.operation === 'set_meal_preference' ? 'update' : 'read',
+        requestTargetFields: ['operation', 'mealKey', 'preference', 'startDate', 'endDate', 'continuation'],
+        resultTargetFields: ['operation', 'mealKey', 'preference', 'status', 'coverage'],
+        evaluate: receipt.healthWrite,
+      },
       [{ operation: 'get_nutrition_history', tool: nutritionHistoryTool },
         { operation: 'analyze_nutrition', tool: nutritionAnalyzeTool },
         { operation: 'get_calorie_balance', tool: calorieBalanceTool },
         { operation: 'set_meal_preference', tool: mealPreferenceTool }]),
     grouped('health_coach_status',
       'Read conversational Status, read or update the saved coach profile, or mark/clear recovery dates. Use get_coach_status, get_coach_profile, update_coach_profile, or set_recovery_period. Execute requested writes directly; no fixed Status renderer, commitments, defaults or measured-data changes.',
+      {
+        domain: 'health',
+        operation: args => args.operation === 'update_coach_profile' ||
+          args.operation === 'set_recovery_period' ? 'update' : 'read',
+        requestTargetFields: ['operation', 'patch', 'startDate', 'endDate', 'state', 'context'],
+        resultTargetFields: ['operation', 'status', 'profile', 'startDate', 'endDate'],
+        evaluate: receipt.healthWrite,
+      },
       [{ operation: 'get_coach_status', tool: coachStatusTool },
         { operation: 'get_coach_profile', tool: coachProfileTool, injected: { operation: 'read' }, exclude: ['patch'] },
         { operation: 'update_coach_profile', tool: coachProfileTool, required: ['patch'], injected: { operation: 'update' } },

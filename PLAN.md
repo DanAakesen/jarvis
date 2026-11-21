@@ -34,7 +34,6 @@ behaviour, with no old voice fallback or provider-output semantic approval gate.
 | Run offline backend/web/Swift/SQL checks and browser inspection, update affected docs and commit the follow-up | Done locally; focused blocker gates pass, including isolated SQL, migration, backend and web pagination tests |
 
 No live model/provider smoke, deployment or spending is authorized. Physical Chat, Voice and device acceptance remains an owner check.
-
 ## GPT-Live P0 replacement — 20 November 2026
 
 **Status: approved source cutover implemented and statically verified on the current `main`-based branch.** No issue or PR is created by this work, no provider/resource is deployed or deleted now, and no test suite, voice session, model call, `measure_pi`, paid smoke or live provider probe is run.
@@ -143,6 +142,19 @@ No external push/provider test is part of this change.
 
 Completion means the existing PI activation envelope and one background queue own the whole path; no parallel brain, shadow scheduler, Personal Memory copy or push transport was introduced. Live provider behaviour and owner judgement remain outside this offline implementation.
 
+## PI execution integrity — 20 November 2026 (#1967)
+
+**Status: implemented and qualified offline.** The PI path now loads remote catalogues only on provider-specific discovery, supports NFKD-aligned English/Danish request handling and exact `otherMatches`, buffers provider answer deltas until completion is verified, records completion evidence, separates Voice Live playback interruption from PI work, and binds tool authority to the exact owner message. Registry construction rejects action contracts that are missing or divergent from a tool's schema/execution contract. No live model/provider, `measure_pi`, external message, deployment or spend was used.
+
+| Step | State |
+| --- | --- |
+| Make local discovery immediate and provider refresh on demand with a bounded selected-provider wait/continuation; add compact connection and capability status | Done |
+| Add aliases, exact-name priority and callable compact matches while retaining per-turn visibility/source checks | Done |
+| Require domain/operation/target/payload-bound tool, argument and terminal-receipt evidence; add complete-row trusted contextual resolution, read-first NFKD Danish interrogatives, exact provider operation aliases and co-located per-tool contracts; enforce durable own-code task status | Done after final follow-up review, including every deployed GitHub/Azure write contract, complete identity groups, separate payload proof, natural operation dispatch, exact Memory capture/correction plans, row-preserving reads, compiled receipt evidence for proactive actions and construction validation across optional registries |
+| Decouple GPT-Live playback cancellation from PI work and preserve exact turn authority under concurrent proactive chat | Done |
+| Keep unrestricted owner actions, target-bound deletion checks and separate foreground/proactive budgets | Done |
+| Update focused tests and PI/product/architecture/agent/decision documentation, including review regressions for same-kind, partial/cancelled, cold-provider and issue-only evidence | Done |
+| Run full offline backend build, test and lint; address independent review and prepare the replacement exact head | Done after the final review fix on current main: build and lint pass, 65 files / 828 backend tests pass |
 ## PI release hardening and selector removal — 19 November 2026 (#1966)
 
 **Status: implemented and fully qualified offline in the existing #1964 branch. The new exact head, CI and review are still pending.** This follow-up keeps the already approved behaviour but removes release and client states that can disagree with it. No paid or live call, merge, deployment or TestFlight action is part of the work.
@@ -228,7 +240,7 @@ change is not required for this backlog unless a hard guard explicitly remains.
 
 | Step | State |
 | --- | --- |
-| The backend wakes the Azure MCP server as it starts (and `/pi/warm` does the same), so the first search no longer finds it asleep | Done |
+| The backend wakes the Azure MCP server as it starts (and `/pi/warm` does the same), so the first search no longer finds it asleep | Historical implementation; superseded by #1967's provider-on-demand loading |
 | The catalogue refresh is no longer cancelled at 90 s (now 200 s, inside the ingress's 240 s hold); a failed first list is not cached, the next search retries | Done |
 | A search says when a server is still loading or could not be reached, so PI no longer reports Azure as "not attached" | Done; PI instructions updated |
 | The smoke lists both servers at once and prints why a listing failed; the Deploy wakes the server first and prints the cold-start time | Done |
@@ -373,7 +385,7 @@ Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so
 | Deploy measurement of the PI leg of a voice turn (first text, total, DKK, speakable-reply check, voice tool turn) | **Built in the `measure_pi` smoke; not yet run.** The numbers go into the pull request when the dispatcher runs Deploy with `measure_pi` |
 | Real audio latency (speech stop to first audio) and per-turn cost with Voice Live | **Open: the owner's phone test.** The relay logs `voice.pi_turn` (transcript to first PI text and to the end of the PI turn) and `voice.turn_timing` (first audio) |
 
-**How a spoken turn runs.** The relay no longer lets the Voice Live model pick among about 150 tools. On the PI engine Voice Live has no tools and a short "voice only" prompt. When the final transcript of an utterance arrives, the relay stores it as Dan's message (as before), starts a PI turn with the voice channel note and the stored message id (so tools still prove the write against Dan's own words), speaks PI's own sentence before a tool call as soon as it exists (the natural acknowledgement; PI writes it), and speaks the answer with `response.create` (tools off) when the turn ends. A newer utterance cancels the turn in flight (the newest wins; the cancel happens when Dan starts speaking, so a stale answer never lands on top of him); a barge-in is Voice Live's own and stops speech as before; the session ending stops the turn. Errors are spoken in PI's honest words ("No other engine was used"). The PI conversation is warmed while Voice Live connects, so the accepted first-turn wait (3.3 s cold, 1.1 to 1.3 s warm, measured 16 November) overlaps the connection.
+**How a spoken turn runs.** The relay no longer lets the Voice Live model pick among about 150 tools. On the PI engine Voice Live has no tools and a short "voice only" prompt. When the final transcript of an utterance arrives, the relay stores it as Dan's message (as before), starts a PI turn with the voice channel note and the stored message id (so tools still prove the write against Dan's own words), speaks PI's own sentence before a tool call as soon as it exists (the natural acknowledgement; PI writes it), and speaks the answer with `response.create` (tools off) when the turn ends. #1967 changed interruption: `speech_started` cancels Voice Live playback and silences stale PI speech, while valid PI work keeps its exact grant; the newer transcript queues behind it. The session ending still stops PI. Errors are spoken in PI's honest words ("No other engine was used"). The PI conversation is warmed while Voice Live connects, so the accepted first-turn wait (3.3 s cold, 1.1 to 1.3 s warm, measured 16 November) overlaps the connection.
 
 **Known limits, stated in the pull request.** With PI, voice has no camera or screen sharing yet (the relay answers `not_supported`) and no typed requests through the voice socket. If PI is not set up on the backend or is over its monthly cap, the voice session ends or says so; it never switches engine. The old harness remains for isolated runtime testing and the separately gated phase-8 retirement; it is not a normal-route fallback.
 

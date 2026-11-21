@@ -3,6 +3,8 @@ import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
+import { attachedOwnerMessageId, readAttachedOwnerMessage } from '../core/owner-message.js';
 import type { ProactiveStore } from './store.js';
 import { createItemFeedbackCapability } from './feedback-tool.js';
 import { findingCategories, type Item } from './types.js';
@@ -158,31 +160,23 @@ async function currentOwnerMessage(request: FastifyRequest, ownerObjectId: strin
       (request.principal?.objectId.toLowerCase() === ownerObjectId.toLowerCase() || request.agentPrincipal)) {
     if (direct.id) {
       const store = request.server.conversationStore;
-      if (request.jarvisMemorySourceMessageId !== direct.id || !store) {
+      if (!store) {
         throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
       }
-      const page = await store.getHistory({ limit: 20 });
-      signal.throwIfAborted();
-      const latest = page.messages.filter((message) => message.role === 'dan').at(-1);
       const session = await store.getSession(direct.sessionId);
       signal.throwIfAborted();
-      if (!latest || latest.id !== direct.id || latest.sessionId !== direct.sessionId ||
-          latest.text !== direct.text || request.jarvisMemorySourceMessageId !== direct.id ||
-          !session || session.endedAt !== null || session.channel === 'phone') {
+      if (!session || session.id !== direct.sessionId || session.endedAt !== null || session.channel === 'phone') {
         throw new ToolRefusal('The current owner request changed. Nothing was changed.');
       }
     }
     return { text: direct.text, id: direct.id, sessionId: direct.sessionId };
   }
-  const id = request.jarvisMemorySourceMessageId ?? request.headers['x-jarvis-message-id'];
-  if (!request.agentPrincipal || typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
-      BigInt(id) > 9_223_372_036_854_775_807n || !request.server.conversationStore) {
+  const id = attachedOwnerMessageId(request);
+  if (!request.agentPrincipal || !id || !request.server.conversationStore) {
     throw new ToolRefusal('A direct, current owner request is required to change proactive preferences.');
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  signal.throwIfAborted();
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') {
+  const message = await readAttachedOwnerMessage(request, signal);
+  if (!message || message.id !== id) {
     throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
   }
   const session = await request.server.conversationStore.getSession(message.sessionId);
@@ -196,6 +190,13 @@ async function currentOwnerMessage(request: FastifyRequest, ownerObjectId: strin
 function preferencesTool(store: ProactiveStore, ownerObjectId: string): JarvisTool {
   return {
     name: 'proactive_preferences',
+    completion: {
+      domain: 'settings',
+      operation: args => args.operation === 'read' || args.operation === 'help' ? 'read' : 'update',
+      requestTargetFields: ['operation', 'categories', 'suggestionScope', 'paused'],
+      resultTargetFields: ['confirmation', 'paused', 'categories', 'suggestionScope'],
+      evaluate: receipt.preferenceUpdate,
+    },
     description: 'Read current proactive preferences or capability-backed help, or change pause, suggestion categories or personal/work scope. Updates require a matching direct owner request; source text and feedback never authorize changes.',
     inputSchema: preferenceInputSchema,
     execution: {

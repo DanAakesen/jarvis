@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { MemoryStore } from '../../database/memory-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
+import { receipt } from '../../core/tool-completion.js';
 import type { PiTurnGrant, PiTurnRegistry } from '../turns.js';
 import { MAX_QUOTE, WatchError } from './note.js';
 import type { Watches } from './store.js';
@@ -81,6 +82,11 @@ export function createWatchTools(options: {
   const tools: JarvisTool[] = [
     {
       name: 'watch_create',
+      completion: {
+        domain: 'jobs', operation: 'create',
+        requestTargetFields: ['title', 'text', 'quote', 'nextLook'],
+        resultTargetFields: ['name'], evaluate: receipt.watchCreate,
+      },
       description: [
         'Start a standing watch when Dan says "keep me updated on X", "watch X for me" or "tell me when X": a free-text note in his vault that I look at again later, or when events about it arrive, and report on only when it is worth his attention.',
         `title is a short name. text is the watch in plain words: what to watch, why, how often or on which events, and when to stop; his own words are quoted automatically. nextLook is the first scheduled look, or "none" for events only.`,
@@ -125,6 +131,11 @@ export function createWatchTools(options: {
     },
     {
       name: 'watch_update',
+      completion: {
+        domain: 'jobs', operation: 'update',
+        requestTargetFields: ['name', 'change', 'nextLook'],
+        resultTargetFields: ['updated'], evaluate: receipt.watchChange,
+      },
       description: [
         'Change a watch: a different cadence, a new condition, a new detail. change is what changed, added to the watch\'s trail (Dan\'s words when he asked); nextLook may change too ("none" for events only).',
         'Use watch_list first for the name. To end a watch use watch_stop.',
@@ -149,6 +160,10 @@ export function createWatchTools(options: {
     },
     {
       name: 'watch_stop',
+      completion: {
+        domain: 'jobs', operation: 'delete', requestTargetFields: ['name', 'reason'],
+        resultTargetFields: ['stopped', 'closedAs'], evaluate: receipt.watchStop,
+      },
       description: [
         'End a watch: Dan said to stop it, or its stop condition is met (then I also tell him, with message_dan in a wake or in the reply in chat). The note moves to the closed watches with a trail line. reason is free text.',
         'In a background wake it records the stop condition I found.',
@@ -172,6 +187,11 @@ export function createWatchTools(options: {
     },
     {
       name: 'watch_look',
+      completion: {
+        domain: 'jobs', operation: 'update',
+        requestTargetFields: ['name', 'result', 'nextLook'],
+        resultTargetFields: ['recorded', 'nextLook'], evaluate: receipt.watchLook,
+      },
       description: [
         'Record one look at a watch in a background wake: result is what I found, in a sentence or two (it is added to the watch\'s trail), and nextLook is when to look next, or "none" for events only. Required every time, so the watch always has an exact next look. Whether Dan hears about it is a separate decision (message_dan).',
         'Choose the slowest cadence that serves the purpose; events beat polling.',

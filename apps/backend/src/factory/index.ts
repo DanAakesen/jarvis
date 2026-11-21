@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
+import { receipt } from '../core/tool-completion.js';
 import { readSettings } from '../core/settings.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { sseHeaders } from '../core/now.js';
@@ -78,6 +79,10 @@ export const factoryModule: BackendModule = {
   id: 'factory',
   tools: [...factoryTools, ...repositoryTools, ...pullRequestTools, ...githubAppTools, createProjectTool, {
     name: 'manage_repository',
+    completion: {
+      domain: 'factory', operation: 'create', requestTargetFields: ['repository'],
+      resultTargetFields: ['repository', 'repo', 'id'], evaluate: receipt.repository,
+    },
     description: 'Register an existing repository from the GitHub App installation using the New projects defaults. ' +
       'When Dan requests it, add directly without a second approval; check list_projects first. Returns alreadyAdded when it is already a project.',
     inputSchema: {
