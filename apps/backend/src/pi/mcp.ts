@@ -9,6 +9,7 @@ import {
   type RegisteredTool, type ToolRegistry,
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
+import { compactLargeSchema } from './compact-schema.js';
 import { providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import {
   noteRequest, piTurnPattern, type PiActionRun, type PiReplayCheck, type PiToolAnswer, type PiTurnGrant, type PiTurnRegistry,
@@ -160,9 +161,9 @@ async function runAction(
   return { answer: await running, duplicate: false, repeat };
 }
 
-/** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. */
+/** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. A very large schema is sent with its repeated parts written once (compact-schema.ts). */
 function shapeSchema(tool: RegisteredTool): unknown {
-  if (tool.name !== 'get_system_health') return tool.inputSchema;
+  if (tool.name !== 'get_system_health') return compactLargeSchema(tool.inputSchema);
   const { properties, ...rest } = tool.inputSchema as { properties?: Record<string, unknown> };
   return { ...rest, properties: Object.fromEntries(Object.entries(properties ?? {}).filter(([name]) => name !== 'operation')) };
 }
