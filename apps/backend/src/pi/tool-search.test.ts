@@ -5,7 +5,7 @@ import { providersNamedBy, searchJarvisTools } from './tool-search.js';
 const names = [
   'weather', 'memory_remember', 'memory_search', 'owner_reminders', 'calendar_today_agenda', 'mail_search',
   'vault_task_create', 'vault_search', 'vault_read', 'health_query', 'inbox_capture', 'get_usage',
-  'gh_issue_read', 'gh_list_pull_requests', 'az_group_list', 'az_group_resource_list',
+  'gh_issue_read', 'gh_list_pull_requests', 'gh_create_pull_request', 'create_issue', 'az_group_list', 'az_group_resource_list',
   'pc_open', 'pc_close', 'pc_media', 'health_nutrition_suggest', 'calendar_next_event', 'vault_write', 'memory_forget',
 ];
 const registry: ToolRegistry = {
@@ -40,6 +40,12 @@ describe('tool search wording', () => {
     ['pause the music on my computer', 'pc_media'],
   ])('finds the right tool for "%s"', (query, expected) => {
     expect(top(query).slice(0, 3)).toContain(expected);
+  });
+
+  it('keeps an issue request away from the pull request tools', () => {
+    expect(top('create an issue for the login bug in Jarvis')[0]).toBe('create_issue');
+    expect(top('opret et issue om login-fejlen')[0]).toBe('create_issue');
+    expect(top('show issue 12 on github')[0]).toBe('gh_issue_read');
   });
 
   it('ignores words that carry no meaning instead of letting them score long descriptions', () => {
