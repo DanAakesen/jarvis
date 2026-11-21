@@ -1,5 +1,6 @@
 import argparse
 import json
+import pathlib
 import unittest
 from unittest import mock
 
@@ -28,15 +29,15 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual(toolset, [{"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": True}}])
 
     def test_an_experiment_switches_one_thing_off_and_changes_the_fingerprint_but_never_the_default(self):
-        full = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills)
+        full = pi.fingerprint(self.spec, "https://b/pi/mcp", self.skills)
         spec, skills = pi.apply_experiment(self.spec, self.skills, "builtins_off")
         self.assertEqual((spec["builtinTools"], skills), ("disabled", self.skills))
         toolset = [tool for tool in pi.build_definition(spec, self.instructions, "https://b/pi/mcp", skills)["tools"] if tool["type"] == "microsoft_copilot_toolset_preview"]
         self.assertEqual(toolset[0]["default_config"], {"enabled": False})
-        self.assertNotEqual(full, pi.fingerprint(spec, self.instructions, "https://b/pi/mcp", skills))
+        self.assertNotEqual(full, pi.fingerprint(spec, "https://b/pi/mcp", skills))
         spec, skills = pi.apply_experiment(self.spec, self.skills, "skills_off")
         self.assertEqual((spec["builtinTools"], skills), ("enabled", []))
-        self.assertNotEqual(full, pi.fingerprint(spec, self.instructions, "https://b/pi/mcp", skills))
+        self.assertNotEqual(full, pi.fingerprint(spec, "https://b/pi/mcp", skills))
         self.assertEqual(pi.apply_experiment(self.spec, self.skills, "none"), (self.spec, self.skills))
         self.assertEqual(self.spec["builtinTools"], "enabled")
         with self.assertRaises(pi.Blocked):
@@ -58,19 +59,14 @@ class DefinitionTest(unittest.TestCase):
         self.assertIn(contract["productIdentity"]["en"], self.instructions)
         self.assertNotIn("{{", self.instructions)
 
-    def test_voice_definition_pins_vesper_with_natural_client_delegation(self):
-        spec, instructions, definition = pi.load_voice_spec()
-        self.assertEqual(spec["agentName"], "jarvis-pi-live")
-        self.assertEqual(spec["audio"]["output"]["voice"], "vesper")
-        self.assertEqual(spec["audio"]["format"], {"type": "audio/pcm", "rate": 24000})
-        self.assertEqual(spec["delegation"], {"type": "client"})
-        self.assertFalse(spec["store"])
-        self.assertEqual(definition["kind"], "voice")
-        self.assertEqual(definition["sub_protocol"], "live")
-        self.assertEqual(definition["delegation"], {"type": "client"})
-        self.assertIn("natural full-duplex conversation", instructions)
-        self.assertIn("delegate it through the client target", instructions)
-        self.assertIn("Do not call a tool, invent an action result", instructions)
+    def test_the_seed_keeps_the_marked_tool_contract_and_drops_its_editor_note(self):
+        start, end = "KEEP THIS BLOCK: backend tool contract (start)", "KEEP THIS BLOCK: backend tool contract (end)"
+        self.assertEqual((self.instructions.count(start), self.instructions.count(end)), (1, 1))
+        block = self.instructions[self.instructions.index(start):self.instructions.index(end)]
+        for needle in ("[Turn jt-", "`find_tools`", "`call_tool`"):
+            self.assertIn(needle, block)
+        self.assertNotIn("Bootstrap seed only", self.instructions)
+        self.assertFalse(self.instructions.lstrip().startswith("<!--"))
 
     def test_skills_are_repository_files_pinned_by_version(self):
         self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches", "jarvis-situational-context"])
@@ -81,13 +77,13 @@ class DefinitionTest(unittest.TestCase):
             {"type": "skill_reference", "name": "jarvis-watches", "version": "1"},
             {"type": "skill_reference", "name": "jarvis-situational-context", "version": "1"}])
 
-    def test_fingerprint_changes_with_instructions_url_and_skill_content_only(self):
-        base = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills)
-        self.assertEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills))
-        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions + "x", "https://b/pi/mcp", self.skills))
-        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://c/pi/mcp", self.skills))
+    def test_fingerprint_changes_with_spec_url_and_skill_content_only_never_with_instructions(self):
+        base = pi.fingerprint(self.spec, "https://b/pi/mcp", self.skills)
+        self.assertEqual(base, pi.fingerprint(self.spec, "https://b/pi/mcp", self.skills))
+        self.assertNotEqual(base, pi.fingerprint({**self.spec, "reasoningEffort": "high"}, "https://b/pi/mcp", self.skills))
+        self.assertNotEqual(base, pi.fingerprint(self.spec, "https://c/pi/mcp", self.skills))
         changed = [dict(self.skills[0], sha256="0" * 64)]
-        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", changed))
+        self.assertNotEqual(base, pi.fingerprint(self.spec, "https://b/pi/mcp", changed))
 
     def test_connection_is_created_with_the_secret_in_an_injected_header_and_never_returned_in_output(self):
         calls = []
@@ -131,7 +127,9 @@ class DefinitionTest(unittest.TestCase):
             def rest(self, method, path, body=None, *, content_type="application/json"):
                 calls.append((method, path))
                 if method == "GET" and path == "/agents/jarvis-pi":
-                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                    if "definition" not in stored:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                    return {"versions": {"latest": {"version": 1}}}
                 if method == "POST" and path.startswith("/skills/"):
                     return {"version": 1}
                 if method == "POST" and path == "/agents/jarvis-pi/versions":
@@ -179,14 +177,322 @@ class DefinitionTest(unittest.TestCase):
 
     def test_verify_rejects_a_readback_whose_builtins_differ_from_the_spec(self):
         readback = {"definition": self.definition()}
-        pi.verify(readback, self.spec, self.instructions)
+        pi.verify(readback, self.spec)
         with_headers = json.loads(json.dumps(readback))
         with_headers["definition"]["tools"][1]["headers"] = {"Authorization": "x"}
         with self.assertRaises(pi.Blocked):
-            pi.verify(with_headers, self.spec, self.instructions)
+            pi.verify(with_headers, self.spec)
         readback["definition"]["tools"][0]["default_config"]["enabled"] = False
         with self.assertRaises(pi.Blocked):
-            pi.verify(readback, self.spec, self.instructions)
+            pi.verify(readback, self.spec)
+
+
+class MainAgentInstructionsTest(unittest.TestCase):
+    """Foundry owns the instructions of jarvis-pi; Deploy seeds them once and carries them forward, never compares them."""
+
+    live = "Rewritten in the Foundry portal by Dan."
+
+    def setUp(self):
+        self.spec = pi.load_spec()
+        self.seed = pi.instructions_text()
+        self.skills = [dict(pi.parse_skill(name), version="1") for name in self.spec["skills"]]
+        self.url = "https://b.example/pi/mcp"
+        self.args = argparse.Namespace(project_endpoint="https://p.example/api/projects/x", backend_fqdn="b.example",
+                                       foundry_account="acct", foundry_project="proj",
+                                       backend_app="app", resource_group="rg", subscription="sub")
+
+    def version(self, instructions=None, fingerprint="current", skills=None, status="active", **changes):
+        definition = pi.build_definition(self.spec, self.live if instructions is None else instructions, self.url, skills or self.skills)
+        definition.update(changes)
+        metadata = {pi.FINGERPRINT_KEY: pi.fingerprint(self.spec, self.url, self.skills) if fingerprint == "current" else fingerprint}
+        return {"status": status, "definition": definition, "metadata": metadata}
+
+    def pinned(self, version, latest=None):
+        rule = {"type": "FixedRatio", "agent_version": version, "traffic_percentage": 100}
+        agent = {"agent_endpoint": {"version_selector": {"version_selection_rules": [rule]}}}
+        return {**agent, "versions": {"latest": {"version": latest}}} if latest else agent
+
+    def run_provision(self, agent, versions, hook=None):
+        """hook(method, path, live) runs before each Foundry call and may change `live["agent"]` or `versions`, like a portal save."""
+        calls, posted = [], []
+        live = {"agent": agent}
+
+        class Fake(pi.Az):
+            def rest(_self, method, path, body=None, *, content_type="application/json"):
+                calls.append((method, path))
+                if hook:
+                    hook(method, path, live)
+                if method == "GET" and path == "/agents/jarvis-pi":
+                    if live["agent"] is None:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                    return live["agent"]
+                if method == "GET" and path.startswith("/agents/jarvis-pi/versions/"):
+                    return versions[path.rsplit("/", 1)[-1]]
+                if method == "POST" and path == "/agents/jarvis-pi/versions":
+                    posted.append(body)
+                    versions["9"] = {"status": "active", "definition": body["definition"], "metadata": body["metadata"]}
+                    if live["agent"] is None or not live["agent"].get("agent_endpoint"):
+                        live["agent"] = {"versions": {"latest": {"version": 9}}}
+                    return {"version": 9}
+                if method == "POST" and path.startswith("/skills/"):
+                    return {"version": 2}
+                return {}
+
+        def fake_arm(method, path, body=None):
+            if method == "GET":
+                raise pi.Blocked("arm_get_failed:jarvis-pi-mcp:not_found")
+            return {}
+
+        with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43), \
+                mock.patch.object(pi, "arm_request", fake_arm), \
+                mock.patch.object(pi, "provision_voice_agent", return_value={"agent": "jarvis-pi-live", "version": "1", "created": False, "model": "gpt-live-1"}), \
+                mock.patch.object(pi, "configure_voice_backend", return_value="rev-1"), \
+                mock.patch.object(pi, "delete_replaced_voice_deployments", return_value=[]), \
+                mock.patch.dict("os.environ", {}, clear=True):
+            result = pi.provision(self.args)
+        return result, calls, posted
+
+    def test_an_existing_agent_with_edited_instructions_and_a_newer_version_passes_without_any_write(self):
+        versions = {"1": self.version(self.seed), "2": self.version(), "3": self.version("A newer, unpinned edit.")}
+        result, calls, _posted = self.run_provision(self.pinned("2", latest="3"), versions)
+        self.assertEqual((result["version"], result["created"]), ("2", False))
+        self.assertFalse([call for call in calls if call[0] in {"POST", "PATCH"} and not call[1].startswith("/skills")])
+        self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls)
+        self.assertNotIn(("POST", "/agents/jarvis-pi/versions"), calls)
+
+    def test_without_a_pin_rule_the_verified_latest_version_is_pinned_without_a_new_version(self):
+        versions = {"3": self.version()}
+        result, calls, posted = self.run_provision({"versions": {"latest": {"version": "3"}}}, versions)
+        self.assertEqual((result["version"], result["created"]), ("3", False))
+        self.assertIn(("GET", "/agents/jarvis-pi/versions/3"), calls)
+        self.assertEqual(posted, [])
+        self.assertEqual([call for call in calls if call[0] != "GET"], [("PATCH", "/agents/jarvis-pi")])
+
+    def test_an_unpinned_latest_version_with_a_matching_fingerprint_is_still_verified_before_it_is_pinned(self):
+        # An earlier run can have died after the POST (which stores the fingerprint) and before verify and pin.
+        versions = {"3": self.version(model="another-model")}
+        with self.assertRaisesRegex(pi.Blocked, "readback_model_mismatch"):
+            self.run_provision({"versions": {"latest": {"version": "3"}}}, versions)
+
+    def test_an_instructions_only_edit_never_creates_a_version(self):
+        for text in (self.live, "", self.seed + "\nand one more line"):
+            _result, calls, posted = self.run_provision(self.pinned("2"), {"2": self.version(text)})
+            self.assertEqual(posted, [])
+            self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls)
+
+    def test_a_code_owned_change_publishes_a_version_with_the_live_text_and_pins_it(self):
+        stale = [dict(skill, sha256="0" * 64) for skill in self.skills]
+        previous = self.version(skills=stale, fingerprint=pi.fingerprint(self.spec, self.url, stale))
+        result, calls, posted = self.run_provision(self.pinned("2", latest="3"), {"2": previous, "3": self.version("Unpinned edit.")})
+        self.assertEqual((result["version"], result["created"]), ("9", True))
+        self.assertEqual(len(posted), 1)
+        self.assertEqual(posted[0]["definition"]["instructions"], self.live)
+        self.assertNotEqual(posted[0]["definition"]["instructions"], self.seed)
+        self.assertEqual(posted[0]["metadata"], {pi.FINGERPRINT_KEY: pi.fingerprint(self.spec, self.url, self.skills)})
+        self.assertLess(calls.index(("POST", "/agents/jarvis-pi/versions")), calls.index(("PATCH", "/agents/jarvis-pi")))
+        self.assertEqual(calls[-1], ("PATCH", "/agents/jarvis-pi"))
+
+    def test_a_changed_mcp_url_also_carries_the_live_text_forward(self):
+        self.args.backend_fqdn = "other.example"
+        _result, _calls, posted = self.run_provision(self.pinned("2"), {"2": self.version()})
+        self.assertEqual(posted[0]["definition"]["instructions"], self.live)
+        self.assertEqual(posted[0]["definition"]["tools"][1]["server_url"], "https://other.example/pi/mcp")
+
+    def test_a_changed_setting_also_carries_the_live_text_forward(self):
+        changed = {**self.spec, "reasoningEffort": "high"}
+        with mock.patch.object(pi, "load_spec", return_value=changed):
+            _result, _calls, posted = self.run_provision(self.pinned("2"), {"2": self.version()})
+        self.assertEqual(posted[0]["definition"]["instructions"], self.live)
+        self.assertEqual(posted[0]["definition"]["reasoning"], {"effort": "high"})
+
+    def test_a_missing_agent_is_seeded_from_the_repo_text_and_pinned_once(self):
+        result, calls, posted = self.run_provision(None, {})
+        self.assertEqual((result["version"], result["created"]), ("9", True))
+        self.assertEqual([call for call in calls if call == ("POST", "/agents/jarvis-pi/versions")], [("POST", "/agents/jarvis-pi/versions")])
+        self.assertEqual(posted[0]["definition"]["instructions"], self.seed)
+        self.assertEqual([call for call in calls if call[0] == "PATCH"], [("PATCH", "/agents/jarvis-pi")])
+
+    def stale_skills(self):
+        stale = [dict(skill, sha256="0" * 64) for skill in self.skills]
+        return self.version(skills=stale, fingerprint=pi.fingerprint(self.spec, self.url, stale))
+
+    def test_a_portal_edit_saved_before_the_version_is_posted_aborts_the_deploy_without_any_write(self):
+        def edit(method, path, live):
+            if (method, path) == ("POST", "/skills/jarvis-inbox-triage/versions"):
+                versions["3"] = self.version("Dan saved this while Deploy ran.")
+                live["agent"] = self.pinned("3")
+
+        versions = {"2": self.stale_skills()}
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision(self.pinned("2"), versions, edit)
+        self.assertNotIn("9", versions)
+
+    def test_a_portal_edit_saved_while_the_new_version_activates_is_never_overwritten_by_the_pin(self):
+        calls_seen = []
+
+        def edit(method, path, live):
+            calls_seen.append((method, path))
+            if (method, path) == ("GET", "/agents/jarvis-pi/versions/9"):
+                versions["3"] = self.version("Dan saved this while Deploy ran.")
+                live["agent"] = self.pinned("3")
+
+        versions = {"2": self.stale_skills()}
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision(self.pinned("2"), versions, edit)
+        self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls_seen)
+
+    def test_without_a_pin_rule_a_newer_portal_version_also_stops_the_pin(self):
+        calls_seen = []
+
+        def edit(method, path, live):
+            calls_seen.append((method, path))
+            if (method, path) == ("GET", "/agents/jarvis-pi/versions/9"):
+                versions["10"] = self.version("Dan saved this while Deploy ran.")
+                live["agent"] = {"versions": {"latest": {"version": 10}}}
+
+        versions = {"3": self.stale_skills()}
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision({"versions": {"latest": {"version": "3"}}}, versions, edit)
+        self.assertNotIn(("PATCH", "/agents/jarvis-pi"), calls_seen)
+
+    def test_an_agent_created_by_someone_else_while_seeding_aborts_instead_of_posting_the_seed(self):
+        def create(method, path, live):
+            if (method, path) == ("POST", "/skills/jarvis-inbox-triage/versions"):
+                live["agent"] = self.pinned("1")
+
+        with self.assertRaisesRegex(pi.Blocked, "agent_changed_during_deploy"):
+            self.run_provision(None, {"1": self.version()}, create)
+
+    def test_an_existing_agent_without_a_usable_version_or_text_fails_instead_of_being_reseeded(self):
+        with self.assertRaisesRegex(pi.Blocked, "agent_version_unknown"):
+            self.run_provision({"versions": {}}, {})
+        stale = self.version(fingerprint="old")
+        del stale["definition"]["instructions"]
+        with self.assertRaisesRegex(pi.Blocked, "agent_instructions_unreadable"):
+            self.run_provision(self.pinned("2"), {"2": stale})
+
+    def test_drift_in_a_code_owned_field_of_a_new_version_still_fails_with_its_reason(self):
+        drift = {
+            "readback_model_mismatch": {"model": "another-model"},
+            "readback_reasoning_mismatch": {"reasoning": {"effort": "high"}},
+            "readback_harness_mismatch": {"harness": {"type": "other"}},
+        }
+        for code, change in drift.items():
+            readback = self.version(**change)
+            with self.assertRaisesRegex(pi.Blocked, code):
+                pi.verify(readback, self.spec)
+        readback = self.version()
+        readback["definition"]["tools"][1]["project_connection_id"] = "other-connection"
+        with self.assertRaisesRegex(pi.Blocked, "readback_mcp_connection_mismatch"):
+            pi.verify(readback, self.spec)
+
+    def test_verify_does_not_read_the_instructions(self):
+        pi.verify(self.version("anything at all"), self.spec)
+        pi.verify(self.version(""), self.spec)
+
+
+class VoiceAgentTest(unittest.TestCase):
+    def setUp(self):
+        self.spec, _instructions, self.seed = pi.load_voice_spec()
+
+    def foundry(self, agent, versions):
+        calls = []
+
+        class Fake:
+            def rest(_self, method, path, body=None, **options):
+                calls.append((method, path))
+                if method == "GET" and path == "/agents/jarvis-pi-live":
+                    if agent is None:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi-live:not_found [code=NotFound]")
+                    return agent
+                if method == "GET" and path.startswith("/agents/jarvis-pi-live/versions/"):
+                    return versions[path.rsplit("/", 1)[-1]]
+                if method == "POST":
+                    versions["1"] = {"status": "active", "definition": body["definition"]}
+                    return {"version": "1"}
+                return {}
+
+        return Fake(), calls
+
+    def edited(self, **changes):
+        definition = json.loads(json.dumps(self.seed))
+        definition["instructions"] = "Edited in the Foundry portal."
+        definition["audio"]["output"]["voice"] = "cedar"
+        definition["greeting"] = "Evening, Dan."
+        definition.update(changes)
+        return {"status": "active", "definition": definition}
+
+    def provision(self, agent, versions):
+        foundry, calls = self.foundry(agent, versions)
+        with mock.patch.object(pi, "arm_deployment_request", return_value={
+            "name": "gpt-live-1", "sku": {"name": "GlobalStandard", "capacity": 10},
+            "properties": {"provisioningState": "Succeeded", "model": {"format": "OpenAI", "name": "gpt-live-1", "version": "2026-09-10"}},
+        }):
+            return pi.provision_voice_agent(foundry, self.spec, self.seed, "acct", "rg", "sub"), calls
+
+    def pinned(self, version):
+        rule = {"type": "FixedRatio", "agent_version": version, "traffic_percentage": 100}
+        return {"agent_endpoint": {"version_selector": {"version_selection_rules": [rule]}}}
+
+    def test_the_voice_is_no_longer_required_to_be_marin(self):
+        spec = json.loads((pi.PI / "voice-definition.json").read_text(encoding="utf-8"))
+        spec["audio"]["output"]["voice"] = "cedar"
+        with mock.patch.object(pathlib.Path, "read_text", side_effect=[json.dumps(spec), (pi.PI / "voice-instructions.md").read_text(encoding="utf-8")]):
+            self.assertEqual(pi.load_voice_spec()[2]["audio"]["output"]["voice"], "cedar")
+
+    def test_an_existing_agent_edited_in_foundry_passes_without_any_write(self):
+        versions = {"1": {"status": "active", "definition": self.seed}, "2": self.edited()}
+        agent = {**self.pinned("2"), "versions": {"latest": {"version": "3"}}}
+        result, calls = self.provision(agent, versions)
+        self.assertEqual((result["version"], result["created"]), ("2", False))
+        self.assertEqual({method for method, _ in calls}, {"GET"})
+
+    def test_without_a_pin_rule_the_latest_version_is_verified(self):
+        versions = {"1": {"status": "active", "definition": self.seed}, "3": self.edited(delegation={"type": "server"})}
+        for latest in ({"version": "3"}, 3):
+            with self.assertRaisesRegex(pi.Blocked, "voice_readback_delegation_mismatch"):
+                self.provision({"versions": {"latest": latest}}, versions)
+        versions["3"] = self.edited()
+        result, calls = self.provision({"versions": {"latest": {"version": "3"}}}, versions)
+        self.assertEqual(result["version"], "3")
+        self.assertIn(("GET", "/agents/jarvis-pi-live/versions/3"), calls)
+        self.assertEqual({method for method, _ in calls}, {"GET"})
+
+    def test_drift_in_the_technical_contract_fails_with_its_reason_and_fixes_nothing(self):
+        drift = {
+            "voice_readback_delegation_mismatch": {"delegation": {"type": "server"}},
+            "voice_readback_audio_format_mismatch": {"audio": {"format": {"type": "audio/pcm", "rate": 16000}}},
+            "voice_readback_model_mismatch": {"model": "gpt-live-2"},
+            "voice_readback_store_mismatch": {"store": True},
+            "voice_readback_kind_mismatch": {"kind": "prompt"},
+        }
+        for code, change in drift.items():
+            foundry, calls = self.foundry(self.pinned("2"), {"2": self.edited(**change)})
+            with mock.patch.object(pi, "arm_deployment_request", return_value={
+                "name": "gpt-live-1", "sku": {"name": "GlobalStandard", "capacity": 10},
+                "properties": {"provisioningState": "Succeeded", "model": {"format": "OpenAI", "name": "gpt-live-1", "version": "2026-09-10"}},
+            }), self.assertRaisesRegex(pi.Blocked, code):
+                pi.provision_voice_agent(foundry, self.spec, self.seed, "acct", "rg", "sub")
+            self.assertEqual({method for method, _ in calls}, {"GET"}, code)
+
+    def test_an_existing_agent_without_a_usable_version_fails_instead_of_being_reseeded(self):
+        with self.assertRaisesRegex(pi.Blocked, "voice_agent_version_unknown"):
+            self.provision({"versions": {}}, {})
+
+    def test_a_missing_agent_is_created_from_the_seed_and_pinned_once(self):
+        versions = {}
+        foundry, calls = self.foundry(None, versions)
+        patched = []
+        with mock.patch.object(pi, "arm_deployment_request", return_value={
+            "name": "gpt-live-1", "sku": {"name": "GlobalStandard", "capacity": 10},
+            "properties": {"provisioningState": "Succeeded", "model": {"format": "OpenAI", "name": "gpt-live-1", "version": "2026-09-10"}},
+        }), mock.patch.object(pi, "pin", side_effect=lambda *args: patched.append(args[2])), \
+                mock.patch.object(pi, "current_state", return_value={"pinned": "1", "status": "active"}):
+            result = pi.provision_voice_agent(foundry, self.spec, self.seed, "acct", "rg", "sub")
+        self.assertEqual((result["version"], result["created"]), ("1", True))
+        self.assertEqual([call for call in calls if call[0] == "POST"], [("POST", "/agents/jarvis-pi-live/versions")])
+        self.assertEqual(patched, ["1"])
+        self.assertEqual(versions["1"]["definition"]["audio"]["output"]["voice"], "marin")
 
 
 class ReachTest(unittest.TestCase):
@@ -238,11 +544,11 @@ class ReachTest(unittest.TestCase):
             self.assertNotIn("read-only", json.dumps(skill).lower())
         for forbidden in ("githubcopilot", "azure-mcp", self.token):
             self.assertNotIn(forbidden, json.dumps(definition))
-        pi.verify({"definition": definition}, self.spec, instructions)
+        pi.verify({"definition": definition}, self.spec)
         extra = json.loads(json.dumps(definition))
         extra["tools"].append({"type": "mcp", "server_label": "azure", "server_url": "https://x", "require_approval": "never", "project_connection_id": "c"})
         with self.assertRaises(pi.Blocked):
-            pi.verify({"definition": extra}, self.spec, instructions)
+            pi.verify({"definition": extra}, self.spec)
         self.assertEqual(self.spec["github"]["url"], "https://api.githubcopilot.com/mcp/x/all")
 
     def test_both_old_harness_connections_are_deleted_and_a_missing_one_is_fine(self):
@@ -266,7 +572,9 @@ class ReachTest(unittest.TestCase):
         class Fake(pi.Az):
             def rest(self, method, path, body=None, *, content_type="application/json"):
                 if method == "GET" and path == "/agents/jarvis-pi":
-                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found")
+                    if "definition" not in stored:
+                        raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found")
+                    return {"versions": {"latest": {"version": 1}}}
                 if method == "POST" and path.startswith("/skills/"):
                     return {"version": 1}
                 if method == "POST" and path == "/agents/jarvis-pi/versions":

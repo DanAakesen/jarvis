@@ -1,7 +1,7 @@
 ## 20 November 2026 — GPT-Live voice fidelity (#1988)
 
-- **Voice:** the immutable `jarvis-pi-live` definition pins `vesper` for English
-  and Danish. The provider remains the native full-duplex speech front end;
+- **Voice:** the immutable `jarvis-pi-live` definition's output voice and instructions
+  are Foundry-owned (2026-11-20 decision below). The provider remains the native full-duplex speech front end;
   client delegation stays `type: client`, with the same PI conversation,
   grants, tools and result path used by Chat. The runtime does not compare or
   buffer approved provider text, and it does not add a second semantic answer
@@ -81,8 +81,8 @@
   capacity 10. The two 2.1 deployments leave the Bicep template.
 - **Voice agent:** Deploy provisions and pins one immutable
   `kind: voice` / `sub_protocol: live` / `model_type: self_deployed` agent named
-  `jarvis-pi-live`. It uses PCM 24 kHz, `vesper`, and
-  `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
+  `jarvis-pi-live`. It uses PCM 24 kHz, a first-seed output voice (Foundry-owned afterwards, see the 2026-11-20
+  decision at the end of this file), and `delegation: { type: "client" }`, with `store: false`. `foundry_managed_agent` is deliberately not
   used because it would create a separate prompt conversation and bypass the
   stored-message/per-turn PI grant.
 - **Boundary:** the owner `/voice` socket stays unchanged. The backend alone
@@ -105,6 +105,22 @@
   run. Dan's physical iPhone/Watch/web audio, latency, acoustic barge-in,
   captions and provider acceptance are explicitly open. Direct Voice Live
   entries below are dated historical evidence, not current routing guidance.
+
+## 20 November 2026 — Reply previews are useful by default (#1989)
+
+- **Decision:** ordinary stored reply text is the lock-screen preview. Clean
+  control characters, collapse repeated whitespace and truncate to 160 Unicode
+  characters; do not substitute a generic body because a reply mentions health,
+  medical, medication, finance, account or identity context.
+- **Boundary:** `show_actions` chooses approval actions for that registration;
+  it does not opt a device into a private reply body. Both SQL outbox insert
+  paths persist the same safe preview for every recipient.
+- **Protection:** retain only the existing `shouldRedact` credential/secret
+  guard at the preview source boundary. Do not reuse the broader
+  Memory/Vault-sensitive classifier and do not add a notification-only privacy
+  regex, setting or approval flow.
+- **Scope:** the message/outbox transaction, retry schedule, APNs collapse ID,
+  exact session/message route and iPhone/Watch state machines are unchanged.
 
 ## 20 November 2026 — Durable reply delivery belongs to the stored message (#1970)
 
@@ -137,12 +153,11 @@
   resolve every current registration for the exact token, so a stale claim cannot
   miss a replacement registration. Recipient reads defensively exclude
   tombstoned hashes even if a stale row is written.
-- **Privacy:** only a bounded, one-line preview is stored per device. Preview
-  opt-out, credentials, health/medical, diagnosis/medication, banking,
-  account, OTP/one-time/verification/security code, CVV/CVC, identity and
-  financial content use the shared
-  `containsSensitiveOwnerData` policy and a generic body. Logs and status
-  expose no body, IDs or token; terminal counts are diagnostic evidence.
+- **Preview:** the stored one-line body follows the #1989 useful-by-default
+  policy above. Credentials/secrets retain their existing source guard; broad
+  personal-content classification is not part of notification delivery. Logs
+  and status expose no body, IDs or token; terminal counts are diagnostic
+  evidence.
 - **Routing:** `jarvis.reply` is a dedicated iPhone/Watch tap branch carrying
   exact `sessionID`/`messageID`. Watch keeps the target pending across active
   chat, voice and dictation instead of discarding it. Once opened, active
@@ -13755,3 +13770,21 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 - Data and colours: only real notes and edges are drawn (self links and unknown ends dropped, one edge per pair, an explicit link beats a similarity edge). Clusters are top-level folders. Work, Personal and General use amber, green and muted violet; every other folder is neutral. This follows the handover's three colours and does not add the brief's People blue. The preview shows the service's own open task count, and "Task count unavailable" when it sends none.
 - Motion: no auto-rotation; no Alive state (the Notes page cannot read Jarvis's activity, so it is dropped rather than faked); pulses run on explicit links only. Reduce Motion or Background motion off gives one still pose with no inertia and no flights.
 - Removed: the old 2D layout `graphPositions` and the unused `notesGraph*` size and opacity tokens.
+
+## 2026-11-20 Voice agent instructions, voice and greeting are Foundry-owned
+
+- Decision: Dan tunes `jarvis-pi-live` in the Foundry portal, so Deploy no longer writes, compares or fails on its instructions, output voice, greeting or any other field the app does not depend on. Previously a portal edit was overwritten by the next Deploy (new version plus re-pin) or failed it on readback.
+- Bootstrap only: if the agent does not exist, `provision_pi_agent.py` creates version 1 once from `agents/pi/voice-definition.json` and `voice-instructions.md` and pins it. Those files are only that initial seed; editing them later changes nothing. The `marin` requirement was removed from `load_voice_spec`.
+- If the agent exists, Deploy never posts a version and never patches the pin. It reads the effective version (the pinned version if a pin rule exists, otherwise `versions.latest`) and verifies only the contract the backend relay depends on: model `gpt-live-1` and its deployment, `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, `delegation: { type: "client" }`, `store: false`, audio format `audio/pcm` at 24,000 Hz. Drift fails with a `voice_readback_*_mismatch` or `voice_agent_*` code and is never auto-fixed.
+- Tests are offline (`.github/scripts/tests/test_pi_agent.py`); no live Foundry call was made.
+
+## 2026-11-20 Main agent (`jarvis-pi`) instructions are Foundry-owned
+
+- Decision: Dan tunes the `jarvis-pi` instructions in the Foundry portal ("Foundry owns the whole instruction text; I keep the tool rules as a marked block at the bottom"), so Deploy never compares, verifies or restores that text. Previously the text was part of the fingerprint and of `verify`, so a portal edit was overwritten by the next Deploy or failed it with `readback_instructions_mismatch`. Same pattern as the voice agent entry above.
+- Bootstrap only: if the agent does not exist, `provision_pi_agent.py` creates version 1 once from `agents/pi/instructions.md` (identity-contract placeholders filled by `instructions_text`) and pins it. The file is a seed; a leading HTML comment says so and is stripped from the seed. The content was not changed. The backend tool contract section (`[Turn ...]` line, `find_tools`, `call_tool`) is wrapped in `KEEP THIS BLOCK: backend tool contract (start)` / `(end)` lines with a sentence that removing it breaks tool use; those lines are part of the seed, so Dan sees them in Foundry. The section sits after the identity paragraphs, not at the bottom; it was not moved.
+- Code keeps owning model, harness, reasoning effort, built-in tool setting, the Jarvis MCP tool and its connection, skills, and the MCP URL. `fingerprint()` hashes only those (spec, MCP URL, skill content); the instructions are excluded, so an instructions-only edit in Foundry never creates a version. `verify()` checks the same code-owned fields on a newly created version and no longer reads the instructions; drift fails with its `readback_*_mismatch` code.
+- Carry-forward: when a code-owned part changed, Deploy reads the effective version (the pinned version if a pin rule exists, otherwise `versions.latest`, via `GET /agents/jarvis-pi` and `GET .../versions/<v>`, the same mechanism as the voice agent), posts a new version whose instructions equal that version's text, verifies it, then pins it. An existing agent without a usable version or text fails (`agent_version_unknown`, `agent_instructions_unreadable`) instead of being re-seeded from the repo. An existing agent with an unchanged fingerprint gets no POST; it gets no PATCH either when a pin rule selects it. Without a pin rule (for example a run that died between the POST, which stores the fingerprint, and the pin) the latest version is still verified and then pinned, so an unchecked version never keeps serving.
+- Concurrent portal edits: Deploy re-reads the effective version (id and text) right before the version POST and again right before the pin, and fails with `agent_changed_during_deploy` if it moved (or if a missing agent appeared), so an edit Dan saves while Deploy runs is never replaced by a stale carry-forward.
+- The voice agent has neither gap: it verifies the effective version on every Deploy (no fingerprint skip) and never writes to an existing agent. A half-seeded one stays unpinned and serves the latest version, which is verified.
+- One-time effect: the fingerprint formula changed, so the first Deploy after this change publishes one new version carrying the live text forward and pins it. The same happens if a Foundry edit does not keep the version metadata (unverified; it settles after that Deploy).
+- Not verified live: no Foundry call, Deploy or provisioning run was made; tests are offline (`.github/scripts/tests/test_pi_agent.py`). Still reading the repo text as if it were live: `apps/backend/src/pi/definition.test.ts` (asserts the seed's capability-overview wording) and docs that cite `agents/pi/instructions.md` for behaviour.

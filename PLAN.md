@@ -7,14 +7,14 @@ behaviour, with no old voice fallback or provider-output semantic approval gate.
 
 | Step | State |
 | --- | --- |
-| Provision and pin `jarvis-pi-live` with `vesper` through the normal Deploy path | Implemented; provisioner spec updated |
+| Leave the `jarvis-pi-live` instructions, output voice and greeting to Foundry (#1992); this work adds no repo requirement on them | Confirmed; no provisioner or voice-file change |
 | Emit explicit activity evidence and keep iPhone/web/Watch state derived from authoritative transport, delegation, playback and terminal events | Implemented; focused offline contracts added |
 | Preserve exact caption speaker/order by stable input, response and delivery identities | Implemented; backend and portable Swift coverage added |
 | Serialize voice transcript persistence as Dan → Jarvis → Dan → Jarvis and order restored history by canonical message ID | Implemented; integration regression added |
 | Keep GPT-Live natural for duplex/backchannels while delegated tool/action turns continue through the same PI gateway | Implemented; focused no-switch/no-fallback checks added |
-| Run provisioner, backend, web, JSON/YAML, contracts and Swift gates | Provisioner 30/30; focused backend 42/42 plus build/lint; web 57/57 plus build/lint; contracts and JSON/YAML pass. Exact-head aggregate CI, including macOS JarvisCore, is green |
+| Run provisioner, backend, web, contracts and Swift gates | Focused backend 42/42 plus build/lint; web 57/57 plus build/lint; contracts and JSON/YAML pass. Exact-head aggregate CI, including macOS JarvisCore, is green |
 | Independently review async persistence, reconnect, state and Watch ordering; inspect final diff and commit | Done; all reported defects fixed and covered |
-| Dan verifies `vesper`, Danish/English audio, iPhone/Watch reconnect and physical caption behaviour | Open; no live/paid test authorized |
+| Dan verifies the Foundry-chosen voice, Danish/English audio, iPhone/Watch reconnect and physical caption behaviour | Open; no live/paid test authorized |
 
 ## Personal Memory restoration — 20 November 2026 (#1968)
 
@@ -43,7 +43,7 @@ No live model/provider smoke, deployment or spending is authorized. Physical Cha
 | Step | State |
 | --- | --- |
 | Replace the two 2.1 Bicep deployments with `gpt-live-1` `2026-09-10`, GlobalStandard capacity 10, in the existing sequential Sweden Central chain | Done in source |
-| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, `vesper`, client delegation, through `provision_pi_agent.py` | Done in source; voice updated by #1988 |
+| Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, client delegation, through `provision_pi_agent.py` (since 2026-11-20 seeded once; instructions and voice are Foundry-owned) | Done in source |
 | Replace the direct model WebSocket with the exact Foundry agent Live route and backend-only Entra/preview headers | Done in source |
 | Preserve native full duplex and the existing `/voice` client route; normalise provider events to `jarvis.voice.*` and use native mute/unmute | Done in source |
 | Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, use 0.6-second quiet (max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source |
@@ -100,8 +100,8 @@ provider call, APNs delivery, deploy or PR is part of this work.**
 | Persist APNs invalid-token tombstones and preserve newer Watch taps when abandoning an exact-target open | Done |
 | Serialize tombstone invalidation/upsert/expiry on the owner lock, resolve stale replacements by exact token and exclude tombstoned recipients | Done |
 | Route iPhone/Watch ordinary reply taps to the exact session/message while preserving proactive and approval routes | Done |
-| Keep Watch exact targets pending through busy/chat/dictation/voice and add broader sensitive preview classes | Done |
-| Reuse the shared sensitive policy and retain active Watch refresh scope separately from pending/opening state | Done |
+| Keep Watch exact targets pending through busy/chat/dictation/voice while retaining the ordinary reply route | Done |
+| Retain active Watch refresh scope separately from pending/opening state and remove broad preview classification in #1989 | Done |
 | Add offline fixtures, unit, migration and loopback SQL store contracts | Done |
 | Update product, design, architecture, agent context and decisions | Done in this change |
 | Rebase on `b5627f47269a4df727c8e5163742d3fbaef95630` and run offline gates | Done; backend build/lint, full 727-test suite, isolated SQL 27-test gate, full JarvisCore 236-test Swift 6.2 suite and Watch source parsing pass |
@@ -110,6 +110,24 @@ Completion requires the focused backend/SQL/Swift checks that the host supports,
 patch review for leaked content or fallback senders, and a local commit. Live
 APNs delivery, Apple compilation/rendering and physical iPhone/Watch acceptance
 remain outside this change.
+
+## Useful reply push previews — 20 November 2026 (#1989)
+
+**Status: implemented and qualified at the focused backend boundary. The
+loopback SQL contract is updated; this Windows worktree has no local SQL
+Server host. Physical iPhone/Watch lock-screen acceptance remains with Dan.**
+
+| Step | State |
+| --- | --- |
+| Show ordinary durable reply text after control/whitespace cleanup and 160-character truncation | Done |
+| Remove broad health, medication, financial, account and identity preview suppression | Done |
+| Keep the existing credential/secret source guard and generic fallback for real secrets | Done |
+| Store the same preview for registrations with or without approval actions | Done |
+| Preserve outbox, retry, APNs identity, exact deep link and iPhone/Watch routing | Done; no client or transport change |
+| Update focused preview and loopback SQL expectations plus product/design/architecture/operations/decision docs | Done |
+| Run focused preview, backend build/lint and SQL integration gates | Backend done; SQL execution unavailable on this host |
+
+No external push/provider test is part of this change.
 
 ## PI situational state integrity — 20 November 2026 (#1969)
 
@@ -327,7 +345,7 @@ Owner's approach, binding: model-driven nudging in instructions and tool descrip
 
 | Item | State |
 | --- | --- |
-| Smart tool choice (PC only when asked) | **Built, not measured live.** Guidance in `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description, the PC and browser tool descriptions and the old engine's instructions. The Deploy smoke (`measure_pi`) now runs four natural prompts (Azure, GitHub, notes, "open Spotify on my PC") and reports which tools PI reached for. The smoke role refuses everything but its reads, so nothing acts. Measure by running Deploy with `measure_pi` |
+| Smart tool choice (PC only when asked) | **Built, not measured live.** Guidance in the Foundry-owned `jarvis-pi` instructions ("Choosing tools"; seeded from `agents/pi/instructions.md`), the `find_tools` description, the PC and browser tool descriptions and the old engine's instructions. The Deploy smoke (`measure_pi`) now runs four natural prompts (Azure, GitHub, notes, "open Spotify on my PC") and reports which tools PI reached for. The smoke role refuses everything but its reads, so nothing acts. Measure by running Deploy with `measure_pi` |
 | Azure not used, PC browser opened | The backend log showed plain voice sessions and old-engine chat: Azure tools are attached to PI only, so on the old engine the model had nothing to answer with and reached for the PC. The fix for that is the PI cutover (#1910), not a patch; the old engine now tells the model to say so instead of opening a site on the PC |
 | Voice stuck on "Connecting" | **Cause not proven.** Backend side is clean: logs of both sessions show ready in under 0.5 s and the greeting spoken, but no speech from the phone. The app shows "Connecting" only before the socket handshake returns, or while no microphone frame has arrived. The handshake waited for a pong with no read outstanding and no timeout; it now starts reading with the handshake and fails visibly after 15 s. Needs the owner's phone test |
 | Follow-up error (`model_response_incomplete`) | The provider ended the stream with a failed or incomplete event; our code dropped the provider code. It is now logged (closed list of content-free codes), the app shows the server's own message, and the error offers Retry |

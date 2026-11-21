@@ -21,12 +21,14 @@ duplicate reply. An accepted delivery outcome remains the exact-turn/device
 suppression record beyond the action-confirmation expiry, through the execution
 and reply window.
 
-The lock-screen alert contains a single-line preview bounded to 160 characters.
-Credential-like, health, medical, medication/diagnosis, banking or account
-content uses **New reply from Jarvis**. The same shared classifier also covers
-credential and identity/financial fields such as OTPs, one-time, verification
-or security codes, CVV/CVC, card numbers, SSNs/social-security numbers,
-passport numbers and dates of birth.
+The lock-screen alert shows the durable reply as one useful line, with control
+characters and repeated whitespace cleaned and the result bounded to 160
+characters. Every native registration receives that same preview; the setting
+that enables notification approval actions is not a privacy switch. Ordinary
+health, medical, medication, financial, account and identity context remains
+visible. The existing credential/secret source protection still uses **New
+reply from Jarvis** when actual credential-like content would otherwise be
+emitted; this is not a general notification-privacy classifier.
 Transient APNs responses retry per device with bounded backoff until expiry.
 Apple's terminal invalid-device responses, registration expiry and explicit
 unregister atomically terminate every matching approval/reply row before the
@@ -320,7 +322,7 @@ Voice status, controls and recovery copy are English-only; Reduced
 Motion keeps the centre still.
 Voice uses the single authenticated `/voice` route. The backend connects it to
 Foundry agent `jarvis-pi-live`, which runs native GPT-Live full duplex on
-`gpt-live-1` with 24 kHz PCM and the built-in `vesper` voice. GPT-Live follows
+`gpt-live-1` with 24 kHz PCM and an output voice chosen in Foundry. GPT-Live follows
 the spoken language, owns listening and barge-in, and delegates owner turns to
 the existing PI gateway. The browser, iPhone and Watch keep Jarvis's
 `jarvis.voice.v2` boundary; provider events stay inside the backend. No
@@ -1204,7 +1206,7 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
 | Voice | Speech and playback | Native GPT-Live 24 kHz PCM; no separate speech-to-text selector |
-| Voice | Spoken voice | GPT-Live built-in `vesper`; the model follows the spoken language |
+| Voice | Spoken voice | A GPT-Live voice chosen in Foundry; the model follows the spoken language |
 | Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
 | Codex | Model and reasoning effort | Codex default |
@@ -1253,7 +1255,7 @@ During voice sessions, Jarvis announces task completion, tasks needing attention
 
 English and Danish speech use the authenticated backend `/voice` WebSocket and
 the GPT-Live voice agent. Its immutable definition pins `gpt-live-1`, 24 kHz
-PCM and `vesper`, while Jarvis remains the sole tool and action authority.
+PCM, while Jarvis remains the sole tool and action authority.
 Provider transcript deltas are normalised for the iPhone, web and Watch UI. A
 normal Deploy provisions the voice agent before deleting the two replaced 2.1
 model deployments; no runtime fallback is retained.

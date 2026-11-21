@@ -56,10 +56,14 @@ flowchart LR
   reset or timeout transport is transient; an APNs-result write failure leaves
   the current sending lease/state intact rather than rewriting it as a
   permanent provider rejection.
-- Preview privacy uses the shared owner-sensitive classifier from the vault/
-  memory boundary, including identity and financial forms such as card number,
-  CVV/CVC, OTP/one-time/verification/security code, SSN/social security,
-  passport number, account and date of birth.
+- Reply previews are useful by default. `safeReplyNotificationPreview` removes
+  control characters, collapses whitespace and truncates by Unicode character
+  count to 160. Both transactional outbox insert paths store the same `@preview`
+  for every registration; `show_actions` controls approval actions only. The
+  preview no longer uses the broad health/financial/identity classifier from
+  Memory and Vault. The established `shouldRedact` credential/secret guard
+  remains in force and returns the generic body only when that source-bound
+  protection fires.
 - Terminal Apple invalid-token rejection deletes the native registration and
   invalidates all pending rows for that stable device reference. The old
   `push-ledger.ts` process-local timestamp suppression and every dual reply path
@@ -171,7 +175,7 @@ sequenceDiagram
 
 ## Tool choice and voice start (#1922, P15-184)
 
-Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description in `apps/backend/src/pi/mcp.ts`, and the PC and browser tool descriptions (`pc-bridge/bridge.ts`, `core/browser-agent.ts`). The old engine reads the same idea from `core/capability-instructions.ts`. The Deploy smoke (`pi/smoke.ts`) reports the tools reached for on four natural prompts. In the iOS voice start path, `URLSessionWebSocketTransport.connect` reads from the first moment and gives up after 15 s; the chat model keeps the failed turn's text so the error can offer Retry.
+Which tools PI uses is steered by text only: the live `jarvis-pi` instructions in Foundry ("Choosing tools"; `agents/pi/instructions.md` is only the seed of version 1), the `find_tools` description in `apps/backend/src/pi/mcp.ts`, and the PC and browser tool descriptions (`pc-bridge/bridge.ts`, `core/browser-agent.ts`). The old engine reads the same idea from `core/capability-instructions.ts`. The Deploy smoke (`pi/smoke.ts`) reports the tools reached for on four natural prompts. In the iOS voice start path, `URLSessionWebSocketTransport.connect` reads from the first moment and gives up after 15 s; the chat model keeps the failed turn's text so the error can offer Retry.
 
 ## Notes, Tasks and Graph pages — 15 November 2026 (#1894, P15-180)
 
@@ -268,19 +272,21 @@ sequenceDiagram
 | Audio format | `voice-definition.json`, `relay.ts` | The pinned agent owns PCM 24 kHz. `session.started` may omit the optional format echo; an explicit start/started format is accepted only when it matches `audio/pcm` at 24,000 Hz. |
 | Commentary bound | `voice/relay.ts` | PI commentary is appended in chunks of at most 256 UTF-8 bytes. Because byte-pair tokenisation cannot produce more tokens than bytes, every append is conservatively below 500 tokens. |
 | Provider usage | `relay.ts`, `ConversationStore.endSession` | `session.usage.updated` and `session.closed.usage.seconds` are cumulative. Event IDs are deduplicated, the maximum is retained, and the final provider seconds replace wall-clock lifetime in the single voice-minutes row. |
-| Voice-agent definition | `agents/pi/voice-definition.json`, `.github/scripts/provision_pi_agent.py` | Immutable `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, model `gpt-live-1`, PCM 24 kHz and output voice `vesper`; `delegation: { type: "client" }`. No Foundry-managed prompt conversation is used. |
+| Voice-agent definition | `agents/pi/voice-definition.json`, `.github/scripts/provision_pi_agent.py` | Technical contract the relay depends on: `kind: voice`, `sub_protocol: live`, `model_type: self_deployed`, model `gpt-live-1`, PCM 24 kHz, `delegation: { type: "client" }`, `store: false`. No Foundry-managed prompt conversation is used. Instructions, output voice, greeting and every other portal-editable field are owned in Foundry; the repo files (`voice-instructions.md`, the seed voice) only seed a first version. |
 | Client activity | `voice/relay.ts`, `VoiceSessionStateMachine`, web `voice-client.ts`, Watch bridge | The relay publishes explicit `jarvis.voice.activity` evidence. Clients retain authoritative Listening/Thinking/Speaking through response and playback IDs, show Reconnecting through bounded retries, and accept Ended only from terminal Jarvis evidence. |
 | Turn boundary | `apps/backend/src/voice/relay.ts` | GPT-Live supplies transcript deltas but no transcript-done/output-done events. Native `event_id` and `start_ms`/`end_ms` keep fragments in the same candidate through pauses; delegation `offset_ms` assigns the exact owner turn. For delegated work, 0.6-second quiet (max three seconds) closes and persists it before PI. A natural direct response closes and enqueues the owner message at the first provider output, so direct conversation is also restored in exact Dan/Jarvis order. Output grouping/persistence follows the bounded rule. |
 | Transcript timeline | `relay.ts`, `VoiceCaptions`, `WatchContract`, `ConversationStore` | Native event IDs deduplicate deltas; input/output groups have stable item/response IDs. Output writes are serialized behind the matching owner write, then updated by exact message/session/role. iPhone captions and Watch v2 rows preserve explicit speaker identity and ordered IDs across overlap, reconnect and restored history; state/caption delivery is serial so a retry cannot overtake later content. |
-| Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
+| Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice, seed only) | The gateway adds the note to the turn; the Voice text of the live `jarvis-pi` instructions is edited in Foundry, Deploy does not publish it |
 | Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write is attributed to his message; the MCP door and receipts are the chat ones |
 | Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
 | Logs | `voice.pi_turn`, `pi.turn` (registered in `logging.ts` with numeric fields only) | `transcriptToFirstTextMs`, `transcriptToDoneMs`, outcome (`ok`, `failed`, `timeout`, `cancelled`, `superseded`), whether a progress note was spoken. No text |
 | Deploy measurement | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | `measure_pi` adds two voice-channel turns (plain, with a Jarvis tool) in the smoke conversation and the checks `voice_spoken_shape` and `voice_tools_over_mcp`; reports first text, total and DKK. It is the PI leg only |
 | iOS | `VoiceEndpoint.url(baseURL:)`, `VoiceSessionClient`, `VoiceScreenModel` | The client connects to `/voice` without a selector and reuses that endpoint on reconnect; Watch follows the same route |
 
-Deploy ordering is deliberate: Bicep creates `gpt-live-1`; `pi-agent` provisions
-and pins `jarvis-pi-live`, then waits for the configured backend revision and
+Deploy ordering is deliberate: Bicep creates `gpt-live-1`; `pi-agent` seeds
+`jarvis-pi-live` (version 1, pinned) only when it does not exist, otherwise
+verifies the technical contract on the effective version (the pinned one, or
+`versions.latest` without a pin) and never writes a version or pin, then waits for the configured backend revision and
 only then deletes the replaced 2.1 deployments through ARM. Barge-in is native.
 Physical/provider audio and device acceptance are still open; no live call was
 made for this source cutover.
@@ -432,7 +438,7 @@ sequenceDiagram
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Agent definition | `agents/pi/definition.json`, `instructions.md`, `skills/*/SKILL.md`; built by `.github/scripts/provision_pi_agent.py` in the Deploy `pi-agent` job | Persona = identity contract kernel plus product identity plus chat rules. Owner preferences, tone and mode go in a context block with the first turn and whenever they change, keeping the cached prefix stable |
+| Agent definition | `agents/pi/definition.json`, `skills/*/SKILL.md`; built by `.github/scripts/provision_pi_agent.py` in the Deploy `pi-agent` job. `instructions.md` only seeds version 1 | Code owns model, harness, reasoning, the Jarvis MCP tool and connection, and skills. **Foundry owns the instructions text** (2026-11-20): Deploy creates version 1 from the seed once, never compares, verifies or restores the text, and when a code-owned part needs a new version it carries forward the text of the serving version (the pinned one, otherwise `versions.latest`). The fingerprint excludes the instructions. The seed keeps the identity contract kernel plus product identity plus chat rules, and a marked `KEEP THIS BLOCK: backend tool contract` section (the `[Turn ...]` line, `find_tools`, `call_tool`) that the backend depends on. Owner preferences, tone and mode go in a context block with the first turn and whenever they change, keeping the cached prefix stable |
 | Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call, SSE parse, text before a tool call becomes the acknowledgment and commentary events, 180 s turn deadline, cancel closes the stream and the grant. One in-flight request on the conversation: a single-flight lock, claimed synchronously, keeps a warm-up and a chat turn from ever overlapping (a turn waits for a running warm-up; a warm-up yields to a turn). Chat, voice and brain results emit bounded status evidence without turn text |
 | Warm conversation | `dbo.pi_conversation` (migration 0086), `POST /pi/warm` | One conversation per owner; a warm-up turn primes the cache when the app opens |
 | Ledger | `dbo.pi_turn`, plus `recordFoundryUsage` (role `chat`) | Per turn: tokens, cached tokens, DKK, first-text ms; the monthly hard stop sums it |
@@ -2176,7 +2182,7 @@ WebSocket adapter against the #1391 core seam.
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
-| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with `vesper`; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
+| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with the voice chosen in Foundry; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
@@ -6604,7 +6610,7 @@ flowchart LR
         SWA["Static Web Apps<br/>board (React/Vite)"]
         BE["Container Apps<br/>Jarvis backend (Node.js)"]
         subgraph Foundry["Foundry"]
-            VL["Voice agent: jarvis-pi-live<br/>gpt-live-1 + vesper<br/>native 24 kHz Live"]
+            VL["Voice agent: jarvis-pi-live<br/>gpt-live-1<br/>native 24 kHz Live"]
             PI["PI agent: jarvis-pi<br/>tools + stored owner turn"]
             JA["Hosted agent: Jarvis<br/>gpt-5.6-luna"]
             SB["Hosted agents: sandboxes<br/>one per task, Codex / Copilot"]
@@ -8067,8 +8073,13 @@ flowchart LR
 - **Backend:** builds `apps/backend/Dockerfile` in ACR, then updates the Container App to the image digest. On the first deploy the app does not exist yet, so Bicep creates it with that image. The job waits until the new revision is the latest ready revision; the previous revision serves until then.
 - **Agent:** builds `agents/jarvis` in ACR and creates a Foundry hosted-agent version from the image digest with `JARVIS_BACKEND_URL` and the `gpt-5.6-luna` deployment. It routes traffic to the active version, updates the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to its instance identity, and waits for backend health. The deploy identity receives Foundry project roles; Dan runs bootstrap once with the reported principal ID to grant `Jarvis.Tools` and persist it for future Bicep deployments.
 - **PI and GPT-Live:** the required `pi-agent` job provisions/pins PI and the
-  immutable `jarvis-pi-live` voice agent, then waits for the backend revision
-  configured for that name. Only after that revision is ready does it
+  `jarvis-pi-live` voice agent, then waits for the backend revision
+  configured for that name. The voice agent's instructions, voice and greeting
+  are Foundry-owned: Deploy seeds version 1 from `agents/pi/voice-*` only when the
+  agent is missing; afterwards it never posts a version or changes the pin, and
+  only fails with a `voice_readback_*_mismatch` / `voice_agent_*` reason if the
+  technical contract (kind, sub-protocol, model, delegation `client`, `store`
+  false, PCM 24 kHz) drifted. Only after that revision is ready does it
   idempotently delete the two replaced voice deployments. The smoke and release
   receipt consume this exact revision; cleanup is not a separate operator step.
 - **Web:** builds with `VITE_BACKEND_URL` from the `backendFqdn` output and uploads `apps/web/dist` with the Static Web Apps deployment token (masked, read with the deploy identity). `staticwebapp.config.json` rewrites client routes to `index.html`. The job checks `/` and a deep link.
