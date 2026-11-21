@@ -645,11 +645,12 @@ function registerVoiceRoute(
       if (hasNewerOwnerTurn) {
         return;
       }
-      const group = timelineMatch ?? currentInput;
-      if (!group || group.delegationId && group.delegationId !== value.id) {
-        closeSession(1011, 'Voice delegation did not match an owner turn');
-        return;
-      }
+      // The delegation can precede its owner transcript. A turn that is already
+      // persisted, being persisted or owned by another delegation must never be reused.
+      const candidate = timelineMatch ?? currentInput;
+      const reusable = candidate && !candidate.persisted && !candidate.persistence &&
+        !candidate.locked && !candidate.delegationId;
+      const group = reusable ? candidate : newInputGroup();
       seenDelegations.add(value.id);
       group.delegationId = value.id;
       if (offsetMs !== undefined) group.delegationOffsetMs = offsetMs;

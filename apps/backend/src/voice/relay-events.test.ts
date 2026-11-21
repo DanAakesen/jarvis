@@ -477,6 +477,204 @@ describe('GPT-Live authoritative client events', () => {
     expect(inputs[0]?.text).toBe('New request');
   }, 15_000);
 
+  describe('delegation that precedes its owner transcript', () => {
+    const recordingStore = (writes: Array<{ id: string; role: string; text: string }>) => ({
+      createSession: async () => ({
+        id: '714', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => true,
+      addMessage: async (input: {
+        sessionId: string;
+        role: string;
+        text: string;
+        model: string | null;
+      }) => {
+        const id = String(1000 + writes.length);
+        writes.push({ id, role: input.role, text: input.text });
+        return {
+          id, sessionId: input.sessionId, role: input.role, text: input.text,
+          model: input.model, at: new Date(),
+        } as ConversationMessage;
+      },
+    } as unknown as ConversationStore);
+    const send = (relay: Awaited<ReturnType<typeof startRelay>>, event: Record<string, unknown>) =>
+      relay.upstreamSockets[0]!.send(JSON.stringify(event));
+    const commentary = (relay: Awaited<ReturnType<typeof startRelay>>) =>
+      relay.upstreamEvents.filter(event => event.type === 'session.commentary.append');
+    const expectOpen = (relay: Awaited<ReturnType<typeof startRelay>>) => {
+      expect(relay.browser.readyState).toBe(WebSocket.OPEN);
+      expect(relay.received.some(event => event.type === 'jarvis.session.failed')).toBe(false);
+    };
+
+    it('delegates the first turn without closing the session', async () => {
+      const writes: Array<{ id: string; role: string; text: string }> = [];
+      const inputs: ConversationAgentInput[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream(input) {
+          inputs.push(input);
+          yield 'Result ready.';
+        },
+      });
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      send(relay, {
+        type: 'session.delegation.created',
+        event_id: 'first-delegation',
+        offset_ms: 300,
+        delegation: { id: 'delegate-first', target: 'client' },
+      });
+      await sleep(50);
+      send(relay, {
+        type: 'session.input_transcript.delta',
+        event_id: 'first-input',
+        delta: 'Find the status',
+        start_ms: 0,
+        end_ms: 300,
+      });
+      await until(() => commentary(relay).length === 1, 'first delegated result');
+      send(relay, {
+        type: 'session.output_transcript.delta',
+        event_id: 'first-output',
+        delta: 'Here is the status.',
+      });
+      await until(() => writes.length === 2, 'ordered persistence');
+
+      expect(inputs).toHaveLength(1);
+      expect(inputs[0]).toEqual(expect.objectContaining({ text: 'Find the status', messageId: '1000' }));
+      expect(commentary(relay)).toEqual([expect.objectContaining({
+        delegation_id: 'delegate-first',
+        content: 'Result ready.',
+      })]);
+      expect(writes.map(({ role, text }) => ({ role, text }))).toEqual([
+        { role: 'dan', text: 'Find the status' },
+        { role: 'jarvis', text: 'Here is the status.' },
+      ]);
+      expectOpen(relay);
+    }, 15_000);
+
+    it('does not reuse a persisted direct turn for the next delegation', async () => {
+      const writes: Array<{ id: string; role: string; text: string }> = [];
+      const inputs: ConversationAgentInput[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream(input) {
+          inputs.push(input);
+          yield 'Result ready.';
+        },
+      });
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      send(relay, {
+        type: 'session.input_transcript.delta',
+        event_id: 'direct-input',
+        delta: 'Hello Jarvis',
+        start_ms: 0,
+        end_ms: 100,
+      });
+      send(relay, {
+        type: 'session.output_transcript.delta',
+        event_id: 'direct-output',
+        delta: 'Hello Dan.',
+      });
+      await until(() => writes.length === 2, 'direct turn persistence');
+      send(relay, {
+        type: 'session.delegation.created',
+        event_id: 'second-delegation',
+        offset_ms: 400,
+        delegation: { id: 'delegate-second', target: 'client' },
+      });
+      await sleep(50);
+      send(relay, {
+        type: 'session.input_transcript.delta',
+        event_id: 'second-input',
+        delta: 'Check my calendar',
+        start_ms: 200,
+        end_ms: 400,
+      });
+      await until(() => commentary(relay).length === 1, 'delegated result');
+      send(relay, {
+        type: 'session.output_transcript.delta',
+        event_id: 'second-output',
+        delta: 'Your calendar is clear.',
+      });
+      await until(() => writes.length === 4, 'ordered persistence');
+
+      expect(inputs).toHaveLength(1);
+      expect(inputs[0]?.text).toBe('Check my calendar');
+      expect(commentary(relay)).toHaveLength(1);
+      expect(writes.map(({ role, text }) => ({ role, text }))).toEqual([
+        { role: 'dan', text: 'Hello Jarvis' },
+        { role: 'jarvis', text: 'Hello Dan.' },
+        { role: 'dan', text: 'Check my calendar' },
+        { role: 'jarvis', text: 'Your calendar is clear.' },
+      ]);
+      expectOpen(relay);
+    }, 15_000);
+
+    it('does not reuse the previous delegated turn for the next delegation', async () => {
+      const writes: Array<{ id: string; role: string; text: string }> = [];
+      const inputs: ConversationAgentInput[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream(input) {
+          inputs.push(input);
+          yield 'Result ready.';
+        },
+      });
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      send(relay, {
+        type: 'session.input_transcript.delta',
+        event_id: 'one-input',
+        delta: 'First task',
+        start_ms: 0,
+        end_ms: 100,
+      });
+      send(relay, {
+        type: 'session.delegation.created',
+        event_id: 'one-delegation',
+        offset_ms: 100,
+        delegation: { id: 'delegate-one', target: 'client' },
+      });
+      await until(() => commentary(relay).length === 1, 'first delegated result');
+      send(relay, {
+        type: 'session.output_transcript.delta',
+        event_id: 'one-output',
+        delta: 'First done.',
+      });
+      await until(() => writes.length === 2, 'first turn persistence');
+      send(relay, {
+        type: 'session.delegation.created',
+        event_id: 'two-delegation',
+        offset_ms: 500,
+        delegation: { id: 'delegate-two', target: 'client' },
+      });
+      await sleep(50);
+      send(relay, {
+        type: 'session.input_transcript.delta',
+        event_id: 'two-input',
+        delta: 'Second task',
+        start_ms: 300,
+        end_ms: 500,
+      });
+      await until(() => commentary(relay).length === 2, 'second delegated result');
+      send(relay, {
+        type: 'session.output_transcript.delta',
+        event_id: 'two-output',
+        delta: 'Second done.',
+      });
+      await until(() => writes.length === 4, 'second turn persistence');
+
+      expect(inputs.map(input => input.text)).toEqual(['First task', 'Second task']);
+      expect(commentary(relay).map(event => event.delegation_id)).toEqual([
+        'delegate-one',
+        'delegate-two',
+      ]);
+      expect(writes.map(({ role, text }) => ({ role, text }))).toEqual([
+        { role: 'dan', text: 'First task' },
+        { role: 'jarvis', text: 'First done.' },
+        { role: 'dan', text: 'Second task' },
+        { role: 'jarvis', text: 'Second done.' },
+      ]);
+      expectOpen(relay);
+    }, 15_000);
+  });
+
   it('sends a controlled PI failure commentary without switching engines', async () => {
     const store = {
       createSession: async () => ({
