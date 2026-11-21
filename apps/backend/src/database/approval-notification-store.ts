@@ -19,7 +19,7 @@ export interface ApprovalNotificationStore {
   ): Promise<'saved' | 'device_limit' | 'invalid_token'>;
   list(owner: string): Promise<StoredApprovalNotificationRegistration[]>;
   remove(owner: string, deviceToken: string): Promise<void>;
-  invalidate(owner: string, deviceToken: string): Promise<void>;
+  invalidate(owner: string, deviceToken: string, statusCode?: number | null): Promise<void>;
 }
 
 export function createApprovalNotificationStore(pool: sql.ConnectionPool): ApprovalNotificationStore {
@@ -62,6 +62,13 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
           FROM dbo.reply_notification_deliveries d
           INNER JOIN @expired expired ON expired.device_reference = d.device_reference
           WHERE d.state IN (N'pending', N'sending');
+          UPDATE o
+            SET state = N'failed', last_result = N'registration_expired',
+                completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
+                next_attempt_at = NULL, lease_owner = NULL, lease_until = NULL
+          FROM dbo.owner_reminder_deliveries o
+          INNER JOIN @expired expired ON expired.device_reference = o.device_reference
+          WHERE o.state IN (N'pending', N'sending', N'retrying');
           DELETE registration
           FROM dbo.approval_notification_registrations registration
           INNER JOIN @expired expired ON expired.registration_id = registration.registration_id;
@@ -92,6 +99,13 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
             FROM dbo.reply_notification_deliveries d
             INNER JOIN @rejected rejected ON rejected.device_reference = d.device_reference
             WHERE d.state IN (N'pending', N'sending');
+            UPDATE o
+              SET state = N'invalid_token', last_result = N'apns_invalid_token',
+                  completed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
+                  next_attempt_at = NULL, lease_owner = NULL, lease_until = NULL
+            FROM dbo.owner_reminder_deliveries o
+            INNER JOIN @rejected rejected ON rejected.device_reference = o.device_reference
+            WHERE o.state IN (N'pending', N'sending', N'retrying');
             DELETE registration
             FROM dbo.approval_notification_registrations registration
             INNER JOIN @rejected rejected ON rejected.registration_id = registration.registration_id;
@@ -191,12 +205,13 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
           INNER JOIN @removed removed ON removed.registration_id = registration.registration_id;
           COMMIT TRANSACTION;`);
     },
-    async invalidate(owner, deviceToken) {
+    async invalidate(owner, deviceToken, statusCode = null) {
       const token = deviceToken.toLowerCase();
       const tokenHash = createHash('sha256').update(token).digest('hex').toUpperCase();
       await pool.request().input('owner', sql.UniqueIdentifier, owner)
         .input('token', sql.VarChar(512), token)
         .input('tokenHash', sql.Char(64), tokenHash)
+        .input('statusCode', sql.Int, statusCode)
         .query(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
           DECLARE @lockResult int;
@@ -238,6 +253,14 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
           FROM dbo.reply_notification_deliveries d
           INNER JOIN @invalid invalid ON invalid.device_reference = d.device_reference
           WHERE d.state IN (N'pending', N'sending');
+          UPDATE o
+            SET state = N'invalid_token', last_result = N'apns_invalid_token',
+                last_status_code = @statusCode, completed_at = SYSUTCDATETIME(),
+                updated_at = SYSUTCDATETIME(), next_attempt_at = NULL,
+                lease_owner = NULL, lease_until = NULL
+          FROM dbo.owner_reminder_deliveries o
+          INNER JOIN @invalid invalid ON invalid.device_reference = o.device_reference
+          WHERE o.state IN (N'pending', N'sending', N'retrying');
           DELETE registration
           FROM dbo.approval_notification_registrations registration
           INNER JOIN @invalid invalid ON invalid.registration_id = registration.registration_id;

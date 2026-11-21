@@ -134,3 +134,10 @@ are migrated.
 `0100_pi_observation_generations.sql` separates source verification time from original occurrence time and converts authority into explicit active/stale generations. Disabling a source retains and marks its active receipt stale; a newer verification inserts the next active generation instead of overwriting the invalidated receipt. Source status, authority, state and follow-up outbox can therefore share an exact verified generation. Its down batch refuses to collapse retained history.
 
 `0101_pi_pending_lookup_authority.sql` keeps independent live-lookup receipts pending (`activated_at IS NULL`) until the exact material/verification tuple is consumed by an atomic situation commit. Active authority remains unique and only the commit can retire its predecessor.
+
+`0102_owner_reminder_delivery_outbox.sql` keeps `owner_reminder_schedules` as
+the owner request and adds one durable APNs outbox row per reminder occurrence
+and immutable native registration reference. It also adds retry/diagnostic
+summary fields, recipient-state terminalization to the shared registration
+delete trigger and a stable no-duplicate uniqueness key. The matching down batch
+refuses to discard delivery evidence or newer schedule state.

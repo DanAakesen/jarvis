@@ -74,6 +74,17 @@ describe('committed SQL manifest', () => {
     expect((await readDownMigration('0096_apns_device_token_tombstones.sql')).sql)
       .toContain('DROP TABLE dbo.approval_notification_token_tombstones');
   });
+  it('ships the durable owner-reminder APNs outbox and retry state', async () => {
+    const migration = (await readMigrations()).find(({ name }) =>
+      name === '0102_owner_reminder_delivery_outbox.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.owner_reminder_deliveries');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.owner_reminder_delivery_snapshots');
+    expect(migration?.sql).toContain("N'scheduled', N'sending', N'retrying'");
+    expect(migration?.sql).toContain('UX_owner_reminder_deliveries_occurrence_device');
+    expect(migration?.sql).toContain('ALTER TRIGGER dbo.TR_approval_notification_registrations_terminalize_deliveries');
+    expect((await readDownMigration('0102_owner_reminder_delivery_outbox.sql')).sql)
+      .toContain('DROP TABLE dbo.owner_reminder_deliveries');
+  });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
     const path = await directory();
     await mkdir(join(path, 'down'));

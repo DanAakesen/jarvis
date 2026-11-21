@@ -1662,7 +1662,12 @@ try {
     ? createPushStore(database.pool)
     : undefined;
   const nativeProactive = approvalNotifications
-    ? createNativeProactiveDelivery(config.auth.ownerObjectId, approvalNotifications, () => new Date())
+    ? createNativeProactiveDelivery(
+      config.auth.ownerObjectId,
+      approvalNotifications,
+      () => new Date(),
+      ownerReminderStore,
+    )
     : undefined;
   const alertPushSender = alertPushStore && config.staticWebAppOrigin
     ? createSystemPushSender({

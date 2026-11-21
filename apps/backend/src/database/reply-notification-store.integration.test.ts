@@ -582,10 +582,20 @@ describe('durable reply notification store', () => {
       new URL('../../../../db/migrations/down/0096_apns_device_token_tombstones.sql', import.meta.url),
       'utf8',
     );
+    const ownerReminderSchema = await readFile(
+      new URL('../../../../db/migrations/0102_owner_reminder_delivery_outbox.sql', import.meta.url),
+      'utf8',
+    );
+    const ownerReminderDown = await readFile(
+      new URL('../../../../db/migrations/down/0102_owner_reminder_delivery_outbox.sql', import.meta.url),
+      'utf8',
+    );
     const before = await pool.request().query<{ count: number }>(
       'SELECT COUNT(*) AS count FROM dbo.reply_notification_deliveries',
     );
 
+    // Later migrations reference registrations and the delete trigger; unwind them first.
+    await pool.request().batch(ownerReminderDown);
     await pool.request().batch(tombstoneDown);
     expect((await pool.request().query<{ table_id: number | null }>(
       `SELECT OBJECT_ID(N'dbo.approval_notification_token_tombstones', N'U') AS table_id`,
@@ -620,6 +630,7 @@ describe('durable reply notification store', () => {
     await pool.request().batch(initialSchema);
     await pool.request().batch(schema);
     await pool.request().batch(terminalSchema);
+    await pool.request().batch(ownerReminderSchema);
     const registrations = await pool.request()
       .input('owner', sql.UniqueIdentifier, legacyOwner)
       .query<{ registration_id: string | null }>(

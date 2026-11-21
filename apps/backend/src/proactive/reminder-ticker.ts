@@ -86,6 +86,12 @@ function ownerReminderFinding(
   };
 }
 
+function ownerReminderNotificationId(schedule: OwnerReminderSchedule): string {
+  return `reminder-${createHash('sha256')
+    .update(`owner-reminder:${schedule.id}:${schedule.fireAt.toISOString()}`)
+    .digest('hex').slice(0, 48)}`;
+}
+
 function itemBody(row: ReminderRow, now: Date): string {
   const due = row.dueAt;
   const time = localTimeLabel(due);
@@ -360,7 +366,9 @@ export function createReminderTicker(options: {
       schedule.cadence !== null || now.getTime() - schedule.fireAt.getTime() <= 7 * 24 * 60 * 60_000);
     const missed = claimed.filter((schedule) => !active.includes(schedule));
     await Promise.all(missed.map((schedule) => schedules.finishClaim(schedule.id, schedule.claimToken!, {
-      state: 'suppressed', reason: 'missed_time', lastDelivery: 'suppressed',
+      state: 'suppressed',
+      reason: 'missed_time',
+      lastDelivery: 'suppressed',
     })));
     if (active.length === 0 || signal.aborted) return;
 
@@ -372,10 +380,12 @@ export function createReminderTicker(options: {
       await Promise.all(active.map((schedule) => {
         const verifyAttempts = Math.min(255, schedule.verifyAttempts + 1);
         return schedules.finishClaim(schedule.id, schedule.claimToken!, {
-          state: verifyAttempts < 3 ? 'scheduled' : 'suppressed',
+          state: verifyAttempts < 3 ? 'retrying' : 'suppressed',
           reason: verifyAttempts < 3 ? 'task_unavailable' : 'verification_exhausted',
           verifyAttempts,
-          ...(verifyAttempts < 3 ? { fireAt: new Date(now.getTime() + retryDelayMs) } : {}),
+          ...(verifyAttempts < 3
+            ? { nextAttemptAt: new Date(now.getTime() + retryDelayMs) }
+            : {}),
         });
       }));
       return;
@@ -404,11 +414,18 @@ export function createReminderTicker(options: {
       if (signal.aborted) return;
       const stillClaimed = await schedules.get(schedule.id);
       if (stillClaimed?.state !== 'sending' || stillClaimed.claimToken !== schedule.claimToken) continue;
-      if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
+      const noCurrentRecipient = subscriptions.length === 0 && !await options.hasNativeRecipients?.();
+      if (noCurrentRecipient && schedule.recipientCount === 0 && schedule.sendAttempts === 0) {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'suppressed',
           reason: 'no_subscription',
           lastDelivery: 'suppressed',
+          lastProvider: null,
+          lastProviderOutcome: 'no_subscription',
+          lastProviderStatusCode: null,
+          recipientCount: 0,
+          acceptedRecipientCount: 0,
+          sendAttempts: 0,
         });
         continue;
       }
@@ -425,40 +442,88 @@ export function createReminderTicker(options: {
         itemId: item.id,
         origin: 'proactive_reminder',
         details: [{ title: reminderTitle(task!.text), dueAt: null }],
+        ownerReminderDelivery: {
+          scheduleId: schedule.id,
+          claimToken: schedule.claimToken!,
+          occurrenceAt: schedule.fireAt,
+          notificationId: ownerReminderNotificationId(schedule),
+          expiresAt: new Date(now.getTime() + 60 * 60_000),
+        },
       }, signal);
       if (outcome.status === 'sent') {
         await options.pushStore.updateItemDelivery(item.id, 'accepted', outcome.statusCode);
         const next = nextOwnerOccurrence(schedule, now);
+        const evidence = outcome.deliveryEvidence;
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: schedule.cadence && next ? 'scheduled' : 'completed',
           reason: null,
-          sendAttempts: 0,
+          sendAttempts: evidence?.attemptCount ?? Math.max(1, schedule.sendAttempts + 1),
+          nextAttemptAt: null,
           itemId: item.id,
           lastDelivery: 'provider_accepted',
-          lastFireAt: now,
+          lastFireAt: schedule.fireAt,
+          lastProvider: outcome.provider ?? (evidence ? 'apns' : null),
+          lastProviderOutcome: outcome.providerOutcome ?? evidence?.providerOutcome ?? 'provider_accepted',
+          lastProviderStatusCode: outcome.statusCode,
+          recipientCount: evidence?.recipientCount ?? Math.max(outcome.accepted, outcome.attempted),
+          acceptedRecipientCount: evidence?.acceptedRecipientCount ?? outcome.accepted,
           ...(next ? { fireAt: next } : {}),
           ...(task!.text !== schedule.taskTitle ? { taskTitle: task!.text } : {}),
         });
       } else if (outcome.status === 'failed') {
         await options.pushStore.updateItemDelivery(item.id, 'failed', outcome.statusCode);
-        const sendAttempts = Math.min(255, schedule.sendAttempts + 1);
+        const evidence = outcome.deliveryEvidence;
+        const sendAttempts = evidence?.attemptCount ??
+          Math.min(255, schedule.sendAttempts + 1);
+        const retryAt = evidence?.nextAttemptAt ??
+          (outcome.reason === 'provider_unavailable' && sendAttempts < 2
+            ? new Date(options.now().getTime() + retryDelayMs)
+            : null);
+        const suppressed = outcome.reason === 'apns_invalid_token' ||
+          outcome.reason === 'registration_removed' ||
+          outcome.reason === 'registration_expired' ||
+          outcome.reason === 'delivery_expired';
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
-          state: sendAttempts < 2 ? 'scheduled' : 'failed',
-          reason: sendAttempts < 2 ? outcome.reason : 'retries_exhausted',
+          state: retryAt ? 'retrying' : suppressed ? 'suppressed' : 'failed',
+          reason: retryAt ? outcome.reason : outcome.reason === 'retry_exhausted' ||
+            outcome.reason === 'provider_unavailable' && sendAttempts >= 2
+            ? 'retries_exhausted'
+            : outcome.reason === 'delivery_expired' ? 'missed_time' : outcome.reason,
           sendAttempts,
+          nextAttemptAt: retryAt,
           itemId: item.id,
-          lastDelivery: 'failed',
-          ...(sendAttempts < 2 ? { fireAt: new Date(options.now().getTime() + retryDelayMs) } : {}),
+          lastDelivery: retryAt ? 'retrying' : suppressed ? 'suppressed' : 'failed',
+          lastProvider: outcome.provider ?? (evidence ? 'apns' : null),
+          lastProviderOutcome: outcome.providerOutcome ?? (
+            outcome.reason === 'retry_exhausted' ? 'retry_exhausted' :
+              outcome.reason === 'delivery_evidence_unavailable' ? 'delivery_evidence_unavailable' :
+              outcome.reason === 'delivery_expired' ? 'delivery_expired' :
+              outcome.reason === 'apns_invalid_token' ? 'apns_invalid_token' :
+                outcome.reason === 'registration_removed' ? 'registration_removed' :
+                  outcome.reason === 'registration_expired' ? 'registration_expired' :
+                    outcome.reason === 'provider_rejected' ? 'provider_rejected' :
+                      outcome.reason === 'provider_unavailable' ? 'provider_unavailable' :
+                        'delivery_failed'
+          ),
+          lastProviderStatusCode: outcome.statusCode,
+          recipientCount: evidence?.recipientCount ?? Math.max(outcome.attempted, 0),
+          acceptedRecipientCount: evidence?.acceptedRecipientCount ?? outcome.accepted,
         });
       } else if (outcome.reason === 'no_subscription') {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
-          state: 'suppressed', reason: 'no_subscription', lastDelivery: 'suppressed', itemId: item.id,
+          state: 'suppressed',
+          reason: 'no_subscription',
+          lastDelivery: 'suppressed',
+          lastProvider: outcome.provider ?? null,
+          lastProviderOutcome: 'no_subscription',
+          lastProviderStatusCode: outcome.statusCode,
+          recipientCount: 0,
+          acceptedRecipientCount: 0,
+          sendAttempts: outcome.deliveryEvidence?.attemptCount ?? schedule.sendAttempts,
+          itemId: item.id,
         });
-      } else if (!signal.aborted) {
-        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
-          state: 'scheduled', fireAt: new Date(options.now().getTime() + retryDelayMs),
-        });
-      }
+      } else if (outcome.reason === 'delivery_evidence_unavailable' ||
+        outcome.reason === 'aborted' || signal.aborted) continue;
     }
   }
 
