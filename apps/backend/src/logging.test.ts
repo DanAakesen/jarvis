@@ -260,6 +260,44 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it.each([
+    ['pi.stream_failed', { reason: 'foundry_response_failed', event: 'response.failed', code: 'server_error', attempt: 2, elapsedMs: 3960, firstEventMs: 120, sawText: false, sawTool: false, sawOutput: false, previousCancelled: true }],
+    ['pi.stream_failed', { reason: 'stream_broke', attempt: 1, elapsedMs: 32_000, firstEventMs: 80, sawText: true, sawTool: false, sawOutput: true, previousCancelled: false }],
+    ['pi.stream_retry', { reason: 'stream_ended_without_completed', attempt: 1, elapsedMs: 900, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }],
+    ['pi.mcp_list_failed', { server: 'azure', code: 'unreachable', status: 503, elapsedMs: 1200 }],
+    ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue', code: 'tool_user_error', elapsedMs: 2500 }],
+  ])('exports only the safe fields of %s and strips everything else', (event, fields) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      ...fields, prompt: 'private prompt', text: 'private reply', arguments: { q: 'private' }, token: 'private token', message: 'private provider message',
+    }, event);
+    expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: event, ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: event, properties: { service: 'jarvis-backend', ...fields } }));
+    logger.info({
+      reason: 'private reason', event: 'private event', code: 'not a code!', server: 'bad server', tool: 'bad/tool', status: 99,
+      attempt: 3, elapsedMs: -1, firstEventMs: Infinity, sawText: 'yes', previousCancelled: 1,
+    }, event);
+    expect(JSON.parse(records[1]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: event });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it('keeps the tool count and Azure catalogue on pi.turn and drops an unknown catalogue state', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, undefined, output);
+    logger.info({ channel: 'chat', outcome: 'failed', totalMs: 3960, toolCount: 0, azureCatalogue: 'not_searched', actionCount: 2, prompt: 'private prompt' }, 'pi.turn');
+    logger.info({ channel: 'chat', outcome: 'ok', toolCount: -1, azureCatalogue: 'private state' }, 'pi.turn');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.turn',
+      channel: 'chat', outcome: 'failed', totalMs: 3960, toolCount: 0, azureCatalogue: 'not_searched',
+    });
+    expect(JSON.parse(records[1]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.turn', channel: 'chat', outcome: 'ok' });
+    expect(records.join('')).not.toContain('private');
+  });
+
   it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(
     'exports only allowlisted proactive reason codes and run IDs: %s', (reason) => {
       const records: string[] = [];
