@@ -1045,19 +1045,24 @@ export const factoryTools: readonly JarvisTool[] = [
         : undefined;
       const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
       if (repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
-        const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
-        if (!existing || existing.isPullRequest || existing.state !== 'open') {
-          throw new ToolRefusal('Only an open GitHub issue can be started.');
+        try {
+          const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
+          if (!existing || existing.isPullRequest || existing.state !== 'open') {
+            throw new ToolRefusal('Only an open GitHub issue can be started.');
+          }
+          const ownProject = selectedProject ?? await resolveProject(JARVIS_REPOSITORY, request.server.projectStore ?? null);
+          if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
+            return await executeStartIssue(request, issue, ownProject.id);
+          }
+          const staged = await stageIssueCreation(request.server, {
+            ...(selectedProject ? { project: selectedProject.id } : {}),
+            issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
+          }, message, signal, selectedProject, pi);
+          return await confirmIssueCreation(request, staged.confirmationCode, signal, true);
+        } catch (error) {
+          if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          throw new ToolFailure('I couldn’t start that issue because GitHub did not answer. Nothing was started; try again shortly.');
         }
-        const ownProject = selectedProject ?? await resolveProject(JARVIS_REPOSITORY, request.server.projectStore ?? null);
-        if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
-          return executeStartIssue(request, issue, ownProject.id);
-        }
-        const staged = await stageIssueCreation(request.server, {
-          ...(selectedProject ? { project: selectedProject.id } : {}),
-          issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
-        }, message, signal, selectedProject, pi);
-        return confirmIssueCreation(request, staged.confirmationCode, signal, true);
       }
       return executeStartIssue(request, issue, project);
     },
