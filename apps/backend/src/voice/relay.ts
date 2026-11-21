@@ -395,7 +395,9 @@ function registerVoiceRoute(
         text: '',
         startedAt: performance.now(),
         lastDeltaAt: performance.now(),
-        ...(owner && !owner.persisted && owner.text.trim() ? { answers: owner } : {}),
+        // A delegation can precede its transcript, so its still-empty turn is already the one being answered.
+        ...(owner && !owner.persisted && (owner.text.trim() || owner === pendingDelegationGroup)
+          ? { answers: owner } : {}),
         persistedTextLength: 0,
         completed: false,
         nextEventSequence: 0,
@@ -753,20 +755,33 @@ function registerVoiceRoute(
           await owner.persistence.catch(() => undefined);
           return;
         }
-        if (!termination.isActive || terminalTeardownStarted) {
-          await persistDirectGroup(owner, 'session_end');
+        const hasText = owner.text.trim().length > 0;
+        const waiting = owner === pendingDelegationGroup;
+        if (!termination.isActive || terminalTeardownStarted || controller.signal.aborted) {
+          if (hasText) await persistDirectGroup(owner, 'session_end');
           return;
         }
+        // An empty turn that is no longer the pending delegation's has nothing to store.
+        if (!hasText && !waiting) return;
         const now = performance.now();
-        const waiting = owner === pendingDelegationGroup;
         const quietFor = now - owner.lastDeltaAt;
-        if (!waiting && quietFor >= VOICE_INPUT_QUIET_MS) {
+        if (hasText && !waiting && quietFor >= VOICE_INPUT_QUIET_MS) {
           void persistDirectGroup(owner, 'before_output');
           continue;
         }
         if (now >= deadline) return;
+        const pauseMs = Math.min(
+          deadline - now,
+          waiting || !hasText ? 25 : VOICE_INPUT_QUIET_MS - quietFor,
+        );
         await new Promise<void>(resolve => {
-          setTimeout(resolve, Math.min(deadline - now, waiting ? 25 : VOICE_INPUT_QUIET_MS - quietFor));
+          const wake = () => {
+            clearTimeout(timer);
+            controller.signal.removeEventListener('abort', wake);
+            resolve();
+          };
+          const timer = setTimeout(wake, pauseMs);
+          controller.signal.addEventListener('abort', wake, { once: true });
         });
       }
     };

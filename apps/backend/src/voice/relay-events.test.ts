@@ -1035,6 +1035,32 @@ describe('GPT-Live authoritative client events', () => {
       await until(() => commentary(relay).length === 1, 'PI result');
     }, 20_000);
 
+    it.each([150, 1_000])(
+      'stores Dan before the acknowledgement when the transcript trails the delegation by %i ms',
+      async (trailingMs) => {
+        const writes: Array<{ role: string; text: string }> = [];
+        const { agent, runs } = gatedAgent();
+        const relay = await startRelay(recordingStore(writes), agent);
+        relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+
+        delegate(relay, 'delegate-order', 400);
+        speak(relay, 'order-a1', 'OK. ');
+        await sleep(trailingMs);
+        word(relay, 'order-w1', 'Check Azure ', 0, 200);
+        word(relay, 'order-w2', 'resource groups', 200, 400);
+
+        await until(() => writes.length >= 2, 'owner and acknowledgement messages', 1_000);
+        expect(writes.slice(0, 2).map(write => `${write.role}:${write.text}`)).toEqual([
+          'dan:Check Azure resource groups',
+          'jarvis:OK. ',
+        ]);
+        await until(() => runs.length === 1, 'PI turn');
+        expect(runs[0]!.text).toBe('Check Azure resource groups');
+        expect(commentary(relay)).toEqual([]);
+      },
+      20_000,
+    );
+
     it('only falls back to the did-not-catch reply when no words ever arrive', async () => {
       const { agent, runs } = gatedAgent();
       const relay = await startRelay(recordingStore([]), agent);
