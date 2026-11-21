@@ -230,6 +230,10 @@ export const workspaceGroup: GroupFactory = (context) => {
         expect((result as { forecast: unknown[] }).forecast).toHaveLength(2);
         expect(result).not.toHaveProperty('artifactId');
       } },
+      // Dan's saved home location is the core group's settings seed; no place is looked up for it.
+      { label: 'uses the saved home location when no place is named', arguments: { report: false }, check: (result) => {
+        expect(result).toMatchObject({ provider: 'Open-Meteo', location: { name: expect.stringMatching(/\S/u) } });
+      } },
       { label: 'adds the hourly values on request', arguments: { location: 'Aarhus', days: 2, hourly: true, report: false }, check: (result) => {
         expect((result as { hourly: { times: string[] } }).hourly.times).toHaveLength(48);
       } },
