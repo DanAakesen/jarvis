@@ -803,7 +803,6 @@ return {
             let firstByteLogged = false;
             let agentIterator: AsyncIterator<ConversationAgentChunk> | undefined;
             let interrupted = false;
-            let acknowledgmentSent = false;
             let invitationId: string | undefined;
             let foodResult: string | undefined;
             const invitations: string[] = [];
@@ -875,11 +874,10 @@ return {
                 const delta = chunk.value;
                 if (typeof delta !== 'string') {
                   const interim = partial.trimStart();
-                  if ((delta.type === 'acknowledgment' && acknowledgmentSent) || !interim.startsWith(delta.text.trimStart())) {
-                    throw new Error('Chat progress update did not match the streamed reply');
-                  }
-                  if (delta.type === 'acknowledgment') acknowledgmentSent = true;
-                  partial = interim.slice(delta.text.trimStart().length);
+                  const progress = delta.text.trimStart();
+                  // Progress is its own event. Text that was already streamed as reply is moved out of the reply; a repeated
+                  // or unmatched line is only shown as progress and never ends the turn.
+                  if (progress && interim.startsWith(progress)) partial = interim.slice(progress.length);
                   yield streamEvent(delta.type, { text: delta.text });
                   next = agentIterator.next();
                   continue;
