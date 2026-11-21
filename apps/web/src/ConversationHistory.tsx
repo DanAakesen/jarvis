@@ -5,6 +5,7 @@ import { copySendDiagnostic, observeSendDiagnostic } from './send-diagnostic';
 import { ReviewSummary } from './ReviewSummary';
 import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { failureCopy } from '@jarvis/contracts';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useLocation } from 'react-router-dom';
 import { TaskWindowLink } from './TaskWindowLink';
@@ -942,8 +943,8 @@ export function ConversationHistory({
       setReload((value) => value + 1);
     } catch (reason) {
       const message = controller.signal.aborted
-        ? 'Reply stopped. A task action may still have completed; check its status before trying again.'
-        : reason instanceof Error ? reason.message : 'Jarvis could not finish the reply.';
+        ? failureCopy.stopped.chat
+        : reason instanceof Error ? reason.message : failureCopy.cut_off.chat;
       setFailedTurns((current) => [...current, {
         ...queued,
         ...(messageId ? { messageId } : {}),
@@ -1007,6 +1008,8 @@ export function ConversationHistory({
   }, [tokenProvider, config, runTurn]);
 
   function failedTurnFeedback(turn: FailedTurn) {
+    // Dan's own Stop ends a turn; it is not a failure, so it is a status and not an alert.
+    const stopped = turn.error === failureCopy.stopped.chat;
     return (
       <li className="conversation-message" data-speaker="jarvis" key={turn.id} tabIndex={0}>
         <strong className="message-author visually-hidden">Jarvis</strong>
@@ -1015,7 +1018,9 @@ export function ConversationHistory({
           <p>Partial reply, interrupted:</p>
           <MarkdownContent source={turn.partialReply} gfm />
         </div>}
-        <p className="chat-error" role="alert">{turn.error}</p>
+        {stopped
+          ? <p className="chat-status" role="status">{turn.error}</p>
+          : <p className="chat-error" role="alert">{turn.error}</p>}
       </li>
     );
   }

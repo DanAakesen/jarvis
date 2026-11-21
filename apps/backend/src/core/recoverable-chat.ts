@@ -1,4 +1,8 @@
 import { Readable } from 'node:stream';
+import { failureCopy } from '@jarvis/contracts';
+
+const frameName = /^(?:id: [^\n]*\n)?event: ([a-z_]+)\n/u;
+const errorFrame = (message: string): string => `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`;
 
 /** One execution, multiple disposable transports. Completed replies also live in SQL history. */
 export class RecoverableChat {
@@ -8,6 +12,8 @@ export class RecoverableChat {
   private ended = false;
   private bytes = 0;
   private overflowed = false;
+  /** The `done` frame of a saved reply is published: nothing after it may call the turn failed. */
+  private delivered = false;
 
   constructor(readonly sessionId: string, readonly messageId: string) {}
 
@@ -16,13 +22,17 @@ export class RecoverableChat {
   /** Append source-bound progress to the same ordered replay as the final reply. */
   publish(frame: string): boolean {
     if (this.ended || this.overflowed) return false;
+    const name = frameName.exec(frame)?.[1];
+    // A saved reply is never reported as failed afterwards: a late error frame is dropped, and the `done` frame itself always fits.
+    if (this.delivered && name === 'error') return true;
     this.bytes += Buffer.byteLength(frame);
-    if (this.bytes > 1024 * 1024) {
+    if (this.bytes > 1024 * 1024 && name !== 'done') {
       this.overflowed = true;
       this.controller.abort();
-      this.frames.push('event: error\ndata: {"error":"Reply exceeded the recovery limit. Check conversation and action status before trying again."}\n\n');
+      this.frames.push(errorFrame(failureCopy.reply_too_long.chat));
     } else {
       this.frames.push(frame);
+      if (name === 'done') this.delivered = true;
     }
     for (const wake of this.listeners) wake();
     return !this.overflowed;
@@ -34,7 +44,7 @@ export class RecoverableChat {
         if (!this.publish(frame)) break;
       }
     } catch (error) {
-      this.frames.push('event: error\ndata: {"error":"Reply interrupted. Check conversation and action status before trying again."}\n\n');
+      if (!this.delivered) this.frames.push(errorFrame(failureCopy.cut_off.chat));
       throw error;
     } finally {
       this.ended = true;

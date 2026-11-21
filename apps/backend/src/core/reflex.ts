@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { WorkspaceSnapshot } from '@jarvis/contracts';
-import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
+import { confirmToolCall, unexpectedToolFailure, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
 import { isWorkspaceReflexOperation } from './workspace-commands.js';
 import { startWorkPresentation } from './work-presentation.js';
@@ -455,7 +455,7 @@ export async function executeReflexAction(
       result = { failure: error.message };
     } else {
       outcome = 'error';
-      result = { error: 'Tool execution failed' };
+      result = { error: unexpectedToolFailure(error, signal.aborted) };
     }
   } finally {
     if (outcome === 'error') request.server.systemHealthDiagnostics.record('failed');

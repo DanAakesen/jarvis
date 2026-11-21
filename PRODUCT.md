@@ -1,3 +1,7 @@
+## Plain failure messages — 21 November 2026 (#1967)
+
+When a Chat or Voice turn does not finish, Dan reads (or hears) one short, plain, first-person sentence that says what happened and what he can do, never an internal name (PI, Foundry, gateway, harness, MCP, approval) or a status code. The technical code and detail stay in logs and diagnostics. "Failed" means a turn really failed: Dan's own Stop, a reply that was already saved, a history refresh that failed after a good reply, and a tool that did not work while the reply is fine are not failed turns. Where nothing ran the sentence says so ("nothing was done"); otherwise it says an action may already have happened and to check before trying again. Voice speaks one short sentence per failure class. PI stays unrestricted: no guardrail, refusal or fallback is added to hide or avoid a real failure.
+
 ## Personal Memory stays separate from Vault Knowledge — 20 November 2026 (#1968)
 
 Jarvis has three distinct information layers. **Session context** is the current conversation, recent turns, active task and tool results. **Personal Memory** is small, durable owner-scoped facts, preferences, decisions, corrections and unfinished commitments in Azure SQL, with a stable identity, exact source-message attribution and history. **Knowledge / Vault** is Dan's Obsidian/GitHub notes, tasks, plans and research; the Vault remains authoritative and its indexes are retrieval aids.

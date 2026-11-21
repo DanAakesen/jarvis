@@ -106,10 +106,30 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
   }
   if (outcome === 'refused') {
     const reason = (result as { refused?: unknown } | null)?.refused;
-    return `Not done: ${tool} was refused.${typeof reason === 'string' ? ` ${reason}` : ''}`;
+    return typeof reason === 'string' ? `Not done. ${reason}` : 'Not done. It was refused.';
   }
-  const failure = (result as { failure?: unknown; error?: unknown } | null)?.failure ??
-    (tool === 'image_generation' || tool.startsWith('mail_') ? (result as { error?: unknown } | null)?.error : undefined);
-  if (typeof failure === 'string') return `Not done: ${tool} failed. ${failure}`;
-  return `Not done: ${tool} failed.`;
+  // The cause is the tool's own plain sentence (a `ToolFailure` message) or the dispatcher's fixed fallback, never provider text.
+  const failed = result as { failure?: unknown; error?: unknown } | null;
+  const failure = failed?.failure ?? failed?.error;
+  return typeof failure === 'string' ? `Not done. ${failure}` : "Not done. It didn't work, and no reason came back.";
+}
+
+const networkCodes = /^(?:ECONN\w*|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EPIPE|UND_ERR\w*)$/u;
+
+/**
+ * The plain cause for a tool that threw something that is not a `ToolFailure`, chosen by class from the error's name or code so no
+ * provider text reaches Dan or the model. The agent reads it, so it names what went wrong instead of "tool execution failed".
+ */
+export function unexpectedToolFailure(error: unknown, aborted: boolean): string {
+  if (aborted) return 'It was stopped before it finished.';
+  const named = (value: unknown): { name?: unknown; code?: unknown; cause?: unknown } =>
+    value !== null && typeof value === 'object' ? value as { name?: unknown; code?: unknown; cause?: unknown } : {};
+  const outer = named(error);
+  const inner = named(outer.cause);
+  if (outer.name === 'TimeoutError' || inner.name === 'TimeoutError' || outer.code === 'ETIMEDOUT' || inner.code === 'ETIMEDOUT') {
+    return 'It did not finish in time.';
+  }
+  const codes = [outer.code, inner.code];
+  if (codes.some((code) => typeof code === 'string' && networkCodes.test(code))) return 'It could not reach the service it needs.';
+  return 'It hit an unexpected problem.';
 }

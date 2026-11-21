@@ -1,3 +1,10 @@
+## Plain failure messages — 21 November 2026 (#1967)
+
+- Every sentence Dan reads or hears for a failed turn lives in `packages/contracts/src/failure-copy.js` (`failureCopy`, `clientFailureCopy`). To add or reword one, edit that table only: `cd packages/contracts && npm test` fails if a sentence names PI, Foundry, the gateway, a harness, MCP or an approval, contains a number, runs past 150 characters (chat) or is not one sentence of at most 90 (voice). The iPhone has its own `JarvisChat.strings`; the same test fails if `chat.activity.errTurn` or `chat.activity.errTurnNotFound` drift from the contract.
+- Keep the six `pi_*` codes and the SSE `error` shape (`error`, `code`) stable. Put the technical cause in `PiGatewayError`'s `detail` (letters, digits and `_.:-`), never in the sentence; it reaches the log through the error message (`conversation.reply_failed`).
+- Checks: `cd apps/backend && npx vitest run src/core/recoverable-chat.test.ts src/core/tool-calls.test.ts src/pi src/voice/pi-voice.test.ts`, then `npx tsc --noEmit -p tsconfig.json` and `npx eslint . --max-warnings 0`; `cd apps/web && npx vitest run src/conversation-history.test.ts`; `cd packages/contracts && npm test`. JarvisCore `ChatTurnEndingTests` and `ChatFailureWordsTests` run in the macOS CI job; there is no Swift toolchain on the Linux dev container. No live model, Foundry, device or paid run is part of these checks.
+- No approval or confirmation step may be added except for deletes (owner rule, 21 November 2026). The messages that exist only because of non-delete approval gates were listed in the pull request for #1967 and not removed.
+
 ## Explicit owner-reminder delivery evidence — 20 November 2026 (#1990)
 
 - Migration `0102_owner_reminder_delivery_outbox.sql` is required before this

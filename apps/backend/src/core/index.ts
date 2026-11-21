@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import { isPiDispatch } from './pi-authority.js';
 import type { BackendModule } from '../modules.js';
-import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
+import { confirmToolCall, unexpectedToolFailure, type ToolCallOutcome } from './tool-calls.js';
 import { isCurrentAssistantTool, ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { setThemeTool } from './theme.js';
@@ -316,7 +316,7 @@ export const coreModule: BackendModule = {
             result = { error: error.message };
           } else {
             outcome = 'error';
-            result = { error: 'Tool execution failed' };
+            result = { error: unexpectedToolFailure(error, controller.signal.aborted) };
           }
         } finally {
           if (outcome === 'error') app.systemHealthDiagnostics.record('failed');

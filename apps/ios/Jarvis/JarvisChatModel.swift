@@ -514,7 +514,7 @@ final class JarvisChatModel: ObservableObject {
             sendTask?.cancel()
             isCancelling = false
             if !cancelled {
-                actionError = "The turn already finished."
+                actionError = "That reply had already finished."
             }
             await refreshHistory()
         } catch {
@@ -803,7 +803,8 @@ final class JarvisChatModel: ObservableObject {
             try await consume(events)
             discardOptimisticMessage()
             discardSteeringPlaceholders()
-            await refreshHistory()
+            // The reply is already on screen from the stream, so a history refresh that fails now is not the turn failing.
+            await refreshHistory(reportsFailure: false)
             isSending = false
         } catch is CancellationError {
             isSending = false
@@ -816,11 +817,15 @@ final class JarvisChatModel: ObservableObject {
             activeMessageID = nil
             statusLine = nil
             discardOptimisticMessage()
-            if !Task.isCancelled {
+            switch ChatTurnEnding.after(error: error, stoppedByUser: isCancelling, taskCancelled: Task.isCancelled) {
+            case .stopped:
+                // Dan stopped the reply (the server's "stopped" event can arrive before the stop request returns): nothing failed.
+                streamingText = ""
+            case .failed:
                 actionError = message(for: error)
                 failedTurn = FailedTurn(text: text, attachments: attachments, visualFrame: visualFrame)
+                // Keep any partial reply readable beside the failure; it is not a completed response.
             }
-            // Keep any partial reply readable beside the failure; it is not a completed response.
         }
         sendTask = nil
     }
@@ -845,7 +850,7 @@ final class JarvisChatModel: ObservableObject {
         guard let client else { return }
         do {
             try await consume(client.reattachTurn(sessionId: turn.sessionId, messageId: turn.messageId))
-            await refreshHistory()
+            await refreshHistory(reportsFailure: false)
             isSending = false
         } catch is CancellationError {
             isSending = false
@@ -855,7 +860,9 @@ final class JarvisChatModel: ObservableObject {
             isSending = false
             activeMessageID = nil
             statusLine = nil
-            if !Task.isCancelled { actionError = message(for: error) }
+            if ChatTurnEnding.after(error: error, stoppedByUser: isCancelling, taskCancelled: Task.isCancelled) == .failed {
+                actionError = message(for: error)
+            }
         }
     }
 
@@ -955,14 +962,15 @@ final class JarvisChatModel: ObservableObject {
         try Task.checkCancellation()
     }
 
-    private func refreshHistory() async {
+    /// `reportsFailure` is false straight after a turn, when the reply is already on screen from the stream.
+    private func refreshHistory(reportsFailure: Bool = true) async {
         guard let client else { return }
         do {
             let page = try await client.history(sessionId: historySessionID)
             apply(page, replacing: false)
             historyPaging.refreshLatestPage(nextCursor: page.nextCursor)
         } catch {
-            actionError = message(for: error)
+            if reportsFailure { actionError = message(for: error) }
         }
     }
 

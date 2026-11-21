@@ -49,6 +49,7 @@ import { registerConversationSummaryRoutes } from './conversation-summary.js';
 import { approvalDeciderFor } from './approval-interpreter.js';
 import { readRuntimeTests, runtimeTestUnavailableMessage } from './runtime-test-availability.js';
 import { PiGatewayError } from '../pi/errors.js';
+import { failureCopy } from '@jarvis/contracts';
 import { createUnconfiguredPiAgent } from '../pi/gateway.js';
 import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 import { showInChatTool } from './chat-blocks.js';
@@ -306,6 +307,14 @@ const historySchema = {
 
 function streamEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/** The model finished without saying anything. Dan gets one plain sentence for it, not the generic one. */
+class EmptyReplyError extends Error {
+  constructor() {
+    super('Chat response was empty');
+    this.name = 'EmptyReplyError';
+  }
 }
 
 function logChatLatency(
@@ -682,7 +691,7 @@ return {
         if (oldestCompleted) recoverableTurns.delete(oldestCompleted[0]);
       }
       if (recoverableTurns.size >= 20) return reply.code(429).send({ error: 'Too many recent replies. Try again shortly.' });
-      if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
+      if (activeTurns.has(sessionId)) return reply.code(409).send({ error: failureCopy.still_answering.chat });
       const agentSessionId = createFoundryAgentSessionId(request.principal!.objectId, sessionId);
       const visualTurnKey = visualContext?.turnId ?? visualContext?.frameId;
       const sourceItemId = visualTurnKey === undefined ? undefined
@@ -941,7 +950,7 @@ return {
               if (presented.startsWith(partial)) yield streamEvent('delta', { text: presented.slice(partial.length) });
               partial = presented;
             }
-            if (!partial.trim()) throw new Error('Chat response was empty');
+            if (!partial.trim()) throw new EmptyReplyError();
             if (!isSteering && visualContext) {
               const metadata = { ...persistedVisualContext(visualContext),
                 ...(visualResult?.visualPath === 'caption' && visualResult.description
@@ -994,11 +1003,11 @@ return {
               } : {}) });
             break;
           }
-          if (controller.signal.aborted) yield streamEvent('error', { error: 'Reply stopped. Check conversation and action status before trying again.' });
+          if (controller.signal.aborted) yield streamEvent('error', { error: failureCopy.stopped.chat });
         } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
-            yield streamEvent('error', { error: 'Reply stopped. An action may already have completed; check its status before trying again.' });
+            yield streamEvent('error', { error: failureCopy.stopped.chat });
           } else {
             request.log.warn(
               { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown',
@@ -1015,7 +1024,7 @@ return {
               ? error.code : error instanceof ChatAgentInvocationError && chatAgentInvocationReasons.has(error.reason)
                 ? error.reason : undefined;
             yield streamEvent('error', {
-              error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+              error: error instanceof EmptyReplyError ? failureCopy.no_reply.chat : failureCopy.cut_off.chat,
               ...(code === undefined ? {} : { code }),
               ...(error instanceof ChatAgentError && error.providerCause
                 ? { providerCause: error.providerCause } : {}),

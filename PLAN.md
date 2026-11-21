@@ -10,6 +10,22 @@
 | Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
 | Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
 
+## Plain failure messages and a truthful Failed — 21 November 2026 (Refs #1967)
+
+**Status: implemented and qualified offline (backend, web, contracts); Swift (JarvisCore tests and app build) runs in CI, and Dan checks the words on a device.**
+
+| Step | State |
+| --- | --- |
+| Inventory every failure string on the PI path (gateway codes, `conversation.reply_failed`, tool texts, voice, web, iPhone) | Done; old → new table in the pull request |
+| One table of plain words in `@jarvis/contracts`, used by backend and web, with a plainness test | Done |
+| Keep the six `pi_*` codes; technical detail in `detail` and the log; plain `userMessage` and one spoken sentence per class | Done |
+| Say "nothing was done" only when nothing ran; otherwise say an action may have happened | Done |
+| A saved reply is never followed by an error; Stop is not a failure; a failed refresh after a reply is not a failed turn; tool rows no longer say "Failed" | Done; the web, backend and contracts tests fail on the old code |
+| Tool confirmations keep the plain cause; the dispatcher's fallback names the class | Done |
+| List the messages that exist only because of non-delete approval gates (owner rule: none except deletes); remove none | Done in the pull request |
+| Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`) and the app build | Written; run in CI, not in the dev container |
+| Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
