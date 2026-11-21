@@ -26,7 +26,7 @@ export function createPiGroup(context: ConformanceContext) {
   const situation = createSituationFixture(context);
   // The brain reads the situation too, but a wake and an activation never share state here: a commit must not change what a wake may cite.
   const wakeSituation = createSituationFixture(context);
-  const brain = createBrainFixture(context, registry);
+  const brain = createBrainFixture(context);
   const now = () => piClock;
 
   const locationEvidence = {

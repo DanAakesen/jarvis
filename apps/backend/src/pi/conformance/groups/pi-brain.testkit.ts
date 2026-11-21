@@ -4,7 +4,6 @@ import { createPiArea } from '../../area.js';
 import { memoryConversations, memoryVault } from '../../brain/brain.testkit.js';
 import { createBrainComms } from '../../brain/comms.js';
 import { createMemoryPiStore } from '../../store.js';
-import type { PiTurnRegistry } from '../../turns.js';
 import { composeWatch } from '../../watch/note.js';
 import { createWatches } from '../../watch/store.js';
 import type { ConformanceContext } from '../types.testkit.js';
@@ -31,7 +30,7 @@ export const vaultDown = 'pi-vault';
  * What a background wake and the standing watches run on: a vault in memory (PI's own corner and the inbox live in it, as in
  * production), the brain's chat voice over a conversation with its proactive ledger, and the watch ledger in memory.
  */
-export function createBrainFixture(context: ConformanceContext, registry: PiTurnRegistry) {
+export function createBrainFixture(context: ConformanceContext) {
   const memory = memoryVault();
   const unreachable = <Args extends unknown[], Result>(method: (...args: Args) => Promise<Result>) => async (...args: Args): Promise<Result> => {
     if (context.down.has(vaultDown)) throw new Error('Could not reach the vault');
@@ -53,7 +52,5 @@ export function createBrainFixture(context: ConformanceContext, registry: PiTurn
   for (const [index, title] of Object.values(seededWatches).entries()) {
     vault.files.set(`PI/Watches/${title}.md`, composeWatch({ title, text: `Keep an eye on: ${title.toLowerCase()}.`, at: piClock, nextLook: new Date(piClock.getTime() + (index + 1) * hour) }));
   }
-  return { registry, vault, conversations, pushes, comms, area, inbox, watches };
+  return { vault, conversations, pushes, comms, area, inbox, watches };
 }
-
-export type BrainFixture = ReturnType<typeof createBrainFixture>;

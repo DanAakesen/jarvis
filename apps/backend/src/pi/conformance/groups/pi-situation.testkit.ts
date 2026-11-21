@@ -99,5 +99,3 @@ export function createSituationFixture(context: Pick<ConformanceContext, 'owner'
     },
   };
 }
-
-export type SituationFixture = ReturnType<typeof createSituationFixture>;
