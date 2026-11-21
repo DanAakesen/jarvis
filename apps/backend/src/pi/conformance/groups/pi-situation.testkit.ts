@@ -17,7 +17,13 @@ const locationResult: SourceResult = {
     text: 'Coarse position near Copenhagen.', observedAt: clockIso,
   }],
 };
-const locationSource: ProactiveSource = { id: 'location', label: 'Location', read: async () => locationResult };
+/** Dependency token: the location provider cannot read the device position. Providers answer `unavailable`, they do not throw. */
+export const locationDown = 'pi-location';
+const locationSourceFor = (down: ReadonlySet<string>): ProactiveSource => ({
+  id: 'location', label: 'Location',
+  read: async () => down.has(locationDown)
+    ? { source: 'location', state: 'unavailable', reason: 'read_failed', facts: [], observedAt: clockIso } : locationResult,
+});
 
 const bareState = () => ({
   version: 1, asOf: clockIso, summary: '', summaryRefIds: [],
@@ -36,7 +42,7 @@ export function createSituationFixture(context: Pick<ConformanceContext, 'owner'
   const owner = context.owner;
   const store = createMemoryPiSituationStore();
   const proactive = createMemoryProactiveStore(owner, () => piClock);
-  const service = createPiSituationService({ owner, store, proactive, sources: [locationSource], now: () => piClock });
+  const service = createPiSituationService({ owner, store, proactive, sources: [locationSourceFor(context.down)], now: () => piClock });
   // The stores answer without real I/O, so this settles long before the first tool call. A failure is surfaced by that call.
   const seeded = service.observe('location', locationResult, new AbortController().signal);
   seeded.catch(() => {});
