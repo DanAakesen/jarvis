@@ -1,6 +1,6 @@
 ## System map — PI, tools, voice and who owns what (21 November 2026)
 
-This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` at commit `1f9a6839`; anything marked "in review" is not on `main`.
+This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `6379822d` (#2004, 21 November 2026, 21:47 UTC).
 
 ### Legend
 
@@ -14,17 +14,14 @@ flowchart TB
     L4[("Data store")]:::data
     L5["External service"]:::external
     L6["Client app"]:::client
-    L7["In review<br/>not on main"]:::review
     L1 ~~~ L5
     L2 ~~~ L6
-    L3 ~~~ L7
     classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
     classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
     classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
     classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
     classDef external fill:#eeeeee,stroke:#555555,color:#222222,stroke-dasharray:4 3
     classDef client fill:#ffffff,stroke:#333333,color:#111111
-    classDef review fill:#fde8e8,stroke:#c53030,color:#4a0e0e,stroke-dasharray:6 3
 ```
 
 | Colour | Meaning |
@@ -35,7 +32,6 @@ flowchart TB
 | Purple | Data store |
 | Grey, dashed | External service Jarvis calls |
 | White | Client app |
-| Red, dashed | In review, not on `main` |
 
 ### Runtime map
 
@@ -170,20 +166,17 @@ flowchart TB
     S["Foundry response stream"] --> I{"Output item type"}
     I -->|"message, reasoning,<br/>mcp_call, mcp_list_tools"| H["Handled: text, progress,<br/>tool and list results"]:::code
     I -->|"other typed items,<br/>for example shell_call"| U["Logged once per type as<br/>pi.harness_item unknown_item<br/>The stream continues"]:::code
-    I -->|"function_call or<br/>mcp_approval_request"| F["Harness function call<br/>or approval request"]:::code
-    F -->|"with #2004"| P["In review: read to the<br/>terminal event, then<br/>classify each call"]:::review
-    F -->|"on main today"| M["pi.stream_failed<br/>approval_or_function_call_item<br/>The turn ends"]:::code
-    P --> N["Native: Foundry<br/>already ran it, for example<br/>a task sub-agent<br/>Never answered"]:::review
-    P --> C["Client-owned: the response<br/>ended with it unanswered<br/>One follow-up, same<br/>conversation, max 8<br/>responses per turn"]:::review
-    P --> Q["Unknown: left<br/>alone, logged"]:::review
+    I -->|"function_call or<br/>mcp_approval_request"| F["Never end the stream.<br/>Read to the terminal event,<br/>then classify each call"]:::code
+    F --> N["Native: Foundry already<br/>ran it, for example a task<br/>sub-agent. Never answered"]:::code
+    F --> C["Client-owned: the response<br/>ended with it unanswered<br/>One follow-up, same<br/>conversation, max 8<br/>responses per turn"]:::code
+    F --> Q["Unknown: left<br/>alone, logged"]:::code
     classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
-    classDef review fill:#fde8e8,stroke:#c53030,color:#4a0e0e,stroke-dasharray:6 3
 ```
 
-- The harness's `task` function_call is a native sub-agent that Foundry had already run. In the production trace it searched, called `calendar_list_events` through the Jarvis door and answered. The gateway threw on the item and closed the stream, and Foundry's outer request recorded HTTP 500. The first fix attempt (answering `task` with "not available") was wrong for that reason and was replaced before merge (#2004 decision).
+- The harness's `task` function_call is a native sub-agent that Foundry had already run. In the production trace it searched, called `calendar_list_events` through the Jarvis door and answered. The gateway then threw `approval_or_function_call_item` and closed the stream, and Foundry's outer request recorded HTTP 500. The first fix attempt (answering `task` with "not available") was wrong for that reason and was replaced before #2004 merged.
 - Other built-ins appear as typed items such as `shell_call` and `shell_call_output`. On `main` any item type other than `message`, `reasoning`, `mcp_call`, `mcp_list_tools`, `function_call` and `mcp_approval_request` is only logged, once per type, and the stream continues. The item names are Dan's production observation; the repository has no handling that names them.
-- Rule for #2004 (in review): never end the stream for a call, read to the terminal event, answer only client-owned calls. Native and unknown calls are never answered.
-- Retry safety (#1999): `respond()` retries a Foundry stream once, after 750 ms, only when nothing observable can have run: a turn grant exists, no text, reasoning, tool call, function call, unknown event, unparseable or half-read frame, no MCP request, tool result, action or push, and a transient failure (a stream that ends or breaks, or `response.failed` / `error` with `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`). It needs a confirmed cancel of the stalled response and bills once. Details are in the section "Remote MCP catalogues load on demand".
+- Rule since #2004: never end the stream for a call. Read to the terminal event, then classify each call. Native (a `function_call_output`, the item's own output or later output shows the harness ran it): never answered. Client-owned (the response ended with the call unanswered and its item complete): one follow-up `responses.create` on the same conversation with an honest "not available" output (`task` has no handler) and `approve: true` for a genuine approval request, at most 8 responses per turn; a call id settles once per turn. Unknown (any other item status): left alone and logged as `incomplete_item`. The gateway never runs shell or starts an agent. It fails the turn with `approval_or_function_call_item` for a client-owned call without a usable id, for more than 16 client-owned calls in one response, or for too many calls to track with no output after them, and with `client_tool_round_limit` when client-owned calls are still pending after the 8th response. Native calls are never capped.
+- Retry safety (#1999, kept by #2004): `respond()` retries a Foundry stream once, after 750 ms, only when nothing observable can have run (a stream that carried any call or tool output is never retried, and only the first response of a turn can be): a turn grant exists, no text, reasoning, tool call, function call, unknown event, unparseable or half-read frame, no MCP request, tool result, action or push, and a transient failure (a stream that ends or breaks, or `response.failed` / `error` with `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`). It needs a confirmed cancel of the stalled response and bills once. Details are in the section "Remote MCP catalogues load on demand".
 - Weather timeouts: a Chat `weather` call returned after exactly 8015 ms on build 119. The tool now logs `weather.phase` per step and retries each fetch once after a timeout, network error, 429 or 5xx, inside the same 8 s budget (an attempt takes at most 3 s). Dan reports that the forecast fetch stalls intermittently and that the one retry recovered it in production; the repository cannot show this.
 
 ### Voice: how a spoken request reaches PI
@@ -220,18 +213,16 @@ Every backend log record passes `safeFields` in `apps/backend/src/logging.ts` be
 
 | Event | Added | Safe fields |
 | --- | --- | --- |
-| `pi.stream_failed` | #1999 | `reason` (fixed list), `event`, `code`, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput`, `previousCancelled` |
+| `pi.stream_failed` | #1999 (`client_tool_round_limit` added by #2004) | `reason` (fixed list), `event`, `code`, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput`, `previousCancelled` |
 | `pi.stream_retry` | #1999 | the same fields for the retried attempt |
-| `pi.harness_item` | #2002 | `trigger`, `itemType`, `name`, `serverLabel`, `itemStatus`, `hasId`, `hasCallId`, `argumentsLength`, `eventTypes`, `itemTypes` (at most 25 each) |
+| `pi.harness_item` | #2002, extended by #2004 | `trigger` (`harness_call`, `rejected_item`, `unknown_item`), `itemType`, `name`, `serverLabel`, `itemStatus`, `hasId`, `hasCallId`, `argumentsLength`, `eventTypes`, `itemTypes` (at most 25 each); on `harness_call` also `classification` (`native`, `client_owned`, `unknown`), `rule`, `round`, `outcome` and `argumentKeys` (key names only, at most 12) |
 | `pi.mcp_list_failed`, `pi.mcp_call_failed` | #1999 | `server`, `tool`, `code`, `status`, `elapsedMs` |
-| `pi.turn` | #1996, #1999 | `toolCount`, `azureCatalogue`, `budgetRead: unavailable`, with the existing outcome, timing, token and cost fields |
+| `pi.turn` | #1996, #1999, #2004 | `toolCount`, `azureCatalogue`, `budgetRead: unavailable`, `rounds` (1 to 8), `clientItems`, `nativeCalls`, with the existing outcome, timing, token and cost fields |
 | `pi.budget_unreadable` | #1996 | the spend could not be read; the turn still ran |
 | `weather.phase` | #2003 | `phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host` |
 | `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started` | #2000 (outcomes extended by #2001) | `delegationId`, `groupId`, `textLength`, `offsetMs`, `quietMs`, `waitedMs`, `reusedGroup`, `outcome` or `reason`, `language` |
 | `voice.activity_published` | #2001 | `state`, `reason`, `sinceLastMs`, `outputActive`, `piBusy`, `delegationPending` |
 | `voice.upstream_event_error` | extended by #2001 | `errorType`, `errorCode`, `param` (short tokens). The relay passes no message. An older allowlist branch could export up to 300 plain characters of `upstreamMessage` for `errorCode: invalid_function_parameters`, but nothing emits that field |
-
-In review (#2004): `pi.harness_item` with `trigger: harness_call` and `classification`, `rule`, `round`, `outcome`, `argumentKeys`; `pi.turn` adds `rounds`, `clientItems`, `nativeCalls`.
 
 The gateway also computes `azureToolsOffered` and `azureCalls` for `pi.turn`, but the allowlist drops them, so they never reach the logs. Query recipes are in `docs/agent-context.md`, "Working rules".
 
@@ -240,6 +231,7 @@ The gateway also computes `azureToolsOffered` and `azureCalls` for `pi.turn`, bu
 - Live behaviour. The PRs of the week ran offline checks only. Production logs and a Foundry trace informed #2001 and #2004, and Dan reported the weather result; Dan owns live and device acceptance.
 - The portal behaviour (a saved version is not Active until Dan sets it), the loss of the version fingerprint on a portal save, and the exact tool count in production.
 - The built-in item names `shell_call` and `shell_call_output` and the `task` behaviour come from production traces that are not in the repository, apart from the #2004 decision text.
+- #2004 is merged but has not been seen in a real trace. The four points the #2004 decision lists (every native call shows a native signal before `response.completed`, a client-owned call is accepted while the previous response reads `in_progress`, the real `status` of an approval request, and whether native children outlive `response.completed`) are open.
 
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 
@@ -401,7 +393,7 @@ flowchart LR
 - Owner authority is the exact owner message attached to the turn (`core/owner-message.ts`: `attachedOwnerMessageId`, `readAttachedOwnerMessage`), not the newest stored message, so a proactive message arriving mid-turn does not invalidate it. The Gmail/computer, calendar, Factory, GitHub-write, Health, reminder, feedback and proactive-preference guards use it; they add no new restriction.
 - Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
 - On a normal PI turn, the live tool reference is the first line of the Foundry message, even when the backend resends the trusted context. The gateway computes the last Azure catalogue state seen by `find_tools`, the number of Azure tool schemas returned during the turn, and the number and outcomes of `az_` call attempts, but the log allowlist exports only `azureCatalogue` and `toolCount`; `azureToolsOffered` and `azureCalls` are dropped before they reach the logs. It does not record searches, arguments, results or references.
-- PI failure diagnostics (`pi/gateway.ts`, `logging.ts`): every `pi_failed` site logs one `pi.stream_failed` with a fixed `reason` (`foundry_response_failed` with the provider's `event` and `code`, `stream_ended_without_completed`, `stream_broke`, `approval_or_function_call_item`, `no_stream`, `no_conversation`, `busy`, `brain_wake_failed`) and, for a stream, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput` and `previousCancelled` (the previous turn was cancelled in the last two minutes). `pi.harness_item` names the shape of an output item the gateway does not handle (`approval_or_function_call_item` rejects it, any other unknown type only logs once per sanitised label, at most 5 per stream): `trigger`, `itemType`, `name`, `serverLabel`, `itemStatus` (lowercase tokens, else `other`), `hasId`, `hasCallId`, `argumentsLength` (a number, never the content) and the distinct `eventTypes` and `itemTypes` seen so far (max 25). `pi.mcp_list_failed` and `pi.mcp_call_failed` carry `server`, `tool`, the harness's own short `code` and HTTP `status` when it sent them, and `elapsedMs`. `pi.turn` keeps `toolCount` and `azureCatalogue`. The log allowlist exports only these scalar fields and fixed vocabularies; never prompts, replies, tool arguments, tokens or provider messages.
+- PI failure diagnostics (`pi/gateway.ts`, `logging.ts`): every `pi_failed` site logs one `pi.stream_failed` with a fixed `reason` (`foundry_response_failed` with the provider's `event` and `code`, `stream_ended_without_completed`, `stream_broke`, `approval_or_function_call_item` (a client item without an id the gateway can answer), `client_tool_round_limit`, `no_stream`, `no_conversation`, `busy`, `brain_wake_failed`) and, for a stream, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput` and `previousCancelled` (the previous turn was cancelled in the last two minutes). `pi.harness_item` names the shape of an output item: `trigger` is `harness_call` for every harness function call or approval request (see the harness calls row below), `rejected_item` for a client-owned one it cannot answer, `unknown_item` for any other unknown type (logged once per sanitised label, at most 5 per stream); fields on `harness_call`: `classification` (`native`, `client_owned`, `unknown`), `rule`, `round`, `outcome` (`answered_default`, `answered_task_client_owned`, `approved`, only when answered) and `argumentKeys` (key names only, max 12, each `^[a-z0-9_.-]{1,32}$`, never values); then `itemType`, `name`, `serverLabel`, `itemStatus` (lowercase tokens, else `other`), `hasId`, `hasCallId`, `argumentsLength` (a number, never the content) and the distinct `eventTypes` and `itemTypes` seen so far (max 25). `pi.mcp_list_failed` and `pi.mcp_call_failed` carry `server`, `tool`, the harness's own short `code` and HTTP `status` when it sent them, and `elapsedMs`. `pi.turn` keeps `toolCount` and `azureCatalogue` and adds `rounds` (responses in the turn, 1 to 8), `clientItems` (client-owned items answered) and `nativeCalls` (calls the harness ran itself). The log allowlist exports only these scalar fields and fixed vocabularies; never prompts, replies, tool arguments, tokens or provider messages.
 - `respond()` retries a Foundry stream once (`pi.stream_retry`, after 750 ms), and only when nothing observable can have happened. Required together: the call has a turn grant (warm-ups and the smoke never retry); no text, reasoning, tool call, function call or unknown event, no unparseable frame and no unread partial frame; no MCP request (counted when `find_tools` or `call_tool` enters the server, `grant.requests`), tool result, action or push on the grant, checked again after the pause; and a transient failure: a stream that ends or breaks, or `response.failed`/`error` with the code `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`. `response.incomplete`, content filters, tool errors and unknown or missing codes are never retried. A stream that merely stopped has its response cancelled first, and the retry needs a confirmed cancel (a failed or still-running cancel, or events whose response id is unknown, ends the turn). It is the same conversation and message, so the turn is billed once (the usage of the successful attempt). Cancel, the turn deadline, an HTTP error or a missing stream end the turn as before.
 
 ## Voice visuals and the phone as the active device (17 November 2026, P15-205, #1939)
@@ -705,6 +697,7 @@ flowchart LR
 | Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | PI starts, steers and retries Workers on its own judgement, in a chat turn or in a wake. Results come back as queue events (below) and as the existing chat notice |
 | Worker results as signals | `workerEvent` in `proactive/events/producers.ts`, subscribed to the task event hub in `index.ts` | Source `worker`, kinds `task.done`, `task.needs_attention`, `task.cancelled`, `task.pull_request_opened` (the queue only accepts lowercase kinds; a test normalises each one), one dedupe key per task and state. They enter the existing queue; the queue has no consumer until the brain (next pull request) |
 | Stream parsing | `pi/gateway.ts` | The harness's `mcp_list_tools` and finished `mcp_call` items are read (labels sanitised) so the smoke and the logs can say which servers are attached and whether a call failed. A failed list or call is logged; it does not by itself fail a chat turn |
+| Harness calls | `pi/gateway.ts` (`respond`, `classifyHarnessCall`), `pi/client-tools.ts` | The managed harness emits `function_call` items `{type, id, call_id, name, arguments}` (and may emit an `mcp_approval_request`). Most are **native**: the harness runs them itself (a sub-agent `task`, shell and file tools: the trace of a Chat turn showed a child agent calling our MCP) and streams on. The gateway never ends or aborts the stream for a call: it reads to the terminal event, merging arguments from `response.function_call_arguments.done` / `response.output_item.done`, and forwards text as before. When the response completed, each call is classified. Native: a `function_call_output` for its `call_id` is in the stream, the item has its own `output`, or other output follows it (events, or the completed `output` list). Client-owned: the response ended with the call unanswered and its item complete (status `completed` or none; `function_call_arguments.done` does not complete the item). Unknown: the item has another status (`in_progress`, `failed`, `incomplete`, ...) and nothing followed; it is left alone. Native and unknown calls are never answered. For client-owned calls ONE follow-up `responses.create` goes out on the same `conversation` (no `previous_response_id`, no `store`) with a `{type:'function_call_output', call_id, output}` per call (the honest default text; `task` has no handler) and a `{type:'mcp_approval_response', approval_request_id, approve:true}` per approval, in arrival order, for at most 8 responses per turn inside the turn deadline and abort signal. A call id is settled once per turn, so a replay is ignored. Usage is summed per turn and billed once; a failed turn is charged the completed rounds plus an estimate for the one in flight. A stream that carried any call or tool output is never retried, and only the first response of a turn can be. No shell or other code ever runs in the gateway and it never starts an agent. A client-owned call without a `call_id` / `id`, or more than 16 client-owned ones in one response, fails the turn with `approval_or_function_call_item` after the stream was read. Native calls are not capped: up to 512 are tracked per response, and beyond that the stream is still read and the rest count as native when output follows. |
 | Smoke | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | Lists the servers the harness reports, runs one read per attached reach server and adds a check for each. The report prints in the job log as well as the summary |
 
 Cost and latency: the Azure container is 0.25 vCPU and 0.5 GiB and scales to zero (about 5 DKK a month in the plan, less when idle). A new conversation lists the servers' tools; a cold container adds its start time to that first turn. Not yet measured.

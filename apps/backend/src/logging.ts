@@ -211,7 +211,13 @@ const approvalPaths = new Set(['fast', 'model', 'failed']);
 /** Why a PI turn failed, in our own words: the only vocabulary `pi.stream_failed` and `pi.stream_retry` may carry as a reason. */
 const piStreamReasons = new Set([
   'foundry_response_failed', 'stream_ended_without_completed', 'stream_broke', 'approval_or_function_call_item',
-  'no_stream', 'no_conversation', 'busy', 'brain_wake_failed',
+  'no_stream', 'no_conversation', 'busy', 'brain_wake_failed', 'client_tool_round_limit',
+]);
+const piClientToolOutcomes = new Set(['answered_default', 'answered_task_client_owned', 'approved']);
+/** Who owned a harness call, and which rule decided: `native` calls ran inside the harness and were never answered. */
+const piHarnessCallClasses = new Set(['native', 'client_owned', 'unknown']);
+const piHarnessCallRules = new Set([
+  'result_item', 'own_output', 'later_output', 'final_output', 'last_item_unanswered', 'incomplete_item', 'replayed',
 ]);
 /** Fixed vocabularies of `weather.phase`: the step, how it ended and which provider host it called. */
 const weatherPhases = new Set(['geocode', 'forecast', 'home_location', 'report']);
@@ -568,10 +574,18 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     return fields;
   }
   if (input.msg === 'pi.harness_item') {
-    // The shape of an item the harness sent that Jarvis does not handle: lowercase tokens, booleans and numbers only. Never arguments, output, ids, URLs or free text.
+    // The shape of an item the harness sent: lowercase tokens, booleans and numbers only, and for a function call or approval request its owner (native or client-owned), the deciding rule and the argument key names. Never argument values, output, ids, URLs or free text.
     const fields: Record<string, unknown> = {};
     const token = (value: unknown): value is string => typeof value === 'string' && /^[a-z0-9_.-]{1,64}$/u.test(value);
-    if (input.trigger === 'rejected_item' || input.trigger === 'unknown_item') fields.trigger = input.trigger;
+    if (input.trigger === 'rejected_item' || input.trigger === 'unknown_item' || input.trigger === 'harness_call') fields.trigger = input.trigger;
+    if (typeof input.classification === 'string' && piHarnessCallClasses.has(input.classification)) fields.classification = input.classification;
+    if (typeof input.rule === 'string' && piHarnessCallRules.has(input.rule)) fields.rule = input.rule;
+    if (typeof input.outcome === 'string' && piClientToolOutcomes.has(input.outcome)) fields.outcome = input.outcome;
+    if (Number.isInteger(input.round) && Number(input.round) >= 1 && Number(input.round) <= 8) fields.round = input.round;
+    if (Array.isArray(input.argumentKeys)) {
+      fields.argumentKeys = input.argumentKeys
+        .filter((key): key is string => typeof key === 'string' && /^[a-z0-9_.-]{1,32}$/u.test(key)).slice(0, 12);
+    }
     for (const key of ['itemType', 'name', 'serverLabel', 'itemStatus']) if (token(input[key])) fields[key] = input[key];
     for (const key of ['hasCallId', 'hasId', 'sawText', 'sawTool', 'sawOutput', 'previousCancelled']) {
       if (typeof input[key] === 'boolean') fields[key] = input[key];
@@ -750,6 +764,11 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.acknowledged === 'boolean') fields.acknowledged = input.acknowledged;
     if (input.budgetRead === 'unavailable') fields.budgetRead = input.budgetRead;
     if (Number.isSafeInteger(input.toolCount) && Number(input.toolCount) >= 0 && Number(input.toolCount) <= 10_000) fields.toolCount = input.toolCount;
+    if (input.msg === 'pi.turn') {
+      if (Number.isInteger(input.rounds) && Number(input.rounds) >= 1 && Number(input.rounds) <= 8) fields.rounds = input.rounds;
+      if (Number.isInteger(input.clientItems) && Number(input.clientItems) >= 0 && Number(input.clientItems) <= 1_000) fields.clientItems = input.clientItems;
+      if (Number.isInteger(input.nativeCalls) && Number(input.nativeCalls) >= 0 && Number(input.nativeCalls) <= 10_000) fields.nativeCalls = input.nativeCalls;
+    }
     if (typeof input.azureCatalogue === 'string' && piAzureCatalogueStates.has(input.azureCatalogue)) fields.azureCatalogue = input.azureCatalogue;
   }
   if (input.msg === 'voice.delegation_received' || input.msg === 'voice.owner_group_persisted' ||

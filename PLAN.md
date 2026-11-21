@@ -1,6 +1,6 @@
 ## Week summary 2026-11-21 — PI tools and reliability (current focus)
 
-**Status: the 20–21 November work is merged on `main` except #2004, which is in review. Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
+**Status: the 20–21 November work is merged on `main` (#2004 last, at 21:47 UTC). Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
 
 ### Current focus: tool design and PI reliability (Dan's P0)
 
@@ -32,11 +32,11 @@ Goal (P0): PI finds the right tool, calls it, finishes the request and says hone
 | Speech never cancels PI; only a new delegation or the session end does | #1997 | Voice tests offline |
 | The whole spoken request goes to PI: all words of the open turn, 1.5 s of quiet, one stored owner message. `offset_ms` is only logged | #2000, #2001 | Offline tests with event shapes from production logs. Device retest open |
 | Failures can be diagnosed and a dead stream is retried once. The weather tool logs its phases and retries one stalled fetch | #1999, #2002, #2003 | Offline tests. After #2003 deployed, Dan reported that the forecast fetch stalls intermittently and the one retry recovered it (production report, not checkable from the repo) |
-| Native harness calls finish on their own; the gateway answers only client-owned calls | #2004 | **In review.** On `main` the gateway still ends a turn on a harness `function_call` |
+| Native harness calls finish on their own: the gateway reads the stream to its end and answers only client-owned calls | #2004 | Merged at 21:47 UTC. Offline tests. Whether the native signals and the client-owned shape hold in a real trace is open |
 
 ### Next steps (proposals; each needs Dan's go-ahead)
 
-1. #2004: independent exact-head review, then merge only when it contains current `main` and CI is green. Then Dan retests "use a sub-agent to check my calendar" in Chat, and the `pi.harness_item` lines (`trigger: harness_call`) confirm the four points the #2004 decision says only a real trace can show.
+1. Once #2004 is deployed, Dan retests "use a sub-agent to check my calendar" in Chat. The `pi.harness_item` lines (`trigger: harness_call`) then confirm the four points the #2004 decision says only a real trace can show.
 2. Dan tunes the routing rules (layers by weight) in the Foundry `jarvis-pi` instructions, keeps the `KEEP THIS BLOCK` tool contract, sets the new version Active, and checks it with the read-only `az rest GET` in `docs/agent-context.md`.
 3. Dan retests voice on a new TestFlight build: a request spoken with pauses reaches PI whole, a backchannel does not stop PI, and captions keep Dan-before-Jarvis order.
 4. Open defect, not fixed: the iPhone "Speaking" state sticks (reported by Dan, #1988). A likely cause was found by reading the code: `VoiceAudioEngine.stopPlayback()` skips the finished handler. Unverified on a device.
@@ -45,6 +45,18 @@ Goal (P0): PI finds the right tool, calls it, finishes the request and says hone
 7. Read the next `weather.phase` lines if a weather call fails again.
 8. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
 9. P1, proactive intelligence, ranks after P0. This summary plans no P1 steps. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence").
+
+## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
+
+**Status: merged as #2004 on 21 November (21:47 UTC); classification, follow-up loop and offline tests done. A live Chat retest ("use a sub-agent to check my calendar") is pending.**
+
+| Step | State |
+| --- | --- |
+| Never end or abort the stream for a `function_call` or approval; read to the terminal event | Done |
+| Classify each call native / client-owned / unknown by call id and stream order; log the rule | Done |
+| Answer only client-owned calls (one follow-up, same conversation, at most 8 responses); no `task` stub; a call id settles once per turn | Done |
+| `pi.harness_item` `harness_call` events and `rounds` / `clientItems` / `nativeCalls` on `pi.turn` | Done |
+| Confirm the native signals and the client-owned shape in a real trace | Open; needs a live turn |
 
 ## Explicit reminder delivery evidence — 20 November 2026 (#1990)
 
