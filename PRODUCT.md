@@ -1,3 +1,16 @@
+## North star — what PI is for (Dan, 21 November 2026)
+
+Dan's goal for PI, from his message of 21 November 2026 relayed by the Dispatcher session. Quotation marks mark his exact words. "As relayed" marks the Dispatcher's summary of his rules. "Inference" marks my reading, not his words.
+
+> "the goal with PI was to get a dots / duet / muse / grok bot experience, that is always on, and know me and can be proactive, and know me super well when i manually reach out."
+
+- **Daily core, in his order:** "the jarvis project, notes, task, workouts. And when i have periods where i log food, then also nutrition, like how many calories i have logged i have left, how many proteins i need the rest of the day." And: "And later when we add banking there will be more scenarios."
+- **Proactive example:** "heavy snow when my agenda says 2 hour transport", which he calls "something i will not ask often, but nice to get proactive if relevant for driving or travel".
+- **Priorities (as relayed):** P0 is that every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. P1 is proactive intelligence.
+- **Approvals (as relayed):** the only approvals anywhere are for delete actions.
+
+Inference: P0 and P1 are priority ranks, not the plan phases P0–P15 in `PLAN.md`. The approvals rule continues the direction of "Owner action policy — current, 9 November 2026" below (no second approval for the owner's clear request) and keeps one exception, delete actions, which that policy does not name. Older approval sections in this file describe earlier behaviour, and I did not audit the code for approvals that remain. For the snow example the building blocks exist (a weather source, a calendar-derived travel source and a coarse Location source, described below); no end-to-end test of it is recorded. Current work follows these priorities: `PLAN.md`, "Week summary 2026-11-21".
+
 ## Personal Memory stays separate from Vault Knowledge — 20 November 2026 (#1968)
 
 Jarvis has three distinct information layers. **Session context** is the current conversation, recent turns, active task and tool results. **Personal Memory** is small, durable owner-scoped facts, preferences, decisions, corrections and unfinished commitments in Azure SQL, with a stable identity, exact source-message attribution and history. **Knowledge / Vault** is Dan's Obsidian/GitHub notes, tasks, plans and research; the Vault remains authoritative and its indexes are retrieval aids.

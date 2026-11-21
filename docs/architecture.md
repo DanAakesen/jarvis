@@ -92,7 +92,7 @@ flowchart TB
 ```
 
 - Both agents live in the one Foundry project in Sweden Central. Typed Chat and Voice share one PI conversation per owner (`dbo.pi_conversation`), the same per-turn grant, the same tool door and the same receipts. Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap.
-- GPT-Live listens and speaks and has no tools. A spoken request that needs work reaches the relay as `session.delegation.created` (delegation `type: client`); the relay stores Dan's words and runs PI.
+- GPT-Live listens and speaks and has no tools. A spoken request that needs work reaches the relay as `session.delegation.created` (its `delegation.target` is `client`; the agent definition says `delegation: {type: client}`); the relay stores Dan's words and runs PI.
 - PI reaches the Jarvis tools only through the MCP door. GitHub and Azure tools come through the same door from backend bridges, not as harness tools. The harness built-ins are separate: Foundry runs them inside the turn and the backend never runs them.
 
 ### The two Foundry agents: who owns what
@@ -110,7 +110,7 @@ flowchart TB
 flowchart TB
     A["Dan saves version N+1<br/>in the portal"]:::foundry
     B["N+1 exists but does<br/>not serve traffic"]:::foundry
-    C["Dan sets N+1 Active<br/>pin rule: FixedRatio 100%"]:::foundry
+    C["Dan sets N+1 Active<br/>the pin rule Deploy reads"]:::foundry
     D["N+1 serves traffic"]:::hosted
     E["Next Deploy reads<br/>the Active version"]:::code
     F["jarvis-pi, code-owned part changed:<br/>publish N+2 with the live text<br/>carried forward, verify, pin"]:::code
@@ -127,10 +127,10 @@ flowchart TB
     classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
 ```
 
-- Deploy creates version 1 only when the agent is missing, from `agents/pi/instructions.md` (or `voice-definition.json` and `voice-instructions.md`), and pins it. After that those files change nothing.
+- Deploy creates version 1 only when the agent is missing, from `agents/pi/instructions.md` (or `voice-definition.json` and `voice-instructions.md`), and pins it. After that the instruction files change nothing. In `voice-definition.json` only the output voice and `store` are seed-only: its contract fields (model, deployment, delegation, audio format) and `agentName` are validated and used on every Deploy.
 - `jarvis-pi`: a code-owned change (skills, MCP URL or tool, `definition.json` settings) makes Deploy publish one new version that carries the serving version's instructions forward, verify the code-owned fields and pin it. An unchanged fingerprint publishes nothing. Deploy re-reads the serving version before the POST and before the pin and fails with `agent_changed_during_deploy` if it moved, so do not set a version Active while Deploy runs; if it fails this way, run Deploy again.
-- `jarvis-pi-live`: an existing agent is never written. Every Deploy verifies the effective version: kind, sub-protocol, model type, model, delegation `client`, PCM 24 kHz and the `gpt-live-1` deployment. Drift fails with `voice_readback_*_mismatch` or `voice_agent_*` and is never auto-fixed.
-- Versions are pinned with one rule, `FixedRatio` 100% to one version (`pin()` in `provision_pi_agent.py`). The pinned version serves traffic; with no pin rule the latest does. Dan reports that saving in the portal does not activate the new version; he sets it Active. The code agrees (it reads the pin rule first) but this was not tested against the live portal.
+- `jarvis-pi-live`: an existing agent is never written. Every Deploy verifies the effective version: kind, sub-protocol, model type, model, delegation `client`, PCM 24 kHz and the `gpt-live-1` deployment. Drift fails with `voice_readback_*_mismatch`, `voice_agent_*` or `voice_deployment_*` and is never auto-fixed.
+- Deploy pins with one rule, `FixedRatio` 100% to one version (`pin()` in `provision_pi_agent.py`), and reads the serving version from `rules[0].agent_version`; with no rule the latest serves. Dan reports that saving in the portal does not activate the new version and that he sets it Active. The code is consistent with that, but it is an assumption that the portal's Set Active writes the same kind of rule. Not tested against the live portal.
 - Rollback is setting the previous version Active. The next Deploy then carries that version's text forward if it has to publish.
 - Never paste the voice text into `jarvis-pi`. It removes the tool contract (the `[Turn ...]` line, `find_tools`, `call_tool`) and PI can no longer reach a Jarvis tool. The seed wraps that section in `KEEP THIS BLOCK: backend tool contract (start)` and `(end)`; keep both lines and everything between them in the live text. Reported by Dan; the markers and the contract are in `agents/pi/instructions.md`, but the live text can only be read in Foundry.
 - A portal-saved version may drop the fingerprint metadata Deploy stores. Then the next Deploy publishes one more version with the same text and pins it (decision of 2026-11-20; unverified live).
@@ -138,7 +138,7 @@ flowchart TB
 ### One door, four layers
 
 - One MCP door (`pi/mcp.ts`, `/pi/mcp`) with two tools. `find_tools` takes the turn reference and a few keywords and returns matching tools with their schemas. `call_tool` runs a tool by exact name, only if `find_tools` returned it in the same turn (names in `otherMatches` count). The door runs the same registry and guards as Chat.
-- About 140 Jarvis tools (141 reported from production; a static count of tool definitions in `apps/backend/src` on `main` finds 139, and the registered number depends on the enabled modules), plus the `gh_` GitHub tools and the `az_` Azure tools offered by the backend bridges. Chat and Voice do not see the legacy confirmation tools or the brain-only tools; a background wake sees the brain-only tools too.
+- About 140 Jarvis tools (141 reported from production; a rough static count of tool definitions in `apps/backend/src` gives 136 to 146 depending on what is counted, and the registered number depends on the enabled modules), plus the `gh_` GitHub tools and the `az_` Azure tools offered by the backend bridges. Chat and Voice do not see the legacy confirmation tools or the brain-only tools; a background wake sees the brain-only tools too.
 - Local-first loading. A search returns local tools at once. A bridge starts idle, with no warm-up at start-up or from `/pi/warm`, and loads only when the query names it (for example GitHub, issue, repo, Azure, resource, or a `gh_` / `az_` tool name). It then gets an 8 s bounded wait and a "search again shortly" note. The first Azure question after a quiet period therefore needs a second search.
 - Exact-name calls rank first; `intentAliases` in `pi/tool-search.ts` maps English and Danish wording (for example "vejr" to `weather`).
 - A capability note (connection states plus a capability index, at most 1,500 characters) goes with the first turn of a Foundry conversation and again only when the GitHub/Azure connection state changes. It is held in memory, so a backend restart sends it once more.
@@ -161,7 +161,7 @@ flowchart LR
     classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
 ```
 
-PI is unrestricted: no guardrails, approval gates or read-only defaults. The MCP tool runs with approval `never`.
+PI is unrestricted: no guardrails or read-only defaults, and the only approvals anywhere are for delete actions (Dan, as relayed; `PRODUCT.md`, "North star"). The MCP tool runs with approval `never`.
 
 ### Gateway and the harness stream
 
@@ -216,7 +216,7 @@ sequenceDiagram
 
 ### Safe logs
 
-Every backend log record passes `safeFields` in `apps/backend/src/logging.ts` before stdout or Application Insights sees it. Only registered event names keep their name (any other becomes `backend.event`), and each event exports only its own scalar fields and fixed vocabularies. Headers, bodies, URLs, prompts, replies, tool arguments, tokens, provider messages and free text are dropped, and ids appear only as opaque tokens or as booleans, never as content. A new field is invisible until it is added to that allowlist and to `logging.test.ts`.
+Every backend log record passes `safeFields` in `apps/backend/src/logging.ts` before stdout or Application Insights sees it. Only registered event names keep their name (any other becomes `backend.event`), and each event exports only its own scalar fields and fixed vocabularies. Headers, bodies, URLs, prompts, replies, tool arguments, tokens, provider messages and free text are dropped, and ids appear only as opaque tokens or as booleans, never as content. A new field is invisible until it is added to that allowlist; test it in `logging.test.ts`.
 
 | Event | Added | Safe fields |
 | --- | --- | --- |
@@ -229,7 +229,7 @@ Every backend log record passes `safeFields` in `apps/backend/src/logging.ts` be
 | `weather.phase` | #2003 | `phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host` |
 | `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started` | #2000 (outcomes extended by #2001) | `delegationId`, `groupId`, `textLength`, `offsetMs`, `quietMs`, `waitedMs`, `reusedGroup`, `outcome` or `reason`, `language` |
 | `voice.activity_published` | #2001 | `state`, `reason`, `sinceLastMs`, `outputActive`, `piBusy`, `delegationPending` |
-| `voice.upstream_event_error` | extended by #2001 | `errorType`, `errorCode`, `param` (short tokens, never the message) |
+| `voice.upstream_event_error` | extended by #2001 | `errorType`, `errorCode`, `param` (short tokens). The relay passes no message. An older allowlist branch could export up to 300 plain characters of `upstreamMessage` for `errorCode: invalid_function_parameters`, but nothing emits that field |
 
 In review (#2004): `pi.harness_item` with `trigger: harness_call` and `classification`, `rule`, `round`, `outcome`, `argumentKeys`; `pi.turn` adds `rounds`, `clientItems`, `nativeCalls`.
 

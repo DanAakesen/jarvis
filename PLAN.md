@@ -1,8 +1,10 @@
 ## Week summary 2026-11-21 — PI tools and reliability (current focus)
 
-**Status: the 20–21 November P0 work is merged on `main` except #2004, which is in review. Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
+**Status: the 20–21 November work is merged on `main` except #2004, which is in review. Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
 
-### Current focus: tool design and PI reliability
+### Current focus: tool design and PI reliability (Dan's P0)
+
+Dan's goal for PI is a bot experience that is "always on", knows him, "can be proactive" and knows him "super well" when he reaches out himself (his words, `PRODUCT.md`, "North star"). Priorities as relayed: **P0** every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. **P1** proactive intelligence. The work in this section is P0; P1 ranks next. Inference: these are priority ranks, not the plan phases P0–P15.
 
 Dan's design layers work by weight. PI reaches the Jarvis tools through one door (`find_tools`, `call_tool`). The routing rules live in the Foundry-owned `jarvis-pi` instructions, not in the repo.
 
@@ -13,7 +15,7 @@ Dan's design layers work by weight. PI reaches the Jarvis tools through one door
 | Deep or durable | Factory workers: coding sessions started and followed with Jarvis tools | a code change that ends in a pull request |
 | Knowledge | Vault notes and SQL Personal Memory | "remember that…", plans, research |
 
-Goal: PI finds the right tool, calls it, finishes the request and says honestly what happened, in Chat and in Voice. PI stays unrestricted: no guardrails, approval gates or read-only defaults.
+Goal (P0): PI finds the right tool, calls it, finishes the request and says honestly what happened, in Chat and in Voice, with no errors. PI has no guardrails or read-only defaults, and the only approvals anywhere are for delete actions (Dan, as relayed).
 
 ### Completed 20–21 November
 
@@ -26,7 +28,7 @@ Goal: PI finds the right tool, calls it, finishes the request and says honestly 
 | Reminders: saving is not delivery. Per-device APNs outbox and an honest `owner_reminders` read | #1995 | Backend 793 tests, isolated SQL 37 tests. Physical push open |
 | Foundry owns the agents: `jarvis-pi` instructions; `jarvis-pi-live` instructions, voice, greeting and `store`. Deploy seeds version 1, carries the live text forward and verifies the technical contract | #1992, #1994, #1998 | Provisioner script tests offline (87 at #1994). No live Foundry call in these PRs |
 | Voice states, caption order, reconnect and Watch v2 events made truthful | #1993 | Backend, web and contracts offline; Swift checks ran in CI only. Device acceptance open |
-| PI finds and calls tools: local-first loading, exact-name calls, aliases, one overview note, owner-message binding, non-blocking budget read, `structuredContent` | #1996 | Backend 803 tests. A larger attempt (#1987) was closed unmerged; Dan approved these seven items |
+| PI finds and calls tools: local-first loading, exact-name calls with aliases, one overview note, a non-blocking budget read, progress lines that never end a turn, owner-message binding, `structuredContent` | #1996 | Backend 803 tests. A larger attempt (#1987) was closed unmerged; Dan approved these seven items |
 | Speech never cancels PI; only a new delegation or the session end does | #1997 | Voice tests offline |
 | The whole spoken request goes to PI: all words of the open turn, 1.5 s of quiet, one stored owner message. `offset_ms` is only logged | #2000, #2001 | Offline tests with event shapes from production logs. Device retest open |
 | Failures can be diagnosed and a dead stream is retried once. The weather tool logs its phases and retries one stalled fetch | #1999, #2002, #2003 | Offline tests. After #2003 deployed, Dan reported that the forecast fetch stalls intermittently and the one retry recovered it (production report, not checkable from the repo) |
@@ -42,6 +44,7 @@ Goal: PI finds the right tool, calls it, finishes the request and says honestly 
 6. Known trade-off of #1996: the first Azure question after a quiet period needs a second search while the container wakes.
 7. Read the next `weather.phase` lines if a weather call fails again.
 8. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
+9. P1, proactive intelligence, ranks after P0. This summary plans no P1 steps. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence").
 
 ## Explicit reminder delivery evidence — 20 November 2026 (#1990)
 
