@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
@@ -49,6 +49,20 @@ describe('composition', () => {
     expect(await world.client.listDoorTools()).toEqual(['call_tool', 'find_tools']);
   });
 
+  it('gives the harness two small, safely named tool definitions', async () => {
+    const definitions = await world.client.listDoorDefinitions();
+    expect(definitions.map((definition) => definition.name).sort()).toEqual(['call_tool', 'find_tools']);
+    for (const definition of definitions) {
+      expect(definition.name, 'a harness-safe name').toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
+      expect(definition.name.includes('___'), `${definition.name} must not contain ___`).toBe(false);
+      const schema = definition.inputSchema ?? {};
+      expect(schema.type, `${definition.name} needs an object schema`).toBe('object');
+      expect(JSON.stringify(schema), `${definition.name} must not set strict`).not.toMatch(/"strict"\s*:\s*true/u);
+      expect(tokensOf({ ...definition }), `${definition.name} is part of every turn: keep it small`).toBeLessThanOrEqual(500);
+    }
+    console.info(`The two door tools cost ${tokensOf(definitions)} tokens per turn.`);
+  });
+
   it('composes every production module (a new key in production-modules.ts needs a conformance group)', () => {
     const source = readFileSync(resolve(import.meta.dirname, '../production-modules.ts'), 'utf8');
     const interfaceBody = /export interface ProductionModules \{([\s\S]*?)\n\}/u.exec(source)?.[1] ?? '';
@@ -57,6 +71,16 @@ describe('composition', () => {
     const claimed = new Set(world.groups.flatMap((group) => group.covers));
     expect(keys.filter((key) => !claimed.has(key)), 'production modules no conformance group claims').toEqual([]);
     expect([...claimed].filter((key) => !keys.includes(key)), 'groups claim modules that do not exist').toEqual([]);
+  });
+
+  it('composes every tool factory production adds to the pi module (index.ts piModule)', () => {
+    const source = readFileSync(resolve(import.meta.dirname, '../index.ts'), 'utf8');
+    const block = /const piModule = \{([\s\S]*?)registerRoutes:/u.exec(source)?.[1] ?? '';
+    const factories = [...new Set([...block.matchAll(/\b(create\w+Tools)\(/gu)].map((match) => match[1]!))];
+    expect(factories.length, 'no tool factories found in the piModule block of index.ts: update this guard').toBeGreaterThan(0);
+    const groupsDir = resolve(import.meta.dirname, 'conformance/groups');
+    const kit = readdirSync(groupsDir).filter((file) => file.startsWith('pi')).map((file) => readFileSync(resolve(groupsDir, file), 'utf8')).join('\n');
+    expect(factories.filter((factory) => !kit.includes(factory)), 'tool factories the pi conformance group does not compose').toEqual([]);
   });
 
   it('keeps every tool of every module in the registry (about 141 are visible to chat and voice)', () => {

@@ -39,6 +39,8 @@ export interface McpClient {
   call(turn: ConformanceTurn, name: string, args: Json, timeoutMs?: number): Promise<CallResult>;
   /** The tools/list answer, which must stay exactly the two door tools. */
   listDoorTools(): Promise<readonly string[]>;
+  /** The full tools/list definitions, as the harness reads them. */
+  listDoorDefinitions(): Promise<readonly { readonly name: string; readonly description?: string; readonly inputSchema?: Json }[]>;
 }
 
 const bearer = (value: string) => `${['Bear', 'er'].join('')} ${value}`;
@@ -119,6 +121,10 @@ export function createMcpClient(options: {
         status: answer.status, outcome, result: envelope?.result, isError: (answer.body?.result as { isError?: boolean } | undefined)?.isError === true,
         truncated: envelope?.truncated === true, raw: text ?? answer.raw, durationMs, timedOut: answer.timedOut,
       };
+    },
+    async listDoorDefinitions() {
+      const answer = await rpc('tools/list');
+      return ((answer.body?.result as { tools?: { name: string; description?: string; inputSchema?: Json }[] } | undefined)?.tools ?? []);
     },
     async listDoorTools() {
       const answer = await rpc('tools/list');
