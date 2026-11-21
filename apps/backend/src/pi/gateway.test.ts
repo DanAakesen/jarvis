@@ -5,6 +5,7 @@ import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
+import type { PiTurnGrant } from './turns.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -56,23 +57,25 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
   const calls: Call[] = [];
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
+  let cancelReply: () => Response = () => Response.json({});
   const fetcher = (async (url: string, init: RequestInit) => {
     const call: Call = { url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
     calls.push(call);
     if (url.includes('/conversations')) { conversations += 1; return Response.json({ id: `conv_${conversations}` }); }
+    if (url.includes('/cancel')) return cancelReply();
     return replies.shift()!(call);
   }) as typeof fetch;
   const gateway = createPiGateway({
     projectEndpoint: 'https://acct.services.ai.azure.com/api/projects/proj', agentName: 'jarvis-pi', owner, monthlyCapDkk: 1, timeZone: 'Europe/Copenhagen',
     store, registry, activations, fetcher, getToken: async () => 'token', context: async () => 'CONTEXT BLOCK',
-    recordUsage: async (record) => { usage.push(record); }, now: () => new Date('2026-11-15T16:00:00Z'), ...overrides,
+    recordUsage: async (record) => { usage.push(record); }, now: () => new Date('2026-11-15T16:00:00Z'), streamRetryDelayMs: 0, ...overrides,
   });
   const run = async (text: string, signal = new AbortController().signal) => {
     const chunks: ConversationAgentChunk[] = [];
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text }, 'Bearer x', signal)) chunks.push(chunk);
     return chunks;
   };
-  return { gateway, store, registry, calls, usage, run, conversations: () => conversations };
+  return { gateway, store, registry, calls, usage, run, conversations: () => conversations, setCancel: (reply: () => Response) => { cancelReply = reply; } };
 }
 
 describe('PI gateway', () => {
@@ -166,14 +169,15 @@ describe('PI gateway', () => {
     const { run } = setup([() => sse(listed, listFailed, tool, failed, odd, delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
     expect(await run('look')).toEqual(['ok']);
     expect(logs.filter(([event]) => event !== 'pi.turn')).toEqual([
-      ['pi.mcp_list_failed', { server: 'azure' }], ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue' }],
+      ['pi.mcp_list_failed', { server: 'azure', elapsedMs: expect.any(Number) }],
+      ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue', code: 'x', elapsedMs: expect.any(Number) }],
     ]);
     const events: Array<{ kind: string }> = [];
     const fresh = setup([() => sse(listed, failed, odd, completed(1, 0, 1))]);
     for await (const event of fresh.gateway.smokeKit.respond('conv_1', 'x', new AbortController().signal)) events.push(event);
     expect(events).toEqual([
       { kind: 'tools_listed', server: 'github', tools: 3, failed: false },
-      { kind: 'tool_done', server: 'github', name: 'get_issue', failed: true },
+      { kind: 'tool_done', server: 'github', name: 'get_issue', failed: true, code: 'x' },
       { kind: 'tool_done', server: '', name: 'x', failed: false },
       expect.objectContaining({ kind: 'done' }),
     ]);
@@ -436,6 +440,247 @@ describe('PI gateway', () => {
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(3);
     clock = new Date('2026-11-15T16:31:00Z');
     expect(await gateway.warm(new AbortController().signal)).toMatchObject({ alreadyWarm: false });
+  });
+
+  describe('a reply stream that dies before the model produced anything', () => {
+    const created = frame({ type: 'response.created', response: { id: 'resp_1' } });
+    const listed = frame({ type: 'response.output_item.done', item: { type: 'mcp_list_tools', server_label: 'github', tools: [{}] } });
+    const failedFrame = (code = 'server_error') => frame({ type: 'response.failed', response: { error: { code, message: 'private provider text' } } });
+    const broken = () => new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode(created)); setTimeout(() => controller.error(new Error('connection reset')), 5); },
+    }), { headers: { 'content-type': 'text/event-stream' } });
+    const responsesOf = (calls: Call[]) => calls.filter(call => call.url.includes('/responses') && !call.url.includes('/cancel'));
+    const capture = () => {
+      const logs: Array<[string, Record<string, unknown>]> = [];
+      return { logs, log: (event: string, fields: Record<string, unknown>) => { logs.push([event, fields]); } };
+    };
+
+    it.each([
+      ['response.failed', () => sse(created, listed, failedFrame()), 'foundry_response_failed', false],
+      ['error', () => sse(frame({ type: 'error', code: 'server_error', message: 'private provider text' })), 'foundry_response_failed', false],
+      ['a transient rate limit', () => sse(created, failedFrame('rate_limit_exceeded')), 'foundry_response_failed', false],
+      ['a stream that ends before its first event', () => sse(), 'stream_ended_without_completed', false],
+      ['a stream that ends early', () => sse(created), 'stream_ended_without_completed', true],
+      ['a stream that breaks', broken, 'stream_broke', true],
+    ])('retries once on %s, with the same message and conversation, billing the turn once', async (_name, first, reason, cancelsFirst) => {
+      const { logs, log } = capture();
+      const { run, calls, store, usage, conversations } = setup([first, () => sse(created, delta('Hi'), completed(100, 0, 10))], { log });
+      expect(await run('private question')).toEqual(['Hi']);
+      const responses = responsesOf(calls);
+      expect(responses).toHaveLength(2);
+      expect(responses[1]!.body).toEqual(responses[0]!.body);
+      expect(responses[0]!.body).toMatchObject({ conversation: 'conv_1' });
+      expect(conversations()).toBe(1);
+      // A response that only stopped may still run on Foundry's side, so it is cancelled before the retry; a failed one is already over.
+      expect(calls.filter(call => call.url.includes('/responses/resp_1/cancel'))).toHaveLength(cancelsFirst ? 1 : 0);
+      expect(logs.filter(([event]) => event === 'pi.stream_failed')).toEqual([[
+        'pi.stream_failed', expect.objectContaining({ reason, attempt: 1, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }),
+      ]]);
+      expect(logs.filter(([event]) => event === 'pi.stream_retry')).toEqual([[
+        'pi.stream_retry', expect.objectContaining({ reason, attempt: 1, elapsedMs: expect.any(Number) }),
+      ]]);
+      // One turn, one usage report, one cap check: the failed attempt is not billed a second time.
+      expect(store.turns).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'ok', inputTokens: 100, outputTokens: 10 });
+      expect(usage).toEqual([expect.objectContaining({ inputTokens: 100, outputTokens: 10 })]);
+      expect(logs.find(([event]) => event === 'pi.turn')![1]).toMatchObject({ outcome: 'ok', inputTokens: 100, outputTokens: 10 });
+      expect(JSON.stringify(logs)).not.toMatch(/private/u);
+    });
+
+    it('reads the spend once for a retried turn', async () => {
+      const { run, store } = setup([() => sse(failedFrame()), () => sse(delta('Hi'), completed(1, 0, 1))]);
+      let reads = 0;
+      const spend = store.spendSince.bind(store);
+      store.spendSince = async (from, kinds, signal) => { reads += 1; return spend(from, kinds, signal); };
+      await run('hi');
+      expect(reads).toBe(1);
+    });
+
+    const turnOf = (call: Call) => /\[Turn (jt-[A-Za-z0-9_-]{22})/u.exec((call.body!.input as Array<{ content: string }>)[0]!.content)![1]!;
+
+    it.each([
+      ['an unparseable frame', () => sse(created, 'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"type":"mcp_c\n\n', failedFrame())],
+      ['a non-object frame', () => sse(created, 'data: 42\n\n', failedFrame())],
+      ['a half-received frame when the stream ends', () => sse(created, 'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"type":"mcp_c')],
+      ['a half-received frame when the stream breaks', () => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`${created}event: response.output_item.added\ndata: {"type":"response.output_item.adde`));
+          setTimeout(() => controller.error(new Error('connection reset')), 5);
+        },
+      }), { headers: { 'content-type': 'text/event-stream' } })],
+    ])('never retries after %s', async (_name, first) => {
+      const { logs, log } = capture();
+      const { run, calls, store } = setup([first, () => sse(delta('again'), completed(1, 0, 1))], { log });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(logs.map(([event]) => event)).not.toContain('pi.stream_retry');
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ sawOutput: true });
+      expect(calls.filter(call => call.url.includes('/cancel'))).toHaveLength(0);
+      expect(store.turns).toHaveLength(1);
+    });
+
+    it.each([
+      ['a request that entered the MCP server and had not returned', (grant: PiTurnGrant) => { grant.requests.count += 1; }],
+      ['a recorded tool result', (grant: PiTurnGrant) => { grant.results.push({ tool: 'probe', outcome: 'ok' }); }],
+      ['a recorded action', (grant: PiTurnGrant) => { grant.actions.count += 1; }],
+    ])('never retries after %s, even though the stream carried nothing', async (_name, mark) => {
+      const { registry, run, calls, store } = setup([
+        (call) => { mark(registry.resolve(turnOf(call))!); return sse(created); },
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(store.turns).toHaveLength(1);
+    });
+
+    it('never retries when a tool request arrives while it waits to retry', async () => {
+      const { registry, run, calls } = setup([
+        (call) => { setTimeout(() => { registry.resolve(turnOf(call))!.requests.count += 1; }, 10); return sse(failedFrame()); },
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ], { streamRetryDelayMs: 60 });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it.each([
+      ['a failed cancel', () => new Response('{}', { status: 500 })],
+      ['a cancel that leaves the response running', () => Response.json({ status: 'in_progress' })],
+    ])('never retries a stream that merely stopped after %s', async (_name, cancel) => {
+      const { run, calls, setCancel } = setup([() => sse(created), () => sse(delta('again'), completed(1, 0, 1))]);
+      setCancel(cancel);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(calls.filter(call => call.url.includes('/responses/resp_1/cancel'))).toHaveLength(1);
+    });
+
+    it('never retries events whose response is unknown, because they cannot be cancelled', async () => {
+      const { run, calls } = setup([() => sse(frame({ type: 'response.in_progress', response: {} })), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it.each([
+      ['response.incomplete', () => sse(created, frame({ type: 'response.incomplete', response: { status: 'incomplete', error: { code: 'server_error' } } }))],
+      ['a content filter', () => sse(created, failedFrame('content_filter'))],
+      ['a tool error', () => sse(created, failedFrame('tool_user_error'))],
+      ['an unknown code', () => sse(created, failedFrame('something_new'))],
+      ['no code', () => sse(created, frame({ type: 'response.failed', response: {} }))],
+    ])('never retries %s', async (_name, first) => {
+      const { run, calls } = setup([first, () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it('never retries a call without a turn grant, such as a warm-up or the smoke', async () => {
+      const { gateway, calls } = setup([() => sse(failedFrame()), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(gateway.warm(new AbortController().signal)).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      const smoke = setup([() => sse(failedFrame()), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect((async () => { for await (const event of smoke.gateway.smokeKit.respond('conv_1', 'x', new AbortController().signal)) void event; })())
+        .rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(smoke.calls)).toHaveLength(1);
+    });
+
+    it('never retries a brain wake that reached a tool', async () => {
+      const { gateway, registry, calls } = setup([
+        (call) => { registry.resolve(turnOf(call))!.requests.count += 1; return sse(created); },
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ]);
+      const result = await gateway.runBrain({ runId: 'run-9', body: 'WAKE' }, new AbortController().signal);
+      expect(result).toMatchObject({ ok: false });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it.each([
+      ['text', [created, delta('Let me')]],
+      ['a tool call', [created, tool]],
+      ['reasoning', [created, frame({ type: 'response.reasoning_summary_text.delta', delta: 'thinking' })]],
+      ['a reasoning item', [created, frame({ type: 'response.output_item.added', item: { type: 'reasoning' } })]],
+      ['an unknown event', [created, frame({ type: 'response.something_new' })]],
+    ])('never retries after %s', async (_name, frames) => {
+      const { logs, log } = capture();
+      const { run, calls, store } = setup([() => sse(...frames, failedFrame()), () => sse(delta('again'), completed(1, 0, 1))], { log });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(logs.map(([event]) => event)).not.toContain('pi.stream_retry');
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'foundry_response_failed', sawOutput: true });
+      expect(store.turns).toHaveLength(1);
+    });
+
+    it('never retries a function call or approval request, and never an HTTP failure or a missing stream', async () => {
+      const { logs, log } = capture();
+      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call' } })), () => sse(delta('x'), completed(1, 0, 1))], { log });
+      await expect(call.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+      expect(responsesOf(call.calls)).toHaveLength(1);
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item', sawTool: true, sawOutput: true });
+      const http = setup([() => new Response('{}', { status: 500 }), () => sse(delta('x'), completed(1, 0, 1))]);
+      await expect(http.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable' });
+      expect(responsesOf(http.calls)).toHaveLength(1);
+      const none = capture();
+      const empty = setup([() => new Response(null), () => sse(delta('x'), completed(1, 0, 1))], { log: none.log });
+      await expect(empty.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(empty.calls)).toHaveLength(1);
+      expect(none.logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'no_stream' });
+    });
+
+    it('surfaces pi_failed with the logged reason when the retry fails too, and charges nothing', async () => {
+      const { logs, log } = capture();
+      const { run, calls, store, usage } = setup([() => sse(created, failedFrame('server_error')), () => sse(created)], { log });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(2);
+      expect(logs.filter(([event]) => event === 'pi.stream_failed').map(([, fields]) => [fields.reason, fields.attempt])).toEqual([
+        ['foundry_response_failed', 1], ['stream_ended_without_completed', 2],
+      ]);
+      expect(logs.filter(([event]) => event === 'pi.stream_retry')).toHaveLength(1);
+      expect(store.turns).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 0, costDkk: 0 });
+      expect(usage).toEqual([]);
+    });
+
+    it('stops at once when the turn is cancelled during the retry or while waiting to retry', async () => {
+      const stalled = () => new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/event-stream' } });
+      const during = new AbortController();
+      const retrying = setup([() => sse(failedFrame()), () => { during.abort(); return stalled(); }]);
+      await expect(retrying.run('hi', during.signal)).rejects.toBeDefined();
+      expect(responsesOf(retrying.calls)).toHaveLength(2);
+      expect(retrying.store.turns[0]).toMatchObject({ outcome: 'cancelled' });
+      expect(retrying.registry.size).toBe(0);
+
+      const waiting = new AbortController();
+      const paused = setup([() => sse(failedFrame()), stalled], { streamRetryDelayMs: 60_000 });
+      const started = performance.now();
+      const turn = paused.run('hi', waiting.signal);
+      setTimeout(() => waiting.abort(), 20);
+      await expect(turn).rejects.toBeDefined();
+      expect(performance.now() - started).toBeLessThan(5_000);
+      expect(responsesOf(paused.calls)).toHaveLength(1);
+      expect(paused.store.turns[0]).toMatchObject({ outcome: 'cancelled' });
+    });
+
+    it('stops retrying when the turn deadline passes', async () => {
+      const paused = setup([() => sse(failedFrame()), () => sse(delta('late'), completed(1, 0, 1))], { streamRetryDelayMs: 60_000, turnTimeoutMs: 40 });
+      await expect(paused.run('hi')).rejects.toMatchObject({ code: 'pi_timeout' });
+      expect(responsesOf(paused.calls)).toHaveLength(1);
+    });
+
+    it('logs one distinct reason for the other pi_failed sites, and whether the previous turn was just cancelled', async () => {
+      const none = capture();
+      const noConversation = setup([], { log: none.log, fetcher: (async () => Response.json({})) as unknown as typeof fetch });
+      await expect(noConversation.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(none.logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'no_conversation' });
+
+      const { logs, log } = capture();
+      const cancelled = new AbortController();
+      const { run } = setup([
+        () => new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(delta('first'))); } }), { headers: { 'content-type': 'text/event-stream' } }),
+        () => sse(created), () => sse(created),
+      ], { log, streamRetryDelayMs: 0 });
+      const first = run('one', cancelled.signal);
+      setTimeout(() => cancelled.abort(), 20);
+      await expect(first).rejects.toBeDefined();
+      await expect(run('two')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(logs.filter(([event]) => event === 'pi.stream_failed').map(([, fields]) => fields.previousCancelled)).toEqual([true, true]);
+    });
   });
 
   it('answers an unconfigured PI selection with its own error', async () => {

@@ -109,7 +109,9 @@ const events = new Set([
   'voice.proactive_context_unavailable', 'voice.credential_refresh_failed',
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
+  'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable',
+  'pi.stream_failed', 'pi.stream_retry', 'pi.mcp_list_failed', 'pi.mcp_call_failed',
+  'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'voice.late_session_ended',
   'voice.late_session_cleanup_failed', 'watch_transcription.stage',
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
@@ -134,6 +136,7 @@ export function safeHistoricalLogFields(input: Record<string, unknown>): Record<
     'language', 'scope', 'source', 'channel', 'closedBy', 'family', 'verdict', 'cachePath',
     'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
     'errorCode', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
+    'event', 'code', 'server', 'tool', 'azureCatalogue',
   ]);
   return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
     typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
@@ -202,6 +205,15 @@ const boardInvalidationOrigins = new Set(['task_event', 'github_webhook']);
 const approvalFamilies = new Set(['calendar', 'mail', 'factory', 'github']);
 const approvalVerdicts = new Set(['approve', 'decline', 'neither']);
 const approvalPaths = new Set(['fast', 'model', 'failed']);
+/** Why a PI turn failed, in our own words: the only vocabulary `pi.stream_failed` and `pi.stream_retry` may carry as a reason. */
+const piStreamReasons = new Set([
+  'foundry_response_failed', 'stream_ended_without_completed', 'stream_broke', 'approval_or_function_call_item',
+  'no_stream', 'no_conversation', 'busy', 'brain_wake_failed',
+]);
+const piStreamEvents = new Set(['response.failed', 'response.incomplete', 'error']);
+const piAzureCatalogueStates = new Set([
+  'idle', 'ready', 'stale', 'starting', 'unreachable', 'empty', 'not_configured', 'not_searched',
+]);
 
 function safeRequestId(value: unknown): value is string {
   return typeof value === 'string' && /^[\da-f-]{36}$/iu.test(value);
@@ -535,6 +547,28 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
     return fields;
   }
+  if (input.msg === 'pi.stream_failed' || input.msg === 'pi.stream_retry' ||
+      input.msg === 'pi.mcp_list_failed' || input.msg === 'pi.mcp_call_failed') {
+    // Short fixed vocabulary, plain labels and numbers only: never a prompt, reply, tool argument, token or provider message.
+    const fields: Record<string, unknown> = {};
+    if (typeof input.reason === 'string' && piStreamReasons.has(input.reason)) fields.reason = input.reason;
+    if (typeof input.event === 'string' && piStreamEvents.has(input.event)) fields.event = input.event;
+    if (typeof input.code === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/u.test(input.code)) fields.code = input.code;
+    for (const key of ['server', 'tool']) {
+      const value = input[key];
+      if (typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/u.test(value)) fields[key] = value;
+    }
+    if (Number.isInteger(input.status) && Number(input.status) >= 100 && Number(input.status) <= 599) fields.status = input.status;
+    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 2) fields.attempt = input.attempt;
+    for (const key of ['elapsedMs', 'firstEventMs']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 600_000) fields[key] = value;
+    }
+    for (const key of ['sawText', 'sawTool', 'sawOutput', 'previousCancelled']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    return fields;
+  }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {
     const fields: Record<string, unknown> = {};
     if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
@@ -673,6 +707,8 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.acknowledged === 'boolean') fields.acknowledged = input.acknowledged;
     if (input.budgetRead === 'unavailable') fields.budgetRead = input.budgetRead;
+    if (Number.isSafeInteger(input.toolCount) && Number(input.toolCount) >= 0 && Number(input.toolCount) <= 10_000) fields.toolCount = input.toolCount;
+    if (typeof input.azureCatalogue === 'string' && piAzureCatalogueStates.has(input.azureCatalogue)) fields.azureCatalogue = input.azureCatalogue;
   }
   if (input.msg === 'voice.turn_timing') {
     if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {

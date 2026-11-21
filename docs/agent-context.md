@@ -181,6 +181,7 @@
 - Checks: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run` (`src/pi/show-in-chat-route.test.ts` runs `show_in_chat` through the real PI door); `cd packages/contracts && node --test`; `cd apps/ios/Packages/JarvisCore && swift test` (a Swift 6.2 Linux toolchain works). The SwiftUI compiles only in the macOS `watch` job.
 - Instruction text changed (`voiceChannelNote`, `workspace_command` description, `capability-instructions.ts`): deploy for it to take effect. The `jarvis-pi` instructions are different: edit them in the Foundry portal (`agents/pi/instructions.md` only seeds version 1 when the agent does not exist, and editing it later changes nothing). Keep the `KEEP THIS BLOCK: backend tool contract` section there, or tool use breaks. Run `measure_pi` to see the voice smoke still passes.
 - The backend log lines for a failing tool are `tool.invalid_arguments` (the refused field) and `pi.stream_failed` (the provider code).
+- A failed PI chat turn: find its `pi.stream_failed` (`reason`, `attempt`, `firstEventMs`, `sawText`/`sawTool`, `previousCancelled`), any `pi.stream_retry` just before it, `pi.mcp_list_failed` / `pi.mcp_call_failed` (`server`, `tool`, `code`, `status`) and the closing `pi.turn` (`toolCount`, `azureCatalogue`). The log allowlist in `apps/backend/src/logging.ts` exports only those fixed fields; a new PI log field must be added there and tested in `logging.test.ts`.
 
 ## Voice bottom panel — 17 November 2026 (#1925, P15-191)
 
