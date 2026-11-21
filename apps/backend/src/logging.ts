@@ -111,6 +111,7 @@ const events = new Set([
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable',
   'pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed',
+  'weather.phase',
   'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'voice.late_session_ended',
   'voice.late_session_cleanup_failed', 'watch_transcription.stage',
@@ -212,6 +213,10 @@ const piStreamReasons = new Set([
   'foundry_response_failed', 'stream_ended_without_completed', 'stream_broke', 'approval_or_function_call_item',
   'no_stream', 'no_conversation', 'busy', 'brain_wake_failed',
 ]);
+/** Fixed vocabularies of `weather.phase`: the step, how it ended and which provider host it called. */
+const weatherPhases = new Set(['geocode', 'forecast', 'home_location', 'report']);
+const weatherOutcomes = new Set(['ok', 'timeout', 'network', 'http_status', 'invalid', 'too_large']);
+const weatherHosts = new Set(['open-meteo-geocoding', 'open-meteo-forecast']);
 const piStreamEvents = new Set(['response.failed', 'response.incomplete', 'error']);
 const piAzureCatalogueStates = new Set([
   'idle', 'ready', 'stale', 'starting', 'unreachable', 'empty', 'not_configured', 'not_searched',
@@ -547,6 +552,19 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (smallCount(input.evicted)) fields.evicted = input.evicted;
     if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
         input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
+  if (input.msg === 'weather.phase') {
+    // Step name, outcome, status, attempt, duration and provider host only: never a place, coordinate, query or provider text.
+    const fields: Record<string, unknown> = {};
+    if (typeof input.phase === 'string' && weatherPhases.has(input.phase)) fields.phase = input.phase;
+    if (typeof input.outcome === 'string' && weatherOutcomes.has(input.outcome)) fields.outcome = input.outcome;
+    if (Number.isInteger(input.status) && Number(input.status) >= 100 && Number(input.status) <= 599) fields.status = input.status;
+    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 2) fields.attempt = input.attempt;
+    if (typeof input.elapsedMs === 'number' && Number.isFinite(input.elapsedMs) && input.elapsedMs >= 0 && input.elapsedMs <= 600_000) {
+      fields.elapsedMs = input.elapsedMs;
+    }
+    if (typeof input.host === 'string' && weatherHosts.has(input.host)) fields.host = input.host;
     return fields;
   }
   if (input.msg === 'pi.harness_item') {

@@ -11,6 +11,13 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { workspaceResultDelivery } from './jobs.js';
 
 const requestTimeoutMs = 8_000;
+/** One try may use at most this much of the overall budget, so a stalled connection leaves room for a second try. */
+const attemptTimeoutMs = 3_000;
+/** A second try only starts when at least this much of the overall budget is left. */
+const minRetryMs = 1_000;
+/** Reading the saved home location is a local store read; it gets its own short bound. */
+const homeLookupTimeoutMs = 2_000;
+const maxAttempts = 2;
 const progressTimeoutMs = 1_000;
 const geocodingResponseLimit = 64 * 1024;
 const forecastResponseLimit = 128 * 1024;
@@ -80,13 +87,68 @@ export function weatherDescription(code: number): string {
   return weatherCodeDescriptions[code] ?? 'Unknown conditions';
 }
 
+type PhaseName = 'geocode' | 'forecast' | 'home_location' | 'report';
+type FailureOutcome = 'timeout' | 'network' | 'http_status' | 'invalid' | 'too_large';
+type FetchPhase = 'geocode' | 'forecast';
+
+/** A failed provider fetch: only a fixed outcome and an HTTP status, never the provider's words. */
+class WeatherFetchError extends Error {
+  constructor(readonly outcome: FailureOutcome, readonly status?: number) {
+    super(`Weather fetch failed: ${outcome}`);
+    this.name = 'WeatherFetchError';
+  }
+}
+
+/** The ToolFailure the agent sees; it names the safe cause and remembers the outcome for the report log. */
+class WeatherProviderFailure extends ToolFailure {
+  constructor(message: string, readonly outcome: FailureOutcome) {
+    super(message);
+  }
+}
+
+const phaseHosts: Readonly<Record<FetchPhase, 'open-meteo-geocoding' | 'open-meteo-forecast'>> = {
+  geocode: 'open-meteo-geocoding',
+  forecast: 'open-meteo-forecast',
+};
+
+function providerFailure(phase: FetchPhase, failure: WeatherFetchError, attempts: number): WeatherProviderFailure {
+  const step = phase === 'geocode' ? 'place lookup' : 'forecast';
+  const tries = attempts > 1 ? ` after ${attempts} tries` : '';
+  const messages: Record<FailureOutcome, string> = {
+    timeout: `The weather provider did not answer in time at the ${step} step${tries}.`,
+    network: `The weather provider could not be reached at the ${step} step${tries}.`,
+    http_status: `The weather provider returned HTTP ${failure.status ?? 'error'} at the ${step} step${tries}.`,
+    too_large: `The weather provider's answer was too large at the ${step} step.`,
+    invalid: `The weather provider's answer could not be read at the ${step} step.`,
+  };
+  return new WeatherProviderFailure(messages[failure.outcome], failure.outcome);
+}
+
+function retryable(failure: WeatherFetchError): boolean {
+  return failure.outcome === 'timeout' || failure.outcome === 'network' ||
+    (failure.outcome === 'http_status' && failure.status !== undefined && (failure.status === 429 || failure.status >= 500));
+}
+
+function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    if (signal.aborted) {
+      work.catch(() => undefined);
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
 async function readBoundedJson(response: Response, maxBytes: number): Promise<unknown> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > maxBytes) {
     await response.body?.cancel().catch(() => undefined);
-    throw new Error('Weather response exceeded the size limit');
+    throw new WeatherFetchError('too_large');
   }
-  if (!response.body) throw new Error('Weather response was empty');
+  if (!response.body) throw new WeatherFetchError('invalid');
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -95,7 +157,7 @@ async function readBoundedJson(response: Response, maxBytes: number): Promise<un
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > maxBytes) throw new Error('Weather response exceeded the size limit');
+      if (size > maxBytes) throw new WeatherFetchError('too_large');
       chunks.push(value);
     }
   } catch (error) {
@@ -113,7 +175,7 @@ async function readBoundedJson(response: Response, maxBytes: number): Promise<un
   try {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
   } catch {
-    throw new Error('Weather response was invalid');
+    throw new WeatherFetchError('invalid');
   }
 }
 
@@ -286,41 +348,143 @@ function artifactSources(place: WeatherPlace, days: number): WorkspaceHtmlSource
   }];
 }
 
+interface WeatherTiming {
+  requestTimeoutMs: number;
+  attemptTimeoutMs: number;
+  minRetryMs: number;
+  homeLookupTimeoutMs: number;
+}
+
+/** The caller's signal, the overall deadline and when that deadline falls. */
+interface WeatherBudget {
+  caller: AbortSignal;
+  deadline: AbortSignal;
+  endsAt: number;
+}
+
+interface PhaseLog {
+  phase: PhaseName;
+  outcome: 'ok' | FailureOutcome;
+  startedAt: number;
+  attempt?: number;
+  status?: number;
+  host?: typeof phaseHosts[FetchPhase];
+}
+
+function logPhase(request: FastifyRequest, entry: PhaseLog): void {
+  // Fixed vocabulary and numbers only: never a place, coordinate, query or provider text.
+  request.log.info({
+    phase: entry.phase,
+    outcome: entry.outcome,
+    ...(entry.status === undefined ? {} : { status: entry.status }),
+    attempt: entry.attempt ?? 1,
+    elapsedMs: Math.round(performance.now() - entry.startedAt),
+    ...(entry.host === undefined ? {} : { host: entry.host }),
+  }, 'weather.phase');
+}
+
 export function createWeatherModule(
   artifacts: Pick<WorkspaceHtmlArtifactStore, 'create'>,
   fetcher?: typeof fetch,
   workspaceItems?: WorkspaceItemsStore,
+  timingOverrides: Partial<WeatherTiming> = {},
 ): BackendModule {
+  const timing: WeatherTiming = {
+    requestTimeoutMs, attemptTimeoutMs, minRetryMs, homeLookupTimeoutMs, ...timingOverrides,
+  };
   const jobs = new Map<AbortController, Promise<void>>();
-  async function requestJson(url: URL, signal: AbortSignal, maxBytes: number): Promise<unknown> {
-    const response = await (fetcher ?? fetch)(url, {
-      headers: { Accept: 'application/json' },
-      redirect: 'error',
-      signal,
-    });
-    if (!response.ok || response.redirected) {
-      await response.body?.cancel().catch(() => undefined);
-      throw new ToolFailure('Open-Meteo could not provide weather right now.');
-    }
-    return readBoundedJson(response, maxBytes);
+
+  function startBudget(caller: AbortSignal): WeatherBudget {
+    return { caller, deadline: AbortSignal.timeout(timing.requestTimeoutMs), endsAt: performance.now() + timing.requestTimeoutMs };
   }
 
-  async function placeFor(inputLocation: string | undefined, request: FastifyRequest, signal: AbortSignal) {
-    if (inputLocation === undefined) {
-      const store = request.server.settingsStore;
-      if (!store) throw new ToolRefusal('Home location settings are unavailable.');
-      const home = (await readSettings(store)).location;
+  // One transparent retry for a stalled or briefly failing provider; the overall budget never grows.
+  async function requestJson(
+    phase: FetchPhase, url: URL, budget: WeatherBudget, maxBytes: number, request: FastifyRequest,
+  ): Promise<unknown> {
+    for (let attempt = 1; ; attempt += 1) {
+      budget.caller.throwIfAborted();
+      const startedAt = performance.now();
+      const attemptSignal = AbortSignal.any([
+        budget.caller,
+        budget.deadline,
+        AbortSignal.timeout(Math.max(1, Math.min(timing.attemptTimeoutMs, budget.endsAt - startedAt))),
+      ]);
+      let failure: WeatherFetchError;
+      try {
+        const response = await (fetcher ?? fetch)(url, {
+          headers: { Accept: 'application/json' },
+          redirect: 'error',
+          signal: attemptSignal,
+        });
+        if (!response.ok || response.redirected) {
+          await response.body?.cancel().catch(() => undefined);
+          throw response.ok
+            ? new WeatherFetchError('invalid')
+            : new WeatherFetchError('http_status', response.status);
+        }
+        const value = await readBoundedJson(response, maxBytes);
+        logPhase(request, { phase, outcome: 'ok', attempt, startedAt, host: phaseHosts[phase] });
+        return value;
+      } catch (error) {
+        budget.caller.throwIfAborted();
+        failure = error instanceof WeatherFetchError
+          ? error
+          : new WeatherFetchError(attemptSignal.aborted ? 'timeout' : 'network');
+      }
+      logPhase(request, {
+        phase, outcome: failure.outcome, attempt, startedAt, host: phaseHosts[phase],
+        ...(failure.status === undefined ? {} : { status: failure.status }),
+      });
+      if (attempt >= maxAttempts || !retryable(failure) || budget.endsAt - performance.now() < timing.minRetryMs) {
+        throw providerFailure(phase, failure, attempt);
+      }
+    }
+  }
+
+  async function homeLocation(request: FastifyRequest, budget: WeatherBudget) {
+    const store = request.server.settingsStore;
+    if (!store) return { state: 'unavailable' } as const;
+    const startedAt = performance.now();
+    const signal = AbortSignal.any([budget.caller, budget.deadline, AbortSignal.timeout(timing.homeLookupTimeoutMs)]);
+    try {
+      const home = (await abortable(readSettings(store), signal)).location;
       if (!home.city || home.latitude === null || home.longitude === null) {
+        logPhase(request, { phase: 'home_location', outcome: 'invalid', startedAt });
+        return { state: 'incomplete' } as const;
+      }
+      logPhase(request, { phase: 'home_location', outcome: 'ok', startedAt });
+      return { state: 'ready', place: { name: home.city, latitude: home.latitude, longitude: home.longitude } } as const;
+    } catch {
+      budget.caller.throwIfAborted();
+      const timedOut = signal.aborted;
+      logPhase(request, { phase: 'home_location', outcome: timedOut ? 'timeout' : 'network', startedAt });
+      return { state: 'unreadable', timedOut } as const;
+    }
+  }
+
+  async function placeFor(inputLocation: string | undefined, request: FastifyRequest, budget: WeatherBudget) {
+    // A saved home city with coordinates is used as it is: no geocoding for the home place.
+    const home = await homeLocation(request, budget);
+    if (inputLocation === undefined) {
+      if (home.state === 'unavailable') throw new ToolRefusal('Home location settings are unavailable.');
+      if (home.state === 'unreadable') {
+        throw new ToolFailure(home.timedOut
+          ? 'The saved home location did not answer in time.'
+          : 'The saved home location could not be read right now.');
+      }
+      if (home.state === 'incomplete') {
         throw new ToolRefusal('Set a home city, latitude and longitude in Settings, or provide a location.');
       }
-      return { name: home.city, latitude: home.latitude, longitude: home.longitude };
+      return home.place;
     }
+    if (home.state === 'ready' && home.place.name.trim().toLowerCase() === inputLocation.toLowerCase()) return home.place;
     const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
     url.searchParams.set('name', inputLocation);
     url.searchParams.set('count', '1');
     url.searchParams.set('language', 'en');
     url.searchParams.set('format', 'json');
-    const result = await requestJson(url, signal, geocodingResponseLimit);
+    const result = await requestJson('geocode', url, budget, geocodingResponseLimit, request);
     if (!isObject(result) || (result.results !== undefined && !Array.isArray(result.results))) {
       throw new ToolFailure('Open-Meteo returned an invalid place result.');
     }
@@ -342,9 +506,9 @@ export function createWeatherModule(
       const location = input.location?.trim();
       if (input.report === false) {
         // Data only: nothing is saved or opened, so the caller can present the result itself.
-        const dataSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
-        const place = await placeFor(location, request, dataSignal);
-        const value = await requestJson(forecastUrl(place, days, input.hourly === true), dataSignal, forecastResponseLimit);
+        const budget = startBudget(signal);
+        const place = await placeFor(location, request, budget);
+        const value = await requestJson('forecast', forecastUrl(place, days, input.hourly === true), budget, forecastResponseLimit, request);
         const data = forecastFrom(value, place, days, input.hourly === true);
         if (!data) throw new ToolFailure('Open-Meteo returned an invalid weather forecast.');
         return { ...data, issuedAt: new Date().toISOString(), confirmation: 'Forecast returned. No workspace report was opened.' };
@@ -354,6 +518,7 @@ export function createWeatherModule(
       const title = (location ? `Weather in ${location}` : 'Home weather forecast').slice(0, 80);
       const viewId = `weather-${randomUUID().replaceAll('-', '')}`;
       const controller = new AbortController();
+      const reportStartedAt = performance.now();
       const tracker = await request.server.backgroundJobs.start(
         'html_app', title, 3, () => controller.abort(), 'Getting current weather',
       );
@@ -374,10 +539,11 @@ export function createWeatherModule(
         const progressSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(progressTimeoutMs)]);
         await request.server.workspaceCommands.execute(ownerId, initialCommand, progressSignal).catch(() => undefined);
         controller.signal.throwIfAborted();
-        const jobSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(requestTimeoutMs)]);
+        const budget = startBudget(controller.signal);
+        const jobSignal = AbortSignal.any([controller.signal, budget.deadline]);
         await tracker.progress(1, 'Getting current weather');
-        const place = await placeFor(location, request, jobSignal);
-        const value = await requestJson(forecastUrl(place, days, input.hourly === true), jobSignal, forecastResponseLimit);
+        const place = await placeFor(location, request, budget);
+        const value = await requestJson('forecast', forecastUrl(place, days, input.hourly === true), budget, forecastResponseLimit, request);
         const report = forecastFrom(value, place, days, input.hourly === true);
         if (!report) throw new ToolFailure('Open-Meteo returned an invalid weather forecast.');
         await tracker.progress(2, 'Saving weather report');
@@ -420,6 +586,7 @@ export function createWeatherModule(
         await tracker.setResultDelivery(
           deliveryError === undefined ? 'delivered' : workspaceResultDelivery(deliveryError),
         ).catch(() => undefined);
+        logPhase(request, { phase: 'report', outcome: 'ok', startedAt: reportStartedAt });
         return {
           jobId: tracker.jobId,
           artifactId: artifact.id,
@@ -430,6 +597,12 @@ export function createWeatherModule(
         };
       } catch (error) {
         if (!controller.signal.aborted) {
+          // The whole job path: a provider failure keeps its own outcome, anything else is a report that could not be built or saved.
+          logPhase(request, {
+            phase: 'report',
+            startedAt: reportStartedAt,
+            outcome: error instanceof WeatherProviderFailure ? error.outcome : error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'invalid',
+          });
           try {
             await tracker.fail(error instanceof ToolRefusal
               ? 'Weather report was refused.'
