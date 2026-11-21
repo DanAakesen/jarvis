@@ -61,6 +61,10 @@ export const googleGroup: GroupFactory = (context) => {
         named('a date-time range', { start: '2026-11-23T00:00:00+01:00', end: '2026-11-24T00:00:00+01:00' }, 'what do I have on Monday?', (result) => {
           expect(subjects(result)).toContain('Lunch with Mette');
         }),
+        named('a short page of a busy week', { start: '2026-11-23', end: '2026-11-29', maxResults: 3 }, 'show me the first three things this week', (result) => {
+          expect(list(object(result).events)).toHaveLength(3);
+          expect(object(result).truncated).toBe(true);
+        }),
         named('a range that is too long', { start: '2026-01-01', end: '2026-12-31' }, 'show me everything this year', undefined, 'refused'),
       ],
       calendar_next_event: [
@@ -70,6 +74,10 @@ export const googleGroup: GroupFactory = (context) => {
         }),
         named('after a given time', { after: '2026-11-23T13:30:00+01:00' }, 'what is my next event after lunch?', (result) => {
           expect(object(object(result).event)).toMatchObject({ subject: 'Gym (optional)' });
+        }),
+        named('nothing ahead', { after: '2027-06-01T00:00:00+02:00' }, 'what is my next event after the summer holiday?', (result) => {
+          expect(object(result).event).toBeNull();
+          expect(object(result).truncated).toBe(false);
         }),
       ],
       calendar_find_free_slots: [
@@ -267,6 +275,16 @@ export const googleGroup: GroupFactory = (context) => {
           completed(result);
           expect(fake.sent().find((message) => message.subject === 'Project status')?.to).toBe('anna@example.com, bob@example.com');
         }),
+        // A retry of the same request under the same Dan message must not send the email twice.
+        {
+          ...named('the same email again', {
+            to: ['anna@example.com', 'bob@example.com'], subject: 'Project status', body: 'Hi both, the project is on track and the next review is on Thursday.',
+          }, 'send Anna and Bob a short project status', (result) => {
+            completed(result);
+            expect(fake.sent().filter((message) => message.subject === 'Project status')).toHaveLength(1);
+          }),
+          sameMessageAsPrevious: true,
+        },
       ],
     },
   };
