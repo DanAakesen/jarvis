@@ -84,7 +84,8 @@ export async function executeCase(
     expect(call.truncated, `${label}: the result exceeded the call_tool size limit and was truncated`).toBe(false);
     const own = world.thrown.filter((entry) => entry.tool === tool.name);
     const untyped = own.filter((entry) => !isTyped(entry.error) && !isAbort(entry.error));
-    expect(untyped.map((entry) => errorLine(entry.error)), `${label}: the tool threw an unhandled error`).toEqual([]);
+    const untypedLines = untyped.map((entry) => errorLine(entry.error));
+    expect(untypedLines, `${label}: the tool threw an unhandled error: ${untypedLines.join(' | ')}`).toEqual([]);
     const result = call.result as Record<string, unknown> | undefined;
     const message = call.outcome === 'refused' ? (result as { refused?: string } | undefined)?.refused
       : call.outcome === 'error' ? (result as { error?: string } | undefined)?.error : undefined;
