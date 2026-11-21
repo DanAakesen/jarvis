@@ -119,6 +119,27 @@ describe('PI MCP server', () => {
     expect(recorded).toHaveLength(1);
   });
 
+  it('labels the tool activity of a spoken turn voice and that of a typed turn chat', async () => {
+    const { app, registry, tool } = setup();
+    const activity: Array<{ type: string; source: unknown; messageId: unknown }> = [];
+    app.jarvisActivityHub.subscribe((event) => {
+      if ('toolName' in event && event.toolName === 'probe_echo') activity.push({ type: event.type, source: event.source, messageId: event.messageId });
+    });
+    const activation = (type: 'chat' | 'voice') => ({
+      id: '00000000-0000-4000-8000-000000000001', type, source: type, slotKey: null, stateRevision: 0, stateHash: null,
+      policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: [],
+    });
+    for (const [messageId, type] of [['42', 'chat'], ['43', 'voice']] as const) {
+      const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId, signal: live(), activation: activation(type) });
+      await tool('find_tools', { turn: grant.turn, query: 'probe echo' });
+      await tool('call_tool', { turn: grant.turn, name: 'probe_echo', arguments: { text: 'hej' } });
+    }
+    expect(activity).toEqual([
+      { type: 'tool-call-started', source: 'chat', messageId: '42' }, { type: 'tool-call-finished', source: 'chat', messageId: '42' },
+      { type: 'tool-call-started', source: 'voice', messageId: '43' }, { type: 'tool-call-finished', source: 'voice', messageId: '43' },
+    ]);
+  });
+
   it('counts a tool request when it enters the server, before the tool has returned', async () => {
     let release!: () => void;
     let entered!: () => void;
