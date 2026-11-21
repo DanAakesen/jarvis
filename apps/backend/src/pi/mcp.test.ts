@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
@@ -139,6 +139,91 @@ describe('PI MCP server', () => {
     expect(undiscovered.body?.outcome).toBe('refused');
     expect(grant.azure).toMatchObject({ attempts: 1, undiscoveredRefusals: 1 });
     expect(grant.results).toEqual([]);
+  });
+
+  it('searches local tools without touching a stalled GitHub or Azure bridge', async () => {
+    const stalled = (prefix: string, label: string): RemoteMcpBridge => ({
+      prefix, label, status: () => ({ state: 'idle' }), warm: vi.fn(),
+      tools: vi.fn(() => new Promise<never>(() => {})), call: async () => ({ outcome: 'ok', result: {} }),
+    });
+    const github = stalled('gh_', 'GitHub');
+    const azure = stalled('az_', 'Azure');
+    const { registry, tool } = setup([github, azure]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'probe echo' });
+    expect(found.body?.result.tools.map((entry: { name: string }) => entry.name)).toContain('probe_echo');
+    expect(github.tools).not.toHaveBeenCalled();
+    expect(azure.tools).not.toHaveBeenCalled();
+    const nothing = await tool('find_tools', { turn: grant.turn, query: 'zzzz qqqq' });
+    expect(nothing.body?.result.note).toMatch(/GitHub and Azure tools load only when the search names them/u);
+  });
+
+  it.each([
+    ['github-issues', 'gh_'], ['pull-request', 'gh_'], ['pullrequest', 'gh_'], ['PR list', 'gh_'], ['my PRs', 'gh_'],
+    ['list commits', 'gh_'], ['commits in jarvis', 'gh_'], ['åbne pull requests', 'gh_'],
+    ['azure-resources', 'az_'], ['container-app', 'az_'], ['resource-group list', 'az_'], ['ressourcegruppe', 'az_'],
+  ])('wakes the bridge a query like "%s" names, even when a local tool also matches', async (query, prefix) => {
+    const make = (p: string, label: string): RemoteMcpBridge => ({
+      prefix: p, label, status: () => ({ state: 'ready' }), warm: vi.fn(), tools: vi.fn(async () => []),
+      call: async () => ({ outcome: 'ok', result: {} }),
+    });
+    const github = make('gh_', 'GitHub');
+    const azure = make('az_', 'Azure');
+    const { registry, tool } = setup([github, azure], { tools: [{ ...probe, name: 'probe_list', description: 'List things. Keyword: list.' }] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    await tool('find_tools', { turn: grant.turn, query: `${query} list` });
+    expect(github.tools).toHaveBeenCalledTimes(prefix === 'gh_' ? 1 : 0);
+    expect(azure.tools).toHaveBeenCalledTimes(prefix === 'az_' ? 1 : 0);
+  });
+
+  it.each(['what is on my calendar list', 'remind me in 5 minutes list', 'hvad er i min kalender', 'påmind mig om fem minutter'])(
+    'does not wake any bridge for the local query "%s"', async (query) => {
+      const make = (p: string, label: string): RemoteMcpBridge => ({
+        prefix: p, label, status: () => ({ state: 'idle' }), warm: vi.fn(), tools: vi.fn(async () => []),
+        call: async () => ({ outcome: 'ok', result: {} }),
+      });
+      const github = make('gh_', 'GitHub');
+      const azure = make('az_', 'Azure');
+      const { registry, tool } = setup([github, azure]);
+      const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+      await tool('find_tools', { turn: grant.turn, query });
+      expect(github.tools).not.toHaveBeenCalled();
+      expect(azure.tools).not.toHaveBeenCalled();
+    });
+
+  it('gives a provider the search names one bounded wait and then says to keep going and try again shortly', async () => {
+    let state: ReturnType<RemoteMcpBridge['status']> = { state: 'idle' };
+    const tools = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      state = { state: 'starting' };
+      return [];
+    });
+    const azure: RemoteMcpBridge = { prefix: 'az_', label: 'Azure', status: () => state, warm: vi.fn(), tools, call: async () => ({ outcome: 'ok', result: {} }) };
+    const { registry, tool } = setup([azure]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'ressourcer i azure' });
+    expect(tools).toHaveBeenCalledTimes(1);
+    expect(found.body?.result.note).toMatch(/Azure tools are still loading.*Keep going.*search again shortly/u);
+    expect(grant.azure.catalogue).toBe('starting');
+  });
+
+  it('can call a tool that was only listed in otherMatches, by its exact name, without another search', async () => {
+    const zebras: JarvisTool[] = Array.from({ length: 6 }, (_, index) => ({
+      name: `zebra_tool_${index}`, description: 'Zebra keyword tool.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => ({ ran: index }),
+    }));
+    const { registry, tool } = setup([], { tools: zebras });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'zebra' });
+    expect(found.body?.result.tools).toHaveLength(3);
+    const others = found.body?.result.otherMatches.map((entry: { name: string }) => entry.name) as string[];
+    expect(others).toEqual(['zebra_tool_3', 'zebra_tool_4', 'zebra_tool_5']);
+    const called = await tool('call_tool', { turn: grant.turn, name: 'zebra_tool_5', arguments: {} });
+    expect(called.body).toMatchObject({ tool: 'zebra_tool_5', outcome: 'ok', result: { ran: 5 } });
+    // Only names that a search showed are callable.
+    const unseen = await tool('call_tool', { turn: grant.turn, name: 'probe_echo', arguments: { text: 'x' } });
+    expect(unseen.body).toMatchObject({ outcome: 'refused' });
   });
 
   it('hides and refuses automatic mail tools when Mail is disabled', async () => {

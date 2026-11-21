@@ -226,6 +226,38 @@ describe('PI gateway', () => {
     }]);
   });
 
+  it('does not fail or hold a turn when its spend cannot be read, and says so in diagnostics', async () => {
+    const evidence: Array<Record<string, unknown>> = [];
+    const logs: Array<[string, Record<string, unknown>]> = [];
+    const { run, store, calls } = setup([() => sse(delta('Hello'), completed(10, 0, 2))], {
+      onRuntimeTurn: (entry) => evidence.push({ ...entry }), log: (event, fields) => logs.push([event, fields]),
+    });
+    store.spendSince = async () => { throw new Error('sql unavailable'); };
+    expect(await run('hi')).toEqual(['Hello']);
+    expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+    expect(evidence).toEqual([{ channel: 'chat', outcome: 'ok', source: 'turn', reason: 'budget_unavailable', at: '2026-11-15T16:00:00.000Z' }]);
+    expect(logs.map(([event]) => event)).toContain('pi.budget_unreadable');
+    expect(logs.find(([event]) => event === 'pi.turn')![1]).toMatchObject({ outcome: 'ok', budgetRead: 'unavailable' });
+  });
+
+  it('sends the tool overview on the first turn and again only when a connection changes', async () => {
+    const { gateway, calls } = setup([
+      () => sse(delta('1'), completed(1, 0, 1)), () => sse(delta('2'), completed(1, 0, 1)),
+      () => sse(delta('3'), completed(1, 0, 1)), () => sse(delta('4'), completed(1, 0, 1)),
+    ]);
+    let signature = 'GitHub=idle;Azure=not_configured';
+    gateway.setCapabilityNote?.(() => ({ signature, text: `OVERVIEW ${signature}` }));
+    const sent = async (text: string) => {
+      for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text }, '', new AbortController().signal)) void chunk;
+      return (calls.filter(call => call.url.includes('/responses')).at(-1)!.body!.input as Array<{ content: string }>)[0]!.content;
+    };
+    expect(await sent('first')).toContain('OVERVIEW GitHub=idle;Azure=not_configured');
+    expect(await sent('second')).not.toContain('OVERVIEW');
+    signature = 'GitHub=ready;Azure=not_configured';
+    expect(await sent('third')).toContain('OVERVIEW GitHub=ready;Azure=not_configured');
+    expect(await sent('fourth')).not.toContain('OVERVIEW');
+  });
+
   it('reports honest errors for a missing agent, rate limiting and a broken stream, with no fallback', async () => {
     const missing = setup([() => new Response('{}', { status: 404 })]);
     await expect(missing.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', userMessage: expect.stringContaining('not provisioned') });

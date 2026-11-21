@@ -8,7 +8,7 @@ import {
   type RegisteredTool, type ToolRegistry,
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
-import { searchJarvisTools, shortenToolDescription } from './tool-search.js';
+import { providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
@@ -119,7 +119,7 @@ export function createPiMcpRoutes(options: {
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Jarvis tools are not listed. Look one up by a few keywords naming what the thing is (azure resource, github issue, calendar, note) to get its description and argument schema, then use call_tool. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
+      description: 'Jarvis tools are not listed. Look one up by a few English or Danish keywords naming what the thing is (azure resource, github issue, calendar, kalender, note, vejr) to get its description and argument schema, then use call_tool. Exact tool names are ranked first, and the compact otherMatches entries can be called by exact name too. Local tools return at once; GitHub and Azure tools load only when the keywords name them (github, repo, issue, azure, resource) and may need a second search. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, async (input, ctx) => {
@@ -134,16 +134,21 @@ export function createPiMcpRoutes(options: {
           return text({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
         }
       }
-      // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, so only the ones a turn asks for are ever put in
-      // front of the model. Each catalogue is bounded, so a slow server never holds up a search of the local tools.
+      // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, but a provider is loaded only when the query
+      // names it, and then for at most the bridge's bounded wait. A search for local tools never waits on a remote catalogue.
       const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
-      const catalogues = await Promise.all(bridges.map(async (bridge) => {
+      const named = providersNamedBy(input.query);
+      const selected = bridges.filter((bridge) => (named as ReadonlySet<string>).has(bridge.prefix));
+      const catalogues = await Promise.all(selected.map(async (bridge) => {
         const tools = await bridge.tools(turnSignal);
         return { bridge, tools, status: bridge.status() };
       }));
       const azure = catalogues.find(({ bridge }) => bridge.prefix === azureToolPrefix);
-      grant.azure.catalogue = !azure ? 'not_configured'
-        : azure.status.state === 'ready' && azure.tools.length === 0 ? 'empty' : azure.status.state;
+      if (azure) {
+        grant.azure.catalogue = azure.status.state === 'ready' && azure.tools.length === 0 ? 'empty' : azure.status.state;
+      } else if (named.has(azureToolPrefix) && !bridges.some((bridge) => bridge.prefix === azureToolPrefix)) {
+        grant.azure.catalogue = 'not_configured';
+      }
       const remoteTools = catalogues.flatMap(({ tools }) => tools);
       const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
@@ -159,10 +164,14 @@ export function createPiMcpRoutes(options: {
       // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
       // reports a server it simply has not heard from yet as "not attached".
       const notes = (noMatch: boolean) => {
+        const unloaded = bridges.filter((bridge) => !selected.includes(bridge)).map((bridge) => bridge.label);
         const lines = [
-          ...(noMatch ? ['No matching tool. Say so plainly.'] : []),
+          ...(noMatch ? [unloaded.length > 0
+            ? `No matching Jarvis tool. ${unloaded.join(' and ')} tools load only when the search names them: search again with the word ${unloaded.map((label) => label.toLowerCase()).join(' or ')} if the task needs them. Otherwise say so plainly.`
+            : 'No matching tool. Say so plainly.'] : []),
           ...catalogues.flatMap(({ bridge, status }) => {
-            if (status.state === 'starting') return [`${bridge.label} tools are still loading (the server wakes from sleep and can take a minute or two). Search again shortly; ${bridge.label} is attached, just not loaded yet.`];
+            if (status.state === 'starting') return [`${bridge.label} tools are still loading (the server wakes from sleep and can take a minute or two). Keep going with what you have and search again shortly; ${bridge.label} is attached, just not loaded yet.`];
+            if (status.state === 'stale') return [`${bridge.label} is using its last loaded tool list because the refresh failed (${status.reason}). Do not present it as freshly verified.`];
             if (status.state === 'unreachable') return [`${bridge.label} could not be reached (${status.reason}). Say so plainly; do not claim to have looked.`];
             return [];
           }),
@@ -170,19 +179,20 @@ export function createPiMcpRoutes(options: {
         return lines.length > 0 ? { note: lines.join(' ') } : {};
       };
       const full = matches.slice(0, maxFullResults);
-      for (const tool of full) grant.discovered.add(tool.name);
+      const other = matches.slice(maxFullResults, maxFullResults + maxOtherResults);
+      // A name shown in this result, including an otherMatches entry, can be called without another search.
+      for (const tool of [...full, ...other]) grant.discovered.add(tool.name);
       return text({
         tool: 'find_tools', outcome: 'ok', result: {
           tools: full.map(tool => ({ name: tool.name, description: tool.description, parameters: shapeSchema(tool) })),
-          otherMatches: matches.slice(maxFullResults, maxFullResults + maxOtherResults)
-            .map(tool => ({ name: tool.name, description: shortenToolDescription(tool.description) })),
+          otherMatches: other.map(tool => ({ name: tool.name, description: shortenToolDescription(tool.description) })),
           ...notes(matches.length === 0),
         },
       });
     });
     server.registerTool('call_tool', {
       title: 'Run a Jarvis tool',
-      description: 'Run a tool that find_tools returned, with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
+      description: 'Run a tool that find_tools returned (in tools or otherMatches), with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
       inputSchema: callSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     }, async (input, ctx) => {

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
+import { readAttachedOwnerMessage } from '../core/owner-message.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -377,9 +378,8 @@ async function danMessage(request: FastifyRequest): Promise<ConversationMessage>
       !request.server.conversationStore) {
     throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  const latest = page.messages[0];
-  if (!latest || latest.id !== id || latest.role !== 'dan' || !hasSession(latest)) {
+  const latest = await readAttachedOwnerMessage(request, AbortSignal.timeout(10_000));
+  if (!latest || latest.id !== id || !hasSession(latest)) {
     throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
   return latest;

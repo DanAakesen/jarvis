@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { explainedArgumentsMessage } from '../core/tool-arguments.js';
+import { attachedOwnerMessageId, readAttachedOwnerMessage } from '../core/owner-message.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
 import { dayKey, localTimeLabel } from './time.js';
@@ -150,16 +151,13 @@ async function ownerMessage(request: FastifyRequest, ownerObjectId: string, sign
     }
     return { id: direct.id, text: direct.text };
   }
-  const id = request.jarvisMemorySourceMessageId ?? request.headers['x-jarvis-message-id'];
+  const id = attachedOwnerMessageId(request);
   const conversations = request.server.conversationStore;
-  if (!request.agentPrincipal || typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
-      BigInt(id) > 9_223_372_036_854_775_807n || !conversations) {
+  if (!request.agentPrincipal || !id || !conversations) {
     throw new ToolRefusal('A direct, current owner request is required to change reminders.');
   }
-  const page = await conversations.getHistory({ limit: 1 });
-  signal.throwIfAborted();
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') {
+  const message = await readAttachedOwnerMessage(request, signal);
+  if (!message || message.id !== id) {
     throw new ToolRefusal('The current owner request could not be verified. Nothing was changed.');
   }
   const session = await conversations.getSession(message.sessionId);

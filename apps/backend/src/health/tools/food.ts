@@ -9,6 +9,7 @@ import type { NutritionStore } from '../nutrition/store.js';
 import { resolveHealthOwner } from '../owner.js';
 import { favoriteFingerprint, projectNutritionRecord } from '../records.js';
 import { activeHealthSession as activeFoodSession, currentHealthMessage } from './context.js';
+import { readOwnerMessageById } from '../../core/owner-message.js';
 export { activeHealthSession as activeFoodSession } from './context.js';
 
 type DirectNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log'>;
@@ -19,9 +20,7 @@ export async function foodSourceMessage(request: FastifyRequest, signal: AbortSi
   const source = await currentHealthMessage(request, signal) as FoodSourceMessage;
   if (request.agentPrincipal) return source;
   const store = request.server.conversationStore;
-  const page = store?.getHistory ? await store.getHistory({ limit: 1 }) : undefined;
-  signal.throwIfAborted();
-  const persisted = page?.messages[0];
+  const persisted = store ? await readOwnerMessageById(store, source.id, signal) : undefined;
   if (persisted && persisted.id === source.id && persisted.sessionId === source.sessionId &&
       persisted.role === 'dan' && persisted.text === source.text && persisted.at instanceof Date &&
       persisted.at.getTime() === source.at.getTime()) return persisted;

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../../core/conversation-store.js';
 import { ToolRefusal } from '../../core/tool-registry.js';
+import { readAttachedOwnerMessage } from '../../core/owner-message.js';
 
 export async function currentHealthMessage(request: FastifyRequest, signal: AbortSignal): Promise<ConversationMessage> {
   const direct = request.jarvisConversationMessage;
@@ -10,10 +11,8 @@ export async function currentHealthMessage(request: FastifyRequest, signal: Abor
       BigInt(id) > 9223372036854775807n || !request.server.conversationStore) {
     throw new ToolRefusal('A verified current Dan message is required for a Health change.');
   }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  signal.throwIfAborted();
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') throw new ToolRefusal('The current Health message could not be verified.');
+  const message = await readAttachedOwnerMessage(request, signal);
+  if (!message || message.id !== id) throw new ToolRefusal('The current Health message could not be verified.');
   return message;
 }
 
