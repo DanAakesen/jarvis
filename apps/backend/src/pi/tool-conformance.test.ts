@@ -220,8 +220,8 @@ describe('discoverable: Dan’s words find the right tool in the top 3 of the fi
 });
 
 describe('golden intents are pinned to tools that exist', () => {
-  it.each(goldenIntents.map((entry) => [`${entry.scenario}: ${entry.step} -> ${entry.tool}`, entry] as const))('%s', (_title, entry) => {
-    expect(names).toContain(entry.tool);
+  it.each(goldenIntents.map((entry) => [`${entry.scenario}: ${entry.step} -> ${entry.tools.join(' or ')}`, entry] as const))('%s', (_title, entry) => {
+    expect(entry.tools.filter((tool) => !names.includes(tool))).toEqual([]);
   });
 });
 
@@ -380,8 +380,8 @@ const scenarios = world.groups.flatMap((group) => (group.scenarios ?? []).map((s
 describe('golden scenarios: one turn, no confirmation step, found on the first search', () => {
   it('covers every scenario step Dan named', () => {
     const missing = goldenIntents.filter((intent) => !scenarios.some(({ scenario }) => scenario.id === intent.scenario
-      && scenario.steps.some((step) => step.tool === intent.tool)));
-    expect(missing.map((intent) => `${intent.scenario}: ${intent.step} (${intent.tool})`)).toEqual([]);
+      && scenario.steps.some((step) => intent.tools.includes(step.tool))));
+    expect(missing.map((intent) => `${intent.scenario}: ${intent.step} (${intent.tools.join(' or ')})`)).toEqual([]);
   });
 
   for (const { scenario } of scenarios) {

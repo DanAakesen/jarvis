@@ -117,26 +117,31 @@ export const phraseTable: readonly PhraseRow[] = [
 /**
  * The daily-core scenarios Dan named. Each phrase must find the tool on the FIRST search (top 3) and the call must finish in
  * the same turn, with no confirmation step. The calls themselves live with the stubs of each group (`ConformanceGroup.scenarios`);
- * this table pins which tool each spoken step is about, so a stub author cannot weaken the contract.
+ * this table pins which tools each spoken step is about, so a stub author cannot weaken the contract. A step is covered when
+ * a scenario with that id has a step using any of the listed tools.
  */
-export const goldenIntents: readonly { readonly scenario: string; readonly step: string; readonly tool: string }[] = [
-  { scenario: 'jarvis-project', step: 'status of my work', tool: 'get_work_status' },
-  { scenario: 'jarvis-project', step: 'create an issue', tool: 'create_issue' },
-  { scenario: 'jarvis-project', step: 'start work on an issue', tool: 'start_issue' },
-  { scenario: 'jarvis-project', step: 'follow a worker', tool: 'get_task' },
-  { scenario: 'notes', step: 'save a note', tool: 'vault_write' },
-  { scenario: 'notes', step: 'find a note', tool: 'vault_search' },
-  { scenario: 'notes', step: 'read a note', tool: 'vault_read' },
-  { scenario: 'notes', step: 'edit the title', tool: 'vault_write' },
-  { scenario: 'tasks', step: 'create a task', tool: 'vault_task_create' },
-  { scenario: 'tasks', step: 'complete a task', tool: 'vault_task_complete' },
-  { scenario: 'tasks', step: 'edit a task', tool: 'vault_task_edit' },
-  { scenario: 'tasks', step: 'what is due today', tool: 'vault_search' },
-  { scenario: 'tasks', step: 'a reminder', tool: 'owner_reminders' },
-  { scenario: 'workouts', step: 'log a lift', tool: 'gym_lifts' },
-  { scenario: 'workouts', step: 'log a session', tool: 'gym_sessions' },
-  { scenario: 'workouts', step: 'what did I lift last week', tool: 'gym_lifts' },
-  { scenario: 'nutrition', step: 'log food', tool: 'health_food' },
-  { scenario: 'nutrition', step: 'calories logged and left', tool: 'health_nutrition_suggest' },
-  { scenario: 'nutrition', step: 'protein still needed', tool: 'health_nutrition_suggest' },
+export const goldenIntents: readonly { readonly scenario: string; readonly step: string; readonly tools: readonly string[] }[] = [
+  { scenario: 'jarvis-project', step: 'status of my work', tools: ['get_work_status'] },
+  { scenario: 'jarvis-project', step: 'which tasks are running', tools: ['list_tasks'] },
+  { scenario: 'jarvis-project', step: 'create an issue', tools: ['create_issue'] },
+  { scenario: 'jarvis-project', step: 'start work on an issue', tools: ['start_issue'] },
+  { scenario: 'jarvis-project', step: 'create a task', tools: ['create_task'] },
+  { scenario: 'jarvis-project', step: 'follow a worker', tools: ['get_task', 'get_work_status'] },
+  { scenario: 'jarvis-project', step: 'look at the pull request', tools: ['pr_get', 'github_read'] },
+  { scenario: 'notes', step: 'save a note', tools: ['vault_write'] },
+  { scenario: 'notes', step: 'find a note', tools: ['vault_search'] },
+  { scenario: 'notes', step: 'read a note', tools: ['vault_read'] },
+  { scenario: 'notes', step: 'edit the title', tools: ['vault_write'] },
+  { scenario: 'tasks', step: 'create a task', tools: ['vault_task_create'] },
+  { scenario: 'tasks', step: 'complete a task', tools: ['vault_task_complete'] },
+  { scenario: 'tasks', step: 'edit a task', tools: ['vault_task_edit'] },
+  { scenario: 'tasks', step: 'what is due today', tools: ['vault_search'] },
+  { scenario: 'tasks', step: 'a reminder', tools: ['owner_reminders'] },
+  { scenario: 'workouts', step: 'log a lift', tools: ['gym_lifts'] },
+  { scenario: 'workouts', step: 'log a session', tools: ['gym_sessions'] },
+  { scenario: 'workouts', step: 'what did I lift last week', tools: ['gym_lifts', 'health_query'] },
+  { scenario: 'nutrition', step: 'log food', tools: ['health_food', 'health_food_review'] },
+  { scenario: 'nutrition', step: 'calories logged and left', tools: ['health_nutrition_suggest', 'health_query'] },
+  { scenario: 'nutrition', step: 'protein still needed', tools: ['health_nutrition_suggest', 'health_nutrition_targets', 'health_query'] },
+  { scenario: 'nutrition', step: 'save a favourite', tools: ['health_saved_food'] },
 ];
