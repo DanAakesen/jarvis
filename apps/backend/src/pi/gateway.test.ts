@@ -282,8 +282,8 @@ describe('PI gateway', () => {
     expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
     const unfinished = setup([() => sse(delta('half'))]);
     await expect(unfinished.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
-    // An approval request without an id cannot be answered, so it still fails the turn.
-    const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request' } }), completed(1, 0, 1))]);
+    // An approval request without an id cannot be answered, so once it is complete it still fails the turn.
+    const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request', status: 'completed' } }), completed(1, 0, 1))]);
     await expect(approval.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
   });
 
@@ -611,8 +611,8 @@ describe('PI gateway', () => {
     it.each([
       ['an mcp_approval_request without an id', { type: 'mcp_approval_request', server_label: 'jarvis', name: 'read_file', arguments: '{"path":"secret"}', status: 'completed' },
         { itemType: 'mcp_approval_request', name: 'read_file', serverLabel: 'jarvis', hasCallId: false, hasId: false, argumentsLength: 17, itemStatus: 'completed' }],
-      ['a function_call without a call_id', { type: 'function_call', id: 'fc_secret', name: 'shell', arguments: '{}' },
-        { itemType: 'function_call', name: 'shell', hasCallId: false, hasId: true, argumentsLength: 2 }],
+      ['a function_call without a call_id', { type: 'function_call', id: 'fc_secret', name: 'shell', arguments: '{}', status: 'completed' },
+        { itemType: 'function_call', name: 'shell', hasCallId: false, hasId: true, argumentsLength: 2, itemStatus: 'completed' }],
     ])('logs only the safe shape of %s and fails because it cannot be answered', async (_name, item, expected) => {
       const { logs, log } = capture();
       const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), completed(1, 0, 1))], { log });
@@ -664,10 +664,10 @@ describe('PI gateway', () => {
     });
 
     it.each([
-      ['a very long name', { type: 'function_call', name: 'n'.repeat(1_000_000), arguments: 'a'.repeat(1_000_000) }, { name: 'other', argumentsLength: 1_000_000 }],
-      ['object arguments', { type: 'function_call', arguments: { q: 'secret' } }, { argumentsLength: 14 }],
-      ['array arguments', { type: 'mcp_approval_request', arguments: ['secret'] }, { argumentsLength: 10 }],
-      ['a non-string type value', { type: 'function_call', name: 42, server_label: [] }, {}],
+      ['a very long name', { type: 'function_call', status: 'completed', name: 'n'.repeat(1_000_000), arguments: 'a'.repeat(1_000_000) }, { name: 'other', argumentsLength: 1_000_000 }],
+      ['object arguments', { type: 'function_call', status: 'completed', arguments: { q: 'secret' } }, { argumentsLength: 14 }],
+      ['array arguments', { type: 'mcp_approval_request', status: 'completed', arguments: ['secret'] }, { argumentsLength: 10 }],
+      ['a non-string type value', { type: 'function_call', status: 'completed', name: 42, server_label: [] }, {}],
     ])('still fails the same way with %s and logs no content', async (_name, item, expected) => {
       const { logs, log } = capture();
       const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), completed(1, 0, 1))], { log });
@@ -689,7 +689,7 @@ describe('PI gateway', () => {
 
     it('never retries a function call or approval request, and never an HTTP failure or a missing stream', async () => {
       const { logs, log } = capture();
-      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call' } }), completed(1, 0, 1)), () => sse(delta('x'), completed(1, 0, 1))], { log });
+      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call', status: 'completed' } }), completed(1, 0, 1)), () => sse(delta('x'), completed(1, 0, 1))], { log });
       await expect(call.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
       expect(responsesOf(call.calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item', sawTool: true, sawOutput: true });
@@ -1146,7 +1146,7 @@ describe('PI gateway', () => {
 
     it('fails a client-owned call it cannot answer but charges the real usage of the response that carried it', async () => {
       const { logs, log } = capture();
-      const first = frame({ type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', name: 'lookup', arguments: '{}' } });
+      const first = frame({ type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', name: 'lookup', arguments: '{}', status: 'completed' } });
       const { run, calls, store } = setup([() => sse(created('resp_1'), first, completed(7_000, 0, 70))], { log });
       await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
       expect(responsesOf(calls)).toHaveLength(1);
