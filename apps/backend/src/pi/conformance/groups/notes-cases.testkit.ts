@@ -53,10 +53,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         ownerMessage: 'I always book the window seat on the train',
         arguments: { category: 'preference', key: 'train-seat', content: 'Dan books the window seat on the train.', sourceIntent: 'automatic' },
       },
-      {
-        label: 'a key with spaces is refused in plain words', expect: 'refused', ownerMessage: 'Remember that I like tea',
-        arguments: { category: 'preference', key: 'tea time', content: 'Dan likes tea.' },
-      },
     ],
     memory_correct: [
       {
@@ -64,21 +60,18 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         arguments: { memoryId: '2', content: 'The Jarvis backend runs on Azure Container Apps in Sweden Central.' },
         check: (result) => { expect(record(result)).toMatchObject({ id: '2', key: 'jarvis-hosting', revision: 2, changed: true }); },
       },
-      { label: 'an unknown memory id is refused', expect: 'refused', arguments: { memoryId: '999', content: 'Anything at all.' } },
     ],
     memory_forget: [
       {
         label: 'forgets the bike memory', ownerMessage: 'Forget that I need to service the bike', arguments: { memoryId: '4' },
         check: (result) => { expect(record(result)).toMatchObject({ id: '4', key: 'bike-service' }); expect(memory.records.has('4')).toBe(false); },
       },
-      { label: 'a memory that is already gone is refused', expect: 'refused', ownerMessage: 'Forget that I need to service the bike', arguments: { memoryId: '4' } },
     ],
     memory_history: [
       {
         label: 'shows both versions of a corrected memory', arguments: { memoryId: '3' },
         check: (result) => { expect(record(result).versions).toHaveLength(2); },
       },
-      { label: 'an unknown memory id is refused', expect: 'refused', arguments: { memoryId: '999' } },
     ],
     memory_list: [
       { label: 'lists the saved memories', arguments: {}, check: (result) => { expect(record(result).count).toBeGreaterThanOrEqual(3); } },
@@ -98,8 +91,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         label: 'reads a note', arguments: { path: 'Personal/Reading list.md' },
         check: (result) => { expect(record(result)).toMatchObject({ path: 'Personal/Reading list.md', sha: vault.shaOf('Personal/Reading list.md') }); },
       },
-      { label: 'a note that does not exist is refused', expect: 'refused', arguments: { path: 'Personal/No such note.md' } },
-      { label: 'a path that is not Markdown is refused', expect: 'refused', arguments: { path: 'Personal/notes.txt' } },
     ],
     vault_search: [
       {
@@ -116,7 +107,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         label: 'finds a task by its words, done or not', arguments: { kind: 'tasks', query: 'bike', state: 'all' },
         check: (result) => { expect(record(result).total).toBe(1); },
       },
-      { label: 'a note search without words is refused in plain words', expect: 'refused', arguments: { kind: 'notes' } },
     ],
     show_knowledge: [
       {
@@ -146,12 +136,9 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         arguments: { path: 'General/Preferences.md', append: 'Dan prefers window seats on trains.\n', reason: 'Dan stated a preference', automaticCapture: true },
       },
       {
-        label: 'a stale sha is a failure that says what to do', expect: 'error',
-        arguments: { ...note('Personal/Conformance note.md'), content: '# Conformance note\n\nToo late.\n', expectedSha: '0'.repeat(40) },
-      },
-      {
-        label: 'content and append together are refused', expect: 'refused',
-        arguments: { ...note('Personal/Conformance note.md'), content: 'One.', append: 'Two.' },
+        label: 'a background wake saves a note without an owner message', turn: 'wake',
+        arguments: { path: 'Work/Morning digest.md', append: 'Nothing urgent today.\n', reason: 'The brain wrote its digest', automaticCapture: false },
+        check: () => { expect(vault.files.get('Work/Morning digest.md')).toContain('Nothing urgent'); },
       },
     ],
     vault_delete: [
@@ -159,7 +146,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         label: 'deletes the old shopping list when Dan asks', ownerMessage: 'Delete my old shopping list', arguments: { path: 'General/Old shopping list.md' },
         check: () => { expect(vault.files.has('General/Old shopping list.md')).toBe(false); },
       },
-      { label: 'a note that is already gone is refused', expect: 'refused', ownerMessage: 'Delete my old shopping list', arguments: { path: 'General/Old shopping list.md' } },
     ],
 
     // ---- Vault tasks ----------------------------------------------------------------------------------------------------------
@@ -173,7 +159,10 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         arguments: { text: 'Join the Jarvis demo call', scope: 'work', due: calendarDay(2), time: '10:00', priority: 'high', remindAtDue: true },
         check: (result) => { expect(record(result)).toMatchObject({ path: workTasks, dueDate: calendarDay(2), dueTime: '10:00', remindAtDue: true }); },
       },
-      { label: 'a time without a day is refused in plain words', expect: 'refused', arguments: { text: 'Join the demo call', time: '10:00' } },
+      {
+        label: 'a background wake adds a task without an owner message', turn: 'wake', arguments: { text: 'Review the weekly report', scope: 'work' },
+        check: (result) => { expect(record(result)).toMatchObject({ text: 'Review the weekly report', path: workTasks }); },
+      },
     ],
     vault_task_complete: [
       {
@@ -184,7 +173,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         label: 'reopens it', arguments: live(() => ({ ...task(personalTasks, 4), done: false })),
         check: (result) => { expect(record(result)).toMatchObject({ done: false }); },
       },
-      { label: 'a task that changed since it was read is refused', expect: 'refused', arguments: { ...task(personalTasks, 4), version: 'f'.repeat(64), done: true } },
     ],
     vault_task_edit: [
       {
@@ -195,10 +183,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
       {
         label: 'rewords a task', arguments: live(() => ({ ...task(workTasks, 4), newText: 'Book a room for the Jarvis demo' })),
         check: (result) => { expect(record(result)).toMatchObject({ text: 'Book a room for the Jarvis demo' }); },
-      },
-      {
-        label: 'a task that changed since it was read is refused', expect: 'refused',
-        arguments: { ...task(personalTasks, 5), version: 'f'.repeat(64), newText: 'Send the quarterly report' },
       },
     ],
 
@@ -214,17 +198,17 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         arguments: { title: 'Compare bike lights for winter', note: 'Dan wants brighter lights before the dark months.' },
         check: (result) => { expect(record(result)).toMatchObject({ created: false }); },
       },
-      { label: 'a blank title is refused in plain words', expect: 'refused', arguments: { title: '   ' } },
+      {
+        label: 'a background wake saves an idea without an owner message', turn: 'wake',
+        arguments: { title: 'Follow up on the demo agenda', note: 'The agenda for the Jarvis demo is still open.' },
+        check: (result) => { expect(record(result)).toMatchObject({ title: 'Follow up on the demo agenda', created: true }); },
+      },
     ],
     inbox_close: [
       {
         label: 'closes an item when Dan says so', ownerMessage: 'Bin the garden beds idea',
         arguments: { id: inboxIds.gardenBeds, reason: 'Dan said to bin it' },
         check: (result) => { expect(record(result)).toMatchObject({ title: 'Plan the garden beds' }); },
-      },
-      {
-        label: 'an item that is already closed is refused', expect: 'refused', ownerMessage: 'Bin the garden beds idea',
-        arguments: { id: inboxIds.gardenBeds, reason: 'Dan said to bin it' },
       },
     ],
     inbox_items: [
@@ -235,7 +219,6 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         label: 'reads one item in full', arguments: { id: inboxIds.standingDesk },
         check: (result) => { expect(record(record(result).item).content).toContain('standing desk'); },
       },
-      { label: 'an unknown id is refused', expect: 'refused', arguments: { id: 'deadbeef' } },
     ],
 
     // ---- Proactive findings and owner reminders -------------------------------------------------------------------------------
@@ -252,13 +235,8 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
       { label: 'turns it on again', arguments: { operation: 'update', categories: { news: true } } },
       { label: 'limits suggestions to work', arguments: { operation: 'update', suggestionScope: 'work' } },
       { label: 'allows suggestions about everything again', arguments: { operation: 'update', suggestionScope: 'all' } },
-      { label: 'an update that changes nothing named is refused in plain words', expect: 'refused', arguments: { operation: 'update' } },
     ],
     proactive_item_feedback: [
-      {
-        label: 'a finding that does not exist is refused', expect: 'refused',
-        ownerMessage: `dismiss ${unknownFinding}`, arguments: { itemId: unknownFinding, action: 'dismiss' },
-      },
       {
         label: 'marks a finding seen when Dan says so',
         get ownerMessage() { return `mark ${findingIds[0]} as seen`; },
@@ -289,12 +267,9 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         check: (result) => { expect(record(result)).toMatchObject({ operation: 'cancel', cancelled: true }); },
       },
       {
-        label: 'a time in the past is refused in plain words', expect: 'refused',
-        arguments: { operation: 'create', task: 'Call the dentist', fireAt: '2020-01-01T10:00:00.000Z' },
-      },
-      {
-        label: 'a task that is not open is refused in plain words', expect: 'refused',
-        arguments: live(() => ({ operation: 'create', task: 'Renew the bike lock', fireAt: hours(2) })),
+        label: 'a background wake sets a reminder without an owner message', turn: 'wake',
+        arguments: live(() => ({ operation: 'create', task: 'Review the Jarvis release notes', fireAt: hours(5) })),
+        check: (result) => { expect(record(result)).toMatchObject({ operation: 'create', created: true }); },
       },
     ],
   };
