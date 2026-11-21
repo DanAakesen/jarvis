@@ -1518,7 +1518,7 @@ export function createVaultModule(options: {
     },
     {
       name: 'show_knowledge',
-      description: 'Search Dan’s vault and open or focus the knowledge graph on matching notes.',
+      description: 'Search Dan’s vault and open or focus the knowledge graph on matching notes. Use when Dan asks to see his notes as a graph or map.',
       inputSchema: {
         type: 'object',
         properties: { query: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' } },
