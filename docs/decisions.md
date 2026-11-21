@@ -13877,3 +13877,16 @@ Dan's rule: a backchannel such as "mm-hm", or any transcript that is not a deleg
 - Bootstrap only: when the agent does not exist, version 1 is still seeded with `store: false` from `agents/pi/voice-definition.json`.
 - Still verified on every Deploy: kind, sub-protocol, model type, model, delegation `{type: client}`, audio format PCM 24 kHz, and the `gpt-live-1` deployment. Unknown extra fields (for example `greeting`) are ignored. The `jarvis-pi` provisioning is unchanged.
 - Tests are offline (`.github/scripts/tests/test_pi_agent.py`); no live Foundry call was made.
+
+## 2026-11-21 Voice: Dan's request stays whole and reaches PI (#1988, #1967)
+
+Dan's TestFlight build 117 lost voice tool requests (five tries at "check Azure resource groups"; Jarvis acknowledged, then asked what to check) and showed one word per line in Chat. Cause: the direct-turn persist added in #1993 ran on every GPT-Live output delta, so it stored and locked the half-built owner turn while the words still arrived; later words opened new input groups, and the delegation found an empty group, waited 0.6 s and said "I did not catch that" without starting PI.
+
+- A direct owner turn is stored only after its input has been quiet for 0.6 s since its last delta (`VOICE_INPUT_QUIET_MS`), and never when it is the pending delegation's turn. Output starting is not a reason to close it. The reply is stored after the owner message it answers, with a three-second bound (`apps/backend/src/voice/relay.ts`).
+- An empty delegated turn is not "quiet": it keeps waiting for its transcript until the existing three-second bound, and only then sends the "did not catch that" reply.
+- Words timed at or before the delegation `offset_ms` join the delegation's turn (unchanged from #1993); only later speech opens a new group. The #1993 delegation-before-transcript handling and the #1997 rule that speech never cancels PI are unchanged; session end still cancels.
+- The "listening" state is no longer published from an input transcript while output is playing, PI is working or a delegation is settling.
+- No keyword list, classifier, output gate or guardrail was added; GPT-Live stays natural. Four log events carry ids and lengths only: `voice.delegation_received`, `voice.owner_group_persisted` (with the reason), `voice.did_not_catch`, `voice.pi_turn_started`. They are on the `apps/backend/src/logging.ts` allowlist.
+- Known limit: if Dan pauses more than 0.6 s mid-sentence while GPT-Live is already answering, that part is stored as its own turn, and a delegation that arrives later cannot adopt a turn that is already stored. It then waits for the speech after it, or says it did not catch it.
+- Stuck "Speaking" (a) is not fixed here. Reading the iPhone code found a likely cause, recorded in the PR: `VoiceAudioEngine.stopPlayback()` clears per-response progress without calling the playback-finished handler, so a response that was already done but still draining stays "playing" in `VoiceSessionStateMachine` after a later response's cancel stops the audio. Unverified on a device.
+- Tests are offline (`apps/backend/src/voice/relay-events.test.ts`, `apps/backend/src/logging.test.ts`); no live model, provider or voice call.

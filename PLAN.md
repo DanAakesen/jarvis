@@ -153,6 +153,18 @@ Server host. Physical iPhone/Watch lock-screen acceptance remains with Dan.**
 
 No external push/provider test is part of this change.
 
+## Voice request stays whole and reaches PI — 21 November 2026 (#1988, #1967)
+
+**Status: backend fix and offline tests done; exact-head CI and Dan's physical retest on a new build are pending.**
+
+| Step | State |
+| --- | --- |
+| Store a direct owner turn only after 0.6 s of input quiet, never because output started or for the delegation's turn | Done |
+| Empty delegated turn waits for its transcript up to 3 s before the "did not catch that" reply | Done |
+| No "listening" from transcript deltas while output plays, PI works or a delegation settles | Done |
+| Id/length-only log events for delegation, owner persist, did-not-catch and PI start | Done |
+| Stuck "Speaking" on iPhone (`VoiceAudioEngine.stopPlayback()` skips the finished handler) | Open; found by reading only, not changed |
+
 ## PI finds and calls its tools reliably — 21 November 2026 (#1967)
 
 **Status: the seven approved items are implemented and checked offline; exact-head CI and Dan's physical acceptance are pending.** Scope was approved feature by feature; the rejected parts of PR #1987 are listed in `docs/decisions.md` and were not ported.

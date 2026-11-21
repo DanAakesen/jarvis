@@ -116,6 +116,7 @@ const events = new Set([
   'voice.late_session_cleanup_failed', 'watch_transcription.stage',
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
   'voice.tool_budget_probe',
+  'voice.delegation_received', 'voice.owner_group_persisted', 'voice.did_not_catch', 'voice.pi_turn_started',
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable', 'approval.interpreted',
   'factory.issue_create_outcome_uncertain',
@@ -709,6 +710,29 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (input.budgetRead === 'unavailable') fields.budgetRead = input.budgetRead;
     if (Number.isSafeInteger(input.toolCount) && Number(input.toolCount) >= 0 && Number(input.toolCount) <= 10_000) fields.toolCount = input.toolCount;
     if (typeof input.azureCatalogue === 'string' && piAzureCatalogueStates.has(input.azureCatalogue)) fields.azureCatalogue = input.azureCatalogue;
+  }
+  if (input.msg === 'voice.delegation_received' || input.msg === 'voice.owner_group_persisted' ||
+      input.msg === 'voice.did_not_catch' || input.msg === 'voice.pi_turn_started') {
+    // Lengths, timings and opaque ids only; the owner's words never reach these events.
+    const identifier = (value: unknown): value is string =>
+      typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(value);
+    for (const key of ['delegationId', 'groupId']) {
+      if (identifier(input[key])) fields[key] = input[key];
+    }
+    for (const key of ['textLength', 'offsetMs', 'quietMs', 'waitedMs']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000) {
+        fields[key] = value;
+      }
+    }
+    if (typeof input.reusedGroup === 'boolean') fields.reusedGroup = input.reusedGroup;
+    if (input.language === 'da' || input.language === 'en') fields.language = input.language;
+    if (input.msg === 'voice.delegation_received' &&
+        ['attached', 'ignored_newer_owner_turn'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (input.msg === 'voice.owner_group_persisted' &&
+        ['delegated', 'direct_quiet', 'before_output', 'session_end'].includes(String(input.reason))) {
+      fields.reason = input.reason;
+    }
   }
   if (input.msg === 'voice.turn_timing') {
     if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {

@@ -100,8 +100,11 @@ transcript deltas, one stored owner message, `voice.pi_turn` and the PI
 turn/receipt logs, then native output audio/transcript deltas. `voice.pi_turn`
 includes no text; use the matching conversation history to inspect the saved
 owner message and provider-spoken reply. The first PI commentary and final
-answer carry the same delegation identifier upstream. An input transcript that
-arrives while PI is running cancels that stale turn.
+answer carry the same delegation identifier upstream. Later speech does not
+cancel a running PI turn; a new delegation or the session ending does. To trace a
+voice request use `voice.delegation_received`, `voice.owner_group_persisted`,
+`voice.did_not_catch` and `voice.pi_turn_started` (ids, lengths and timings
+only, never words).
 
 Transcript pauses do not split an owner turn. Native event IDs and timeline
 offsets stay in one candidate until client delegation; the 0.6-second quiet

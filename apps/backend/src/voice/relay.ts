@@ -24,6 +24,7 @@ const MAX_TRANSCRIPT_CHARACTERS = 20_000;
 const MAX_TRANSCRIPTS_PER_SESSION = 1_000;
 const OUTPUT_QUIET_MS = VOICE_INPUT_QUIET_MS;
 const OUTPUT_PERSIST_BOUND_MS = VOICE_TRANSCRIPT_MAX_WAIT_MS;
+const EMPTY_TRANSCRIPT_POLL_MS = 50;
 const TOKEN_TIMEOUT_MS = 10_000;
 const CLEAN_END_TIMEOUT_MS = 5_000;
 const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
@@ -49,6 +50,8 @@ interface OutputGroup {
   text: string;
   readonly startedAt: number;
   lastDeltaAt: number;
+  // The owner turn this output replies to; its message is stored before this one.
+  readonly answers?: InputGroup;
   messageId?: string;
   persistedTextLength: number;
   quietTimer?: ReturnType<typeof setTimeout>;
@@ -336,7 +339,7 @@ function registerVoiceRoute(
       const text = group.text;
       if (!text.trim() || group.persistedTextLength === text.length) return persistenceQueue;
       group.persistedTextLength = text.length;
-      return serializePersistence(async () => {
+      return settleOwnerTurnBefore(group).then(() => serializePersistence(async () => {
         if (!sessionId) throw new Error('Voice session was not created');
         if (group.messageId && store.updateMessage) {
           const updated = await store.updateMessage({
@@ -362,7 +365,7 @@ function registerVoiceRoute(
           group.messageId = message.id;
         }
         app.nowEventHub.publish({ type: 'refresh' });
-      }).catch((error: unknown) => {
+      })).catch((error: unknown) => {
         persistenceFailed = true;
         log.warn({ failure: safeFailure(error), language }, 'voice.transcript_persistence_failed');
         if (termination.isActive && !controller.signal.aborted) closeSession(1011, 'Voice transcript could not be saved');
@@ -385,12 +388,16 @@ function registerVoiceRoute(
 
     const ensureOutputGroup = (delegationId = lastCommentaryDelegation) => {
       if (activeOutput && !activeOutput.completed) return activeOutput;
+      const owner = currentInput ?? pendingDelegationGroup;
       const group: OutputGroup = {
         id: `voice_${randomUUID().replaceAll('-', '')}`,
         delegationId,
         text: '',
         startedAt: performance.now(),
         lastDeltaAt: performance.now(),
+        // A delegation can precede its transcript, so its still-empty turn is already the one being answered.
+        ...(owner && !owner.persisted && (owner.text.trim() || owner === pendingDelegationGroup)
+          ? { answers: owner } : {}),
         persistedTextLength: 0,
         completed: false,
         nextEventSequence: 0,
@@ -493,12 +500,23 @@ function registerVoiceRoute(
       });
     };
 
-    const persistOwnerGroup = (group: InputGroup): Promise<ConversationMessage> => {
+    const persistOwnerGroup = (
+      group: InputGroup,
+      reason: 'delegated' | 'direct_quiet' | 'before_output' | 'session_end',
+    ): Promise<ConversationMessage> => {
       if (group.persisted) return Promise.resolve(group.persisted);
       if (group.persistence) return group.persistence;
       sendInputCompletion(group);
       group.locked = true;
       const turnText = group.text;
+      log.info({
+        groupId: group.id,
+        ...(group.delegationId ? { delegationId: group.delegationId } : {}),
+        textLength: turnText.length,
+        quietMs: Math.round(performance.now() - group.lastDeltaAt),
+        reason,
+        language,
+      }, 'voice.owner_group_persisted');
       const persistence = (async () => {
         await sessionReady;
         if (!sessionId) throw new Error('Voice session was not created');
@@ -567,32 +585,51 @@ function registerVoiceRoute(
         delta,
         eventId: normalizedEventId,
       });
-      if (microphoneActive) publishActivity('listening');
+      if (microphoneActive && !outputActive && !piBusy && pendingDelegation === undefined) {
+        publishActivity('listening');
+      }
     };
 
     const persistDelegatedTurn = async (group: InputGroup, delegationId: string, signal: AbortSignal) => {
-      const deadline = performance.now() + VOICE_TRANSCRIPT_MAX_WAIT_MS;
+      const waitStartedAt = performance.now();
+      const deadline = waitStartedAt + VOICE_TRANSCRIPT_MAX_WAIT_MS;
       for (;;) {
         signal.throwIfAborted();
         const now = performance.now();
-        if (now >= deadline || now - group.lastDeltaAt >= VOICE_INPUT_QUIET_MS) break;
-        await delay(Math.min(
-          deadline - now,
-          VOICE_INPUT_QUIET_MS - (now - group.lastDeltaAt),
-        ), signal);
+        if (now >= deadline) break;
+        if (!group.text.trim()) {
+          // The transcript can trail the delegation; an empty turn is not a quiet one.
+          await delay(Math.min(deadline - now, EMPTY_TRANSCRIPT_POLL_MS), signal);
+          continue;
+        }
+        const quietFor = now - group.lastDeltaAt;
+        if (quietFor >= VOICE_INPUT_QUIET_MS) break;
+        await delay(Math.min(deadline - now, VOICE_INPUT_QUIET_MS - quietFor), signal);
       }
       signal.throwIfAborted();
       if (!group.text.trim()) {
+        log.info({
+          delegationId,
+          groupId: group.id,
+          waitedMs: Math.round(performance.now() - waitStartedAt),
+          language,
+        }, 'voice.did_not_catch');
         sendCommentary('I did not catch that. Please say it again.', delegationId);
         return;
       }
       const turnText = group.text;
-      const message = await persistOwnerGroup(group);
+      const message = await persistOwnerGroup(group, 'delegated');
       if (signal.aborted || controller.signal.aborted || !termination.isActive ||
           pendingDelegationGroup !== group) return;
       const turnProactiveContext = await refreshProactiveContext();
       if (signal.aborted || controller.signal.aborted || !termination.isActive ||
           pendingDelegationGroup !== group) return;
+      log.info({
+        delegationId,
+        groupId: group.id,
+        textLength: turnText.length,
+        language,
+      }, 'voice.pi_turn_started');
       piTurns.start({
         text: turnText,
         messageId: message.id,
@@ -635,6 +672,12 @@ function registerVoiceRoute(
             group.lastTimelineEndMs !== undefined && group.lastTimelineEndMs > offsetMs)
         );
       if (hasNewerOwnerTurn) {
+        log.info({
+          delegationId: value.id,
+          ...(offsetMs === undefined ? {} : { offsetMs }),
+          outcome: 'ignored_newer_owner_turn',
+          language,
+        }, 'voice.delegation_received');
         return;
       }
       // The delegation can precede its owner transcript. A turn that is already
@@ -644,6 +687,15 @@ function registerVoiceRoute(
         !candidate.locked && !candidate.delegationId;
       const group = reusable ? candidate : newInputGroup();
       seenDelegations.add(value.id);
+      log.info({
+        delegationId: value.id,
+        groupId: group.id,
+        ...(offsetMs === undefined ? {} : { offsetMs }),
+        textLength: group.text.length,
+        reusedGroup: Boolean(reusable),
+        outcome: 'attached',
+        language,
+      }, 'voice.delegation_received');
       group.delegationId = value.id;
       if (offsetMs !== undefined) group.delegationOffsetMs = offsetMs;
       currentInput = undefined;
@@ -675,14 +727,63 @@ function registerVoiceRoute(
       queuedAudioBytes = 0;
     };
 
+    const persistDirectGroup = (
+      group: InputGroup,
+      reason: 'direct_quiet' | 'before_output' | 'session_end',
+    ): Promise<void> => persistOwnerGroup(group, reason).then(() => undefined, (error: unknown) => {
+      if (controller.signal.aborted) return;
+      log.warn({ failure: safeFailure(error), language }, 'voice.direct_transcript_failed');
+      closeSession(1011, 'Voice turn could not be saved');
+    });
+
+    // GPT-Live starts answering while Dan's transcript still arrives. Closing the owner turn then would
+    // split his sentence, so a direct turn is stored only once its input has been quiet.
     const persistDirectOwnerTurn = () => {
       const group = currentInput;
-      if (!group?.text.trim() || group.persisted || group.persistence) return;
-      void persistOwnerGroup(group).catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        log.warn({ failure: safeFailure(error), language }, 'voice.direct_transcript_failed');
-        closeSession(1011, 'Voice turn could not be saved');
-      });
+      if (!group?.text.trim() || group.persisted || group.persistence || group === pendingDelegationGroup) return;
+      if (performance.now() - group.lastDeltaAt < VOICE_INPUT_QUIET_MS) return;
+      void persistDirectGroup(group, 'direct_quiet');
+    };
+
+    // Dan's message is stored before the reply to it, without closing his turn while he is still speaking.
+    const settleOwnerTurnBefore = async (output: OutputGroup): Promise<void> => {
+      const owner = output.answers;
+      if (!owner) return;
+      const deadline = performance.now() + VOICE_TRANSCRIPT_MAX_WAIT_MS;
+      while (!owner.persisted) {
+        if (owner.persistence) {
+          await owner.persistence.catch(() => undefined);
+          return;
+        }
+        const hasText = owner.text.trim().length > 0;
+        const waiting = owner === pendingDelegationGroup;
+        if (!termination.isActive || terminalTeardownStarted || controller.signal.aborted) {
+          if (hasText) await persistDirectGroup(owner, 'session_end');
+          return;
+        }
+        // An empty turn that is no longer the pending delegation's has nothing to store.
+        if (!hasText && !waiting) return;
+        const now = performance.now();
+        const quietFor = now - owner.lastDeltaAt;
+        if (hasText && !waiting && quietFor >= VOICE_INPUT_QUIET_MS) {
+          void persistDirectGroup(owner, 'before_output');
+          continue;
+        }
+        if (now >= deadline) return;
+        const pauseMs = Math.min(
+          deadline - now,
+          waiting || !hasText ? 25 : VOICE_INPUT_QUIET_MS - quietFor,
+        );
+        await new Promise<void>(resolve => {
+          const wake = () => {
+            clearTimeout(timer);
+            controller.signal.removeEventListener('abort', wake);
+            resolve();
+          };
+          const timer = setTimeout(wake, pauseMs);
+          controller.signal.addEventListener('abort', wake, { once: true });
+        });
+      }
     };
 
     const receiveProvider = (data: RawData, isBinary: boolean) => {
