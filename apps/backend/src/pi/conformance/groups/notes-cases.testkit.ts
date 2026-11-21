@@ -44,7 +44,7 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         check: (result) => { expect(record(result)).toMatchObject({ category: 'preference', key: 'tea-time', changed: true, searchMode: 'vector' }); },
       },
       {
-        label: 'the same memory again is already remembered', ownerMessage: 'Remember that I drink tea at four in the afternoon',
+        label: 'the same memory again is already remembered', ownerMessage: 'Remember that I drink tea at four in the afternoon', sameMessageAsPrevious: true,
         arguments: { category: 'preference', key: 'tea-time', content: 'Dan drinks tea at four in the afternoon.' },
         check: (result) => { expect(record(result)).toMatchObject({ changed: false }); },
       },
@@ -194,7 +194,7 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
         check: (result) => { expect(record(result)).toMatchObject({ title: 'Compare bike lights for winter', created: true }); },
       },
       {
-        label: 'the same message and title again returns the existing item', ownerMessage: 'I should compare bike lights for the winter',
+        label: 'the same message and title again returns the existing item', ownerMessage: 'I should compare bike lights for the winter', sameMessageAsPrevious: true,
         arguments: { title: 'Compare bike lights for winter', note: 'Dan wants brighter lights before the dark months.' },
         check: (result) => { expect(record(result)).toMatchObject({ created: false }); },
       },

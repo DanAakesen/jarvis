@@ -95,6 +95,8 @@ function seedVault(vault: MemoryVault, today: string): void {
   vault.seed('Work/Jarvis roadmap.md', '# Jarvis roadmap\n\nNext up: better note search, reminders that follow tasks and a calmer inbox. Ask [[Anna]] for the demo agenda.\n');
   vault.seed('People/Anna.md', '# Anna\n\nColleague on the Jarvis project. Prefers short written updates over calls.\n');
   vault.seed('General/Old shopping list.md', '# Old shopping list\n\nMilk, bread and coffee filters.\n');
+  // A web clipping or an export can be far above the 256 KB the vault tools work with. It sits in the vault like any note.
+  vault.seed('General/Huge export.md', `# Huge export\n\n${'word '.repeat(70_000)}\n`);
   vault.seed(personalTasks, [
     '# Inbox', '',
     `- [ ] Call the dentist 📅 ${today} ⏫`,

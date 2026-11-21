@@ -1,3 +1,4 @@
+import { expect } from 'vitest';
 import type { ToolCase } from '../types.testkit.js';
 import { hours, live, taskIdentity } from './notes-cases.testkit.js';
 import { personalTasks, type NotesFixtures } from './notes-fixtures.testkit.js';
@@ -11,6 +12,9 @@ const failed = (label: string, args: Record<string, unknown>, extra: Partial<Too
   ({ label, arguments: args, expect: 'error', ...extra });
 
 const missingNote = { path: 'Personal/No such note.md', reason: 'Dan asked to save a note', automaticCapture: false };
+const hugeNote = 'General/Huge export.md';
+/** The answer says the note is too large, rather than blaming a passing outage. */
+const saysTooLarge = (result: unknown) => { expect((result as { error?: string }).error).toMatch(/larger than 256 KB/u); };
 
 /**
  * The calls the group's cases cannot make, because the suite reports a tool as `ok` only when every case of it is: stale versions,
@@ -30,6 +34,7 @@ export function buildNotesProbes(fixtures: NotesFixtures): Readonly<Record<strin
     vault_read: [
       refused('a note that does not exist', { path: 'Personal/No such note.md' }),
       refused('a path that is not Markdown', { path: 'Personal/notes.txt' }),
+      failed('a note larger than 256 KB', { path: hugeNote }, { check: saysTooLarge }),
     ],
     vault_search: [refused('a note search without words', { kind: 'notes' })],
     vault_write: [
@@ -37,8 +42,12 @@ export function buildNotesProbes(fixtures: NotesFixtures): Readonly<Record<strin
       failed('replacing a note that does not exist', { ...missingNote, content: '# Nothing\n\nNothing here.', expectedSha: '1'.repeat(40) }),
       refused('content and append together', { ...missingNote, content: 'One.', append: 'Two.' }),
       refused('neither content nor append', { ...missingNote }),
+      failed('a note larger than 256 KB', { ...missingNote, path: hugeNote, append: 'One more line.' }, { check: saysTooLarge }),
     ],
-    vault_delete: [refused('a note that does not exist', { path: 'General/No such note.md' }, { ownerMessage: 'Delete the note about nothing' })],
+    vault_delete: [
+      refused('a note that does not exist', { path: 'General/No such note.md' }, { ownerMessage: 'Delete the note about nothing' }),
+      failed('a note larger than 256 KB', { path: hugeNote }, { ownerMessage: 'Delete the huge export', check: saysTooLarge }),
+    ],
     vault_task_create: [refused('a time without a day', { text: 'Join the demo call', time: '10:00' })],
     vault_task_complete: [refused('a task that changed since it was read', { ...task(personalTasks, 4), version: 'f'.repeat(64), done: true })],
     vault_task_edit: [refused('a task that changed since it was read', { ...task(personalTasks, 5), version: 'f'.repeat(64), newText: 'Send the quarterly report' })],

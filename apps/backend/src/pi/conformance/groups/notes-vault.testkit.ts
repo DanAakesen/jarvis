@@ -52,6 +52,8 @@ export function createMemoryVault(): MemoryVault {
       signal.throwIfAborted();
       const content = files.get(path);
       if (content === undefined) return null;
+      // The real client fails a note above 256 KB with VaultFileTooLargeError, whether GitHub's answer was too large to read or the
+      // note decoded above the limit.
       if (Buffer.byteLength(content, 'utf8') > MAX_VAULT_FILE_BYTES) throw new VaultFileTooLargeError();
       return { path, sha: blobSha(content), content };
     },
