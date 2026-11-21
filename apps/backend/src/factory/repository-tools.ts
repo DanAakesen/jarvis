@@ -115,15 +115,22 @@ async function githubJson(
   signal: AbortSignal,
   limit = maxApiResponseBytes,
 ): Promise<unknown> {
-  const response = await fetchImpl(`${githubApi}${path}`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `${['Bear', 'er'].join('')} ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-    redirect: 'error',
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(`${githubApi}${path}`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `${['Bear', 'er'].join('')} ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+      redirect: 'error',
+    });
+  } catch (error) {
+    // A cancelled turn stays a cancellation; anything else (no network, a timeout) means GitHub could not be reached.
+    if (signal.aborted) throw error;
+    throw new ToolFailure('I couldn’t reach GitHub just now. Try again shortly.');
+  }
   if (!response.ok) {
     // A path the model guessed wrong is a refusal it can correct, not the dispatcher's generic "Tool execution failed".
     if (response.status === 404) throw new ToolRefusal('I couldn’t find that file, folder or repository on GitHub.');
@@ -303,9 +310,13 @@ async function resolveToolRepository(input: RepositoryToolInput, request: Fastif
 
 async function issueReadToken(request: FastifyRequest, repository: string, issues = false) {
   const issuer = getTokenIssuer(request);
-  return issues
-    ? issuer.issueForRepositoryRead(repository)
-    : issuer.issueForContents(repository);
+  try {
+    return issues
+      ? await issuer.issueForRepositoryRead(repository)
+      : await issuer.issueForContents(repository);
+  } catch {
+    throw new ToolFailure('I couldn’t get access to GitHub just now. Try again shortly.');
+  }
 }
 
 const projectProperty = {
