@@ -21,9 +21,9 @@ import {
  *
  * The PC is a stateful in-process fake that speaks the real bridge protocol over a fake WebSocket (see pc-fake.testkit.ts), so the
  * production connection and every tool run unchanged. Dependency tokens in `context.down` make it fail the way a real PC does:
- *   pc-bridge          the PC is offline (no socket)         pc-bridge-silent   it stops answering (the command times out)
- *   pc-bridge-drops    the socket drops mid-command           pc-bridge-failing  it answers its generic "failed" error
- *   pc-bridge-garbled  it answers something unreadable        pc-chrome          the Chrome extension is off in the bridge settings
+ *   pc-bridge          the PC is offline (no socket)         pc-bridge-drops    the socket drops mid-command
+ *   pc-bridge-failing  it answers its generic "failed" error pc-bridge-garbled  it answers something unreadable
+ *   pc-chrome          the Chrome extension is off in the bridge settings
  * Models (Jev's planners, the text and vision deployments) are deterministic fakes (pc-stubs.testkit.ts).
  */
 
@@ -65,8 +65,8 @@ const act = (label: string, extra: Record<string, unknown>, ownerMessage: string
 });
 
 export const pcGroup: GroupFactory = (context) => {
-  // A short command timeout only makes a silent PC fail fast; the fake answers at once.
-  const bridge = createPcBridgeModule({ timeoutMs: 750, pcActPlanner: createFakePcActPlanner(), pcActVisionModel: fakePcActVisionModel });
+  // The fake answers at once; a generous command timeout keeps a loaded machine from turning a slow tick into a "PC did not answer".
+  const bridge = createPcBridgeModule({ timeoutMs: 10_000, pcActPlanner: createFakePcActPlanner(), pcActVisionModel: fakePcActVisionModel });
   const pc = new FakePc(bridge.connection);
   pc.attach();
 

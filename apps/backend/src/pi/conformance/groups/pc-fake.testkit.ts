@@ -152,8 +152,7 @@ export class FakePc {
   /** Brings the fake in line with the dependency tokens a case asks to fail. Called before every tool runs. */
   sync(down: ReadonlySet<string>): void {
     if (down.has('pc-bridge')) { this.detach(); return; }
-    this.mode = down.has('pc-bridge-silent') ? 'silent' : down.has('pc-bridge-drops') ? 'drops'
-      : down.has('pc-bridge-failing') ? 'failing' : down.has('pc-bridge-garbled') ? 'garbled' : 'healthy';
+    this.mode = down.has('pc-bridge-drops') ? 'drops' : down.has('pc-bridge-failing') ? 'failing' : down.has('pc-bridge-garbled') ? 'garbled' : 'healthy';
     this.chromeOff = down.has('pc-chrome');
     if (!this.attached) this.attach();
   }

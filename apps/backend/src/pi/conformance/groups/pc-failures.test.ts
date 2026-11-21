@@ -1,15 +1,19 @@
 import { afterAll, describe, expect, it } from 'vitest';
+import type { FastifyRequest } from 'fastify';
 import { coreModule } from '../../../core/index.js';
+import { ToolFailure } from '../../../core/tool-registry.js';
+import { createPcBridgeModule } from '../../../pc-bridge/bridge.js';
 import { executeCase, turnKindFor } from '../callable.testkit.js';
 import { buildConformanceWorld } from '../world.testkit.js';
 import type { ToolCase } from '../types.testkit.js';
+import { FakePc } from './pc-fake.testkit.js';
 import { pcGroup, pcWorldOf } from './pc.testkit.js';
 
 /**
  * Dan's PC is the one dependency the PC tools cannot do without, so every tool that reaches it must answer a typed,
- * plain-English refusal or failure (never the generic "Tool execution failed") when the PC is offline, stops answering,
- * drops mid-command, sends its generic error, or sends something unreadable. The group's fake PC fails the way a real one
- * does while the matching token is in `context.down` (see pc.testkit.ts).
+ * plain-English refusal or failure (never the generic "Tool execution failed") when the PC is offline, drops mid-command,
+ * sends its generic error, or sends something unreadable. The group's fake PC fails the way a real one does while the
+ * matching token is in `context.down` (see pc.testkit.ts).
  */
 const world = await buildConformanceWorld({ groups: [() => ({ id: 'core', covers: [], modules: [coreModule] }), pcGroup] });
 afterAll(async () => { await world.close(); });
@@ -69,17 +73,25 @@ describe('the PC tools fail cleanly when Dan’s PC is not there', () => {
     expect(done.message).toMatch(/could not read/iu);
   });
 
-  // Each silent command waits for the (shortened) command timeout, so one tool per way of reaching the PC is enough.
-  it.each(['pc_open', 'pc_active_window', 'pc_browser_tabs', 'browser_do', 'pc_act', 'codex_prompt'])('%s fails with a plain message when the PC stops answering', async (name) => {
-    const done = await failing(name, 'pc-bridge-silent');
-    expect(done.outcome).toBe('error');
-    expect(done.message).toMatch(/did not answer in time/iu);
-  }, 15_000);
-
   it.each(browserTools)('%s says so when the Chrome extension is off in the bridge settings', async (name) => {
     const done = await failing(name, 'pc-chrome');
     expect(done.outcome).toBe('refused');
     expect(done.message).toMatch(/Chrome/u);
+  });
+});
+
+describe('a PC that stops answering', () => {
+  it('fails the command with a plain message once the bridge stops waiting', async () => {
+    const bridge = createPcBridgeModule({ timeoutMs: 30 });
+    const pc = new FakePc(bridge.connection);
+    pc.mode = 'silent';
+    pc.attach();
+    const open = bridge.tools.find((tool) => tool.name === 'pc_open')!;
+    const request = { log: { info: () => {} } } as unknown as FastifyRequest;
+    const failure = await open.execute({ target: 'app', value: 'Spotify' }, request, new AbortController().signal).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ToolFailure);
+    expect((failure as ToolFailure).message).toMatch(/did not answer in time/u);
+    await bridge.connection.close();
   });
 });
 
