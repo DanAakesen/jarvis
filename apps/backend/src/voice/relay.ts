@@ -13,7 +13,7 @@ import {
   commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
   endLateVoiceSession, LiveVoiceUsageTracker, parseVoiceEvent,
   settleVoiceSessionCreation, VoiceTerminationStateMachine,
-  validPcm24Base64, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
+  validPcm24Base64, VOICE_DIRECT_TURN_QUIET_MS, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
   type VoiceConnectionFactory, type VoiceFailureCloseCode, type VoiceTerminationEffect,
 } from './live-protocol.js';
 export { VOICE_SUBPROTOCOL } from '../websocket.js';
@@ -30,15 +30,18 @@ const CLEAN_END_TIMEOUT_MS = 5_000;
 const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 const MAX_PROVIDER_EVENT_IDS = 4_096;
 
+type ActivityReason =
+  | 'response_started' | 'response_completed' | 'pi_started' | 'pi_finished' | 'delegation_received'
+  | 'input_transcript' | 'input_audio' | 'output_audio' | 'microphone_active' | 'microphone_muted'
+  | 'playback_completed' | 'session_ended' | 'session_failed' | 'session_reconnecting';
+
 interface InputGroup {
   readonly id: string;
   text: string;
   lastDeltaAt: number;
-  lastTimelineEndMs?: number;
   quietSent: boolean;
   locked: boolean;
   delegationId?: string;
-  delegationOffsetMs?: number;
   persisted?: ConversationMessage;
   persistence?: Promise<ConversationMessage>;
   nextEventSequence: number;
@@ -76,6 +79,27 @@ function safeFailure(error: unknown): string {
   return error instanceof Error
     ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown'
     : 'unknown';
+}
+
+const ERROR_TOKEN_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/u;
+const ERROR_PARAM_PATTERN = /^[A-Za-z0-9_.[\]-]{1,120}$/u;
+
+/** The upstream error's type, code and param as short tokens; its message can echo Dan's words and is never logged. */
+function upstreamErrorFields(event: Record<string, unknown>): Record<string, string> {
+  const body = typeof event.error === 'object' && event.error !== null && !Array.isArray(event.error)
+    ? event.error as Record<string, unknown> : event;
+  const token = (value: unknown, pattern: RegExp): string | undefined => {
+    const text = typeof value === 'number' && Number.isSafeInteger(value) ? String(value) : value;
+    return typeof text === 'string' && pattern.test(text) ? text : undefined;
+  };
+  const errorType = token(body.type, ERROR_TOKEN_PATTERN);
+  const errorCode = token(body.code, ERROR_TOKEN_PATTERN);
+  const param = token(body.param, ERROR_PARAM_PATTERN);
+  return {
+    ...(errorType ? { errorType } : {}),
+    ...(errorCode ? { errorCode } : {}),
+    ...(param ? { param } : {}),
+  };
 }
 
 function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -190,7 +214,6 @@ function registerVoiceRoute(
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
     const seenProviderEventIds = new Set<string>();
-    const recentInputGroups: InputGroup[] = [];
     let persistedOutputGroups = 0;
     let persistenceFailed = false;
     const seenDelegations = new Set<string>();
@@ -204,6 +227,7 @@ function registerVoiceRoute(
     });
     let unregisterVisionVoice: (() => void) | undefined;
     let activityFinished = false;
+    let lastActivityPublishAt: number | undefined;
     let activityState: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | null = null;
     const termination = new VoiceTerminationStateMachine();
     let terminalTeardownStarted = false;
@@ -231,11 +255,24 @@ function registerVoiceRoute(
 
     const publishActivity = (
       type: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | 'failed' | 'ended',
+      reason: ActivityReason,
     ) => {
       if (activityFinished && type !== 'reconnecting') return;
       if (type === 'failed' || type === 'ended' || type === 'reconnecting') activityFinished = type !== 'reconnecting';
       if (type === activityState) return;
       activityState = type === 'failed' || type === 'ended' ? null : type;
+      // Lets a stuck "Speaking" be traced: what published it, how long since the last publish, and what held the others back.
+      const publishedAt = performance.now();
+      log.info({
+        state: type,
+        reason,
+        ...(lastActivityPublishAt === undefined ? {} : { sinceLastMs: Math.round(publishedAt - lastActivityPublishAt) }),
+        outputActive,
+        piBusy,
+        delegationPending: pendingDelegation !== undefined,
+        language,
+      }, 'voice.activity_published');
+      lastActivityPublishAt = publishedAt;
       app.jarvisActivityHub.publish({ type, activityId, source: 'voice' });
       if (type !== 'interrupted') {
         sendClient({ type: 'jarvis.voice.activity', state: type });
@@ -329,7 +366,7 @@ function registerVoiceRoute(
           });
           if (microphoneActive && !piBusy && !outputActive &&
               pendingDelegation === undefined) {
-            publishActivity('listening');
+            publishActivity('listening', 'response_completed');
           }
         }
       });
@@ -409,7 +446,7 @@ function registerVoiceRoute(
         responseId: group.id,
         ...(delegationId ? { delegationId } : {}),
       });
-      publishActivity('thinking');
+      publishActivity('thinking', 'response_started');
       scheduleOutputPersistence(group);
       return group;
     };
@@ -434,9 +471,9 @@ function registerVoiceRoute(
       speak: (text, delegationId) => sendCommentary(text, delegationId ?? null),
       busy: (active) => {
         piBusy = active;
-        if (active && microphoneActive) publishActivity('thinking');
+        if (active && microphoneActive) publishActivity('thinking', 'pi_started');
         else if (!active && microphoneActive && !outputActive && pendingDelegation === undefined) {
-          publishActivity('listening');
+          publishActivity('listening', 'pi_finished');
         }
         if (!active) statusAnnouncer?.flush();
       },
@@ -484,8 +521,6 @@ function registerVoiceRoute(
         locked: false,
         nextEventSequence: 0,
       };
-      recentInputGroups.push(group);
-      if (recentInputGroups.length > 32) recentInputGroups.shift();
       currentInput = group;
       return group;
     };
@@ -555,28 +590,16 @@ function registerVoiceRoute(
         closeSession(1008, 'Invalid voice transcript timeline');
         return;
       }
+      // The delegation's offset_ms is not where Dan's utterance ends, so no timestamp splits a turn: every word joins
+      // the open turn until PI has started for it or the reply to it has begun.
       let group = currentInput;
-      const timelineEnd = endMs ?? startMs;
-      const belongsToPending = pendingDelegationGroup && !pendingDelegationGroup.locked &&
-        (timelineEnd === undefined || pendingDelegationGroup.delegationOffsetMs === undefined ||
-          timelineEnd <= pendingDelegationGroup.delegationOffsetMs);
-      if (belongsToPending) group = pendingDelegationGroup;
-      else if (pendingDelegationGroup && timelineEnd !== undefined &&
-          pendingDelegationGroup.delegationOffsetMs !== undefined &&
-          timelineEnd > pendingDelegationGroup.delegationOffsetMs) {
-        // Later speech never drops the delegation still settling; only a new delegation supersedes it.
-        if (!group || group === pendingDelegationGroup || group.persisted || group.locked) group = newInputGroup();
-      } else if (!group || group.persisted || group.locked) group = newInputGroup();
-      if (!group) group = newInputGroup();
+      if (!group || group.persisted || group.locked) group = newInputGroup();
       group.text += delta;
       if (group.text.length > MAX_TRANSCRIPT_CHARACTERS) {
         closeSession(1009, 'Voice transcript too large');
         return;
       }
       group.lastDeltaAt = performance.now();
-      if (timelineEnd !== undefined) {
-        group.lastTimelineEndMs = Math.max(group.lastTimelineEndMs ?? 0, timelineEnd);
-      }
       limits.touch();
       const normalizedEventId = eventId ?? `${group.id}:${group.nextEventSequence++}`;
       sendClient({
@@ -586,7 +609,7 @@ function registerVoiceRoute(
         eventId: normalizedEventId,
       });
       if (microphoneActive && !outputActive && !piBusy && pendingDelegation === undefined) {
-        publishActivity('listening');
+        publishActivity('listening', 'input_transcript');
       }
     };
 
@@ -615,6 +638,8 @@ function registerVoiceRoute(
           language,
         }, 'voice.did_not_catch');
         sendCommentary('I did not catch that. Please say it again.', delegationId);
+        // Words that still arrive are a new request, not a late part of this one.
+        if (currentInput === group) currentInput = undefined;
         return;
       }
       const turnText = group.text;
@@ -659,32 +684,12 @@ function registerVoiceRoute(
         closeSession(1008, 'Invalid voice delegation timeline');
         return;
       }
-      const timelineMatch = offsetMs === undefined
-        ? undefined
-        : recentInputGroups
-          .filter(group => group.lastTimelineEndMs !== undefined &&
-            group.lastTimelineEndMs <= offsetMs)
-          .sort((left, right) => right.lastTimelineEndMs! - left.lastTimelineEndMs!)[0];
-      const hasNewerOwnerTurn = timelineMatch && offsetMs !== undefined &&
-        (
-          recentInputGroups.indexOf(timelineMatch) < recentInputGroups.length - 1 ||
-          recentInputGroups.some(group => group.id !== timelineMatch.id &&
-            group.lastTimelineEndMs !== undefined && group.lastTimelineEndMs > offsetMs)
-        );
-      if (hasNewerOwnerTurn) {
-        log.info({
-          delegationId: value.id,
-          ...(offsetMs === undefined ? {} : { offsetMs }),
-          outcome: 'ignored_newer_owner_turn',
-          language,
-        }, 'voice.delegation_received');
-        return;
-      }
-      // The delegation can precede its owner transcript. A turn that is already
-      // persisted, being persisted or owned by another delegation must never be reused.
-      const candidate = timelineMatch ?? currentInput;
-      const reusable = candidate && !candidate.persisted && !candidate.persistence &&
-        !candidate.locked && !candidate.delegationId;
+      // The request is Dan's whole open turn. offset_ms is logged only: GPT-Live sends the delegation while his
+      // transcript is still arriving, so it is not where his words end. A turn already stored, locked or owned by
+      // a delegation that has started is never reused; one still settling is taken over by the newer delegation.
+      const candidate = currentInput;
+      const reusable = candidate && !candidate.persisted && !candidate.persistence && !candidate.locked &&
+        (!candidate.delegationId || candidate === pendingDelegationGroup);
       const group = reusable ? candidate : newInputGroup();
       seenDelegations.add(value.id);
       log.info({
@@ -697,13 +702,11 @@ function registerVoiceRoute(
         language,
       }, 'voice.delegation_received');
       group.delegationId = value.id;
-      if (offsetMs !== undefined) group.delegationOffsetMs = offsetMs;
-      currentInput = undefined;
       const pending = new AbortController();
       pendingDelegation?.abort();
       pendingDelegation = pending;
       pendingDelegationGroup = group;
-      publishActivity('thinking');
+      publishActivity('thinking', 'delegation_received');
       const work = persistDelegatedTurn(group, value.id, AbortSignal.any([controller.signal, pending.signal]))
         .catch((error: unknown) => {
           if (controller.signal.aborted || pending.signal.aborted) return;
@@ -741,7 +744,7 @@ function registerVoiceRoute(
     const persistDirectOwnerTurn = () => {
       const group = currentInput;
       if (!group?.text.trim() || group.persisted || group.persistence || group === pendingDelegationGroup) return;
-      if (performance.now() - group.lastDeltaAt < VOICE_INPUT_QUIET_MS) return;
+      if (performance.now() - group.lastDeltaAt < VOICE_DIRECT_TURN_QUIET_MS) return;
       void persistDirectGroup(group, 'direct_quiet');
     };
 
@@ -765,14 +768,14 @@ function registerVoiceRoute(
         if (!hasText && !waiting) return;
         const now = performance.now();
         const quietFor = now - owner.lastDeltaAt;
-        if (hasText && !waiting && quietFor >= VOICE_INPUT_QUIET_MS) {
+        if (hasText && !waiting && quietFor >= VOICE_DIRECT_TURN_QUIET_MS) {
           void persistDirectGroup(owner, 'before_output');
           continue;
         }
         if (now >= deadline) return;
         const pauseMs = Math.min(
           deadline - now,
-          waiting || !hasText ? 25 : VOICE_INPUT_QUIET_MS - quietFor,
+          waiting || !hasText ? 25 : VOICE_DIRECT_TURN_QUIET_MS - quietFor,
         );
         await new Promise<void>(resolve => {
           const wake = () => {
@@ -842,7 +845,9 @@ function registerVoiceRoute(
         return;
       }
       if (!providerReady) {
-        if (type === 'error') log.warn({ failure: 'startup_error', language }, 'voice.upstream_event_error');
+        if (type === 'error') {
+          log.warn({ failure: 'startup_error', ...upstreamErrorFields(event), language }, 'voice.upstream_event_error');
+        }
         return;
       }
       if (type === 'session.input_transcript.delta') {
@@ -892,12 +897,12 @@ function registerVoiceRoute(
           ...(typeof event.end_ms === 'number' ? { endMs: event.end_ms } : {}),
         };
         sendClient(audio);
-        if (microphoneActive) publishActivity('speaking');
+        if (microphoneActive) publishActivity('speaking', 'output_audio');
         scheduleOutputPersistence(group);
         return;
       }
       if (type === 'error') {
-        log.warn({ failure: 'provider_error', language }, 'voice.upstream_event_error');
+        log.warn({ failure: 'provider_error', ...upstreamErrorFields(event), language }, 'voice.upstream_event_error');
         closeSession(1011, 'Voice connection failed');
       }
     };
@@ -987,7 +992,7 @@ function registerVoiceRoute(
           clearTimeout(endTimer);
           endTimer = undefined;
           diagnostics.summary('relay', effect.closeCode);
-          if (!activityFinished) publishActivity('ended');
+          if (!activityFinished) publishActivity('ended', 'session_ended');
           closeSocket(browser, effect.closeCode, effect.reason);
           return;
         case 'close-failed': {
@@ -1003,7 +1008,12 @@ function registerVoiceRoute(
               retryable,
             });
           }
-          if (!activityFinished) publishActivity(retryable ? 'reconnecting' : 'failed');
+          if (!activityFinished) {
+            publishActivity(
+              retryable ? 'reconnecting' : 'failed',
+              retryable ? 'session_reconnecting' : 'session_failed',
+            );
+          }
           closeSocket(browser, effect.closeCode, effect.reason);
           return;
         }
@@ -1081,7 +1091,7 @@ function registerVoiceRoute(
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent);
         if (!piBusy && !outputActive && pendingDelegation === undefined) {
-          publishActivity('listening');
+          publishActivity('listening', 'microphone_active');
         }
         return;
       }
@@ -1091,7 +1101,7 @@ function registerVoiceRoute(
         const providerEvent = { type: 'session.input_audio.mute' };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent);
-        if (activeOutput) publishActivity('speaking');
+        if (activeOutput) publishActivity('speaking', 'microphone_muted');
         return;
       }
       if (event.type === 'jarvis.voice.input_audio.append') {
@@ -1103,7 +1113,7 @@ function registerVoiceRoute(
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent, Buffer.byteLength(event.audio, 'base64'));
         if (microphoneActive && !outputActive && !piBusy && pendingDelegation === undefined) {
-          publishActivity('listening');
+          publishActivity('listening', 'input_audio');
         }
         return;
       }
@@ -1114,7 +1124,7 @@ function registerVoiceRoute(
           return;
         }
         if (microphoneActive && !piBusy && !outputActive && pendingDelegation === undefined) {
-          publishActivity('listening');
+          publishActivity('listening', 'playback_completed');
         }
         return;
       }

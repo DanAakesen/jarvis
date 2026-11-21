@@ -164,6 +164,41 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('private');
   });
 
+  it('exports the activity trail and the upstream error code and never the words or message', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, undefined, output);
+    const text = { transcript: 'private words', text: 'private words', delta: 'private', message: 'private words' };
+    logger.info({
+      ...text, state: 'speaking', reason: 'output_audio', sinceLastMs: 1_250, outputActive: true, piBusy: false,
+      delegationPending: false, language: 'en',
+    }, 'voice.activity_published');
+    logger.info({ ...text, state: 'private', reason: 'private', sinceLastMs: -1 }, 'voice.activity_published');
+    logger.warn({
+      ...text, failure: 'provider_error', errorType: 'server_error', errorCode: 'rate_limit_exceeded',
+      param: 'session.audio[0]', upstreamMessage: 'private words', language: 'en',
+    }, 'voice.upstream_event_error');
+    logger.warn({ errorType: 'private words', errorCode: 'private words', param: 'private words' },
+      'voice.upstream_event_error');
+    const [published, rejected, error, rejectedError] = records.map((record) => JSON.parse(record));
+    expect(published).toMatchObject({
+      msg: 'voice.activity_published', state: 'speaking', reason: 'output_audio', sinceLastMs: 1_250,
+      outputActive: true, piBusy: false, delegationPending: false, language: 'en',
+    });
+    expect(rejected).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.activity_published',
+    });
+    expect(error).toMatchObject({
+      msg: 'voice.upstream_event_error', failure: 'provider_error', errorType: 'server_error',
+      errorCode: 'rate_limit_exceeded', param: 'session.audio[0]',
+    });
+    expect(error).not.toHaveProperty('upstreamMessage');
+    expect(rejectedError).toEqual({
+      level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.upstream_event_error',
+    });
+    expect(records.join('')).not.toContain('private');
+  });
+
   it('exports only fixed probe names, counts, sizes and timings', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
