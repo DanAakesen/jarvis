@@ -30,9 +30,9 @@ export type PiEvent =
   | { readonly kind: 'delta'; readonly text: string }
   | { readonly kind: 'tool'; readonly server: string }
   /** An MCP call finished. `failed` is the harness's own report, for servers whose results we do not record ourselves. */
-  | { readonly kind: 'tool_done'; readonly server: string; readonly name: string; readonly failed: boolean }
+  | { readonly kind: 'tool_done'; readonly server: string; readonly name: string; readonly failed: boolean; readonly code?: string; readonly status?: number }
   /** The harness listed a server's tools at the start of a response: the proof that a server is attached and reachable. */
-  | { readonly kind: 'tools_listed'; readonly server: string; readonly tools: number; readonly failed: boolean }
+  | { readonly kind: 'tools_listed'; readonly server: string; readonly tools: number; readonly failed: boolean; readonly code?: string; readonly status?: number }
   | { readonly kind: 'done'; readonly usage: PiUsage; readonly responseId: string | null };
 
 export interface PiWarmResult {
@@ -75,6 +75,8 @@ export interface PiGatewayOptions {
   readonly turnTimeoutMs?: number;
   readonly connectTimeoutMs?: number;
   readonly warmFreshMs?: number;
+  /** The pause before the one retry of a reply stream that died before the model produced anything. */
+  readonly streamRetryDelayMs?: number;
   readonly brainTimeoutMs?: number;
   /** Bounded runtime evidence for status pages; status consumers must not inspect turn text. */
   readonly onRuntimeTurn?: (evidence: PiRuntimeTurnEvidence) => void;
@@ -135,6 +137,10 @@ const estimatedPromptTokens = 12_000;
 const warmFailureCooldownMs = 10 * 60_000;
 const repeatedFailures = 3;
 const repeatedFailurePauseMs = 30 * 60_000;
+/** A turn cancelled this recently may still be running on Foundry's side, which is worth knowing when the next one fails. */
+const previousCancelledWindowMs = 120_000;
+/** Streams that die like this before any output are the only ones retried: no text, reasoning or tool call exists, so nothing has run. */
+const retryableStreamFailures: ReadonlySet<string> = new Set(['foundry_response_failed', 'stream_ended_without_completed', 'stream_broke']);
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -148,6 +154,17 @@ function readUnlessAborted(reader: ReadableStreamDefaultReader<Uint8Array>, sign
     const onAbort = () => reject(signal.reason);
     signal.addEventListener('abort', onAbort, { once: true });
     reader.read().then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
+/** Waits, and ends at once with the signal's reason when the turn is cancelled or runs out of time. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(() => { signal.removeEventListener('abort', onAbort); resolve(); }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -173,6 +190,35 @@ function failureCode(payload: Record<string, unknown>, type: string): string {
   return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) ? code : type;
 }
 
+/** What one attempt at a reply stream has seen so far: it explains a failure and decides whether a retry could repeat anything. */
+interface StreamPhase {
+  readonly startedAt: number;
+  firstEventMs: number | null;
+  sawText: boolean;
+  sawTool: boolean;
+  /** Any event beyond the response lifecycle and a tool listing: text, reasoning, a tool call or anything unknown. */
+  sawOutput: boolean;
+  responseId: string | null;
+  failure: string | null;
+  failureFields: Record<string, string>;
+}
+
+/** The harness's own code and HTTP status for a failed item, when it sent short plain ones; never its message. */
+function itemFailure(item: Record<string, unknown>): { code?: string; status?: number } {
+  const error = isObject(item.error) ? item.error : {};
+  const code = typeof error.code === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/u.test(error.code) ? error.code : undefined;
+  const raw = error.status ?? error.status_code;
+  const status = typeof raw === 'number' && Number.isInteger(raw) && raw >= 100 && raw <= 599 ? raw : undefined;
+  return { ...(code ? { code } : {}), ...(status ? { status } : {}) };
+}
+
+/** The event is part of the response lifecycle or a tool listing, so a stream that dies after only these has produced nothing. */
+function isQuietEvent(type: string, payload: Record<string, unknown>): boolean {
+  if (['response.created', 'response.in_progress', 'response.queued', 'response.failed', 'response.incomplete', 'error'].includes(type)) return true;
+  if (type.startsWith('response.mcp_list_tools.')) return true;
+  return (type === 'response.output_item.added' || type === 'response.output_item.done') && isObject(payload.item) && payload.item.type === 'mcp_list_tools';
+}
+
 export function createPiGateway(options: PiGatewayOptions): PiGateway {
   const fetcher = options.fetcher ?? fetch;
   const now = options.now ?? (() => new Date());
@@ -180,6 +226,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   const turnTimeoutMs = options.turnTimeoutMs ?? 180_000;
   const connectTimeoutMs = options.connectTimeoutMs ?? 60_000;
   const warmFreshMs = options.warmFreshMs ?? 4 * 60_000;
+  const streamRetryDelayMs = options.streamRetryDelayMs ?? 750;
   const base = `${options.projectEndpoint.replace(/\/+$/u, '')}/agents/${options.agentName}/endpoint/protocols/openai`;
   const reportRuntime = (
     channel: PiRuntimeTurnEvidence['channel'],
@@ -194,6 +241,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     } catch { /* Status observation must not change the turn outcome. */ }
   };
   let ensuring: Promise<string> | null = null;
+  let lastTurnEnd: { readonly outcome: PiTurnRecord['outcome']; readonly at: number } | null = null;
   let capabilityNote = options.capabilityNote;
   /** The tool overview note last sent, and to which conversation: it is repeated only for a new conversation or a changed connection. */
   let noteSent: { readonly conversationId: string; readonly signature: string } | undefined;
@@ -245,6 +293,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const payload: unknown = await response.json().catch(() => null);
     const id = isObject(payload) ? payload.id : undefined;
     if (typeof id !== 'string' || id.length === 0 || id.length > 512) {
+      log('pi.stream_failed', { reason: 'no_conversation', previousCancelled: previousCancelled() });
       throw new PiGatewayError('pi_failed', 'Foundry returned no conversation for PI.');
     }
     return id;
@@ -263,20 +312,46 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return ensuring;
   }
 
-  async function* respond(conversationId: string, input: string, signal: AbortSignal): AsyncGenerator<PiEvent> {
+  const previousCancelled = (): boolean =>
+    lastTurnEnd?.outcome === 'cancelled' && performance.now() - lastTurnEnd.at < previousCancelledWindowMs;
+
+  /** One line for each way a PI turn fails, with a distinct reason and how far the attempt had got. Never text, arguments or tokens. */
+  function logStreamFailure(reason: string, phase: StreamPhase | null, attempt: number, extra: Record<string, string> = {}): void {
+    if (phase) { phase.failure = reason; phase.failureFields = extra; }
+    log('pi.stream_failed', {
+      reason, ...extra, ...(phase ? { attempt, ...phaseFields(phase) } : { previousCancelled: previousCancelled() }),
+    });
+  }
+
+  function phaseFields(phase: StreamPhase) {
+    return {
+      elapsedMs: Math.round(performance.now() - phase.startedAt),
+      ...(phase.firstEventMs !== null ? { firstEventMs: phase.firstEventMs } : {}),
+      sawText: phase.sawText, sawTool: phase.sawTool, sawOutput: phase.sawOutput, previousCancelled: previousCancelled(),
+    };
+  }
+
+  /**
+   * One request to the model. A stream that fails before any text, reasoning or tool call is tried once more (see `respond`),
+   * and every failure here logs why with `pi.stream_failed`.
+   */
+  async function* respondOnce(conversationId: string, input: string, signal: AbortSignal, phase: StreamPhase, attempt: number): AsyncGenerator<PiEvent> {
     const response = await call('POST', '/responses', {
       conversation: conversationId, input: [{ role: 'user', content: input }], stream: true,
     }, signal, true);
-    if (!response.body) throw new PiGatewayError('pi_failed', 'Foundry sent PI no reply stream.');
+    if (!response.body) {
+      logStreamFailure('no_stream', phase, attempt);
+      throw new PiGatewayError('pi_failed', 'Foundry sent PI no reply stream.');
+    }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let responseId: string | null = null;
     let completed = false;
     try {
       while (!completed) {
         const chunk = await readUnlessAborted(reader, signal).catch((error: unknown) => {
           if (signal.aborted) throw error;
+          logStreamFailure('stream_broke', phase, attempt);
           throw new PiGatewayError('pi_failed', 'The PI reply stream broke before it finished.', { cause: error });
         });
         if (chunk.done) break;
@@ -288,24 +363,29 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           try { payload = JSON.parse(frame.data); } catch { continue; }
           if (!isObject(payload)) continue;
           const type = typeof payload.type === 'string' ? payload.type : frame.event;
+          phase.firstEventMs ??= Math.round(performance.now() - phase.startedAt);
+          if (!isQuietEvent(type, payload)) phase.sawOutput = true;
           if (type === 'response.created' && isObject(payload.response) && typeof payload.response.id === 'string') {
-            responseId = payload.response.id;
+            phase.responseId = payload.response.id;
           } else if (type === 'response.output_text.delta' && typeof payload.delta === 'string' && payload.delta.length > 0) {
+            phase.sawText = true;
             yield { kind: 'delta', text: payload.delta };
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
-            if (itemType === 'mcp_call') yield { kind: 'tool', server: label(payload.item.server_label) };
+            if (itemType === 'mcp_call') { phase.sawTool = true; yield { kind: 'tool', server: label(payload.item.server_label) }; }
             else if (itemType === 'mcp_approval_request' || itemType === 'function_call') {
+              phase.sawTool = true;
+              logStreamFailure('approval_or_function_call_item', phase, attempt);
               throw new PiGatewayError('pi_failed', 'PI asked for an approval or client tool the gateway does not answer. The agent definition must run Jarvis tools without harness approval.');
             }
           } else if (type === 'response.output_item.done' && isObject(payload.item)) {
             const item = payload.item;
             if (item.type === 'mcp_call') {
-              yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null };
+              yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null, ...itemFailure(item) };
             } else if (item.type === 'mcp_list_tools') {
               yield {
                 kind: 'tools_listed', server: label(item.server_label), tools: Array.isArray(item.tools) ? item.tools.length : 0,
-                failed: item.error !== undefined && item.error !== null,
+                failed: item.error !== undefined && item.error !== null, ...itemFailure(item),
               };
             }
           } else if (type === 'response.mcp_list_tools.failed') {
@@ -315,23 +395,54 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
             completed = true;
             yield {
-              kind: 'done', responseId,
+              kind: 'done', responseId: phase.responseId,
               usage: { inputTokens: count(usage.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(usage.output_tokens) },
             };
             break;
           } else if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
             const detail = failureCode(payload, type);
-            log('pi.stream_failed', { event: type, ...(detail ? { code: detail } : {}) });
+            logStreamFailure('foundry_response_failed', phase, attempt, { event: type, code: detail });
             throw new PiGatewayError('pi_failed', 'PI stopped before it finished the reply. Check saved conversation and action status before trying again.', { detail });
           }
         }
       }
-      if (!completed) throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
+      if (!completed) {
+        logStreamFailure('stream_ended_without_completed', phase, attempt);
+        throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
+      }
     } finally {
       await reader.cancel().catch(() => {});
       // Best effort: closing the stream is the real stop; this only helps when the service ran it in the background.
-      if (signal.aborted && responseId !== null) {
-        void call('POST', `/responses/${encodeURIComponent(responseId)}/cancel`, {}, AbortSignal.timeout(5_000)).catch(() => {});
+      if (signal.aborted && phase.responseId !== null) {
+        void call('POST', `/responses/${encodeURIComponent(phase.responseId)}/cancel`, {}, AbortSignal.timeout(5_000)).catch(() => {});
+      }
+    }
+  }
+
+  /**
+   * Sends one message and streams the reply. A stream that dies before the model produced any text, reasoning or tool call
+   * (Foundry's `response.failed`, `incomplete` or `error`, or a stream that ends or breaks) is tried once more on the same
+   * conversation with the same message: nothing has run, so the retry repeats nothing. Anything after the first output, any
+   * cancel and the turn deadline end it as before. Callers see one stream and one `done`, so the turn is billed once.
+   */
+  async function* respond(conversationId: string, input: string, signal: AbortSignal): AsyncGenerator<PiEvent> {
+    for (let attempt = 1; ; attempt += 1) {
+      const phase: StreamPhase = {
+        startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
+        responseId: null, failure: null, failureFields: {},
+      };
+      try {
+        yield* respondOnce(conversationId, input, signal, phase, attempt);
+        return;
+      } catch (error) {
+        if (attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput ||
+          phase.failure === null || !retryableStreamFailures.has(phase.failure)) throw error;
+        log('pi.stream_retry', { reason: phase.failure, ...phase.failureFields, attempt, ...phaseFields(phase) });
+        // A stream that merely stopped may still be running on Foundry's side; stop it before asking again.
+        if (phase.failure !== 'foundry_response_failed' && phase.responseId !== null) {
+          await call('POST', `/responses/${encodeURIComponent(phase.responseId)}/cancel`, {}, AbortSignal.any([signal, AbortSignal.timeout(5_000)])).catch(() => {});
+        }
+        await pause(streamRetryDelayMs, signal);
       }
     }
   }
@@ -423,6 +534,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
         throw error;
       } finally {
+        lastTurnEnd = { outcome, at: performance.now() };
         const billed = usage ?? (modelStarted ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: 1 } : undefined);
         await record({
           kind: 'warm', messageId: null, model: PI_MODEL, inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0,
@@ -470,6 +582,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
     const releaseTurn = claim('chat');
     if (!releaseTurn) {
+      logStreamFailure('busy', null, 1);
       reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', 'failed', 'turn', 'busy');
       throw new PiGatewayError('pi_failed', 'PI is already answering. Wait for that reply first.');
     }
@@ -517,9 +630,15 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           segment += event.text;
           yield event.text;
         } else if (event.kind === 'tools_listed') {
-          if (event.failed) log('pi.mcp_list_failed', { server: event.server });
+          if (event.failed) log('pi.mcp_list_failed', {
+            server: event.server, ...(event.code ? { code: event.code } : {}), ...(event.status ? { status: event.status } : {}),
+            elapsedMs: Math.round(performance.now() - started),
+          });
         } else if (event.kind === 'tool_done') {
-          if (event.failed && event.server !== PI_MCP_SERVER_LABEL) log('pi.mcp_call_failed', { server: event.server, tool: event.name });
+          if (event.failed && event.server !== PI_MCP_SERVER_LABEL) log('pi.mcp_call_failed', {
+            server: event.server, tool: event.name, ...(event.code ? { code: event.code } : {}), ...(event.status ? { status: event.status } : {}),
+            elapsedMs: Math.round(performance.now() - started),
+          });
         } else if (event.kind === 'tool') {
           sawTool = true;
           // Text before a tool call is a progress note; very long text stays in the answer.
@@ -544,6 +663,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       throw error;
     } finally {
       releaseTurn();
+      lastTurnEnd = { outcome, at: performance.now() };
       const totalMs = Math.round(performance.now() - started);
       // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
       // conservative estimate (the measured fixed prompt plus what streamed) so the monthly stop cannot be dodged.
@@ -657,7 +777,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
       failure = error instanceof PiGatewayError ? error
         : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'The brain wake took too long and was stopped.', { cause: error })
-        : new PiGatewayError('pi_failed', 'The brain wake failed.', { cause: error });
+        : (logStreamFailure('brain_wake_failed', null, 1), new PiGatewayError('pi_failed', 'The brain wake failed.', { cause: error }));
     }
     const toolResults = grant ? [...grant.results] : [];
     if (outcome !== 'ok' && grant) {

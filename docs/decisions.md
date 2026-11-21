@@ -1,3 +1,28 @@
+## 21 November 2026 — Log why PI chat turns fail and retry a dead stream once (Refs #1967)
+
+- **Evidence:** on TestFlight build 117 two typed Chat turns failed with
+  `pi_failed`, one after 12 output tokens and about 32 s of silence, one after
+  3.96 s with no text and no tool; a retry in the same minute worked. The cause
+  could not be read: the log allowlist dropped `pi.stream_failed`,
+  `pi.mcp_list_failed` and `pi.mcp_call_failed` fields and the `toolCount` and
+  `azureCatalogue` of `pi.turn`, and several `pi_failed` sites logged nothing.
+- **Diagnosability:** every `pi_failed` site logs `pi.stream_failed` with a
+  distinct `reason` and how far the attempt got (time to first event, text or
+  tool seen, previous turn cancelled within two minutes). The allowlist exports
+  only fixed vocabularies and scalars; never prompts, replies, tool arguments,
+  tokens or provider messages.
+- **Resilience:** `respond()` retries the Foundry call once, after 750 ms, only
+  when the stream fails before any text, reasoning, tool call, function call or
+  unknown event (`response.failed`, `incomplete`, `error`, or a stream that ends
+  or breaks) and logs `pi.stream_retry`. Nothing has run, so the retry repeats
+  nothing; it keeps the conversation and message, bills once and honours cancel
+  and the turn deadline. A stream that merely stopped is cancelled on Foundry's
+  side before the retry. PI stays unrestricted: no classifier, completion check,
+  refusal, gate or answer buffering was added.
+- **Open:** the failed first attempt's own input cost is not billed (as before
+  for a stream with no output); whether Foundry stores the message of a failed
+  response in the conversation, so the retry could show it twice, is unverified.
+
 ## 20 November 2026 — Owner reminder scheduling is not device delivery (#1990)
 
 - **Authoritative request:** `dbo.owner_reminder_schedules` remains the exact
