@@ -38,6 +38,14 @@ export const DEFAULT_STARTUP_GRACE_MS = 2 * 60_000;
 // Transport failures reach Dan through the tool result; an untyped Error would only ever show as "Tool execution failed".
 const pcDisconnected = 'The PC bridge disconnected before it answered; the action may not have happened.';
 const pcCommandFailed = 'The PC bridge could not complete that command.';
+const pcTimedOut = 'The PC bridge did not answer in time; the action may not have happened.';
+const pcUnreadable = 'The PC bridge answered in a way Jarvis could not read; the action may not have happened.';
+
+/** A deadline that ran out is a failure Dan should hear about; a caller that went away needs no answer. */
+function cancellation(signal: AbortSignal): Error {
+  const reason: unknown = signal.reason;
+  return reason instanceof Error && reason.name === 'TimeoutError' ? new ToolFailure(pcTimedOut) : new Error('PC bridge command was cancelled');
+}
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
@@ -357,7 +365,7 @@ export class PcBridgeConnection {
     if (this.controlPaused && controlActions.has(command.name)) {
       throw new ToolRefusal('Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.');
     }
-    if (signal.aborted) throw new Error('PC bridge command was cancelled');
+    if (signal.aborted) throw cancellation(signal);
     if (this.pending.size >= 16) throw new ToolFailure('The PC bridge is busy with other commands. Try again in a moment.');
 
     const id = randomUUID();
@@ -370,8 +378,8 @@ export class PcBridgeConnection {
         resolve,
         reject,
         signal,
-        timer: setTimeout(() => this.finish(id, new ToolFailure('The PC bridge did not answer in time; the action may not have happened.')), this.timeoutMs),
-        abort: () => this.finish(id, new Error('PC bridge command was cancelled')),
+        timer: setTimeout(() => this.finish(id, new ToolFailure(pcTimedOut)), this.timeoutMs),
+        abort: () => this.finish(id, cancellation(signal)),
       };
       pending.timer.unref();
       this.pending.set(id, pending);
@@ -479,7 +487,7 @@ export class PcBridgeConnection {
       return;
     }
     if (response.type !== 'result' || !validResult(pending.command, response.result)) {
-      this.finish(response.id, new ToolFailure('The PC bridge answered in a way Jarvis could not read; the action may not have happened.'));
+      this.finish(response.id, new ToolFailure(pcUnreadable));
       return;
     }
     this.finish(response.id, undefined, response.result);
@@ -610,7 +618,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
             signal,
             request.log,
           );
-          if (!isClipboardReadResult(result)) throw new Error('Invalid clipboard read response');
+          if (!isClipboardReadResult(result)) throw new ToolFailure(pcUnreadable);
           const after = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
           if (after.application !== before.application)
             throw new ToolRefusal('The foreground Windows application changed before clipboard export.');
@@ -637,7 +645,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
             signal,
             request.log,
           );
-          if (!isClipboardWriteResult(result)) throw new Error('Invalid clipboard write response');
+          if (!isClipboardWriteResult(result)) throw new ToolFailure(pcUnreadable);
           return result;
         },
       },
@@ -659,7 +667,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
           const result = await bridge.execute({
             name: 'browser_tabs', arguments: offset === undefined ? {} : { offset },
           }, signal, request.log);
-          if (!validBrowserTabs(result)) throw new Error('Invalid browser tab response');
+          if (!validBrowserTabs(result)) throw new ToolFailure(pcUnreadable);
           return result;
         },
       },
@@ -682,7 +690,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
           const result = await bridge.execute({
             name: 'browser_snapshot', arguments: { tabId: input.tabId },
           }, signal, request.log);
-          if (!validBrowserSnapshot(result, input.tabId)) throw new Error('Invalid browser snapshot response');
+          if (!validBrowserSnapshot(result, input.tabId)) throw new ToolFailure(pcUnreadable);
           refuseGmailComputerAccess(result.url, result.title);
           return result;
         },
@@ -858,7 +866,7 @@ async function runBrowserAction(
         name: 'browser_act',
         arguments: { ...bridgeAction, confirmed: true },
       }, signal, logger);
-      if (!validBrowserActionFor(approved, bridgeAction.action)) throw new Error('Invalid browser action response');
+      if (!validBrowserActionFor(approved, bridgeAction.action)) throw new ToolFailure(pcUnreadable);
       return approved;
     }, signal);
   }
@@ -868,16 +876,16 @@ async function runBrowserAction(
   };
   const result = await executeBrowserAction(bridge, command, signal, logger);
   if (!isConfirmationRequired(result)) {
-    if (!validBrowserActionFor(result, action.action)) throw new Error('Invalid browser action response');
+    if (!validBrowserActionFor(result, action.action)) throw new ToolFailure(pcUnreadable);
     return result;
   }
-  if (bridgeAction.action !== 'click' && bridgeAction.action !== 'keys') throw new Error('Invalid browser confirmation response');
+  if (bridgeAction.action !== 'click' && bridgeAction.action !== 'keys') throw new ToolFailure(pcUnreadable);
   return executeRequested(result.summary, async () => {
     const approved = await executeBrowserAction(bridge, {
       name: 'browser_act',
       arguments: { ...bridgeAction, confirmed: true },
     }, signal, logger);
-    if (!validBrowserActionFor(approved, bridgeAction.action)) throw new Error('Invalid browser action response');
+    if (!validBrowserActionFor(approved, bridgeAction.action)) throw new ToolFailure(pcUnreadable);
     return approved;
   }, signal);
 }
@@ -892,7 +900,7 @@ async function readBrowserTarget(
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
   while (offset <= 5000) {
     const result = await bridge.execute({ name: 'browser_tabs', arguments: { offset } }, deadline, logger);
-    if (!validBrowserTabs(result)) throw new Error('Invalid browser tab response');
+    if (!validBrowserTabs(result)) throw new ToolFailure(pcUnreadable);
     const tabs = result.tabs as { id: string; title: string; url: string; focused: boolean }[];
     const target = tabs.find((tab) => tabId === undefined ? tab.focused : tab.id === tabId);
     if (target) {
@@ -902,7 +910,7 @@ async function readBrowserTarget(
     }
     if (result.nextOffset === null) break;
     const next = result.nextOffset as number;
-    if (next <= offset) throw new Error('Invalid browser tab pagination');
+    if (next <= offset) throw new ToolFailure(pcUnreadable);
     offset = next;
   }
   throw new ToolRefusal('The current Chrome target cannot be verified. List the tabs again before acting.');
