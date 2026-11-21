@@ -209,8 +209,8 @@ const maxClientItemsPerRound = 16;
  * Calls beyond it are not tracked but the stream is still read to its end: they count as native when output follows them.
  */
 const maxTrackedCalls = 512;
-/** Output items tracked per response, by id and by output index, for when each opened and what text it streamed; beyond it an item counts as new, like one that names neither. */
-const maxTrackedItems = 1024;
+/** Names of output items tracked per response (each item has up to two: its id and its output index), far above what a response carries. Past it the reply is whatever streamed: nothing is reconciled, so nothing can repeat. */
+const maxTrackedItems = 4096;
 const callItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
 
 /**
@@ -231,26 +231,20 @@ interface HarnessCall {
 }
 
 /**
- * An output item the response opened. `calls` is how many calls were tracked when it did and `overflow` whether calls beyond
- * the tracking limit had been seen, so closing it later is not output that follows those calls. `text` is what the reply
- * holds of the item, by content index.
+ * An output item the response opened, named by its id and by its position in the response's output. `calls` is how many calls
+ * were tracked when it did and `overflow` whether calls beyond the tracking limit had been seen, so closing it later is not
+ * output that follows those calls. `text` is what the reply holds of the item, by content index.
  */
 interface OutputSlot {
+  id: string | undefined;
   readonly calls: number;
   readonly overflow: boolean;
   readonly text: Map<number, string>;
 }
 
 const plainId = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 && value.length <= 512 ? value : undefined;
-/** The names an event gives an item or its text: its id and its position in the response's output. */
-const slotNames = (id: unknown, index: unknown): string[] => {
-  const names: string[] = [];
-  const plain = plainId(id);
-  if (plain !== undefined) names.push(`id:${plain}`);
-  if (typeof index === 'number' && Number.isSafeInteger(index) && index >= 0) names.push(`index:${index}`);
-  return names;
-};
-const contentIndexOf = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+/** An output or content index from an event: a non-negative integer, else nothing. */
+const indexOf = (value: unknown): number | undefined => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 
 /** The id a call is resolved by: a function call's `call_id`, an approval request's `id`. */
 const callKey = (item: Record<string, unknown>): string | undefined => {
@@ -579,18 +573,29 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let overflowFollowed = false;
     // The items the response opened, by id and by output index: when each opened among the calls, and the text it streamed.
     const slots = new Map<string, OutputSlot>();
+    // Past the tracking limit nothing is reconciled any more: the reply is what streamed, so nothing can repeat.
+    let reconciling = true;
     const slotFor = (id: unknown, index: unknown): OutputSlot | undefined => {
-      const names = slotNames(id, index);
-      let slot = names.map(name => slots.get(name)).find(found => found !== undefined);
-      if (!slot && names.length > 0 && slots.size < maxTrackedItems) slot = { calls: calls.length, overflow: overflowSeen, text: new Map() };
-      if (slot) for (const name of names) slots.set(name, slot);
+      const itemId = plainId(id);
+      const position = indexOf(index);
+      if (itemId === undefined && position === undefined) return undefined;
+      const atPosition = position === undefined ? undefined : slots.get(`index:${position}`);
+      // The same position under another id is another item: a list that omits earlier items does not line up with the events.
+      const sameItem = atPosition && (itemId === undefined || atPosition.id === undefined || atPosition.id === itemId) ? atPosition : undefined;
+      let slot = (itemId === undefined ? undefined : slots.get(`id:${itemId}`)) ?? sameItem;
+      if (!slot) {
+        if (slots.size >= maxTrackedItems) { reconciling = false; return undefined; }
+        slot = { id: itemId, calls: calls.length, overflow: overflowSeen, text: new Map() };
+      }
+      if (itemId !== undefined) { slot.id ??= itemId; slots.set(`id:${itemId}`, slot); }
+      if (position !== undefined && (atPosition === undefined || atPosition === slot)) slots.set(`index:${position}`, slot);
       return slot;
     };
     // Text that arrived as deltas naming no item is matched, in order, against the text a done event or the completed output gives.
     let unplaced = '';
     // What of a part's authoritative text the reply does not hold yet. Nothing when the two disagree: the reply is never corrupted.
     const unstreamed = (slot: OutputSlot | undefined, part: number, text: string): string => {
-      if (text.length === 0) return '';
+      if (!reconciling || text.length === 0) return '';
       let streamed = slot?.text.get(part);
       if (streamed === undefined) {
         if (text.startsWith(unplaced)) { streamed = unplaced; unplaced = ''; }
@@ -635,12 +640,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             phase.sawText = true;
             laterOutput();
             const slot = slotFor(payload.item_id, payload.output_index);
-            if (slot) { const part = contentIndexOf(payload.content_index); slot.text.set(part, (slot.text.get(part) ?? '') + payload.delta); }
-            else unplaced += payload.delta;
+            if (slot) { const part = indexOf(payload.content_index) ?? 0; slot.text.set(part, (slot.text.get(part) ?? '') + payload.delta); }
+            else if (reconciling) unplaced += payload.delta;
             yield { kind: 'delta', text: payload.delta };
           } else if (type === 'response.output_text.done' && typeof payload.text === 'string') {
             const slot = slotFor(payload.item_id, payload.output_index);
-            const missing = unstreamed(slot, contentIndexOf(payload.content_index), payload.text);
+            const missing = unstreamed(slot, indexOf(payload.content_index) ?? 0, payload.text);
             laterOutput(slot);
             if (missing.length > 0) { phase.sawText = true; yield { kind: 'delta', text: missing }; }
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {

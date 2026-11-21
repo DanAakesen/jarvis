@@ -1341,10 +1341,23 @@ describe('PI gateway', () => {
         ['each message of the completed output is reconciled on its own', [
           [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_1'), finalMessage(second, 'msg_2')], 9, 3, 4)],
         ], ok(first + second, [9, 3, 4])],
+        ['a message of the completed output under another id than the one streamed at its position is its own item', [
+          [created('resp_1'), textDelta(first, 'msg_0', 0), finished([finalMessage(second, 'msg_9')], 9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
       ];
 
       it.each([...gaps, ...texts, ...kept])('%s', async (_name, rounds, expected) => {
         for (const seed of seeds) expect(await play(rounds, seed), `seed ${seed}`).toEqual(expected);
+      });
+
+      it('adds nothing from done events or the completed output past the item tracking limit, so no text repeats', async () => {
+        const items = Array.from({ length: 2_100 }, (_, index) => ({ id: `msg_${index}`, text: `t${index} ` }));
+        const frames = items.flatMap(({ id, text }, index) => [
+          added({ type: 'message', id }, index), textDelta(text, id, index), textDone(text, id, index), finishedItem({ type: 'message', id }, index),
+        ]);
+        const { run, calls } = setup([() => sse(created('resp_1'), ...frames, finished(items.map(({ id, text }) => finalMessage(text, id)), 5, 0, 5))]);
+        expect((await run('hi')).filter(chunk => typeof chunk === 'string').join('')).toBe(items.map(item => item.text).join(''));
+        expect(responsesOf(calls)).toHaveLength(1);
       });
 
       it.each([
