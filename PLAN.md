@@ -1,15 +1,17 @@
-## MCP door call ledger and duplicate-safe actions — 21 November 2026 (#1967)
+## MCP door call ledger and replay recognition — 21 November 2026 (#1967)
 
-**Status: implemented and checked offline; exact-head CI and the next live slow or replayed call are pending.**
+**Status: implemented and checked offline; exact-head CI and the first live measurement are pending.** The first version answered any second identical action of a turn from the first result; review rejected it because it would silently swallow intended repeats (three sets of the same lift, two identical entries, parallel identical calls), and nothing shows that Foundry replays calls. An identical action under a different request now always runs.
 
 | Step | State |
 | --- | --- |
-| One `pi.mcp_tool` line per finished `find_tools` / `call_tool`: tool, outcome, elapsedMs, resultBytes, truncated, duplicate, turn hash (8 hex), channel, provider; no arguments, results or reference | Done |
+| One `pi.mcp_tool` line per finished `find_tools` / `call_tool`: tool, outcome, elapsedMs, resultBytes, truncated, duplicate, sameArgsRepeat, replayCheck, turn hash (8 hex), channel, provider; no arguments, results or reference | Done |
 | Fields in the `logging.ts` allow-list; tested in `logging.test.ts` and, before the allow-list, in `mcp.test.ts` | Done |
-| An identical action repeated in the same turn runs once and returns the first result with `duplicate: true`, also while the first is still running; failed and refused calls can be retried; reads never kept | Done |
-| Remote `gh_` / `az_` calls | Out of scope; not deduplicated |
+| Replay recognition: the same request identity (call id in `_meta`, else JSON-RPC id) asking for the same tool and arguments gets the first result with `duplicate: true`, also while the first is still running; failed and refused calls are not kept; reads never kept | Done |
+| No identity, or an identity reused for something else: nothing is recognised as a replay (`replayCheck` `no_id` / `id_reused`) | Done |
+| `sameArgsRepeat` observation of identical actions under other requests (never changes execution) | Done |
+| Remote `gh_` / `az_` calls | Out of scope; never recognised |
 | Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
-| Confirm in production whether Foundry retries or replays a call (`duplicate: true`) and where the 8.0 s versus 12.8 s gap came from | Open; needs a live turn |
+| Measure in production: `replayCheck` mix, whether `duplicate` ever appears, what `sameArgsRepeat` shows; the real Foundry `_meta` call-id key, if any (plan in `docs/decisions.md`) | Open; needs live turns |
 
 ## Wake path matches Chat — 21 November 2026 (#1967)
 

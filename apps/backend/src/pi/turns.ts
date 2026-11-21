@@ -33,6 +33,24 @@ export interface PiToolAnswer {
   readonly truncated: boolean;
 }
 
+/** One action call of a turn that went to its tool: what it asked for, which request carried it, and how it went. */
+export interface PiActionRun {
+  /** SHA-256 of the tool name and its canonical JSON arguments. */
+  readonly asked: string;
+  /** What the transport called the request that carried it (see mcp.ts), when it said. */
+  readonly identity: string | undefined;
+  /** The first answer once the run succeeded; undefined when it did not. A call that failed or was refused did nothing. */
+  readonly answer: Promise<PiToolAnswer | undefined>;
+  /** `running` until it settles. A failed run is never replayed and does not count as having executed. */
+  state: 'running' | 'ok' | 'failed';
+}
+
+/**
+ * Whether a repeated request identity can be taken for a replay in this turn: not when the transport gave no identity (`no_id`),
+ * nor once an identity has asked for something else (`id_reused`), because an identity that is not unique to a request proves nothing.
+ */
+export type PiReplayCheck = 'on' | 'no_id' | 'id_reused';
+
 export interface PiTurnGrant {
   readonly turn: string;
   readonly ownerObjectId: string;
@@ -68,12 +86,14 @@ export interface PiTurnGrant {
   } | undefined;
   /** Successful action calls recorded from the authenticated local tool catalogue. */
   readonly actions: { count: number };
+  /** The action calls of this turn that went to their tool, in order. mcp.ts tells a replayed request from a repeated action with them. */
+  readonly actionRuns: PiActionRun[];
   /**
-   * The first result of each action this turn ran, by SHA-256 of the tool name and its canonical JSON arguments. An identical
-   * repeat gets that result back instead of running again, also while the first is still running (see mcp.ts). Only a success
-   * stays: a call that failed or was refused did nothing, so it can be tried again.
+   * What each door request of this turn asked for (SHA-256 of the tool name and canonical arguments), by the identity the transport
+   * gave it. An identity that ever asks for something else does not identify requests: `reused` is set and from then on no request
+   * of this turn is taken for a replay.
    */
-  readonly actionResults: Map<string, Promise<PiToolAnswer | undefined>>;
+  readonly identities: { readonly asked: Map<string, string>; reused: boolean };
   /** Successful chat pushes from message_dan, recorded by the wake itself. */
   readonly pushes: { count: number };
   /** MCP requests the model made in this turn, counted when a request ENTERS the server (results are written only after a tool returns). */
@@ -81,7 +101,7 @@ export interface PiTurnGrant {
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'actionResults' | 'pushes' | 'requests'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'actionRuns' | 'identities' | 'pushes' | 'requests'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
@@ -93,6 +113,19 @@ export interface PiTurnRegistry {
 export const piTurnPattern = /^jt-[A-Za-z0-9_-]{22}$/u;
 const maxOpenTurns = 8;
 
+/**
+ * Notes what a door request asks for under the identity the transport gave it, and says whether a repeat of that identity can be
+ * taken for a replay in this turn. It cannot without an identity, and it cannot once an identity has asked for something else:
+ * then the transport does not identify requests, and the safe answer is to run every request.
+ */
+export function noteRequest(grant: PiTurnGrant, identity: string | undefined, asked: string): PiReplayCheck {
+  if (identity === undefined) return 'no_id';
+  const earlier = grant.identities.asked.get(identity);
+  if (earlier === undefined) grant.identities.asked.set(identity, asked);
+  else if (earlier !== asked) grant.identities.reused = true;
+  return grant.identities.reused ? 'id_reused' : 'on';
+}
+
 export function createPiTurnRegistry(): PiTurnRegistry {
   const grants = new Map<string, PiTurnGrant>();
   return {
@@ -103,7 +136,8 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       const grant: PiTurnGrant = {
         ...input, turn, discovered: new Set(), results: [],
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
-        actions: { count: 0 }, actionResults: new Map(), pushes: { count: 0 }, requests: { count: 0 },
+        actions: { count: 0 }, actionRuns: [], identities: { asked: new Map(), reused: false },
+        pushes: { count: 0 }, requests: { count: 0 },
       };
       grants.set(turn, grant);
       return grant;

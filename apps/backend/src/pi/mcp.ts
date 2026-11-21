@@ -10,7 +10,9 @@ import {
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
-import { piTurnPattern, type PiToolAnswer, type PiTurnGrant, type PiTurnRegistry } from './turns.js';
+import {
+  noteRequest, piTurnPattern, type PiActionRun, type PiReplayCheck, type PiToolAnswer, type PiTurnGrant, type PiTurnRegistry,
+} from './turns.js';
 import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
 
@@ -38,7 +40,21 @@ interface Settled {
   /** Set by a search that waited on a remote catalogue; otherwise the provider is read from the tool name. */
   readonly provider?: Provider;
   readonly truncated?: boolean;
+  /** The request was a replay of an earlier one and was answered with that one's result, without running. */
   readonly duplicate?: boolean;
+  /** An action ran that an earlier request of the turn had already run, or was running, with the same arguments. */
+  readonly sameArgsRepeat?: boolean;
+}
+
+/** What a door call knows about its request before it runs. */
+interface Door {
+  readonly grant: PiTurnGrant | undefined;
+  /** SHA-256 of what the request asks for: the tool and its canonical arguments. */
+  readonly asked: string;
+  /** What the transport called the request, when it said. */
+  readonly identity: string | undefined;
+  /** Whether a repeat of that identity can be taken for a replay in this turn; absent when the turn reference matched no live turn. */
+  readonly replayCheck: PiReplayCheck | undefined;
 }
 
 function text(value: unknown, isError = false): CallToolResult {
@@ -56,8 +72,10 @@ const providerOf = (name: string): Provider =>
 const channelOf = (grant: PiTurnGrant) =>
   grant.smoke === true ? 'smoke' : grant.brain ? 'wake' : grant.activation?.type === 'voice' ? 'voice' : 'chat';
 
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+
 /** The first 8 hex characters of the reference's SHA-256: enough to tell the calls of one turn from another's, never the reference. */
-const turnHash = (reference: string) => createHash('sha256').update(reference).digest('hex').slice(0, 8);
+const turnHash = (reference: string) => sha256(reference).slice(0, 8);
 
 const answerBytes = (reply: CallToolResult) =>
   reply.content.reduce((total, part) => total + (part.type === 'text' ? Buffer.byteLength(part.text) : 0), 0);
@@ -72,35 +90,66 @@ function canonicalJson(value: unknown): string {
 }
 
 /** A tool name never contains `{`, so the name and the canonical arguments cannot run into each other. */
-const actionKey = (name: string, args: Record<string, unknown>) =>
-  createHash('sha256').update(name + canonicalJson(args)).digest('hex');
+const askedOf = (tool: string, question: unknown) => sha256(tool + canonicalJson(question));
+
+/** The harness's own name for one tool call, if it sends one in the request's `_meta` (`call_id`, `callId`, `tool_call_id`). */
+const callIdKey = /call[_-]?id$/iu;
 
 /**
- * Runs an action once per turn. A repeat with the same tool and the same arguments, from a retry or a replay, gets the first
- * result back with `duplicate: true` instead of running again, also while the first is still running. Only a success is kept:
- * a call that failed or was refused did nothing, so asking again runs it again. This is deduplication, not a gate: nothing
- * is refused.
+ * What the transport calls a request, so that the same request delivered again can be told from a new one: a call id in the
+ * request's `_meta` if the harness sends one, else the JSON-RPC id (within the session, when there is one). Undefined when the
+ * transport gives neither, and then no request of the turn is ever taken for a replay.
  */
-async function runOnce(
-  grant: PiTurnGrant, key: string, run: () => Promise<PiToolAnswer>,
-): Promise<{ readonly answer: PiToolAnswer; readonly duplicate: boolean }> {
-  for (;;) {
-    const earlier = grant.actionResults.get(key);
-    if (earlier === undefined) break;
-    const first = await earlier;
-    if (first) return { answer: { ...first, text: JSON.stringify({ ...JSON.parse(first.text), duplicate: true }) }, duplicate: true };
+export function requestIdentity(ctx: {
+  readonly sessionId?: string | undefined;
+  readonly mcpReq: { readonly id?: unknown; readonly _meta?: unknown };
+}): string | undefined {
+  const meta = ctx.mcpReq._meta;
+  if (meta !== null && typeof meta === 'object') {
+    for (const [key, value] of Object.entries(meta)) {
+      if (callIdKey.test(key) && typeof value === 'string' && /^[\w.:-]{1,128}$/u.test(value)) return `call:${value}`;
+    }
   }
+  const id = ctx.mcpReq.id;
+  return typeof id === 'string' || typeof id === 'number' ? `rpc:${ctx.sessionId ?? ''}:${typeof id}:${id}` : undefined;
+}
+
+/**
+ * Runs an action call and tells how it relates to the earlier ones of the turn.
+ *
+ * A replay is the same request delivered again: the same identity asking for the same thing, while the transport's identities can
+ * be trusted (see PiReplayCheck). It is answered with the first result and `duplicate: true` and does not run again, also while the
+ * first is still running. Everything else runs, even an identical action under another request, because the model may mean it
+ * (three sets of the same lift); `repeat` says that such an action was already running or had succeeded, and changes nothing.
+ * Only a success is kept: a call that failed or was refused did nothing, so asking again runs it again.
+ * This is recognition of a replay, not a gate: nothing is refused.
+ */
+async function runAction(
+  grant: PiTurnGrant, door: Door, run: () => Promise<PiToolAnswer>,
+): Promise<{ readonly answer: PiToolAnswer; readonly duplicate: boolean; readonly repeat: boolean }> {
+  const { asked, identity } = door;
+  const replayable = identity !== undefined && door.replayCheck === 'on';
+  for (;;) {
+    const replayed = replayable
+      ? grant.actionRuns.find((earlier) => earlier.asked === asked && earlier.identity === identity && earlier.state !== 'failed')
+      : undefined;
+    if (!replayed) break;
+    const first = await replayed.answer;
+    if (first) return { answer: { ...first, text: JSON.stringify({ ...JSON.parse(first.text), duplicate: true }) }, duplicate: true, repeat: false };
+  }
+  // A replay of a run that is not failed has returned above, so what is left here is another request's run, or an untrusted identity's.
+  const repeat = grant.actionRuns.some((earlier) => earlier.asked === asked && earlier.state !== 'failed');
   const running = run();
-  // The entry leaves the map before this promise settles, so a waiter that sees a failure finds the key free and runs the call itself.
-  grant.actionResults.set(key, running.then(
-    (answer) => {
-      if (answer.outcome === 'ok') return answer;
-      grant.actionResults.delete(key);
-      return undefined;
-    },
-    () => { grant.actionResults.delete(key); return undefined; },
-  ));
-  return { answer: await running, duplicate: false };
+  // The state is set before the answer settles, so a replay that waited on a run which failed finds it failed and runs the call itself.
+  const record: PiActionRun = {
+    asked, identity, state: 'running',
+    answer: running.then(
+      (answer) => { record.state = answer.outcome === 'ok' ? 'ok' : 'failed'; return record.state === 'ok' ? answer : undefined; },
+      () => { record.state = 'failed'; return undefined; },
+    ),
+  };
+  grant.actionRuns.push(record);
+  return { answer: await running, duplicate: false, repeat };
 }
 
 /** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. */
@@ -191,21 +240,27 @@ export function createPiMcpRoutes(options: {
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
     /**
      * The ledger: one `pi.mcp_tool` line when a door call finishes, however it ends (a refusal, a failure, or an exception on
-     * its way out): the tool's name, outcome, time, size of the answer, channel, provider and a hash of the turn reference.
-     * Never arguments, results or the reference. It resolves the turn reference once and hands the grant to the call.
+     * its way out): the tool's name, outcome, time, size of the answer, channel, provider and a hash of the turn reference,
+     * and whether the request was a replay (`duplicate`), whether an identical action had already run (`sameArgsRepeat`) and
+     * whether replays could be recognised at all (`replayCheck`). Never arguments, results or the reference.
+     * It resolves the turn reference once, and notes the request's identity and what it asks on the turn, for the call to use.
      */
     const ledgered = <Input extends { readonly turn: string }>(
-      toolOf: (input: Input) => string,
-      run: (input: Input, ctx: ServerContext, grant: PiTurnGrant | undefined) => Promise<Settled>,
+      asks: (input: Input) => { readonly tool: string; readonly question: unknown },
+      run: (input: Input, ctx: ServerContext, door: Door) => Promise<Settled>,
     ) => async (input: Input, ctx: ServerContext): Promise<CallToolResult> => {
       const started = performance.now();
+      const { tool, question } = asks(input);
       const grant = registry.resolve(input.turn);
+      let door: Door | undefined;
       let settled: Settled | undefined;
       try {
-        settled = await run(input, ctx, grant);
+        const asked = askedOf(tool, question);
+        const identity = requestIdentity(ctx);
+        door = { grant, asked, identity, replayCheck: grant ? noteRequest(grant, identity, asked) : undefined };
+        settled = await run(input, ctx, door);
         return settled.reply;
       } finally {
-        const tool = toolOf(input);
         try {
           log.info({
             tool,
@@ -214,6 +269,8 @@ export function createPiMcpRoutes(options: {
             ...(settled ? { resultBytes: answerBytes(settled.reply) } : {}),
             truncated: settled?.truncated === true,
             duplicate: settled?.duplicate === true,
+            sameArgsRepeat: settled?.sameArgsRepeat === true,
+            ...(door?.replayCheck ? { replayCheck: door.replayCheck } : {}),
             turnHash: turnHash(input.turn),
             ...(grant ? { channel: channelOf(grant) } : {}),
             provider: settled?.provider ?? providerOf(tool),
@@ -226,7 +283,7 @@ export function createPiMcpRoutes(options: {
       description: 'Jarvis tools are not listed. Look one up by a few English or Danish keywords naming what the thing is (azure resource, github issue, calendar, kalender, note, vejr) to get its description and argument schema, then use call_tool. Exact tool names are ranked first, and the compact otherMatches entries can be called by exact name too. Local tools return at once; GitHub and Azure tools load only when the keywords name them (github, repo, issue, azure, resource) and may need a second search. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    }, ledgered<z.infer<typeof findSchema>>(() => 'find_tools', async (input, ctx, grant) => {
+    }, ledgered<z.infer<typeof findSchema>>((input) => ({ tool: 'find_tools', question: { query: input.query } }), async (input, ctx, { grant }) => {
       if (!grant) return say({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
       grant.requests.count += 1;
       let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
@@ -296,10 +353,11 @@ export function createPiMcpRoutes(options: {
     }));
     server.registerTool('call_tool', {
       title: 'Run a Jarvis tool',
-      description: 'Run a tool that find_tools returned (in tools or otherMatches), with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more. An action repeated with the same arguments in the same turn is not run again: the first result comes back with duplicate: true.',
+      description: 'Run a tool that find_tools returned (in tools or otherMatches), with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
       inputSchema: callSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    }, ledgered<z.infer<typeof callSchema>>((input) => input.name, async (input, ctx, grant) => {
+    }, ledgered<z.infer<typeof callSchema>>((input) => ({ tool: input.name, question: input.arguments }), async (input, ctx, door) => {
+      const { grant } = door;
       if (!grant) return say({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
       grant.requests.count += 1;
       if (grant.brain) {
@@ -379,13 +437,13 @@ export function createPiMcpRoutes(options: {
           return failed();
         }
       };
-      // An action is kept for its repeats within the turn; anything that reads, or whose effect is not classified, runs every time.
-      const { answer, duplicate } = effectOf(tool, input.arguments) === 'action'
-        ? await runOnce(grant, actionKey(tool.name, input.arguments), run)
-        : { answer: await run(), duplicate: false };
+      // An action is run through the replay check; anything that reads, or whose effect is not classified, simply runs.
+      const { answer, duplicate, repeat } = effectOf(tool, input.arguments) === 'action'
+        ? await runAction(grant, door, run)
+        : { answer: await run(), duplicate: false, repeat: false };
       return {
         reply: { ...(answer.isError ? { isError: true } : {}), content: [{ type: 'text', text: answer.text }] },
-        outcome: answer.outcome, truncated: answer.truncated, duplicate,
+        outcome: answer.outcome, truncated: answer.truncated, duplicate, sameArgsRepeat: repeat,
       };
     }));
     return server;
