@@ -12,7 +12,7 @@ import {
   type JarvisVoiceWakeEvent,
 } from '@jarvis/contracts';
 import { defaultSettings, readSettings } from '../core/settings.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
   isIrreversibleKeySequence,
@@ -35,6 +35,9 @@ const MAX_MESSAGE_BYTES = 128 * 1024;
 const MAX_CAPTURE_RESPONSE_BYTES = MAX_WEBSOCKET_PAYLOAD_BYTES;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_STARTUP_GRACE_MS = 2 * 60_000;
+// Transport failures reach Dan through the tool result; an untyped Error would only ever show as "Tool execution failed".
+const pcDisconnected = 'The PC bridge disconnected before it answered; the action may not have happened.';
+const pcCommandFailed = 'The PC bridge could not complete that command.';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
@@ -308,7 +311,7 @@ export class PcBridgeConnection {
     const socket = this.socket;
     this.socket = undefined;
     if (socket && socket.readyState === WebSocket.OPEN) socket.close(1001, 'Backend shutting down');
-    this.rejectPending(new Error('PC bridge disconnected'));
+    this.rejectPending(new ToolFailure(pcDisconnected));
     await this.statusUpdate;
   }
 
@@ -355,7 +358,7 @@ export class PcBridgeConnection {
       throw new ToolRefusal('Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.');
     }
     if (signal.aborted) throw new Error('PC bridge command was cancelled');
-    if (this.pending.size >= 16) throw new Error('PC bridge is busy');
+    if (this.pending.size >= 16) throw new ToolFailure('The PC bridge is busy with other commands. Try again in a moment.');
 
     const id = randomUUID();
     const envelope = JSON.stringify({ id, type: 'command', command: command.name, arguments: command.arguments });
@@ -367,14 +370,14 @@ export class PcBridgeConnection {
         resolve,
         reject,
         signal,
-        timer: setTimeout(() => this.finish(id, new Error('PC bridge command timed out')), this.timeoutMs),
+        timer: setTimeout(() => this.finish(id, new ToolFailure('The PC bridge did not answer in time; the action may not have happened.')), this.timeoutMs),
         abort: () => this.finish(id, new Error('PC bridge command was cancelled')),
       };
       pending.timer.unref();
       this.pending.set(id, pending);
       signal.addEventListener('abort', pending.abort, { once: true });
       socket.send(envelope, (error) => {
-        if (error) this.finish(id, new Error('PC bridge command failed'));
+        if (error) this.finish(id, new ToolFailure(pcCommandFailed));
       });
     });
   }
@@ -472,11 +475,11 @@ export class PcBridgeConnection {
           ? 'The foreground Windows app or requested control was not found.'
           : 'The requested app, folder, or window was not found.',
       ));
-      else this.finish(response.id, new Error('PC bridge command failed'));
+      else this.finish(response.id, new ToolFailure(pcCommandFailed));
       return;
     }
     if (response.type !== 'result' || !validResult(pending.command, response.result)) {
-      this.finish(response.id, new Error('Invalid PC bridge result'));
+      this.finish(response.id, new ToolFailure('The PC bridge answered in a way Jarvis could not read; the action may not have happened.'));
       return;
     }
     this.finish(response.id, undefined, response.result);
@@ -508,7 +511,7 @@ export class PcBridgeConnection {
     this.onWakeWord = undefined;
     this.wakeWordListening = false;
     this.wakeWordEnabled = undefined;
-    this.rejectPending(new Error('PC bridge disconnected'));
+    this.rejectPending(new ToolFailure(pcDisconnected));
     this.setStatus(false);
   }
 
