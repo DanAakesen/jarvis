@@ -219,10 +219,12 @@ function googleDateTime(value: unknown, timeZone: string): Date | undefined {
 
 function requiredEvent(value: unknown): Record<string, unknown> {
   const event = object(value);
-  if (!event || typeof event.id !== 'string' || !event.id || typeof event.summary !== 'string') {
+  if (!event || typeof event.id !== 'string' || !event.id ||
+      (event.summary !== undefined && typeof event.summary !== 'string')) {
     throw new ToolFailure('Google Calendar returned an invalid event.');
   }
-  return event;
+  // Google leaves `summary` out of an untitled event and labels it "(No title)" itself.
+  return event.summary === undefined ? { ...event, summary: '(No title)' } : event;
 }
 
 function eventSummary(event: Record<string, unknown>, timeZone: string) {
