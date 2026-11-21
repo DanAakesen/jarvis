@@ -9,6 +9,7 @@ import type { PiTurnRegistry } from './turns.js';
 import type { BrainControl } from './brain/control.js';
 import { PI_MODEL, PI_REASONING_EFFORT } from './definition.js';
 import type { PiSituationService } from './situation.js';
+import { piCapabilityNote } from './capabilities.js';
 
 export interface PiModuleOptions {
   /** Absent until the Deploy workflow has provisioned the agent and given the backend its name and MCP secret. */
@@ -53,8 +54,6 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
       if (!options.gateway) {
         return reply.code(503).send({ error: 'PI is not set up on this backend yet. No other engine was used.', code: 'pi_not_configured' });
       }
-      // Starts a remote server that scales to zero (Azure) and reads the catalogues now, so the first search does not wait for them.
-      for (const bridge of options.bridges ?? []) bridge.warm();
       const controller = new AbortController();
       request.raw.once('aborted', () => controller.abort());
       try { return await options.gateway.warm(AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)])); } catch (error) {
@@ -103,8 +102,8 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
         },
       });
     };
-    // Wake a server that scales from zero (Azure) as the backend starts, so its first search does not find it asleep.
-    for (const bridge of options.bridges ?? []) bridge.warm();
+    // GitHub and Azure start idle: a bridge loads its catalogue only when a request names the provider (see mcp.ts).
+    gateway.setCapabilityNote?.(() => piCapabilityNote(app.jarvisTools, options.bridges ?? []));
     await app.register(createPiMcpRoutes({
       registry: options.registry,
       auth: options.auth,

@@ -120,6 +120,10 @@
 
 - `POST /pi/smoke` needs `{ "part": "core" | "voice" | "reach" }`. `.github/scripts/pi_smoke_report.py` calls the three in turn and merges them; run it through Deploy `measure_pi`. Checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`.
 
+## PI tool loading and discovery — 21 November 2026 (#1967)
+
+- `cd apps/backend && npx vitest run src/pi src/core/owner-message.test.ts src/core/conversation-progress.test.ts`, then backend build and lint. GitHub and Azure bridges start idle and load only when a `find_tools` query names them; do not add startup warm-ups. The Danish/English alias table is `intentAliases` in `pi/tool-search.ts`. No live model, Foundry, MCP or paid run is part of these checks; Dan owns physical acceptance.
+
 ## Azure MCP cold start — 17 November 2026 (#1910, P15-208)
 
 - Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text is edited in the Foundry portal (it is not deployed from the repo); after a Foundry edit run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.

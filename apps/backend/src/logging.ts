@@ -109,7 +109,7 @@ const events = new Set([
   'voice.proactive_context_unavailable', 'voice.credential_refresh_failed',
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
+  'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'voice.late_session_ended',
   'voice.late_session_cleanup_failed', 'watch_transcription.stage',
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
@@ -672,6 +672,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.costDkk = input.costDkk;
     }
     if (typeof input.acknowledged === 'boolean') fields.acknowledged = input.acknowledged;
+    if (input.budgetRead === 'unavailable') fields.budgetRead = input.budgetRead;
   }
   if (input.msg === 'voice.turn_timing') {
     if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {
