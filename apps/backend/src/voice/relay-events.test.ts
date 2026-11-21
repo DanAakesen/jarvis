@@ -1234,6 +1234,8 @@ describe('GPT-Live authoritative client events', () => {
         'jarvis:Sunny.',
       ]);
       expect(captionItems(relay)).toHaveLength(1);
+      await until(() => relay.received.some(event => event.type === 'jarvis.voice.input_transcript.completed'),
+        'completed caption');
       expect(relay.received.filter(event => event.type === 'jarvis.voice.input_transcript.completed'))
         .toEqual([expect.objectContaining({ transcript: 'Tell me what the weather is like tomorrow' })]);
     }, 20_000);
