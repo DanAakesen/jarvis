@@ -155,7 +155,7 @@ function workspaceItemTools(
   const tools: JarvisTool[] = [
     {
       name: 'workspaces_search',
-      description: 'Search saved research reports, HTML apps, generated images, and knowledge graph views in Workspaces.',
+      description: 'Search saved research reports, HTML apps, generated images, and knowledge graph views in Workspaces. Use when Dan asks to find or list something he saved earlier.',
       inputSchema: workspaceItemsSearchToolSchema,
       sensitive: true,
       async execute(input, request, signal) {
@@ -167,7 +167,7 @@ function workspaceItemTools(
     },
     {
       name: 'workspaces_open',
-      description: 'Reopen a saved Workspaces item by id or a unique search phrase, such as “Ignite research”.',
+      description: 'Reopen a saved Workspaces item by id or a unique search phrase, such as “Ignite research”. Use when Dan asks to open or pull up a saved item again.',
       inputSchema: workspaceItemOpenToolSchema,
       sensitive: true,
       async execute(input, request, signal) {
