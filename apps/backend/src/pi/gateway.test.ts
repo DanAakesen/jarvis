@@ -1200,7 +1200,10 @@ describe('PI gateway', () => {
         type: 'response.completed',
         response: { status: 'completed', output, usage: { input_tokens: input, input_tokens_details: { cached_tokens: cached }, output_tokens: out } },
       });
-      const finalMessage = (text: string, id = 'msg_1') => ({ type: 'message', id, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
+      const finalMessage = (text: string, id = 'msg_1', ...more: string[]) => ({
+        type: 'message', id, role: 'assistant', status: 'completed', content: [text, ...more].map(part => ({ type: 'output_text', text: part, annotations: [] })),
+      });
+      const anonymousMessage = (text: string) => ({ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
       const textDelta = (text: string, id = 'msg_1', index = 0) => frame({ type: 'response.output_text.delta', item_id: id, output_index: index, content_index: 0, delta: text });
       const textDone = (text: string, id = 'msg_1', index = 0) => frame({ type: 'response.output_text.done', item_id: id, output_index: index, content_index: 0, text });
       const statusless = { type: 'function_call', id: 'fc_call_1', call_id: 'call_1', name: 'lookup', arguments: '{}' };
@@ -1219,11 +1222,20 @@ describe('PI gateway', () => {
         ['1. a statusless call that was only added: no done event, nothing after it', [
           [created('resp_1'), delta(first), added(statusless), completed(11, 2, 7)],
         ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])],
+        ['1. a statusless approval request that was only added: no done event, nothing after it', [
+          [created('resp_1'), delta(first), added({ type: 'mcp_approval_request', id: 'mcpr_1', server_label: 'jarvis', name: 'read_file', arguments: '{"path":"/x"}' }), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])],
         ['2. reply text only in the terminal event, with no text deltas', [
           [created('resp_1'), finished([finalMessage(first)], 9, 3, 4)],
         ], ok(first, [9, 3, 4])],
         ['3. reply text only in response.output_text.done, with no text deltas', [
           [created('resp_1'), textDone(first), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['3. reply text only in response.output_text.done, named by its item id alone', [
+          [created('resp_1'), frame({ type: 'response.output_text.done', item_id: 'msg_1', content_index: 0, text: first }), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['3. reply text only in response.output_text.done, named by its output index alone', [
+          [created('resp_1'), frame({ type: 'response.output_text.done', output_index: 0, content_index: 0, text: first }), completed(9, 3, 4)],
         ], ok(first, [9, 3, 4])],
         ['4. an mcp_call that was only added after a completed call', [
           [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), added(mcpCall), completed(11, 2, 7)],
@@ -1232,6 +1244,10 @@ describe('PI gateway', () => {
           [created('resp_1'), earlierMessage(by).opened, delta(first), ...functionCall('lookup', 'call_1', '{}'), earlierMessage(by).closed, completed(10, 2, 5)],
           [created('resp_2'), delta(second), completed(12, 4, 6)],
         ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])]),
+        ['5. the mcp_call opened before the call is closed after it', [
+          [created('resp_1'), delta(first), added(mcpCall, 0), ...functionCall('lookup', 'call_1', '{}'), finishedItem(mcpCall, 0), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
         ['5. the text of the message opened before the call is closed after it too', [
           [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), textDelta(first), ...functionCall('lookup', 'call_1', '{}'),
             textDone(first), finishedItem({ type: 'message', id: 'msg_1' }, 0), completed(10, 2, 5)],
@@ -1248,6 +1264,10 @@ describe('PI gateway', () => {
           [created('resp_1'), delta(first), added(statusless), finished([statusless], 10, 2, 5)],
           [created('resp_2'), delta(second), completed(12, 4, 6)],
         ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['a statusless approval request with a done event is complete, so it is approved once', [
+          [created('resp_1'), delta(first), ...approval('mcpr_1'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [[{ type: 'mcp_approval_response', approval_request_id: 'mcpr_1', approve: true }]], ['client_owned:last_item_unanswered'])],
         ['native: text follows the call', [
           [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), ...message(second), completed(11, 2, 7)],
         ], ok(first + second, [11, 2, 7], [], ['native:later_output'])],
@@ -1308,6 +1328,15 @@ describe('PI gateway', () => {
         ], ok(first, [9, 3, 4])],
         ['a final text shorter than the streamed text adds nothing', [
           [created('resp_1'), textDelta(first), finished([finalMessage(first.slice(0, cut))], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a terminal-only reply that follows a call: the call is native and the text arrives once', [
+          [created('resp_1'), finished([{ ...statusless, status: 'completed' }, finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4], [], ['native:final_output'])],
+        ['the text parts of one message are reconciled by content index', [
+          [created('resp_1'), textDelta(first), finished([finalMessage(first, 'msg_1', second)], 9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+        ['a message without an id is reconciled by its output index', [
+          [created('resp_1'), frame({ type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: first }), finished([anonymousMessage(first)], 9, 3, 4)],
         ], ok(first, [9, 3, 4])],
         ['each message of the completed output is reconciled on its own', [
           [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_1'), finalMessage(second, 'msg_2')], 9, 3, 4)],

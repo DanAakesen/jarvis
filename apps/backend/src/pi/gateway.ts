@@ -590,6 +590,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let unplaced = '';
     // What of a part's authoritative text the reply does not hold yet. Nothing when the two disagree: the reply is never corrupted.
     const unstreamed = (slot: OutputSlot | undefined, part: number, text: string): string => {
+      if (text.length === 0) return '';
       let streamed = slot?.text.get(part);
       if (streamed === undefined) {
         if (text.startsWith(unplaced)) { streamed = unplaced; unplaced = ''; }
