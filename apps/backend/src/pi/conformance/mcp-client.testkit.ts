@@ -52,7 +52,8 @@ export function createMcpClient(options: {
   readonly auth: PiAuth;
   readonly owner: string;
   readonly sessionId: string;
-  readonly messageId: string;
+  /** Read when a turn opens, so every call can be attributed to its own stored Dan message. */
+  readonly messageId: () => string;
   readonly secret?: string;
 }): McpClient {
   const { app, registry, owner } = options;
@@ -93,7 +94,7 @@ export function createMcpClient(options: {
     openTurn(turnOptions = {}) {
       const controller = new AbortController();
       const grant = registry.open({
-        ownerObjectId: owner, sessionId: options.sessionId, messageId: options.messageId, signal: controller.signal,
+        ownerObjectId: owner, sessionId: options.sessionId, messageId: options.messageId(), signal: controller.signal,
         ...(turnOptions.wake ? { brain: { runId: 'conformance-wake', sent: [], wrote: [], looked: [] } } : {}),
         ...(turnOptions.activation ? { activation: turnOptions.activation } : {}),
       });

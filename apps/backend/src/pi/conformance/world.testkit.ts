@@ -132,7 +132,7 @@ export async function buildConformanceWorld(options: {
   await app.ready();
 
   const client = createMcpClient({
-    app, registry, auth, owner: context.owner, sessionId: context.ownerMessage.sessionId, messageId: context.ownerMessage.id,
+    app, registry, auth, owner: context.owner, sessionId: context.ownerMessage.sessionId, messageId: () => context.ownerMessage.id,
   });
   return {
     app, context, groups, tools: app.jarvisTools.list(), registry, auth, client, bridges, remote: { github, azure }, recorded, thrown, warnings,

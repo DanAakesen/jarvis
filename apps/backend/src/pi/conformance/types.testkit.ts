@@ -18,9 +18,10 @@ export interface ConformanceContext {
   /**
    * The stored Dan message the current turn is attributed to. Stubbed message stores answer `getSourceMessage(...)` with
    * `text`, so a case can say what Dan "asked" (a tool that needs explicit intent reads it). The suite sets `text` before
-   * every call from `ToolCase.ownerMessage` (default: a plain imperative request).
+   * every call from `ToolCase.ownerMessage` (default: a plain imperative request), and gives every call a fresh message `id`, so
+   * per-message state (a Gmail turn, an idempotent write) never leaks from one tool's case into another's.
    */
-  readonly ownerMessage: { text: string; readonly id: string; readonly sessionId: string };
+  readonly ownerMessage: { text: string; id: string; readonly sessionId: string };
   /** Dependency tokens the stubs must fail (network down, bridge offline) while they are in the set. */
   readonly down: Set<string>;
   /** The turn registry the MCP door uses. Tools that prove the turn they run in (a PI activation, a brain wake) must be built with this one. */
@@ -38,6 +39,8 @@ export interface ToolCase {
    * `activation` for the situation tools.
    */
   readonly turn?: 'chat' | 'wake' | 'activation';
+  /** Attribute this call to the same stored Dan message as the previous call of this tool (to prove a repeat is idempotent). */
+  readonly sameMessageAsPrevious?: true;
   /** Default `ok`. `refused`/`error` are for cases that prove a typed, plain-English refusal or failure. */
   readonly expect?: 'ok' | 'refused' | 'error';
   /** Extra assertions on the structured result (the `result` field of the call_tool answer). Throw to fail. */

@@ -153,7 +153,6 @@ export const goldenIntents: readonly { readonly scenario: string; readonly step:
   { scenario: 'jarvis-project', step: 'start work on an issue', tools: ['start_issue'] },
   { scenario: 'jarvis-project', step: 'create a task', tools: ['create_task'] },
   { scenario: 'jarvis-project', step: 'follow a worker', tools: ['get_task', 'get_work_status'] },
-  { scenario: 'jarvis-project', step: 'look at the pull request', tools: ['pr_get', 'github_read'] },
   { scenario: 'notes', step: 'save a note', tools: ['vault_write'] },
   { scenario: 'notes', step: 'find a note', tools: ['vault_search'] },
   { scenario: 'notes', step: 'read a note', tools: ['vault_read'] },

@@ -56,6 +56,10 @@ export function openTurn(world: ConformanceWorld, kind: 'chat' | 'wake' | 'activ
   return world.client.openTurn(kind === 'wake' ? { wake: true } : kind === 'activation' ? { activation } : {});
 }
 
+/** Every call is its own Dan message (ids start high so they never collide with a store's seeded rows). */
+let messageCounter = 5_000;
+let lastMessageId = '5000';
+
 export interface ExecutedCase {
   readonly outcome: 'ok' | 'refused' | 'error';
   readonly result: unknown;
@@ -68,8 +72,10 @@ export interface ExecutedCase {
  * failure text, a call the model could not make because the search did not return the tool.
  */
 export async function executeCase(
-  world: ConformanceWorld, tool: RegisteredTool, turnKind: 'chat' | 'wake' | 'activation', testCase: Pick<ToolCase, 'label' | 'arguments' | 'ownerMessage'>,
+  world: ConformanceWorld, tool: RegisteredTool, turnKind: 'chat' | 'wake' | 'activation', testCase: Pick<ToolCase, 'label' | 'arguments' | 'ownerMessage' | 'sameMessageAsPrevious'>,
 ): Promise<ExecutedCase> {
+  if (testCase.sameMessageAsPrevious !== true) { messageCounter += 1; lastMessageId = String(messageCounter); }
+  world.context.ownerMessage.id = lastMessageId;
   const turn = openTurn(world, turnKind);
   const label = `${tool.name} [${testCase.label}]`;
   try {
