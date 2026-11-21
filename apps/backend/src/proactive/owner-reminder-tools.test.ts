@@ -193,4 +193,42 @@ describe('owner_reminders delivery evidence', () => {
     });
     expect(read.reminders[0]?.recovery).toMatch(/no delivery attempt is recorded.*evidence is unavailable/u);
   });
+  it('returns a cancelled reminder with no next retry and a cancellation reason', async () => {
+    const store = createMemoryOwnerReminderStore();
+    const tool = createOwnerReminderTool({
+      ownerObjectId: owner,
+      store,
+      vault: vault() as never,
+      now: () => now,
+    });
+    const created = await tool.execute({
+      operation: 'create',
+      task: taskTitle,
+      fireAt: '2026-11-20T10:05:00.000Z',
+    }, ownerRequest(), AbortSignal.timeout(1_000)) as { reminder: { id: string } };
+    const [claimed] = await store.claimDue(new Date('2026-11-20T10:05:00.000Z'), 1, 120_000);
+    await store.finishClaim(claimed!.id, claimed!.claimToken!, {
+      state: 'retrying',
+      reason: 'provider_unavailable',
+      sendAttempts: 1,
+      nextAttemptAt: new Date('2026-11-20T10:10:00.000Z'),
+      lastDelivery: 'retrying',
+      lastProviderOutcome: 'provider_unavailable',
+    });
+
+    const result = await tool.execute({
+      operation: 'cancel',
+      id: created.reminder.id,
+      task: taskTitle,
+    }, ownerRequest(), AbortSignal.timeout(1_000)) as { cancelled: boolean; reminder: Record<string, unknown> };
+
+    expect(result.cancelled).toBe(true);
+    expect(result.reminder).toMatchObject({
+      state: 'cancelled',
+      reason: 'cancelled',
+      nextRetryAt: null,
+      nextActionAt: null,
+      recovery: 'The reminder is cancelled.',
+    });
+  });
 });

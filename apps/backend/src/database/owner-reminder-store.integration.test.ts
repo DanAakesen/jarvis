@@ -320,6 +320,47 @@ describe('durable owner reminder outbox', () => {
       attemptCount: 0,
     });
   });
+  it('lists active reminders soonest first, then the newest terminal reminders within the limit', async () => {
+    const owner = randomUUID();
+    const store = createOwnerReminderStore(pool, owner);
+    const base = new Date('2026-11-22T10:00:00.000Z');
+    for (let index = 0; index < 25; index += 1) {
+      const fireAt = new Date(base.getTime() + index * 60_000);
+      const { schedule } = await store.create({
+        idempotencyKey: (index + 1).toString(16).padStart(64, 'a'),
+        taskIdentity: 'b'.repeat(64),
+        taskTitle: `Terminal ${index}`,
+        fireAt,
+        localTime: '11:00',
+        anchorDate: null,
+        cadence: null,
+        untilTaskDone: false,
+      }, new Date(base.getTime() - 300_000));
+      const [claimed] = await store.claimDue(fireAt, 1, 120_000);
+      await store.finishClaim(schedule.id, claimed!.claimToken!, {
+        state: 'failed',
+        reason: 'provider_rejected',
+        lastDelivery: 'failed',
+      });
+    }
+    const active = await store.create({
+      idempotencyKey: 'f'.repeat(64),
+      taskIdentity: 'c'.repeat(64),
+      taskTitle: 'Still scheduled',
+      fireAt: new Date(base.getTime() + 24 * 3_600_000),
+      localTime: '12:00',
+      anchorDate: null,
+      cadence: null,
+      untilTaskDone: false,
+    }, base);
+
+    const listed = await store.list(20);
+    expect(listed[0]?.id).toBe(active.schedule.id);
+    expect(listed.slice(1).map(({ taskTitle }) => taskTitle)).toEqual(
+      Array.from({ length: 19 }, (_, index) => `Terminal ${24 - index}`),
+    );
+  });
+
   it('refuses rollback while delivery evidence exists and reapplies cleanly after it is retired', async () => {
     const up = await readFile(
       new URL('../../../../db/migrations/0102_owner_reminder_delivery_outbox.sql', import.meta.url),

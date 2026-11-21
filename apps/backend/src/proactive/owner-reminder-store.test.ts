@@ -92,6 +92,79 @@ describe('owner reminder delivery state', () => {
     });
   });
 
+  it('summarizes an accepted device plus a retrying device as a retry regardless of row order', () => {
+    const accepted = {
+      state: 'accepted' as const,
+      attemptCount: 1,
+      lastResult: 'provider_accepted',
+      lastStatusCode: 200,
+      nextAttemptAt: null,
+      leaseUntil: null,
+      lastAttemptAt: at,
+    };
+    const retrying = {
+      state: 'retrying' as const,
+      attemptCount: 1,
+      lastResult: 'provider_unavailable',
+      lastStatusCode: 503,
+      nextAttemptAt: new Date(at.getTime() + 300_000),
+      leaseUntil: null,
+      lastAttemptAt: at,
+    };
+    for (const rows of [[accepted, retrying], [retrying, accepted]]) {
+      expect(summarizeOwnerReminderDeliveries(rows)).toMatchObject({
+        acceptedRecipientCount: 1,
+        pendingRecipientCount: 1,
+        providerOutcome: 'provider_unavailable',
+        providerStatusCode: 503,
+        nextAttemptAt: new Date(at.getTime() + 300_000),
+      });
+    }
+    expect(summarizeOwnerReminderDeliveries([
+      accepted,
+      { ...retrying, state: 'sending', nextAttemptAt: null, leaseUntil: new Date(at.getTime() + 20_000) },
+    ]).providerOutcome).toBe('in_progress');
+  });
+
+  it('lists the newest terminal reminders even when more than twenty exist', async () => {
+    const store = createMemoryOwnerReminderStore();
+    for (let index = 0; index < 25; index += 1) {
+      const fireAt = new Date(at.getTime() + index * 60_000);
+      const { schedule } = await store.create({
+        idempotencyKey: index.toString(16).padStart(64, '0'),
+        taskIdentity: 'b'.repeat(64),
+        taskTitle: `Task ${index}`,
+        fireAt,
+        localTime: '11:00',
+        anchorDate: null,
+        cadence: null,
+        untilTaskDone: false,
+      }, new Date(at.getTime() - 300_000));
+      const [claimed] = await store.claimDue(fireAt, 1, 60_000);
+      await store.finishClaim(schedule.id, claimed!.claimToken!, {
+        state: 'failed',
+        reason: 'provider_rejected',
+        lastDelivery: 'failed',
+      });
+    }
+    const newest = await store.create({
+      idempotencyKey: 'f'.repeat(64),
+      taskIdentity: 'c'.repeat(64),
+      taskTitle: 'Still scheduled',
+      fireAt: new Date(at.getTime() + 3_600_000),
+      localTime: '12:00',
+      anchorDate: null,
+      cadence: null,
+      untilTaskDone: false,
+    }, at);
+
+    const listed = await store.list(20);
+    expect(listed[0]?.id).toBe(newest.schedule.id);
+    expect(listed.slice(1).map(({ taskTitle }) => taskTitle)).toEqual(
+      Array.from({ length: 19 }, (_, index) => `Task ${24 - index}`),
+    );
+  });
+
   it('suppresses pending outbox work atomically on reschedule and cancellation', async () => {
     const registrationId = randomUUID();
     const recipients = [{ registrationId, deviceToken: 'ab'.repeat(32) }];

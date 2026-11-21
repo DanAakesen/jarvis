@@ -142,8 +142,7 @@ async function deliveredOwnerReminder(
     metadata.scheduleId,
     metadata.occurrenceAt,
   );
-  if (unresolved || summary.pendingRecipientCount > 0 &&
-      (summary.providerOutcome === 'in_progress' || claimed.length === 0)) {
+  if (unresolved || summary.pendingRecipientCount > 0 && summary.providerOutcome === 'in_progress') {
     return {
       status: 'skipped',
       reason: 'delivery_evidence_unavailable',

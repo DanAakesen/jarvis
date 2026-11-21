@@ -378,7 +378,7 @@ export function createOwnerReminderTool(options: {
         if (intent.action !== 'cancel') throw new ToolRefusal('A direct cancellation request is required.');
         const cancelled = await options.store.cancel(schedule.id);
         if (!cancelled) throw new ToolRefusal('That reminder is no longer scheduled.');
-        return { operation: 'cancel', cancelled: true, reminder: scheduleResult({ ...schedule, state: 'cancelled' }, now) };
+        return { operation: 'cancel', cancelled: true, reminder: scheduleResult({ ...schedule, state: 'cancelled', reason: 'cancelled', nextAttemptAt: null }, now) };
       }
       if (intent.action !== input.operation || intent.fireAt.getTime() <= now.getTime() ||
           intent.fireAt.getTime() > now.getTime() + 366 * 24 * 60 * 60_000) {

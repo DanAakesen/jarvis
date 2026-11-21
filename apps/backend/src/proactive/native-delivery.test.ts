@@ -19,13 +19,16 @@ const registration: StoredApprovalNotificationRegistration = {
 };
 const now = new Date('2026-11-20T10:00:00.000Z');
 
-async function setup(sender: ApprovalNotificationSender) {
+async function setup(
+  sender: ApprovalNotificationSender,
+  extraRecipients: readonly { registrationId: string; deviceToken: string }[] = [],
+) {
   let clock = new Date(now);
   const store = createMemoryOwnerReminderStore({
     nativeRecipients: () => [{
       registrationId: registration.registrationId,
       deviceToken: registration.deviceToken,
-    }],
+    }, ...extraRecipients],
   });
   const { schedule } = await store.create({
     idempotencyKey: 'a'.repeat(64),
@@ -112,6 +115,30 @@ describe('durable native owner reminder delivery', () => {
       proactiveItemID: request.itemId,
       ownerReminderID: request.ownerReminderDelivery!.scheduleId,
     });
+  });
+
+  it('reports a retry with its time when one device accepted and another failed transiently', async () => {
+    const second = { registrationId: randomUUID(), deviceToken: 'cd'.repeat(32) };
+    const send = vi.fn<ApprovalNotificationSender['send']>(async (token) => token === second.deviceToken
+      ? { accepted: false, invalidToken: false, retryable: true, statusCode: 503 }
+      : { accepted: true, invalidToken: false, statusCode: 200 });
+    const { store, delivery, request } = await setup({ send }, [second]);
+    const outcome = await delivery.send(request, new AbortController().signal);
+
+    expect(outcome).toMatchObject({
+      status: 'failed',
+      reason: 'provider_unavailable',
+      accepted: 1,
+      statusCode: 503,
+    });
+    expect(outcome?.deliveryEvidence).toMatchObject({
+      recipientCount: 2,
+      acceptedRecipientCount: 1,
+      pendingRecipientCount: 1,
+      providerOutcome: 'provider_unavailable',
+    });
+    expect(outcome?.deliveryEvidence?.nextAttemptAt?.toISOString()).toBe('2026-11-20T10:05:00.000Z');
+    expect(store.deliverySnapshot().map(({ state }) => state).sort()).toEqual(['accepted', 'retrying']);
   });
 
   it('caps transient APNs retries and preserves the same collapse identity', async () => {

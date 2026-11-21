@@ -189,14 +189,15 @@ export function summarizeOwnerReminderDeliveries(
     state === 'pending' || state === 'sending' || state === 'retrying');
   const latest = [...rows].sort((left, right) =>
     (right.lastAttemptAt?.getTime() ?? 0) - (left.lastAttemptAt?.getTime() ?? 0))[0]!;
+  const awaitingRetry = pending.length > 0 && pending.every(({ state, nextAttemptAt }) =>
+    state === 'retrying' && nextAttemptAt !== null);
   const nextAttemptTimes = pending.flatMap(({ nextAttemptAt, leaseUntil }) =>
     [nextAttemptAt, leaseUntil].flatMap((value) => value === null ? [] : [value.getTime()]));
   let providerOutcome: OwnerReminderProviderOutcome;
   if (accepted === rows.length) providerOutcome = 'provider_accepted';
   else if (pending.length > 0) {
-    providerOutcome = latest.attemptCount > 0 && latest.lastResult === 'provider_unavailable'
-      ? 'provider_unavailable'
-      : 'in_progress';
+    // Judge the unfinished rows only: a batch shares one attempt time, so `latest` may be an accepted row.
+    providerOutcome = awaitingRetry ? 'provider_unavailable' : 'in_progress';
   } else if (accepted > 0) providerOutcome = 'partial_acceptance';
   else if (rows.every(({ state }) => state === 'invalid_token')) providerOutcome = 'apns_invalid_token';
   else if (rows.every(({ lastResult }) => lastResult === 'registration_removed')) {
@@ -221,7 +222,8 @@ export function summarizeOwnerReminderDeliveries(
     pendingRecipientCount: pending.length,
     attemptCount: Math.max(...rows.map((row) => row.attemptCount)),
     providerOutcome,
-    providerStatusCode: latest.lastStatusCode,
+    providerStatusCode: (awaitingRetry ? pending.find(({ lastStatusCode }) => lastStatusCode !== null) : latest)
+      ?.lastStatusCode ?? null,
     nextAttemptAt: nextAttemptTimes.length === 0 ? null : new Date(Math.min(...nextAttemptTimes)),
   };
 }
@@ -325,9 +327,13 @@ export function createMemoryOwnerReminderStore(options: {
             state === 'scheduled' || state === 'sending' || state === 'retrying';
           const rank = Number(!active(left.state)) - Number(!active(right.state));
           if (rank !== 0) return rank;
-          const leftAt = left.nextAttemptAt?.getTime() ?? left.fireAt.getTime();
-          const rightAt = right.nextAttemptAt?.getTime() ?? right.fireAt.getTime();
-          return leftAt - rightAt || right.fireAt.getTime() - left.fireAt.getTime();
+          // Soonest first only while a reminder can still act; history lists the newest outcome first.
+          if (active(left.state)) {
+            const leftAt = left.nextAttemptAt?.getTime() ?? left.fireAt.getTime();
+            const rightAt = right.nextAttemptAt?.getTime() ?? right.fireAt.getTime();
+            if (leftAt !== rightAt) return leftAt - rightAt;
+          }
+          return right.fireAt.getTime() - left.fireAt.getTime();
         })
         .slice(0, limit)
         .map(copy);

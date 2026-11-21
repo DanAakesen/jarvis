@@ -220,7 +220,9 @@ export function createOwnerReminderStore(
         .query<OwnerReminderDatabaseRow>(`SELECT TOP (@limit) ${columns} FROM dbo.owner_reminder_schedules
           WHERE owner_object_id = @owner
           ORDER BY CASE WHEN state IN (N'scheduled', N'sending', N'retrying') THEN 0 ELSE 1 END,
-            COALESCE(next_attempt_at, fire_at) ASC, fire_at DESC;`);
+            CASE WHEN state IN (N'scheduled', N'sending', N'retrying')
+              THEN COALESCE(next_attempt_at, fire_at) END ASC,
+            fire_at DESC;`);
       return recordset.map(mapRow);
     },
     async get(id) {
