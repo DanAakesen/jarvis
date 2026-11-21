@@ -243,6 +243,17 @@ describe('callable: every tool runs through the real call_tool over stubbed stor
   });
 });
 
+// ---- Size limits ---------------------------------------------------------------------------------------------------------------
+
+describe('size: the door accepts what the tools accept', () => {
+  it('lets a 400 KB HTML app through (create_html_view allows 512 KB; the door used to refuse anything above 256 KB with HTTP 413)', async () => {
+    const tool = world.app.jarvisTools.get('create_html_view')!;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Large app</title></head><body><p>${'x'.repeat(400_000)}</p></body></html>`;
+    const done = await executeCase(world, tool, 'chat', { label: 'large app', arguments: { title: 'Large app', html, sources: [] } });
+    expect(done.outcome, `create_html_view answered ${done.outcome} ("${done.message ?? ''}")`).toBe('ok');
+  });
+});
+
 // ---- Remote bridges ----------------------------------------------------------------------------------------------------------
 
 /** A door with no local tools and fresh stub GitHub and Azure servers: the bridge behaviour is what is under test. */
