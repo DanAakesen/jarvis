@@ -447,6 +447,12 @@ class VoiceAgentTest(unittest.TestCase):
         self.assertEqual((result["version"], result["created"]), ("2", False))
         self.assertEqual({method for method, _ in calls}, {"GET"})
 
+    def test_store_true_saved_by_the_portal_passes_without_any_write(self):
+        versions = {"1": {"status": "active", "definition": self.seed}, "13": self.edited(store=True)}
+        result, calls = self.provision(self.pinned("13"), versions)
+        self.assertEqual((result["version"], result["created"]), ("13", False))
+        self.assertEqual({method for method, _ in calls}, {"GET"})
+
     def test_without_a_pin_rule_the_latest_version_is_verified(self):
         versions = {"1": {"status": "active", "definition": self.seed}, "3": self.edited(delegation={"type": "server"})}
         for latest in ({"version": "3"}, 3):
@@ -463,7 +469,6 @@ class VoiceAgentTest(unittest.TestCase):
             "voice_readback_delegation_mismatch": {"delegation": {"type": "server"}},
             "voice_readback_audio_format_mismatch": {"audio": {"format": {"type": "audio/pcm", "rate": 16000}}},
             "voice_readback_model_mismatch": {"model": "gpt-live-2"},
-            "voice_readback_store_mismatch": {"store": True},
             "voice_readback_kind_mismatch": {"kind": "prompt"},
         }
         for code, change in drift.items():
@@ -493,6 +498,7 @@ class VoiceAgentTest(unittest.TestCase):
         self.assertEqual([call for call in calls if call[0] == "POST"], [("POST", "/agents/jarvis-pi-live/versions")])
         self.assertEqual(patched, ["1"])
         self.assertEqual(versions["1"]["definition"]["audio"]["output"]["voice"], "marin")
+        self.assertIs(versions["1"]["definition"]["store"], False)
 
 
 class ReachTest(unittest.TestCase):

@@ -95,7 +95,6 @@ def load_voice_spec() -> tuple[dict, str, dict]:
     require(spec["modelVersion"] == "2026-09-10", "voice_model_version_invalid")
     require(spec["sku"] == "GlobalStandard" and spec["capacity"] == 10, "voice_deployment_sku_invalid")
     require(spec["delegation"] == {"type": "client"}, "voice_delegation_invalid")
-    require(spec["store"] is False, "voice_store_invalid")
     audio = spec["audio"]
     # The format is a contract with the relay. The output voice only seeds a first version; Foundry owns it after that.
     require(isinstance(audio, dict) and audio.get("format") == VOICE_AUDIO_FORMAT, "voice_audio_invalid")
@@ -112,6 +111,7 @@ def load_voice_spec() -> tuple[dict, str, dict]:
         "instructions": instructions,
         "audio": audio,
         "delegation": spec["delegation"],
+        # Seed only: Foundry owns store afterwards (the portal saves new versions with true).
         "store": spec["store"],
     }
     return spec, instructions, definition
@@ -551,16 +551,15 @@ def voice_contract(spec: dict) -> dict:
         "model": spec["model"],
         "audio_format": VOICE_AUDIO_FORMAT,
         "delegation": spec["delegation"],
-        "store": spec["store"],
     }
 
 
 def verify_voice_agent(readback: dict, spec: dict) -> None:
-    """Fail on drift in the technical contract. Instructions, voice, greeting and the rest are never read."""
+    """Fail on drift in the technical contract. Instructions, voice, greeting, store and the rest are never read."""
     require(readback.get("status") == "active", "voice_agent_not_active")
     actual = readback.get("definition") or {}
     wanted = voice_contract(spec)
-    for key in ("kind", "sub_protocol", "model_type", "model", "delegation", "store"):
+    for key in ("kind", "sub_protocol", "model_type", "model", "delegation"):
         require(actual.get(key) == wanted[key], f"voice_readback_{key}_mismatch")
     audio = actual.get("audio")
     require(isinstance(audio, dict) and audio.get("format") == wanted["audio_format"], "voice_readback_audio_format_mismatch")
