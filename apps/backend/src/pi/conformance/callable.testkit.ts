@@ -8,7 +8,8 @@ import type { ConformanceGroup, ToolCase } from './types.testkit.js';
 import { isCurrentAssistantTool, isSituationActivationTool, isWakeTool } from '../../core/tool-registry.js';
 
 export type CallableStatus =
-  | { readonly kind: 'ok'; readonly variants: number }
+  /** At least one call answered ok; `typed` counts the calls that proved a typed, plain-English refusal or failure. */
+  | { readonly kind: 'ok'; readonly variants: number; readonly typed: number }
   | { readonly kind: 'refusal'; readonly variants: number; readonly note: string }
   | { readonly kind: 'failure'; readonly variants: number; readonly note: string }
   | { readonly kind: 'requiresExternal'; readonly reason: string }
@@ -178,8 +179,10 @@ export async function exerciseTool(world: ConformanceWorld, tool: RegisteredTool
     }
     testCase.check?.(done.result);
   }
-  const worst = outcomes.find((entry) => entry.outcome === 'error') ?? outcomes.find((entry) => entry.outcome === 'refused');
-  if (!worst) return { kind: 'ok', variants: outcomes.length };
+  // A tool is `ok` when at least one call ran to an ok result; every other call already matched what its case expected.
+  const typed = outcomes.filter((entry) => entry.outcome !== 'ok');
+  if (outcomes.some((entry) => entry.outcome === 'ok')) return { kind: 'ok', variants: outcomes.length, typed: typed.length };
+  const worst = typed.find((entry) => entry.outcome === 'error') ?? typed[0]!;
   return worst.outcome === 'error'
     ? { kind: 'failure', variants: outcomes.length, note: worst.message ?? '' }
     : { kind: 'refusal', variants: outcomes.length, note: worst.message ?? '' };

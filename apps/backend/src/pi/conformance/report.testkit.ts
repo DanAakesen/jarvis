@@ -23,7 +23,7 @@ const clip = (value: string, max: number) => (value.length <= max ? value : `${v
 function callableCell(status: CallableStatus | undefined): string {
   if (!status) return 'not run';
   switch (status.kind) {
-    case 'ok': return status.variants > 1 ? `ok (${status.variants} calls)` : 'ok';
+    case 'ok': return status.variants > 1 ? `ok (${status.variants} calls${status.typed > 0 ? `, ${status.typed} typed refusals or failures proven` : ''})` : 'ok';
     case 'refusal': return 'refusal';
     case 'failure': return 'failure (typed)';
     case 'requiresExternal': return 'requiresExternal';

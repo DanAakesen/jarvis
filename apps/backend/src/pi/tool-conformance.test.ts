@@ -385,7 +385,7 @@ describe('remote: the gh_ and az_ bridges behind the door', () => {
 
 // ---- Golden daily-core scenarios ----------------------------------------------------------------------------------------------
 
-const confirmationMarkers = /confirmationCode|requiresConfirmation|needsApproval|awaitingApproval|"pending"\s*:\s*true|proposal/iu;
+const confirmationMarkers = /confirmationCode|requiresConfirmation|needsApproval|awaitingApproval|"pending"\s*:\s*true|"status"\s*:\s*"(?:pending|proposal|proposed|staged|needs_[a-z_]+|awaiting_[a-z_]+)"/iu;
 const scenarios = world.groups.flatMap((group) => (group.scenarios ?? []).map((scenario) => ({ group, scenario })));
 
 describe('golden scenarios: one turn, no confirmation step, found on the first search', () => {

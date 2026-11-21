@@ -174,6 +174,14 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'pc', en: 'click the button on the page I am sharing', da: 'klik på knappen på siden jeg deler', tools: ['browser_do_shared'] },
   { intent: 'vision', en: 'tell me when someone is at the door', da: 'beskriv hvad du ser hele tiden', tools: ['watch_for'] },
   { intent: 'vision', en: 'stop looking through the camera', da: 'du kan stoppe med at kigge', tools: ['stop_watching_for'] },
+  { intent: 'nutrition', en: 'I had a banana for lunch', da: 'jeg spiste en banan til frokost', tools: ['health_food_review', 'health_food'] },
+  { intent: 'nutrition', en: 'what did I eat yesterday', da: 'hvad spiste jeg i går', tools: ['health_nutrition_history', 'health_query'] },
+  { intent: 'workouts', en: 'log 3 sets of bench press at 80 kilos', da: 'log 3 sæt bænkpres på 80 kilo', tools: ['gym_lifts'] },
+  { intent: 'workouts', en: 'I trained chest today', da: 'jeg har trænet bryst i dag', tools: ['gym_sessions'] },
+  { intent: 'workouts', en: 'how did my last run go', da: 'hvordan gik min sidste løbetur', tools: ['gym_sessions', 'health_query'] },
+  { intent: 'health', en: 'am I recovered', da: 'jeg er syg i dag', tools: ['health_coach_status'] },
+  { intent: 'health', en: 'give me a health overview', da: 'giv mig en oversigt over min sundhed', tools: ['health_summary', 'health_query'] },
+  { intent: 'health', en: 'set my daily step goal to 12000', da: 'sæt mit skridtmål til 12000', tools: ['health_coach_status'] },
 ];
 
 /**
