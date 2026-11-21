@@ -117,6 +117,7 @@ const events = new Set([
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
   'voice.tool_budget_probe',
   'voice.delegation_received', 'voice.owner_group_persisted', 'voice.did_not_catch', 'voice.pi_turn_started',
+  'voice.activity_published',
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable', 'approval.interpreted',
   'factory.issue_create_outcome_uncertain',
@@ -136,7 +137,7 @@ export function safeHistoricalLogFields(input: Record<string, unknown>): Record<
     'kind', 'method', 'reason', 'phase', 'stage', 'lastStage', 'outcome', 'decision', 'status',
     'language', 'scope', 'source', 'channel', 'closedBy', 'family', 'verdict', 'cachePath',
     'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
-    'errorCode', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
+    'errorCode', 'errorType', 'param', 'state', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
     'event', 'code', 'server', 'tool', 'azureCatalogue',
   ]);
   return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
@@ -750,11 +751,27 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.reusedGroup === 'boolean') fields.reusedGroup = input.reusedGroup;
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
     if (input.msg === 'voice.delegation_received' &&
-        ['attached', 'ignored_newer_owner_turn'].includes(String(input.outcome))) fields.outcome = input.outcome;
+        ['attached', 'adopted_stored_turn', 'ignored_newer_owner_turn'].includes(String(input.outcome))) fields.outcome = input.outcome;
     if (input.msg === 'voice.owner_group_persisted' &&
         ['delegated', 'direct_quiet', 'before_output', 'session_end'].includes(String(input.reason))) {
       fields.reason = input.reason;
     }
+  }
+  if (input.msg === 'voice.activity_published') {
+    // The state a client sees, what published it and what was still busy: no content.
+    if (['listening', 'thinking', 'speaking', 'interrupted', 'reconnecting', 'failed', 'ended']
+      .includes(String(input.state))) fields.state = input.state;
+    if ([
+      'response_started', 'response_completed', 'pi_started', 'pi_finished', 'delegation_received',
+      'input_transcript', 'input_audio', 'output_audio', 'microphone_active', 'microphone_muted',
+      'playback_completed', 'session_ended', 'session_failed', 'session_reconnecting',
+    ].includes(String(input.reason))) fields.reason = input.reason;
+    if (typeof input.sinceLastMs === 'number' && Number.isSafeInteger(input.sinceLastMs) &&
+        input.sinceLastMs >= 0 && input.sinceLastMs <= 100_000_000) fields.sinceLastMs = input.sinceLastMs;
+    for (const key of ['outputActive', 'piBusy', 'delegationPending']) {
+      if (typeof input[key] === 'boolean') fields[key] = input[key];
+    }
+    if (input.language === 'da' || input.language === 'en') fields.language = input.language;
   }
   if (input.msg === 'voice.turn_timing') {
     if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {
@@ -850,12 +867,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.httpStatus = input.httpStatus;
     }
     if (input.language === 'da' || input.language === 'en') fields.language = input.language;
-    if (input.msg === 'voice.upstream_event_error' && input.errorCode === 'invalid_function_parameters') {
-      fields.errorCode = input.errorCode;
-      if (typeof input.param === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.param)) {
-        fields.param = input.param;
+    if (input.msg === 'voice.upstream_event_error') {
+      // The upstream error's own type, code and parameter path as short tokens; never its free-text message.
+      for (const key of ['errorType', 'errorCode']) {
+        const value = input[key];
+        if (typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(value)) fields[key] = value;
       }
-      if (typeof input.upstreamMessage === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,300}$/.test(input.upstreamMessage)) {
+      if (typeof input.param === 'string' && /^[A-Za-z0-9_.[\]-]{1,120}$/.test(input.param)) fields.param = input.param;
+      if (input.errorCode === 'invalid_function_parameters' && typeof input.upstreamMessage === 'string' &&
+          /^[A-Za-z0-9 .:,'()_-]{1,300}$/.test(input.upstreamMessage)) {
         fields.upstreamMessage = input.upstreamMessage;
       }
     }

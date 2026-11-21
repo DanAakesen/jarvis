@@ -1,4 +1,5 @@
 import { AddressInfo } from 'node:net';
+import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import { buildApp } from '../app.js';
@@ -25,7 +26,7 @@ async function until(check: () => boolean, label: string, attempts = 800) {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function startRelay(store: ConversationStore, piAgent: PiVoiceAgent) {
+async function startRelay(store: ConversationStore, piAgent: PiVoiceAgent, logs?: string[]) {
   const upstream = new WebSocketServer({ port: 0 });
   const upstreamSockets: WebSocket[] = [];
   const upstreamEvents: Record<string, unknown>[] = [];
@@ -43,7 +44,11 @@ async function startRelay(store: ConversationStore, piAgent: PiVoiceAgent) {
   const upstreamUrl = `ws://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
   const app = buildApp(
     config,
-    createLogger({ ...config, logLevel: 'silent' } as typeof config),
+    logs
+      ? createLogger({ ...config, logLevel: 'info' } as typeof config, undefined, new Writable({
+        write(chunk: Buffer, _encoding, done) { logs.push(chunk.toString()); done(); },
+      }))
+      : createLogger({ ...config, logLevel: 'silent' } as typeof config),
     {
       auth: async () => ({
         objectId: config.auth.ownerObjectId,
@@ -405,7 +410,7 @@ describe('GPT-Live authoritative client events', () => {
     release();
   });
 
-  it('does not attach a late delegation to a newer owner transcript', async () => {
+  it('sends the whole current turn to PI whatever offset the delegation carries', async () => {
     const writes: Array<{ role: string; text: string }> = [];
     const store = {
       createSession: async () => ({
@@ -457,23 +462,16 @@ describe('GPT-Live authoritative client events', () => {
       start_ms: 201,
       end_ms: 300,
     }));
+    // The offset lies before the new words; it is not where the turn ends, so it must not drop them.
     relay.upstreamSockets[0]!.send(JSON.stringify({
       type: 'session.delegation.created',
-      event_id: 'late-old-delegation',
+      event_id: 'offset-delegation',
       offset_ms: 100,
-      delegation: { id: 'delegate-old', target: 'client' },
+      delegation: { id: 'delegate-offset', target: 'client' },
     }));
-    await sleep(700);
-    expect(inputs).toEqual([]);
-
-    relay.upstreamSockets[0]!.send(JSON.stringify({
-      type: 'session.delegation.created',
-      event_id: 'new-delegation',
-      offset_ms: 300,
-      delegation: { id: 'delegate-new', target: 'client' },
-    }));
-    await until(() => inputs.length === 1, 'new delegated owner turn');
-    expect(inputs[0]?.text).toBe('New request');
+    await until(() => inputs.length === 1, 'delegated owner turn');
+    await sleep(100);
+    expect(inputs.map(input => input.text)).toEqual(['New request']);
   }, 15_000);
 
   describe('delegation that precedes its owner transcript', () => {
@@ -825,13 +823,14 @@ describe('GPT-Live authoritative client events', () => {
       relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
       say(relay, 'settle-input', 'Check the build', 0, 100);
       delegate(relay, 'delegate-settle', 100);
-      say(relay, 'settle-backchannel', 'mm-hm', 201, 250);
-      await until(() => heard(relay, 'mm-hm'), 'relay to take the backchannel transcript');
+      say(relay, 'settle-backchannel', ' mm-hm', 201, 250);
+      await until(() => heard(relay, ' mm-hm'), 'relay to take the backchannel transcript');
       expect(runs).toHaveLength(0);
 
       await until(() => runs.length === 1, 'delegated PI turn after settling');
       await sleep(150);
-      expect(runs.map(run => run.text)).toEqual(['Check the build']);
+      // Words that arrive before PI starts belong to the same request; it still starts once.
+      expect(runs.map(run => run.text)).toEqual(['Check the build mm-hm']);
       expect(runs[0]!.aborted()).toBe(false);
 
       runs[0]!.reply('The build is green.');
@@ -847,14 +846,15 @@ describe('GPT-Live authoritative client events', () => {
       const { agent, runs } = gatedAgent();
       const relay = await startRelay(storeFor('77'), agent);
       relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
-      say(relay, 'early-input', 'Check the build', 0, 100);
+      say(relay, 'early-input', 'Check the build. ', 0, 100);
       delegate(relay, 'delegate-early', 100);
-      say(relay, 'correction-input', 'Check the deploy instead', 201, 300);
+      say(relay, 'correction-input', 'No, check the deploy instead', 201, 300);
       delegate(relay, 'delegate-correction', 300);
       await until(() => runs.length === 1, 'corrected PI turn');
       await sleep(800);
 
-      expect(runs.map(run => run.text)).toEqual(['Check the deploy instead']);
+      // The correction arrived before PI started, so PI hears the whole turn once and the newest delegation answers it.
+      expect(runs.map(run => run.text)).toEqual(['Check the build. No, check the deploy instead']);
       runs[0]!.reply('The deploy is fine.');
       await until(() => commentary(relay).length > 0, 'corrected PI result');
       await sleep(50);
@@ -1097,6 +1097,406 @@ describe('GPT-Live authoritative client events', () => {
         'jarvis:Sure. ',
       ]);
       expect(new Set(captionDeltas(relay).map(event => event.itemId)).size).toBe(1);
+    }, 20_000);
+  });
+  describe("Dan's whole spoken request, as GPT-Live really sends it", () => {
+    type Relay = Awaited<ReturnType<typeof startRelay>>;
+    type Write = { role: string; text: string; sourceItemId?: string };
+    const recordingStore = (writes: Write[]) => ({
+      createSession: async () => ({
+        id: '79', channel: 'voice', language: 'en', startedAt: new Date(), endedAt: null,
+      }),
+      endSession: async () => true,
+      addMessage: async (input: {
+        sessionId: string; role: string; text: string; model: string | null; sourceItemId?: string;
+      }) => {
+        writes.push({
+          role: input.role, text: input.text, ...(input.sourceItemId ? { sourceItemId: input.sourceItemId } : {}),
+        });
+        return {
+          id: String(7900 + writes.length), sessionId: input.sessionId, role: input.role,
+          text: input.text, model: input.model, at: new Date(),
+        } as ConversationMessage;
+      },
+    } as unknown as ConversationStore);
+    const gatedAgent = () => {
+      const runs: Array<{ text: string; aborted: () => boolean; reply: (text: string) => void }> = [];
+      const agent: PiVoiceAgent = {
+        async *stream(input, _authorization, signal) {
+          let reply!: (text: string) => void;
+          const answer = new Promise<string>((resolve, reject) => {
+            reply = resolve;
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+          runs.push({ text: input.text, aborted: () => signal.aborted, reply });
+          yield await answer;
+        },
+      };
+      return { agent, runs };
+    };
+    const send = (relay: Relay, event: Record<string, unknown>) =>
+      relay.upstreamSockets[0]!.send(JSON.stringify(event));
+    // Timestamps run on from word to word, as the provider's input timeline does.
+    let clock = 0;
+    const word = (relay: Relay, delta: string, lengthMs = 300) => {
+      send(relay, {
+        type: 'session.input_transcript.delta', event_id: `w${clock}`, delta, start_ms: clock, end_ms: clock + lengthMs,
+      });
+      clock += lengthMs;
+    };
+    const delegate = (relay: Relay, id: string, offsetMs: number) =>
+      send(relay, {
+        type: 'session.delegation.created', event_id: `${id}-event`, offset_ms: offsetMs,
+        delegation: { id, target: 'client' },
+      });
+    const answer = (relay: Relay, id: string, delta: string) => {
+      send(relay, { type: 'session.output_transcript.delta', event_id: `${id}-text`, delta });
+      send(relay, { type: 'session.output_audio.delta', event_id: `${id}-audio`, delta: 'AAE=' });
+    };
+    const commentary = (relay: Relay) =>
+      relay.upstreamEvents.filter(event => event.type === 'session.commentary.append');
+    const captionItems = (relay: Relay) => [...new Set(relay.received
+      .filter(event => event.type === 'jarvis.voice.input_transcript.delta').map(event => event.itemId))];
+    const started = (relay: Relay) => {
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      clock = 0;
+    };
+
+    it('sends the full sentence to PI once when the transcript keeps arriving after the delegation event', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'What ');
+      word(relay, 'is the weather ');
+      delegate(relay, 'delegate-weather', 600);
+      // The delegation's offset is far behind the words still to come; each gap is shorter than the quiet window.
+      for (const text of ['in ', 'Copenhagen ', 'tomorrow ', 'morning']) {
+        await sleep(350);
+        word(relay, text);
+        expect(runs).toHaveLength(0);
+      }
+      await until(() => runs.length === 1, 'PI turn with the whole sentence');
+      await sleep(900);
+
+      expect(runs.map(run => run.text)).toEqual(['What is the weather in Copenhagen tomorrow morning']);
+      expect(commentary(relay)).toEqual([]);
+      expect(writes.filter(write => write.role === 'dan').map(write => write.text))
+        .toEqual(['What is the weather in Copenhagen tomorrow morning']);
+      expect(captionItems(relay)).toHaveLength(1);
+    }, 20_000);
+
+    it('sends a transcript that arrives entirely after the delegation, after an earlier direct answer', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'Hello Jarvis');
+      answer(relay, 'greeting', 'Hello Dan.');
+      await until(() => writes.length === 2, 'direct turn stored', 1_000);
+      // GPT-Live named a far-off offset and no words are in yet: the group is empty, not "I did not catch that".
+      delegate(relay, 'delegate-late-words', 20_000);
+      await sleep(1_000);
+      expect(commentary(relay)).toEqual([]);
+      word(relay, 'Will it ');
+      await sleep(300);
+      word(relay, 'rain today');
+
+      await until(() => runs.length === 1, 'PI turn from the late transcript');
+      await sleep(900);
+      expect(runs.map(run => run.text)).toEqual(['Will it rain today']);
+      expect(commentary(relay)).toEqual([]);
+      expect(writes.filter(write => write.role === 'dan').map(write => write.text))
+        .toEqual(['Hello Jarvis', 'Will it rain today']);
+    }, 20_000);
+
+    it.each([700, 900])(
+      'sends the whole sentence to PI once when Dan pauses %i ms twice after the delegation event',
+      async (pauseMs) => {
+        const writes: Write[] = [];
+        const { agent, runs } = gatedAgent();
+        const relay = await startRelay(recordingStore(writes), agent);
+        started(relay);
+
+        word(relay, 'Check ');
+        delegate(relay, 'delegate-pauses', 300);
+        await sleep(pauseMs);
+        expect(runs).toHaveLength(0);
+        word(relay, 'the build on ');
+        await sleep(pauseMs);
+        expect(runs).toHaveLength(0);
+        word(relay, 'the main branch');
+        await until(() => runs.length === 1, 'PI turn with the whole sentence');
+        await sleep(1_000);
+
+        expect(runs.map(run => run.text)).toEqual(['Check the build on the main branch']);
+        expect(commentary(relay)).toEqual([]);
+        expect(writes.filter(write => write.role === 'dan').map(write => write.text))
+          .toEqual(['Check the build on the main branch']);
+        expect(captionItems(relay)).toHaveLength(1);
+      },
+      20_000,
+    );
+
+    it('answers with the stored message of words GPT-Live had already started answering when it delegates', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'Check my calendar');
+      await sleep(1_700);
+      answer(relay, 'one-moment', 'Sure, one moment.');
+      await until(() => writes.length === 1, 'direct owner message stored first', 1_000);
+      delegate(relay, 'delegate-after-direct', 300);
+
+      await until(() => runs.length === 1, 'PI turn from the stored message');
+      await sleep(1_000);
+      expect(runs.map(run => run.text)).toEqual(['Check my calendar']);
+      expect(commentary(relay)).toEqual([]);
+      await until(() => writes.length === 2, 'reply stored after the owner message', 1_000);
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Check my calendar', 'jarvis:Sure, one moment.',
+      ]);
+      runs[0]!.reply('Your calendar is clear.');
+      await until(() => commentary(relay).length === 1, 'PI result');
+      expect(commentary(relay)[0]).toEqual(expect.objectContaining({
+        delegation_id: 'delegate-after-direct', content: 'Your calendar is clear.',
+      }));
+      expect(runs).toHaveLength(1);
+      expect(writes.filter(write => write.role === 'dan')).toHaveLength(1);
+    }, 20_000);
+
+    it('answers with the open turn when the delegation comes after a long quiet and before any reply', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'Check my calendar');
+      await sleep(1_700);
+      delegate(relay, 'delegate-after-quiet', 300);
+      await until(() => runs.length === 1, 'PI turn from the open turn');
+      answer(relay, 'ack', 'One moment.');
+      await until(() => writes.length === 2, 'owner message then reply', 1_000);
+      await sleep(500);
+
+      expect(runs.map(run => run.text)).toEqual(['Check my calendar']);
+      expect(commentary(relay)).toEqual([]);
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Check my calendar', 'jarvis:One moment.',
+      ]);
+    }, 20_000);
+
+    it('does not take a turn that already got a completed reply as the request of a later delegation', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'Check my calendar');
+      await sleep(1_700);
+      answer(relay, 'full-answer', 'Your calendar is clear.');
+      await until(() => writes.length === 2, 'answered exchange stored', 1_500);
+      delegate(relay, 'delegate-new-request', 300);
+      await sleep(1_200);
+      expect(runs).toHaveLength(0);
+      word(relay, 'Book a table');
+      await until(() => runs.length === 1, 'PI turn for the new request');
+
+      expect(runs.map(run => run.text)).toEqual(['Book a table']);
+      expect(commentary(relay)).toEqual([]);
+    }, 20_000);
+
+    it('stores Dan\'s open words when the session ends before any reply or delegation', async () => {
+      const writes: Write[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream() { yield 'unused'; },
+      });
+      const closed = new Promise<void>(resolve => relay.browser.once('close', () => resolve()));
+      started(relay);
+
+      word(relay, 'Remind me to call mum');
+      await sleep(100);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+      await closed;
+
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual(['dan:Remind me to call mum']);
+    }, 20_000);
+
+    it.each([700, 900])('stores three phrases separated by %i ms pauses as one message', async (pauseMs) => {
+      const writes: Write[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream() { yield 'PI is not used for a direct reply.'; },
+      });
+      started(relay);
+
+      word(relay, 'Tell me ');
+      await sleep(pauseMs);
+      word(relay, 'what the weather is ');
+      await sleep(pauseMs);
+      word(relay, 'like tomorrow');
+      await sleep(pauseMs);
+      expect(writes).toEqual([]);
+      answer(relay, 'forecast', 'Sunny.');
+      await until(() => writes.length === 2, 'owner and reply messages', 1_000);
+
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Tell me what the weather is like tomorrow',
+        'jarvis:Sunny.',
+      ]);
+      expect(captionItems(relay)).toHaveLength(1);
+      await until(() => relay.received.some(event => event.type === 'jarvis.voice.input_transcript.completed'),
+        'completed caption');
+      expect(relay.received.filter(event => event.type === 'jarvis.voice.input_transcript.completed'))
+        .toEqual([expect.objectContaining({ transcript: 'Tell me what the weather is like tomorrow' })]);
+    }, 20_000);
+
+    it('keeps one message when GPT-Live starts answering inside a natural pause of the sentence', async () => {
+      const writes: Write[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream() { yield 'PI is not used for a direct reply.'; },
+      });
+      started(relay);
+
+      word(relay, 'Tell me ');
+      await sleep(800);
+      answer(relay, 'early', 'Sure. ');
+      await sleep(100);
+      word(relay, 'about the weather');
+      await until(() => writes.length === 2, 'owner and reply messages', 1_000);
+
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Tell me about the weather',
+        'jarvis:Sure. ',
+      ]);
+      expect(captionItems(relay)).toHaveLength(1);
+    }, 20_000);
+
+    it('stores a phrase, the answer to it and the next phrase as separate messages in order', async () => {
+      const writes: Write[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream() { yield 'PI is not used for a direct reply.'; },
+      });
+      started(relay);
+
+      word(relay, 'Hello Jarvis');
+      answer(relay, 'first', 'Hello Dan.');
+      await until(() => writes.length === 2, 'first exchange', 1_000);
+      word(relay, 'How are you');
+      answer(relay, 'second', 'Very well.');
+      await until(() => writes.length === 4, 'second exchange', 1_000);
+
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Hello Jarvis', 'jarvis:Hello Dan.', 'dan:How are you', 'jarvis:Very well.',
+      ]);
+      expect(captionItems(relay)).toHaveLength(2);
+    }, 20_000);
+
+    it('treats words after PI has started as a new turn and lets the next delegation supersede', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'Check the build');
+      delegate(relay, 'delegate-first-try', 300);
+      await until(() => runs.length === 1, 'first PI turn');
+
+      word(relay, 'Actually check the deploy');
+      expect(runs).toHaveLength(1);
+      expect(runs[0]!.aborted()).toBe(false);
+      delegate(relay, 'delegate-correction', 900);
+      await until(() => runs.length === 2, 'correcting PI turn');
+
+      expect(runs.map(run => run.text)).toEqual(['Check the build', 'Actually check the deploy']);
+      expect(runs[0]!.aborted()).toBe(true);
+      expect(runs[1]!.aborted()).toBe(false);
+      expect(writes.filter(write => write.role === 'dan').map(write => write.text))
+        .toEqual(['Check the build', 'Actually check the deploy']);
+      expect(captionItems(relay)).toHaveLength(2);
+      runs[1]!.reply('The deploy is fine.');
+      await until(() => commentary(relay).length === 1, 'result of the correction');
+      expect(commentary(relay)[0]).toEqual(expect.objectContaining({ delegation_id: 'delegate-correction' }));
+    }, 20_000);
+
+    it('does not cancel PI for GPT-Live\'s own backchannel while the delegation waits', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      started(relay);
+
+      word(relay, 'Check my ');
+      delegate(relay, 'delegate-backchannel', 300);
+      answer(relay, 'mm', 'Mm-hm. ');
+      await sleep(200);
+      word(relay, 'calendar');
+      await until(() => runs.length === 1, 'PI turn');
+      await sleep(900);
+
+      expect(runs.map(run => run.text)).toEqual(['Check my calendar']);
+      expect(runs[0]!.aborted()).toBe(false);
+      await until(() => writes.length >= 2, 'owner and backchannel messages', 1_000);
+      expect(writes.slice(0, 2).map(write => `${write.role}:${write.text}`)).toEqual([
+        'dan:Check my calendar', 'jarvis:Mm-hm. ',
+      ]);
+      expect(commentary(relay)).toEqual([]);
+    }, 20_000);
+
+    it('leaves nothing running when the session ends while the delegation is still waiting', async () => {
+      const writes: Write[] = [];
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore(writes), agent);
+      const closed = new Promise<void>(resolve => relay.browser.once('close', () => resolve()));
+      started(relay);
+
+      word(relay, 'Check the ');
+      delegate(relay, 'delegate-ended', 300);
+      await sleep(200);
+      word(relay, 'build');
+      relay.browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
+      await closed;
+      await sleep(1_000);
+
+      expect(runs).toHaveLength(0);
+      expect(commentary(relay)).toEqual([]);
+      expect(writes.map(write => `${write.role}:${write.text}`)).toEqual(['dan:Check the build']);
+    }, 20_000);
+
+    it('logs the upstream error code and the activity trail without any transcript text', async () => {
+      const logs: string[] = [];
+      const relay = await startRelay(recordingStore([]), {
+        async *stream() { yield 'unused'; },
+      }, logs);
+      started(relay);
+      await until(() => relay.received.some(event => event.type === 'jarvis.voice.activity'), 'listening activity');
+      answer(relay, 'speaking', 'Private reply words');
+      await until(() => relay.received.some(event =>
+        event.type === 'jarvis.voice.activity' && event.state === 'speaking'), 'speaking activity');
+
+      send(relay, {
+        type: 'error',
+        error: {
+          type: 'server_error', code: 'rate_limit_exceeded', param: 'session.audio[0]',
+          message: 'Private reply words could not be spoken',
+        },
+      });
+      await until(() => logs.some(line => line.includes('voice.upstream_event_error')), 'upstream error log');
+
+      const records = logs.map(line => JSON.parse(line) as Record<string, unknown>);
+      expect(records.find(record => record.msg === 'voice.upstream_event_error')).toMatchObject({
+        failure: 'provider_error', errorType: 'server_error', errorCode: 'rate_limit_exceeded', param: 'session.audio[0]',
+      });
+      const published = records.filter(record => record.msg === 'voice.activity_published');
+      expect(published.map(record => `${record.state}:${record.reason}`)).toEqual(expect.arrayContaining([
+        'listening:microphone_active', 'thinking:response_started', 'speaking:output_audio',
+      ]));
+      expect(published.find(record => record.state === 'speaking')).toMatchObject({
+        sinceLastMs: expect.any(Number), outputActive: true, piBusy: false, delegationPending: false,
+      });
+      expect(logs.join('')).not.toContain('Private');
     }, 20_000);
   });
 });
