@@ -1,3 +1,16 @@
+## MCP door call ledger and duplicate-safe actions — 21 November 2026 (#1967)
+
+**Status: implemented and checked offline; exact-head CI and the next live slow or replayed call are pending.**
+
+| Step | State |
+| --- | --- |
+| One `pi.mcp_tool` line per finished `find_tools` / `call_tool`: tool, outcome, elapsedMs, resultBytes, truncated, duplicate, turn hash (8 hex), channel, provider; no arguments, results or reference | Done |
+| Fields in the `logging.ts` allow-list; tested in `logging.test.ts` and, before the allow-list, in `mcp.test.ts` | Done |
+| An identical action repeated in the same turn runs once and returns the first result with `duplicate: true`, also while the first is still running; failed and refused calls can be retried; reads never kept | Done |
+| Remote `gh_` / `az_` calls | Out of scope; not deduplicated |
+| Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
+| Confirm in production whether Foundry retries or replays a call (`duplicate: true`) and where the 8.0 s versus 12.8 s gap came from | Open; needs a live turn |
+
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
 **Status: implemented and offline-tested; the PR's exact-head CI is the gate. No wake has run in production, so how a real wake uses the overview is unobserved.**

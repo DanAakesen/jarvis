@@ -397,6 +397,36 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('private');
   });
 
+  it('exports only the bounded fields of a pi.mcp_tool and never arguments, results or the turn reference', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = {
+      tool: 'calendar_create_event', outcome: 'ok', elapsedMs: 8012, resultBytes: 1234, truncated: false, duplicate: true,
+      turnHash: '0a1b2c3d', channel: 'voice', provider: 'az_',
+    };
+    logger.info({
+      ...fields, arguments: { title: 'private' }, result: 'private result', text: 'private text', turn: 'jt-AAAAAAAAAAAAAAAAAAAAAA', reqId: 'private',
+    }, 'pi.mcp_tool');
+    expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool', ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'pi.mcp_tool', properties: { service: 'jarvis-backend', ...fields } }));
+    for (const channel of ['chat', 'wake', 'smoke']) for (const provider of ['local', 'gh_']) {
+      logger.info({ ...fields, channel, provider }, 'pi.mcp_tool');
+      expect(JSON.parse(records.at(-1)!)).toMatchObject({ channel, provider });
+    }
+    const before = records.length;
+    logger.info({
+      tool: 'bad/tool', outcome: 'private outcome', elapsedMs: -1, resultBytes: 1.5, truncated: 'yes', duplicate: 1,
+      turnHash: 'jt-AAAAAAAAAAAAAAAAAAAAAA', channel: 'private channel', provider: 'private provider',
+    }, 'pi.mcp_tool');
+    logger.info({ tool: 'x'.repeat(65), turnHash: '0A1B2C3D', elapsedMs: Infinity, resultBytes: 2 ** 40, provider: 'github' }, 'pi.mcp_tool');
+    for (const record of records.slice(before)) {
+      expect(JSON.parse(record)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool' });
+    }
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toMatch(/private|jt-/u);
+  });
+
   it('keeps the tool count and Azure catalogue on pi.turn and drops an unknown catalogue state', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

@@ -1,15 +1,16 @@
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { createHash } from 'node:crypto';
+import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextprotocol/server';
+import { createMcpHandler, McpServer, type CallToolResult, type ServerContext } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import {
-  isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
+  effectOf, isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
   type RegisteredTool, type ToolRegistry,
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
-import { piTurnPattern, type PiTurnRegistry } from './turns.js';
+import { piTurnPattern, type PiToolAnswer, type PiTurnGrant, type PiTurnRegistry } from './turns.js';
 import type { PiSituationService } from './situation.js';
 import type { SourceId } from '../proactive/types.js';
 
@@ -27,9 +28,79 @@ const callSchema = z.object({
   arguments: z.record(z.string(), z.unknown()),
 }).strict();
 
+type Outcome = PiToolAnswer['outcome'];
+type Provider = 'local' | typeof githubToolPrefix | typeof azureToolPrefix;
+
+/** How a door call ended: the reply the model gets, and what the ledger (`pi.mcp_tool`) records about it. */
+interface Settled {
+  readonly reply: CallToolResult;
+  readonly outcome: Outcome;
+  /** Set by a search that waited on a remote catalogue; otherwise the provider is read from the tool name. */
+  readonly provider?: Provider;
+  readonly truncated?: boolean;
+  readonly duplicate?: boolean;
+}
+
 function text(value: unknown, isError = false): CallToolResult {
   const body = JSON.stringify(value);
   return { ...(isError ? { isError: true } : {}), content: [{ type: 'text', text: body }] };
+}
+
+function say(body: { readonly outcome: Outcome } & Record<string, unknown>, isError = false, extra: Pick<Settled, 'provider' | 'truncated'> = {}): Settled {
+  return { reply: text(body, isError), outcome: body.outcome, ...extra };
+}
+
+const providerOf = (name: string): Provider =>
+  name.startsWith(githubToolPrefix) ? githubToolPrefix : name.startsWith(azureToolPrefix) ? azureToolPrefix : 'local';
+
+const channelOf = (grant: PiTurnGrant) =>
+  grant.smoke === true ? 'smoke' : grant.brain ? 'wake' : grant.activation?.type === 'voice' ? 'voice' : 'chat';
+
+/** The first 8 hex characters of the reference's SHA-256: enough to tell the calls of one turn from another's, never the reference. */
+const turnHash = (reference: string) => createHash('sha256').update(reference).digest('hex').slice(0, 8);
+
+const answerBytes = (reply: CallToolResult) =>
+  reply.content.reduce((total, part) => total + (part.type === 'text' ? Buffer.byteLength(part.text) : 0), 0);
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** A tool name never contains `{`, so the name and the canonical arguments cannot run into each other. */
+const actionKey = (name: string, args: Record<string, unknown>) =>
+  createHash('sha256').update(name + canonicalJson(args)).digest('hex');
+
+/**
+ * Runs an action once per turn. A repeat with the same tool and the same arguments, from a retry or a replay, gets the first
+ * result back with `duplicate: true` instead of running again, also while the first is still running. Only a success is kept:
+ * a call that failed or was refused did nothing, so asking again runs it again. This is deduplication, not a gate: nothing
+ * is refused.
+ */
+async function runOnce(
+  grant: PiTurnGrant, key: string, run: () => Promise<PiToolAnswer>,
+): Promise<{ readonly answer: PiToolAnswer; readonly duplicate: boolean }> {
+  for (;;) {
+    const earlier = grant.actionResults.get(key);
+    if (earlier === undefined) break;
+    const first = await earlier;
+    if (first) return { answer: { ...first, text: JSON.stringify({ ...JSON.parse(first.text), duplicate: true }) }, duplicate: true };
+  }
+  const running = run();
+  // The entry leaves the map before this promise settles, so a waiter that sees a failure finds the key free and runs the call itself.
+  grant.actionResults.set(key, running.then(
+    (answer) => {
+      if (answer.outcome === 'ok') return answer;
+      grant.actionResults.delete(key);
+      return undefined;
+    },
+    () => { grant.actionResults.delete(key); return undefined; },
+  ));
+  return { answer: await running, duplicate: false };
 }
 
 /** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. */
@@ -102,29 +173,61 @@ export function createPiMcpRoutes(options: {
     return new Set(current.disabledSources);
   };
 
-  async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
+  async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<Settled> {
     if (grant.smoke === true && !smokeMayCall(name, args)) {
       grant.results.push({ tool: name, outcome: 'refused' });
-      return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
+      return say({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
     }
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     const body = JSON.stringify(done.result);
-    const result = body.length > maxResultCharacters
+    const truncated = body.length > maxResultCharacters;
+    const result = truncated
       ? { truncated: true, preview: body.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' } : done.result;
-    return text({ tool: name, outcome: done.outcome, result }, done.outcome === 'error');
+    return say({ tool: name, outcome: done.outcome, result }, done.outcome === 'error', { truncated });
   }
 
-  function buildServer(app: FastifyInstance, signal: AbortSignal): McpServer {
+  function buildServer(app: FastifyInstance, signal: AbortSignal, log: FastifyBaseLogger): McpServer {
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
+    /**
+     * The ledger: one `pi.mcp_tool` line when a door call finishes, however it ends (a refusal, a failure, or an exception on
+     * its way out): the tool's name, outcome, time, size of the answer, channel, provider and a hash of the turn reference.
+     * Never arguments, results or the reference. It resolves the turn reference once and hands the grant to the call.
+     */
+    const ledgered = <Input extends { readonly turn: string }>(
+      toolOf: (input: Input) => string,
+      run: (input: Input, ctx: ServerContext, grant: PiTurnGrant | undefined) => Promise<Settled>,
+    ) => async (input: Input, ctx: ServerContext): Promise<CallToolResult> => {
+      const started = performance.now();
+      const grant = registry.resolve(input.turn);
+      let settled: Settled | undefined;
+      try {
+        settled = await run(input, ctx, grant);
+        return settled.reply;
+      } finally {
+        const tool = toolOf(input);
+        try {
+          log.info({
+            tool,
+            outcome: settled?.outcome ?? 'error',
+            elapsedMs: Math.round(performance.now() - started),
+            ...(settled ? { resultBytes: answerBytes(settled.reply) } : {}),
+            truncated: settled?.truncated === true,
+            duplicate: settled?.duplicate === true,
+            turnHash: turnHash(input.turn),
+            ...(grant ? { channel: channelOf(grant) } : {}),
+            provider: settled?.provider ?? providerOf(tool),
+          }, 'pi.mcp_tool');
+        } catch { /* Logging cannot change what a call returns. */ }
+      }
+    };
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
       description: 'Jarvis tools are not listed. Look one up by a few English or Danish keywords naming what the thing is (azure resource, github issue, calendar, kalender, note, vejr) to get its description and argument schema, then use call_tool. Exact tool names are ranked first, and the compact otherMatches entries can be called by exact name too. Local tools return at once; GitHub and Azure tools load only when the keywords name them (github, repo, issue, azure, resource) and may need a second search. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    }, async (input, ctx) => {
-      const grant = registry.resolve(input.turn);
-      if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
+    }, ledgered<z.infer<typeof findSchema>>(() => 'find_tools', async (input, ctx, grant) => {
+      if (!grant) return say({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
       grant.requests.count += 1;
       let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
       if (grant.brain && options.situation) {
@@ -132,7 +235,7 @@ export function createPiMcpRoutes(options: {
           turnSignalFor(grant, ctx.mcpReq.signal, signal),
         ); }
         catch {
-          return text({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
+          return say({ tool: 'find_tools', outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
         }
       }
       // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, but a provider is loaded only when the query
@@ -183,22 +286,21 @@ export function createPiMcpRoutes(options: {
       const other = matches.slice(maxFullResults, maxFullResults + maxOtherResults);
       // A name shown in this result, including an otherMatches entry, can be called without another search.
       for (const tool of [...full, ...other]) grant.discovered.add(tool.name);
-      return text({
+      return say({
         tool: 'find_tools', outcome: 'ok', result: {
           tools: full.map(tool => ({ name: tool.name, description: tool.description, parameters: shapeSchema(tool) })),
           otherMatches: other.map(tool => ({ name: tool.name, description: shortenToolDescription(tool.description) })),
           ...notes(matches.length === 0),
         },
-      });
-    });
+      }, false, { provider: providerOf(selected[0]?.prefix ?? '') });
+    }));
     server.registerTool('call_tool', {
       title: 'Run a Jarvis tool',
-      description: 'Run a tool that find_tools returned (in tools or otherMatches), with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
+      description: 'Run a tool that find_tools returned (in tools or otherMatches), with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more. An action repeated with the same arguments in the same turn is not run again: the first result comes back with duplicate: true.',
       inputSchema: callSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    }, async (input, ctx) => {
-      const grant = registry.resolve(input.turn);
-      if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
+    }, ledgered<z.infer<typeof callSchema>>((input) => input.name, async (input, ctx, grant) => {
+      if (!grant) return say({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
       grant.requests.count += 1;
       if (grant.brain) {
         let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
@@ -207,12 +309,12 @@ export function createPiMcpRoutes(options: {
             turnSignalFor(grant, ctx.mcpReq.signal, signal),
           ); }
           catch {
-            return text({ tool: input.name, outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
+            return say({ tool: input.name, outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
           }
         }
         if (!sourceAllowed(input.name, input.arguments, disabled)) {
           grant.results.push({ tool: input.name, outcome: 'refused' });
-          return text({
+          return say({
             tool: input.name, outcome: 'refused',
             result: { refused: 'That source is disabled in Proactive settings. Nothing was read.' },
           });
@@ -230,46 +332,62 @@ export function createPiMcpRoutes(options: {
         : isCurrentAssistantTool(tool.name) || isSituationActivationTool(tool.name));
       if (!tool || !visible || !grant.discovered.has(tool.name)) {
         if (azureRequested) grant.azure.undiscoveredRefusals += 1;
-        return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
+        return say({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
       }
       const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
-      try {
-        const response = await app.inject({
-          method: 'POST',
-          url: `/tools/${tool.name}`,
-          headers: {
-            authorization: `Bearer ${auth.dispatch.token}`,
-            'content-type': 'application/json',
-            // The stored owner message of this turn, from the grant. A brain wake has no owner message: it carries its run id.
-            ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' }
-              : grant.brain ? { 'x-jarvis-pi': 'wake', 'x-jarvis-brain': grant.brain.runId }
-                : { 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': grant.messageId }),
-            ...(grant.activation ? { 'x-jarvis-activation': grant.activation.id } : {}),
-          },
-          payload: JSON.stringify(input.arguments),
-          signal: abort,
-        });
-        if (response.statusCode !== 200) {
-          grant.results.push({ tool: tool.name, outcome: 'error' });
-          return text({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }, true);
-        }
-        const serialized = response.body;
-        const parsed = JSON.parse(serialized) as { outcome?: unknown };
-        const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
-        grant.results.push({ tool: tool.name, outcome });
-        if (outcome === 'ok' && tool.execution?.defaultEffect === 'action') grant.actions.count += 1;
-        if (serialized.length > maxResultCharacters) {
-          return text({
-            tool: tool.name, outcome, truncated: true,
-            result: { preview: serialized.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' },
-          });
-        }
-        return { ...(parsed.outcome === 'error' ? { isError: true } : {}), content: [{ type: 'text', text: serialized }] };
-      } catch {
+      const failed = (): PiToolAnswer => {
         grant.results.push({ tool: tool.name, outcome: 'error' });
-        return text({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }, true);
-      }
-    });
+        return {
+          outcome: 'error', isError: true, truncated: false,
+          text: JSON.stringify({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }),
+        };
+      };
+      const run = async (): Promise<PiToolAnswer> => {
+        try {
+          const response = await app.inject({
+            method: 'POST',
+            url: `/tools/${tool.name}`,
+            headers: {
+              authorization: `Bearer ${auth.dispatch.token}`,
+              'content-type': 'application/json',
+              // The stored owner message of this turn, from the grant. A brain wake has no owner message: it carries its run id.
+              ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' }
+                : grant.brain ? { 'x-jarvis-pi': 'wake', 'x-jarvis-brain': grant.brain.runId }
+                  : { 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': grant.messageId }),
+              ...(grant.activation ? { 'x-jarvis-activation': grant.activation.id } : {}),
+            },
+            payload: JSON.stringify(input.arguments),
+            signal: abort,
+          });
+          if (response.statusCode !== 200) return failed();
+          const serialized = response.body;
+          const parsed = JSON.parse(serialized) as { outcome?: unknown };
+          const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
+          grant.results.push({ tool: tool.name, outcome });
+          if (outcome === 'ok' && tool.execution?.defaultEffect === 'action') grant.actions.count += 1;
+          if (serialized.length > maxResultCharacters) {
+            return {
+              outcome, isError: false, truncated: true,
+              text: JSON.stringify({
+                tool: tool.name, outcome, truncated: true,
+                result: { preview: serialized.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' },
+              }),
+            };
+          }
+          return { outcome, isError: parsed.outcome === 'error', truncated: false, text: serialized };
+        } catch {
+          return failed();
+        }
+      };
+      // An action is kept for its repeats within the turn; anything that reads, or whose effect is not classified, runs every time.
+      const { answer, duplicate } = effectOf(tool, input.arguments) === 'action'
+        ? await runOnce(grant, actionKey(tool.name, input.arguments), run)
+        : { answer: await run(), duplicate: false };
+      return {
+        reply: { ...(answer.isError ? { isError: true } : {}), content: [{ type: 'text', text: answer.text }] },
+        outcome: answer.outcome, truncated: answer.truncated, duplicate,
+      };
+    }));
     return server;
   }
 
@@ -292,7 +410,7 @@ export function createPiMcpRoutes(options: {
         request.raw.once('aborted', abort);
         reply.raw.once('close', disconnect);
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(10 * 60_000)]);
-        const handler = createMcpHandler(() => buildServer(app, signal));
+        const handler = createMcpHandler(() => buildServer(app, signal, request.log));
         try {
           reply.hijack();
           const incoming = Object.assign(request.raw, { method: request.method, url: request.url });

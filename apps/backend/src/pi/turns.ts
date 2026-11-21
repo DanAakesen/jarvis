@@ -25,6 +25,14 @@ export interface PiBrainRun {
   evidence?: PiProactiveEvidence[];
 }
 
+/** What one call of a tool gave the model: how it ended, the exact text, and whether that text was cut short. */
+export interface PiToolAnswer {
+  readonly outcome: 'ok' | 'refused' | 'error';
+  readonly text: string;
+  readonly isError: boolean;
+  readonly truncated: boolean;
+}
+
 export interface PiTurnGrant {
   readonly turn: string;
   readonly ownerObjectId: string;
@@ -60,6 +68,12 @@ export interface PiTurnGrant {
   } | undefined;
   /** Successful action calls recorded from the authenticated local tool catalogue. */
   readonly actions: { count: number };
+  /**
+   * The first result of each action this turn ran, by SHA-256 of the tool name and its canonical JSON arguments. An identical
+   * repeat gets that result back instead of running again, also while the first is still running (see mcp.ts). Only a success
+   * stays: a call that failed or was refused did nothing, so it can be tried again.
+   */
+  readonly actionResults: Map<string, Promise<PiToolAnswer | undefined>>;
   /** Successful chat pushes from message_dan, recorded by the wake itself. */
   readonly pushes: { count: number };
   /** MCP requests the model made in this turn, counted when a request ENTERS the server (results are written only after a tool returns). */
@@ -67,7 +81,7 @@ export interface PiTurnGrant {
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'pushes' | 'requests'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'actionResults' | 'pushes' | 'requests'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
@@ -89,7 +103,7 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       const grant: PiTurnGrant = {
         ...input, turn, discovered: new Set(), results: [],
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
-        actions: { count: 0 }, pushes: { count: 0 }, requests: { count: 0 },
+        actions: { count: 0 }, actionResults: new Map(), pushes: { count: 0 }, requests: { count: 0 },
       };
       grants.set(turn, grant);
       return grant;
