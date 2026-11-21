@@ -1,3 +1,246 @@
+## System map — PI, tools, voice and who owns what (21 November 2026)
+
+This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` at commit `1f9a6839`; anything marked "in review" is not on `main`.
+
+### Legend
+
+Diagram colours say who changes a thing, not how important it is. Every node also says it in words, so the diagrams stay readable without colour.
+
+```mermaid
+flowchart TB
+    L1["Foundry-owned<br/>Dan edits it in the portal"]:::foundry
+    L2["Code-owned<br/>repository, CI, Deploy"]:::code
+    L3["Foundry-hosted<br/>settings are code-owned"]:::hosted
+    L4[("Data store")]:::data
+    L5["External service"]:::external
+    L6["Client app"]:::client
+    L7["In review<br/>not on main"]:::review
+    L1 ~~~ L5
+    L2 ~~~ L6
+    L3 ~~~ L7
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+    classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
+    classDef external fill:#eeeeee,stroke:#555555,color:#222222,stroke-dasharray:4 3
+    classDef client fill:#ffffff,stroke:#333333,color:#111111
+    classDef review fill:#fde8e8,stroke:#c53030,color:#4a0e0e,stroke-dasharray:6 3
+```
+
+| Colour | Meaning |
+| --- | --- |
+| Amber | Foundry-owned. Dan edits it in the Foundry portal. After version 1 Deploy never writes, compares or restores it |
+| Blue | Code-owned. In the repository, shipped by CI and Deploy |
+| Green | Hosted in Foundry. The agent's model, harness, tools and delegation are code-owned |
+| Purple | Data store |
+| Grey, dashed | External service Jarvis calls |
+| White | Client app |
+| Red, dashed | In review, not on `main` |
+
+### Runtime map
+
+```mermaid
+flowchart TB
+    APP["iPhone, Watch, web<br/>client"]
+    CHAT["Chat turn route<br/>backend"]
+    VOICE["Voice relay /voice<br/>backend"]
+    LIVET["Instructions, voice,<br/>greeting, store<br/>Foundry-owned"]
+    LIVE["jarvis-pi-live<br/>GPT-Live voice, no tools<br/>Foundry-hosted"]
+    GW["PI gateway<br/>one conversation per owner<br/>one grant per turn<br/>backend"]
+    PIT["Instructions text<br/>Foundry-owned"]
+    PI["jarvis-pi, gpt-6.1-terra<br/>managed Copilot harness<br/>Foundry-hosted"]
+    BI["Harness built-ins<br/>shell, files, web fetch,<br/>sub-agents<br/>run by Foundry"]
+    DOOR["MCP door /pi/mcp<br/>find_tools, call_tool<br/>backend"]
+    TOOLS["Jarvis tools, about 140<br/>backend"]
+    BR["GitHub and Azure bridges<br/>gh_ and az_ tools<br/>backend"]
+    SQL[("Azure SQL")]
+    VAULT[("Vault")]
+    WK["Factory workers"]
+    EXT["Open-Meteo,<br/>Google, APNs"]
+    GH["GitHub MCP"]
+    AZ["Azure MCP"]
+    APP -->|"typed chat"| CHAT
+    APP <-->|"audio"| VOICE
+    VOICE <-->|"Live session"| LIVE
+    LIVET -.-> LIVE
+    CHAT --> GW
+    VOICE -->|"whole spoken request"| GW
+    GW --> PI
+    PIT -.-> PI
+    PI --- BI
+    PI -->|"MCP"| DOOR
+    DOOR --> TOOLS
+    DOOR --> BR
+    TOOLS --> SQL
+    TOOLS --> VAULT
+    TOOLS --> WK
+    TOOLS --> EXT
+    BR --> GH
+    BR --> AZ
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+    classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
+    classDef external fill:#eeeeee,stroke:#555555,color:#222222,stroke-dasharray:4 3
+    classDef client fill:#ffffff,stroke:#333333,color:#111111
+    class PIT,LIVET foundry
+    class CHAT,VOICE,GW,DOOR,TOOLS,BR code
+    class PI,BI,LIVE hosted
+    class SQL,VAULT data
+    class GH,AZ,WK,EXT external
+    class APP client
+```
+
+- Both agents live in the one Foundry project in Sweden Central. Typed Chat and Voice share one PI conversation per owner (`dbo.pi_conversation`), the same per-turn grant, the same tool door and the same receipts. Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap.
+- GPT-Live listens and speaks and has no tools. A spoken request that needs work reaches the relay as `session.delegation.created` (delegation `type: client`); the relay stores Dan's words and runs PI.
+- PI reaches the Jarvis tools only through the MCP door. GitHub and Azure tools come through the same door from backend bridges, not as harness tools. The harness built-ins are separate: Foundry runs them inside the turn and the backend never runs them.
+
+### The two Foundry agents: who owns what
+
+| Field | `jarvis-pi` | `jarvis-pi-live` |
+| --- | --- | --- |
+| Instructions text | Foundry | Foundry |
+| Output voice, greeting, `store`, any other portal field | not applicable | Foundry (`store` is seeded `false`; the portal saves `true`) |
+| Model | code: `gpt-6.1-terra`, reasoning effort `low` | code: `gpt-live-1` and its deployment (`2026-09-10`, GlobalStandard, capacity 10) |
+| Kind | code: `microsoft_copilot_preview` harness | code: `voice`, `sub_protocol: live`, `model_type: self_deployed` |
+| Tools | code: harness built-ins by one flag (`builtinTools: "enabled"` in `agents/pi/definition.json`), the `jarvis` MCP tool on connection `jarvis-pi-mcp` with approval `never`, five skills | none; delegation `{type: client}` and PCM 24 kHz audio are code-owned |
+| Version that serves traffic | the pinned version | the pinned version |
+
+```mermaid
+flowchart TB
+    A["Dan saves version N+1<br/>in the portal"]:::foundry
+    B["N+1 exists but does<br/>not serve traffic"]:::foundry
+    C["Dan sets N+1 Active<br/>pin rule: FixedRatio 100%"]:::foundry
+    D["N+1 serves traffic"]:::hosted
+    E["Next Deploy reads<br/>the Active version"]:::code
+    F["jarvis-pi, code-owned part changed:<br/>publish N+2 with the live text<br/>carried forward, verify, pin"]:::code
+    G["jarvis-pi, nothing changed:<br/>no write"]:::code
+    H["jarvis-pi-live:<br/>verify the technical contract,<br/>never write"]:::code
+    I["Rollback: Dan sets the<br/>previous version Active"]:::foundry
+    A --> B --> C --> D --> E
+    E --> F
+    E --> G
+    E --> H
+    D --> I
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+```
+
+- Deploy creates version 1 only when the agent is missing, from `agents/pi/instructions.md` (or `voice-definition.json` and `voice-instructions.md`), and pins it. After that those files change nothing.
+- `jarvis-pi`: a code-owned change (skills, MCP URL or tool, `definition.json` settings) makes Deploy publish one new version that carries the serving version's instructions forward, verify the code-owned fields and pin it. An unchanged fingerprint publishes nothing. Deploy re-reads the serving version before the POST and before the pin and fails with `agent_changed_during_deploy` if it moved, so do not set a version Active while Deploy runs; if it fails this way, run Deploy again.
+- `jarvis-pi-live`: an existing agent is never written. Every Deploy verifies the effective version: kind, sub-protocol, model type, model, delegation `client`, PCM 24 kHz and the `gpt-live-1` deployment. Drift fails with `voice_readback_*_mismatch` or `voice_agent_*` and is never auto-fixed.
+- Versions are pinned with one rule, `FixedRatio` 100% to one version (`pin()` in `provision_pi_agent.py`). The pinned version serves traffic; with no pin rule the latest does. Dan reports that saving in the portal does not activate the new version; he sets it Active. The code agrees (it reads the pin rule first) but this was not tested against the live portal.
+- Rollback is setting the previous version Active. The next Deploy then carries that version's text forward if it has to publish.
+- Never paste the voice text into `jarvis-pi`. It removes the tool contract (the `[Turn ...]` line, `find_tools`, `call_tool`) and PI can no longer reach a Jarvis tool. The seed wraps that section in `KEEP THIS BLOCK: backend tool contract (start)` and `(end)`; keep both lines and everything between them in the live text. Reported by Dan; the markers and the contract are in `agents/pi/instructions.md`, but the live text can only be read in Foundry.
+- A portal-saved version may drop the fingerprint metadata Deploy stores. Then the next Deploy publishes one more version with the same text and pins it (decision of 2026-11-20; unverified live).
+
+### One door, four layers
+
+- One MCP door (`pi/mcp.ts`, `/pi/mcp`) with two tools. `find_tools` takes the turn reference and a few keywords and returns matching tools with their schemas. `call_tool` runs a tool by exact name, only if `find_tools` returned it in the same turn (names in `otherMatches` count). The door runs the same registry and guards as Chat.
+- About 140 Jarvis tools (141 reported from production; a static count of tool definitions in `apps/backend/src` on `main` finds 139, and the registered number depends on the enabled modules), plus the `gh_` GitHub tools and the `az_` Azure tools offered by the backend bridges. Chat and Voice do not see the legacy confirmation tools or the brain-only tools; a background wake sees the brain-only tools too.
+- Local-first loading. A search returns local tools at once. A bridge starts idle, with no warm-up at start-up or from `/pi/warm`, and loads only when the query names it (for example GitHub, issue, repo, Azure, resource, or a `gh_` / `az_` tool name). It then gets an 8 s bounded wait and a "search again shortly" note. The first Azure question after a quiet period therefore needs a second search.
+- Exact-name calls rank first; `intentAliases` in `pi/tool-search.ts` maps English and Danish wording (for example "vejr" to `weather`).
+- A capability note (connection states plus a capability index, at most 1,500 characters) goes with the first turn of a Foundry conversation and again only when the GitHub/Azure connection state changes. It is held in memory, so a backend restart sends it once more.
+- Tool authority is the exact owner message attached to the turn (`core/owner-message.ts`), not the newest stored message.
+- GPT-Live has no tools at all; it only delegates.
+
+Dan's design layers the work by weight. The routing rules live in the Foundry-owned `jarvis-pi` instructions ("Choosing tools"), so the repository holds only the seed.
+
+```mermaid
+flowchart LR
+    R["Dan's request"] --> W{"How heavy is the job?"}
+    RULES["Routing rules<br/>Foundry-owned jarvis-pi instructions"]:::foundry -.-> W
+    W -->|"quick, same turn"| T["Jarvis tools through the door<br/>find_tools, then call_tool<br/>plus gh_ and az_"]:::code
+    W -->|"scratch compute"| B["Harness built-ins, run by Foundry<br/>files, shell, web fetch, sub-agents"]:::hosted
+    W -->|"deep or durable"| F["Factory workers<br/>coding sessions, results return as events"]:::code
+    W -->|"knowledge"| K["Vault notes and Personal Memory<br/>vault_ and memory_ tools"]:::data
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+    classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
+```
+
+PI is unrestricted: no guardrails, approval gates or read-only defaults. The MCP tool runs with approval `never`.
+
+### Gateway and the harness stream
+
+```mermaid
+flowchart TB
+    S["Foundry response stream"] --> I{"Output item type"}
+    I -->|"message, reasoning,<br/>mcp_call, mcp_list_tools"| H["Handled: text, progress,<br/>tool and list results"]:::code
+    I -->|"other typed items,<br/>for example shell_call"| U["Logged once per type as<br/>pi.harness_item unknown_item<br/>The stream continues"]:::code
+    I -->|"function_call or<br/>mcp_approval_request"| F["Harness function call<br/>or approval request"]:::code
+    F -->|"with #2004"| P["In review: read to the<br/>terminal event, then<br/>classify each call"]:::review
+    F -->|"on main today"| M["pi.stream_failed<br/>approval_or_function_call_item<br/>The turn ends"]:::code
+    P --> N["Native: Foundry<br/>already ran it, for example<br/>a task sub-agent<br/>Never answered"]:::review
+    P --> C["Client-owned: the response<br/>ended with it unanswered<br/>One follow-up, same<br/>conversation, max 8<br/>responses per turn"]:::review
+    P --> Q["Unknown: left<br/>alone, logged"]:::review
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef review fill:#fde8e8,stroke:#c53030,color:#4a0e0e,stroke-dasharray:6 3
+```
+
+- The harness's `task` function_call is a native sub-agent that Foundry had already run. In the production trace it searched, called `calendar_list_events` through the Jarvis door and answered. The gateway threw on the item and closed the stream, and Foundry's outer request recorded HTTP 500. The first fix attempt (answering `task` with "not available") was wrong for that reason and was replaced before merge (#2004 decision).
+- Other built-ins appear as typed items such as `shell_call` and `shell_call_output`. On `main` any item type other than `message`, `reasoning`, `mcp_call`, `mcp_list_tools`, `function_call` and `mcp_approval_request` is only logged, once per type, and the stream continues. The item names are Dan's production observation; the repository has no handling that names them.
+- Rule for #2004 (in review): never end the stream for a call, read to the terminal event, answer only client-owned calls. Native and unknown calls are never answered.
+- Retry safety (#1999): `respond()` retries a Foundry stream once, after 750 ms, only when nothing observable can have run: a turn grant exists, no text, reasoning, tool call, function call, unknown event, unparseable or half-read frame, no MCP request, tool result, action or push, and a transient failure (a stream that ends or breaks, or `response.failed` / `error` with `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`). It needs a confirmed cancel of the stalled response and bills once. Details are in the section "Remote MCP catalogues load on demand".
+- Weather timeouts: a Chat `weather` call returned after exactly 8015 ms on build 119. The tool now logs `weather.phase` per step and retries each fetch once after a timeout, network error, 429 or 5xx, inside the same 8 s budget (an attempt takes at most 3 s). Dan reports that the forecast fetch stalls intermittently and that the one retry recovered it in production; the repository cannot show this.
+
+### Voice: how a spoken request reaches PI
+
+```mermaid
+sequenceDiagram
+    participant D as Dan
+    participant L as GPT-Live
+    participant R as Voice relay
+    participant G as PI gateway
+    D->>L: speaks
+    L-->>R: transcript deltas, still arriving
+    L-->>R: session.delegation.created<br/>offset_ms is only logged
+    R->>R: wait 1.5 s of quiet, max 3 s
+    R->>R: store one owner message
+    R->>G: start PI once
+    D->>L: mm-hm
+    Note over R,G: a backchannel never cancels PI.<br/>Only a new delegation or<br/>the session end does
+    G-->>R: first sentence, then answer
+    R->>L: session.commentary.append
+    L-->>D: speaks
+```
+
+- `offset_ms` on the delegation is not the end of Dan's utterance: GPT-Live sends the delegation while the transcript is still arriving. The relay logs it and never cuts words with it.
+- The relay assembles the whole spoken turn: every input delta joins the open turn until PI starts for it or the reply to it begins. A delegation waits for 1.5 s of quiet (`VOICE_TURN_QUIET_MS`, at most 3 s `VOICE_TRANSCRIPT_MAX_WAIT_MS`), stores the whole turn once and starts PI once. A direct (non-delegated) turn is stored after the same 1.5 s. Only the assistant's output is still grouped on 0.6 s of quiet.
+- A delegation that arrives after GPT-Live began answering adopts the stored direct turn if no reply has completed for it, nothing newer was said and it is at most 10 s old. An empty turn at the 3 s bound gets "did not catch that".
+- Backchannels never cancel PI. Only a new delegation (which supersedes the turn in flight, as steering does in Chat) or the session ending stops it. There is no separate stop command; "stop that" reaches PI as a delegation.
+- Ordering is Dan before Jarvis: the reply is stored after the owner message it answers, within a bounded wait, so restored history keeps the order.
+- Relay log events (ids, lengths, states and reasons only, never words): `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started`, `voice.activity_published`, `voice.upstream_event_error`, and `voice.pi_turn` from the PI side.
+
+### Safe logs
+
+Every backend log record passes `safeFields` in `apps/backend/src/logging.ts` before stdout or Application Insights sees it. Only registered event names keep their name (any other becomes `backend.event`), and each event exports only its own scalar fields and fixed vocabularies. Headers, bodies, URLs, prompts, replies, tool arguments, tokens, provider messages and free text are dropped, and ids appear only as opaque tokens or as booleans, never as content. A new field is invisible until it is added to that allowlist and to `logging.test.ts`.
+
+| Event | Added | Safe fields |
+| --- | --- | --- |
+| `pi.stream_failed` | #1999 | `reason` (fixed list), `event`, `code`, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput`, `previousCancelled` |
+| `pi.stream_retry` | #1999 | the same fields for the retried attempt |
+| `pi.harness_item` | #2002 | `trigger`, `itemType`, `name`, `serverLabel`, `itemStatus`, `hasId`, `hasCallId`, `argumentsLength`, `eventTypes`, `itemTypes` (at most 25 each) |
+| `pi.mcp_list_failed`, `pi.mcp_call_failed` | #1999 | `server`, `tool`, `code`, `status`, `elapsedMs` |
+| `pi.turn` | #1996, #1999 | `toolCount`, `azureCatalogue`, `budgetRead: unavailable`, with the existing outcome, timing, token and cost fields |
+| `pi.budget_unreadable` | #1996 | the spend could not be read; the turn still ran |
+| `weather.phase` | #2003 | `phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host` |
+| `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started` | #2000 (outcomes extended by #2001) | `delegationId`, `groupId`, `textLength`, `offsetMs`, `quietMs`, `waitedMs`, `reusedGroup`, `outcome` or `reason`, `language` |
+| `voice.activity_published` | #2001 | `state`, `reason`, `sinceLastMs`, `outputActive`, `piBusy`, `delegationPending` |
+| `voice.upstream_event_error` | extended by #2001 | `errorType`, `errorCode`, `param` (short tokens, never the message) |
+
+In review (#2004): `pi.harness_item` with `trigger: harness_call` and `classification`, `rule`, `round`, `outcome`, `argumentKeys`; `pi.turn` adds `rounds`, `clientItems`, `nativeCalls`.
+
+The gateway also computes `azureToolsOffered` and `azureCalls` for `pi.turn`, but the allowlist drops them, so they never reach the logs. Query recipes are in `docs/agent-context.md`, "Working rules".
+
+### Not verified
+
+- Live behaviour. The PRs of the week ran offline checks only. Production logs and a Foundry trace informed #2001 and #2004, and Dan reported the weather result; Dan owns live and device acceptance.
+- The portal behaviour (a saved version is not Active until Dan sets it), the loss of the version fingerprint on a portal save, and the exact tool count in production.
+- The built-in item names `shell_call` and `shell_call_output` and the `task` behaviour come from production traces that are not in the repository, apart from the #2004 decision text.
+
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 
 ```mermaid
@@ -157,7 +400,7 @@ flowchart LR
 - A progress event (`acknowledgment`, `commentary`) is separate from reply text: the conversation route removes streamed text that equals it from the reply, and a repeated or unmatched progress line is shown as progress without ending the turn (`core/conversation.ts`).
 - Owner authority is the exact owner message attached to the turn (`core/owner-message.ts`: `attachedOwnerMessageId`, `readAttachedOwnerMessage`), not the newest stored message, so a proactive message arriving mid-turn does not invalidate it. The Gmail/computer, calendar, Factory, GitHub-write, Health, reminder, feedback and proactive-preference guards use it; they add no new restriction.
 - Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
-- On a normal PI turn, the live tool reference is the first line of the Foundry message, even when the backend resends the trusted context. The gateway's `pi.turn` log separates the last Azure catalogue state seen by `find_tools`, the number of Azure tool schemas returned during the turn, and the number and outcomes of `az_` call attempts. It does not record searches, arguments, results or references.
+- On a normal PI turn, the live tool reference is the first line of the Foundry message, even when the backend resends the trusted context. The gateway computes the last Azure catalogue state seen by `find_tools`, the number of Azure tool schemas returned during the turn, and the number and outcomes of `az_` call attempts, but the log allowlist exports only `azureCatalogue` and `toolCount`; `azureToolsOffered` and `azureCalls` are dropped before they reach the logs. It does not record searches, arguments, results or references.
 - PI failure diagnostics (`pi/gateway.ts`, `logging.ts`): every `pi_failed` site logs one `pi.stream_failed` with a fixed `reason` (`foundry_response_failed` with the provider's `event` and `code`, `stream_ended_without_completed`, `stream_broke`, `approval_or_function_call_item`, `no_stream`, `no_conversation`, `busy`, `brain_wake_failed`) and, for a stream, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput` and `previousCancelled` (the previous turn was cancelled in the last two minutes). `pi.harness_item` names the shape of an output item the gateway does not handle (`approval_or_function_call_item` rejects it, any other unknown type only logs once per sanitised label, at most 5 per stream): `trigger`, `itemType`, `name`, `serverLabel`, `itemStatus` (lowercase tokens, else `other`), `hasId`, `hasCallId`, `argumentsLength` (a number, never the content) and the distinct `eventTypes` and `itemTypes` seen so far (max 25). `pi.mcp_list_failed` and `pi.mcp_call_failed` carry `server`, `tool`, the harness's own short `code` and HTTP `status` when it sent them, and `elapsedMs`. `pi.turn` keeps `toolCount` and `azureCatalogue`. The log allowlist exports only these scalar fields and fixed vocabularies; never prompts, replies, tool arguments, tokens or provider messages.
 - `respond()` retries a Foundry stream once (`pi.stream_retry`, after 750 ms), and only when nothing observable can have happened. Required together: the call has a turn grant (warm-ups and the smoke never retry); no text, reasoning, tool call, function call or unknown event, no unparseable frame and no unread partial frame; no MCP request (counted when `find_tools` or `call_tool` enters the server, `grant.requests`), tool result, action or push on the grant, checked again after the pause; and a transient failure: a stream that ends or breaks, or `response.failed`/`error` with the code `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`. `response.incomplete`, content filters, tool errors and unknown or missing codes are never retried. A stream that merely stopped has its response cancelled first, and the retry needs a confirmed cancel (a failed or still-running cancel, or events whose response id is unknown, ends the turn). It is the same conversation and message, so the turn is billed once (the usage of the successful attempt). Cancel, the turn deadline, an HTTP error or a missing stream end the turn as before.
 
@@ -309,7 +552,7 @@ sequenceDiagram
     R->>V: session.input_audio.append
     V-->>R: input transcript deltas
     V-->>R: session.delegation.created (client target)
-    R->>R: 0.6 s quiet, max 3 s; persist Dan's exact message
+    R->>R: whole open turn, 1.5 s quiet, max 3 s, store one owner message
     R->>G: stream(text, voice channel, stored message id)
     G->>P: same PI conversation / owner turn grant
     P-->>G: sentence before a tool call
@@ -426,7 +669,7 @@ flowchart TB
 | Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
 | Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
 | Budget | `proactive_spend` ledger, settings `monthlyBudgetDkk` (default 100) | Hard stop before a wake (worst case of one wake against what is left), one chat notice at 80 percent and one at the stop, a note in the wake text after 80 percent. The brain and the watches share this ledger. Chat and voice keep their own cap (`pi_turn` kinds `chat`, `warm`, `smoke`) |
-| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, "PI brain (test)" | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called |
+| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, Proactive, "Background PI" (was "PI brain (test)" until #1966) | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called |
 | One reader | `proactive/events/wiring.ts` | The queue has one reader: the brain **or** the old one-shot pipeline. Turning both on is a startup `ConfigurationError`, so nothing runs in parallel or in shadow. The old pipeline stays switched off and is deleted in #1887 |
 
 Not covered: the call channel, the Now card, tiers (owner decision: none for now), voice, standing watches (next pull request).
@@ -458,7 +701,7 @@ flowchart LR
 | GitHub | remote server `https://api.githubcopilot.com/mcp/x/all` (the all-toolsets URL; the bare `/mcp/` serves only the default toolsets, without Actions and Copilot), reached by the backend (`pi/github-bridge.ts`, a small Streamable HTTP client) and offered through the Jarvis MCP door as tools named `gh_<tool>` | **Not a harness tool.** Attached as a harness MCP tool, the full server put its whole tool list (about 13k input tokens, and a tool listing per turn) in every turn: first text went from 1.1 to 1.5 s to 2.4 to 5.7 s (Deploy 43901841128). Through the door, `find_tools` ranks the GitHub tools with the Jarvis ones and `call_tool` forwards the call, so the harness lists two tools and nothing is lost. The token is the repository secret `PI_GITHUB_TOKEN`: fine-grained only (the script refuses a classic token), held by the backend as the Container App secret `pi-github-token` (env `JARVIS_PI_GITHUB_TOKEN`, a fingerprint in `JARVIS_PI_GITHUB_FP`), no longer in a Foundry connection (the old `jarvis-pi-github` connection is deleted by the Deploy). Its permissions, set by the owner, are the only limit. The tool list is cached for 30 minutes |
 | Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Jarvis backend's managed identity (set up by `infra/setup-azure-mcp.ps1`, which also removes any other holder). Outgoing calls use the container's own system identity with the **Contributor** role on `rg-jarvis`; widening beyond that resource group is the owner's call. The unauthenticated call returns 401 (observed) |
 | Environment note | `pi/context.ts` (`buildPiEnvironment`), wired in `index.ts` | The backend parses the Azure subscription and the Jarvis resource group from its own `BACKEND_CONTAINER_APP_RESOURCE_ID` and adds the GitHub defaults (DanAakesen, DanAakesen/jarvis, DanAakesen/vault). The note is part of the trusted context block (first turn, again on change, every wake); the smoke's Azure turn carries it. No identifier is committed. Without the setting the Azure line is omitted |
-| Azure through the door | `pi/remote-mcp.ts` (the same client as GitHub), backend settings `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` (set by the Deploy), tools named `az_<tool>` | Attached to the harness as an MCP tool with a `ProjectManagedIdentity` connection, the first Deploy with Azure (43924888427) failed the very first turn after about 28 s ("PI stopped before it finished the reply"): the harness fails the whole turn when a server's tool list does not come back, and a scale-to-zero container plus a project-identity token is exactly where that happens. So Azure is a door tool: the backend calls the guarded server with its own managed identity (token for `api://<client id>/.default`, app role granted to the backend identity by `infra/setup-azure-mcp.ps1`), a catalogue read waits at most 8 s in a search but the refresh itself may take 90 s so a cold container can finish starting, `/pi/warm` and the smoke start it, and a call may take 120 s. A failed stream now logs `pi.stream_failed` with the provider's short error code, and the smoke's HTTP 502 shows it |
+| Azure through the door | `pi/remote-mcp.ts` (the same client as GitHub), backend settings `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` (set by the Deploy), tools named `az_<tool>` | Attached to the harness as an MCP tool with a `ProjectManagedIdentity` connection, the first Deploy with Azure (43924888427) failed the very first turn after about 28 s ("PI stopped before it finished the reply"): the harness fails the whole turn when a server's tool list does not come back, and a scale-to-zero container plus a project-identity token is exactly where that happens. So Azure is a door tool: the backend calls the guarded server with its own managed identity (token for `api://<client id>/.default`, app role granted to the backend identity by `infra/setup-azure-mcp.ps1`), a catalogue read waits at most 8 s in a search but the refresh itself may take up to 200 s so a cold container can finish starting, nothing starts it at start-up or from `/pi/warm` since #1996 (a search that names Azure does, and the Deploy smoke wakes it first), and a call may take 120 s. A failed stream now logs `pi.stream_failed` with the provider's short error code, and the smoke's HTTP 502 shows it |
 | Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | PI starts, steers and retries Workers on its own judgement, in a chat turn or in a wake. Results come back as queue events (below) and as the existing chat notice |
 | Worker results as signals | `workerEvent` in `proactive/events/producers.ts`, subscribed to the task event hub in `index.ts` | Source `worker`, kinds `task.done`, `task.needs_attention`, `task.cancelled`, `task.pull_request_opened` (the queue only accepts lowercase kinds; a test normalises each one), one dedupe key per task and state. They enter the existing queue; the queue has no consumer until the brain (next pull request) |
 | Stream parsing | `pi/gateway.ts` | The harness's `mcp_list_tools` and finished `mcp_call` items are read (labels sanitised) so the smoke and the logs can say which servers are attached and whether a call failed. A failed list or call is logged; it does not by itself fail a chat turn |
@@ -2240,7 +2483,7 @@ WebSocket adapter against the #1391 core seam.
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
-| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with the voice chosen in Foundry; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
+| Voice | One backend-owned `/voice` route connects to Foundry agent `jarvis-pi-live` on `gpt-live-1` (Deploy verifies its technical contract; its instructions, voice, greeting and `store` are tuned in Foundry). GPT-Live provides native 24 kHz full duplex with the voice chosen in Foundry; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 

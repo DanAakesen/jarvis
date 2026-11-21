@@ -1227,10 +1227,11 @@ existing budget alerts with USD 20/month authorized for Terra; no new spending
 guard or other role change is part of this work.
 
 Voice sessions use `jarvis-pi-live` as the native speech layer. GPT-Live never
-receives Jarvis's tool catalogue. The relay keeps transcript fragments together
-through pauses and uses native event/timeline identities to associate the client
-delegation. After that assignment it waits for 0.6-second quiet, bounded by
-three seconds, stores Dan's exact owner message, and only then starts the same
+receives Jarvis's tool catalogue. The relay keeps every word of Dan's open turn
+together through pauses. The delegation's `offset_ms` is not where the utterance
+ends, so it is only logged and never cuts the request. When the delegation
+arrives, the relay waits until the turn has been quiet for 1.5 seconds (at most
+three), stores Dan's whole message once, and only then starts the same
 PI gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
 final speakable answer return through the matching delegation ID. This preserves
 `find_tools -> call_tool`, grants, receipts, monthly cap and single-flight.
@@ -1238,15 +1239,18 @@ Every commentary append is split at UTF-8 boundaries of at most 256 bytes, a
 conservative bound below the provider's 500-token append limit.
 GPT-Live has no transcript-done or output-audio-done event: the relay explicitly
 groups native deltas and emits bounded Jarvis readiness, caption, activity and
-playback events. New input cancels stale PI work; GPT-Live owns acoustic
-barge-in and continuous listening/speaking. Activity changes come from the
+playback events. Speech, including a backchannel such as "mm-hm", never cancels
+PI's running turn: only a new delegation (the newest request wins) or the end of
+the session does. GPT-Live owns acoustic barge-in and continuous
+listening/speaking. Activity changes come from the
 provider, transcript/delegation and playback evidence, so the UI reports
 Listening, Thinking, Speaking, Reconnecting and Ended instead of retaining a
 stale default. Each input/output delta carries an event identity, and each
 assistant group has a response identity. The phone, Watch and restored Chat
 history keep the original speaker and event order through overlap or reconnect.
-Direct conversational turns persist Dan's transcript before the first natural
-provider reply; delegated turns retain the existing quiet boundary before PI.
+Direct conversational turns persist Dan's transcript, after the same 1.5 seconds
+of quiet, before the reply that answers it, so history keeps Dan-before-Jarvis
+order; delegated turns wait for that quiet boundary before PI.
 Provider `usage.updated` and final closed usage are cumulative: the relay keeps
 the maximum deduplicated `usage.seconds` value and writes it as voice minutes
 instead of counting the wall-clock sitting time when real usage exists.
@@ -1254,8 +1258,9 @@ instead of counting the wall-clock sitting time when real usage exists.
 During voice sessions, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 
 English and Danish speech use the authenticated backend `/voice` WebSocket and
-the GPT-Live voice agent. Its immutable definition pins `gpt-live-1`, 24 kHz
-PCM, while Jarvis remains the sole tool and action authority.
+the GPT-Live voice agent. Deploy verifies its technical contract (`gpt-live-1`,
+24 kHz PCM, client delegation); Dan tunes its instructions, voice, greeting and
+`store` in Foundry. Jarvis remains the sole tool and action authority.
 Provider transcript deltas are normalised for the iPhone, web and Watch UI. A
 normal Deploy provisions the voice agent before deleting the two replaced 2.1
 model deployments; no runtime fallback is retained.
