@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk } from '../core/chat-agent.js';
+import { defaultAwayModeState } from '../core/away-mode.js';
+import { defaultSettings } from '../core/settings.js';
+import { buildPiContext, buildPiEnvironment } from './context.js';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
@@ -260,6 +263,47 @@ describe('PI gateway', () => {
     signature = 'GitHub=ready;Azure=not_configured';
     expect(await sent('third')).toContain('OVERVIEW GitHub=ready;Azure=not_configured');
     expect(await sent('fourth')).not.toContain('OVERVIEW');
+  });
+
+  describe('a brain wake opens like a new chat conversation', () => {
+    const overview = { signature: 'GitHub=idle;Azure=not_configured', text: 'TOOL OVERVIEW' };
+    const containerApp = '/subscriptions/11111111-2222-4333-8444-555555555555/resourceGroups/rg-jarvis/providers/Microsoft.App/containerApps/ca-jarvis-backend-abc123';
+    const turnTexts = (calls: Call[]) => calls
+      .filter(call => call.url.includes('/responses'))
+      .map(call => (call.body!.input as Array<{ content: string }>)[0]!.content);
+    const reply = () => sse(delta('x'), completed(1, 0, 1));
+
+    it('carries the tool overview in every wake, even after chat was sent it, and never makes chat repeat it', async () => {
+      const { gateway, calls } = setup([reply, reply, reply, reply]);
+      gateway.setCapabilityNote?.(() => overview);
+      const signal = new AbortController().signal;
+      const lastTurn = () => turnTexts(calls).at(-1)!;
+      await gateway.runBrain({ runId: 'run-1', body: 'WAKE' }, signal);
+      expect(lastTurn()).toContain(overview.text);
+      // The wake is a conversation of its own: it did not use up the overview of Dan's conversation.
+      for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'first' }, '', signal)) void chunk;
+      expect(lastTurn()).toContain(overview.text);
+      await gateway.runBrain({ runId: 'run-2', body: 'WAKE' }, signal);
+      expect(lastTurn()).toContain(overview.text);
+      for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'second' }, '', signal)) void chunk;
+      expect(lastTurn()).not.toContain(overview.text);
+    });
+
+    it('shares the turn line, trusted context, environment note and tool overview with the first turn of a chat conversation', async () => {
+      const environment = buildPiEnvironment({ BACKEND_CONTAINER_APP_RESOURCE_ID: containerApp });
+      const context = buildPiContext(defaultSettings, defaultAwayModeState, environment);
+      const { gateway, calls, run } = setup([reply, reply], { context: async () => context });
+      gateway.setCapabilityNote?.(() => overview);
+      await run('CHAT MESSAGE');
+      await gateway.runBrain({ runId: 'run-1', body: 'WAKE MESSAGE' }, new AbortController().signal);
+      const [chat, wake] = turnTexts(calls);
+      for (const text of [chat, wake]) {
+        for (const block of [context, environment, overview.text]) expect(text).toContain(block);
+      }
+      // Structure, not wording: apart from the turn reference and the message itself, both turns are the same blocks in the same order.
+      const shape = (text: string | undefined, message: string) => text?.replace(/jt-[A-Za-z0-9_-]{22}/u, '[turn]').replace(message, '[message]');
+      expect(shape(wake, 'WAKE MESSAGE')).toBe(shape(chat, 'CHAT MESSAGE'));
+    });
   });
 
   it('reports honest errors for a missing agent, rate limiting and a broken stream, with no fallback', async () => {
