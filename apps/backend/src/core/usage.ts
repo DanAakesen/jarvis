@@ -119,9 +119,13 @@ function summarizeSpend(entries: UsageEntry[], key: (entry: UsageEntry) => strin
     if (entry.costStatus === 'unverified') total.unverifiedEntries += 1;
     groups.set(label, total);
   }
+  // Four decimals, as the Usage page shows DKK; it also drops the float noise of summing many small costs.
+  const money = (value: number) => Number(value.toFixed(4));
   return [...groups].map(([label, total]) => ({
     label,
     ...total,
+    usd: money(total.usd),
+    dkk: money(total.dkk),
     costStatus: total.unverifiedEntries > 0 ? 'unverified' : total.estimatedEntries > 0 ? 'estimated' : 'measured',
   })).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
 }
