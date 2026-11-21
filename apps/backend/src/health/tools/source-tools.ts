@@ -432,9 +432,11 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       const properties = route.tool.inputSchema.properties as Record<string, unknown>;
       const routeProperties = Object.fromEntries(Object.entries(properties).filter(([key]) => key !== 'operation' && !route.exclude?.includes(key)));
       const required = [...(route.required ?? (route.tool.inputSchema.required as string[] | undefined ?? []).filter(key => key !== 'operation'))];
+      // No additionalProperties:false here: Ajv removes what a failing oneOf branch does not declare, which erased every argument
+      // but `operation`. execute() refuses fields the chosen operation does not take.
       return {
         type: 'object', properties: { operation: { type: 'string', const: route.operation }, ...routeProperties },
-        required: ['operation', ...required], additionalProperties: false,
+        required: ['operation', ...required],
       };
     });
     const routeByOperation = new Map(routes.map(route => [route.operation, route]));
