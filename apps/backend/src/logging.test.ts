@@ -284,6 +284,35 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('exports only the bounded shape of a pi.harness_item and drops everything else', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = {
+      trigger: 'rejected_item', attempt: 1, itemType: 'mcp_approval_request', name: 'read_file', serverLabel: 'jarvis', itemStatus: 'in_progress',
+      hasCallId: false, hasId: true, argumentsLength: 17, eventTypes: ['response.created', 'response.output_item.added'], itemTypes: ['mcp_approval_request'],
+      elapsedMs: 661, firstEventMs: 120, sawText: true, sawTool: true, sawOutput: true, previousCancelled: true,
+    };
+    logger.info({ ...fields, arguments: '{"q":"private"}', output: 'private output', id: 'private id', url: 'https://private.example' }, 'pi.harness_item');
+    expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item', ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'pi.harness_item', properties: { service: 'jarvis-backend', ...fields } }));
+    logger.info({
+      trigger: 'private trigger', itemType: 'Has Spaces', name: 'https://private.example/x', serverLabel: 'a'.repeat(65), itemStatus: 'UPPER',
+      hasCallId: 'yes', hasId: 1, argumentsLength: -1, attempt: 3, elapsedMs: Infinity,
+      eventTypes: ['ok.type', 'private event', 'https://private.example', 'x'.repeat(65), 42, ...Array.from({ length: 40 }, () => 'fine')],
+      itemTypes: 'private',
+    }, 'pi.harness_item');
+    const dropped = JSON.parse(records[1]!);
+    expect(dropped).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item',
+      eventTypes: ['ok.type', ...Array.from({ length: 24 }, () => 'fine')],
+    });
+    expect(records[1]).not.toContain('private');
+    logger.info({ argumentsLength: 1.5, itemType: '' }, 'pi.harness_item');
+    expect(JSON.parse(records[2]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.harness_item' });
+  });
+
   it('keeps the tool count and Azure catalogue on pi.turn and drops an unknown catalogue state', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
