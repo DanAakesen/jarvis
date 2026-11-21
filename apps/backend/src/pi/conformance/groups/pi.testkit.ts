@@ -119,7 +119,13 @@ export function createPiGroup(context: ConformanceContext) {
       wakeRefused('evidence the wake never had', messageDan('The 14:05 train to Aarhus is cancelled.', { evidenceSources: ['mail'], evidence: [{ ...locationEvidence, source: 'mail', identity: 'gmail-message:999' }] })),
       wakeRefused('no evidence at all', messageDan('The 14:05 train to Aarhus is cancelled.', { evidence: [] })),
     ],
-    pi_note: [wakeRefused('a name with a folder in it', { name: 'Folder/Waiting for', text: 'Nothing is pending.' })],
+    pi_note: [
+      wakeRefused('a name with a folder in it', { name: 'Folder/Waiting for', text: 'Nothing is pending.' }),
+      {
+        ...wakeRefused('a note name with a credential-like word', { name: 'Waiting for the API key', text: 'Anna will send it.' }),
+        check: (result) => expect(result).toMatchObject({ refused: expect.stringContaining('includes the note name') }),
+      },
+    ],
     inbox_trail: [
       wakeRefused('an item that is not in the inbox', { id: 'ffffffffffff', line: 'Nudged Dan about it this morning.' }),
       wakeRefused('an id that is not an inbox id', { id: '1', line: 'Nudged Dan about it this morning.' }),
