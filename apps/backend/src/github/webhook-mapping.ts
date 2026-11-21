@@ -156,7 +156,7 @@ function clip(value: unknown, maxLength: number): string | undefined {
     : undefined;
 }
 
-function login(value: unknown): string | null {
+function person(value: unknown): string | null {
   return clip(value, 80) || null;
 }
 
@@ -259,9 +259,9 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
         activity: {
           action,
           title: clip(pullRequest?.title, 200) ?? '',
-          author: login(object(pullRequest?.user)?.login),
-          actor: login(object(payload.sender)?.login),
-          reviewer: login(object(payload.requested_reviewer)?.login) ?? (teamSlug ? `team:${teamSlug}` : null),
+          author: person(object(pullRequest?.user)?.login),
+          actor: person(object(payload.sender)?.login),
+          reviewer: person(object(payload.requested_reviewer)?.login) ?? (teamSlug ? `team:${teamSlug}` : null),
           updatedAt: timestamp(pullRequest?.updated_at) ?? openedAt,
         },
       } : {}),
@@ -375,7 +375,7 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
         numberValue && title !== undefined && at && !object(issue?.pull_request)) {
       return {
         kind: 'issue', repository: repo, action, number: numberValue, title,
-        actor: login(object(payload.sender)?.login), at,
+        actor: person(object(payload.sender)?.login), at,
       };
     }
   }
@@ -391,7 +391,7 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       return {
         kind: 'issue_comment', repository: repo, id, number: numberValue, title,
         pullRequest: object(issue?.pull_request) !== undefined,
-        commenter: login(object(comment?.user)?.login),
+        commenter: person(object(comment?.user)?.login),
         excerpt: clip(comment?.body, 200) ?? '',
         at,
       };
@@ -407,7 +407,7 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       return {
         kind: 'release', repository: repo, id, tag, name: clip(release?.name, 200) || null,
         prerelease: release?.prerelease === true, publishedAt,
-        actor: login(object(payload.sender)?.login),
+        actor: person(object(payload.sender)?.login),
       };
     }
   }
