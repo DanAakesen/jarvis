@@ -204,8 +204,11 @@ const knownItemTypes = new Set(['message', 'reasoning', 'mcp_call', 'mcp_list_to
 const maxTurnRounds = 8;
 /** Client-owned items one follow-up may answer; more than this is not a tool loop but a runaway stream. */
 const maxClientItemsPerRound = 16;
-/** Harness calls tracked per response. The harness runs most of them itself, so this is far above what a follow-up may answer. */
-const maxTrackedCalls = 64;
+/**
+ * Harness calls tracked per response. The harness runs most of them itself, so this is far above what a follow-up may answer.
+ * Calls beyond it are not tracked but the stream is still read to its end: they count as native when output follows them.
+ */
+const maxTrackedCalls = 512;
 const callItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
 
 /**
@@ -220,8 +223,6 @@ type HarnessCallClass = 'native' | 'client_owned' | 'unknown';
 /** A `function_call` or `mcp_approval_request` the harness emitted, merged from its `added`, argument and `done` events (later events win). */
 interface HarnessCall {
   readonly item: Record<string, unknown>;
-  /** Its `output_item.done` or `function_call_arguments.done` arrived. */
-  done: boolean;
   native?: NativeEvidence;
 }
 
@@ -240,7 +241,7 @@ function trackCall(calls: HarnessCall[], item: Record<string, unknown>): { reado
   const known = calls.find(entry => entry.item.type === item.type && ((callId !== undefined && entry.item.call_id === callId) || (id !== undefined && entry.item.id === id)));
   if (known) { Object.assign(known.item, item); return { call: known, created: false }; }
   if (calls.length >= maxTrackedCalls) return undefined;
-  const call: HarnessCall = { item: { ...item }, done: false };
+  const call: HarnessCall = { item: { ...item } };
   calls.push(call);
   return { call, created: true };
 }
@@ -274,8 +275,8 @@ function applyFinalOutput(calls: HarnessCall[], output: readonly unknown[]): voi
 
 /**
  * Decides who owns a call once its response completed. Native: the harness ran it (see `NativeEvidence`). Client-owned: the
- * response ended with it unanswered and its item is complete, so the client must answer. Unknown: its item never completed and
- * nothing followed it; it is left alone, because answering a call the harness may be running could repeat its work.
+ * response ended with it unanswered and its item is complete (no status, or `completed`), so the client must answer. Unknown: its
+ * item has another status (`in_progress`, `failed`, `incomplete`, ...) and nothing followed it; it is left alone, because answering a call the harness may be running could repeat its work.
  * `resolved` holds the calls this turn already settled: a replayed one is never settled again.
  */
 function classifyHarnessCall(call: HarnessCall, resolved: ReadonlySet<string>): { readonly classification: HarnessCallClass; readonly rule: HarnessCallRule } {
@@ -285,7 +286,7 @@ function classifyHarnessCall(call: HarnessCall, resolved: ReadonlySet<string>): 
   if (call.item.output !== undefined && call.item.output !== null) return { classification: 'native', rule: 'own_output' };
   if (call.native) return { classification: 'native', rule: call.native };
   const status = call.item.status;
-  return call.done || status === undefined || status === 'completed'
+  return status === undefined || status === 'completed'
     ? { classification: 'client_owned', rule: 'last_item_unanswered' }
     : { classification: 'unknown', rule: 'incomplete_item' };
 }
@@ -542,7 +543,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let buffer = '';
     let completed = false;
     const calls: HarnessCall[] = [];
-    let overflow = false;
+    // Calls beyond the tracking limit are not tracked; they are only a problem when no output ever followed them.
+    let overflowSeen = false;
+    let overflowFollowed = false;
+    const laterOutput = () => { markLaterOutput(calls); if (overflowSeen) overflowFollowed = true; };
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
     const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
@@ -570,7 +574,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             phase.responseId = payload.response.id;
           } else if (type === 'response.output_text.delta' && typeof payload.delta === 'string' && payload.delta.length > 0) {
             phase.sawText = true;
-            markLaterOutput(calls);
+            laterOutput();
             yield { kind: 'delta', text: payload.delta };
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
@@ -587,36 +591,38 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             else if (typeof itemType === 'string' && callItemTypes.has(itemType)) {
               phase.sawTool = true;
               const tracked = trackCall(calls, payload.item);
-              if (!tracked) overflow = true;
+              if (!tracked) overflowSeen = true;
               else if (tracked.created) yield { kind: 'tool', server: '' };
             } else {
               noteResult(calls, payload.item);
-              markLaterOutput(calls);
+              laterOutput();
             }
           } else if (type === 'response.function_call_arguments.done' && typeof payload.arguments === 'string') {
             const target = calls.find(entry => entry.item.type === 'function_call' && plainId(payload.item_id) !== undefined && entry.item.id === payload.item_id);
-            if (target) { target.item.arguments = payload.arguments; target.done = true; }
+            // Only the arguments are complete here: the call itself has not run, so this says nothing about its item.
+            if (target) target.item.arguments = payload.arguments;
           } else if (type === 'response.output_item.done' && isObject(payload.item)) {
             const item = payload.item;
             if (typeof item.type === 'string' && callItemTypes.has(item.type)) {
               const tracked = trackCall(calls, item);
-              if (!tracked) overflow = true;
+              if (!tracked) overflowSeen = true;
               else {
-                tracked.call.done = true;
+                // A finished item without a status is a completed one, whatever status it was added with.
+                if (item.status === undefined) tracked.call.item.status = 'completed';
                 if (tracked.created) yield { kind: 'tool', server: '' };
               }
             } else if (item.type === 'mcp_call') {
-              markLaterOutput(calls);
+              laterOutput();
               yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null, ...itemFailure(item) };
             } else if (item.type === 'mcp_list_tools') {
-              markLaterOutput(calls);
+              laterOutput();
               yield {
                 kind: 'tools_listed', server: label(item.server_label), tools: Array.isArray(item.tools) ? item.tools.length : 0,
                 failed: item.error !== undefined && item.error !== null, ...itemFailure(item),
               };
             } else {
               noteResult(calls, item);
-              markLaterOutput(calls);
+              laterOutput();
             }
           } else if (type === 'response.mcp_list_tools.failed') {
             yield { kind: 'tools_listed', server: '', tools: 0, failed: true };
@@ -624,7 +630,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const usage = isObject(payload.response.usage) ? payload.response.usage : {};
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
             completed = true;
-            if (Array.isArray(payload.response.output)) applyFinalOutput(calls, payload.response.output);
+            if (Array.isArray(payload.response.output)) {
+              applyFinalOutput(calls, payload.response.output);
+              if (payload.response.output.some(entry => isObject(entry) && typeof entry.type === 'string' && !callItemTypes.has(entry.type))) overflowFollowed = overflowSeen;
+            }
             yield {
               kind: 'round_done',
               usage: { inputTokens: count(usage.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(usage.output_tokens) },
@@ -642,7 +651,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         logStreamFailure('stream_ended_without_completed', phase, attempt);
         throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
       }
-      return { calls, overflow };
+      return { calls, overflow: overflowSeen && !overflowFollowed };
     } finally {
       await reader.cancel().catch(() => {});
       // Best effort: closing the stream is the real stop; this only helps when the service ran it in the background.

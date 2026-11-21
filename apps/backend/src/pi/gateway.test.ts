@@ -1088,11 +1088,60 @@ describe('PI gateway', () => {
       expect(flood.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 7_000, outputTokens: 70 });
     });
 
-    it('does not answer 17 native calls: the harness ran them', async () => {
-      const natives = Array.from({ length: 17 }, (_, index) => functionCall('task', `call_${index}`, '{}')).flat();
-      const { run, calls } = setup([() => sse(created('resp_1'), ...natives, ...message('Done'), completed(1, 0, 1))]);
-      expect(await run('hi')).toContain('Done');
+    it('does not answer 600 native calls, even past the tracking limit: the harness ran them and the reply arrives once', async () => {
+      const natives = Array.from({ length: 600 }, (_, index) => [
+        frame({ type: 'response.output_item.added', item: callItem('task', `call_${index}`, '', 'in_progress') }),
+        frame({ type: 'response.output_item.done', item: { ...callItem('task', `call_${index}`, '{}', 'completed'), output: 'child result' } }),
+      ]).flat();
+      const { logs, log } = capture();
+      const { run, calls } = setup([() => sse(created('resp_1'), ...natives, ...message('Done'), completed(1, 0, 1))], { log });
+      expect((await run('hi')).filter(chunk => typeof chunk === 'string')).toEqual(['Done']);
       expect(responsesOf(calls)).toHaveLength(1);
+      expect(logs.map(([event]) => event)).not.toContain('pi.stream_failed');
+      expect(turnLog(logs)).toMatchObject({ outcome: 'ok', nativeCalls: expect.any(Number) });
+    });
+
+    it('fails only when calls beyond the tracking limit were never followed by any output', async () => {
+      const bare = Array.from({ length: 600 }, (_, index) => functionCall('lookup', `call_${index}`, '{}')).flat();
+      const { run, calls, store } = setup([() => sse(created('resp_1'), ...bare, completed(100, 0, 10))]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('more client tools') });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 100 });
+    });
+
+    it('leaves a call alone whose arguments finished but whose item never did: the harness may still be running it', async () => {
+      const { logs, log } = capture();
+      const { run, calls } = setup([() => sse(created('resp_1'), ...message('Working. '),
+        frame({ type: 'response.output_item.added', item: callItem('task', 'call_1', '', 'in_progress') }),
+        frame({ type: 'response.function_call_arguments.done', item_id: 'fc_call_1', arguments: '{"prompt":"p"}' }),
+        completed(1, 0, 1))], { log });
+      expect(await run('hi')).toContain('Working. ');
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(harnessCalls(logs)).toEqual([expect.objectContaining({ classification: 'unknown', rule: 'incomplete_item', argumentKeys: ['prompt'] })]);
+    });
+
+    it.each(['failed', 'incomplete', 'cancelled', 'in_progress'])('leaves a call alone whose finished item has the status %s', async (status) => {
+      const { logs, log } = capture();
+      const { run, calls } = setup([() => sse(created('resp_1'), ...message('Working. '),
+        frame({ type: 'response.output_item.added', item: callItem('task', 'call_1', '', 'in_progress') }),
+        frame({ type: 'response.output_item.done', item: callItem('task', 'call_1', '{}', status) }),
+        completed(1, 0, 1))], { log });
+      expect(await run('hi')).toContain('Working. ');
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(harnessCalls(logs)).toEqual([expect.objectContaining({ classification: 'unknown', rule: 'incomplete_item', itemStatus: status.replace(/[^a-z_]/gu, '') })]);
+    });
+
+    it('treats a finished item without a status as completed, so a genuine client call still gets its one follow-up', async () => {
+      const { run, calls } = setup([
+        () => sse(created('resp_1'),
+          frame({ type: 'response.output_item.added', item: callItem('lookup', 'call_1', '', 'in_progress') }),
+          frame({ type: 'response.output_item.done', item: { type: 'function_call', id: 'fc_call_1', call_id: 'call_1', name: 'lookup', arguments: '{}' } }),
+          completed(1, 0, 1)),
+        () => sse(created('resp_2'), ...message('Done'), completed(1, 0, 1)),
+      ]);
+      await run('hi');
+      expect(responsesOf(calls)).toHaveLength(2);
+      expect(responsesOf(calls)[1]!.body!.input).toEqual([{ type: 'function_call_output', call_id: 'call_1', output: unavailable('lookup') }]);
     });
 
     it('fails a client-owned call it cannot answer but charges the real usage of the response that carried it', async () => {
