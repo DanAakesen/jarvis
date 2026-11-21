@@ -6,6 +6,8 @@ import { allGroups, buildConformanceWorld } from './conformance/world.testkit.js
 import { goldenIntents, phraseTable } from './conformance/phrases.testkit.js';
 import { descriptionViolations, harnessManagedNames, nameViolations, schemaViolations, tokensOf } from './conformance/schema.testkit.js';
 import type { ConformanceTurn } from './conformance/mcp-client.testkit.js';
+import { executeCase, exerciseTool, openTurn, turnKindFor, type CallableStatus } from './conformance/callable.testkit.js';
+import type { ConformanceGroup } from './conformance/types.testkit.js';
 
 /**
  * Offline tool conformance: every tool the registry holds is checked against the harness contract (static), found by the
@@ -185,5 +187,59 @@ describe('golden intents are pinned to tools that exist', () => {
   });
 });
 
+// ---- Callable ----------------------------------------------------------------------------------------------------------------
+
+const groupOfModule = new Map<string, ConformanceGroup>();
+for (const group of world.groups) for (const module of group.modules) groupOfModule.set(module.id, group);
+const groupOfTool = (name: string) => groupOfModule.get(world.app.jarvisTools.get(name)!.moduleId);
+/** `CONFORMANCE_GROUP=google` runs only the callable checks of one group while its stubs are being built. */
+const onlyGroup = process.env.CONFORMANCE_GROUP;
+const callable = new Map<string, CallableStatus>();
+
+describe('callable: every tool runs through the real call_tool over stubbed stores and services', () => {
+  it.each(names)('%s', async (name, context) => {
+    const group = groupOfTool(name);
+    if (onlyGroup && group?.id !== onlyGroup) return context.skip();
+    expect(group, `${name} belongs to a module no conformance group composes`).toBeDefined();
+    callable.set(name, await exerciseTool(world, world.app.jarvisTools.get(name)!, group));
+  });
+});
+
+// ---- Golden daily-core scenarios ----------------------------------------------------------------------------------------------
+
+const confirmationMarkers = /confirmationCode|requiresConfirmation|needsApproval|awaitingApproval|"pending"\s*:\s*true|proposal/iu;
+const scenarios = world.groups.flatMap((group) => (group.scenarios ?? []).map((scenario) => ({ group, scenario })));
+
+describe('golden scenarios: one turn, no confirmation step, found on the first search', () => {
+  it('covers every scenario step Dan named', () => {
+    const missing = goldenIntents.filter((intent) => !scenarios.some(({ scenario }) => scenario.id === intent.scenario
+      && scenario.steps.some((step) => step.tool === intent.tool)));
+    expect(missing.map((intent) => `${intent.scenario}: ${intent.step} (${intent.tool})`)).toEqual([]);
+  });
+
+  for (const { scenario } of scenarios) {
+    for (const language of ['en', 'da'] as const) {
+      it(`${scenario.title} (${language})`, async (context) => {
+        if (onlyGroup && !world.groups.some((group) => group.id === onlyGroup && group.scenarios?.includes(scenario))) return context.skip();
+        for (const step of scenario.steps) {
+          const phrase = step.say[language];
+          const top = await topThree(phrase);
+          expect(top, `"${phrase}" must find ${step.tool} in the top 3 of the first search, got ${top.join(', ')}`).toContain(step.tool);
+          const tool = world.app.jarvisTools.get(step.tool)!;
+          // Each spoken request is its own turn; the stored Dan message is exactly what he said.
+          const done = await executeCase(world, tool, step.call.turn ?? turnKindFor(step.tool), {
+            label: `${scenario.id}: ${phrase}`, arguments: step.call.arguments, ownerMessage: step.call.ownerMessage ?? phrase,
+          });
+          const wanted = step.call.expect ?? 'ok';
+          expect(done.outcome, `"${phrase}" -> ${step.tool} answered ${done.outcome} ("${done.message ?? ''}"), expected ${wanted}`).toBe(wanted);
+          expect(JSON.stringify(done.result ?? null), `"${phrase}" -> ${step.tool} asked for a confirmation step`).not.toMatch(confirmationMarkers);
+          step.call.check?.(done.result);
+        }
+      });
+    }
+  }
+});
+
 // Keep the module referenced for the groups listed in the report.
 void allGroups;
+void openTurn;

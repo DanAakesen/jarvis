@@ -30,6 +30,11 @@ export interface ToolCase {
   readonly arguments: Record<string, unknown>;
   /** What Dan said in the stored message of this turn. Default: a plain imperative request. */
   readonly ownerMessage?: string;
+  /**
+   * The kind of PI turn the call is made in. Default: `chat` for chat and voice tools, `wake` for wake-only tools, and
+   * `activation` for the situation tools.
+   */
+  readonly turn?: 'chat' | 'wake' | 'activation';
   /** Default `ok`. `refused`/`error` are for cases that prove a typed, plain-English refusal or failure. */
   readonly expect?: 'ok' | 'refused' | 'error';
   /** Extra assertions on the structured result (the `result` field of the call_tool answer). Throw to fail. */
@@ -58,6 +63,7 @@ export interface ExternalTool {
   /** Arguments for the clean-failure call; omitted means generated from the schema. */
   readonly arguments?: Record<string, unknown>;
   readonly ownerMessage?: string;
+  readonly turn?: 'chat' | 'wake' | 'activation';
 }
 
 export interface ConformanceGroup {

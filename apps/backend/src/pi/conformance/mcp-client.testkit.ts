@@ -34,7 +34,7 @@ export interface ConformanceTurn { readonly grant: PiTurnGrant; close(): void }
 
 export interface McpClient {
   /** A chat or voice turn, or (`wake`) a background brain wake that also sees the wake-only tools. */
-  openTurn(options?: { readonly wake?: boolean }): ConformanceTurn;
+  openTurn(options?: { readonly wake?: boolean; readonly activation?: PiTurnGrant['activation'] }): ConformanceTurn;
   find(turn: ConformanceTurn, query: string): Promise<FindResult>;
   call(turn: ConformanceTurn, name: string, args: Json, timeoutMs?: number): Promise<CallResult>;
   /** The tools/list answer, which must stay exactly the two door tools. */
@@ -93,6 +93,7 @@ export function createMcpClient(options: {
       const grant = registry.open({
         ownerObjectId: owner, sessionId: options.sessionId, messageId: options.messageId, signal: controller.signal,
         ...(turnOptions.wake ? { brain: { runId: 'conformance-wake', sent: [], wrote: [], looked: [] } } : {}),
+        ...(turnOptions.activation ? { activation: turnOptions.activation } : {}),
       });
       return { grant, close: () => { registry.close(grant.turn); controller.abort(); } };
     },
