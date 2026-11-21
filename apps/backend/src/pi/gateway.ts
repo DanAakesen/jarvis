@@ -562,7 +562,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    * One request to the model. A stream that fails before any text, reasoning or tool call is tried once more (see `respond`),
    * and every failure here logs why with `pi.stream_failed`. The harness's calls (`function_call`, `mcp_approval_request`) are
    * collected while the response streams and never end it: the stream is read to its terminal event, so the harness can finish
-   * what it runs itself. They are returned once the response completed, for `respond` to classify.
+   * what it runs itself. They are returned once the response completed, for `respond` to classify. Reply text is forwarded as it
+   * streams; text that only a `response.output_text.done` event or the completed `output` carries is added once, as its missing end.
    */
   async function* respondOnce(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number,

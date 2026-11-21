@@ -1325,6 +1325,10 @@ describe('PI gateway', () => {
           [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
           [created('resp_2'), delta(second), completed(12, 4, 6)],
         ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['client-owned replay within one response: the same call id repeated is answered once', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
         ['client-owned replay: the same call id again is answered once', [
           [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
           [created('resp_2'), delta(second), ...functionCall('lookup', 'call_1', '{}'), completed(12, 4, 6)],
