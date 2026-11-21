@@ -125,6 +125,7 @@ export function createPiMcpRoutes(options: {
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
+      grant.requests.count += 1;
       let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
       if (grant.brain && options.situation) {
         try { disabled = await disabledFor(
@@ -198,6 +199,7 @@ export function createPiMcpRoutes(options: {
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
+      grant.requests.count += 1;
       if (grant.brain) {
         let disabled: ReadonlySet<string> = new Set<string>(grant.activation?.disabledSources ?? []);
         if (options.situation) {

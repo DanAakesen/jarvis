@@ -5,6 +5,7 @@ import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
+import type { PiTurnGrant } from './turns.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const frame = (event: Record<string, unknown>) => `event: ${String(event.type)}\ndata: ${JSON.stringify(event)}\n\n`;
@@ -56,11 +57,12 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
   const calls: Call[] = [];
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
+  let cancelReply: () => Response = () => Response.json({});
   const fetcher = (async (url: string, init: RequestInit) => {
     const call: Call = { url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
     calls.push(call);
     if (url.includes('/conversations')) { conversations += 1; return Response.json({ id: `conv_${conversations}` }); }
-    if (url.includes('/cancel')) return Response.json({});
+    if (url.includes('/cancel')) return cancelReply();
     return replies.shift()!(call);
   }) as typeof fetch;
   const gateway = createPiGateway({
@@ -73,7 +75,7 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
     for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text }, 'Bearer x', signal)) chunks.push(chunk);
     return chunks;
   };
-  return { gateway, store, registry, calls, usage, run, conversations: () => conversations };
+  return { gateway, store, registry, calls, usage, run, conversations: () => conversations, setCancel: (reply: () => Response) => { cancelReply = reply; } };
 }
 
 describe('PI gateway', () => {
@@ -268,10 +270,9 @@ describe('PI gateway', () => {
     const failed = setup([() => sse(delta('half'), frame({ type: 'response.failed', response: {} }))]);
     await expect(failed.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
     // The provider's own short error code is kept for the log and the smoke; its message never is.
-    // A stream that fails before any output is tried once more, so these fail twice to show what the owner finally sees.
-    const coded = setup(Array.from({ length: 2 }, () => () => sse(frame({ type: 'response.failed', response: { error: { code: 'tool_user_error', message: 'Bearer secret leaked here' } } }))));
+    const coded = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'tool_user_error', message: 'Bearer secret leaked here' } } }))]);
     await expect(coded.run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'tool_user_error' });
-    const odd = setup(Array.from({ length: 2 }, () => () => sse(frame({ type: 'response.failed', response: { error: { code: 'not a code with spaces' } } }))));
+    const odd = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'not a code with spaces' } } }))]);
     await expect(odd.run('hi')).rejects.toMatchObject({ detail: 'response.failed' });
     // The model had started, so the turn is charged at an estimate and counts toward the cap.
     expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 12_000, outputTokens: 2 });
@@ -457,7 +458,8 @@ describe('PI gateway', () => {
     it.each([
       ['response.failed', () => sse(created, listed, failedFrame()), 'foundry_response_failed', false],
       ['error', () => sse(frame({ type: 'error', code: 'server_error', message: 'private provider text' })), 'foundry_response_failed', false],
-      ['response.incomplete', () => sse(created, frame({ type: 'response.incomplete', response: { status: 'incomplete' } })), 'foundry_response_failed', false],
+      ['a transient rate limit', () => sse(created, failedFrame('rate_limit_exceeded')), 'foundry_response_failed', false],
+      ['a stream that ends before its first event', () => sse(), 'stream_ended_without_completed', false],
       ['a stream that ends early', () => sse(created), 'stream_ended_without_completed', true],
       ['a stream that breaks', broken, 'stream_broke', true],
     ])('retries once on %s, with the same message and conversation, billing the turn once', async (_name, first, reason, cancelsFirst) => {
@@ -492,6 +494,101 @@ describe('PI gateway', () => {
       store.spendSince = async (from, kinds, signal) => { reads += 1; return spend(from, kinds, signal); };
       await run('hi');
       expect(reads).toBe(1);
+    });
+
+    const turnOf = (call: Call) => /\[Turn (jt-[A-Za-z0-9_-]{22})/u.exec((call.body!.input as Array<{ content: string }>)[0]!.content)![1]!;
+
+    it.each([
+      ['an unparseable frame', () => sse(created, 'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"type":"mcp_c\n\n', failedFrame())],
+      ['a non-object frame', () => sse(created, 'data: 42\n\n', failedFrame())],
+      ['a half-received frame when the stream ends', () => sse(created, 'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"type":"mcp_c')],
+      ['a half-received frame when the stream breaks', () => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`${created}event: response.output_item.added\ndata: {"type":"response.output_item.adde`));
+          setTimeout(() => controller.error(new Error('connection reset')), 5);
+        },
+      }), { headers: { 'content-type': 'text/event-stream' } })],
+    ])('never retries after %s', async (_name, first) => {
+      const { logs, log } = capture();
+      const { run, calls, store } = setup([first, () => sse(delta('again'), completed(1, 0, 1))], { log });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(logs.map(([event]) => event)).not.toContain('pi.stream_retry');
+      expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ sawOutput: true });
+      expect(calls.filter(call => call.url.includes('/cancel'))).toHaveLength(0);
+      expect(store.turns).toHaveLength(1);
+    });
+
+    it.each([
+      ['a request that entered the MCP server and had not returned', (grant: PiTurnGrant) => { grant.requests.count += 1; }],
+      ['a recorded tool result', (grant: PiTurnGrant) => { grant.results.push({ tool: 'probe', outcome: 'ok' }); }],
+      ['a recorded action', (grant: PiTurnGrant) => { grant.actions.count += 1; }],
+    ])('never retries after %s, even though the stream carried nothing', async (_name, mark) => {
+      const { registry, run, calls, store } = setup([
+        (call) => { mark(registry.resolve(turnOf(call))!); return sse(created); },
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(store.turns).toHaveLength(1);
+    });
+
+    it('never retries when a tool request arrives while it waits to retry', async () => {
+      const { registry, run, calls } = setup([
+        (call) => { setTimeout(() => { registry.resolve(turnOf(call))!.requests.count += 1; }, 10); return sse(failedFrame()); },
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ], { streamRetryDelayMs: 60 });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it.each([
+      ['a failed cancel', () => new Response('{}', { status: 500 })],
+      ['a cancel that leaves the response running', () => Response.json({ status: 'in_progress' })],
+    ])('never retries a stream that merely stopped after %s', async (_name, cancel) => {
+      const { run, calls, setCancel } = setup([() => sse(created), () => sse(delta('again'), completed(1, 0, 1))]);
+      setCancel(cancel);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(calls.filter(call => call.url.includes('/responses/resp_1/cancel'))).toHaveLength(1);
+    });
+
+    it('never retries events whose response is unknown, because they cannot be cancelled', async () => {
+      const { run, calls } = setup([() => sse(frame({ type: 'response.in_progress', response: {} })), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it.each([
+      ['response.incomplete', () => sse(created, frame({ type: 'response.incomplete', response: { status: 'incomplete', error: { code: 'server_error' } } }))],
+      ['a content filter', () => sse(created, failedFrame('content_filter'))],
+      ['a tool error', () => sse(created, failedFrame('tool_user_error'))],
+      ['an unknown code', () => sse(created, failedFrame('something_new'))],
+      ['no code', () => sse(created, frame({ type: 'response.failed', response: {} }))],
+    ])('never retries %s', async (_name, first) => {
+      const { run, calls } = setup([first, () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
+    it('never retries a call without a turn grant, such as a warm-up or the smoke', async () => {
+      const { gateway, calls } = setup([() => sse(failedFrame()), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect(gateway.warm(new AbortController().signal)).rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      const smoke = setup([() => sse(failedFrame()), () => sse(delta('again'), completed(1, 0, 1))]);
+      await expect((async () => { for await (const event of smoke.gateway.smokeKit.respond('conv_1', 'x', new AbortController().signal)) void event; })())
+        .rejects.toMatchObject({ code: 'pi_failed' });
+      expect(responsesOf(smoke.calls)).toHaveLength(1);
+    });
+
+    it('never retries a brain wake that reached a tool', async () => {
+      const { gateway, registry, calls } = setup([
+        (call) => { registry.resolve(turnOf(call))!.requests.count += 1; return sse(created); },
+        () => sse(delta('again'), completed(1, 0, 1)),
+      ]);
+      const result = await gateway.runBrain({ runId: 'run-9', body: 'WAKE' }, new AbortController().signal);
+      expect(result).toMatchObject({ ok: false });
+      expect(responsesOf(calls)).toHaveLength(1);
     });
 
     it.each([

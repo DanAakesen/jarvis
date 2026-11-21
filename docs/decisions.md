@@ -12,13 +12,19 @@
   only fixed vocabularies and scalars; never prompts, replies, tool arguments,
   tokens or provider messages.
 - **Resilience:** `respond()` retries the Foundry call once, after 750 ms, only
-  when the stream fails before any text, reasoning, tool call, function call or
-  unknown event (`response.failed`, `incomplete`, `error`, or a stream that ends
-  or breaks) and logs `pi.stream_retry`. Nothing has run, so the retry repeats
-  nothing; it keeps the conversation and message, bills once and honours cancel
-  and the turn deadline. A stream that merely stopped is cancelled on Foundry's
-  side before the retry. PI stays unrestricted: no classifier, completion check,
-  refusal, gate or answer buffering was added.
+  when nothing observable can have happened: a turn grant exists, no output,
+  unparseable or half-received frame was seen, no MCP request, tool result,
+  action or push is on the grant (also after the pause), and the failure is
+  transient (a stream that ends or breaks, or `response.failed`/`error` with
+  `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`,
+  `temporarily_unavailable` or `timeout`; never `incomplete`, content filters,
+  tool errors or unknown codes). A stream that merely stopped must have its
+  response cancelled and confirmed first. It logs `pi.stream_retry`, keeps the
+  conversation and message, bills once and honours cancel and the turn
+  deadline. PI stays unrestricted: no classifier, completion check, refusal,
+  gate or answer buffering was added. A review found the first version retried
+  too widely (any failure code, unread frames, an in-flight tool call, an
+  unconfirmed cancel); this is the narrowed rule.
 - **Open:** the failed first attempt's own input cost is not billed (as before
   for a stream with no output); whether Foundry stores the message of a failed
   response in the conversation, so the retry could show it twice, is unverified.

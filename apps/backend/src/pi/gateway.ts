@@ -140,7 +140,14 @@ const repeatedFailurePauseMs = 30 * 60_000;
 /** A turn cancelled this recently may still be running on Foundry's side, which is worth knowing when the next one fails. */
 const previousCancelledWindowMs = 120_000;
 /** Streams that die like this before any output are the only ones retried: no text, reasoning or tool call exists, so nothing has run. */
-const retryableStreamFailures: ReadonlySet<string> = new Set(['foundry_response_failed', 'stream_ended_without_completed', 'stream_broke']);
+const retryableStreamFailures: ReadonlySet<string> = new Set(['stream_ended_without_completed', 'stream_broke']);
+/** A Foundry `response.failed` or `error` is retried only with one of these codes; `incomplete`, content filters, tool errors and unknown codes never are. */
+const transientFoundryCodes: ReadonlySet<string> = new Set([
+  'server_error', 'rate_limit', 'rate_limit_exceeded', 'too_many_requests', 'temporarily_unavailable', 'timeout',
+]);
+/** What the retry decision needs from a turn's grant: any trace that the model reached a tool. */
+const toolMayHaveRun = (grant: PiTurnGrant): boolean =>
+  grant.requests.count > 0 || grant.results.length > 0 || grant.actions.count > 0 || grant.pushes.count > 0;
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -347,10 +354,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const decoder = new TextDecoder();
     let buffer = '';
     let completed = false;
+    // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
+    const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
       while (!completed) {
         const chunk = await readUnlessAborted(reader, signal).catch((error: unknown) => {
           if (signal.aborted) throw error;
+          markUnreadTail();
           logStreamFailure('stream_broke', phase, attempt);
           throw new PiGatewayError('pi_failed', 'The PI reply stream broke before it finished.', { cause: error });
         });
@@ -360,8 +370,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         buffer = parsed.pending;
         for (const frame of parsed.events) {
           let payload: unknown;
-          try { payload = JSON.parse(frame.data); } catch { continue; }
-          if (!isObject(payload)) continue;
+          // A frame that cannot be read could have been anything, a tool event included.
+          try { payload = JSON.parse(frame.data); } catch { phase.sawOutput = true; continue; }
+          if (!isObject(payload)) { phase.sawOutput = true; continue; }
           const type = typeof payload.type === 'string' ? payload.type : frame.event;
           phase.firstEventMs ??= Math.round(performance.now() - phase.startedAt);
           if (!isQuietEvent(type, payload)) phase.sawOutput = true;
@@ -407,6 +418,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         }
       }
       if (!completed) {
+        markUnreadTail();
         logStreamFailure('stream_ended_without_completed', phase, attempt);
         throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
       }
@@ -419,13 +431,25 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
   }
 
+  /** The old response is stopped for certain, or its state is unknown and the caller must not ask again. */
+  async function cancelConfirmed(responseId: string, signal: AbortSignal): Promise<boolean> {
+    try {
+      const cancelled = await call('POST', `/responses/${encodeURIComponent(responseId)}/cancel`, {}, AbortSignal.any([signal, AbortSignal.timeout(5_000)]));
+      const body: unknown = await cancelled.json().catch(() => null);
+      const status = isObject(body) && typeof body.status === 'string' ? body.status : '';
+      return status !== 'in_progress' && status !== 'queued';
+    } catch { return false; }
+  }
+
   /**
-   * Sends one message and streams the reply. A stream that dies before the model produced any text, reasoning or tool call
-   * (Foundry's `response.failed`, `incomplete` or `error`, or a stream that ends or breaks) is tried once more on the same
-   * conversation with the same message: nothing has run, so the retry repeats nothing. Anything after the first output, any
-   * cancel and the turn deadline end it as before. Callers see one stream and one `done`, so the turn is billed once.
+   * Sends one message and streams the reply. A stream that dies before anything observable happened is tried once more on
+   * the same conversation with the same message, so the retry can never repeat work. That needs all of: the turn's grant
+   * (a call without one never retries), no byte of output or unreadable frame, no MCP request, tool result, action or push
+   * on the grant (checked again after the pause), a stream-level failure (ended or broke) or a Foundry `response.failed` or
+   * `error` with a code in `transientFoundryCodes`, and, for a stream that merely stopped, a confirmed cancel of the old
+   * response. Cancel and the turn deadline end it as before. Callers see one stream and one `done`, so the turn is billed once.
    */
-  async function* respond(conversationId: string, input: string, signal: AbortSignal): AsyncGenerator<PiEvent> {
+  async function* respond(conversationId: string, input: string, signal: AbortSignal, grant?: PiTurnGrant): AsyncGenerator<PiEvent> {
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
         startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
@@ -435,14 +459,18 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         yield* respondOnce(conversationId, input, signal, phase, attempt);
         return;
       } catch (error) {
-        if (attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput ||
-          phase.failure === null || !retryableStreamFailures.has(phase.failure)) throw error;
-        log('pi.stream_retry', { reason: phase.failure, ...phase.failureFields, attempt, ...phaseFields(phase) });
-        // A stream that merely stopped may still be running on Foundry's side; stop it before asking again.
-        if (phase.failure !== 'foundry_response_failed' && phase.responseId !== null) {
-          await call('POST', `/responses/${encodeURIComponent(phase.responseId)}/cancel`, {}, AbortSignal.any([signal, AbortSignal.timeout(5_000)])).catch(() => {});
+        const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
+          phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
+        if (attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
+          !grant || toolMayHaveRun(grant)) throw error;
+        if (phase.failure !== 'foundry_response_failed') {
+          // A stream that merely stopped may still be running on Foundry's side. Without a confirmed stop, or with events whose
+          // response is unknown, it may be running a tool: do not ask again.
+          if (phase.responseId !== null ? !await cancelConfirmed(phase.responseId, signal) : phase.firstEventMs !== null) throw error;
         }
         await pause(streamRetryDelayMs, signal);
+        if (toolMayHaveRun(grant)) throw error;
+        log('pi.stream_retry', { reason: phase.failure, ...phase.failureFields, attempt, ...phaseFields(phase) });
       }
     }
   }
@@ -620,7 +648,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
-      for await (const event of respond(conversationId, text, deadline)) {
+      for await (const event of respond(conversationId, text, deadline, grant)) {
         // The model has the message once the provider answers, so the overview is not sent again on the next turn.
         if (overviewSent) { noteSent = overviewSent; overviewSent = undefined; }
         if (event.kind === 'delta') {
@@ -763,7 +791,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         context: [context, activation.context].filter(Boolean).join('\n\n'),
         turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
       });
-      for await (const event of respond(conversationId, message, deadline)) {
+      for await (const event of respond(conversationId, message, deadline, grant)) {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawModel = true;

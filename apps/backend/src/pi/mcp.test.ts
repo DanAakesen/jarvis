@@ -119,6 +119,29 @@ describe('PI MCP server', () => {
     expect(recorded).toHaveLength(1);
   });
 
+  it('counts a tool request when it enters the server, before the tool has returned', async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const slow: JarvisTool = {
+      name: 'probe_slow', description: 'A slow probe. Keyword: slowprobe.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => { entered(); await new Promise<void>((resolve) => { release = resolve; }); return { ok: true }; },
+    };
+    const { registry, tool } = setup([], { tools: [slow] });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    expect(grant.requests.count).toBe(0);
+    await tool('find_tools', { turn: grant.turn, query: 'slowprobe' });
+    expect(grant.requests.count).toBe(1);
+    const pending = tool('call_tool', { turn: grant.turn, name: 'probe_slow', arguments: {} });
+    await started;
+    expect(grant.requests.count).toBe(2);
+    expect(grant.results).toEqual([]);
+    release();
+    await pending;
+    expect(grant.results).toEqual([{ tool: 'probe_slow', outcome: 'ok' }]);
+  });
+
   it('says a remote server is still loading, or could not be reached, instead of leaving the model to call it not attached', async () => {
     let status: ReturnType<RemoteMcpBridge['status']> = { state: 'starting' };
     const azure: RemoteMcpBridge = { prefix: 'az_', label: 'Azure', status: () => status, warm: () => {}, tools: async () => [], call: async () => ({ outcome: 'ok', result: {} }) };

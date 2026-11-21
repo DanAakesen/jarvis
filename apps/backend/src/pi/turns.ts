@@ -62,10 +62,12 @@ export interface PiTurnGrant {
   readonly actions: { count: number };
   /** Successful chat pushes from message_dan, recorded by the wake itself. */
   readonly pushes: { count: number };
+  /** MCP requests the model made in this turn, counted when a request ENTERS the server (results are written only after a tool returns). */
+  readonly requests: { count: number };
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'pushes'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'pushes' | 'requests'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
@@ -87,7 +89,7 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       const grant: PiTurnGrant = {
         ...input, turn, discovered: new Set(), results: [],
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
-        actions: { count: 0 }, pushes: { count: 0 },
+        actions: { count: 0 }, pushes: { count: 0 }, requests: { count: 0 },
       };
       grants.set(turn, grant);
       return grant;
