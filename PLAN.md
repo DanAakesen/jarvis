@@ -1,3 +1,15 @@
+## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
+
+**Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
+
+| Step | State |
+| --- | --- |
+| Never end or abort the stream for a `function_call` or approval; read to the terminal event | Done |
+| Classify each call native / client-owned / unknown by call id and stream order; log the rule | Done |
+| Answer only client-owned calls (one follow-up, same conversation, at most 8 responses); no `task` stub; a call id settles once per turn | Done |
+| `pi.harness_item` `harness_call` events and `rounds` / `clientItems` / `nativeCalls` on `pi.turn` | Done |
+| Confirm the native signals and the client-owned shape in a real trace | Open; needs a live turn |
+
 ## Explicit reminder delivery evidence — 20 November 2026 (#1990)
 
 **Status: implementation, focused offline unit/fixture/build/lint gates and the
