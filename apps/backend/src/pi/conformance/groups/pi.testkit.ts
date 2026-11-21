@@ -3,7 +3,7 @@ import { createBrainTools } from '../../brain/tools.js';
 import { createSituationTools } from '../../situation-tools.js';
 import { createWatchTools } from '../../watch/tools.js';
 import { ownerMessageSource } from '../shared.testkit.js';
-import type { ConformanceGroup, GroupFactory, ToolCase } from '../types.testkit.js';
+import type { ConformanceContext, ConformanceGroup, GroupFactory, ToolCase } from '../types.testkit.js';
 import { createBrainFixture, seededInboxItemId, seededWatches } from './pi-brain.testkit.js';
 import { createSituationFixture, piClock } from './pi-situation.testkit.js';
 
@@ -15,13 +15,14 @@ const noActivation = 'This tool needs a live PI activation. Nothing was done.';
  * The PI-only tools: situation tools (an activation turn), the brain's tools (a background wake) and standing watches. The MCP
  * door itself is composed by the world; this group contributes the tools production adds to the `pi` module, built over the
  * production services with in-memory stores. Their turn authority comes from the same registry the door resolves turns in.
+ * The fixtures come back too, so a test can look at what a call left behind (a push, a note) or take a dependency down.
  */
-export const piGroup: GroupFactory = (context): ConformanceGroup => {
+export function createPiGroup(context: ConformanceContext) {
   const registry = context.registry;
   if (!registry) throw new Error('The PI conformance group needs the turn registry the MCP door uses (ConformanceContext.registry).');
-  const situationFixture = createSituationFixture(context.owner);
+  const situationFixture = createSituationFixture(context);
   // The brain reads the situation too, but a wake and an activation never share state here: a commit must not change what a wake may cite.
-  const wakeSituation = createSituationFixture(context.owner);
+  const wakeSituation = createSituationFixture(context);
   const brain = createBrainFixture(context, registry);
   const now = () => piClock;
 
@@ -79,7 +80,14 @@ export const piGroup: GroupFactory = (context): ConformanceGroup => {
       { label: 'an id that is not an inbox id', turn: 'wake', arguments: { id: '1', line: 'Nudged Dan about it this morning.' }, expect: 'refused' },
     ],
     watch_create: [
-      { label: 'in chat, quoting Dan', ownerMessage: 'Please keep me updated on the deploy of main, every half hour.', arguments: { title: 'Deploy of main status', text: 'Tell me when the deploy of main is green. Look every half hour.', nextLook: inAnHour }, check: (result) => expect(result).toMatchObject({ created: true, name: 'Deploy of main status', nextLook: inAnHour }) },
+      {
+        label: 'in chat, quoting Dan', ownerMessage: 'Please keep me updated on the deploy of main, every half hour.',
+        arguments: { title: 'Deploy of main status', text: 'Tell me when the deploy of main is green. Look every half hour.', nextLook: inAnHour },
+        check: (result) => {
+          expect(result).toMatchObject({ created: true, name: 'Deploy of main status', nextLook: inAnHour });
+          expect(brain.vault.files.get('PI/Watches/Deploy of main status.md')).toContain('Please keep me updated on the deploy of main');
+        },
+      },
       { label: 'in a wake, events only', turn: 'wake', arguments: { title: 'Price of the flight', text: 'Watch the price of the flight to Berlin.', nextLook: 'none' }, check: (result) => expect(result).toMatchObject({ created: true, nextLook: null }) },
       { label: 'a next look that is not a time', arguments: { title: 'Deploy of main status', text: 'Look every half hour.', nextLook: 'tomorrow' }, expect: 'refused' },
     ],
@@ -103,7 +111,7 @@ export const piGroup: GroupFactory = (context): ConformanceGroup => {
     ],
   };
 
-  return {
+  const group: ConformanceGroup = {
     id: 'pi',
     covers: ['pi'],
     modules: [{
@@ -120,4 +128,7 @@ export const piGroup: GroupFactory = (context): ConformanceGroup => {
     }],
     cases,
   };
-};
+  return { group, situation: situationFixture, wakeSituation, brain };
+}
+
+export const piGroup: GroupFactory = (context) => createPiGroup(context).group;

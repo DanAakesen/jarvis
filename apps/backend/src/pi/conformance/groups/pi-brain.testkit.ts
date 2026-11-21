@@ -24,12 +24,20 @@ export const seededWatches = {
 /** The inbox item `inbox_trail` writes to (the hidden id a real item carries). */
 export const seededInboxItemId = '0a1b2c3d4e5f';
 
+/** Dependency token: the vault (GitHub) cannot be reached. The real client throws plain errors, not typed ones. */
+export const vaultDown = 'pi-vault';
+
 /**
  * What a background wake and the standing watches run on: a vault in memory (PI's own corner and the inbox live in it, as in
  * production), the brain's chat voice over a conversation with its proactive ledger, and the watch ledger in memory.
  */
 export function createBrainFixture(context: ConformanceContext, registry: PiTurnRegistry) {
-  const vault = memoryVault();
+  const memory = memoryVault();
+  const unreachable = <Args extends unknown[], Result>(method: (...args: Args) => Promise<Result>) => async (...args: Args): Promise<Result> => {
+    if (context.down.has(vaultDown)) throw new Error('Could not reach the vault');
+    return method(...args);
+  };
+  const vault = { files: memory.files, read: unreachable(memory.read), write: unreachable(memory.write), tree: unreachable(memory.tree), move: unreachable(memory.move) } as typeof memory;
   const conversations = memoryConversations();
   /** Chat messages the brain pushed to Dan's phone, as the push hook received them. */
   const pushes: { sessionId: string; messageId: string; text: string }[] = [];

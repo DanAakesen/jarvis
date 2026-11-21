@@ -2,7 +2,8 @@ import { proactiveSettingsRevision } from '../../../proactive/preferences.js';
 import { createMemoryProactiveStore, defaultProactiveSettings } from '../../../proactive/store.js';
 import type { ProactiveSource, SourceResult } from '../../../proactive/types.js';
 import { sourceIds } from '../../../proactive/types.js';
-import { createMemoryPiSituationStore, createPiSituationService, type PiSituationService } from '../../situation.js';
+import { createMemoryPiSituationStore, createPiSituationService, PiSituationError, type PiSituationService } from '../../situation.js';
+import type { ConformanceContext } from '../types.testkit.js';
 
 /** The clock of every PI fake: evidence and situational state are judged against it, so the cases never go stale. */
 export const piClock = new Date('2026-11-21T08:00:00.000Z');
@@ -24,11 +25,15 @@ const bareState = () => ({
   refs: [], facts: [], followUps: [],
 });
 
+/** Dependency token: the stored situational state cannot be read (the real store's answer to a corrupt row). */
+export const situationDown = 'pi-situation';
+
 /**
  * The PI situation service over in-memory stores, with one location observation recorded the way a source refresh records it.
  * The service is the production one; only its stores and its one connected source are fakes.
  */
-export function createSituationFixture(owner: string) {
+export function createSituationFixture(context: Pick<ConformanceContext, 'owner' | 'down'>) {
+  const owner = context.owner;
   const store = createMemoryPiSituationStore();
   const proactive = createMemoryProactiveStore(owner, () => piClock);
   const service = createPiSituationService({ owner, store, proactive, sources: [locationSource], now: () => piClock });
@@ -39,7 +44,11 @@ export function createSituationFixture(owner: string) {
     get: (target, property) => {
       const member = (target as unknown as Record<string | symbol, unknown>)[property];
       if (typeof member !== 'function') return member;
-      return async (...args: unknown[]) => { await seeded; return (member as (...values: unknown[]) => unknown).apply(target, args); };
+      return async (...args: unknown[]) => {
+        await seeded;
+        if (context.down.has(situationDown)) throw new PiSituationError('unavailable', 'The stored PI situational state is invalid. No replacement was invented.');
+        return (member as (...values: unknown[]) => unknown).apply(target, args);
+      };
     },
   }) as PiSituationService;
 
