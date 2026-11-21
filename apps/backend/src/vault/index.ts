@@ -987,6 +987,11 @@ export function createVaultModule(options: {
       const unchanged = previous?.blobSha === file.sha;
       const backfill = unchanged && previous?.embeddingMissing === true;
       if (unchanged && (!backfill || !embedder)) continue;
+      // A note above the size limit stays out of the index, like one that reads as too large; reading it would fail every synchronization.
+      if (file.size !== undefined && file.size > MAX_VAULT_FILE_BYTES) {
+        remove.push(file.path);
+        continue;
+      }
       let note: VaultFile | null;
       try {
         note = await options.client.read(file.path, signal);
