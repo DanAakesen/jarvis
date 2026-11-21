@@ -199,7 +199,7 @@ describe('weather provider fetch: phase logs and one retry', () => {
     expect(early.calls).toHaveLength(0);
   });
 
-  it('does not geocode the saved home location', async () => {
+  it('does not geocode the saved home location and never reads settings for a named place', async () => {
     const home = { 'location.home_city': JSON.stringify('Aarhus'), 'location.latitude': '56.16', 'location.longitude': '10.2' };
     const saved = scripted({}, home);
     const result = await saved.call({ days: 2, report: false });
@@ -207,13 +207,12 @@ describe('weather provider fetch: phase logs and one retry', () => {
     expect(saved.calls.map((url) => url.hostname)).toEqual(['api.open-meteo.com']);
     expect(phases(saved.logs)).toEqual([{ phase: 'home_location', outcome: 'ok', attempt: 1 }, { phase: 'forecast', outcome: 'ok', attempt: 1 }]);
 
+    // A named place never waits on the settings store, even when it is the home city.
     const named = scripted({}, home);
     await named.call({ location: 'aarhus', days: 2, report: false });
-    expect(named.calls.map((url) => url.hostname)).toEqual(['api.open-meteo.com']);
+    expect(named.calls.map((url) => url.hostname)).toEqual(['geocoding-api.open-meteo.com', 'api.open-meteo.com']);
+    expect(named.logs.map((entry) => entry.phase)).not.toContain('home_location');
 
-    const other = scripted({}, home);
-    await other.call(chat);
-    expect(other.calls.map((url) => url.hostname)).toEqual(['geocoding-api.open-meteo.com', 'api.open-meteo.com']);
   });
 
   it('refuses a missing home location and reports an unreadable settings store in plain words', async () => {
@@ -254,3 +253,187 @@ describe('weather provider fetch: phase logs and one retry', () => {
     expect(touched).not.toHaveBeenCalled();
   });
 });
+
+/** A stub clock: performance.now, AbortSignal.timeout and delayed answers all move only when the test ticks, with fractional milliseconds like the real clock. */
+function stubClock() {
+  let now = 1000.37;
+  const due: { at: number; run: () => void }[] = [];
+  const at = (ms: number, run: () => void) => { due.push({ at: now + ms, run }); };
+  const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+  const spies = [
+    vi.spyOn(performance, 'now').mockImplementation(() => now),
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      if (!Number.isInteger(ms)) throw new RangeError(`The value of "delay" is out of range. It must be an integer. Received ${ms}`);
+      const controller = new AbortController();
+      at(ms, () => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')));
+      return controller.signal;
+    }),
+  ];
+  return {
+    at,
+    flush,
+    restore: () => spies.forEach((spy) => spy.mockRestore()),
+    async tick(ms: number) {
+      const end = now + ms;
+      for (;;) {
+        const next = due.filter((item) => item.at <= end).sort((a, b) => a.at - b.at)[0];
+        if (!next) break;
+        due.splice(due.indexOf(next), 1);
+        now = Math.max(now, next.at);
+        next.run();
+        await flush();
+      }
+      now = end;
+      await flush();
+    },
+  };
+}
+
+type Timed = 'stall' | { answerAfterMs: number } | 'ok';
+
+describe('weather retry under the real default budget (8000 / 3000 / 1000 ms) on a stub clock', () => {
+  const defaults = { requestTimeoutMs: 8_000, attemptTimeoutMs: 3_000, minRetryMs: 1_000, homeLookupTimeoutMs: 2_000 };
+
+  function timed(script: { geocoding?: Timed[]; forecast?: Timed[] }, clock: ReturnType<typeof stubClock>, timing = defaults) {
+    const logs: Logged[] = [];
+    const fetcher = (async (url: URL, init: RequestInit) => {
+      const geocoding = new URL(url).hostname.startsWith('geocoding');
+      const step = (geocoding ? script.geocoding : script.forecast)?.shift() ?? 'ok';
+      const response = () => new Response(JSON.stringify(geocoding ? placeAnswer : forecast));
+      if (step === 'ok') return response();
+      return new Promise<Response>((resolve, reject) => {
+        init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+        if (step !== 'stall') clock.at(step.answerAfterMs, () => resolve(response()));
+      });
+    }) as unknown as typeof fetch;
+    const req = { server: {}, log: { info: (fields: Logged) => logs.push(fields) } } as unknown as FastifyRequest;
+    const weather = createWeatherModule({ create: async () => { throw new Error('no artifact'); } }, fetcher, undefined, timing).tools[0]!;
+    return { logs, start: (input: unknown) => weather.execute(input, req, new AbortController().signal) as Promise<WeatherResult> };
+  }
+
+  it('finishes when the retry leaves a fractional, shorter remainder for the forecast', async () => {
+    const clock = stubClock();
+    try {
+      const { logs, start } = timed({ geocoding: ['stall', { answerAfterMs: 2_500.6 }] }, clock);
+      const pending = start(chat);
+      await clock.flush();
+      await clock.tick(3_000);
+      await clock.tick(2_500.6);
+      await expect(pending).resolves.toMatchObject({ forecast: expect.any(Array) });
+      expect(phases(logs)).toEqual([
+        { phase: 'geocode', outcome: 'timeout', attempt: 1 },
+        { phase: 'geocode', outcome: 'ok', attempt: 2 },
+        { phase: 'forecast', outcome: 'ok', attempt: 1 },
+      ]);
+      expect(logs[1]!.elapsedMs).toBe(2_501);
+    } finally { clock.restore(); }
+  });
+
+  it('turns a forecast stall after a slow lookup into the named-step failure, not a RangeError', async () => {
+    const clock = stubClock();
+    try {
+      const { logs, start } = timed({ geocoding: ['stall', { answerAfterMs: 2_500.6 }], forecast: ['stall'] }, clock);
+      const pending = start(chat).catch((error: unknown) => error);
+      await clock.flush();
+      await clock.tick(3_000);
+      await clock.tick(2_500.6);
+      await clock.tick(2_500);
+      const failure = await pending;
+      expect(failure).toBeInstanceOf(ToolFailure);
+      expect((failure as Error).message).toBe('The weather provider did not answer in time at the forecast step.');
+      expect(phases(logs).at(-1)).toEqual({ phase: 'forecast', outcome: 'timeout', attempt: 1 });
+    } finally { clock.restore(); }
+  });
+
+  it('retries the forecast inside the fractional remainder and reports two tries', async () => {
+    const clock = stubClock();
+    try {
+      const { logs, start } = timed({ geocoding: [{ answerAfterMs: 2_000.7 }], forecast: ['stall', 'stall'] }, clock);
+      const pending = start(chat).catch((error: unknown) => error);
+      await clock.flush();
+      await clock.tick(2_000.7);
+      await clock.tick(3_000);
+      await clock.tick(2_999);
+      const failure = await pending;
+      expect((failure as Error).message).toBe('The weather provider did not answer in time at the forecast step after 2 tries.');
+      expect(phases(logs).slice(-2)).toEqual([
+        { phase: 'forecast', outcome: 'timeout', attempt: 1 },
+        { phase: 'forecast', outcome: 'timeout', attempt: 2 },
+      ]);
+    } finally { clock.restore(); }
+  });
+
+  it('keeps a fractional remainder usable for the place lookup retry too', async () => {
+    const clock = stubClock();
+    try {
+      const { logs, start } = timed({ geocoding: ['stall', 'stall'] }, clock, { ...defaults, attemptTimeoutMs: 5_000 });
+      const pending = start(chat).catch((error: unknown) => error);
+      await clock.flush();
+      await clock.tick(5_000);
+      await clock.tick(3_000);
+      const failure = await pending;
+      expect(failure).toBeInstanceOf(ToolFailure);
+      expect((failure as Error).message).toBe('The weather provider did not answer in time at the place lookup step after 2 tries.');
+      expect(phases(logs)).toEqual([
+        { phase: 'geocode', outcome: 'timeout', attempt: 1 },
+        { phase: 'geocode', outcome: 'timeout', attempt: 2 },
+      ]);
+    } finally { clock.restore(); }
+  });
+});
+
+describe('weather report path', () => {
+  function reporting(script: { forecast?: Step[] }, timing = quick) {
+    const logs: Logged[] = [];
+    const calls: URL[] = [];
+    const tracker = {
+      jobId: 'job-1', progress: vi.fn(async () => undefined), fail: vi.fn(async () => undefined),
+      done: vi.fn(async () => undefined), setResultDelivery: vi.fn(async () => undefined),
+    };
+    const fetcher = (async (url: URL, init: RequestInit) => {
+      const target = new URL(url);
+      calls.push(target);
+      if (target.hostname.startsWith('geocoding')) return new Response(JSON.stringify(placeAnswer));
+      if ((script.forecast?.shift() ?? 'ok') === 'stall') {
+        return new Promise<Response>((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true }));
+      }
+      return new Response(JSON.stringify(forecast));
+    }) as unknown as typeof fetch;
+    const req = {
+      server: {
+        ownerObjectId: 'owner',
+        backgroundJobs: { start: async () => tracker },
+        workspaceCommands: { execute: async () => undefined, isConnected: () => true },
+        jarvisTools: { list: () => [] },
+      },
+      log: { info: (fields: Logged, event: string) => logs.push({ ...fields, event }) },
+    } as unknown as FastifyRequest;
+    const weather = createWeatherModule({ create: async () => { throw new Error('no artifact'); } }, fetcher, {} as never, timing).tools[0]!;
+    return { logs, calls, tracker, run: (signal: AbortSignal) => weather.execute({ location: 'Copenhagen', days: 2 }, req, signal) };
+  }
+
+  it('fails with the provider cause and one report log when the forecast times out twice', async () => {
+    const { logs, tracker, run } = reporting({ forecast: ['stall', 'stall'] });
+    const failure = await run(new AbortController().signal).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ToolFailure);
+    expect((failure as Error).message).toBe('The weather provider did not answer in time at the forecast step after 2 tries.');
+    expect(logs.filter((entry) => entry.phase === 'report')).toEqual([expect.objectContaining({ phase: 'report', outcome: 'timeout', attempt: 1, event: 'weather.phase' })]);
+    expect(tracker.fail).toHaveBeenCalledWith('Weather report could not be completed.');
+  });
+
+  it('stops when the caller aborts, closes the job and logs no report outcome', async () => {
+    const { calls, logs, tracker, run } = reporting({ forecast: ['stall', 'ok'] }, { ...quick, attemptTimeoutMs: 300 });
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const pending = run(controller.signal).catch((error: unknown) => error);
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    controller.abort();
+    const failure = await pending;
+    expect((failure as Error).message).toBe('Weather report was cancelled.');
+    expect(Date.now() - startedAt).toBeLessThan(300);
+    expect(calls).toHaveLength(2);
+    expect(tracker.fail).toHaveBeenCalledWith('Weather report was cancelled.');
+    expect(logs.filter((entry) => entry.phase === 'report')).toEqual([]);
+  });
+});
+

@@ -202,7 +202,7 @@ sequenceDiagram
 - Persistence reuses `dbo.messages.metadata` for assistant messages (the column already holds a user message's visual context). `getHistory` and the `done` event return `blocks`; the history response schema allows them. The read path keeps only blocks that still validate.
 - Nothing refetches: a historic block renders from its stored JSON. A new request creates a new block.
 - `weather` with `report: false` returns values without a job or window; `hourly: true` adds hourly temperature and rain probability.
-- `weather` fetches Open-Meteo within one 8-second budget: at most 3 seconds per attempt, one retry after a timeout, network error, HTTP 429 or 5xx (never another 4xx or an unreadable or oversized answer), and no geocoding for the saved home city. A failure reaches the agent as a `ToolFailure` naming the step and cause. Each step logs `weather.phase` (`phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host`; no place, coordinates, query or response text).
+- `weather` fetches Open-Meteo within one 8-second budget: at most 3 seconds per attempt, one retry after a timeout, network error, HTTP 429 or 5xx (never another 4xx or an unreadable or oversized answer), and no geocoding for the saved home city (read only when no place is named). The caller's abort signal cancels the report job too. A failure reaches the agent as a `ToolFailure` naming the step and cause. Each step logs `weather.phase` (`phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host`; no place, coordinates, query or response text).
 - Voice is unchanged by this part: it still uses `workspace_command` views.
 
 ## App polish: page chrome, row surface, swipe back (16 November 2026, #1923, P15-185)

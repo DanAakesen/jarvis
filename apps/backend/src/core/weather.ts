@@ -405,13 +405,12 @@ export function createWeatherModule(
     for (let attempt = 1; ; attempt += 1) {
       budget.caller.throwIfAborted();
       const startedAt = performance.now();
-      const attemptSignal = AbortSignal.any([
-        budget.caller,
-        budget.deadline,
-        AbortSignal.timeout(Math.max(1, Math.min(timing.attemptTimeoutMs, budget.endsAt - startedAt))),
-      ]);
+      let attemptSignal: AbortSignal | undefined;
       let failure: WeatherFetchError;
       try {
+        // AbortSignal.timeout only accepts whole milliseconds; what is left of the budget is fractional.
+        const attemptMs = Math.max(1, Math.floor(Math.min(timing.attemptTimeoutMs, budget.endsAt - startedAt)));
+        attemptSignal = AbortSignal.any([budget.caller, budget.deadline, AbortSignal.timeout(attemptMs)]);
         const response = await (fetcher ?? fetch)(url, {
           headers: { Accept: 'application/json' },
           redirect: 'error',
@@ -430,7 +429,7 @@ export function createWeatherModule(
         budget.caller.throwIfAborted();
         failure = error instanceof WeatherFetchError
           ? error
-          : new WeatherFetchError(attemptSignal.aborted ? 'timeout' : 'network');
+          : new WeatherFetchError(attemptSignal?.aborted ? 'timeout' : 'network');
       }
       logPhase(request, {
         phase, outcome: failure.outcome, attempt, startedAt, host: phaseHosts[phase],
@@ -464,9 +463,9 @@ export function createWeatherModule(
   }
 
   async function placeFor(inputLocation: string | undefined, request: FastifyRequest, budget: WeatherBudget) {
-    // A saved home city with coordinates is used as it is: no geocoding for the home place.
-    const home = await homeLocation(request, budget);
     if (inputLocation === undefined) {
+      // The saved home city with coordinates is used as it is: no geocoding. A named place never waits on the settings store.
+      const home = await homeLocation(request, budget);
       if (home.state === 'unavailable') throw new ToolRefusal('Home location settings are unavailable.');
       if (home.state === 'unreadable') {
         throw new ToolFailure(home.timedOut
@@ -478,7 +477,6 @@ export function createWeatherModule(
       }
       return home.place;
     }
-    if (home.state === 'ready' && home.place.name.trim().toLowerCase() === inputLocation.toLowerCase()) return home.place;
     const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
     url.searchParams.set('name', inputLocation);
     url.searchParams.set('count', '1');
@@ -518,10 +516,18 @@ export function createWeatherModule(
       const title = (location ? `Weather in ${location}` : 'Home weather forecast').slice(0, 80);
       const viewId = `weather-${randomUUID().replaceAll('-', '')}`;
       const controller = new AbortController();
+      const abortOnCaller = () => controller.abort();
+      signal.addEventListener('abort', abortOnCaller, { once: true });
       const reportStartedAt = performance.now();
-      const tracker = await request.server.backgroundJobs.start(
-        'html_app', title, 3, () => controller.abort(), 'Getting current weather',
-      );
+      let tracker: Awaited<ReturnType<typeof request.server.backgroundJobs.start>>;
+      try {
+        tracker = await request.server.backgroundJobs.start(
+          'html_app', title, 3, () => controller.abort(), 'Getting current weather',
+        );
+      } catch (error) {
+        signal.removeEventListener('abort', abortOnCaller);
+        throw error;
+      }
       let finish!: () => void;
       jobs.set(controller, new Promise<void>((resolve) => { finish = resolve; }));
       const command = (operation: 'create' | 'update', view: GeneratedView): WorkspaceCommand => ({
@@ -596,7 +602,10 @@ export function createWeatherModule(
             : 'Weather report saved, but workspace delivery was not confirmed. Open it from Background work.',
         };
       } catch (error) {
-        if (!controller.signal.aborted) {
+        if (signal.aborted) {
+          // The caller is gone: close the job so it does not stay running; nobody is left to tell if that fails.
+          await tracker.fail('Weather report was cancelled.').catch(() => undefined);
+        } else if (!controller.signal.aborted) {
           // The whole job path: a provider failure keeps its own outcome, anything else is a report that could not be built or saved.
           logPhase(request, {
             phase: 'report',
@@ -616,6 +625,7 @@ export function createWeatherModule(
           ? 'Weather report was cancelled.'
           : 'Weather report could not be completed.');
       } finally {
+        signal.removeEventListener('abort', abortOnCaller);
         jobs.delete(controller);
         finish();
       }
