@@ -1,6 +1,6 @@
 import type { BrowserDecision, BrowserJevPlanner, BrowserTextModel } from '../../../core/browser-agent.js';
 import type { WorkspaceCommandBroker } from '../../../core/workspace-commands.js';
-import type { PcActDecision, PcActPlanner } from '../../../pc-bridge/pc-act.js';
+import type { PcActDecision, PcActPlanner, PcActVisionModel } from '../../../pc-bridge/pc-act.js';
 import type { ScreenFrameUsageStore, ScreenVisionModel } from '../../../vision/screen.js';
 import type { VisionWatchUsageStore } from '../../../vision/watch.js';
 
@@ -61,6 +61,13 @@ export function createFakePcActPlanner(): PcActPlanner {
     },
   };
 }
+
+/** Jev's eyes for apps UI Automation cannot read: one labelled control, in normalized window coordinates. */
+export const fakePcActVisionModel: PcActVisionModel = {
+  async locateElements() {
+    return [{ index: 0, role: 'button', name: 'Brush', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.1 } }];
+  },
+};
 
 /** The vision deployment: a watch frame gets the JSON observation the watch service expects, any other frame a caption. */
 export function createFakeVisionModel(): ScreenVisionModel & { readonly calls: Parameters<ScreenVisionModel['describe']>[0][] } {

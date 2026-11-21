@@ -13,6 +13,7 @@ import type { ConformanceContext, GroupFactory, ToolCase } from '../types.testki
 import { FakePc, snapshotIdFor } from './pc-fake.testkit.js';
 import {
   createFakeBrowserPlanner, createFakePcActPlanner, createFakeVisionModel, createFakeVisionUsage, ensureWorkspaceTab, fakeBrowserTextModel,
+  fakePcActVisionModel,
 } from './pc-stubs.testkit.js';
 
 /**
@@ -65,7 +66,7 @@ const act = (label: string, extra: Record<string, unknown>, ownerMessage: string
 
 export const pcGroup: GroupFactory = (context) => {
   // A short command timeout only makes a silent PC fail fast; the fake answers at once.
-  const bridge = createPcBridgeModule({ timeoutMs: 750, pcActPlanner: createFakePcActPlanner() });
+  const bridge = createPcBridgeModule({ timeoutMs: 750, pcActPlanner: createFakePcActPlanner(), pcActVisionModel: fakePcActVisionModel });
   const pc = new FakePc(bridge.connection);
   pc.attach();
 

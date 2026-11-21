@@ -54,6 +54,8 @@ const installed: readonly DesktopApp[] = [
     controls: [['treeitem', 'jarvis'], ['listitem', 'README.md'], ['button', 'Back']] },
   { application: 'chrome', display: 'Google Chrome', title: 'Jarvis – Home - Google Chrome',
     controls: [['tab', 'Jarvis – Home'], ['edit', 'Address and search bar'], ['button', 'Reload']] },
+  // A canvas app: UI Automation sees almost nothing, so pc_act falls back to the vision model to find controls.
+  { application: 'mspaint', display: 'Paint', title: 'Untitled - Paint', controls: [['control', 'Canvas']] },
 ];
 
 const running = ['vscode', 'spotify', 'notepad', 'chrome'] as const;
