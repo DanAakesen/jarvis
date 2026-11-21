@@ -235,7 +235,7 @@ const onlyGroup = process.env.CONFORMANCE_GROUP;
 const callable = new Map<string, CallableStatus>();
 
 describe('callable: every tool runs through the real call_tool over stubbed stores and services', () => {
-  it.each(names)('%s', async (name, context) => {
+  it.for(names)('%s', async (name, context) => {
     const group = groupOfTool(name);
     if (onlyGroup && group?.id !== onlyGroup) return context.skip();
     expect(group, `${name} belongs to a module no conformance group composes`).toBeDefined();

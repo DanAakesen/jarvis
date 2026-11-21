@@ -138,6 +138,18 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'azure', en: 'what does azure cost this month', da: 'hvad koster azure denne måned', tools: ['az_cost_query'] },
   { intent: 'github', en: 'merge the pull request', da: 'merge pull requesten', tools: ['gh_merge_pull_request', 'github_write'] },
   { intent: 'github', en: 'what changed in the repo this week', da: 'hvad er ændret i repoet i denne uge', tools: ['gh_list_commits', 'repo_issues', 'github_read'] },
+  { intent: 'settings', en: 'I am leaving the house', da: 'jeg kører bil nu', tools: ['set_presence_mode', 'set_away_mode'] },
+  { intent: 'settings', en: 'I am back home', da: 'jeg er hjemme igen', tools: ['set_presence_mode', 'set_away_mode'] },
+  { intent: 'settings', en: 'switch to dark mode', da: 'skift til mørk tilstand', tools: ['set_theme'] },
+  { intent: 'settings', en: 'reduce the animations', da: 'reducer animationerne', tools: ['set_theme'] },
+  { intent: 'settings', en: 'turn up the reasoning', da: 'skru op for tænkningen', tools: ['set_jarvis_model', 'update_settings'] },
+  { intent: 'settings', en: 'change my personality to warm', da: 'skift min personlighed til varm', tools: ['update_settings'] },
+  { intent: 'system', en: 'is something broken', da: 'er der noget galt', tools: ['get_system_health', 'get_status_summary'] },
+  { intent: 'system', en: 'how is the research going', da: 'hvordan går det med researchen', tools: ['list_jobs', 'get_job'] },
+  { intent: 'system', en: 'stop the research job', da: 'stop den research opgave', tools: ['cancel_job'] },
+  { intent: 'system', en: 'why did you fail yesterday', da: 'hvorfor fejlede du i går', tools: ['read_backend_logs'] },
+  { intent: 'workspace', en: 'tidy up my windows', da: 'ryd op i mine vinduer', tools: ['workspace_command'] },
+  { intent: 'workspace', en: 'delete my routine', da: 'slet min rutine', tools: ['task_routines', 'task_recipes'] },
 ];
 
 /**
