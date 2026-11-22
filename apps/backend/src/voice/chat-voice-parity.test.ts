@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { failureCopy } from '@jarvis/contracts';
 import { GoogleApiError } from '../google/api-client.js';
 import { answerClientTool } from '../pi/client-tools.js';
+import type { PiMessageRecord } from '../pi/store.js';
 import { VOICE_TURN_QUIET_MS } from './live-protocol.js';
 import type { McpRecord, ScriptedResponse } from './parity-foundry.testkit.js';
 import {
@@ -623,9 +624,7 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
             { say: 'Booking that.' }, find('calendar create event probe owner'),
             // A background wake tells Dan something after his message is stored and before the tool runs.
             { run: async (w: ParityWorld) => {
-              const session = await w.store.createSession({ channel: 'chat', language: 'en' });
-              await w.store.addMessage({ sessionId: session.id, role: 'jarvis', text: 'Heads up: rain is coming tomorrow.', model: 'pi' });
-              w.proactiveText = 'PROACTIVE: Heads up: rain is coming tomorrow.';
+              await w.deliverProactive('Heads up: rain is coming tomorrow.');
             } },
             call('parity_owner_probe', {}),
             call('calendar_create_event', { subject: 'Dentist', startDateTime: `${world.tomorrow}T09:00:00+01:00`, endDateTime: `${world.tomorrow}T09:30:00+01:00` }),
@@ -644,10 +643,60 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
         expect(world.grantFacts()[0]).toMatchObject({ messageId: owner.id, sessionId: owner.sessionId });
         expect(world.store.messages.filter(message => message.text.startsWith('Heads up'))).toHaveLength(1);
         const second = world.foundry.requests.filter(request => request.kind === 'turn')[1]!;
-        expect(second.text).toContain('[Jarvis recently told Dan this, and he may be replying to it]\nPROACTIVE: Heads up: rain is coming tomorrow.');
+        expect(second.text).toContain('[Jarvis recently told Dan this, and he may be replying to it]');
+        expect(second.text).toContain('"text":"Heads up: rain is coming tomorrow."');
       }
       expectParity(rows);
     }, 120_000);
+
+    it('S19 "do that" resolves the same proactive receipt and follow-up in Chat and Voice', async () => {
+      const suggestion = 'Snow could delay the airport drive. I can add a task to check the motorway before leaving.';
+      const task = 'Check the motorway before leaving for the airport';
+      const receipt = {
+        evidence: [{
+          source: 'calendar', ref: 'calendar:airport', identity: 'calendar-event:airport', label: 'Airport trip',
+          observedAt: '2026-11-21T21:00:00Z', verifiedAt: '2026-11-21T21:00:02Z',
+        }],
+        followUpIds: ['departure:airport'],
+      } satisfies Pick<PiMessageRecord, 'evidence' | 'followUpIds'>;
+      const { rows, chatWorld, voiceWorld } = await runBoth({
+        title: 'S19 Proactive follow-up: "do that"',
+        ...sequence(['Do that.']),
+        setup: async world => { await world.deliverProactive(suggestion, receipt); },
+        background: text => text === suggestion,
+        script: world => {
+          const taskByFollowUp = new Map([['departure:airport', task]]);
+          let followUpId: string;
+          return [{ steps: [
+            { run: () => {
+              const turn = world.foundry.requests.find(request => request.kind === 'turn')!;
+              const line = turn.text!.split('\n').find(part => part.startsWith('{"outgoingProactiveMessage"'))!;
+              const stored = world.store.messages.find(message => message.text === suggestion)!;
+              const context = JSON.parse(line) as { outgoingProactiveMessage: { pendingFollowUpIds: [string] } };
+              expect(context).toEqual({ outgoingProactiveMessage: {
+                runId: 'fixture-wake',
+                sessionId: stored.sessionId,
+                messageId: stored.id,
+                text: suggestion,
+                evidence: receipt.evidence,
+                pendingFollowUpIds: receipt.followUpIds,
+                sentAt: '2026-11-21T22:00:00.000Z',
+              } });
+              expect(turn.text).toMatch(/\nDo that\.$/u);
+              [followUpId] = context.outgoingProactiveMessage.pendingFollowUpIds;
+            } },
+            find('create task'), call('vault_task_create', () => ({ text: taskByFollowUp.get(followUpId) })),
+            { say: tools => confirmation(tools) },
+          ] }];
+        },
+      });
+      for (const world of [chatWorld, voiceWorld]) {
+        expect(result(world.foundry.mcp)).toMatchObject({ text: task });
+        const inbox = world.daily.vault.files.get('Personal/Task inbox.md')!.content;
+        expect(inbox).toContain(`- [ ] ${task}`);
+      }
+      expectParity(rows);
+    }, 90_000);
 
     it('S14 a replayed stream or a duplicated delivery stores nothing twice, and a reconnect keeps one conversation', async () => {
       const side = { chat: { equal: false, unchanged: false }, voice: { unchanged: false } };

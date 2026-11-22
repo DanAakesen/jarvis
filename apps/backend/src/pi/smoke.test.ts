@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RemoteMcpBridge } from './remote-mcp.js';
-import type { PiEvent, PiGateway, PiUsage } from './gateway.js';
+import type { PiEvent, PiGateway } from './gateway.js';
+import type { PiUsage } from './pricing.js';
 import { isSpokenShape, runPiSmoke, toolRanOk } from './smoke.js';
 import type { PiTurnGrant } from './turns.js';
 
@@ -12,7 +13,7 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
   let count = 0;
   return {
     smokeKit: {
-      createConversation: async () => 'conv_1',
+      withConversation: async (_signal, run) => run('conv_1'),
       openGrant: (signal) => {
         count += 1;
         const grant = { turn: `jt-${String(count).padStart(22, 'A')}`, ownerObjectId: 'o', sessionId: '', messageId: '', smoke: true, discovered: new Set<string>(), results: [], signal } as PiTurnGrant;

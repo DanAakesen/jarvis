@@ -1,6 +1,6 @@
 import sql from 'mssql';
 import type {
-  PiConversationRow, PiProactiveMessageContext, PiStore, PiStoredTurn, PiTurnKind,
+  PiConversationRow, PiProactiveMessageContext, PiProactiveMessageFeedback, PiStore, PiStoredTurn, PiTurnKind,
 } from '../pi/store.js';
 import { databaseReadRequest } from './wake-retry.js';
 
@@ -183,6 +183,35 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
         ) VALUES (
           @at, @run, @session, @message, @hash, @owner, @text, @evidence, @followUps
         );`, signal);
+    },
+    async recordProactiveMessageFeedback(owner, messageId, rating, at, signal) {
+      const result = await query(pool.request()
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('message', sql.BigInt, BigInt(messageId))
+        .input('feedback', sql.NVarChar(128), JSON.stringify({ rating, at: at.toISOString() })),
+      `UPDATE message SET metadata = JSON_MODIFY(COALESCE(message.metadata, N'{}'), '$.piFeedback', JSON_QUERY(@feedback))
+        FROM dbo.messages AS message
+        WHERE message.id = @message AND EXISTS (
+          SELECT 1 FROM dbo.pi_message AS receipt
+          WHERE receipt.owner_object_id = @owner AND receipt.message_id = message.id
+            AND receipt.session_id = message.jarvis_session_id AND receipt.message_text IS NOT NULL
+        );`, signal);
+      return result.rowsAffected[0] === 1;
+    },
+    async latestProactiveMessageFeedback(owner, signal) {
+      const result = await query<PiProactiveMessageFeedback>(databaseReadRequest(pool)
+        .input('owner', sql.UniqueIdentifier, owner),
+      `SELECT TOP (1) CONVERT(varchar(19), receipt.message_id) AS messageId, receipt.message_text AS text, feedback.rating
+        FROM dbo.pi_message AS receipt
+        INNER JOIN dbo.messages AS message ON message.id = receipt.message_id AND message.jarvis_session_id = receipt.session_id
+        CROSS APPLY (VALUES (
+          JSON_VALUE(message.metadata, '$.piFeedback.rating'),
+          TRY_CONVERT(datetime2(7), JSON_VALUE(message.metadata, '$.piFeedback.at'), 127)
+        )) AS feedback(rating, rated_at)
+        WHERE receipt.owner_object_id = @owner AND receipt.message_text IS NOT NULL
+          AND feedback.rated_at IS NOT NULL AND feedback.rating IN (N'useful', N'wrong')
+        ORDER BY feedback.rated_at DESC, receipt.id DESC;`, signal);
+      return result.recordset[0];
     },
     async recordLook(watch, runId, at, signal) {
       await query(pool.request().input('watch', sql.NVarChar(120), watch).input('run', sql.Char(36), runId).input('at', sql.DateTime2, at),

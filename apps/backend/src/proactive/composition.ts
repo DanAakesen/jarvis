@@ -37,6 +37,7 @@ import { createEventPath, type EventConsumer } from './events/wiring.js';
 import type { EventQueueStore } from './events/event-queue.js';
 import type { ProactiveEventSink } from './events/types.js';
 import type { BrainControl } from '../pi/brain/control.js';
+import { PI_WAKE_PREFLIGHT_DKK } from '../pi/pricing.js';
 import { readSettings } from '../core/settings.js';
 import type { PiSituationService } from '../pi/situation.js';
 
@@ -256,7 +257,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     now,
     run: scheduledRun,
     worstCaseDkk: () => events?.runScheduled
-      ? 0.79
+      ? (options.brain ? PI_WAKE_PREFLIGHT_DKK : 0.79)
       : model.worstCaseDkk(),
     ...(events?.outreach ? { outreach: events.outreach } : {}),
     ...(options.background ? { background: options.background } : {}),

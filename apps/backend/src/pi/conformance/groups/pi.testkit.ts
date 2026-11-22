@@ -1,6 +1,8 @@
 import { expect } from 'vitest';
+import { createProactiveMessageFeedbackTool } from '../../../proactive/feedback-tool.js';
 import { createBrainTools } from '../../brain/tools.js';
 import { createSituationTools } from '../../situation-tools.js';
+import { createMemoryPiStore } from '../../store.js';
 import { createWatchTools } from '../../watch/tools.js';
 import { ownerMessageSource } from '../shared.testkit.js';
 import type { ConformanceContext, ConformanceGroup, GroupFactory, ToolCase } from '../types.testkit.js';
@@ -28,6 +30,12 @@ export function createPiGroup(context: ConformanceContext) {
   const wakeSituation = createSituationFixture(context);
   const brain = createBrainFixture(context);
   const now = () => piClock;
+  const feedbackStore = createMemoryPiStore(now);
+  const proactiveMessageId = '43';
+  void feedbackStore.recordMessage({
+    ownerObjectId: context.owner, runId: 'fixture-wake', sessionId: context.ownerMessage.sessionId,
+    messageId: proactiveMessageId, textHash: 'a'.repeat(64), text: 'The parcel is ready to collect.',
+  }, piClock, new AbortController().signal);
 
   const locationEvidence = {
     source: 'location', ref: null, identity: 'location:device', label: 'Near Copenhagen', observedAt: clockIso, verifiedAt: clockIso,
@@ -62,6 +70,11 @@ export function createPiGroup(context: ConformanceContext) {
         check: (result) => { expect(result).toMatchObject({ sent: true, messageId: expect.any(String) }); expect(brain.pushes.length).toBeGreaterThan(0); },
       },
     ],
+    proactive_message_feedback: [{
+      label: 'rate the exact notification from chat', ownerMessage: 'That parcel alert was useful.',
+      arguments: { messageId: proactiveMessageId, rating: 'useful' },
+      check: (result) => expect(result).toMatchObject({ saved: true, messageId: proactiveMessageId, rating: 'useful' }),
+    }],
     pi_note: [
       { label: 'append a dated block to a new note', turn: 'wake', arguments: { name: 'Waiting for', text: 'The parcel from the post office, expected this week.' }, check: (result) => expect(result).toMatchObject({ path: 'PI/Notes/Waiting for.md', created: true }) },
       { label: 'append to the same note again', turn: 'wake', arguments: { name: 'Waiting for', text: 'The parcel arrived at the post office.', mode: 'append' }, check: (result) => expect(result).toMatchObject({ created: false }) },
@@ -119,6 +132,10 @@ export function createPiGroup(context: ConformanceContext) {
       wakeRefused('evidence the wake never had', messageDan('The 14:05 train to Aarhus is cancelled.', { evidenceSources: ['mail'], evidence: [{ ...locationEvidence, source: 'mail', identity: 'gmail-message:999' }] })),
       wakeRefused('no evidence at all', messageDan('The 14:05 train to Aarhus is cancelled.', { evidence: [] })),
     ],
+    proactive_message_feedback: [
+      { label: 'a message that is not a proactive receipt', arguments: { messageId: '999', rating: 'useful' }, expect: 'refused' },
+      wakeRefused('a wake cannot rate its own message', { messageId: proactiveMessageId, rating: 'useful' }),
+    ],
     pi_note: [
       wakeRefused('a name with a folder in it', { name: 'Folder/Waiting for', text: 'Nothing is pending.' }),
       {
@@ -148,6 +165,7 @@ export function createPiGroup(context: ConformanceContext) {
           registry, comms: brain.comms, proactive: wakeSituation.proactive, area: brain.area, inbox: brain.inbox,
           situation: wakeSituation.service, now,
         }),
+        createProactiveMessageFeedbackTool(feedbackStore, context.owner, now),
         ...createWatchTools({ watches: brain.watches, registry, memoryStore: ownerMessageSource(context) as never }),
       ],
     }],

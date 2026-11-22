@@ -1,0 +1,54 @@
+[
+  {
+    "name": "a failed main deploy",
+    "messages": [1],
+    "source": "github",
+    "kind": "workflow_run.failure",
+    "summary": "Workflow \"Deploy\" failure on DanAakesen/jarvis (main)"
+  },
+  {
+    "name": "a new GitHub release",
+    "messages": [1],
+    "source": "github",
+    "kind": "release.published",
+    "summary": "Jarvis v2.1.0 was published"
+  },
+  {
+    "name": "a failing check on a PR branch",
+    "messages": [0],
+    "source": "github",
+    "kind": "check_run.failure",
+    "summary": "Lint failed on DanAakesen/jarvis (feature/42)"
+  },
+  {
+    "name": "a reminder delivery failure",
+    "messages": [1],
+    "source": "reminder",
+    "kind": "reminder.delivery_failed",
+    "summary": "The reminder to send the final draft could not be delivered",
+    "detail": { "evidenceSources": ["todos"] }
+  },
+  {
+    "name": "a calendar clash tomorrow",
+    "messages": [1],
+    "source": "calendar",
+    "kind": "calendar.clash",
+    "summary": "Project planning overlaps a dentist appointment tomorrow at 10:00",
+    "detail": { "startsAt": "2026-11-17T09:00:00Z" }
+  },
+  {
+    "name": "ten routine events",
+    "messages": [0],
+    "source": "github",
+    "kind": "workflow_run.success",
+    "summary": "PR checks passed on DanAakesen/jarvis",
+    "batchSize": 10
+  },
+  {
+    "name": "a repeat of an already-told event",
+    "messages": [1, 0],
+    "source": "github",
+    "kind": "release.published",
+    "summary": "Jarvis v2.1.0 was published"
+  }
+]

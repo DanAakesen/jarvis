@@ -168,6 +168,7 @@ export function createScriptedFoundry<World>(options: {
 
   const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method === 'DELETE' && url.includes('/conversations/')) return new Response(null, { status: 204 });
     if (url.includes('/conversations')) { conversations += 1; return Response.json({ id: `conv_${conversations}` }); }
     if (url.includes('/cancel')) { cancels.push(url.split('/responses/')[1]!.split('/')[0]!); return Response.json({ status: 'cancelled' }); }
     const body = JSON.parse(String(init?.body)) as { conversation: string; input: unknown[] };
