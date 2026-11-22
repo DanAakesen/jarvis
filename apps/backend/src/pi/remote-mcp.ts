@@ -81,6 +81,26 @@ function text(content: unknown): string {
     ? [String((part as { text?: unknown }).text ?? '')] : []).join('\n');
 }
 
+/** GitHub returns a download receipt and the file itself in separate MCP blocks. */
+function githubFileResult(result: Record<string, unknown>, parsed: unknown): unknown {
+  const structured = result.structuredContent;
+  const structuredBlocks = structured && typeof structured === 'object' && 'content' in structured && Array.isArray(structured.content)
+    ? structured.content : [];
+  const blocks = [...(Array.isArray(result.content) ? result.content : []), ...structuredBlocks];
+  const embedded = blocks.find((block) => block?.type === 'resource' && typeof block.resource?.text === 'string')?.resource;
+  const receipt = parsed || text(structuredBlocks);
+  if (embedded) return { receipt, uri: embedded.uri, content: embedded.text };
+  const attachment = blocks.find((block) => block?.type === 'resource' || block?.type === 'resource_link');
+  if (structured && !structuredBlocks.length) return structured;
+  if (attachment || (typeof receipt === 'string' && receipt.startsWith('successfully downloaded '))) {
+    return {
+      receipt, ...(attachment ? { uri: attachment.resource?.uri ?? attachment.uri } : {}),
+      note: 'GitHub returned no source text. For default-branch text files up to 1 MB, find repo_read and read the same project and path. For another ref or SHA, obtain the source at that revision.',
+    };
+  }
+  return structured ?? parsed;
+}
+
 /**
  * A small client for a remote MCP server (Streamable HTTP). The credential comes from `token()` on every request, so a managed
  * identity token is renewed by its own library and a static one stays on the backend. The tool list is read once and kept for
@@ -212,7 +232,8 @@ export function createRemoteMcpBridge(options: {
         let parsed: unknown = body;
         try { parsed = JSON.parse(body); } catch { /* plain text stays text */ }
         if (result.isError === true) return { outcome: 'error', result: { error: body || `${options.label} returned an error.` } };
-        return { outcome: 'ok', result: result.structuredContent ?? parsed, ...(readOnly ? { readOnly: true } : {}) };
+        const value = name === 'gh_get_file_contents' ? githubFileResult(result, parsed) : result.structuredContent ?? parsed;
+        return { outcome: 'ok', result: value, ...(readOnly ? { readOnly: true } : {}) };
       } catch (error) {
         if (signal.aborted) throw error;
         return { outcome: 'error', result: { error: `${options.label} could not be reached. Nothing is confirmed as done.` } };

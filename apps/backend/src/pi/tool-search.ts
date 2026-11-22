@@ -97,6 +97,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['branch*'], terms: ['github', 'branch'], provider: 'gh_' },
   { stems: ['workflow*', 'arbejdsgang*'], terms: ['github', 'workflow', 'actions'], provider: 'gh_' },
   { stems: ['repo', 'repos', 'repoet', 'repoer', 'repoerne', 'repositor*'], terms: ['repo'] },
+  { stems: ['kildekode*', 'kodegennemgang*'], phrases: ['source code', 'code review', 'review the code', 'read the code', 'gennemgå koden', 'læs koden'], terms: ['repo', 'read'] },
   { stems: ['changed', 'changes', 'ændret', 'ændringer'], light: true, terms: ['commits'] },
   { stems: ['pr', 'prs', 'pull', 'pullrequest*', 'pullanmodning*', 'request*'], phrases: ['pull request'], terms: ['pr'] },
   { stems: ['azure*', 'az', 'ressource*', 'resource*', 'subscription*', 'abonnement*', 'container*'],

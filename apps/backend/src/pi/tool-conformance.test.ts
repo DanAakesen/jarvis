@@ -376,6 +376,26 @@ async function remoteWorld(bridge: { now?: () => number; searchWaitMs?: number }
 }
 
 describe('remote: the gh_ and az_ bridges behind the door', () => {
+  it('continues a receipt-only file download with a local source read in the same turn', async () => {
+    const turn = world.client.openTurn();
+    const path = 'apps/web/src/Now.tsx';
+    const receipt = 'successfully downloaded text file (SHA: abc123)';
+    world.remote.github.controls.toolResult = { name: 'get_file_contents', value: receipt };
+    try {
+      await world.client.find(turn, 'gh_get_file_contents');
+      const download = await world.client.call(turn, 'gh_get_file_contents', { owner: 'DanAakesen', repo: 'jarvis', path });
+      expect(download.result).toMatchObject({ receipt, note: expect.stringContaining('repo_read') });
+      expect(download.result).not.toHaveProperty('content');
+      const next = await world.client.find(turn, 'review the source code');
+      expect(next.tools.map((tool) => tool.name)).toContain('repo_read');
+      const read = await world.client.call(turn, 'repo_read', { path, startLine: 1, endLine: 1 });
+      expect(read).toMatchObject({ outcome: 'ok', result: { path, startLine: 1, endLine: 1, content: 'export function Now() { return null; }' } });
+    } finally {
+      world.remote.github.controls.toolResult = undefined;
+      turn.close();
+    }
+  });
+
   it('loads nothing for a local search, and only the provider the query names', async () => {
     await using door = await remoteWorld();
     const { remote, found } = door;

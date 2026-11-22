@@ -180,7 +180,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `repo_issues` | factory | chat and voice | unclassified | ok | "List up to 30 issues or pull requests in the default Jarvis repository" (derived, #2) | ok (3 calls) | 56 |  |
 | `repo_list` | factory | chat and voice | unclassified | ok | "List up to 200 entries in a repository directory" (derived, #1) | ok (2 calls) | 95 |  |
 | `repo_overview` | factory | chat and voice | unclassified | ok | "Read a repository README excerpt, top-level tree, and key documentati…" (derived, #2) | ok (2 calls) | 76 |  |
-| `repo_read` | factory | chat and voice | unclassified | ok | "Read UTF-8 text from one repository file, limited to 400 lines and 40…" (derived, #1) | ok (2 calls) | 125 |  |
+| `repo_read` | factory | chat and voice | unclassified | ok | "read repository file" (en, #2) | ok (2 calls) | 125 |  |
 | `repo_search` | factory | chat and voice | unclassified | ok | "Search code in one repository and return up to 20 matching line snipp…" (derived, #1) | ok (3 calls) | 172 |  |
 | `research` | workspace | chat and voice | action | ok | "research the best noise cancelling headphones" (en, #1) | ok (2 calls) | 60 |  |
 | `resume_task` | factory | chat and voice | action | ok | "Resume a Software Factory task when its lifecycle state permits" (derived, #1) | ok | 39 |  |
