@@ -45,6 +45,33 @@ final class WatchDictationRoutingTests: XCTestCase {
         XCTAssertEqual(calls, ["direct", "failure", "phone"])
     }
 
+    func testUnavailableDirectRouteUsesPhoneBeforeTheTranscriptionDeadline() async throws {
+        #if canImport(Darwin)
+        XCTAssertFalse(WatchDictationRouting.directSessionConfiguration().waitsForConnectivity)
+        #endif
+        let direct = Gate<Void>()
+        let timer = Gate<Void>()
+        let phoneStarted = XCTestExpectation(description: "Phone fallback without advancing the direct deadline")
+        phoneStarted.assertForOverFulfill = true
+        let task = Task {
+            try await WatchDictationRouting.transcribe(direct: {
+                await direct.wait()
+                throw WatchFailure.network
+            }, phone: {
+                phoneStarted.fulfill()
+                return "Phone transcript"
+            }, sleep: { _ in await timer.wait() })
+        }
+        let noRoute = await direct.next()
+        let deadline = await timer.next()
+        noRoute.resume()
+        let outcome = await XCTWaiter.fulfillment(of: [phoneStarted], timeout: 1)
+        deadline.resume()
+        XCTAssertEqual(outcome, .completed)
+        let text = try await task.value
+        XCTAssertEqual(text, "Phone transcript")
+    }
+
     func testGatewayTimeoutUsesTimeoutRecoveryInsteadOfNetworkFailure() async {
         XCTAssertEqual(WatchDictationError.forHTTPStatus(504), .timedOut)
         XCTAssertNil(WatchDictationError.forHTTPStatus(503))

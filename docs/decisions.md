@@ -13965,10 +13965,16 @@ Open: none of the capture changes is verified on a Watch. Whether the cause is t
   an empty recognition result looked like a transport failure. Keep the
   bounded upload running and report no words separately, without replaying it.
 - **Decision:** take a new graph and the negotiated format for each capture.
-  If the route changed or stopped the graph, retry rebuilding it up to three
-  times on the same stream. Install playback completion on the successful
-  startup attempt. On a phone-link gap, allow ten seconds including heartbeat
-  replies; don't replay audio or open a second voice session.
+  Check again after 250 ms: only changed ports or a stopped graph need a
+  rebuild. Allow two recoveries per capture in a rolling ten seconds, with
+  up to three attempts per recovery on the same stream. More instability
+  stops the capture and shows Retry instead of repeatedly cutting playback.
+  Install playback completion on the successful startup attempt. On a
+  phone-link gap, allow ten seconds including heartbeat replies; don't replay
+  audio or open a second voice session.
+- **Dictation fallback:** keep the recognition deadline for an active
+  transfer, but don't wait for connectivity when the direct path is
+  unavailable. Try the paired iPhone once instead.
 - **Still inferred:** cold/stale audio routing could contribute to build 120
   dictation failures. Prior reports show a Speech start stall (#1950) and
   silent Watch captures (#1943), not which stage failed on build 120. No backend

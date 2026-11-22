@@ -37,16 +37,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private struct Route: Equatable {
         let inputs: [String]
         let outputs: [String]
-        let sampleRate: Double
-        let inputChannels: Int
 
         init() {
-            let session = AVAudioSession.sharedInstance()
-            let route = session.currentRoute
+            // The converter follows the actual buffer format. Session rate and channel count can settle after start.
+            let route = AVAudioSession.sharedInstance().currentRoute
             inputs = route.inputs.map(\.uid)
             outputs = route.outputs.map(\.uid)
-            sampleRate = session.sampleRate
-            inputChannels = session.inputNumberOfChannels
         }
     }
     #endif

@@ -58,11 +58,7 @@ enum WatchDirectDictation {
         urlRequest.httpBody = request.body
         urlRequest.timeoutInterval = WatchDictationDeadline.directSeconds
         request.headers.forEach { urlRequest.setValue($1, forHTTPHeaderField: $0) }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.urlCache = nil
-        configuration.httpCookieStorage = nil
-        configuration.waitsForConnectivity = true
-        configuration.timeoutIntervalForResource = WatchDictationDeadline.directSeconds
+        let configuration = WatchDictationRouting.directSessionConfiguration()
         let session = URLSession(configuration: configuration, delegate: NoRedirect(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
         do {

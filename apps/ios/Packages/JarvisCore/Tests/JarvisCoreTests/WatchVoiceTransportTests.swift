@@ -165,10 +165,23 @@ final class WatchVoiceTransportTests: XCTestCase {
         } catch { XCTAssertEqual(error as? WatchFailure, .invalidRequest) }
     }
 
-    func testPhoneWaitsLongerThanTheWatchBeforeEndingAGap() {
-        // The Watch notices a gap after 3 s, then waits for recovery.
+    func testPhoneGraceCoversTheWatchWindowEvenAfterADebouncedDisconnect() {
+        // The disconnect callback can take 3 s; active voice can start recovery sooner.
         XCTAssertGreaterThan(WatchVoiceRecovery.phoneGraceSeconds, 3 + WatchVoiceRecovery.reconnectGraceSeconds)
         XCTAssertLessThanOrEqual(WatchVoiceRecovery.phoneGraceSeconds, 15)
+    }
+
+    func testRouteRecoveryIgnoresSettledRoutesAndCapsRestartsInARollingWindow() {
+        let start = ContinuousClock.now
+        var budget = WatchVoiceRecovery.RouteBudget()
+        XCTAssertEqual(budget.decide(needsRestart: false, at: start), .unchanged)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start), .restart)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(4))), .restart)
+        XCTAssertEqual(budget.decide(needsRestart: false, at: start.advanced(by: .seconds(5))), .unchanged)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .milliseconds(9_999))), .exhausted)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(10))), .restart)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(11))), .exhausted)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(14))), .restart)
     }
 
     func testPlaybackPriorityRespectsAudioOrderAndTerminalBarriers() {

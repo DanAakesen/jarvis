@@ -8900,6 +8900,9 @@ For #1769, the documented WatchContractTests filter matches no tests in this che
   Chat. Tap Stop each time; each transcript should append once to the draft
   without sending. Stop once without speaking, then tap Retry and check that
   the previous draft is still there.
+- Dan: if the Watch has no direct network path but can still reach the iPhone,
+  dictate again. It should try the phone without waiting out the direct
+  request deadline. Switching off Wi-Fi alone may leave another usable route.
 - Dan: have a two-minute back-and-forth. Switch between the Watch speaker and
   Bluetooth once, and check that replies play and voice returns to Listening.
   While actually using Wi-Fi to reach the iPhone, switch Watch Wi-Fi off and

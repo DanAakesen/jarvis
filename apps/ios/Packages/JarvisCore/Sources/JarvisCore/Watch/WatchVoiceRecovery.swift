@@ -1,16 +1,34 @@
 import Foundation
 
-/// Bounds for voice startup and for short WatchConnectivity gaps during a live session.
+/// Bounds for Watch capture and voice recovery.
 public enum WatchVoiceRecovery {
     /// How long the Watch waits for the iPhone to become reachable again before it ends a live session.
     public static let reconnectGraceSeconds: TimeInterval = 10
-    /// The Watch notices a gap after 3 s and then waits `reconnectGraceSeconds`; the phone waits longer so it
-    /// never ends a session the Watch is about to recover.
+    /// The phone waits longer, including room for the debounced disconnect callback. Active voice can
+    /// notice a gap and start recovery before that callback.
     public static let phoneGraceSeconds: TimeInterval = 15
     public static let startAttempts = 3
     /// Only a quick failure is retried: a slow one has already used most of the start budget.
     public static let startRetryWindowSeconds: TimeInterval = 12
     public static let startRetryDelay: Duration = .milliseconds(750)
+
+    public struct RouteBudget {
+        public enum Decision: Equatable { case unchanged, restart, exhausted }
+
+        public static let settleDelay: Duration = .milliseconds(250)
+        private var restarts: [ContinuousClock.Instant] = []
+
+        public init() {}
+
+        /// Only a change that still needs a restart after settling uses this capture's budget.
+        public mutating func decide(needsRestart: Bool, at now: ContinuousClock.Instant = .now) -> Decision {
+            guard needsRestart else { return .unchanged }
+            restarts.removeAll { $0.duration(to: now) >= .seconds(10) }
+            guard restarts.count < 2 else { return .exhausted }
+            restarts.append(now)
+            return .restart
+        }
+    }
 
     /// Retrying a start request is safe because the phone answers a repeated request ID from its reply cache
     /// or reports it as busy while the first copy is still running; it never opens a second session.

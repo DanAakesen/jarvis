@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum WatchDictationError: Error, Equatable, Sendable {
     case timedOut, noSpeech
@@ -18,6 +21,18 @@ public enum WatchDictationError: Error, Equatable, Sendable {
 /// Transcription is safe to fall back; chat/voice mutations must never use this policy.
 @MainActor
 public enum WatchDictationRouting {
+    public static func directSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        #if canImport(Darwin)
+        // An unavailable direct route should fall back to the phone, not use the recognition window.
+        configuration.waitsForConnectivity = false
+        #endif
+        configuration.timeoutIntervalForResource = WatchDictationDeadline.directSeconds
+        return configuration
+    }
+
     public static func transcribe(
         direct: (@MainActor () async throws -> String)?,
         phone: () async throws -> String,

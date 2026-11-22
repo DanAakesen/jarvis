@@ -53,8 +53,9 @@ final class WatchModel: ObservableObject {
     private var voiceGeneration = UUID()
     private var voiceStartToken: UUID?
     @Published private var voiceRecovery: Task<Void, Never>?
-    @Published private var audioRouteRecovery: Task<Void, Never>?
-    var repairingAudio: Bool { audioRouteRecovery != nil }
+    private var audioRouteRecovery: Task<Void, Never>?
+    private var audioRouteBudget = WatchVoiceRecovery.RouteBudget()
+    @Published private var repairingAudio = false
     var voiceRecoveryStatus: String? {
         if voiceRecovery != nil { return "iPhone connection lost. Reconnecting…" }
         if repairingAudio { return "Audio changed. Reconnecting…" }
@@ -695,7 +696,6 @@ final class WatchModel: ObservableObject {
         guard voice || dictationState == .listening,
               audioRouteRecovery == nil, audio.needsRouteRecovery(changedEngine: changedEngine) else { return }
         let epoch = voice ? voiceGeneration : dictationGeneration
-        voiceLogger.info("Audio route recovery: reason=\(reason.map { String($0) } ?? "engine_configuration", privacy: .public)")
         audioRouteRecovery = Task { [weak self] in
             guard let self else { return }
             func isCurrent() -> Bool {
@@ -703,14 +703,33 @@ final class WatchModel: ObservableObject {
                     ? self.voiceGeneration == epoch && !self.endingVoice
                     : self.dictationGeneration == epoch && self.dictationState == .listening)
             }
+            func fail(_ reason: String) {
+                self.voiceLogger.error("Audio route recovery failed: \(reason, privacy: .public)")
+                if voice { self.failVoice("Audio changed and voice couldn’t reconnect.", reason: reason) }
+                else { self.failDictation("Audio changed and dictation couldn’t continue. Tap Message to type instead.") }
+            }
+            defer {
+                if isCurrent() {
+                    self.audioRouteRecovery = nil
+                    self.repairingAudio = false
+                }
+            }
             do {
+                try await Task.sleep(for: WatchVoiceRecovery.RouteBudget.settleDelay)
+                guard isCurrent() else { return }
+                switch self.audioRouteBudget.decide(needsRestart: self.audio.needsRouteRecovery()) {
+                case .unchanged: return
+                case .exhausted: fail("audio_route_recovery_limit"); return
+                case .restart: break
+                }
+                self.repairingAudio = true
+                self.voiceLogger.info("Audio route recovery: reason=\(reason.map { String($0) } ?? "engine_configuration", privacy: .public)")
                 try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: {
                     try self.audio.recoverRoute()
                 }, onFailure: { attempt, error in
                     self.voiceLogger.error("Audio route restart failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
                 })
                 guard isCurrent() else { return }
-                self.audioRouteRecovery = nil
                 if voice {
                     self.captureLevel = WatchCaptureLevel()
                     self.audioBackpressure.progressed(at: Date())
@@ -718,15 +737,15 @@ final class WatchModel: ObservableObject {
                 self.voiceLogger.info("Audio route recovered")
             } catch {
                 guard isCurrent() else { return }
-                self.audioRouteRecovery = nil
-                if voice { self.failVoice("Audio changed and voice couldn’t reconnect.", reason: "audio_route_restart_failed") }
-                else { self.failDictation("Audio changed and dictation couldn’t continue. Tap Message to type instead.") }
+                fail("audio_route_restart_failed")
             }
         }
     }
     private func cancelRouteRecovery() {
         audioRouteRecovery?.cancel()
         audioRouteRecovery = nil
+        audioRouteBudget = WatchVoiceRecovery.RouteBudget()
+        repairingAudio = false
     }
     private func voiceFailureMessage(_ failure: Error) -> String {
         switch failure as? WatchFailure {

@@ -5797,9 +5797,13 @@ Implemented in source: recover the Watch audio graph without closing the phone
 voice session, keep playback completion after capture retries, confirm the same
 session after a short connection loss, and show Retry for failed dictation or
 voice. Transcription survives an audio interruption after Stop and never
-automatically sends the draft. Next: macOS Watch build, then Dan's paired-Watch
+automatically sends the draft. An unavailable direct route falls through to
+the phone without waiting for connectivity. Once a route has settled, an
+active capture can rebuild its graph at most twice per ten seconds; further
+instability offers Retry. Next: macOS Watch build, then Dan's paired-Watch
 checks in `docs/agent-context.md`. Build 120's dictation cause and hardware
-acceptance remain open.
+acceptance remain open. The no-buffer watchdog and tests that drive the Watch
+app's audio/companion wiring are follow-ups.
 
 ## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
 

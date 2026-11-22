@@ -1005,11 +1005,15 @@ Watch pauses outgoing audio and retries a heartbeat for the same session within
 is unchanged. Lost audio is not replayed.
 
 On watchOS, a new capture uses a fresh graph and converts the actual tap
-format. A stopped graph or changed route can be rebuilt on the same stream.
-The phone session ID and microphone packet sequence are unchanged; playback
-queued on the old route is stopped rather than replayed. A late callback from
-an earlier voice session cannot acknowledge playback on a new one. If recovery
-fails, Watch Chat offers Retry. Paired-device audio remains unverified.
+format. After 250 ms for the route to settle, only a stopped graph or changed
+input/output ports trigger a rebuild on the same stream. A running graph
+does not restart just because the session reports a new rate or channel count.
+Allow two recoveries per capture in any ten-second window. The phone session
+ID and microphone packet sequence survive a rebuild; playback queued on the
+old route is stopped rather than replayed. A late callback from an earlier voice
+session cannot acknowledge playback on a new one. Watch Chat offers Retry if
+recovery fails or the route keeps changing past the limit. Paired-device audio
+remains unverified.
 
 ## Home brief and daily activity implementation — 9 November 2026
 
@@ -10484,11 +10488,12 @@ Watch steps (15 November 2026, #1859): `WatchStepsMonitor` in the Watch app read
 Watch dictation follow-up (#1950, #2006): recognition now detects Danish or
 English. The direct window grows with the clip to at most 22 seconds; the
 overall deadline grows from 30 seconds, measured after the capture is drained.
-The direct request can wait for connectivity within that window. A transport
-failure can fall back to the iPhone once; a completed result with no words
-does not. Both entry points append just the successful text to the existing
-draft. After Stop, an audio interruption does not cancel transcription; Cancel,
-sign-out and the deadline still do. Retry starts a new recording.
+The direct request does not wait for an unavailable network route; it can fall
+back to the iPhone once without using that transcription window. A completed
+result with no words does not fall back. Both entry points append just the
+successful text to the existing draft. After Stop, an audio interruption does
+not cancel transcription; Cancel, sign-out and the deadline still do. Retry
+starts a new recording.
 
 ### Notes recent-library projection
 
