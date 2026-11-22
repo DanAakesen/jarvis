@@ -198,6 +198,7 @@ struct ContentView: View {
                         if destination == .chat {
                             JarvisChatScreen(
                                 client: chatClient,
+                                voiceModel: voiceModel,
                                 fixtureMode: fixtureMode,
                                 initialActivitySheet: activityScreenshotState != nil
                                     ? .activity
@@ -266,7 +267,7 @@ struct ContentView: View {
                 }
                 .accessibilityHidden(navigation.isSidebarOpen)
 
-                if voiceModel.isMinimized {
+                if navigation.currentDestination != .chat && voiceModel.isMinimized {
                     VoiceMiniBar(model: voiceModel) {
                         voiceModel.restore()
                         navigate(to: .voice)
@@ -353,6 +354,7 @@ struct ContentView: View {
         } else if destination == .chat {
             JarvisChatScreen(
                 client: chatClient,
+                voiceModel: voiceModel,
                 fixtureMode: fixtureMode,
                 startupError: startupError,
                 replyTarget: openingReplyTarget,

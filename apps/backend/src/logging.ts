@@ -981,6 +981,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       .includes(String(input.state))) fields.state = input.state;
     if ([
       'response_started', 'response_completed', 'pi_started', 'pi_finished', 'delegation_received',
+      'delegation_settled', 'commentary_sent', 'commentary_audio_timeout',
       'input_transcript', 'input_audio', 'output_audio', 'microphone_active', 'microphone_muted',
       'playback_completed', 'session_ended', 'session_failed', 'session_reconnecting',
     ].includes(String(input.reason))) fields.reason = input.reason;

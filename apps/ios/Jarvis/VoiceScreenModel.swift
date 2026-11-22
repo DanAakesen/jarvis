@@ -1,38 +1,41 @@
 import Combine
 import Foundation
 import JarvisCore
+import Observation
 import UIKit
 
 @MainActor
+@Observable
 final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
-    @Published private(set) var voiceState: VoiceSessionState = .idle
-    @Published private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
-    @Published private(set) var microphoneDenied = false
-    @Published private(set) var signInRequired = false
-    @Published private(set) var isAudioReady = false
-    @Published private(set) var isMuted = false
-    @Published private(set) var isCaptionsEnabled = false
-    @Published private(set) var isMinimized = false
-    @Published private(set) var returnToChatRequested = false
-    @Published private(set) var isCameraEnabled = false
+    // StateObject owns the lifetime; views observe individual fields, not objectWillChange.
+    private(set) var voiceState: VoiceSessionState = .idle
+    private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
+    private(set) var microphoneDenied = false
+    private(set) var signInRequired = false
+    private(set) var isAudioReady = false
+    private(set) var isMuted = false
+    private(set) var isCaptionsEnabled = false
+    private(set) var isMinimized = false
+    private(set) var returnToChatRequested = false
+    private(set) var isCameraEnabled = false
     private(set) var isPhotoSession = false
-    @Published private(set) var cameraPermissionDenied = false
-    @Published private(set) var isScreenSharing = false
-    @Published private(set) var visualInputUnavailable = false
-    @Published private(set) var captions = VoiceCaptions()
+    private(set) var cameraPermissionDenied = false
+    private(set) var isScreenSharing = false
+    private(set) var visualInputUnavailable = false
+    private(set) var captions = VoiceCaptions()
     var userCaption: String { captions.user }
     var assistantCaption: String { captions.assistant }
     var captionEntries: [VoiceCaptionEntry] { captions.entries }
-    @Published private(set) var errorMessage: String?
-    @Published private(set) var camera: VoiceCameraCapture?
-    @Published private(set) var photoIsReady = false
+    private(set) var errorMessage: String?
+    private(set) var camera: VoiceCameraCapture?
+    private(set) var photoIsReady = false
     /// Images and video frames handed to the assistant this session, newest last, shown with the transcript.
-    @Published private(set) var sentMedia: [VoiceSentMedia] = []
+    private(set) var sentMedia: [VoiceSentMedia] = []
 
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
     private let liveActivity = VoiceLiveActivityController()
-    private(set) var liveActivitySessionID: UUID? {
+    @ObservationIgnored private(set) var liveActivitySessionID: UUID? {
         didSet {
             if liveActivitySessionID == nil, VoiceLiveActivityActions.session === self {
                 VoiceLiveActivityActions.session = nil
@@ -142,15 +145,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     var statusText: String {
         if case .reconnecting = voiceState { return JarvisVoiceLocalization.string(.reconnecting) }
         if voiceState == .failed || microphoneDenied { return JarvisVoiceLocalization.string(.offline) }
-        if isMuted { return JarvisVoiceLocalization.string(.muted) }
-        if !isAudioReady && voiceState == .listening { return JarvisVoiceLocalization.string(.connecting) }
         switch voiceState {
         case .idle, .connecting:
             return JarvisVoiceLocalization.string(.connecting)
         case .thinking:
             return JarvisVoiceLocalization.string(.thinking)
         case .listening:
-            return JarvisVoiceLocalization.string(.listening)
+            if isMuted { return JarvisVoiceLocalization.string(.muted) }
+            return JarvisVoiceLocalization.string(isAudioReady ? .listening : .connecting)
         case .speaking:
             return JarvisVoiceLocalization.string(.speaking)
         case .reconnecting:
@@ -251,13 +253,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 baseURL: baseURL,
                 transport: URLSessionWebSocketTransport(),
                 onMessage: { [weak self] message in
-                    Task { @MainActor in
+                    // Deliver buffers and their completion to the player in socket order.
+                    DispatchQueue.main.async { [weak self] in
                         guard let self, self.sessionGeneration == generation else { return }
                         self.receive(message)
                     }
                 },
                 onStateChange: { [weak self] state in
-                    Task { @MainActor in
+                    DispatchQueue.main.async { [weak self] in
                         guard let self, self.sessionGeneration == generation else { return }
                         self.receiveSessionState(state)
                     }

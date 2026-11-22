@@ -51,7 +51,8 @@ public struct VoiceCaptions: Equatable, Sendable {
     }
 
     private mutating func append(_ delta: String, to id: String, speaker: ConversationRole) {
-        if let index = entries.firstIndex(where: { $0.id == id && $0.speaker == speaker }) {
+        // Live deltas usually belong to the last entries; still accept a late delta for an older turn.
+        if let index = entries.lastIndex(where: { $0.id == id && $0.speaker == speaker }) {
             entries[index].text += delta
         } else {
             entries.append(.init(id: id, speaker: speaker, text: delta))
@@ -59,7 +60,7 @@ public struct VoiceCaptions: Equatable, Sendable {
     }
 
     private mutating func upsert(_ text: String, id: String, speaker: ConversationRole) {
-        if let index = entries.firstIndex(where: { $0.id == id && $0.speaker == speaker }) {
+        if let index = entries.lastIndex(where: { $0.id == id && $0.speaker == speaker }) {
             entries[index].text = text
         } else {
             entries.append(.init(id: id, speaker: speaker, text: text))

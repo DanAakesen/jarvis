@@ -1234,6 +1234,34 @@ and on that send's revision. A reply notification failure cannot change the
 saved reply's result. A service shutdown cuts off the reply; only an explicit
 stop request produces a `stopped` result.
 
+### Live Voice in iPhone Chat (22 November 2026; #2008, #2010)
+
+The relay derives `jarvis.voice.activity` from its current output group,
+delegation and PI work. Transcript deltas update captions; they do not decide
+whether Dan has finished speaking. The end of an output group emits its response
+completion independently of storage. `VoiceSessionStateMachine` combines relay
+work with started, playing and draining response IDs. A cancellation, reconnect
+or playback receipt cannot complete a different response. The web client likewise
+keeps playback separate from the relay's Thinking state.
+Delegated commentary stays pending until the next output audio delta, a newer
+delegation, session teardown or a 10-second status timeout. GPT-Live does not
+key those audio deltas by commentary. This wait does not retry speech or change
+what goes into history.
+
+Once a Voice row is committed, the relay publishes a refresh through the Now hub
+(`now` on the SSE wire). Chat coalesces these and other activity invalidations
+into one in-flight reload and at most one trailing reload. History reads scoped
+to live updates leave the last good rows in place on failure without posting a
+turn error; a normal history refresh can still report one. Chat reads `/history`,
+upserts rows in numeric message-ID order, and rebuilds its
+tool placements only if the ordered history changed. During a typed turn the
+typed stream owns its rows; a live refresh can still apply Voice rows. Older
+pages do not advance the follow-latest revision. Only a drag or its deceleration
+changes the reader's follow preference; layout changes can request a bottom
+scroll without changing that preference. `StateObject` owns the Voice model's
+lifetime; the shared mini-bar observes only the controls and status it displays,
+not the caption stream.
+
 A saved typed reply carries `replyToTurnId`, the accepted message ID that
 opened the stream, even if a follow-up steered it. The conversation store writes
 the link in the existing message metadata and exposes it in history. Chat
