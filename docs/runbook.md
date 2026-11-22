@@ -1,403 +1,64 @@
 # Operations runbook
 
-Production operations are for Dan or an
-authorized operator; cloud coding agents have no Azure access. Never put secret
-values in commands, logs, notes, or this file. Use resource names and endpoints
-from the `jarvis-infra` deployment outputs instead of guessing them.
+For the owner or an authorised operator. Look up the intended resources in the infrastructure deployment's outputs. Do not copy secret values, live content or environment identifiers into the repository or a PR.
 
 ## Deploy
 
-1. Merge the authorized change to `main`. The **Deploy** workflow runs for
-   production changes; documentation-only changes do not deploy. A manual
-   `workflow_dispatch` of **Deploy** from `main` redeploys all components.
-2. **Runner deploy** is a separate workflow. It runs from `main` and requires
-   `JARVIS_INFRA_DEPLOYMENT_NAME` to identify the successful infrastructure
-   deployment (currently `jarvis-infra`).
-3. Both workflows queue in `jarvis-production-deploy`; do not start a competing
-   deployment elsewhere. Follow the Actions run and its summary. The backend
-   deploy waits for the new Container Apps revision to become ready; the old
-   revision continues serving if that check fails. The smoke checks require
-   backend `/health` and, for infrastructure changes, the Foundry hosts.
-4. Confirm the relevant Deploy or Runner deploy jobs and smoke checks succeeded.
-   A successful build alone is not production acceptance.
+1. Follow [exact-tree PR qualification](agent-context.md#merge-and-release-procedure). [Deploy](../.github/workflows/deploy.yml) runs on `main` for production inputs, including `docs/features.md`, but not for ordinary docs. Do not trigger it to validate a docs PR.
+2. Inspect the plan, component jobs, deterministic readiness and release result. A missing qualification receipt blocks Azure access; a skipped component may reuse compatible evidence. A green image build is not a ready revision.
+3. [Runner deploy](../.github/workflows/runner-deploy.yml) is separate and uses the configured successful infrastructure deployment. It shares production deployment concurrency; do not start a competing out-of-band release.
+4. Use [PLAN.md](../PLAN.md) for delivery state and the [TestFlight procedure](agent-context.md#testflight-build) for a signed build. Readiness, signed upload, Apple processing and device acceptance are separate. Live provider or notification probes require explicit approval.
+
+## Triage
+
+Use [diagnostic sources](reference/logs.md) and a narrow UTC window. Investigate the specific symptomatic surface, not a fresh model call.
+
+| Symptom | Check first |
+| --- | --- |
+| Deploy reports `exact_qualification_missing` | Compare the merged tree with the CI receipt's PR/head and tested tree. Use a qualified PR to reconcile source; do not rerun an unqualified commit or bypass evidence. |
+| Tool result is missing or uncertain | Compare `pi.stream_failed` with `pi.mcp_tool` and the stored receipt. The harness can refuse a name before the door sees it. Read back the intended result before retrying a possible write. |
+| Voice never starts or does not end | Follow `voice.session_stage` to `jarvis.session.ready`; a WebSocket open is not service readiness. `voice.session_summary` names the closer and safe outcome. An interrupted close or missing upstream acknowledgement is a failure, not Ended. For a spoken request, correlate lifecycle/length events with the stored owner turn, not raw audio. |
+| Brain appears idle | Inspect the retained status and `pi.brain_tick`/`pi.brain_run`: distinguish off, paused, no eligible sources, no due work and a failed wake. Do not enable the brain to diagnose it. |
+| Status smoke is degraded | Read authenticated `GET /status` for retained results and `system.smoke_check` for the final allowlisted reason. `GET /status/smoke` runs checks; do not invoke it for routine diagnosis. Check discovery, tool receipt and reply assertions separately. |
 
 ## Owner session switch
 
-The backend switch is pinned to `false` in `infra/main.bicep`; do not change it
-through a portal override. Keep ingress header logging off because the voice
-session token is carried in the `Sec-WebSocket-Protocol` header.
+The checked-in `JARVIS_OWNER_SESSION_ENABLED` pin is **true** in [Bicep](../infra/main.bicep). Keep ingress header logging off; Voice carries the session token through `Sec-WebSocket-Protocol`.
 
-### Enable
-
-Deploy migration 0064 and the backend revision with the switch still off first.
-Enabling requires the owner's explicit approval: change the `infra/main.bicep`
-pin and `apps/backend/src/auth/session/enabled-switch.test.ts` together to
-`true` in one reviewed change, then deploy. After a 404, the web client waits up
-to six hours before its next mint attempt, so a device may need a reload or time
-before it starts using sessions.
-
-### Disable
-
-Change the pin and its test back to `false` together, then deploy. Verification
-stops on the next request served by the off revision, and the session routes
-answer 404. The next process start with SQL configured attempts one background
-revoke of active sessions; without SQL there is no boot revoke. This can wake a
-paused serverless database, but does not delay or fail startup and is not retried.
-
-### Incident
-
-Call `DELETE /auth/sessions` with a session token or Entra owner access token
-first; confirm its 200 response and revoked count, then turn the switch off if
-needed. If no usable token is available, turn the switch off; the next process
-start attempts to revoke stored sessions once, with no retry. Before turning the
-switch back on, confirm the off revision logged `owner_session.boot_revoke` with
-outcome `revoked`; after `failed`, restart it so the attempt runs again. An off
-revision that starts during an on/off deployment overlap may revoke sessions
-minted by the on revision; the owner signs in again.
-
-### Verify after enabling
-
-Sign in once with Entra; confirm mint answers 201, revoke-all answers 200 with a
-count, and expected `owner_session.*` events appear, including
-`owner_session.boot_revoke` when an off-mode process starts. Logs contain no
-session tokens or hashes.
-
-## Voice startup diagnosis
-
-The current route is Foundry GPT-Live agent `jarvis-pi-live` behind the
-authenticated `/voice` socket. `voice.session_stage` reports request start,
-SQL session creation, credential acquisition, upstream open and
-`session_started`. One exactly-once `voice.session_summary` records the
-allowlisted native GPT-Live event names, first closer, close code and durations;
-it contains no transcript, instructions or audio.
-
-Startup has one route and no tool-budget rung or representation fallback. A
-token failure, upstream error, invalid PCM negotiation or missing
-`session.started` closes with a visible error and the existing client retry
-backoff. Do not infer readiness from a WebSocket open alone. The next event must
-be the service-owned `session.started`, after which Jarvis sends
-`jarvis.session.ready` to the phone/browser.
-The pinned agent owns PCM 24 kHz. The optional `session.audio.format` echo may
-be absent; omission is accepted, while an explicit type/rate conflict fails.
-
-`jarvis.session.ended` is terminal and is sent only for a clean owner/time-limit
-end. A retryable failure (startup, provider disconnect, service restart) sends
-`jarvis.session.failed` with `retryable: true`, stops queued playback and then
-closes with the retry code. Web/iOS reconnect; a permanent policy/protocol
-failure sends the same event with `retryable: false` and ends the client. SQL
-session creation has an immediate rejection consumer so a startup failure can
-never become an unhandled Node 22 promise rejection.
-
-Clean owner, time-limit and lost-browser termination send native
-`session.close` once and wait up to five seconds for `session.closed`. A socket
-close, socket error or timeout before that terminal event is a retryable 1011,
-not a clean 1000, and no wall-clock voice usage row is invented. iOS and Watch
-keep their receive loop alive until the Jarvis terminal acknowledgement or a
-bounded End timeout; failed End is surfaced instead of publishing Ended.
-
-At a client delegation, expect this source-only sequence in logs: native input
-transcript deltas, one stored owner message, `voice.pi_turn` and the PI
-turn/receipt logs, then native output audio/transcript deltas. `voice.pi_turn`
-includes no text; use the matching conversation history to inspect the saved
-owner message and provider-spoken reply. The first PI commentary and final
-answer carry the same delegation identifier upstream. Later speech does not
-cancel a running PI turn; a new delegation or the session ending does. To trace a
-voice request use `voice.delegation_received`, `voice.owner_group_persisted`,
-`voice.did_not_catch` and `voice.pi_turn_started` (ids, lengths and timings
-only, never words).
-
-Transcript pauses do not split an owner turn. Every input delta joins the open
-turn; at client delegation the relay waits for 1.5 seconds of quiet since the
-last delta (`VOICE_TURN_QUIET_MS`, at most three seconds) and stores the whole
-turn once (`offset_ms` is logged, never used to cut a turn). GPT-Live has no
-transcript-done or output-audio-done event, so later output is split/persisted
-on 0.6-second quiet or a three-second persistence bound. If no provider audio
-was exercised, none of this is provider or acoustic acceptance.
-Each delegated commentary append is at most 256 UTF-8 bytes, a conservative
-below-500-token bound. Native `session.usage.updated` events and
-`session.closed.usage.seconds` are cumulative: event IDs are deduplicated, the
-largest value is retained, and the final provider audio seconds become the
-voice-minutes usage row.
-
-The physical/provider acceptance is intentionally open. Dan must make the real
-voice attempt on a device after a future Deploy; this coding session did not
-connect to Foundry, open a voice session, invoke a model or run a paid smoke.
-
-## Enable Health Gmail attention and calendar reads
-
-These feeds are off by default and this procedure does not claim they are
-enabled. Enabling them requires a separate reviewed deployment change; do not
-set the flag as an ad hoc portal override.
-
-1. Confirm the backend Health module is already enabled. In a reviewed change,
-   add `JARVIS_DAILY_FEEDS_ENABLED: 'true'` to the backend container environment
-   in `infra/main.bicep` and extend
-   `apps/backend/src/daily/default-off.test.ts` so the switch is allowed only in
-   that deployment file and is set exactly once to `true`. Do not change the
-   web build switch to enable these backend feeds. Deploy through the normal
-   Deploy workflow above; the flag remains off if absent or `false`.
-2. Before the deployment, complete the existing Google OAuth consent procedure
-   in [Google Calendar and Gmail setup](../infra/README.md#google-calendar-and-gmail-setup).
-   The consent must include the calendar-list read permission used to enumerate
-   the owner's calendars. If that permission has not been consented, update the
-   configured consent screen as documented there and rerun the setup procedure
-   to replace the protected refresh token. This runbook records the step; it
-   does not perform consent or access a token.
-3. After deployment, use the authorized Health read-only acceptance procedure
-   to confirm the feeds are composed, source coverage is reported truthfully,
-   and missing permission or partial data is not presented as an empty success.
-   The read endpoints and capability discovery are backend behavior; this
-   change does not add the attention list or agenda to the web page.
-4. To disable the feeds, remove the flag or set it to `false` in a reviewed
-   deployment change, deploy normally, and confirm the feed routes are absent
-   and the feed sources are no longer advertised. Do not remove existing
-   retained rows as part of disabling the flag.
-
-### Chat capability smoke diagnosis
-
-Read the retained result with the ordinary authenticated `GET /status`; this
-does not rerun checks. `GET /status/smoke` actively runs provider and chat
-checks, so use it only as part of an authorized normal deployment smoke, not
-for diagnosis or repeated probing. The `chat_capabilities` reason is one of
-`capabilities_discovery_missing` (no matching discovery receipt),
-`capabilities_discovery_wrong` (wrong tool or operation),
-`capabilities_discovery_failed` (matching call did not succeed),
-`capabilities_receipt_incomplete` (successful receipt omitted a required
-Notes, Calendar or GitHub capability), or `capabilities_reply_incomplete`
-(the reply omitted required wording). These reasons classify which existing
-predicate failed; they do not relax the assertion that real successful
-`get_system_health/list_capabilities` discovery, all three capabilities and
-their mention in the reply are required. The reason alone does not establish
-the original production cause; until a normal recovery deployment and released
-acceptance confirm the result, treat that cause as unidentified.
-
-For mixed backend/web versions, both HTTP routes retain the legacy rule that
-only down checks include a reason. Internal snapshots also retain allowlisted
-degraded reasons. An authorised normal smoke run exports `system.smoke_check`
-with only `checkId`, `status` and an allowlisted check-specific failure `reason`
-to stdout and Application Insights; an ordinary retained Status read does not
-repeat it. Use those events for safe warning details instead of broadening the
-wire contract or retrieving raw provider text. The event is diagnostic evidence,
-not an accepted-green release certificate.
-
-A bare `agent_error` now means an unexpected exception that is neither a labelled
-backend-side invocation failure nor a hosted error event (or no agent is
-configured). Backend-side failures report `agent_auth_unavailable`,
-`agent_request_failed`, `agent_http_<status>` (`agent_http_other` for an unlisted
-status), `agent_response_invalid`, `agent_stream_failed` or `agent_stream_ended`;
-a hosted error event without a safe code is `agent_error_code_missing` and one
-with an unlisted code is `agent_error_code_unlisted`; `tool_loop_stalled` is a
-fixed safe agent failure reason. A conversation check that
-threw one of these runs once more before its result is final, so a passing
-artifact may hide a rescued first failure; `system.smoke_check` records only the
-final result. Assertion failures and timeouts are not retried.
-
-The local consolidated #831/#832 recovery trace on main `81580919` found no
-matching exact-format numeric model-round records in the authorised existing
-workspace for 14 October 17:32–17:34 UTC. The failed smoke-only retry therefore
-does not establish which capability predicate failed. The smoke role omits
-normal-chat capability instructions; do not treat that source observation or
-timings as a proved live cause. Review/publication and a normal release's safe
-reason readback remain coordinator-owned. No blind smoke retry, new credentials
-or access grant is required or authorised by this diagnostic change.
-
-P9-107 deterministic fixtures demonstrate a separate reply false-negative:
-successful discovery with all three canonical receipt categories followed by
-“I can help with Notes, calendars and GitHub tools” failed only the reply
-predicate. The reply now accepts whole-word `calendar` or `calendars`, as Notes
-already accepts singular/plural wording. Receipt requirements are unchanged;
-synonyms, partial words, missing categories and missing/failed/wrong discovery
-still fail. This controlled equivalence does not identify the historical
-deployed cause or establish live recovery. Production acceptance remains open
-under #820; the coordinator owns normal deployment smoke and released acceptance.
+- **Incident:** Use authenticated `DELETE /auth/sessions` and check its success and revoked count. If no usable owner token is available, disable the switch through a reviewed change and Deploy.
+- **Disable/re-enable:** Change the deployment pin through a reviewed PR and Deploy, not a portal override. Off mode returns 404 on the session routes and a new process attempts one revoke of retained sessions. Check `owner_session.boot_revoke` before turning it back on; a failed attempt needs an authorised retry by restarting the off revision. Off/on overlap can revoke newly minted sessions.
+- **Verify:** After enabling, the owner signs in with Entra and checks mint/revoke in the intended client. A web client that cached a 404 may wait before minting again.
 
 ## Roll back a deployment
 
 ### Backend Container Apps revision
 
-If a new revision fails its readiness check, the previous revision keeps serving;
-inspect the failed Deploy run before taking further action. For an unhealthy
-revision that already became active:
+Failed readiness should leave the previous revision serving. If an unhealthy revision is already serving, use the backend app from the infrastructure outputs and activate the last known-good revision in **Revisions and replicas**. Verify health and the affected path within the authorised scope. Retain the failed revision and run evidence until triage, then reconcile through an authorised revert PR. Portal-only rollback is temporary.
 
-1. From `jarvis-infra` outputs, identify `backendAppName`.
-2. In the Azure portal, open that Container App's **Revisions and replicas**.
-   Activate the last known-good revision so it serves in the app's single-revision
-   mode. Do not delete the failed revision before recording its name and the
-   failing Deploy run.
-3. Verify the backend health check and the affected user workflow.
-4. Restore source-of-truth afterward: revert the offending change through an
-   authorized PR to `main` and let **Deploy** build and verify the corrected
-   revision. A portal-only rollback is temporary and can be replaced by the next
-   deployment.
+### Foundry version
 
-### Foundry `jarvis` agent version
+Determine which agent serves the affected path before changing a pin. Normal Chat and Voice use `jarvis-pi` and `jarvis-pi-live`, not the isolated hosted `jarvis` agent. Use the [agent ownership rules](architecture.md#the-two-foundry-agents) and the [readback procedure](agent-context.md#verify-the-live-agents-read-only). A version rollback is an owner operation: pin the known-good version, verify what is serving and preserve `KEEP THIS BLOCK`. Do not change Active concurrently with Deploy, delete the affected version or infer that existing sessions restarted. If the problem is code-owned, reconcile the source through a PR.
 
-The Deploy workflow creates a new hosted-agent version and routes 100% of
-`jarvis` traffic to it. Existing sessions are not restarted by a version change.
-For an emergency rollback, use the previous known-good version ID from the
-Foundry project’s version list or its successful Deploy run. Set `$version` to
-that ID and `$FOUNDRY_ADMIN` to the `foundryAdminEndpoint` output from
-`jarvis-infra`, then use the same selector and PATCH commands as Deploy:
+## Rotate credentials
 
-```bash
-patch=$(jq -cn --arg version "$version" '{
-  agent_endpoint: {
-    version_selector: {version_selection_rules: [{agent_version: $version, traffic_percentage: 100, type: "FixedRatio"}]},
-    protocol_configuration: {invocations: {}}
-  }
-}')
-az rest --method patch --url "$FOUNDRY_ADMIN/agents/jarvis?api-version=v1" --resource https://ai.azure.com/ --headers Content-Type=application/merge-patch+json --body "$patch" --output none --only-show-errors
-```
+- **GitHub App key:** Generate a replacement while the old key still works. Write the PEM to the `github-app-private-key` Key Vault secret from a protected temporary file, verify metadata and one authorised App-backed operation, then retire the old key and remove the temporary file. The key never goes to a sandbox.
+- **GitHub webhook secret:** Write `github-app-webhook-secret` from a protected file, set the matching value in the GitHub App, and restart the backend to clear its cache. Verify recent deliveries after restart. Preserve the webhook URL and subscribed events.
+- **Codex login:** Only re-seed when Settings reports **Action needed** and no Codex task or renewal is running. Use the Jarvis-only `CODEX_HOME`, not the operator's login. Write the resulting `auth.json` to `codex-login`, remove the temporary copy and let scheduled renewal verify health before starting another task.
 
-Verify Jarvis with a new chat turn. Keep both versions; do not delete the version
-being rolled back from. As with a Container Apps rollback, follow up with an
-authorized source change and Deploy so the deployed state is reproducible.
-
-## Rotate the GitHub App private key
-
-The backend reads `github-app-private-key` from Key Vault when it issues a GitHub
-App token; the key is never sent to a sandbox.
-
-1. In GitHub App settings, generate a replacement private key while the current
-   key is still valid. Keep its PEM in a temporary, access-controlled location
-   outside the repository and synced folders.
-2. Set the Key Vault secret using the existing file-based command:
-
-   ```powershell
-   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --file <private-key.pem> --encoding utf-8 --output none
-   ```
-
-3. Verify metadata only; never display the secret value:
-
-   ```powershell
-   az keyvault secret show --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-private-key --query "{id:id,enabled:attributes.enabled}" --output json
-   ```
-
-4. Verify a GitHub App-backed operation succeeds. Then revoke the old key in
-   GitHub App settings and remove the temporary PEM copy.
-
-## Rotate the GitHub App webhook secret
-
-The backend caches `github-app-webhook-secret` after its first successful Key
-Vault read, so a backend restart is required after replacing it.
-
-1. Generate a new random secret and stage it temporarily outside the repository
-   and synced folders.
-2. Store it in Key Vault with the existing file-based command:
-
-   ```powershell
-   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name github-app-webhook-secret --file <webhook-secret.txt> --encoding utf-8 --output none
-   ```
-
-3. Update the webhook secret in **GitHub → Settings → Developer settings →
-   GitHub Apps → Jarvis Software Factory → Webhook** to the same value.
-   Preserve the configured URL and subscribed events.
-4. Restart the backend Container App identified by the `backendAppName` output
-   from `jarvis-infra` in the Azure portal. Then check **Recent Deliveries** for
-   successful 2xx responses; redeliver any failed event after the restart.
-5. Remove the temporary copy. Do not confuse the webhook secret with the App
-   private key; they are separate Key Vault secrets.
-
-## Re-seed the Codex login
-
-Do this only when renewal has failed and Settings shows **Action needed**. The
-login is the Jarvis-only ChatGPT Pro login, not Dan's personal Codex login.
-
-1. Confirm no Codex task is running and no renewal is in progress. In a local,
-   private Jarvis-only folder, set `CODEX_HOME` to
-   `.secrets\codex-jarvis` and run `codex login`. Authenticate with the Jarvis-only
-   account. Never copy Dan's own Codex login.
-2. Store the resulting `auth.json` as the Key Vault secret `codex-login`, using a
-   protected local file and no inline secret value:
-
-   ```powershell
-   az keyvault secret set --subscription <subscription-id> --vault-name <key-vault-name> --name codex-login --file <auth.json> --encoding utf-8 --output none
-   ```
-
-3. Delete the local `auth.json` after the write. Do not start another Codex task
-   until the scheduled renewal succeeds and Settings reports a healthy status;
-   the task store refuses Codex starts while the credential status is failed.
-   No manual production renewal command is documented for the current backend.
+For a Key Vault update, use the file form of `az keyvault secret set` with the configured vault and `--output none`. Never pass a raw value on the command line or print secret readback. [Infrastructure setup](../infra/README.md) owns configuration names.
 
 ## Recover a crashed task
 
-1. Wait for heartbeat recovery to move the crashed task to **Needs attention**.
-   Open its task detail page and review the latest event and task branch.
-2. Select **Recover**. Recovery starts a fresh Foundry session using the existing
-   task branch, original request, bounded steering history, and a summary of
-   recent events. It does not restore uncommitted sandbox files.
-3. Follow the task timeline. Confirm the branch and pull request on GitHub before
-   treating the task as Done; the backend requires that evidence. If recovery
-   fails or the state changes, inspect the new event before trying again; do not
-   create a duplicate task or set task state manually.
+Wait for **Needs attention** and inspect the Factory timeline and task branch. **Recover** starts a fresh session using the recorded branch, request and bounded history; uncommitted sandbox files are not restored. Verify actual branch and PR state before calling the work Done. Do not create a duplicate task or edit its SQL state directly.
 
 ## Use the sleep switch
 
-Use the sleep switch on Jarvis's main page to put the backend to sleep or wake it.
-Sleep is refused while tasks are **Ready**, **Running**, or **PauseRequested**.
-Let them finish or cancel them through their supported controls, then try again.
-To wake Jarvis, set the switch to awake. Azure SQL may also need to resume; wait
-for the app's **Waking Jarvis…** indicator rather than repeating a write.
-Do not scale the backend directly in Azure while using this control.
+Sleep is refused while tasks are Ready, Running or PauseRequested. Finish or cancel via the supported control. On wake, wait for backend and SQL readiness instead of repeating a write. Do not scale the backend directly while using the switch.
 
 ## Temporary SQL firewall access for an operator
 
-SQL uses Entra-only authentication. `jarvis-sql-admins` is the server's Entra
-administrator group; an operator must already be authorized through that group.
-The Bicep-managed `AllowAzureServices` firewall rule (`0.0.0.0` to `0.0.0.0`)
-allows Azure services; it is not an operator IP rule.
+Use Entra access through the authorised administrator group. If needed, add a temporary rule for only the operator's current public IP, then remove and verify removal. Do not broaden the Bicep-managed Azure services rule or add password auth.
 
-The repository has no operator firewall command. In the Azure portal, open the
-SQL server identified by the `sqlServerName` output from `jarvis-infra`, add a
-temporary firewall rule for only the operator workstation's current public IPv4
-address (same start and end address), and connect using Entra authentication.
-Remove the temporary rule as soon as the work is complete and confirm it is no
-longer listed. Never allow a broad range or use a SQL password. Do not alter the
-Bicep-managed `AllowAzureServices` rule for operator access.
+## Restore the database to a temporary copy
 
-## Restore the database to a temporary copy (drill)
-
-Verified end to end on 13 October 2026 (P6-04, #65). The production database `jarvis` on server
-`sql-jarvis-rmw7kae3bza6a` (resource group `rg-jarvis`) is serverless General Purpose Gen5 (0.5 to 1 vCore,
-auto-pause after 60 minutes, about 254 MB used) with locally redundant backup storage. Azure keeps
-point-in-time restore data; the earliest restore point on 13 October was 6 October 02:38 UTC (about seven days).
-
-1. Pick a restore time in UTC inside the window, formatted `yyyy-MM-ddTHH:mm:ssZ`. Build it with the invariant
-   culture; on a Danish-locale Windows machine `ToString('yyyy-MM-ddTHH:mm:ssZ')` renders the colons as dots and the
-   request fails (the Azure CLI then fails with a deserialization error and creates nothing).
-2. Restore into a new database on the same server with the ARM API. `az sql db restore` hung without submitting a
-   request from the operator machine, so the REST call below is the verified path:
-   `az rest --method put --uri https://management.azure.com/subscriptions/<sub>/resourceGroups/rg-jarvis/providers/Microsoft.Sql/servers/sql-jarvis-rmw7kae3bza6a/databases/jarvis-restore-drill?api-version=2023-08-01-preview --body @restore.json`
-   with `restore.json` = `{"location":"swedencentral","sku":{"name":"GP_S_Gen5","tier":"GeneralPurpose","family":"Gen5","capacity":1},"properties":{"createMode":"PointInTimeRestore","sourceDatabaseId":"<resource id of jarvis>","restorePointInTime":"<time>","minCapacity":0.5,"autoPauseDelay":60,"requestedBackupStorageRedundancy":"Local"}}`.
-   The response is `CreateRestoreRequest`.
-3. Poll `az sql db show -g rg-jarvis -s sql-jarvis-rmw7kae3bza6a -n jarvis-restore-drill --query status` until
-   `Online`. Observed: 104 seconds for this database.
-4. Verify with the temporary firewall rule below (rule name `coordinator-temp`, delete it afterwards): connect to both
-   databases with an Entra token and compare per-table row counts. Result on 13 October with a restore point 30
-   minutes old: 67 of 67 tables present, 64 identical, and only the three busiest tables (`dbo.webhook_deliveries`,
-   `dbo.workflow_runs`, `dbo.pull_requests`) differed, by the rows written after the restore point.
-5. Delete the copy immediately: `az sql db delete -g rg-jarvis -s sql-jarvis-rmw7kae3bza6a -n jarvis-restore-drill --yes`,
-   then delete the firewall rule and confirm only `jarvis` and `master` remain. A serverless copy that exists for
-   a few minutes costs pennies; leaving it running does not.
-
-To recover production data (not drilled): restore to a temporary copy as above, copy the needed rows back with a
-reviewed script, then delete the copy. Do not rename databases or replace `jarvis` without a recorded decision.
-
-Limits of this drill: it proves the point-in-time backup is restorable and complete for row counts. It does not
-prove the application starts against the copy, restores of older points than 30 minutes, long-term retention (none
-is configured), or geo-restore (backup storage is local, so a regional loss is not covered).
-## Not verified by this runbook
-
-These procedures document the repository's current configuration; they do not
-claim a live production operation was performed. Dan must review this runbook.
-Azure revision/Foundry rollback, webhook delivery after rotation, Codex reseeding,
-live task recovery, sleep/wake, and temporary operator firewall access require
-authorized production verification.
-
-## References
-
-- [Deploy workflow](../.github/workflows/deploy.yml) and
-  [Runner deploy workflow](../.github/workflows/runner-deploy.yml)
-- [GitHub App setup and secret commands](agent-context.md#github-app-setup)
-- [Backend and sandbox credential behavior](architecture.md)
-- [Task recovery and sleep control contracts](agent-context.md#setup-and-commands)
+Choose an available UTC point in the configured retention window. Use the [Azure SQL point-in-time restore procedure](https://learn.microsoft.com/en-us/azure/azure-sql/database/recovery-using-backups?view=azuresql) to restore to a new database, never over production. Verify the required schema and records with scoped access. Recover only the needed rows with an approved, reviewed script; clean up the copy and temporary access afterwards. Row-count agreement is not application recovery. Check retention and redundancy on the target before planning a regional recovery.

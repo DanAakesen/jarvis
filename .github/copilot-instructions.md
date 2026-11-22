@@ -11,6 +11,7 @@ These files describe the project **as it is now**, not its history (Git and `doc
 | File | What it owns |
 | --- | --- |
 | `.github/copilot-instructions.md` | This file: the working rules and the map of every important document. |
+| `AGENTS.md` | Pointer to this working agreement for tools that start at the root. |
 | `p0.md` | Dan's current priorities, short. Dan edits it freely and Jarvis reads it. It says what comes first; it is not a plan or a history. |
 | `PRODUCT.md` | What Jarvis is for, who uses it, the daily core, requirements per area, success criteria, what is out of scope and Dan's standing rules. |
 | `PLAN.md` | Current state and what is in flight, next steps, blockers, open decisions A to F, the active issue backlog and the task tables the plan-status bot reads. Ideas are proposals, not authorization. |
@@ -18,9 +19,10 @@ These files describe the project **as it is now**, not its history (Git and `doc
 | `ui.md` | The screen map: every destination on iPhone, Watch, widgets and web, what it shows today and what is still open. |
 | `docs/ui/style-guide.md` | The look: colour, glass, type, the orb and neural background, motion and hard rules. Read it first for any new or visible UI, then `DESIGN.md`. |
 | `docs/architecture.md` | Stack and versions, components, data flows, deployment, invariants and known limits. |
-| `docs/agent-context.md` | Setup, verified commands, development workflow, merge and release procedure, TestFlight, cost and safety rules, repository hygiene. Commands are candidates until verified. |
+| `docs/agent-context.md` | Agent context and log entry points, setup, commands, development workflow, merge, TestFlight and repository hygiene. |
 | `docs/decisions.md` | Dated decisions and learnings with rationale and evidence, newest first; older ones are indexed in `docs/archive/`. Check it before a change that may conflict with an earlier choice. |
 | `docs/runbook.md` | Production operations: deploy, rollback, key rotation and incident steps. |
+| `docs/reference/logs.md` | Diagnostic sources, safe fields, access and coverage limits. |
 | `docs/features.md` | The feature catalogue built into the backend image. Editing it, even in a docs-only change, triggers backend CI and Deploy. |
 | `docs/tool-conformance.md` | Generated catalogue of every Jarvis tool and its first-search result. Regenerate it, never hand-edit. |
 
@@ -28,9 +30,10 @@ These files describe the project **as it is now**, not its history (Git and `doc
 
 Start with `README.md` (what the repo is and how to run it) and `docs/README.md` (index of the `docs/` folders).
 
-- **Contracts and reference:** `docs/ios/integration-contract.md` (backend endpoints the iPhone app uses), `docs/ios/apple-capabilities.md` (entitlements and capabilities), `docs/reference/data-model.md` (SQL schema and ownership), `docs/reference/logs.md` (how logs are read), `docs/reference/daily/*.md` and `docs/reference/daily-v182/README.md` (Daily health upload contract and the pinned source snapshot).
-- **Switch-on and parked work:** `docs/pi/cutover.md` (PI switch-on checklist and open decisions), `docs/inbox-loop/design.md`, `acceptance.md`, `mcp.md` and `shortcut.md` (inbox loop: built, switched off), `docs/ui/map-route-card/brief.md` (design brief waiting for Dan).
-- **Component READMEs:** `db/README.md` and `db/migrations/README.md` (migrations and their down scripts), `infra/README.md` (Bicep and deployment inputs), `runner/README.md` (coding runner images), `apps/vault-mirror/README.md` (vault mirror), `agents/jarvis/README.md` (hosted Python agent), `apps/backend/src/modules.README.md` (backend module index) and the READMEs next to the code it lists.
+- **Contracts and reference:** `docs/ios/integration-contract.md` (native backend endpoints), `docs/ios/apple-capabilities.md` (entitlements), `docs/reference/README.md` (reference index), `docs/reference/data-model.md` (SQL ownership), `docs/reference/daily/*.md` (Health upload and SQL mapping), `docs/reference/daily-v182/README.md` (pinned source contract).
+- **Switch-on and parked work:** `docs/pi/cutover.md` (PI switch-on and open decisions), `docs/inbox-loop/*.md` (inbox activation and acceptance, MCP and Shortcut), `docs/ui/map-route-card/brief.md` (unbuilt design).
+- **Decision history:** `docs/archive/decisions-index-*.md` points to dated decisions in Git history. Do not copy the full text into the archive.
+- **Component READMEs:** `db/README.md` and `db/migrations/README.md` (SQL), `infra/README.md` (Bicep), `runner/README.md` (coding runner), `apps/vault-mirror/README.md` (mirror), `agents/jarvis/README.md` (legacy hosted Python agent), `apps/backend/src/modules.README.md` (module index) and `apps/backend/src/**/README.md` (module contracts).
 - **Skills:** `.agents/skills/engineering/SKILL.md` and `.agents/skills/product-ui/SKILL.md`.
 - **PI agent definition inputs (deployed, Foundry-owned text):** `agents/pi/instructions.md`, `agents/pi/voice-instructions.md` and `agents/pi/skills/*/SKILL.md`. Never edit the KEEP THIS BLOCK text.
 - **Not documents:** `CopilotAndCodex.md` (Astra's advice file) exists only on Dan's machine and is never committed.

@@ -13,7 +13,7 @@ Use the shared orb and network, not a screen-specific effect. Chat, Voice and th
 ## Chat
 
 - **Turn first.** Keep the draft and focus while a reply streams. Follow the latest content when already at the end. Reading earlier text pauses following; show **Jump to latest**, and never pull an exact notification target away from the reader. A queued typed turn during Voice is still one message, not a second speculative answer.
-- **Follow Voice without replaying it.** iPhone Chat displays the current Voice state when relevant and follows new Voice transcript/reply content using the same follow-latest rules. Show real work rather than a lingering Speaking label. This is in source after [#2034](https://github.com/DanAakesen/jarvis/pull/2034); physical-device scroll, status and input latency remain to be checked.
+- **Follow Voice without replaying it.** iPhone Chat displays the current Voice state when relevant and follows new Voice transcript/reply content using the same follow-latest rules. Show real work rather than a lingering Speaking label.
 - **Make status truthful.** Name a known step. Don't infer an error from a slow stream or infer success from a click. Use the shared failure sentence; distinguish a failed tool, an interrupted response and a write that may have completed.
 - **Compact tool tree.** Use an icon, an action label and inline disclosure for grouped calls. While running, trace a moving highlight around the icon outline and shimmer the label; don't pulse the icon. A group shows the worst child state: running while any child runs, then failure before refusal, then success only if every child succeeded. Child status must remain readable without colour or motion. Omit counts and filler.
 - **Blocks stay in the conversation.** Generated results scroll as part of the assistant message and stay in history, not in a sheet. Keep date, place, units, source and issue time with the relevant result. Charts use one scale per unit and provide View data and Copy data. Missing values are gaps, not zeros. Unsupported content keeps a text alternative. Keep ordinary assistant prose unboxed.
@@ -36,7 +36,7 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Proactive and notification opening
 
-- **One iPhone switch**, **Proactive suggestions**. Save on change, preserve the last confirmed state while pending, and offer Retry. **Background suggestions** is detail, not another engine toggle. Keep source controls and guidance in their editor. This is the iPhone direction after [#2028](https://github.com/DanAakesen/jarvis/pull/2028); do not copy the old two-switch layout to it.
+- **One iPhone switch**, **Proactive suggestions**. Save on change, preserve the last confirmed state while pending, and offer Retry. **Background suggestions** is detail, not another engine toggle. Keep source controls and guidance in their editor.
 - **A reply push opens existing Chat.** Show one useful preview, not an approval summary. In Chat open the exact committed message without animating away from the target; allow Jump to latest. Watch waits until an active turn, dictation or Voice is idle and keeps the pending target across refresh. Proactive items and approval actions have distinct routes. If the target cannot load, show Chat's retry state, not another message.
 
 ## Watch
@@ -53,6 +53,6 @@ In a focused Voice call, replace the composer and Start control with **Mute/Unmu
 - **Health and insights** describe the source, period and units in context. Distinguish logged from estimated, missing from zero, and current from stale. Make drill-down and data alternatives usable without colour. Keep capture and correction flows separate from read-only summaries. Do not infer support for a new entry action from a design board.
 - **Settings and status** show saved values, actionable errors and evidence freshness; don't repeat a row's status in a second card. Respect sign-in and lock/privacy cover; a pending response must not turn a locked view into a notification bypass.
 
-## Evidence and design history
+## Acceptance
 
-The [documentation index](docs/README.md) lists the operating references. Concepts, fixture captures, source review, simulator build and physical-device acceptance are different evidence. Native follow-latest, Voice and Watch recovery, title visibility after sync, and push taps require device confirmation after a build lands. CarPlay is a voice-first direction, not a claim that the in-car interface is shipped or device-tested; see [Apple capabilities](docs/ios/apple-capabilities.md).
+Concepts, source review and simulator results do not establish physical-device acceptance. Follow [the plan](PLAN.md) for device checks. CarPlay is a voice-first direction, not a shipped interface; see [Apple capabilities](docs/ios/apple-capabilities.md).

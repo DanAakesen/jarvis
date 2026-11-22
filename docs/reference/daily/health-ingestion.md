@@ -2,7 +2,7 @@
 
 **Status:** The checked-in contract and Daily freshness evidence were last updated on 20 October 2026. The upload routes and SQL processor are implemented behind `JARVIS_HEALTH_UPLOAD_ENABLED`. It defaults to false in code; the checked-in backend Bicep sets it to true. The deployed flag and credential state, real upload and processing, and phone acceptance were not verified for this refresh.
 
-The revised [#719](https://github.com/DanAakesen/jarvis/issues/719) design reuses Jarvis's backend and SQL, with no new Azure resources. See the [Daily v182 delivery status](../daily-v182/delivery-status.md).
+Health upload reuses Jarvis's backend and SQL. Use the [pinned Daily v182 reference](../daily-v182/README.md) for the source protocol.
 
 ## Acceptance contract
 

@@ -12,7 +12,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | --- | --- | --- |
 | **Home** | The brief and next action, today's activity card, tasks and the iPhone Gym sheet. The activity stays usable when the brief is unavailable. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
 | **Chat** | The one PI conversation: streaming replies, composer with plus menu and dictation, grouped tool activity, generated blocks and charts, photos, reply targets from pushes, follow-latest, and the live Voice state when Voice is active. | `JarvisChatScreen`, `JarvisComposerBar`, `JarvisChatToolActivityList`, `JarvisChatBlockView`, `JarvisChatFollowLatest` |
-| **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, camera and screen share where supported, and a Live Activity. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
+| **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |
 | **Health** | Daily dashboard, body chart, workouts and the iPhone Gym lift log and editor, goals, and HealthKit sync. Nutrition totals live here. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
@@ -51,5 +51,5 @@ Not built. Apple granted the Voice Based Conversation entitlement on 21 November
 | --- | --- |
 | Map and route card in Chat and Voice | Design brief only: [docs/ui/map-route-card/brief.md](docs/ui/map-route-card/brief.md). Dan chooses the layout, then it is built. |
 | Manual kcal entry on the Nutrition screen | Not built; waiting for [decision B](PLAN.md#open-decisions-af). |
-| Device acceptance of follow-latest, Voice state labels, Notes titles, Watch dictation and recovery | Merged, not accepted. Dan checks them on the next build, in the order in [PLAN.md](PLAN.md). |
+| Follow-latest, Voice state labels, Notes titles, Watch dictation and recovery | Not accepted on device. See [PLAN.md](PLAN.md) for the current build and checks. |
 | CarPlay scenes | Not started. |

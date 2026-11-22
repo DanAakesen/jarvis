@@ -1,15 +1,14 @@
 # Jarvis iOS: backend integration contract
 
-The backend endpoints the native iPhone app uses, derived from the backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. Sections 11 to 13 reuse existing routes, and Workspaces uses no new backend route. APNs backend work is separate and not authorized by this client contract.
+The backend endpoints the native iPhone app uses. Check the [shared client](../../apps/ios/Packages/JarvisCore/Sources/JarvisCore) and the relevant backend route before changing a payload. [PLAN.md](../../PLAN.md) owns device acceptance.
 
 ## 1. Sign-in and session
 
 - Every HTTP and SSE request sends the header `Authorization: Bearer TOKEN`.
 - An Entra token is accepted only when the audience is the API client ID, the issuer is v2, the scope is `access_as_user`, and `oid` and `tid` match the owner. Anyone else gets 403.
-- Owner session (on in production since 23 October 2026): after Microsoft sign-in the app calls `POST /auth/session` with an optional `deviceLabel` and receives a one-time token shaped `js.ID.SECRET`. Send it as the Bearer token instead of the Entra token. Idle lifetime is 10 days, the absolute cap is 30 days, and at most 10 sessions are active. There is no refresh call: when it expires, sign in again. `DELETE /auth/session` revokes this device and `DELETE /auth/sessions` revokes all of them.
+- The deployed configuration pins owner sessions on. After Microsoft sign-in, `POST /auth/session` mints the one-time bearer token. Idle lifetime is 10 days, the absolute cap is 30 days, and at most 10 sessions are active. There is no refresh call: when one expires, sign in again. `DELETE /auth/session` revokes this device; `DELETE /auth/sessions` revokes all of them. See the [operator procedure](../runbook.md#owner-session-switch) for the pin and rollback.
 - Native sign-in: MSAL for iOS with authorization code plus PKCE, a public client, scope `access_as_user`, and a mobile redirect URI registered in Entra. The session token lives in the Keychain with the class `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Classes that need an unlocked phone would hide the token when the app wakes in the background, runs a notification action or is used in CarPlay, where the phone is usually locked (the CarPlay developer guide lists them as inaccessible).
-- Face ID lock (owner decision, 29 October 2026: on by default, set up at the first sign-in, switch in Settings). It gates the screen, not the token: the app covers its content until `LocalAuthentication` succeeds, with the device passcode as the fallback. It is separate from Microsoft sign-in, needs no backend change and needs `NSFaceIDUsageDescription` in Info.plist. A running voice session is never interrupted by the lock: Mute and End stay on the cover and in the Live Activity. P15-16 uses a 60-second background interval; Settings controls remain out of scope for that issue.
-- Backend change needed: probably none for HTTP and SSE.
+- Face ID gates the screen, not the token. It uses `LocalAuthentication`, with the device passcode as fallback. A running Voice session stays active; Mute and End remain available.
 - Source: `apps/backend/src/auth/hook.ts`, `apps/backend/src/auth/verify.ts`.
 
 ## 2. Chat (HTTP plus SSE)
@@ -20,7 +19,7 @@ The backend endpoints the native iPhone app uses, derived from the backend and w
 4. Reattach after a drop: `GET /conversation/turns/active` returns `{turns: [{sessionId, messageId, language}]}`. Keep the `sessionId` and `messageId` of each entry. Reattach with `GET /conversation/sessions/:sessionId/turns/:messageId/events` (a server-sent event stream) and cancel with `POST /conversation/sessions/:sessionId/turns/:messageId/cancel`, which answers `{cancelled: true}`. Both answer 404 when the turn is unknown or the session id does not match it. The web client retries reattaching for up to 15 minutes, 2 seconds apart.
 5. History: `GET /conversation/history?limit=50&before=CURSOR&sessionId=ID` returns `{messages, nextCursor}`.
 6. Attachments: `POST /conversation/attachments` as multipart, one file up to 20 MB, returns `{id, name, contentType, size, status}`.
-7. Tool calls are not streamed as their own events. Read them from `toolCalls` in the final history, or from the confirmation text.
+7. `tool_activity` streams PI progress and tool outcomes. History retains tool receipts separately from the final answer.
 8. Errors: 401 sign in again, 403 not the owner, 429 wait for `Retry-After`, 503 try again later.
 
 ## 3. Voice (WebSocket)
@@ -50,16 +49,15 @@ The backend endpoints the native iPhone app uses, derived from the backend and w
   Thinking until audio starts or the wait expires. Chat refreshes stored rows
   on the existing `now` SSE message.
 - Reconnect: exponential backoff, up to 8 attempts, at most 10 seconds apart.
-- Camera: post a JPEG to `POST /screen/frames` with `sessionId`, `frame`, `question`, `turnId`, and `mode: "handle"`; use its `frameId` and `capturedAt` in a `jarvis.screen.context` message with `source: "camera"` and the same `itemId`.
-- Screen sharing: inspect the latest JPEG through the same authenticated `POST /screen/frames` route without `mode`; send its `description` and `capturedAt` in `jarvis.screen.context` with `source: "screen"`. Report capture failures with `jarvis.screen.context.unavailable`.
-- Source: `apps/web/src/voice-client.ts`, `apps/web/src/screen-sharing.ts`, `apps/backend/src/voice/`, `apps/backend/src/vision/screen.ts`, and `apps/backend/src/core/settings.ts`.
+- GPT-Live is audio-only; the presence of legacy camera or screen controls does not establish live visual input. Show unsupported capture honestly.
+- Sources: [native Voice client](../../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Voice), [backend Voice](../../apps/backend/src/voice).
 
 ## 4. Generated views
 
 - Shape: `GeneratedView`, version 1, in `packages/contracts/src/index.d.ts` with runtime guards in `index.js`. It is JSON, not Zod.
 - Renderers: table, list, detail, text (plain or markdown), timeline, chart (line, bar or area, up to 5 series and 1000 points), task-card, status, image, html-app, knowledge-graph, code.
 - Actions (up to 10 per view): open-route, open-link, call-tool, window.
-- Native decisions still open: html-app (a stored HTML artifact of up to 512 KiB; needs a sandboxed web view), knowledge-graph, and code. P15-14 leaves all three as unsupported cards and does not execute supplied HTML. Its optional web link opens only the configured HTTPS app root because no item deep link is established by this contract.
+- Renderer support varies by surface. Unsupported blocks keep a text alternative; use the native Workspaces surface for user-opened generated apps.
 
 ## 5. App control (workspace commands)
 
@@ -68,73 +66,29 @@ The backend endpoints the native iPhone app uses, derived from the backend and w
 - Acknowledge each command within 10 seconds (the `workspace-command` event carries `expiresAt`): `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
 - A command `target` is `active`, `desktop`, `phone` or `all`.
 - UNVERIFIED: replay after an SSE reconnect, which commands are desktop only, version negotiation, and how the phone and the desktop choose the active client.
-- P15-14 registers its current window snapshot as a `phone` client and acknowledges each received command by its deadline. This does not resolve the active-client choice or replay behavior above; a successful open request is not evidence that the phone was selected.
+- iPhone registers as a `phone` client and acknowledges each received command by its deadline. A successful open request is not evidence that the phone was selected.
 
 ## 6. Tools
 
 - `GET /tools` lists them. `POST /tools/:toolName` runs one and returns `{tool, outcome: "ok" or "refused" or "error", result, confirmation}`.
 
-## 7. Approvals from the Lock Screen (P15-51)
-
-Decision (owner, 29 October 2026): approving from the Lock Screen is allowed and must not be blocked.
-
-What exists today, read from `apps/backend/src/core/now.ts`, `owner-interactions.ts` and `index.ts` on 29 October 2026:
+## 7. Approvals from the Lock Screen
 
 - `GET /now` lists the pending confirmations as `{id, actionKind, summary, expiresAt}`. `GET /now/events` carries `refresh` and `status` events (kind `approval_pending`) from the same hub.
 - `POST /now/confirmations/:id` with `{decision: "approve" or "reject"}` resolves one. The id is a 43-character base64url string. It answers 204 on success, 403 for anyone except the owner, 404 when the confirmation is unknown, expired or already used, and 503 when the service is not available.
 - A confirmation lives 5 minutes and is single-use: the approval is consumed once on the server before the action runs.
 - The pending confirmation is held in the memory of the one backend instance (the deployment is fixed at one replica), so a restart ends it. The app treats 404 as no longer available.
-- Today the only hook when a confirmation is created is `onConfirmationPending`, and it feeds the in-app event stream, not a push.
-
-Native design (approved in P15-36, 31 October 2026; polished in P15-51):
-
 - The app registers the `jarvis.approval` category with Approve and Decline actions, both marked `.authenticationRequired`. The handler makes one authenticated `POST /now/confirmations/:id` using the existing Keychain session, with an eight-second timeout and no retry.
 - The standard system notification permission prompt appears after sign-in and device unlock, before any approval exists. Denial prevents APNs registration; it does not block in-app approval.
 - The owner-only `POST /ios/approval-notifications` stores an APNs token, app language, time zone and preview-action preference; `DELETE` removes that device registration. After an approval is persisted/staged, the backend sends one APNs alert with `aps.alert`, `aps.category`, `aps.thread-id`, `aps.sound`, and top-level `confirmationID`. The body contains the bounded server summary and localized absolute expiry. Hidden previews select the no-actions category.
 - There is no local-notification duplicate: `/now` only reconciles old local alerts and stale delivered alerts; foreground remote banners are suppressed while Chat shows the action bar. Own-device decisions dismiss the delivered notification. The backend does not send a second lifecycle push when another device resolves/expires an approval, so a lock-screen alert can remain until refresh; the existing endpoint rejects stale IDs.
 - APNs uses `apns-push-type: alert`, the app bundle topic, priority 10 and the confirmation expiry as the delivery expiration. These are actionable user notifications, not approval Live Activities. Existing task Live Activity updates remain separate.
 
-## 8. Backend capabilities and remaining work
+## 8. Reply notifications and Live Activities
 
-| Item | Status |
-|---|---|
-| APNs token registration and bounded SQL table (migration 0073) | Implemented for up to five owner devices with 30-day refresh. |
-| Actionable approval APNs delivery | Implemented at confirmation creation for core approvals and staged calendar proposals. Requires protected APNs configuration and `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED=true`. |
-| Remove a notification when another device resolves/expires the approval | Not implemented. The app removes stale alerts on its next successful `/now` refresh; the endpoint still rejects stale IDs. |
-| Factory task Live Activity push updates | Implemented separately by P15-49; uses ActivityKit tokens and update/end payloads, not alert notifications. |
-| Entra mobile redirect (a registration change, not code) | Native sign-in configuration. |
+Normal reply pushes open the exact committed session and message. Approval and proactive routes are distinct. Factory and durable job Live Activities register per-activity tokens for update/end, not alert or push-to-start tokens. See [the push lifecycle](../architecture.md#reply-push-and-reminders); device receipt and tap routing are separate checks.
 
-The approve and decline route itself needs no change.
-
-P15-49 (#1498) implements the task portion: owner-only ActivityKit token
-registration in SQL and APNs task update/end delivery. It covers existing
-Factory tasks and durable `/jobs` background work, not approval notification
-pushes or push-to-start. The app requests the activity automatically in the
-foreground and registers its update token; server execution is independent of
-that token or client connection. Protected APNs configuration, the migration,
-Push Notifications provisioning and signed-device verification are still release
-prerequisites. Disabled activities and unavailable remote updates have explicit
-Danish/English in-app recovery; stale activities do not claim current state.
-
-## 9. Unverified (test on a real device)
-
-- Background audio, Bluetooth and route changes, microphone recovery after a lock or a call, and how long a WebSocket survives in the background.
-- Any absolute limit on voice session length.
-- Attachment type allowlist and rate quotas.
-- Tool and error event shapes on the voice socket.
-- Starting the microphone from a locked phone (Action Button, a shortcut or a Lock Screen control), and what the Face ID lock does to it.
-- Real-device confirmation that hidden Lock Screen previews suppress Approve/Decline when `showPreviewsSetting` is `.never`; local notifications use a no-action category in that setting and require device authentication for visible actions.
-- Whether Approve and Decline appear and work on the Apple Watch, including the authentication step.
-- The passcode fallback of the Face ID lock on a cold start, on return from the background and in CarPlay.
-- Whether App Intents (Action Button, shortcuts, Siri phrases) need no capability tick. About 90 percent sure; confirm when the first one is built.
-
-## 10. Later surfaces (owner intent, not version 1, nothing authorised)
-
-- CarPlay: the voice-based conversational category would use the same voice WebSocket. The phone is usually locked in the car, so everything it needs must be readable after the first unlock (section 1). CarPlay shows no notifications for conversational apps, so nothing in the car can depend on one. The build plan holds the entitlement steps and limits.
-- Apple Watch: Live Activities appear on the Watch without extra work. A native Watch app is outside version 1.
-- Music: Jarvis can ask Apple Music (MusicKit) or another player to start something. It cannot be the CarPlay audio app, because an app has one CarPlay category.
-
-## 11. Notes area (P15-12; P15-93 follow-up)
+## 9. Notes area
 
 The Notes area uses the existing owner-authenticated vault routes. No iOS-specific route or payload is needed.
 Its Danish/English interface language is an app-owned local preference (`jarvis.appLanguage`), defaulting to Danish; the voice setting is not used for Notes UI copy.
@@ -143,11 +97,12 @@ Its Danish/English interface language is an app-owned local preference (`jarvis.
 |---|---|
 | Load the vault folders | `GET /notes/tree` returns `directories`, `rootNoteCount`, `truncated` and `updatedAt`. |
 | Read or change the manual folder order | `GET /notes/folder-order` returns `orders` (`parent`, `folders`); `PUT /notes/folder-order` with `{ parent, folders }` replaces one parent's order. Owner only; display metadata, never a file move. |
-| List notes or load one folder in the tree | `GET /notes?limit=50&offset=N`, optionally with `directory=PATH`, `folder=NAME` or `query=TEXT`. Results are sorted by path, not recency. |
+| List notes or load a folder | `GET /notes?limit=50&offset=N`, optionally with `directory=PATH`, `folder=NAME` or `query=TEXT`. Use `sort=updated` for the newest-first native library. |
+| Read pinned-note titles | `POST /notes/summaries` with `{paths}`; up to 50 exact paths, independent of pagination. |
 | Open a note in the editor | `GET /notes/note?path=PATH` returns `path`, Markdown `content`, the current `sha` and a GitHub URL. |
 | Create a note | `POST /notes` with `{path, content}` returns `path`, `commit` and `url`. |
 | Create an empty folder | `POST /notes/folders` with `{path}` returns the confirmed `path` and `commit`. A safe visible path is required; an existing directory/file returns 409. |
-| Save an edited note | `PUT /notes/note` with `{path, content, sha}` returns `path`, `commit` and `url`. A stale `sha` returns `409` with the latest `currentSha` and `content`; retain the draft and require an explicit recovery choice. |
+| Save or delete a note | `PUT /notes/note` with `{path, content, sha}` saves; `DELETE /notes/note` with `{path, sha}` deletes after confirmation. On a stale revision retain the draft, refresh, and do not blindly repeat the write. |
 | Load task groups or search tasks | `GET /vault/tasks?state=open|all`, optionally with `q=TEXT`. The response includes task due dates/times, priority, source path/line/version and the backend's `today`. Personal/Work scope is inferred from the source path, as in the web client. |
 | Complete or reopen a task | `PATCH /vault/tasks` with the exact source `path`, `line`, `text`, `version` and `done`. A stale version returns `409`; refresh before another write. |
 | Edit task text, due date/time or priority | `PUT /vault/tasks` with the exact source identity/version plus `newText`, `due`, `time` and `priority`. |
@@ -159,20 +114,9 @@ The web and iOS Knowledge graph readers use `GET /notes/note?path=PATH`; the Mem
 
 The web Notes and Tasks views call these routes directly; their assistant tools (`vault_search`, `show_knowledge`, `vault_read`, `vault_write`, `vault_task_create`, `vault_task_complete` and `vault_task_edit`) are not screen endpoints and are not invoked by this area. `vault_delete` is confirmation-gated and is not a substitute for a screen delete route.
 
-There is no note delete, rename or move route, folder rename route or task delete
-route. P15-93 adds owner-only empty-folder creation using an empty `.gitkeep`
-marker; this appears in the folder inventory and never counts as a note. The
-New folder sheet persists through that route. The New note picker may also stage
-a new child path and explains that saving the note persists it. P15-93 adds
-optional task-create priority. Deploy the compatible backend before releasing
-the client that sends these requests.
-Recent tiles use account-bound local opening history, independent of note
-modification times; sign-out clears that history. Cached reads do not imply
-offline writes. Root note summaries legitimately use an empty `folder` string.
+Empty folders use a `.gitkeep` marker that never counts as a note. An account-bound warm snapshot is not proof of fresh data or an offline write. See the [Vault routes](../../apps/backend/src/vault/index.ts) and [Notes client](../../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Notes/JarvisNotesClient.swift).
 
-Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx`, `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (the separate voice-language setting).
-
-## 12. Settings area (P15-20)
+## 10. Settings area
 
 The four native Settings sections reuse the existing owner-session bearer token
 and the web application's routes. The handlers below use the verified owner
@@ -184,55 +128,33 @@ this screen.
 | Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
 | Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
 | Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
-| Edit training/nutrition targets | `GET` and `PATCH /daily/training-targets` and `/daily/nutrition-targets` use the existing bounded target schemas. A patch is a top-level object of changed values; `null` clears a target. |
-| Read Health upload credential state | `GET /api/health/upload-credential` returns the state and optional expiry. Its `POST` explicitly rejects owner-session tokens with 403 and requires Microsoft sign-in. V1 therefore displays state only; it does not create, rotate, revoke or reveal a one-time token. A native HealthKit upload path is not defined. |
+| Edit training/nutrition targets | `GET` and `PATCH /health/training-targets` or `/health/nutrition-targets`. A patch is a top-level object of changed values; `null` clears a target. |
+| Read Health upload credential state | `GET /api/health/upload-credential` returns state and optional expiry. Minting through `POST` requires an Entra owner token, not an owner-session token; it is separate from native HealthKit sync. |
 | Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |
 | List, view, edit or delete memory | `GET /memory?folder=General&limit=50&offset=N&query=TEXT` returns SQL Personal Memory only in `items`, with `count`, `limit`, `offset` and `hasMore`; numeric IDs identify one memory and `type` is `memory`. The iPhone client preserves raw `count`/computed `nextOffset`, filters legacy Vault rows separately and versions its Memory cache scope so old filtered-page cursors are discarded. `GET /memory/:id` reads one with source-linked history; `PATCH /memory/:id` accepts `{text}`; `DELETE /memory/:id` returns 204 after the committed forget. Vault notes use the Notes API and never appear here. |
 | List and delete routines | `GET /routines` returns `{routines}`. The web panel deletes through `DELETE /recipes/:id`, which returns 204. |
 | Read account and sign out | `GET /me` returns the validated owner display name. `DELETE /auth/session` revokes the current session; `DELETE /auth/sessions` revokes all sessions. The existing client removes the device's Keychain token only after the server confirms the revocation. |
 
-Approval APNs delivery is opt-in through `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED`
-and the existing protected `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_SIGNING_KEY` and
-`APNS_ENVIRONMENT` configuration. Task Live Activity updates use the separate
-`JARVIS_ACTIVITYKIT_ENABLED` gate. Advanced voice tuning,
-retrieval thresholds, timeouts and project administration remain web-only in v1.
-The checked-in `docs/ios/design/board.html` does not contain the approved
-`screen=settings` frames referenced by the issue; the implementation follows
-those owner-approved frames rather than treating the older local board as source
-for settings values. The existing screenshot workflow is retained unchanged
-under the Mac-run cost guard.
+See [Settings routes](../../apps/backend/src/core/settings.ts) and the [Proactive code](../../apps/backend/src/proactive).
 
-Sources checked before implementation: `apps/backend/src/core/settings.ts`,
-`apps/web/src/SettingsPage.tsx` and its panels, `apps/backend/src/core/model-deployments.ts`,
-`apps/backend/src/daily/routes/training-targets.ts`,
-`apps/backend/src/daily/routes/nutrition-targets.ts`,
-`apps/backend/src/daily/health-upload/capability-routes.ts`,
-`apps/backend/src/proactive/routes.ts`, `apps/web/src/proactive-data.ts`,
-`apps/backend/src/vault/index.ts`, `apps/backend/src/core/recipe-management.ts`,
-`apps/web/src/TaskRecipesSettings.tsx`, `apps/backend/src/core/index.ts` and
-`apps/backend/src/auth/session/routes.ts`.
+## 11. Health dashboard
 
-## 13. Health dashboard (P15-18)
-
-The approved Dashboard reuses the authenticated Daily API. The iPhone does not upload HealthKit data and adds no backend route or iOS-specific payload. Before querying, it calls `GET /daily/capabilities` with `Accept: application/json;version=6` and only requests advertised sources.
+The dashboard calls `GET /health/capabilities` with `Accept: application/json;version=6`, then queries only advertised sources. The `daily.*` source names are unchanged. Native HealthKit sync posts to `/health/sync`; it is separate from the [Health upload credential and ingestion contract](../reference/daily/health-ingestion.md).
 
 | Dashboard block or action | Existing endpoint and source |
 |---|---|
-| Gym and Run rings; recent-session rows | `POST /daily/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |
-| Steps ring | `POST /daily/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /daily/training-targets`. |
-| Protein and calorie balance | `POST /daily/query` with `source: "daily.nutrition.days"` and the selected date range; protein, resting-calorie and deficit targets come from `GET /daily/nutrition-targets`. |
-| Sleep value and sleep-night detail | `POST /daily/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
-| Open a workout | `POST /daily/query` with `source: "daily.health.workout"` and the exact `workoutId` from a workout row. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
-| Open meals | `POST /daily/query` with `source: "daily.nutrition.meals"` and the selected date range. |
-| Body trend catalogue and detail | `POST /daily/query` with `source: "daily.health.metric-catalog"`, then `source: "daily.health.metrics"` with each selected exact metric name and date range. |
-| Protein chart and target line | `POST /daily/query` with `source: "daily.nutrition.days"` and `GET /daily/nutrition-targets`. |
-| Freshness status | `POST /daily/query` with `source: "daily.sync"`. Dashboard refresh listens to the existing authenticated `GET /now/events` stream for `refresh` or `now` events, then reloads the same reads. |
+| Gym and Run rings; recent-session rows | `POST /health/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |
+| Steps ring | `POST /health/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /health/training-targets`. |
+| Protein and calorie balance | `POST /health/query` with `source: "daily.nutrition.days"` and the selected date range; protein, resting-calorie and deficit targets come from `GET /health/nutrition-targets`. |
+| Sleep value and sleep-night detail | `POST /health/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
+| Open a workout | `POST /health/query` with `source: "daily.health.workout"` and the exact `workoutId`. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
+| Open meals | `POST /health/query` with `source: "daily.nutrition.meals"` and the selected date range. |
+| Body trend catalogue and detail | `POST /health/query` with `source: "daily.health.metric-catalog"`, then `source: "daily.health.metrics"` with the selected metric name and date range. |
+| Freshness status | `POST /health/query` with `source: "daily.sync"`. The authenticated `GET /now/events` stream can trigger a reload. |
 
-`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. P15-39 enables Track workout and plus using the shared lift contract in section 15. History queries use `source: daily.health.lifts`, `limit: 100` and the returned cursor; quick-add chips use `lastPerExercise: true`. New lift sends `idempotencyKey`, `exerciseName`, `weightKg`, `reps` and `sets` to `POST /daily/lifts`, retaining the same submission on explicit save retry. No inline form or new route is added. Last lifts remains omitted from the Dashboard.
+See the [Health client](../../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Health/JarvisHealthClient.swift) and [backend module](../../apps/backend/src/health).
 
-Sources checked: `apps/backend/src/daily/index.ts`, `apps/backend/src/daily/query.ts`, `apps/backend/src/daily/health/read-model.ts`, `apps/backend/src/daily/routes/training-targets.ts`, `apps/backend/src/daily/routes/nutrition-targets.ts`, `apps/web/src/daily/client.ts`, `apps/web/src/daily/sections/overview/health-panel/data.ts`, `apps/web/src/daily/sections/overview/useTopCardData.ts`, `apps/web/src/daily/nutrition-targets.ts` and `apps/web/src/daily/sections/workouts/WorkoutDetail.tsx`.
-
-## 14. Software Factory area (P15-19)
+## 12. Software Factory area
 
 The Factory area reuses the authenticated web/backend routes. It adds no iOS-specific route or backend behavior. Project administration (other than the existing completion-policy control in task creation), Git graph visualization, backfill, and sandbox routes remain out of scope.
 
@@ -255,37 +177,34 @@ view.
 | Show recent commits | When `graph` is present, its flat `commits` array contains `{sha, message, author, committedAt, parents}` and `truncated` indicates incomplete history. There is no separate compact-commit endpoint or DTO. Show a compact list from these commit records; do not render the web-only branch graph. |
 
 Contract verification (31 October 2026): `apps/backend/src/factory/index.ts`, `board.ts`, `projects.ts`, `task-store.ts`, and `release-view.ts`; `apps/backend/src/core/now.ts` and `apps/backend/src/auth/hook.ts`; `apps/web/src/factory/TasksPage.tsx`, `TaskControls.tsx`, `release-data.ts`, and `ReleasePage.tsx`; and `apps/web/src/task-events.ts`. The owner-session stream, task-list agent/state filters, and returned commit record shape are verified in those sources. Production authorization, project selection, and all writes remain on the existing authenticated API.
-## 15. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
+## 13. Workout lift logs
 
 The web Health area and native Track workout screen use the same owner routes;
 there are no iOS-specific endpoints. The source of truth is the backend and
 shared contract code cited below.
 
 - Capability version 6 advertises `daily.health.lifts`. Query it with
-  `POST /daily/query` and `{source: "daily.health.lifts", limit?, cursor?,
+  `POST /health/query` and `{source: "daily.health.lifts", limit?, cursor?,
   lastPerExercise?}`. `limit` is 1–100 (default 50); replay the exact
   `coverage.next` cursor `{performedAt, id}`. Without `lastPerExercise`, this
   returns recent non-deleted entries. With it true, the result contains the
   latest non-deleted row for each normalized exercise key. The response uses
   the standard Daily `items`, `units`, `freshness`, `coverage` and `revision`
   envelope; weight is `kg`, and reps/sets are counts.
-- Create with `POST /daily/lifts` and a JSON body containing a UUID
+- Create with `POST /health/lifts` and a JSON body containing a UUID
   `idempotencyKey`, `exerciseName` (1–80 characters), `weightKg` (0–1000,
   at most two decimals), `reps` (1–1000), `sets` (1–100), and optional
   `performedAt` ISO timestamp. If omitted, the server records the current
   time. A new row responds 201; a matching retry responds 200 with the prior
   entry and `replayed: true`.
 - Correct any subset of `exerciseName`, `weightKg`, `reps` and `sets` with
-  `PATCH /daily/lifts/:id`. Soft-delete with `DELETE /daily/lifts/:id`.
+  `PATCH /health/lifts/:id`. Soft-delete with `DELETE /health/lifts/:id`.
   Successful corrections and deletes return `{entry}`; missing/deleted IDs
   return 404. Bodies are strict and bounded; invalid requests return 400,
   store failures 503. These routes and lift reads are owner-only; the Jarvis
   agent token does not have access.
-- Source: `packages/contracts/src/daily.js`,
-  `packages/contracts/src/index.d.ts`, `apps/backend/src/daily/query.ts`,
-  `apps/backend/src/daily/routes/lifts.ts`, and
-  `apps/backend/src/daily/lifts/lifts.ts`.
+- iPhone Gym also has a Vault-backed capture flow through `POST /health/lifts/capture`. See the [lift routes](../../apps/backend/src/health/routes/lifts.ts) and [Gym tool](../../apps/backend/src/health/tools/gym.ts).
 
-## 16. Usage, Status and Proactive (P15-58)
+## 14. Usage, Status and Proactive
 
 No new backend route. The pages call `GET /usage?period=`, `GET /status`, `GET /proactive/status`, `GET /proactive/items?state=open|all`, `GET /proactive/runs`, `POST /proactive/runs` (answers 202), `GET`/`PATCH /proactive/settings` (with `expectedRevision`; 409 `settings_changed` re-fetches and rebases the draft), and `POST /proactive/items/:id/feedback` (`seen`, `dismiss`, `snooze` until tomorrow 07:00). 401 and 403 mean sign-in needed, 404 on proactive status means unavailable. "Add to tasks" creates a personal task through the existing Notes task route because proactive has no such route. The settings PATCH does not accept preferences, so the editor shows them read-only.

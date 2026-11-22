@@ -1,6 +1,6 @@
 # Jarvis architecture
 
-Current system map, checked against repository code and workflows on 22 November 2026. This is not a production readback. See [PLAN.md](../PLAN.md) for priorities and release status, [PRODUCT.md](../PRODUCT.md) for requirements, [decisions](decisions.md) for rationale, and the [operator manual](agent-context.md) for commands. Archive: 3 October–22 November 2026.
+Current system map, checked against repository code and workflows. This is not a production readback. See [PLAN.md](../PLAN.md) for release status, [PRODUCT.md](../PRODUCT.md) for requirements and the [operator manual](agent-context.md) for commands.
 
 ## Stack overview
 
@@ -79,7 +79,7 @@ flowchart LR
 ## Chat and Voice
 
 - **One owner conversation for foreground PI.** Chat and delegated Voice share the persisted PI conversation (`dbo.pi_conversation`), the gateway's FIFO claim and the same per-turn tool grant. The waiting time counts against the turn deadline. The gateway defaults to 180 seconds; the Voice leg stops at 90 seconds. Warm-up skips a busy turn rather than taking its place. A proactive wake never writes model messages into that Foundry conversation.
-- **Chat.** The authenticated server stores the owner message, builds first-party context and streams PI text, tool activity and the terminal result. The shared contracts and app history show receipts and failures separately. The app's stored Chat messages and the Foundry conversation ID are different records.
+- **Chat.** The authenticated server stores the owner message, adds [agent context](agent-context.md#agent-context) and streams PI text, tool activity and the terminal result. Client-visible history, the Foundry conversation and [diagnostic logs](reference/logs.md) are separate records.
 - **Voice.** GPT-Live can handle talk itself. When it delegates, the relay joins the full input transcript, waits for 1.5 seconds of quiet (at most 3 seconds), stores the request once and starts PI once. It does not cut the transcript at the delegation offset. It passes spoken commentary back to GPT-Live. Backchannels do not cancel PI; a new delegation can supersede it, and ending or timing out the session stops it. Voice is audio-only: camera and screen input are not supported by this backend.
 - **Parity is a contract, not identical presentation.** Both channels see the same PI tool effects and failure meaning. The [replay tests](../apps/backend/src/voice/chat-voice-parity.test.ts) exercise the real routes, gateway and door against stubs. Their [report helper](../apps/backend/src/voice/parity-report.testkit.ts) documents intended presentation differences. Native audio and device rendering are separate acceptance.
 
@@ -139,7 +139,7 @@ flowchart TB
 
 **Legend:** The diamond selects how the gateway handles stream items; arrows are control flow. Foundry executes native built-ins. The backend does not run a harness shell command or sub-agent.
 
-**Limits we hit.** [`infra/main.parameters.json`](../infra/main.parameters.json) sets GPT-6.1 Terra GlobalStandard capacity to **600** (600K tokens/minute); Bicep passes that parameter to the deployment. The [#2032](https://github.com/DanAakesen/jarvis/pull/2032) incident reported **84K–116K input tokens per request** on large tool turns; several rounds can hit a shared limit. These are historical measurements, not a local benchmark or a guarantee. The harness can also deny an MCP name in the current session policy *before* `/pi/mcp` sees it. Stick to the two established names and check `pi.stream_failed` and `pi.mcp_tool` together. Whether an existing conversation needs a reset, what the live provider actually returns on rate limit, and whether Foundry sends unique replay IDs remain unverified here.
+**Limits.** [`infra/main.parameters.json`](../infra/main.parameters.json) sets GPT-6.1 Terra GlobalStandard capacity to 600K tokens/minute. Long tool turns use multiple model rounds against this shared limit. The harness can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` with `pi.mcp_tool`. See [the plan](../PLAN.md) for unresolved provider behavior.
 
 ## Memory and Vault Knowledge
 
@@ -158,7 +158,7 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. See the [data model](reference/data-model.md), [Health module](../apps/backend/src/health/README.md) and [historical migration record](reference/daily/migration.md).
+Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
 ## Proactive wake and the old engine
 
@@ -228,13 +228,11 @@ flowchart LR
 - [CI](../.github/workflows/ci.yml) qualifies the ready PR, not whatever later happens to be on the branch. [Deploy](../.github/workflows/deploy.yml) selects affected components, verifies the merged Git tree equals the qualified tree, and retains [deployment evidence](../.github/scripts/release_state.py). A no-op or superseded run is not fresh provider acceptance. An unchanged tree need not rerun a component; changed inputs need matching evidence.
 - Backend readiness includes PI provisioning/readback and the exact applied revision. Readiness is not a live conversation test. [TestFlight](../.github/workflows/ios-testflight.yml) signs and uploads from the chosen ref; a normal release uses `main` after its Deploy is green. The workflow's run number is the Apple build number.
 
-### Sandbox credentials
-
-Factory credentials belong to the runner, its managed identity and protected secret storage; see the [runner contract](../runner/README.md) and the archived sandbox design. Factory runtime sandboxes are not the development environment for this repository.
+<a name="sandbox-credentials"></a>
 
 ### Coding sandbox
 
-See the [runner](../runner/README.md) and [infra map](../infra/README.md) for the supported Factory container and identity boundaries. Older sandbox experiments are in the archive.
+Factory runtime sandboxes are not this repository's development environment. Credentials belong to the runner, its managed identity and protected secret storage. See the [runner](../runner/README.md) and [infra map](../infra/README.md) for those boundaries.
 
 ### Cost
 
@@ -245,4 +243,4 @@ The PI foreground ledger separates input, cached input and output; background re
 - **P0: same tools in Chat and Voice.** One foreground PI conversation and dispatcher; do not add a second provider or path to mask failure.
 - **Model decides; code proves facts.** No new approval or confirmation gates for PI except delete. That product rule does not remove sign-in, owner identity, data provenance or safe delivery checks. An accepted request or APNs send is not proof of the final outcome.
 - **Unknown outcomes stay unknown.** Use actual receipts and require a readback before recommending a retry of a potentially committed action.
-- **Qualify the exact tree.** No stale CI or self-merge. See [merge and release](agent-context.md#merge-and-release).
+- **Qualify the exact tree.** Merge through a PR with independent review and green checks for its current head on current `main`; the PR author may merge after those checks. See [merge and release](agent-context.md#merge-and-release).
