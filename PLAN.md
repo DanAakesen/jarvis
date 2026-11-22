@@ -5822,6 +5822,22 @@ Implemented the owner-approved handover: one Chat row, bottom-right menu button,
 
 Owner on build 113: dictation and live voice both report no sound, native Apple Dictation works, and the newest Chat message still sits behind the composer. The new silence check proved the Watch tap delivers exact digital silence (not a transport or Speech fault), so the capture path is the suspect, independent of permission and hardware. Done in code: dictation records in the plain session mode and live voice in voice-chat mode, each restarting once in the other mode when the first seconds are exact silence; several microphone channels are folded to mono explicitly; the tap's input peak, channels, rate, route and permission are logged (`WatchAudio`, `WatchVoice`). The newest message now clears the composer through real end content measured from the composer and safe area. Backend logs agree: voice sockets reached upstream and played audio but never heard speech, and no dictation reached the backend. Next: a paired-Watch run reading the `WatchAudio`/`WatchVoice` lines (they show the mode that works and whether the input or the conversion lost the signal), and the simulator `chat-ready.png` / `chat-reading.png` captures for the overlap.
 
+## Watch dictation and voice reliability — 22 November 2026 (Refs #2006)
+
+Implemented in source: recover the Watch audio graph without closing the phone
+voice session, keep playback completion after capture retries, confirm the same
+session after a short connection loss, and show Retry for failed dictation or
+voice. Transcription survives an audio interruption after Stop and never
+automatically sends the draft. An unavailable direct route falls through to
+the phone without waiting for connectivity. Once a route has settled, an
+active capture can rebuild its graph at most twice per ten seconds; further
+instability offers Retry. Native CI caught route-recovery callbacks reading
+Watch state outside the main actor. The corrected model type-checks
+against JarvisCore and Linux platform stubs. Next: macOS Watch rebuild, then
+Dan's paired-Watch checks in `docs/agent-context.md`. Build 120's dictation
+cause and hardware acceptance remain open. The no-buffer watchdog and tests
+that drive the Watch app's audio/companion wiring are follow-ups.
+
 ## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
 
 Owner report on build 112: live voice no longer fails but cannot hear him, and dictation ends in "transcription timed out". Backend logs for two 10 s dictation attempts (14:49Z) show the clip arrived intact (489,082 bytes, 10,189 ms) and the speech token was acquired, but the Speech recognizer never started and nothing was logged until the Watch gave up, so dictation is a backend Speech-connection problem, not a capture failure. The Watch transcriber now uses the language identification that the live partial recognizer proved on this endpoint (L111) instead of a fixed `en-GB`, bounds the recognizer start to 6 s and logs where it stops; the Watch's direct window and overall wait grow with the clip; capture is measured so silent audio is reported instead of uploaded. Live voice: the logs show no Watch voice socket at all, which is not explained yet. Next: deploy, test a 10 s dictation on the Watch and read the `watch_transcription.stage` rows (`service_connected`, `recognizer_started`, `recognizer_start_timeout`); trace a Watch live-voice start on a paired phone.

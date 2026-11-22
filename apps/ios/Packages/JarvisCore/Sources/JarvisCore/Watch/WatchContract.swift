@@ -268,7 +268,9 @@ public struct WatchComposer: Equatable, Sendable {
     public var draft = ""
     public private(set) var sending = false
     public init() {}
-    public mutating func dictate(_ text: String) { draft = text }
+    public mutating func appendDictation(_ text: String) {
+        draft = draft.isEmpty ? text : draft + " " + text
+    }
     public mutating func beginSend() -> String? {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sending, !text.isEmpty, text.utf8.count <= 8_000 else { return nil }

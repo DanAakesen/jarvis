@@ -1,4 +1,5 @@
 import AVFoundation
+import Combine
 import JarvisCore
 import SwiftUI
 import WatchKit
@@ -161,17 +162,13 @@ struct WatchRoot: View {
         .onChange(of: model.dictationState) { _, dictationState in
             if dictationState == .idle { Task { await model.routePendingReplyIfPossible() } }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification).receive(on: DispatchQueue.main)) { notification in
             guard notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue else { return }
             let reason = notification.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt
             if model.voiceID != nil { model.handleVoiceAudioInterruption(reason: reason) }
             if model.dictationState != .idle { model.interruptDictation() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
-            let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
-            guard reason != AVAudioSession.RouteChangeReason.categoryChange.rawValue else { return }
-            if model.voiceID != nil { model.handleVoiceAudioRouteChange(reason: reason) }
-        }
+        .onReceive(audioRouteChanges, perform: recoverAudioRoute)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await WatchStepsMonitor.shared.requestAccessIfNeeded()
@@ -193,9 +190,25 @@ struct WatchRoot: View {
                     await model.reconcileVoice()
                     await model.routePendingReplyIfPossible()
                 }
+            } else {
+                model.recoverVoiceConnection()
             }
         }
     }
+    private var audioRouteChanges: some Publisher<Notification, Never> {
+        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .merge(with: NotificationCenter.default.publisher(for: .AVAudioEngineConfigurationChange))
+            .receive(on: DispatchQueue.main)
+    }
+
+    private func recoverAudioRoute(_ notification: Notification) {
+        if notification.name == AVAudioSession.routeChangeNotification {
+            model.handleAudioRouteChange(reason: notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
+        } else if let engine = notification.object as? AVAudioEngine {
+            model.handleAudioRouteChange(changedEngine: engine)
+        }
+    }
+
     /// Menu page: one Chat row and Factory, the menu button bottom right. The top right stays free for the system time.
     private func openPendingReplyNotification() {
         guard let target = JarvisReplyNotificationTarget.pending()
