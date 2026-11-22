@@ -443,7 +443,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
   return ['show', 'focus', 'minimise', 'restore', 'close', 'resize', 'place', 'arrange', 'minimise-all',
     'restore-all', 'close-all', 'pin', 'unpin'].includes(String(args.operation)) ||
     args.operation === 'conversation' && ['show', 'hide'].includes(String(args.action)) ||
-    args.operation === 'session' && ['language', 'voice', 'camera'].includes(String(args.action)) ||
+    args.operation === 'session' && ['voice', 'camera'].includes(String(args.action)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
       args.action === 'open' && args.view === undefined);
