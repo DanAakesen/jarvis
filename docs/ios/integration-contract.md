@@ -1,6 +1,6 @@
-# Jarvis iOS: backend integration contract (draft)
+# Jarvis iOS: backend integration contract
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings, Health and the Lock Screen tasks surface on 31 October 2026; sections 11–13 reuse existing routes. P15-14 implements Workspaces without a new backend route. APNs backend work remains separate and is not authorized by this client contract.
+The backend endpoints the native iPhone app uses, derived from the backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. Sections 11 to 13 reuse existing routes, and Workspaces uses no new backend route. APNs backend work is separate and not authorized by this client contract.
 
 ## 1. Sign-in and session
 

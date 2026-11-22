@@ -9,7 +9,7 @@ Use this as the single detailed software workflow. Follow the mandatory engineer
 
 ## Trace and bound the change
 
-- Follow the `AGENTS.md` context map. Read relevant requirements, system boundaries, prior choices, and execution constraints; inspect nearby code, callers, and existing checks before editing.
+- Follow the key-files map in `.github/copilot-instructions.md`. Read relevant requirements, system boundaries, prior choices, and execution constraints; inspect nearby code, callers, and existing checks before editing.
 - Reproduce the reported behavior or identify the precise missing behavior. Trace the flow from entrypoint through services, storage, integrations, and user-visible result.
 - Identify who owns state, retries, side effects, and recovery. Explain affected service, data, identity, or deployment boundaries before implementing a structural change.
 - Reuse the repository's stack, versions, frameworks, conventions, package managers, lockfiles, and stable abstractions. Make the smallest coherent change and keep unrelated cleanup/formatting out of it.

@@ -19,6 +19,13 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep this page under 20 KB.
 
+### 22 November 2026 — One source of truth for agents, only current key files, delete working material
+
+- **Decision:** [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) is the single source of truth for working here and maps the key files: `p0.md`, `PRODUCT.md`, `PLAN.md`, `DESIGN.md`, `ui.md` and the key docs. `AGENTS.md` only points to it. Key files describe the project as it is now; history lives in Git and this log. Obsolete notes, handoffs, evidence files, screenshots and prototypes are deleted, not archived; design references go once built. `p0.md` (Dan's priorities) and `ui.md` (now the screen map) were kept and rewritten.
+- **Why:** Dan, 22 November: agents had become less useful because the repository was impossible to make sense of, and Astra could not be onboarded from it. Docs were over 1 MB each and the working tree about 500 MB.
+- **Evidence:** Tracked files fell from 3,233 to about 1,800 and tracked docs to about 3 MB. Every markdown link and anchor in the live docs resolves. Pipeline tests 24/24.
+- **Consequence:** Software Factory prompts embed the root `AGENTS.md` as "Repository agent rules" ([`issues.ts`](../apps/backend/src/factory/issues.ts)), so workers now receive the pointer, not the rules. Workers still have the checkout. Reading `.github/copilot-instructions.md` there instead is a backend change, not made.
+
 ### 22 November 2026 — Give Notes one title and a file inventory ([#2031](https://github.com/DanAakesen/jarvis/pull/2031))
 
 - **Decision:** Keep file inventory separate from search chunks (`0103`) so title-only notes can list. Use the leading H1 or readable filename and read pins by path. Refresh newest-first on open and show one headline without rewriting saved Markdown.

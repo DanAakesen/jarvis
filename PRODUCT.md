@@ -99,17 +99,3 @@ Start dictation and Voice on the first press, recover the route when it drops, a
 - **Ask for a device test after delivery.** State the build and exactly what to test in daily-core order. Do not ask for a retest during an in-flight fix. Lead with the answer and keep replies short; put a legend on diagrams.
 
 [Dated rule sources](docs/decisions.md#standing-rules) · [Architecture](docs/architecture.md) · [Design](DESIGN.md).
-
-## History
-
-Full product history.
-
-<a name="health-migration-approved-p12"></a>
-
-### Daily
-
-Original Daily migration and source exclusions. Current owner-facing requirements are under Workouts and Nutrition above.
-
-### Web notifications and confirmations (P6-22)
-
-Historical web notification and confirmation contract. See the current PI rules above for Chat and Voice.

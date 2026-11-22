@@ -4,10 +4,10 @@ Jarvis is a personal AI assistant for iPhone, Apple Watch and web. It supports
 chat, voice, proactive follow-ups, notes and tasks. Software Factory manages
 coding work against GitHub repositories.
 
-Start with [PRODUCT.md](PRODUCT.md) for scope, [PLAN.md](PLAN.md) for current
+Start with [p0.md](p0.md) for what comes first, [PRODUCT.md](PRODUCT.md) for scope, [PLAN.md](PLAN.md) for current
 work, [architecture](docs/architecture.md) for how the system fits together,
 and [agent context](docs/agent-context.md) for setup and checks. For UI work,
-read [DESIGN.md](DESIGN.md) and the [UI reference index](docs/ui/README.md).
+read [DESIGN.md](DESIGN.md), the [UI map](ui.md) and the [style guide](docs/ui/style-guide.md).
 
 ## Repository layout
 
@@ -46,7 +46,7 @@ than the configured production origin; see [agent context](docs/agent-context.md
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) before changing the repo. Work on a task branch from
+Read [.github/copilot-instructions.md](.github/copilot-instructions.md) before changing the repo. Work on a task branch from
 current `main` in a separate worktree. Don't push directly to `main` or merge
 your own PR. Run offline checks before asking for review; don't run live or
 paid checks without approval. Keep secrets, local authentication files and

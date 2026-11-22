@@ -1,7 +1,7 @@
 # Jarvis UI style guide
 
 Read this first when you build a Jarvis surface. The code and [DESIGN.md](../../DESIGN.md) stay authoritative.
-The [UI reference index](README.md) lists designs that still need work.
+The [UI map](../../ui.md) lists every screen and the designs that still need work.
 
 Evidence labels: **Token** = a value read from code, with its file. **Decision** = agreed in `DESIGN.md` or
 `docs/decisions.md`, no token. **Suggestion** = this guide's advice for a new platform, not yet agreed.
@@ -273,8 +273,8 @@ node positions, not a screenshot.
 | Neural background | `apps/ios/Packages/JarvisCore/Sources/JarvisCore/Neural/`, `DESIGN.md` |
 | Opening layout | `apps/ios/Jarvis/JarvisOpeningView.swift` and `JarvisCore/Opening/JarvisOpening.swift` |
 | Dated design decisions | `DESIGN.md` (newest first; if two conflict, the newer wins), `docs/decisions.md` |
-| UI rules every builder follows | `.agents/skills/product-ui/SKILL.md`, `AGENTS.md` |
-| Pending designs | [UI reference index](README.md) |
+| UI rules every builder follows | `.agents/skills/product-ui/SKILL.md`, `.github/copilot-instructions.md` |
+| Screens and pending designs | [UI map](../../ui.md) |
 
 ## 10. Platform notes
 

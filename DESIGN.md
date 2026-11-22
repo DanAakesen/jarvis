@@ -1,6 +1,6 @@
 # Jarvis design direction
 
-Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, motion, accessibility and hard rules. This page sets composition and behaviour for each surface; it does not define a second palette. [Product requirements](PRODUCT.md), [current work and device acceptance](PLAN.md), and [decisions](docs/decisions.md) are separate. Build feedback and superseded concepts remain in the 3 October–22 November 2026 archive.
+Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, motion, accessibility and hard rules. This page sets composition and behaviour for each surface; it does not define a second palette. [Product requirements](PRODUCT.md), [current work and device acceptance](PLAN.md), and [decisions](docs/decisions.md) are separate. Screens and their code live in [the UI map](ui.md).
 
 ## Shared control geometry
 
@@ -55,8 +55,4 @@ In a focused Voice call, replace the composer and Start control with **Mute/Unmu
 
 ## Evidence and design history
 
-The [current documentation index](docs/README.md) separates operating references, accepted visual handoffs and historical checks. Concepts, fixture captures, source review, simulator build and physical-device acceptance are different evidence. Native follow-latest, Voice and Watch recovery, title visibility after sync, and push taps require device confirmation after a build lands. CarPlay is a voice-first direction, not a claim that the in-car interface is shipped or device-tested; see [Apple capabilities](docs/ios/apple-capabilities.md).
-
-<a name="stage-glass-shell-and-docked-conversation--6-october-2026-local-ui-session-with-dan"></a>
-
-The 6 October stage and docked conversation record is historical.
+The [documentation index](docs/README.md) lists the operating references. Concepts, fixture captures, source review, simulator build and physical-device acceptance are different evidence. Native follow-latest, Voice and Watch recovery, title visibility after sync, and push taps require device confirmation after a build lands. CarPlay is a voice-first direction, not a claim that the in-car interface is shipped or device-tested; see [Apple capabilities](docs/ios/apple-capabilities.md).

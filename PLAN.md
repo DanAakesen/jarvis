@@ -14,17 +14,17 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **122** | Latest successful upload at this check. The [run](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) succeeded from `cd066648` and contains #2027, #2028, #2029 and #2030. |
 | **Notes [#2031](https://github.com/DanAakesen/jarvis/pull/2031)** | Merged at `ee34f2c3e`. Fixes missing new notes, wrong list/pin titles and duplicate headlines. Includes inventory migration `0103`. Device acceptance is pending. |
-| TestFlight **124** | Run #123 from `ee34f2c3e` was cancelled by a macOS runner cancellation, so it was re-dispatched as [run #124](https://github.com/DanAakesen/jarvis/actions/runs/45071501953) (in progress at this check; upload and processing not yet confirmed). New iOS changes over build 122: Notes #2031, and live Voice follow, state labels and responsiveness in #2034. |
+| TestFlight **124** | Uploaded from `ee34f2c3e` by [run #124](https://github.com/DanAakesen/jarvis/actions/runs/45071501953) (run #123 was cancelled by a macOS runner cancellation) and shown as **Ready to Submit** in the Internal group on 22 November. Over build 122 (#2027 to #2030) it adds Notes #2031 and live Voice follow, state labels and responsiveness #2034. Not yet installed or tested by Dan. |
 | Backend | #2032 (Terra 600K capacity) and #2033 (tool access, rate-limit recovery; the iPhone Gym reads ship in the app) were deployed through [Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45064871117) before build 123/124. [Notes Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) succeeded from `ee34f2c3e`. Pipeline receipts do not prove live provider behavior. |
+| Repository and docs | Tracked files fell from 3,233 to 1.814 and tracked docs to about 3 MB; obsolete notes, handoffs, evidence, screenshots and prototypes are deleted (Git history keeps them). [`.github/copilot-instructions.md`](.github/copilot-instructions.md) is the source of truth and maps the key files; `AGENTS.md` only points to it. `p0.md`, `ui.md` and the key docs were rewritten to the current state. |
 | Background PI | Off by default in code; off per the 22 November handoff, not independently read back. Dan controls it in **Settings → Proactive**. The existing 07:00/18:00 engine stays until decision A. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. **Confirm the next TestFlight upload.** The coordinator is the dispatcher session that reviews and merges PRs. It checks that the exact head is current with `main`, required CI is green (including macOS for iOS), no unresolved threads or High findings remain, and the merge tree equals the qualified tree. Follow [Merge and release procedure](docs/agent-context.md#merge-and-release-procedure) and [TestFlight build](docs/agent-context.md#testflight-build). No live probes as part of this handoff.
-2. **After the next build uploads**, give Dan the build number and test in daily-core order. Ask the same things in Chat and Voice: project status and a GitHub issue; find, read and save a note (including a title-only note; check first-page visibility, pin title and a single reader headline); complete a task and verify its receipt; find a lift saved from iPhone Gym; read the nutrition totals on a logged day. Ask for weather via the existing conversation. Check iPhone typing, live Voice state/auto-scroll, then Watch dictation/voice and the single Proactive switch. Do not request a retest of a fix still in flight.
+1. **Dan tests build 124** with the checks below. For any later change, the coordinator (the dispatcher session that reviews and merges PRs) checks that the exact head is current with `main`, required CI is green (including macOS for iOS), no unresolved threads or High findings remain, and the merge tree equals the qualified tree. Follow [Merge and release procedure](docs/agent-context.md#merge-and-release-procedure) and [TestFlight build](docs/agent-context.md#testflight-build). No live probes.
+2. **Test build 124 in daily-core order.** Ask the same things in Chat and Voice: project status and a GitHub issue; find, read and save a note (including a title-only note; check first-page visibility, pin title and a single reader headline); complete a task and verify its receipt; find a lift saved from iPhone Gym; read the nutrition totals on a logged day. Ask for weather via the existing conversation. Check iPhone typing, live Voice state/auto-scroll, then Watch dictation/voice and the single Proactive switch. Do not request a retest of a fix still in flight.
 3. **P1 after P0.** Dan decides when to enable Background PI. Verify the intended GitHub App event subscriptions (including `Release`) and observe one real wake with its signal, decision, and exact-message delivery before considering legacy deletion. The queue has GitHub, failed-reminder and calendar-clash signals. The heavy-snow/travel example is an acceptance goal, not a shipped end-to-end scenario.
 
 **Unverified:** whether Foundry sends a usable `_meta` call ID (the ledger still works without one); whether an existing provider conversation picks up restored tool access without a reset (Jarvis does not ask for one); real provider rate-limit message and cause (reported error code and offline fixtures are evidence, not a new live trace); iPhone follow/Voice label and Watch recovery on physical devices; real Background PI wake and delivery. Do not treat an offline replay or a merged fix as device acceptance.
@@ -93,23 +93,3 @@ These completed phase tasks have existing GitHub issues and merged PRs from the 
 | P15-200 | [#1945](https://github.com/DanAakesen/jarvis/issues/1945) | Focus the Watch active Voice view (#1946, #1952) | Watch Voice focus design and implementation merged. | — | Complete |
 
 [Plan status](.github/workflows/plan-status.yml) reconciles only this file's numbered rows. On a plan push or manual run it creates issues for new IDs and resolves `Depends on` by issue title against **all** GitHub issues, including closed ones. It does not need archived rows to find their issues. The archive is not a work queue; do not reuse its IDs. Keep the Issue/Status columns and issue checklist links to [Development workflow](docs/agent-context.md#development-workflow), [Start a task](docs/agent-context.md#start-a-task) and [Finish a task](docs/agent-context.md#finish-a-task) intact.
-
-## History
-
-Plan archive, October–November 2026: previous phases, tasks, test records and ideas. Use this live plan and the linked issues to decide what to work on now; an archived plan does not authorize work.
-
-### Reuse from the prototypes
-
-Historical prototype reuse and exit criteria.
-
-### P0 — Foundations
-
-Historical foundation tasks and deploy gate.
-
-### P8 — Jarvis UI
-
-Historical P8 task table. See [the current design](DESIGN.md) for UI direction.
-
-### Proactive assistance — proposed scope (17 October 2026)
-
-Original P13 proposal. This precedes PI, and is not the current behavior contract.

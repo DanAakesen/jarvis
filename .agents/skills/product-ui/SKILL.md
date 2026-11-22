@@ -10,7 +10,7 @@ Use this as the single frontend workflow. The project entrypoint contains the ma
 ## Understand the affected workflow
 
 - For Jarvis, read `docs/ui/style-guide.md` first: it holds the look (colour, glass, type, orb, neural background, motion) and the hard rules in one page.
-- Follow the `AGENTS.md` context map to the relevant sections of `PRODUCT.md`, `DESIGN.md`, and feature documentation. Search large documents by heading or topic. Read architecture context only when the change affects data flow, state ownership, or integration boundaries.
+- Follow the key-files map in `.github/copilot-instructions.md` to the relevant sections of `PRODUCT.md`, `DESIGN.md`, and feature documentation. Search large documents by heading or topic. Read architecture context only when the change affects data flow, state ownership, or integration boundaries.
 - Inspect existing routes, components, styles, dependencies, and assets before replacing them. Follow the selected stack and conventions; add packages only for a concrete need.
 - Identify the user, their main task, and the successful outcome. Clarify only unresolved choices that materially change the design; make routine, reversible choices and continue.
 - Choose hierarchy, page shape, navigation, density, primary action, supporting information, and applicable states from that task. A monitor, queue, editor, comparison, review, or settings screen should reflect how it is used.

@@ -1,11 +1,12 @@
 # Jarvis docs
 
-One map of the documentation. The most important files are also listed in [.github/copilot-instructions.md](../.github/copilot-instructions.md) and [AGENTS.md](../AGENTS.md). Rules for this folder: one doc per topic, updated in place; new docs go in the right folder and are added to that map; evidence, screenshots, per-build notes, design handoffs and prototype snapshots are not committed (they live in pull request bodies and CI artifacts); anything obsolete is deleted, because Git history keeps it.
+Index of the documentation folders. The source of truth for which files matter and what each owns is [.github/copilot-instructions.md](../.github/copilot-instructions.md); `AGENTS.md` only points to it. Rules for this folder: one doc per topic, updated in place; new docs go in the right folder and are added to that map; evidence, screenshots, per-build notes, design handoffs and prototype snapshots are not committed (they live in pull request bodies and CI artifacts); anything obsolete is deleted, because Git history keeps it.
 
 ## Read first
 
 | Doc | What it tells you |
 | --- | --- |
+| [../p0.md](../p0.md) | Dan's current priorities, short. He edits it freely and Jarvis reads it. |
 | [../PRODUCT.md](../PRODUCT.md) | What Jarvis is for, the daily core, priorities P0/P1/P2, Dan's standing rules. |
 | [../PLAN.md](../PLAN.md) | Current state, what is in flight, next steps, open decisions. Its task tables are read by the plan-status bot. |
 | [architecture.md](architecture.md) | Components, data flows, deployment, invariants and known limits. |
@@ -29,10 +30,10 @@ One map of the documentation. The most important files are also listed in [.gith
 | [ios/](ios/) | `integration-contract.md` (backend endpoints the iPhone app uses) and `apple-capabilities.md` (entitlements and capabilities). |
 | [pi/](pi/cutover.md) | The PI switch-on checklist and the pending decisions. |
 | [inbox-loop/](inbox-loop/design.md) | Inbox loop design, acceptance, MCP and Shortcut notes: built, switched off, waiting for Dan's decision. |
-| [ui/](ui/README.md) | The UI style guide and the few design references still waiting to be implemented. |
+| [ui/](ui/style-guide.md) | The UI style guide and the design references still waiting to be implemented. |
 | [archive/](archive/) | Decision history only (`decisions-YYYY-MM.md` and their indexes), cited by code comments such as L63. |
 
-Design direction lives in [../DESIGN.md](../DESIGN.md). Module READMEs sit next to their code: `db/`, `infra/`, `runner/`, `apps/vault-mirror/`, `agents/jarvis/` and `apps/backend/src/*`; `apps/backend/src/modules.README.md` indexes the backend ones.
+Design direction lives in [../DESIGN.md](../DESIGN.md) and the screen map in [../ui.md](../ui.md). Module READMEs sit next to their code: `db/`, `infra/`, `runner/`, `apps/vault-mirror/`, `agents/jarvis/` and `apps/backend/src/*`; `apps/backend/src/modules.README.md` indexes the backend ones.
 
 ## Where does new content go?
 

@@ -12,7 +12,7 @@ Implemented on the secondary branch, with CI tracked in PR #1686: proactive push
 normal Chat with the finding/evidence behind the scenes for typed, dictated and voice
 follow-ups. No duplicate message or visual chat change. Durable owner selection and
 duplicate-tap reuse are included. Primary integration and physical-device/model
-acceptance remain. Details.
+acceptance remain. [Details](push-chat-continuity.md).
 
 ## Main chat managed harness (#1350; 29 October 2026)
 
@@ -20,7 +20,7 @@ acceptance remain. Details.
 **Planned:** switchable managed main-chat path, identical automated comparisons
 and the approved separate runtime-test conversation through the existing chat
 menu. Manual comparison questions and evidence limits are in the
-migration notes. No live parity, UI delivery or
+[migration notes](main-chat-harness-migration.md). No live parity, UI delivery or
 production cutover is claimed.
 
 # Features
@@ -245,7 +245,7 @@ and privacy tests; production and physical-phone acceptance remain unverified.
 
 ### Enabling-logic coverage
 
-This coverage is for backend-enabling requirements in ui.md; shell composition and client-only interactions belong to the companion P8-02 breakdown. P8-02 allocated P8-04 through P8-13 to frontend tasks in PR #233. P8-10 is implemented on the client without waiting for future contracts; P8-14/15/16 now provide the data, commands, and activity consumed by the related views. P8-11's phone workspace is complete offline, and P8-13 consumes P8-17's preference path.
+This coverage is for backend-enabling requirements in [ui.md](../ui.md); shell composition and client-only interactions belong to the companion P8-02 breakdown. P8-02 allocated P8-04 through P8-13 to frontend tasks in PR #233. P8-10 is implemented on the client without waiting for future contracts; P8-14/15/16 now provide the data, commands, and activity consumed by the related views. P8-11's phone workspace is complete offline, and P8-13 consumes P8-17's preference path.
 
 | Confirmed UI requirement in scope | Existing capability or issue | Coverage and owner |
 | --- | --- | --- |
@@ -291,7 +291,7 @@ The earlier shell/workspace/contracts remain implemented with their recorded liv
 | Selected glass surfaces | Readable translucent shell/window surfaces using existing navigation, views and controls; no 3D on other routes | Current shared shell/pages | Merged in #376; contrast over the integrated stage was visually inspected with P8-29 |  | P8-31 |
 | Re-lit light appearance | Same room geometry/viewpoint re-lit for light mode; existing approved preferences/tokens persist; empty prompt, activity disclosure, and Jarvis replies use readable glass | Jarvis stage and shared appearance | Merged in PR #387; dark/light captures and system-switch continuity recorded; live settings, real devices and hardware GPU remain unverified |  | P8-32 |
 | Resilient phone/GPU experience | Single-view docking/swipe, adaptive quality, hidden-tab lifecycle, reduced motion and usable WebGL failure handling | Jarvis phone/browser | Implementation in draft PR #391; Chromium checks cover phone/landscape layouts, context loss/restore and unavailable WebGL. SwiftShader frame cadence remains poor; hardware GPU, physical phone, Safari and live-provider acceptance are unverified |  | P8-33 |
-Requirements, references, runnable prototype. Reuse P8-14–P8-17 for data, tools, activity and preference logic; do not recreate those completed tasks. The latest persistent orb decision supersedes older phone-typing/voice-collapse visual requirements.
+[Requirements](../ui.md#accepted-centred-3d-stage--5-october-2026), [references](ui/centred-stage/README.md), [runnable prototype](reference/ui-stage-prototype/README.md). Reuse P8-14–P8-17 for data, tools, activity and preference logic; do not recreate those completed tasks. The latest persistent orb decision supersedes older phone-typing/voice-collapse visual requirements.
 
 ## Accepted conversation-surface refinement (6 October 2026)
 
@@ -303,7 +303,7 @@ Existing chat, voice, safe Markdown, queue/steering, workspace tools and shared 
 | Matching glass composer | Small voice-start orb, paperclip menu for existing screen/camera visual context (disabled with a reason until shared; no file upload), multiline writing area, More → Language and Send; preserve Enter/Send steering and Ctrl+Enter queueing during replies | Jarvis typing, bottom centre | Implemented in the P8-37 PR |  | P8-37 (#398) |
 | Readable message window | Glass history hosted as the shared workspace view `conversation` (shared tabs, minimise/restore, maximise, close, drag/resize and Jarvis commands); avatar-free 62ch messages with hidden author text; auto-follow only at the latest message with Jump to latest; safe Markdown, tool outcomes and failures kept | Jarvis typing and requested voice history | Implemented in the P8-37 PR |  | P8-37 (#398) |
 
-Approved visual and acceptance criteria. Architectural Glass is selected; P8-37 (#398) implements the shell without a bottom bar, matching composer and avatar-free messages together. #399/#401 are superseded separate allocations.
+[Approved visual and acceptance criteria](ui/chat-voice/README.md). Architectural Glass is selected; P8-37 (#398) implements the shell without a bottom bar, matching composer and avatar-free messages together. #399/#401 are superseded separate allocations.
 
 ## Selected shared shell refinement (6 October 2026)
 
@@ -311,7 +311,7 @@ Approved visual and acceptance criteria. Architectural Glass is selected; P8-37 
 | --- | --- | --- | --- | --- | --- |
 | Architectural Glass shell | Selected dimensional graphite/glass framing, existing navigation and context; remove separate bottom bar/layout track, retaining compact accessible database-waking status in the top bar | Shared shell; large room/orb on Jarvis only | Implemented in the P8-37 PR |  | P8-37 (#398) |
 
-Refined selected reference. The bottom composer and voice bar remain; P8-37 owns the shell, composer and avatar-free message-window update in one PR. Existing shell/voice/window/data capabilities remain implemented with their recorded validation limits.
+[Refined selected reference](ui/shell-styling/README.md#refined-approved-reference). The bottom composer and voice bar remain; P8-37 owns the shell, composer and avatar-free message-window update in one PR. Existing shell/voice/window/data capabilities remain implemented with their recorded validation limits.
 
 ## Approved voice/orb follow-up (6 October 2026)
 
@@ -334,7 +334,7 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending |  | P8-43 (#435) |
 ## Daily (P12)
 
-Daily reuses Jarvis's existing backend, SQL Server (a separate `daily` schema), owner authentication and tool confirmation flow, with no new database service, API, auth service or Azure resource ([boundary](architecture.md#daily-integration-boundary-p12-01)). On 18 October 2026 the owner cancelled the database export/import route; data now reaches Daily directly from the owner's phone through the health upload endpoint, including bounded historical batches (#1005, #1008). The original Daily is untouched, and retiring it (#734) has not started. [Source mapping](reference/daily/schema-mapping.md) is implementation evidence, not an import plan.
+Daily reuses Jarvis's existing backend, SQL Server (a separate `daily` schema), owner authentication and tool confirmation flow, with no new database service, API, auth service or Azure resource ([boundary](architecture.md#daily-integration-boundary-p12-01)). On 18 October 2026 the owner cancelled the database export/import route; data now reaches Daily directly from the owner's phone through the health upload endpoint, including bounded historical batches (#1005, #1008). The original Daily is untouched, and retiring it (#734) has not started. [Source mapping](daily-schema-mapping.md) is implementation evidence, not an import plan.
 
 Daily rows are current as of 18 October 2026. Daily is switched on for the owner's production by `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED`, and health upload by `JARVIS_HEALTH_UPLOAD_ENABLED`. No owner acceptance is recorded yet, so no Daily row is Live. The page opens on a today dashboard and has Workouts, Nutrition, Body & sleep, Briefs and Data sections.
 
@@ -354,6 +354,6 @@ Daily rows are current as of 18 October 2026. Daily is switched on for the owner
 | iPhone widget and football table | Phone | Not planned; both tasks are closed as not planned | P12-11 (#726), P12-13 (#728) |
 | Parity, physical-phone acceptance, cutover/rollback and legacy retirement | Background/Phone | Planned; not started. Each issue carries a revised-direction note because the export/import route is cancelled | P12-17–P12-19 (#732–#734) |
 
-[Approved scope and existing issue URLs](reference/daily/migration.md). No TickTick integration or original Daily repository/data deletion.
+[Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
 
 P12-10 has inactive source-contract-based resumable Gmail/calendar services, exact waiting/order selectors, owner-local snapshots/suppressions and bounded manual refresh with independent denied/partial/stale/oversized-source states. Semantic extraction uses the existing protected chat model/identity/settings with tool-free JSON transport and strict local validation; absent/failed capability is unavailable. The P12-09 continuation adds opt-in sensitive `daily_feed` reads and native-reviewed refresh/visibility operations through those shared services, with exact under-lock targets and acknowledged-commit invalidation. Production remains unregistered/default-off and nutrition-only MCP cannot access feeds. Source and model-interface contracts are supplied; stored-grant/CalendarList/deployed-model/consent/live/private/phone parity remain open. No broadened OAuth or live-provider success is claimed.
