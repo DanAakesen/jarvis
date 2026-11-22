@@ -1,7 +1,7 @@
 import Foundation
 
 public enum WatchDictationError: Error, Equatable, Sendable {
-    case timedOut
+    case timedOut, noSpeech
 
     public static func forHTTPStatus(_ status: Int) -> Self? {
         status == 504 ? .timedOut : nil
@@ -10,6 +10,7 @@ public enum WatchDictationError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .timedOut: "Transcription timed out. Try again, or tap Message to type."
+        case .noSpeech: "No words were recognised. Speak clearly and try again, or tap Message to type."
         }
     }
 }
@@ -30,10 +31,12 @@ public enum WatchDictationRouting {
             do {
                 let text = try await boundedDirect(direct, window: directWindow, sleep: sleep)
                 try Task.checkCancellation()
-                return text
+                return try transcript(text)
             }
             catch {
                 try checkCancellation(error)
+                // A completed recognition with no words isn't a transport failure. Both paths use the same transcriber.
+                if error as? WatchDictationError == .noSpeech { throw error }
                 directFailure = error
                 try onDirectFailure(error)
             }
@@ -42,22 +45,31 @@ public enum WatchDictationRouting {
         do {
             let text = try await phone()
             try Task.checkCancellation()
-            return text
+            return try transcript(text)
         }
         catch {
             try checkCancellation(error)
+            if error as? WatchDictationError == .noSpeech { throw error }
             if directFailure as? WatchDictationError == .timedOut {
                 switch error as? WatchFailure {
                 case .unavailable, .network, .failed, nil: throw WatchDictationError.timedOut
                 default: break
                 }
             }
+
             if error as? WatchFailure == .unavailable {
                 if let directFailure { throw directFailure }
                 if direct == nil { throw WatchFailure.dictationSetup }
             }
             throw error
         }
+    }
+
+    private static func transcript(_ text: String) throws -> String {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw WatchDictationError.noSpeech }
+        guard text.utf8.count <= 8_000 else { throw WatchFailure.failed }
+        return text
     }
 
     private static func boundedDirect(

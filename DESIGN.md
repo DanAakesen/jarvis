@@ -190,6 +190,12 @@ No new screens. A low-tier outreach is one row in the existing Now feed list (al
 
 Implements the owner-approved option 2 ([handover](docs/ui/watch-voice/HANDOFF.md)). While a live session exists, Chat shows one view instead of the conversation and composer: the shared orb, one state label (Listening, Speaking, Thinking, Connecting, Reconnecting, and Muted, which wins over the others), the latest message text in a scroll area, and Mute/Unmute and End in neutral glass (amber microphone, red End). The Message field, dictation button and start-voice orb are absent, so there is no second start control. Back keeps the session as before; the menu row then reads Resume voice and reopens this view. Simulator captures `voice-listening.png`, `voice-speaking.png` and `voice-muted.png` use synthetic text. No device, VoiceOver, large-text or small-watch check yet.
 
+For #2006, the same status label explains a route or connection interruption
+while it recovers. Recovery text takes precedence over Muted; VoiceOver still
+reports mute. If voice or dictation cannot recover, Chat shows a plain message
+and the shared Watch Retry control just above the composer. Retry restarts
+that action; it does not clear or send the draft.
+
 ## Watch Chat composer clearance — 18 November 2026 (#1943)
 
 The owner reported the newest message still behind the composer when scrolled to the end. The space after the last message is now real content sized from the measured composer and bottom safe area, so the newest message ends fully above the ready composer and above the taller composer with a status row. Layout, glass and the reading bubble are unchanged. Checked in the simulator captures only; large text, VoiceOver and the smallest case are not checked.

@@ -64,6 +64,107 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertFalse(WatchVoiceRecovery.shouldRetryStart(CancellationError(), attempt: 1, elapsed: 0))
     }
 
+    @MainActor
+    func testPlaybackCompletionIsDeliveredAfterCaptureRetryClearsTheHandler() async throws {
+        var ledger = VoicePlaybackLedger()
+        var machine = VoiceSessionStateMachine()
+        for event in [VoiceSessionEvent.start, .connected, .sessionReady] { machine.apply(event) }
+        var handler: ((VoicePlaybackLedger.Receipt) -> Void)?
+        var attempts = 0
+        var resets = 0
+        try await WatchVoiceRecovery.startCapture(isCurrent: { true }, start: {
+            attempts += 1
+            if attempts == 1 { throw WatchFailure.unavailable }
+        }, onFailure: { _, _ in
+            resets += 1
+            // Like VoiceAudioEngine.stop(), a failed start resets both the ledger and the handler.
+            ledger = VoicePlaybackLedger()
+            handler = nil
+        }, onReady: {
+            handler = { machine.apply(.playbackFinished(responseID: $0.responseID)) }
+        }, wait: {})
+
+        machine.apply(.responseCreated(id: "reply"))
+        machine.apply(.audioDelta(responseID: "reply"))
+        ledger.bufferScheduled(responseID: "reply")
+        machine.apply(.responseFinished(responseID: "reply"))
+        XCTAssertNil(ledger.responseFinished(responseID: "reply"))
+        XCTAssertEqual(machine.state, .speaking)
+        handler?(try XCTUnwrap(ledger.bufferPlayed(responseID: "reply")))
+        XCTAssertEqual(machine.state, .listening)
+        XCTAssertEqual(attempts, 2)
+        XCTAssertEqual(resets, 1)
+    }
+
+    @MainActor
+    func testCaptureRecoveryStopsWhenTheRecordingIsReplacedDuringRetry() async {
+        var current = true
+        var attempts = 0
+        do {
+            try await WatchVoiceRecovery.startCapture(isCurrent: { current }, start: {
+                attempts += 1
+                throw WatchFailure.unavailable
+            }, onFailure: { _, _ in }, onReady: {
+                XCTFail("A cancelled capture must not configure playback")
+            }, wait: { current = false })
+            XCTFail("Expected cancellation")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(attempts, 1)
+    }
+
+    @MainActor
+    func testCaptureRecoveryExhaustsRetriesWithoutReportingReady() async {
+        var failedAttempts: [Int] = []
+        do {
+            try await WatchVoiceRecovery.startCapture(isCurrent: { true }, start: {
+                throw WatchFailure.unavailable
+            }, onFailure: { attempt, _ in failedAttempts.append(attempt) }, onReady: {
+                XCTFail("An unavailable microphone must not be reported ready")
+            }, wait: {})
+            XCTFail("Expected the capture failure")
+        } catch { XCTAssertEqual(error as? WatchFailure, .unavailable) }
+        XCTAssertEqual(failedAttempts, [1, 2, 3])
+    }
+
+    @MainActor
+    func testReconnectWaitsForHeartbeatEvenAfterReachabilityFlaps() async throws {
+        var time = ContinuousClock.now
+        var attempts = 0
+        try await WatchVoiceRecovery.reconnect(now: { time }, wait: { time = time.advanced(by: $0) }) { _ in
+            attempts += 1
+            if attempts < 3 { throw WatchFailure.unavailable }
+        }
+        XCTAssertEqual(attempts, 3)
+    }
+
+    @MainActor
+    func testReconnectIncludesUnansweredHeartbeatsInTheDeadline() async {
+        let start = ContinuousClock.now
+        var time = start
+        var budgets: [Duration] = []
+        do {
+            try await WatchVoiceRecovery.reconnect(now: { time }, wait: { time = time.advanced(by: $0) }) { timeout in
+                budgets.append(timeout)
+                // The first reply fails quickly; the last must get less than the usual two seconds.
+                time = time.advanced(by: budgets.count == 1 ? .seconds(1) : timeout)
+                throw WatchFailure.unavailable
+            }
+            XCTFail("A missing phone must not report a reconnection")
+        } catch { XCTAssertEqual(error as? WatchFailure, .unavailable) }
+        XCTAssertEqual(budgets, [.seconds(2), .seconds(2), .seconds(2), .seconds(2), .seconds(1)])
+        XCTAssertEqual(start.duration(to: time), .seconds(10))
+    }
+
+    @MainActor
+    func testReconnectDoesNotRetryWhenThePhoneSessionHasEnded() async {
+        do {
+            try await WatchVoiceRecovery.reconnect(wait: { _ in XCTFail("No retry after the session ended") }) { _ in
+                throw WatchFailure.invalidRequest
+            }
+            XCTFail("Expected the missing session failure")
+        } catch { XCTAssertEqual(error as? WatchFailure, .invalidRequest) }
+    }
+
     func testPhoneWaitsLongerThanTheWatchBeforeEndingAGap() {
         // The Watch notices a gap after 3 s, then waits for recovery.
         XCTAssertGreaterThan(WatchVoiceRecovery.phoneGraceSeconds, 3 + WatchVoiceRecovery.reconnectGraceSeconds)

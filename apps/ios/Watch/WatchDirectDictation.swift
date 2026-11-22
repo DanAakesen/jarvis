@@ -61,6 +61,7 @@ enum WatchDirectDictation {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
+        configuration.waitsForConnectivity = true
         configuration.timeoutIntervalForResource = WatchDictationDeadline.directSeconds
         let session = URLSession(configuration: configuration, delegate: NoRedirect(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
@@ -81,9 +82,7 @@ enum WatchDirectDictation {
                 data.append(byte)
             }
             struct Result: Decodable { let text: String }
-            let text = try JSONDecoder().decode(Result.self, from: data).text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty, text.utf8.count <= 8_000 else { throw WatchFailure.failed }
-            return text
+            return try JSONDecoder().decode(Result.self, from: data).text
         } catch is CancellationError { throw CancellationError() }
         catch let failure as WatchDictationError { try Task.checkCancellation(); throw failure }
         catch let failure as WatchFailure { try Task.checkCancellation(); throw failure }
