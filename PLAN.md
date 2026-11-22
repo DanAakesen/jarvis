@@ -96,20 +96,20 @@ These completed phase tasks have existing GitHub issues and merged PRs from the 
 
 ## History
 
-[Plan archive, October–November 2026](docs/archive/plan-2026-10-to-11.md): previous phases, tasks, test records and ideas. Use this live plan and the linked issues to decide what to work on now; an archived plan does not authorize work.
+Plan archive, October–November 2026: previous phases, tasks, test records and ideas. Use this live plan and the linked issues to decide what to work on now; an archived plan does not authorize work.
 
 ### Reuse from the prototypes
 
-[Historical prototype reuse and exit criteria](docs/archive/plan-2026-10-to-11.md#reuse-from-the-prototypes).
+Historical prototype reuse and exit criteria.
 
 ### P0 — Foundations
 
-[Historical foundation tasks and deploy gate](docs/archive/plan-2026-10-to-11.md#p0--foundations).
+Historical foundation tasks and deploy gate.
 
 ### P8 — Jarvis UI
 
-[Historical P8 task table](docs/archive/plan-2026-10-to-11.md#p8--jarvis-ui). See [the current design](DESIGN.md) for UI direction.
+Historical P8 task table. See [the current design](DESIGN.md) for UI direction.
 
 ### Proactive assistance — proposed scope (17 October 2026)
 
-[Original P13 proposal](docs/archive/plan-2026-10-to-11.md#proactive-assistance--proposed-scope-17-october-2026). This precedes PI, and is not the current behavior contract.
+Original P13 proposal. This precedes PI, and is not the current behavior contract.

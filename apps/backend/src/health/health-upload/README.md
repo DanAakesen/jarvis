@@ -1,6 +1,6 @@
 # SQL health upload boundary
 
-P12-04 now reuses the existing backend and SQL. See the [contract, bounds, retention and operator gates](../../../../../docs/daily-health-ingestion/README.md).
+P12-04 now reuses the existing backend and SQL. See the [contract, bounds, retention and operator gates](../../../../../docs/reference/daily/health-ingestion.md).
 
 | Component | Responsibility |
 | --- | --- |

@@ -1,6 +1,6 @@
 # Jarvis architecture
 
-Current system map, checked against repository code and workflows on 22 November 2026. This is not a production readback. See [PLAN.md](../PLAN.md) for priorities and release status, [PRODUCT.md](../PRODUCT.md) for requirements, [decisions](decisions.md) for rationale, and the [operator manual](agent-context.md) for commands. [Archive: 3 October–22 November 2026](archive/architecture-2026-10-03-to-2026-11-22.md).
+Current system map, checked against repository code and workflows on 22 November 2026. This is not a production readback. See [PLAN.md](../PLAN.md) for priorities and release status, [PRODUCT.md](../PRODUCT.md) for requirements, [decisions](decisions.md) for rationale, and the [operator manual](agent-context.md) for commands. Archive: 3 October–22 November 2026.
 
 ## Stack overview
 
@@ -158,7 +158,7 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. See the [data model](data-model.md), [Health module](../apps/backend/src/health/README.md) and [historical migration record](daily-migration.md).
+Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. See the [data model](reference/data-model.md), [Health module](../apps/backend/src/health/README.md) and [historical migration record](reference/daily/migration.md).
 
 ## Proactive wake and the old engine
 
@@ -230,11 +230,11 @@ flowchart LR
 
 ### Sandbox credentials
 
-Factory credentials belong to the runner, its managed identity and protected secret storage; see the [runner contract](../runner/README.md) and the [archived sandbox design](archive/architecture-2026-10-03-to-2026-11-22.md#sandbox-credentials). Factory runtime sandboxes are not the development environment for this repository.
+Factory credentials belong to the runner, its managed identity and protected secret storage; see the [runner contract](../runner/README.md) and the archived sandbox design. Factory runtime sandboxes are not the development environment for this repository.
 
 ### Coding sandbox
 
-See the [runner](../runner/README.md) and [infra map](../infra/README.md) for the supported Factory container and identity boundaries. Older sandbox experiments are in the [archive](archive/architecture-2026-10-03-to-2026-11-22.md#coding-sandbox).
+See the [runner](../runner/README.md) and [infra map](../infra/README.md) for the supported Factory container and identity boundaries. Older sandbox experiments are in the archive.
 
 ### Cost
 

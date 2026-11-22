@@ -1,6 +1,6 @@
 # Jarvis operator manual
 
-Use this when starting on a new machine or handing off a task. [Plan](../PLAN.md) owns current priorities and release status. [Product](../PRODUCT.md) owns requirements. [Architecture](architecture.md) explains the runtime; [decisions](decisions.md) record why it works that way. Start with the [style guide](ui/style-guide.md) for design or the [documentation index](README.md) for other references. [Archive: 3 October–22 November 2026](archive/agent-context-2026-10-03-to-2026-11-22.md).
+Use this when starting on a new machine or handing off a task. [Plan](../PLAN.md) owns current priorities and release status. [Product](../PRODUCT.md) owns requirements. [Architecture](architecture.md) explains the runtime; [decisions](decisions.md) record why it works that way. Start with the [style guide](ui/style-guide.md) for design or the [documentation index](README.md) for other references. Archive: 3 October–22 November 2026.
 
 ## Setup and commands
 
@@ -56,7 +56,7 @@ Keep [AGENTS.md](../AGENTS.md) as the entry point and read only the project cont
 | Progress, next action, blockers | [PLAN.md](../PLAN.md) and the issue. Leave automation-owned issue/status fields to the workflow; the issue stays open if device acceptance remains. |
 | Requirement or user workflow | [PRODUCT.md](../PRODUCT.md). Update the [deployed feature catalog](features.md) only with the corresponding implementation change. |
 | Visual or interaction contract | [DESIGN.md](../DESIGN.md); use the [style guide](ui/style-guide.md) and shared controls. |
-| Runtime, data flow, identity, deployment or schema | [Architecture](architecture.md), and [data model](data-model.md) for database changes. |
+| Runtime, data flow, identity, deployment or schema | [Architecture](architecture.md), and [data model](reference/data-model.md) for database changes. |
 | Approved decision, setup or check | [Decisions](decisions.md) for rationale and evidence; this manual for commands and operations. |
 
 See [decisions.md](decisions.md) for where new entries go. Use the next unused number in each series (`#N` for decisions, `LN` for learnings). When using the **Decisions of the last 14 days** section, add confirmed entries at the top, newest first. Move older entries to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep proposals separate from confirmed decisions.
@@ -117,7 +117,7 @@ Local work does not require Azure credentials. Production inspection requires th
 
 ### Verify the live agents (read-only)
 
-After every save of the agent text in the Foundry portal, Dan activates the intended version and checks what is serving. This is an owner check, not an offline test. With authorised Foundry access, use only `GET /agents/<name>` and `GET /agents/<name>/versions/<version>` on the project endpoint. Inspect the 100% pin first and the latest version only if there is no pin. Follow the API version and feature headers in the [provisioner](../.github/scripts/provision_pi_agent.py) or use the [read-only query example](archive/agent-context-2026-10-03-to-2026-11-22.md#verify-the-live-agents-read-only).
+After every save of the agent text in the Foundry portal, Dan activates the intended version and checks what is serving. This is an owner check, not an offline test. With authorised Foundry access, use only `GET /agents/<name>` and `GET /agents/<name>/versions/<version>` on the project endpoint. Inspect the 100% pin first and the latest version only if there is no pin. Follow the API version and feature headers in the [provisioner](../.github/scripts/provision_pi_agent.py) or use the read-only query example.
 
 For `jarvis-pi`, check the model, harness, tool setup and both `KEEP THIS BLOCK` markers. For `jarvis-pi-live`, check the live voice kind, client delegation and audio contract. Compare the results to the checked-in [Chat](../agents/pi/definition.json) and [Voice](../agents/pi/voice-definition.json) definitions without printing the instruction text. If the intended version or tool block is missing, correct it in the portal and verify again. Do not run this check from a coding session without approval of the exact command.
 
@@ -135,11 +135,11 @@ Do not use a production setting as a local default. See [`config.ts`](../apps/ba
 
 ### GitHub App setup
 
-The GitHub App manifest and Azure bindings are maintained separately from developer GitHub CLI sign-in. The backend reads the App key through Key Vault under its managed identity; never give it to a client or a sandbox. The [infra guide](../infra/README.md) and [historical setup](archive/agent-context-2026-10-03-to-2026-11-22.md#github-app-setup) describe the boundary. App creation, credential rotation and permission changes are owner operations, not onboarding.
+The GitHub App manifest and Azure bindings are maintained separately from developer GitHub CLI sign-in. The backend reads the App key through Key Vault under its managed identity; never give it to a client or a sandbox. The [infra guide](../infra/README.md) and historical setup describe the boundary. App creation, credential rotation and permission changes are owner operations, not onboarding.
 
 ### Cloud agent environments
 
-Historical only. Do not follow older cloud-agent setup instructions without explicit approval. The current path is a local worktree, even when the remote is GitHub. The [archived setup](archive/agent-context-2026-10-03-to-2026-11-22.md#cloud-agent-environments) records the old experiment.
+Historical only. Do not follow older cloud-agent setup instructions without explicit approval. The current path is a local worktree, even when the remote is GitHub. The archived setup records the old experiment.
 
 ### Jarvis agent
 
@@ -158,11 +158,11 @@ Start with the [style guide](ui/style-guide.md) and [shared control geometry](..
 | `node` is missing, wrong version or the npm cache misses | Check `.nvmrc`, PATH and `node --version` in this shell. Don't borrow a machine's unpinned Node for sign-off. Report a blocked offline install rather than downloading implicitly. |
 | Fixture paths fail on Windows | Check whether the suite assumes POSIX paths, Git executable bits, case sensitivity, or mode bits. The Python secret-file test uses `os.fchmod`, unavailable on Windows; use Linux for that exact assertion. Python reports with non-ASCII output need UTF-8. Do not patch tests for a docs-only change. |
 | JWKS/auth fixture fails near a timeout | Rerun the focused offline [`auth.test.ts`](../apps/backend/src/auth/auth.test.ts) and note the runner/platform and timing. Investigate a repeatable failure. Do not label a failing run green or reach out to the real issuer. |
-| Tool or turn fails in use | Start with [backend log fields](backend-logs.md) and [the runbook](runbook.md), not raw prompts. Compare `pi.stream_failed`/`pi.mcp_call_failed` to `pi.mcp_tool`; absence at the door can mean harness policy refused the name. Keep recorded writes and uncertain outcomes distinct. |
+| Tool or turn fails in use | Start with backend log fields and [the runbook](runbook.md), not raw prompts. Compare `pi.stream_failed`/`pi.mcp_call_failed` to `pi.mcp_tool`; absence at the door can mean harness policy refused the name. Keep recorded writes and uncertain outcomes distinct. |
 | Brain appears idle | From authorised evidence, distinguish Off, paused, no sources, no due work, and a failed wake. `pi.brain_tick`, `pi.brain_run` and `/pi/brain` explain attempts; status does not invoke a model. |
 | Deploy says exact qualification missing | Compare PR/head, run and attempt, and `git rev-parse 'HEAD^{tree}'` for the tested and merged revisions. Requalify the real candidate. Do not use an older receipt. |
 | TestFlight succeeded but the fix isn't visible | Check the uploaded run number and the version installed on the device. Native signing, APNs display and real Voice behavior are not proved by fixture tests. |
 
 <a name="read-only-status-page-14-october-2026"></a>
 
-The [14 October read-only status evidence](archive/agent-context-2026-10-03-to-2026-11-22.md#read-only-status-page-14-october-2026) is historical.
+The 14 October read-only status evidence is historical.

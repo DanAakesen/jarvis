@@ -67,7 +67,7 @@ Both new collection queries use keyset cursors and parameterized SQL bounded
 to `TOP(@limit + 1)`. Metric catalogues default to 100 (maximum 500) rows;
 nutrition days default to 50 (maximum 400). Neither requires a table or index
 migration. `docs/architecture.md` records the broader read boundary and
-version-compatibility details; [`docs/archive/daily-health-read-coverage.md`](../../../../docs/archive/daily-health-read-coverage.md)
+version-compatibility details; `docs/archive/daily-health-read-coverage.md`
 maps retained storage through shared reads to actual tools and records the
 remaining exclusions and partial-detail bound.
 

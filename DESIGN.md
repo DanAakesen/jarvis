@@ -1,6 +1,6 @@
 # Jarvis design direction
 
-Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, motion, accessibility and hard rules. This page sets composition and behaviour for each surface; it does not define a second palette. [Product requirements](PRODUCT.md), [current work and device acceptance](PLAN.md), and [decisions](docs/decisions.md) are separate. Build feedback and superseded concepts remain in the [3 October–22 November 2026 archive](docs/archive/design-2026-10-03-to-2026-11-22.md).
+Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, motion, accessibility and hard rules. This page sets composition and behaviour for each surface; it does not define a second palette. [Product requirements](PRODUCT.md), [current work and device acceptance](PLAN.md), and [decisions](docs/decisions.md) are separate. Build feedback and superseded concepts remain in the 3 October–22 November 2026 archive.
 
 ## Shared control geometry
 
@@ -59,4 +59,4 @@ The [current documentation index](docs/README.md) separates operating references
 
 <a name="stage-glass-shell-and-docked-conversation--6-october-2026-local-ui-session-with-dan"></a>
 
-The [6 October stage and docked conversation record](docs/archive/design-2026-10-03-to-2026-11-22.md#stage-glass-shell-and-docked-conversation--6-october-2026-local-ui-session-with-dan) is historical.
+The 6 October stage and docked conversation record is historical.

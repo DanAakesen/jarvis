@@ -17,7 +17,7 @@ post-grant positive/negative proof remain mandatory before activation.
 
 ## Proposed backend log access (#1341; currently disabled)
 
-[The reader and activation plan](../docs/backend-logs.md) documents a proposed
+The reader and activation plan documents a proposed
 workspace-scoped conditional grant for the existing backend identity. It is not
 added to Bicep, bootstrap or CI. Owner action-time approval and live schema,
 effective-grant and negative other-app checks remain required. Deployment of this

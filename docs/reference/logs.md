@@ -6,7 +6,7 @@ and supporting services, excluding unrelated projects. Retain the existing
 Foundry Reader assignment. No removal was approved or performed. The earlier
 backend-only permission approval does not authorize new whole-system grants.
 The existing reader remains disabled. This document is the current design;
-[backend-only implementation history](backend-logs.md) remains historical evidence.
+backend-only implementation history remains historical evidence.
 
 ## Source inventory and current access
 

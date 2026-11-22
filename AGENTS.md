@@ -17,6 +17,20 @@ For each prompt, use this map to select context for the task. Read only relevant
 
 If a mapped file is missing, inspect the repository and continue with available evidence. Do not ask the user to locate project context that can be found from this map.
 
+## Project docs map (where to find what)
+
+Every important markdown file is listed here. A new markdown file is added to this map in the same change, otherwise its content goes into an existing doc or the pull request body. Evidence, screenshots, per-build notes, design handoffs and prototype snapshots are not committed; design references are deleted after implementation. `docs/README.md` is the detailed index.
+
+- **Start here:** `README.md` (what the repo is, how to run it) and `docs/README.md` (index of every doc folder). This file and `AGENTS.md` carry the same map and rules.
+- **Product and direction:** `PRODUCT.md` (what Jarvis is for, the daily core, priorities P0/P1/P2, Dan's standing rules), `PLAN.md` (current state, in flight, next steps, open decisions, task tables read by the plan-status bot), `docs/decisions.md` (confirmed decisions and learnings, newest first, with an index of older ones in `docs/archive/decisions-*.md`).
+- **How the system works:** `docs/architecture.md` (components, data flows, deployment, invariants and limits), `docs/features.md` (feature catalogue built into the backend image; a docs-only edit of it triggers backend CI and Deploy), `docs/reference/data-model.md` (SQL schema and ownership), `docs/reference/logs.md` (how backend and agent logs are read), `docs/tool-conformance.md` (generated catalogue of every Jarvis tool and its first-search result; regenerate, never hand-edit).
+- **How to work here:** `docs/agent-context.md` (setup, verified commands, development workflow, merge and release procedure, TestFlight, cost and safety rules, repo hygiene rules), `docs/runbook.md` (production operations: deploy, rollback, incident steps), `.agents/skills/engineering/SKILL.md` and `.agents/skills/product-ui/SKILL.md` (task workflows).
+- **Design:** `docs/ui/style-guide.md` (the look and the hard rules, read first for any UI), `DESIGN.md` (design direction and decisions), `docs/ui/README.md` and `docs/ui/map-route-card/brief.md` (design references still pending implementation).
+- **Contracts and integrations:** `docs/ios/integration-contract.md` (backend endpoints the iPhone app uses), `docs/ios/apple-capabilities.md` (Apple entitlements and capabilities), `docs/pi/cutover.md` (PI switch-on checklist and open decisions), `docs/inbox-loop/design.md`, `docs/inbox-loop/acceptance.md`, `docs/inbox-loop/mcp.md` and `docs/inbox-loop/shortcut.md` (inbox loop: built, switched off), `docs/reference/daily/health-ingestion.md`, `docs/reference/daily/migration.md`, `docs/reference/daily/schema-mapping.md` and `docs/reference/daily-v182/README.md` (Daily health upload contract and source snapshot), `db/README.md` and `db/migrations/README.md` (migrations and their down scripts), `infra/README.md` (Bicep, deployment inputs), `runner/README.md` (coding runner images), `apps/vault-mirror/README.md` (vault mirror), `agents/jarvis/README.md` (Python Jarvis agent).
+- **PI agent definition inputs (deployed, Foundry-owned text):** `agents/pi/instructions.md`, `agents/pi/voice-instructions.md` and `agents/pi/skills/*/SKILL.md`. Never edit the KEEP THIS BLOCK text.
+- **Backend module READMEs:** `apps/backend/src/modules.README.md` (module index) and the READMEs next to the code it lists (`database`, `foundry`, `health/*`).
+- **Not documents:** `CopilotAndCodex.md` (Astra's advice file) exists only on Dan's machine and is never committed.
+
 ## Work and communication
 
 - Reply in the user's language. Lead with the outcome and keep responses concise. Use bullets, numbered steps, or tables for scanning and comparison; use a diagram, chart, or screenshot when it makes the subject clearer. Use an available visualization skill when a visual will materially clarify a workflow, comparison, or dataset.

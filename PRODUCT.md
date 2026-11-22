@@ -38,7 +38,7 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ### Software Factory — task view
 
-Show actual issues, PRs, worker state and releases, and surface what needs Dan's attention. From Chat or Voice, Dan can ask about the project, start work in an identified project, and follow or steer an existing worker. A coding change is not delivered just because a worker stopped: show the real PR/check/release state. See the [historical task lifecycle](docs/archive/product-2026-10-to-11.md#task-lifecycle) for the state model.
+Show actual issues, PRs, worker state and releases, and surface what needs Dan's attention. From Chat or Voice, Dan can ask about the project, start work in an identified project, and follow or steer an existing worker. A coding change is not delivered just because a worker stopped: show the real PR/check/release state. See the historical task lifecycle for the state model.
 
 ### Notes
 
@@ -102,14 +102,14 @@ Start dictation and Voice on the first press, recover the route when it drops, a
 
 ## History
 
-[Full product history](docs/archive/product-2026-10-to-11.md).
+Full product history.
 
 <a name="health-migration-approved-p12"></a>
 
 ### Daily
 
-[Original Daily migration and source exclusions](docs/archive/product-2026-10-to-11.md#health-migration-approved-p12). Current owner-facing requirements are under Workouts and Nutrition above.
+Original Daily migration and source exclusions. Current owner-facing requirements are under Workouts and Nutrition above.
 
 ### Web notifications and confirmations (P6-22)
 
-[Historical web notification and confirmation contract](docs/archive/product-2026-10-to-11.md#web-notifications-and-confirmations-p6-22). See the current PI rules above for Chat and Voice.
+Historical web notification and confirmation contract. See the current PI rules above for Chat and Voice.
