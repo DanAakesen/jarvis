@@ -204,6 +204,7 @@ struct WatchRoot: View {
 
     private var menu: some View {
         List {
+            menuLink("Factory", "chevron.left.forwardslash.chevron.right", .factory)
             Section("Daily") {
                 menuLink("Agenda", "calendar", .agenda)
                 menuLink("Tasks", "checklist", .tasks)
@@ -217,9 +218,6 @@ struct WatchRoot: View {
                 menuLink("Nutrition", "fork.knife", .nutrition)
                 menuLink("Body Fat", "chart.line.uptrend.xyaxis", .bodyFat)
                 menuLink("Health summary", "heart", .health)
-            }
-            Section("Project") {
-                menuLink("Factory", "chevron.left.forwardslash.chevron.right", .factory)
             }
         }
         .navigationTitle("Menu")
