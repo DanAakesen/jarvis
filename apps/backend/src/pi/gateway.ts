@@ -974,8 +974,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     try {
       const cancelled = await call('POST', `/responses/${encodeURIComponent(responseId)}/cancel`, {}, AbortSignal.any([signal, AbortSignal.timeout(5_000)]));
       const body: unknown = await cancelled.json().catch(() => null);
-      const status = isObject(body) && typeof body.status === 'string' ? body.status : '';
-      return status !== 'in_progress' && status !== 'queued';
+      // A 2xx response can describe a turn that completed before cancellation reached it.
+      // Replaying its request could repeat work lost from the original stream.
+      return isObject(body) && body.status === 'cancelled' &&
+        (body.output === undefined || (Array.isArray(body.output) && body.output.length === 0));
     } catch { return false; }
   }
 
@@ -1287,6 +1289,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
+      let retainedReply = false;
       for await (const event of respond(conversationId, text, deadline, turn)) {
         spend.note(event);
         // The model has the message once the provider answers, so the overview is not sent again on the next turn.
@@ -1312,7 +1315,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
             boundaries += 1;
-          }
+          } else if (segment.trim()) retainedReply = true;
           segment = '';
         } else if (event.kind === 'round_calls') {
           nativeCalls += event.native;
@@ -1324,6 +1327,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           rounds = event.rounds ?? rounds;
           clientItems = event.answered ?? clientItems;
         }
+      }
+      // A completed HTTP response can contain just a tool call and its progress note. Its
+      // recorded receipt still belongs to Dan even when the model never writes the answer.
+      if (grant.receipts.length && !retainedReply && !segment.trim()) {
+        throw new PiGatewayError('pi_failed', 'no_reply', { detail: 'no_final_reply' });
       }
       await untilAborted(() => options.store.markWarm(options.owner, activationHash, now(), deadline), deadline)
         .catch(() => { if (!deadline.aborted) log('pi.mark_warm_failed', {}); });

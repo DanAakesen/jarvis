@@ -65,7 +65,7 @@ function setup(replies: Array<(call: Call) => Response | Promise<Response>>, ove
   const calls: Call[] = [];
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
-  let cancelReply: () => Response | Promise<Response> = () => Response.json({});
+  let cancelReply: () => Response | Promise<Response> = () => Response.json({ status: 'cancelled', output: [] });
   let cleanupReply: (signal: AbortSignal) => Response | Promise<Response> = () => new Response(null, { status: 204 });
   const fetcher = (async (url: string, init: RequestInit) => {
     const call: Call = { method: init.method, url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
@@ -857,6 +857,22 @@ describe('PI gateway', () => {
       expect(responsesOf(calls)).toHaveLength(1);
     });
 
+    it('returns the completed task receipt when Foundry finishes with progress and no answer', async () => {
+      const { run, calls, registry, store } = setup([call => {
+        const grant = registry.resolve(turnOf(call))!;
+        grant.results.push({ tool: 'vault_task_complete', outcome: 'ok' });
+        grant.receipts.push({ confirmation: 'Completed task: Pay rent.', action: true });
+        const item = { type: 'mcp_call', id: 'mcp_1', name: 'call_tool', server_label: 'jarvis' };
+        return sse(delta('Marking it done.'), frame({ type: 'response.output_item.added', item }),
+          frame({ type: 'response.output_item.done', item: { ...item, status: 'completed' } }), completed(100, 0, 5));
+      }]);
+      await expect(run('complete the task')).rejects.toMatchObject({
+        receipt: `Completed task: Pay rent. ${failureCopy.reply_not_written.chat}`,
+      });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'failed', outputTokens: 5 });
+    });
+
     it.each([
       ['response.failed', () => sse(created, listed, failedFrame()), 'foundry_response_failed', false],
       ['error', () => sse(frame({ type: 'error', code: 'server_error', message: 'private provider text' })), 'foundry_response_failed', false],
@@ -946,6 +962,10 @@ describe('PI gateway', () => {
     it.each([
       ['a failed cancel', () => new Response('{}', { status: 500 })],
       ['a cancel that leaves the response running', () => Response.json({ status: 'in_progress' })],
+      ['a cancel without a receipt', () => new Response(null, { status: 204 })],
+      ['a cancel without a status', () => Response.json({})],
+      ['a response completed before cancellation', () => Response.json({ status: 'completed' })],
+      ['a cancelled response with unseen tool work', () => Response.json({ status: 'cancelled', output: [{ type: 'mcp_call' }] })],
     ])('never retries a stream that merely stopped after %s', async (_name, cancel) => {
       const { run, calls, setCancel } = setup([() => sse(created), () => sse(delta('again'), completed(1, 0, 1))]);
       setCancel(cancel);
