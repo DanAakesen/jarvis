@@ -10,6 +10,10 @@ import type { ApprovalNotificationSender } from './approval-notifications.js';
 const replyCategory = 'jarvis.reply';
 const redactedReply = 'New reply from Jarvis';
 const sentences = new Intl.Segmenter('en', { granularity: 'sentence' });
+const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
+// Node 22 ignores the `ss` locale extension. Suppress breaks at common Danish and English abbreviations.
+const midSentenceAbbreviation = /(?:^|[^\p{L}\p{N}])(?:bl\.a|ca|dr|dvs|f\.eks|kl|mht|mr|mrs|ms|nr|prof)\.$/iu;
+const previewTail = /[ \u200d]+$/u;
 const retryBackoffMs = [1_000, 5_000, 20_000, 60_000] as const;
 export const replyNotificationMaxAttempts = 5;
 
@@ -45,8 +49,13 @@ function previewLine(text: string): string {
 }
 
 function clipPreview(line: string, limit: number): string {
-  const characters = Array.from(line);
-  return characters.length <= limit ? line : `${characters.slice(0, limit - 3).join('').trimEnd()}...`;
+  const cleaned = line.replace(previewTail, '');
+  const characters = Array.from(cleaned);
+  if (characters.length <= limit) return cleaned || redactedReply;
+  // Keep the code-point cap; Segmenter rounds the UTF-16 offset down to a whole grapheme.
+  const cut = characters.slice(0, limit - 3).join('').length;
+  const end = graphemes.segment(cleaned).containing(cut)!.index;
+  return `${cleaned.slice(0, end).replace(previewTail, '')}...`;
 }
 
 export function safeReplyNotificationPreview(text: string): string {
@@ -54,10 +63,16 @@ export function safeReplyNotificationPreview(text: string): string {
   return !line || shouldRedact(line) ? redactedReply : clipPreview(line, 160);
 }
 
+function firstPreviewSentence(line: string): string {
+  for (const { index, segment } of sentences.segment(line)) {
+    if (!midSentenceAbbreviation.test(segment.trimEnd())) return line.slice(0, index + segment.length).trimEnd();
+  }
+  return line;
+}
+
 function proactiveAlert(text: string): { title: string; body: string } {
   const line = previewLine(text);
-  const first = sentences.segment(line)[Symbol.iterator]().next().value?.segment.trim();
-  const sentence = !first || shouldRedact(line) ? redactedReply : first;
+  const sentence = !line || shouldRedact(line) ? redactedReply : firstPreviewSentence(line);
   return { title: clipPreview(sentence, 60), body: clipPreview(sentence, 180) };
 }
 

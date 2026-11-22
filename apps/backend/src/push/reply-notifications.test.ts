@@ -278,6 +278,16 @@ describe('reply notification contract', () => {
     });
   });
 
+  it.each([
+    'Dit fly til London kl. 14.30 er forsinket.',
+    'Du har en tid hos Dr. Hansen i morgen.',
+    'Du kan tage f.eks. Ring 3 i morgen.',
+  ])('keeps the whole first sentence at abbreviation boundaries: %s', (first) => {
+    const proactiveText = `${first} Giv mig besked bagefter.`;
+    const payload = JSON.parse(replyNotificationPayload({ ...delivery(), proactiveText }).toString('utf8'));
+    expect(payload.aps.alert).toEqual({ title: first, body: first });
+  });
+
   it('bounds both fields even when the first sentence of a brain message is itself long', () => {
     const text = `Driving conditions: ${'heavy snow '.repeat(30).trim()}. The second sentence is not a preview.`;
     const payload = JSON.parse(replyNotificationPayload({ ...delivery(), proactiveText: text }).toString('utf8'));
@@ -287,6 +297,29 @@ describe('reply notification contract', () => {
     expect(body.startsWith('Driving conditions: heavy snow')).toBe(true);
     expect(body).not.toContain('second sentence');
   });
+
+  it.each([
+    ['title', 57, '\u{1f469}\u200d\u{1f4bb}'],
+    ['body', 177, '\u{1f1e9}\u{1f1f0}'],
+    ['body', 177, 'e\u0301'],
+  ] as const)('only clips between graphemes in the %s (cut point %i, cluster %s)', (field, cut, cluster) => {
+    const prefix = 'x'.repeat(cut - [...cluster].length);
+    const tail = `${cluster}${'x'.repeat(10)}.`;
+    const alert = (proactiveText: string) =>
+      JSON.parse(replyNotificationPayload({ ...delivery(), proactiveText }).toString('utf8')).aps.alert[field];
+    expect(alert(`${prefix}${tail}`)).toBe(`${prefix}${cluster}...`);
+    expect(alert(`${prefix}x${tail}`)).toBe(`${prefix}x...`);
+  });
+
+  it('removes a dangling joiner at the end of a preview or before the ellipsis', () => {
+    const emoji = '\u{1f469}';
+    const alert = (proactiveText: string) =>
+      JSON.parse(replyNotificationPayload({ ...delivery(), proactiveText }).toString('utf8')).aps.alert;
+    expect(alert(`Rejseinfo ${emoji}\u200d`)).toEqual({ title: `Rejseinfo ${emoji}`, body: `Rejseinfo ${emoji}` });
+    const prefix = `${'x'.repeat(55)}${emoji}`;
+    expect(alert(`${prefix}\u200d ${'x'.repeat(20)}.`).title).toBe(`${prefix}...`);
+  });
+
   it('uses bounded backoff and stops after the attempt limit', () => {
     expect(replyNotificationRetryAt(1, 1_000, 100_000)).toBe(2_000);
     expect(replyNotificationRetryAt(4, 1_000, 100_000)).toBe(61_000);

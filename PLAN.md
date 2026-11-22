@@ -2,7 +2,7 @@
 
 New PI ledger rows price cached input at the Azure cache-read rate. The wake budget still stops before a reservation that will not fit. Wakes and smoke clean up their scratch conversations, and the wake replay pins all seven decision fixtures with a scripted model.
 
-Brain pushes use the first sentence and link to the exact chat message. The offline Chat/Voice replay follows the same evidence and follow-up IDs for “do that”. A useful/wrong rating goes into the next otherwise due wake. No live or device acceptance has run: Dan owns the Background PI switch and the iPhone/Watch check. The old proactive engine stays; weather signals are outside this step.
+Brain pushes use the first sentence without cutting off common abbreviations or splitting emoji, and link to the exact chat message. The offline Chat/Voice replay follows the same evidence and follow-up IDs for “do that”. A useful/wrong rating goes into the next otherwise due wake. No live or device acceptance has run: Dan owns the Background PI switch and the iPhone/Watch check. The old proactive engine stays; weather signals are outside this step.
 
 ## Week summary 2026-11-21 — PI tools and reliability (current focus)
 

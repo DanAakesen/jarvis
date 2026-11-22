@@ -449,8 +449,8 @@ flowchart LR
   evidence and follow-up IDs. When leasing its reply delivery, the worker reads
   that receipt by owner, session and message and uses the first sentence for
   the APNs title (60 characters) and body (180), with the same secret handling.
-  Ordinary reply copy and the exact string `sessionID`/`messageID` contract
-  are unchanged.
+  The preview keeps common abbreviations and times intact and clips only at
+  grapheme boundaries. The exact string `sessionID`/`messageID` contract is unchanged.
 - `/status` database diagnostics expose only aggregate pending/accepted/failed/
   expired/invalid-token/suppressed counts and latest sanitized failure time.
   Logs contain outcome, attempt and HTTP status, never preview/message content
