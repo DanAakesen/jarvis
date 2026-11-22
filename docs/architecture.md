@@ -1,6 +1,6 @@
 ## System map — PI, tools, voice and who owns what (21 November 2026)
 
-This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `e3600da8` (#2016, 22 November 2026, 07:11 UTC). I read most code facts at `df84095f` (#2014). Since then #2013 changed only the iPhone voice client, which this section does not cover, and #2016 changed the MCP door, `logging.ts`, `turns.ts` and `tool-registry.ts`; I checked what this section says about #2016 against that code.
+This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `c9b32ba5` (#2021, 22 November 2026, 07:24 UTC). I read most code facts at `df84095f` (#2014). Since then #2013 changed only the iPhone voice client, which this section does not cover. #2016 changed the MCP door, `logging.ts`, `turns.ts` and `tool-registry.ts`, and #2021 changed the failure wording of Chat and Voice, what the gateway sends in the voice warm-up and the channel label on a spoken turn's tool activity; I checked what this section says about #2016 and #2021 against that code.
 
 ### Legend
 
@@ -158,7 +158,7 @@ flowchart LR
     classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
 ```
 
-PI is unrestricted: no guardrails or read-only defaults. Dan's rule, as relayed (recorded in issues [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)) and not audited against the code: no approvals, confirmations or gates except DELETE actions (`PRODUCT.md`, "North star"). The MCP tool runs with approval `never`.
+PI is unrestricted: no guardrails or read-only defaults. Dan's rule, as relayed (recorded in issues [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)): no approvals, confirmations or gates except DELETE actions (`PRODUCT.md`, "North star"). #2021 reports that no non-delete confirmation is reachable by a Chat or Voice PI turn, and that the phone-call approval (`phone/approval.ts`) is the one live non-delete gate, on the phone channel. I did not re-check that and did not audit the rest of the code. The MCP tool runs with approval `never`.
 
 ### Gateway and the harness stream
 
@@ -206,6 +206,7 @@ sequenceDiagram
 - A delegation that arrives after GPT-Live began answering adopts the stored direct turn if no reply has completed for it, nothing newer was said and it is at most 10 s old. An empty turn at the 3 s bound gets "did not catch that".
 - Backchannels never cancel PI. Only a new delegation (which supersedes the turn in flight, as steering does in Chat), the session ending, or the 90 s voice turn deadline (`PI_VOICE_TURN_DEADLINE_MS`, after which Jarvis says so) stops it. There is no separate stop command; "stop that" reaches PI as a delegation.
 - Ordering is Dan before Jarvis: the reply is stored after the owner message it answers, within a bounded wait, so restored history keeps the order.
+- Parity with Chat (#2021). `voice/chat-voice-parity.test.ts` replays 24 scenarios (27 tests) through the real chat route and the real `/voice` relay on the same gateway, MCP door and tool route, with a scripted Foundry and a stub GPT-Live, and fails on any difference that `voice/parity-report.testkit.ts` does not declare. It found and fixed three divergences. The persona and situation block reached PI twice in a voice conversation, because the warm-up recorded less than a turn sends. An unexpected failure or an empty reply was worded one way in Chat and another in Voice; both now use `piTurnFailedMessage`, a gateway error keeps its own message, and the 90 s deadline keeps its own. A spoken turn's tool activity was labelled `chat`; the door now sends `x-jarvis-pi-channel: voice`. Left for Dan to decide, as the #2021 entry lists it (I confirmed only that `runChatReflex` and `presentNutritionList` exist in `core/conversation.ts` and `core/food-presentation.ts`): Chat rewrites a meal estimate to the server's nutrition list while Voice speaks PI's sentence, a chat-only reflex path (`runChatReflex`) can run read tools before PI answers, voice sessions are stored as `en`, a turn refused before it starts writes no `pi.turn` record in either channel, and a spoken failure is stored as a transcript while a chat failure is not.
 - Relay log events (ids, lengths, states and reasons only, never words): `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started`, `voice.activity_published`, `voice.upstream_event_error`, and `voice.pi_turn` from the PI side.
 
 ### Safe logs
@@ -236,6 +237,7 @@ The gateway also computes `azureToolsOffered` and `azureCalls` for `pi.turn`, bu
 - Whether the live `jarvis-pi` instructions carry weight-based routing rules. I did not read them; the repository seed routes only by where a thing lives.
 - #2004 is merged but has not been seen in a real trace. The four points the #2004 decision lists (every native call shows a native signal before `response.completed`, a client-owned call is accepted while the previous response reads `in_progress`, the real `status` of an approval request, and whether native children outlive `response.completed`) are open.
 - #2016 was tested offline with stub tools only. Whether the harness sends a `_meta` call id, under which key, and whether its call ids are unique, is unknown: the harness spike never ran. Until live `pi.mcp_tool` lines show it (`replayCheck`, `metaKeys`), nothing is recognised as a replay. The #2016 entry reports no evidence that Foundry replays a call.
+- #2021 ran offline against a scripted Foundry and a stub GPT-Live. Real GPT-Live speech, real Foundry stores, cancels and replays, real latencies, and what the iPhone, Watch and web render for a spoken turn's tool events (`source: "voice"`) are unproven; the #2021 entry lists them.
 
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 
