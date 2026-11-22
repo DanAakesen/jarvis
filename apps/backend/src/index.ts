@@ -92,7 +92,6 @@ import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
 import { alertEvent, githubEvent, workerEvent } from './proactive/events/producers.js';
 import type { ProactiveEventSink } from './proactive/events/types.js';
-import type { EventQueueStore } from './proactive/events/event-queue.js';
 import { createGitHubIssueClient } from './github/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
@@ -1734,11 +1733,10 @@ try {
   if (config.proactiveEnabled) registerProactive(app, {
     ...(piSituationService ? { situation: piSituationService } : {}),
     ...(brainControl ? { background: brainControl } : {}),
-    ...(inboxNudgeHook ? { onFindingsStored: [inboxNudgeHook] } : {}),
+    ...(inboxNudgeHook ? { reviewInbox: inboxNudgeHook } : {}),
     healthEnabled: config.healthEnabled === true,
     ...(nativeProactive ? { hasNativeRecipients: nativeProactive.hasRecipients } : {}),
     ...(memoryStore ? { memoryStore } : {}),
-    vaultMirrorStatusReader,
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
     ...(proactiveStore ? { store: proactiveStore } : {}),
@@ -1756,7 +1754,6 @@ try {
     ...(config.foundryProjectEndpoint ? { foundryProjectEndpoint: config.foundryProjectEndpoint } : {}),
     ...(usageStore ? { usageStore } : {}),
     ...(taskStore ? { taskStore } : {}),
-    backgroundJobs: app.backgroundJobs,
     ...(conversationStore ? { conversationStore } : {}),
     registerVaultPushHandler: (handler: () => void) => { vaultPushReminderHandler = handler; },
     eventsEnabled: config.proactiveEventsEnabled,
@@ -1764,9 +1761,9 @@ try {
     registerEventSink: (sink: ProactiveEventSink) => { proactiveEventSink = sink; },
     // PI reads the event queue instead of the old one-shot pipeline; the Proactive Background PI switch decides whether it wakes.
     ...(piGateway && piStore && brainComms && piArea && proactiveStore ? {
-      brain: (queue: EventQueueStore) => {
+      brain: (queue, afterScheduledWake) => {
         brainHandle = createBrain({
-          queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
+          afterScheduledWake, queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
           decisionLog: createDecisionLog({ area: piArea }), extras: watches, owner: config.auth.ownerObjectId,
           timeZone: config.googleTimeZone ?? 'Europe/Copenhagen', now: () => new Date(), logger,
         });
@@ -1778,7 +1775,6 @@ try {
     ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),
     registerReminderWakeHandler: (handler: (fireAt: Date) => void) => { scheduleOwnerReminderWake = handler; },
     pushEnabled: config.pushEnabled,
-    todoWritesEnabled: config.proactiveTodoWritesEnabled,
     alertsEnabled: config.proactiveAlertsEnabled,
     now: () => new Date(),
     logger,

@@ -40,7 +40,7 @@ param nativePushEnabled bool = false
 @description('Loose Ends inbox tools, capture endpoint and MCP server. Owner switch-on; apply migrations 0081 to 0085 first (docs/inbox-loop/acceptance.md).')
 param inboxEnabled bool = false
 
-@description('Loose Ends follow-up nudges, daily missed-capture audit and weekly review inside the proactive slots. Needs inboxEnabled and proactive checks.')
+@description('Loose Ends follow-up nudges, daily missed-capture audit and weekly review at eligible Background PI slots. Requires inboxEnabled and proactive checks.')
 param inboxNudgesEnabled bool = false
 
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')

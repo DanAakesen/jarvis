@@ -1,9 +1,11 @@
 import type { FastifyRequest } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { FoundryModelUsage } from '../core/usage.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
+import { createMemoryProactiveStore } from '../proactive/store.js';
 import { VaultWriteConflictError, type VaultFile, type VaultTreeFile } from '../vault/github-client.js';
 import { createMissedCaptureAudit, parseAudit, quotedWords } from './audit.js';
 import { createInboxIndex, type InboxIndexRow, type InboxIndexStore } from './item-index.js';
@@ -193,24 +195,24 @@ describe('weekly review and nudge style', () => {
 
 describe('inbox work in the proactive run', () => {
   function proactive(spent = 0) {
-    const recorded: unknown[] = [];
+    const ledger = createMemoryProactiveStore(owner).spend;
     const store = {
       settings: { read: async () => ({ paused: false, monthlyBudgetDkk: 100, sources: { notes: true } }) },
-      spend: { monthTotal: async () => spent, record: async (value: unknown) => { recorded.push(value); } },
+      spend: { monthTotal: async (month: string) => spent + await ledger.monthTotal(month), record: ledger.record },
     };
     const context = { runId: 'run-1', trigger: 'scheduled', now: sundayEvening, signal, findings: [], facts: [], sources: [] } as unknown as FindingsStoredContext;
-    return { store, recorded, context };
+    return { store, ledger, context };
   }
 
   type PassOutcome = { status: 'done'; nudged: { itemId: string; tier: string } | null; rewrites: number } | { status: 'skipped'; reason: string };
 
   function harness(options: { spent?: number; at?: Date; slot?: PassOutcome; weekly?: PassOutcome; audit?: { status: 'done' | 'skipped'; captured: number } } = {}) {
-    const { store, recorded, context } = proactive(options.spent);
+    const { store, ledger, context } = proactive(options.spent);
     const { ops, state, spend } = memoryOps();
     const usage: FoundryModelUsage[] = [];
     const calls: string[] = [];
     const take = () => usage.splice(0);
-    const used = () => usage.push({ role: 'chat', model: 'gpt-5.6-luna', inputTokens: 10_000, outputTokens: 1_000, eventId: 'e' });
+    const used = () => usage.push({ role: 'chat', model: 'gpt-5.6-luna', inputTokens: 10_000, outputTokens: 1_000, eventId: randomUUID() });
     const hook = createInboxNudgeHook({
       store: store as never, ops, takeUsage: take, now: () => options.at ?? sundayEvening,
       pass: () => ({ run: async (_signal: AbortSignal, mode: string, allow?: { nudge?: boolean }) => {
@@ -219,17 +221,19 @@ describe('inbox work in the proactive run', () => {
       } }) as never,
       audit: { run: async () => { calls.push('audit'); used(); return options.audit ?? { status: 'done', captured: 0 }; } } as never,
     });
-    return { hook, context, calls, state, spend, recorded };
+    return { hook, context, calls, state, spend, ledger };
   }
 
   it('runs the review, then the daily audit at the evening run and the weekly review on Sunday, each once a day', async () => {
-    const { hook, context, calls, state, spend, recorded } = harness();
+    const { hook, context, calls, state, spend, ledger } = harness();
+    await ledger.record({ runId: context.runId, month: '2026-11', inputTokens: 100, outputTokens: 20,
+      estimatedDkk: 0.2, createdAt: sundayEvening });
     await hook(context);
     expect(calls).toEqual(['pass:slot', 'audit', 'pass:weekly']);
     expect(state.get(AUDIT_DAY_KEY)).toBe('2026-11-15');
     expect(state.get(WEEKLY_WEEK_KEY)).toBe('2026-11-15');
     expect(spend.map((row) => [row.kind, row.calls])).toEqual([['review', 1], ['audit', 1], ['weekly', 1]]);
-    expect(recorded).toHaveLength(3);
+    expect(await ledger.monthTotal('2026-11')).toBeCloseTo(0.2 + spend.reduce((sum, row) => sum + row.estimatedDkk, 0), 8);
     calls.length = 0;
     await hook(context);
     expect(calls).toEqual(['pass:slot']);

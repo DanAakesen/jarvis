@@ -160,7 +160,7 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. Manual iPhone kcal entries use the same meal ledger and Copenhagen day as Chat and Voice. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
-## Proactive wake and the old engine
+## Proactive wake and Inbox review
 
 ```mermaid
 flowchart LR
@@ -169,21 +169,18 @@ flowchart LR
     SCHED["Scheduler: tick, slots and Check now"]
     BRAIN["PI brain and activation"]
     WAKE["PI gateway: scratch conversation"]
-    OLD["Old 07:00 / 18:00 engine"]
+    INBOX["Inbox review and eligible follow-up"]
     DELIVERY["message_dan: evidence, stored Chat reply and push"]
     EVENTS -->|enabled sources| QUEUE --> BRAIN
     SCHED -->|PI configured| BRAIN
-    SCHED -.->|no PI event path| OLD
+    BRAIN -->|eligible scheduled slot| INBOX
     BRAIN -->|due and permitted background wake| WAKE
     WAKE -->|if PI chooses to reach out| DELIVERY
-    LEG["Legend: cylinder = durable queue; dashed = old-engine path"]
 ```
-
-**Legend:** Solid arrows are the configured PI path; the dashed arrow is the remaining old-engine route when PI is not configured. The cylinder is durable work, not a notification.
 
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
 - Missing switch state means **Off** in the code. The owner controls it in Proactive settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. Actual production switch state or a first successful real wake was not checked here.
-- [`proactive/composition.ts`](../apps/backend/src/proactive/composition.ts) chooses the brain for the 07:00/18:00 slots and Check now if the PI event path exists. The old engine remains built for the no-PI case. Deletion is an explicit later cutover, after a proven wake and agreement about its remaining hooks; see [PI cutover](pi/cutover.md).
+- PI owns the 07:00 and 18:00 Copenhagen slots and Check now. Inbox reviews each eligible slot once, including a slot PI already covered through an earlier event. With no brain configured, no slot is claimed.
 
 ## Reply push and reminders
 

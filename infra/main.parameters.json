@@ -5,6 +5,12 @@
     "foundryNameTimestamp": {
       "value": "20261003200000"
     },
+    "inboxEnabled": {
+      "value": true
+    },
+    "inboxNudgesEnabled": {
+      "value": true
+    },
     "terraChatCapacity": {
       "value": 600
     }

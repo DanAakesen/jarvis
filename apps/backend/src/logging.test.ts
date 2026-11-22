@@ -285,7 +285,6 @@ describe('structured log export', () => {
   });
 
   it.each([
-    { event: 'proactive.model_failed', fields: { reason: 'completion_incomplete', outputTokens: 2048 } },
     { event: 'image_generation.failed', fields: { reason: 'provider_http_error', status: 429 } },
   ])('exports only safe generation diagnostics for $event', ({ event, fields }) => {
     const records: string[] = [];
@@ -609,15 +608,15 @@ describe('structured log export', () => {
     expect([...unregistered]).toEqual([]);
   });
 
-  it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(
-    'exports only allowlisted proactive reason codes and run IDs: %s', (reason) => {
+  it.each(['internal_error', 'hook_failed', 'private-provider-text'])(
+    'exports only the allowlisted proactive reason code and run ID: %s', (reason) => {
       const records: string[] = [];
       const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
       const sink = { ...sdk, trackTrace: vi.fn() };
       const logger = createLogger({ logLevel: 'info' }, sink, output);
       const runId = '11111111-1111-4111-8111-111111111111';
       logger.warn({ runId, reason, text: 'private-source', title: 'private-title', guidance: 'private-guidance' }, 'proactive.failed');
-      const fields = { runId, ...(reason.startsWith('private') ? {} : { reason }) };
+      const fields = { runId, ...(reason === 'internal_error' ? { reason } : {}) };
       expect(JSON.parse(records[0]!)).toEqual({
         level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.failed', ...fields,
       });

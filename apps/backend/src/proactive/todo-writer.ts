@@ -5,7 +5,7 @@ import {
   type createGitHubVaultClient,
 } from '../vault/github-client.js';
 import { isVaultLineSafe } from '../vault/index.js';
-import type { FindingsStoredContext } from './engine.js';
+import type { FindingsStoredContext } from './types.js';
 import {
   appendTaskLines,
   buildSuggestedTodoLine,

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createMemoryEventQueueStore } from '../../proactive/events/event-queue.js';
 import { alertEvent, githubEvent, workerEvent } from '../../proactive/events/producers.js';
 import type { ProactiveEventInput } from '../../proactive/events/types.js';
@@ -29,6 +29,7 @@ function captureLogs() {
 function setup(options: {
   start?: string; enabled?: boolean; decide?: Parameters<typeof scriptedGateway>[0]; failVault?: () => boolean; budgetDkk?: number; paused?: boolean;
   logger?: BrainOptions['logger'];
+  afterScheduledWake?: BrainOptions['afterScheduledWake'];
 } = {}) {
   const clock = { t: new Date(options.start ?? '2026-11-16T10:00:00Z') };
   const now = () => clock.t;
@@ -44,6 +45,7 @@ function setup(options: {
   const gateway = scriptedGateway(options.decide ?? (async () => ({ text: 'Nothing needs Dan.' })));
   const brain = createBrain({
     queue, gateway, proactive, piStore, comms, decisionLog: createDecisionLog({ area: createPiArea({ vault }) }), owner, timeZone: 'Europe/Copenhagen', now,
+    afterScheduledWake: options.afterScheduledWake,
     ...(options.logger ? { logger: options.logger } : {}),
   });
   const ready = (async () => {
@@ -126,6 +128,20 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect((await t.proactive.runs.latest())?.status).toBe('done');
   });
 
+  it.each([
+    { enabled: true, fail: false, calls: 1 },
+    { enabled: true, fail: true, calls: 0 },
+    { enabled: false, fail: false, calls: 0 },
+  ])('runs the Inbox review after a successful claimed sweep (enabled=$enabled, failed=$fail)', async ({ enabled, fail, calls }) => {
+    const review = vi.fn(async () => {});
+    const t = setup({ enabled, afterScheduledWake: review, decide: async () => ({ text: '', fail }) });
+    await t.ready;
+    const claim = await t.proactive.runs.claim({ trigger: 'scheduled', slot: '2026-11-16T07:00', now: t.now() });
+    await t.brain.runScheduled(claim!, signal());
+    expect(review).toHaveBeenCalledTimes(calls);
+    if (calls) expect(review).toHaveBeenCalledWith(expect.objectContaining({ runId: claim!.run.id, trigger: 'scheduled' }));
+  });
+
   it('does not let a scheduled morning run consume the evening sweep', async () => {
     const t = setup();
     await t.ready;
@@ -142,8 +158,9 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect((await t.proactive.runs.latest())?.status).toBe('done');
   });
 
-  it('lets an event consume the next scheduled slot without another hidden PI turn', async () => {
-    const t = setup();
+  it('lets an event satisfy the next PI turn and still reviews the evening Inbox slot once', async () => {
+    const review = vi.fn(async () => {});
+    const t = setup({ afterScheduledWake: review });
     await t.enqueue(event(1));
     expect((await t.tick()).outcome).toBe('done');
     t.advance(7 * 60 * 60_000);
@@ -153,6 +170,9 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     await t.brain.runScheduled(evening!, signal());
     expect(t.gateway.wakes).toHaveLength(1);
     expect((await t.proactive.runs.latest())?.reason).toBe('satisfied_by_event');
+    await t.brain.runScheduled(evening!, signal());
+    expect(review).toHaveBeenCalledTimes(1);
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({ runId: evening!.run.id, trigger: 'scheduled' }));
   });
 
   it('turns the model\'s decision to speak into one chat message that pushes once, and logs what was sent', async () => {

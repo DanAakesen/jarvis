@@ -3,7 +3,7 @@ import { createGymLogWriter } from '../health/gym/gym-log.js';
 import { createMemoryProactiveStore } from '../proactive/store.js';
 import { createMemoryProactiveTodoReceiptStore } from '../proactive/todo-store.js';
 import { createProactiveTodoWriter } from '../proactive/todo-writer.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
 import { taskWriteHelpers } from './index.js';
 import { createTaskWriter } from './task-writes.js';
 

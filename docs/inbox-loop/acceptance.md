@@ -1,25 +1,25 @@
 # Loose Ends: switch-on and acceptance
 
-Status: **built, switched off by default.** Dan approved capture and automatic follow-ups. Both production flags were verified off on 22 November. Production activation, real vault/model use and device acceptance are unverified.
+Dan approved capture and automatic follow-ups. Production parameters enable both. Use the checks below to verify the deployed revision and device.
 
 ## What each switch turns on
 
 | Switch | Where | Turns on |
 | --- | --- | --- |
 | `inboxEnabled` | `infra/main.bicep` parameter (sets `JARVIS_INBOX_ENABLED=true`) | Chat and voice tools (`inbox_capture`, `inbox_items`, `inbox_close`, `inbox_capture_credential`, `inbox_nudge_style`), `POST /inbox/capture`, the credential routes, `/inbox/mcp`, `/inbox/status` |
-| `inboxNudgesEnabled` | same (sets `JARVIS_INBOX_NUDGES_ENABLED=true`) | Enables the old engine's post-findings hook for slot reviews, the daily missed-capture audit and the weekly nudge-style review. |
+| `inboxNudgesEnabled` | same (sets `JARVIS_INBOX_NUDGES_ENABLED=true`) | Enables Inbox review in the PI slots and after a successful Check now, the daily missed-capture audit and the weekly nudge-style review. |
 
-Both default to `false`. The nudge hook also needs `JARVIS_PROACTIVE_ENABLED=true` and an enabled Notes source. PI's brain owns the scheduled slots and Check now when PI is configured. Enabling flags alone does not make that brain call the old engine's hook; check the [remaining trigger decision](../pi/cutover.md#43-the-old-chat-harness-and-old-proactive-pipeline-backend) before enabling scheduled nudges.
+Production overrides both template defaults in `infra/main.parameters.json`. Reviews require Background PI, an enabled Notes source and available budget. An earlier event can satisfy the PI wake for a slot while its Inbox review still runs once.
 
 ## What is left for the owner
 
-1. **Switch-on:** with the owner's approval, enable `inboxEnabled` and qualify capture before considering nudges. Resolve the scheduled trigger before enabling `inboxNudgesEnabled`. Migrations `0081` to `0085` define the inbox records; `0080` defines the proactive-events queue.
+1. **Switch-on:** read the deployed revision and `GET /inbox/status`. Confirm both flags before testing.
 2. **External assistants:** Use the [MCP contract](mcp.md). OAuth connectors are not built.
 3. **Device acceptance:** Run the checklist after approved switch-on.
 
 ## Acceptance checklist (owner, on a real device)
 
-Test capture before nudges. Test the scheduled rows only once the trigger and nudge activation are confirmed.
+Use one test idea and its normal 07:00 or 18:00 Copenhagen review. An item receives a nudge only when it warrants one.
 
 - [ ] Say an idea in chat ("we should do a padel night before Christmas"). A note appears in `Inbox/` within seconds and in Obsidian within about ten minutes; your words are quoted verbatim.
 - [ ] Say the same by voice. Ask "what is in my inbox?" and see it listed.
