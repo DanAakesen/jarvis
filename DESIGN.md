@@ -293,7 +293,9 @@ This supersedes the earlier normal insight push destination of Proactive.
 Use the existing error surface for distinct timeout and interrupted-connection
 messages. Neither failure proves the phone is offline. Ask the user to check the
 conversation before sending again because server work may have been accepted.
-No additional dialog or approval step is introduced.
+If the app never saw the message accepted, restore it without replacing a newer
+draft and keep Retry. If the app saw it accepted, show that the reply is unconfirmed
+until history shows the linked answer. No additional dialog is introduced.
 
 ## Factory approval friction (7 November 2026)
 
@@ -305,25 +307,31 @@ task creation/queueing from observed runner execution and completed delivery.
 
 ## Approved runtime test entry (#1350; 29 October 2026)
 
-On iOS, Test agent runtime follows Voice language in the shared Home/Chat Plus
-menu. A large sheet uses the shared glass choice buttons, loading feedback and
+On iPhone since #2010, the shared Plus menu says **Test a reply**. The sheet
+labels the two isolated choices **Previous Jarvis setup** and **Copilot** and
+makes clear that neither tests nor changes normal Chat. The saved reply and
+its result appear together; a stop or an unconfirmed result is not an error
+label on the reply. The existing shared controls and normal draft stay in place.
+
+On iOS, the shared Home/Chat Plus entry follows Voice language.
+A large sheet uses the shared glass choice buttons, loading feedback and
 composer. The title names the chosen runtime and stays marked as a test. The
 normal Chat view remains mounted with its draft. Disabled choices show the server
 reason; Check again re-reads availability. Closing is allowed during read-only
 loads and blocked during session creation or a reply; Stop reply requests server
 cancellation and keeps reading the saved reply. An uncertain managed claim stays
-blocked even after Refresh test history. Copy is Danish/English. Native run
-42373705592 passed the Current selector/retry and isolated conversation flow,
+blocked even after Refresh test history. A server-reported cut-off requires a
+history review before sending again. Copy is Danish/English. Native run
+42373705592 passed the earlier selector/retry and isolated conversation flow,
 including normal draft/history preservation; the selector capture was inspected.
 The web selector/retry flow was inspected at 390 and 1440 pixels in both themes
 with reduced motion included (6 November). Live Copilot compatibility remains
 unqualified after its second-turn policy check failed.
 
-The existing chat menu will contain Test agent runtime. Dan chooses Current or
-Copilot and opens a separate, clearly labelled conversation. Normal chats stay
-unchanged; do not switch runtimes mid-conversation. The local candidate opens an
-accessible selector and then a labelled modal conversation, keeping the normal
-chat mounted with its session and draft. Unknown or unverified availability
+The web comparison also opens a separate, clearly labelled conversation.
+Normal chats stay unchanged; do not switch runtimes mid-conversation. The
+selector opens a modal conversation, keeping the normal chat mounted with
+its session and draft. Unknown or unverified availability
 disables the option with a reason. The test view uses scoped history, streaming,
 Stop reply and explicit uncertain-outcome recovery. Desktop/phone Chromium fixture
 inspection covers both themes, focus return, failure/retry and streamed replies;

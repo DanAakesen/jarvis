@@ -31,6 +31,20 @@ final class ChatStreamLimitTests: XCTestCase {
         }
     }
 
+    func testAReplacedAttemptCanStillDeliverTheFollowUpReply() async throws {
+        let body = frame("user", message(id: "430", role: "dan", text: "Hi"))
+            + frame("superseded", #"{"messageId":"430"}"#)
+            + frame("done", message(id: "432", role: "jarvis", text: "Follow-up answer"))
+            + frame("error", #"{"error":"A late error is not the reply's outcome."}"#)
+
+        let events = try await receive(Data(body.utf8))
+
+        XCTAssertEqual(events.count, 3)
+        XCTAssertTrue(events.contains(.superseded(messageID: "430")))
+        guard case .done(let reply) = events.last else { return XCTFail("Expected a saved reply") }
+        XCTAssertEqual(reply.text, "Follow-up answer")
+    }
+
     private func receive(_ body: Data) async throws -> [ChatEvent] {
         let client = try JarvisClient(
             configuration: JarvisClientConfiguration(baseURL: URL(string: "https://api.example.invalid/api")!),

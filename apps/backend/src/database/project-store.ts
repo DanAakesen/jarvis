@@ -20,7 +20,7 @@ export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories
   return {
     async list() {
       const { recordset } = await databaseReadRequest(pool).query<ProjectRow>(
-        `SELECT ${columns} FROM dbo.projects WHERE active = 1 ORDER BY name, id;`,
+        `SELECT ${columns} FROM dbo.projects AS p WHERE p.active = 1 ORDER BY p.name, p.id;`,
       );
       return recordset;
     },

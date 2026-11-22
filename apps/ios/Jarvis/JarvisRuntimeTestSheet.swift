@@ -10,10 +10,6 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var messages: [JarvisChatRow] = []
     @Published var sendRevision = 0
     @Published var composerDraft = ComposerDraft()
-    var draft: String {
-        get { composerDraft.text }
-        set { composerDraft.replace(with: newValue) }
-    }
     @Published var partial = ""
     @Published var acknowledgment = ""
     @Published var progressUpdates: [String] = []
@@ -26,19 +22,26 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var sending = false
     @Published var stopping = false
     @Published var error: JarvisChatLocalizationKey?
+    @Published private(set) var turnFeedback: String?
     @Published var recovery = ChatRuntimeRecovery()
     @Published var nextCursor: String?
     @Published var activeMessageID: String?
     private let client: JarvisChatClient?
+    private let appLanguage: JarvisAppLanguage
     private var turn: Task<Void, Never>?
 
-    init(client: JarvisChatClient?) {
+    init(client: JarvisChatClient?, appLanguage: JarvisAppLanguage) {
         self.client = client
+        self.appLanguage = appLanguage
+    }
+
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: appLanguage)
     }
 
     var canSend: Bool {
         session != nil && !loading && !sending && !recovery.requiresHistoryReview && !recovery.sessionBlocked &&
-            !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !composerDraft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func checkAvailability() async {
@@ -56,7 +59,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
             guard !Task.isCancelled else { return }
             availability = nil
             selection = nil
-            self.error = .runtimeVerificationFailed
+            self.error = .runtimeAvailabilityFailed
         }
     }
 
@@ -78,28 +81,23 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         guard !loading, !sending, let client, let session else { return }
         loading = true
         defer { loading = false }
+        error = nil
         do {
             let page = try await client.history(before: older ? nextCursor : nil, sessionId: session.id)
             try Task.checkCancellation()
             let incoming = page.messages.map(JarvisChatRow.init)
             messages = older ? incoming + messages.filter { row in !incoming.contains { $0.id == row.id } } : incoming
             nextCursor = page.nextCursor
-            // A refresh must not erase an acknowledgment/partial result that was never saved.
-            let hasFinal = activeMessageID.flatMap(Int64.init).map { source in
-                incoming.contains { $0.role == .jarvis && (Int64($0.id) ?? 0) > source }
-            } ?? false
-            if hasFinal {
-                partial = ""
-                acknowledgment = ""
-                tools = []
-                progressUpdates = []
-                activeMessageID = nil
-            }
-            if activeMessageID == nil || hasFinal {
-                recovery.historyReviewed()
-                error = recovery.sessionBlocked ? .runtimeBlocked : nil
+            guard !older else { return }
+            if let activeMessageID {
+                if page.confirmsTestReply(to: activeMessageID, sessionID: session.id) {
+                    recordReplyReceived()
+                    tools = []
+                } else {
+                    reconnect()
+                }
             } else {
-                reconnect()
+                recovery.historyReviewed()
             }
         } catch {
             guard !Task.isCancelled else { return }
@@ -111,9 +109,11 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     func send() {
         guard canSend, let client, let session else { return }
         sendRevision += 1
-        let text = composerDraft.consume().trimmingCharacters(in: .whitespacesAndNewlines)
+        let submittedText = composerDraft.consume()
+        let draftRevision = composerDraft.revision
         sending = true
         error = nil
+        turnFeedback = nil
         partial = ""
         activeMessageID = nil
         acknowledgment = ""
@@ -130,14 +130,11 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                 turn = nil
             }
             do {
-                let events = try await client.sendTurn(sessionId: session.id, text: text)
+                let events = try await client.sendTurn(sessionId: session.id, text: submittedText.trimmingCharacters(in: .whitespacesAndNewlines))
                 try await consume(events)
             } catch {
-                if activeMessageID == nil { draft = text }
-                let code: String?
-                if let failure = error as? JarvisChatClientError, case .serverEvent(let value, _) = failure { code = value } else { code = nil }
-                recovery.failed(code: code)
-                self.error = recovery.sessionBlocked ? .runtimeBlocked : .runtimeUncertain
+                if activeMessageID == nil { composerDraft.restore(submittedText, revision: draftRevision) }
+                reportTurnEnding(error)
             }
         }
     }
@@ -147,7 +144,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         sending = true
         isReconnecting = true
         turn = Task {
-            defer { sending = false; isReconnecting = false; turn = nil }
+            defer { sending = false; stopping = false; isReconnecting = false; turn = nil }
             do {
                 let events = try await client.reattachTurn(sessionId: session.id, messageId: activeMessageID)
                 // The GET replays the same turn from the beginning; never POST it again.
@@ -157,11 +154,10 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                 progressUpdates = []
                 isReconnecting = false
                 error = nil
+                turnFeedback = nil
                 try await consume(events)
-                recovery.historyReviewed()
             } catch {
-                recovery.failed(code: nil)
-                self.error = recovery.sessionBlocked ? .runtimeBlocked : .runtimeUncertain
+                reportTurnEnding(error)
             }
         }
     }
@@ -189,27 +185,71 @@ private final class JarvisRuntimeTestModel: ObservableObject {
             case .connectionState(let state): isReconnecting = state == .reconnecting
             case .done(let message):
                 append(JarvisChatRow(message))
-                partial = ""
-                acknowledgment = ""
-                progressUpdates = []
-                activeMessageID = nil
+                recordReplyReceived()
+                return
             case .interrupted(let message):
-                append(JarvisChatRow(message))
+                var row = JarvisChatRow(message)
+                row.interrupted = true
+                append(row)
                 partial = ""
-            case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: nil)
-            case .foodInvitation, .unknown: break
+            case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
+            case .superseded, .foodInvitation, .unknown: break
             }
+        }
+        try Task.checkCancellation()
+        throw JarvisChatClientError.streamEnded
+    }
+
+    private func recordReplyReceived() {
+        partial = ""
+        acknowledgment = ""
+        progressUpdates = []
+        activeMessageID = nil
+        error = nil
+        recovery.historyReviewed()
+        turnFeedback = copy(.runtimeReplyReceived)
+    }
+
+    private func reportTurnEnding(_ failure: any Error) {
+        let server = (failure as? JarvisChatClientError)?.serverFailure
+        error = nil
+        switch ChatTurnEnding.after(error: failure, taskCancelled: Task.isCancelled, accepted: activeMessageID != nil) {
+        case .detached:
+            break
+        case .stopped:
+            activeMessageID = nil
+            recovery.historyReviewed()
+            turnFeedback = server?.message ?? copy(.turnStopped)
+        case .failed:
+            activeMessageID = nil
+            if let server { recovery.failed(code: server.code) }
+            switch failure {
+            case JarvisClientError.serviceUnavailable: turnFeedback = copy(.errUnavailable)
+            case JarvisClientError.signInRequired: turnFeedback = copy(.errSignIn)
+            case JarvisClientError.rateLimited: turnFeedback = copy(.errRateLimited)
+            case JarvisClientError.networkFailure: turnFeedback = copy(.errOffline)
+            case JarvisClientError.timedOut: turnFeedback = copy(.errTimedOut)
+            case JarvisChatClientError.invalidTextLength: turnFeedback = copy(.errTextLength)
+            default: turnFeedback = server?.message ?? copy(.errGeneric)
+            }
+        case .unconfirmed:
+            recovery.failed(code: nil)
+            turnFeedback = copy(.runtimeUncertain)
         }
     }
 
     func stop() async {
         guard !stopping, let client, let session, let activeMessageID else { return }
         stopping = true
-        defer { stopping = false }
         do {
             // Keep consuming the stream after cancellation so the final saved reply is visible.
-            _ = try await client.cancelTurn(sessionId: session.id, messageId: activeMessageID)
-        } catch { self.error = .runtimeStopFailed }
+            if try await client.cancelTurn(sessionId: session.id, messageId: activeMessageID) { return }
+        } catch {
+            // Losing the stop request does not fail the reply.
+        }
+        guard self.activeMessageID == activeMessageID else { return }
+        stopping = false
+        self.error = .turnStopUnconfirmed
     }
 
     private func append(_ message: JarvisChatRow) {
@@ -230,7 +270,7 @@ struct JarvisRuntimeTestSheet: View {
     private let fixtureMode: Bool
 
     init(client: JarvisChatClient?, appLanguage: JarvisAppLanguage, fixtureMode: Bool = false) {
-        _model = StateObject(wrappedValue: JarvisRuntimeTestModel(client: client))
+        _model = StateObject(wrappedValue: JarvisRuntimeTestModel(client: client, appLanguage: appLanguage))
         self.appLanguage = appLanguage
         self.fixtureMode = fixtureMode
     }
@@ -254,14 +294,21 @@ struct JarvisRuntimeTestSheet: View {
                         } else {
                             selector
                         }
+                        if let feedback = model.turnFeedback {
+                            Text(feedback).foregroundStyle(.primary)
+                                .accessibilityIdentifier("runtimeTest.result")
+                        }
                         if let error = model.error {
                             Text(copy(error)).foregroundStyle(.primary)
                                 .accessibilityIdentifier("runtimeTest.error")
-                            if model.session != nil {
-                                JarvisLabelledButton(title: copy(.runtimeRefreshHistory), systemImage: "arrow.clockwise",
-                                                     identifier: "runtimeTest.refresh", isDisabled: model.loading || model.sending) {
-                                    perform { await model.refreshHistory() }
-                                }
+                        }
+                        if model.recovery.sessionBlocked {
+                            Text(copy(.runtimeBlocked)).foregroundStyle(.secondary)
+                        }
+                        if model.session != nil && (model.error != nil || model.recovery.requiresHistoryReview || model.recovery.sessionBlocked) {
+                            JarvisLabelledButton(title: copy(.runtimeRefreshHistory), systemImage: "arrow.clockwise",
+                                                 identifier: "runtimeTest.refresh", isDisabled: model.loading || model.sending) {
+                                perform { await model.refreshHistory() }
                             }
                         }
                         Color.clear.frame(height: 1).id("runtimeTest.bottom")
@@ -283,7 +330,7 @@ struct JarvisRuntimeTestSheet: View {
                         tools: model.tools,
                         isReconnecting: model.isReconnecting,
                         confirmations: [],
-                        errors: [model.error.map { copy($0) }]
+                        errors: [model.error.map { copy($0) }, model.turnFeedback]
                     ),
                     sendRevision: model.sendRevision,
                     jumpToLatestTitle: copy(.jumpToLatest),
@@ -358,6 +405,9 @@ struct JarvisRuntimeTestSheet: View {
                 .accessibilityAction(named: copy(.turnShowTime)) {
                     selectedTimestampID = selectedTimestampID == message.id ? nil : message.id
                 }
+                if message.interrupted {
+                    Text(copy(.turnSuperseded)).font(.caption).foregroundStyle(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("runtimeTest.message.\(message.id)")
@@ -374,6 +424,7 @@ struct JarvisRuntimeTestSheet: View {
         }
         if !model.partial.isEmpty {
             JarvisSelectableReply(text: model.partial, identifier: "runtimeTest.reply.streaming")
+            if !model.sending { Text(copy(.turnPartial)).font(.caption).foregroundStyle(.secondary) }
         }
         if model.sending || !model.tools.isEmpty {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {

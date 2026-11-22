@@ -39,6 +39,20 @@ afterAll(async () => {
 });
 
 describe('conversation blocks in the message store', () => {
+  it.each([false, true])('keeps the saved reply linked to its turn in history (reply push enabled: %s)', async (notify) => {
+    const store = createConversationStore(pool);
+    const owner = randomUUID();
+    const session = await store.createSession({ channel: 'chat', language: 'en', ownerObjectId: owner });
+    const request = await store.addMessage({ sessionId: session.id, role: 'dan', text: 'Question', model: null });
+    const reply = await store.addMessage({
+      sessionId: session.id, role: 'jarvis', text: 'Saved answer', model: 'pi', replyToTurnId: request!.id,
+      ...(notify ? { replyNotification: { ownerObjectId: owner, turnMessageId: request!.id } } : {}),
+    });
+    expect(reply?.replyToTurnId).toBe(request!.id);
+    const history = await store.getHistory({ limit: 10, sessionId: session.id });
+    expect(history.messages.map(message => message.replyToTurnId)).toEqual([undefined, request!.id]);
+  });
+
   it('stores a proactive message and continuation receipt atomically and idempotently', async () => {
     const store = createConversationStore(pool);
     const owner = randomUUID();
@@ -282,6 +296,27 @@ describe('conversation blocks in the message store', () => {
     expect(history.messages[3]!.blocks).toEqual([chart]);
     expect(history.messages[1]!.blocks).toEqual(first!.blocks);
     expect(second?.id).toBe(history.messages[3]!.id);
+  });
+
+  it('pages across a message ID digit boundary without skipping or repeating a row', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'chat', language: 'en' });
+    await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(session.id))
+      .query(`SET IDENTITY_INSERT dbo.messages ON;
+        INSERT INTO dbo.messages (id, jarvis_session_id, role, text) VALUES
+          (999998, @sessionId, N'dan', N'First question'),
+          (999999, @sessionId, N'jarvis', N'First reply'),
+          (1000000, @sessionId, N'dan', N'Second question'),
+          (1000001, @sessionId, N'jarvis', N'Second reply');
+        SET IDENTITY_INSERT dbo.messages OFF;`);
+
+    const latest = await store.getHistory({ limit: 2, sessionId: session.id });
+    expect(latest.messages.map(({ id }) => id)).toEqual(['1000000', '1000001']);
+    expect(latest.nextCursor).toBe('1000000');
+    const earlier = await store.getHistory({ limit: 2, before: latest.nextCursor!, sessionId: session.id });
+    expect(earlier.messages.map(({ id }) => id)).toEqual(['999998', '999999']);
+    expect(earlier.nextCursor).toBeNull();
   });
 
   it('refuses blocks on the owner\'s own message, empty lists and broken blocks', async () => {

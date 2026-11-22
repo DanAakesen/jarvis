@@ -278,6 +278,11 @@ A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
 
+On iPhone, **Test a reply** tries the earlier Jarvis setup or Copilot in an
+isolated conversation, not the model used by normal Chat. Report a received reply
+only when there is a completed answer; distinguish a confirmed stop, a known
+failure and a result the app could not confirm.
+
 ## PI-only normal chat and voice (#1887, #1910, #1966)
 
 PI is the only normal Chat and Voice route. The obsolete engine selector, saved device choice, Chat test badge and client `engine` parameters are removed. The server accepts an older client's explicit `pi` only; `current` and every other value are refused. Isolated runtime tests keep their own selected runtime. Watch and web follow the server's one normal route; PI web voice still does not support camera or screen sharing. A PI failure does not switch engines.
@@ -309,9 +314,9 @@ Replace the custom main chat loop through a controlled, switchable Foundry
 Copilot-harness migration after fixing the live baseline. Preserve native audio,
 Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate
 subscription-backed Factory workers. Automated comparisons use identical test
-scenarios. Dan can test Current or Copilot through Test agent runtime in the chat
-menu, opening a separate labelled conversation with no mid-conversation switch;
-normal chats stay unchanged. The local candidate implements this selector and
+scenarios. On iPhone, **Test a reply** in the Plus menu opens a separate conversation
+using **Previous Jarvis setup** or **Copilot**. It cannot switch setups mid-conversation,
+and normal chats stay unchanged. The local candidate implements this selector and
 session-scoped test view; Copilot stays unavailable until its live definition,
 settings, bindings and application policies are verified. The owner also approved
 retaining the Python bridge temporarily for voice fallback, using existing Jarvis
