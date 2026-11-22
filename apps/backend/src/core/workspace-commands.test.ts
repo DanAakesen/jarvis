@@ -1,0 +1,73 @@
+import { randomUUID } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ToolFailure } from './tool-registry.js';
+import { isWorkspaceReflexOperation, workspaceCommandTool, WorkspaceCommandBroker } from './workspace-commands.js';
+
+describe('a workspace command that may already have been applied', () => {
+  const owner = 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef';
+  const layout = () => ({ commandId: randomUUID(), operation: 'layout', arrangement: 'tiled' }) as const;
+  const failure = (work: Promise<void>) => work.then(() => undefined, (error: unknown) => error as Error);
+  afterEach(() => { vi.useRealTimers(); });
+
+  /** The broker with one signed-in tab; `received` holds what the tab was sent, and the tab answers only when the test says so. */
+  function oneTab() {
+    const received: { commandId: string }[] = [];
+    const broker = new WorkspaceCommandBroker();
+    const tab = broker.connect(owner, (...[, data]) => { received.push((data as { command: { commandId: string } }).command); return true; });
+    return { broker, tab, received };
+  }
+
+  it('is marked when the caller cancels it: the tab may have applied it', async () => {
+    const { broker } = oneTab();
+    const controller = new AbortController();
+    const pending = failure(broker.execute(owner, layout(), controller.signal));
+    controller.abort();
+    const error = await pending;
+    expect(error).toBeInstanceOf(ToolFailure);
+    expect(error).toMatchObject({ outcomeUnknown: true });
+    expect(error.message).toMatch(/may already have applied it/u);
+  });
+
+  it('is marked when the tab does not answer within 10 seconds', async () => {
+    vi.useFakeTimers();
+    const { broker } = oneTab();
+    const pending = failure(broker.execute(owner, layout(), new AbortController().signal));
+    await vi.advanceTimersByTimeAsync(10_000);
+    const error = await pending;
+    expect(error).toMatchObject({ outcomeUnknown: true });
+    expect(error.message).toMatch(/did not acknowledge the command within 10 seconds; it may already have been applied/u);
+  });
+
+  it('is marked when the tab goes away before it answers', async () => {
+    const { broker, tab } = oneTab();
+    const pending = failure(broker.execute(owner, layout(), new AbortController().signal));
+    tab.close();
+    const error = await pending;
+    expect(error).toMatchObject({ outcomeUnknown: true });
+    expect(error.message).toMatch(/disconnected before acknowledging the command; it may already have been applied/u);
+  });
+
+  it('is not marked when the tab says it could not apply the command: that is its own claim', async () => {
+    const { broker, tab, received } = oneTab();
+    const pending = failure(broker.execute(owner, layout(), new AbortController().signal));
+    broker.acknowledge(owner, tab.sessionId, received[0]!.commandId, false, 'The workspace failed while applying the command.', 'error');
+    const error = await pending;
+    expect(error).toBeInstanceOf(ToolFailure);
+    expect(error).toMatchObject({ outcomeUnknown: false });
+    expect(error.message).toBe('The workspace failed while applying the command.');
+  });
+});
+
+describe('session commands', () => {
+  it('counts only voice and camera as session reflexes', () => {
+    expect(isWorkspaceReflexOperation({ operation: 'session', action: 'language', value: 'da' })).toBe(false);
+    for (const action of ['voice', 'camera']) expect(isWorkspaceReflexOperation({ operation: 'session', action })).toBe(true);
+  });
+
+  it('offers the model no language change in the schema it reads', () => {
+    const { action, value } = (workspaceCommandTool.inputSchema as { properties: Record<string, { enum: string[] }> }).properties;
+    expect(action!.enum).not.toContain('language');
+    expect(value!.enum).not.toContain('da');
+    expect(value!.enum).not.toContain('en');
+  });
+});

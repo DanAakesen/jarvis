@@ -341,7 +341,8 @@ export function createOwnerReminderTool(options: {
         const task = matches[0]!;
         const candidate: NewOwnerReminder = {
           // One message can ask for several reminders, so a request is the message, the task and everything the reminder says.
-          idempotencyKey: createHash('sha256').update([message.id, task.taskIdentity, input.fireAt, intent.cadence ?? 'once', intent.untilTaskDone].join(':')).digest('hex'),
+          // The time is the instant, not the text: 10:05Z and 11:05+01:00 are one request when the model retries.
+          idempotencyKey: createHash('sha256').update([message.id, task.taskIdentity, intent.fireAt.toISOString(), intent.cadence ?? 'once', intent.untilTaskDone].join(':')).digest('hex'),
           taskIdentity: task.taskIdentity,
           taskTitle: task.text,
           fireAt: intent.fireAt,

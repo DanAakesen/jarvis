@@ -9,6 +9,8 @@ export interface ToolRow {
   readonly discover: { readonly phrase: string; readonly language: string; readonly rank: number; readonly source: 'curated' | 'derived' } | undefined;
   readonly callable: CallableStatus | undefined;
   readonly schemaTokens: number;
+  /** What `find_tools` gives the model: a very large schema is compacted (pi/compact-schema.ts), so this can be far below `schemaTokens`. */
+  readonly sentTokens: number;
   readonly definitionTokens: number;
   readonly notes: readonly string[];
 }
@@ -89,7 +91,7 @@ export function renderReport(rows: readonly ToolRow[], meta: { readonly ceiling:
   lines.push('- **static**: `ok`, or the violated rule. Rules: a harness-safe unique name (1-64 of `A-Za-z0-9_-`, no `___`, no harness-managed name, no `gh_`/`az_` prefix), an informative description (30+ characters, 6+ words, says when to use it, at most 4,000 characters), a schema the harness accepts (object root, no `strict`, no `$ref`/`$schema`, only plain JSON Schema keywords, no cycles), and a size ceiling.');
   lines.push(`- **discoverable**: the phrase that makes \`find_tools\` return the tool and where it ranks. \`curated\` phrases are what Dan says (English and Danish) and must rank in the top 3 of the first search. \`derived\` phrases come from the tool's own description; the tool must be returned by \`find_tools\` (the top 3 in full, the next 5 as compact entries that can be called by exact name too).`);
   lines.push('- **callable**: `ok` (ran against the stubs and answered with a structured result), `refusal` or `failure (typed)` (a write tool answered with a typed, plain-English ToolRefusal/ToolFailure; the note shows the words), `requiresExternal` (cannot run offline: hardware, live credentials or a paid model; it is still run with its dependency down and must fail cleanly), `not advertised` (the legacy confirmation endpoints are HTTP only; the door must treat them as unknown).');
-  lines.push(`- **schema tokens**: characters / 4 of the parameters schema (definition tokens in the notes include name and description). A search that returns a tool pays its definition in every turn. Ceiling ${meta.ceiling}; the exceptions below are listed with their reason.`, '');
+  lines.push(`- **schema tokens**: characters / 4 of the parameters schema as the registry holds it (definition tokens in the notes include name and description). A search that returns a tool pays its definition in every turn. Ceiling ${meta.ceiling}; the exceptions below are listed with their reason. \`find_tools\` gives the model a compacted copy of a very large schema (a repeated part written once), so the largest-schemas table also shows what is sent.`, '');
   lines.push('## Summary', '');
   lines.push('| What | Count |', '| --- | ---: |');
   lines.push(`| Registered tools | ${summary.total} |`);
@@ -107,8 +109,8 @@ export function renderReport(rows: readonly ToolRow[], meta: { readonly ceiling:
   lines.push(`| Callable: not advertised (legacy) | ${summary.callable.notAdvertised} |`);
   lines.push(`| Callable: skipped | ${summary.callable.skipped} |`, '');
   lines.push('## The 15 largest schemas', '');
-  lines.push('| # | Tool | Schema tokens | Definition tokens |', '| ---: | --- | ---: | ---: |');
-  largestSchemas(sorted).forEach((row, index) => lines.push(`| ${index + 1} | \`${row.name}\` | ${row.schemaTokens} | ${row.definitionTokens} |`));
+  lines.push('| # | Tool | Schema tokens | Sent by find_tools | Definition tokens |', '| ---: | --- | ---: | ---: | ---: |');
+  largestSchemas(sorted).forEach((row, index) => lines.push(`| ${index + 1} | \`${row.name}\` | ${row.schemaTokens} | ${row.sentTokens} | ${row.definitionTokens} |`));
   lines.push('');
   const exceptions = Object.entries(meta.oversize);
   if (exceptions.length > 0) {

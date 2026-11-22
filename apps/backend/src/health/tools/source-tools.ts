@@ -377,7 +377,9 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       if (typeof input.mealKey !== 'string' || !/^(?:favorite|meal):[a-z0-9_-]{1,194}$/u.test(input.mealKey) ||
           ![null, 'like', 'dislike'].includes(input.preference as string | null)) throw new ToolRefusal('Use one exact favorite:/meal: key and like, dislike or null.');
       const store = nutrition(request);
-      const current = (await store.preferences([input.mealKey], signal))[0] ?? null;
+      // Suggestions and health_saved_food key feedback by the bare favourite id, so a favorite: key is stored under that id.
+      const storedKey = input.mealKey.startsWith('favorite:') ? input.mealKey.slice('favorite:'.length) : input.mealKey;
+      const current = (await store.preferences([storedKey], signal))[0] ?? null;
       if ((current?.preference ?? null) === input.preference) return { status: 'unchanged', mealKey: input.mealKey, preference: input.preference };
       const interactions = request.server.ownerInteractions;
       if (!interactions) throw new ToolRefusal('Action execution is unavailable. No meal preference was changed.');
@@ -385,9 +387,9 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       return interactions.runRequested('other', `Review this exact meal preference in Now. No food or Health row changes.\n${JSON.stringify({
         mealKey: input.mealKey, before: current?.preference ?? null, after: input.preference,
       })}`, async () => {
-        const latest = (await store.preferences([input.mealKey as string], signal))[0] ?? null;
+        const latest = (await store.preferences([storedKey], signal))[0] ?? null;
         if ((latest ? BigInt(String(latest.revision)) : 0n) !== revision) throw new ToolRefusal('The meal preference changed. Read the latest value and review the change again.');
-        const saved = await store.feedback(input.mealKey as string, input.preference as 'like' | 'dislike' | null, signal, revision);
+        const saved = await store.feedback(storedKey, input.preference as 'like' | 'dislike' | null, signal, revision);
         return { status: 'committed', mealKey: input.mealKey, preference: saved.preference ?? null, revision: String(saved.revision),
           source: 'daily.nutrition_recommendation_feedback' };
       }, signal, { channel: 'browser', lifetimeSeconds: 120 });

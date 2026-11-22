@@ -62,12 +62,12 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
       if (request.healthConnectorPrincipal) throw new ToolRefusal('Use the separate nutrition connector boundary for external clients.');
       signal.throwIfAborted();
       const parsed = internalSavedInput.safeParse(raw);
-      if (!parsed.success) throw new ToolRefusal('Choose one bounded saved-food operation without authority or operation-ID fields.');
+      if (!parsed.success) throw new ToolRefusal('Send operation as lookup_saved (name), read_preferences (favoriteIds), save_favorite (name, expectedRevision, sourceIdempotencyKey or definition, optional aliases), save_plan (name, expectedRevision, entries, optional description), delete_plan (id, expectedRevision) or set_feedback (favoriteId, expectedRevision, preference), and no other field.');
       const input = structuredClone(parsed.data);
       const store = nutrition(request);
       if (input.operation === 'lookup_saved' || input.operation === 'read_preferences') {
         const read = savedReadSchema.safeParse(input);
-        if (!read.success) throw new ToolRefusal('Use only the selectors for the chosen saved-food read.');
+        if (!read.success) throw new ToolRefusal('lookup_saved takes only name; read_preferences takes only favoriteIds (1 to 50 ids). Send nothing else with a read.');
         if (read.data.operation === 'lookup_saved') {
           const match = await store.lookupSaved(read.data.name, signal);
           return { status: match ? 'available' : 'empty', ...(match ? {
@@ -91,7 +91,7 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
         ...(['save_favorite', 'save_plan'].includes(input.operation) ? { operationId } : {}),
         ...(input.definition ? { definition: { ...input.definition, confidence: 'estimate' } } : {}),
       } });
-      if (!changeResult.success) throw new ToolRefusal('Use only the exact fields and current revision for this saved-food change.');
+      if (!changeResult.success) throw new ToolRefusal('This saved-food change has a missing, extra or invalid field. save_favorite needs name, expectedRevision (0 when new) and exactly one of sourceIdempotencyKey or definition; save_plan needs name, expectedRevision and entries (3 to 50 with slot and favoriteId); delete_plan needs id and expectedRevision; set_feedback needs favoriteId, expectedRevision and preference (like, dislike or null).');
       const change = changeResult.data.change;
       const expected = BigInt(change.expectedRevision);
       let kind: SavedKind;
@@ -175,7 +175,7 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
         if (!matches(row) || revision !== expected && revision !== expected + 1n ||
             kind !== 'feedback' && (typeof row.id !== 'string' || !row.id) ||
             change.operation === 'delete_plan' && revision !== expected + 1n) {
-          throw new ToolFailure('The saved-food change may have committed, but its exact receipt is unavailable. Read the saved record; do not retry with a new source or revision.');
+          throw new ToolFailure('The saved-food change may have committed, but its exact receipt is unavailable. Read the saved record; do not retry with a new source or revision.', { outcomeUnknown: true });
         }
         return { status: replay ? change.operation === 'delete_plan' ? 'already-deleted' : 'already-applied' : 'committed',
           operation: change.operation, record: kind === 'feedback' ? projectHealthRecord(row, feedbackFields) : projectNutritionRecord(row, kind) };

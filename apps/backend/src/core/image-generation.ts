@@ -98,13 +98,14 @@ function imageTool(options: ImageGenerationOptions): BackendModule['tools'][numb
           view,
         };
         if (!isWorkspaceCommand(command, generatedViewValidationOptions(request.server))) {
-          throw new ToolFailure(`Image artifact ${upload.artifactId} was saved, but its workspace view was invalid.`);
+          throw new ToolFailure(`Image artifact ${upload.artifactId} was saved, but its workspace view was invalid.`, { outcomeUnknown: true });
         }
         try {
           await request.server.workspaceCommands.execute(ownerObjectId, command, signal);
         } catch {
           throw new ToolFailure(
             `Image artifact ${upload.artifactId} was saved, but the active workspace could not display it.`,
+            { outcomeUnknown: true },
           );
         }
         return {
@@ -114,7 +115,7 @@ function imageTool(options: ImageGenerationOptions): BackendModule['tools'][numb
       } catch (error) {
         if (saved) {
           if (error instanceof ToolFailure) throw error;
-          throw new ToolFailure(`Image artifact ${upload.artifactId} was saved, but could not be displayed. Do not regenerate it.`);
+          throw new ToolFailure(`Image artifact ${upload.artifactId} was saved, but could not be displayed. Do not regenerate it.`, { outcomeUnknown: true });
         }
         if (requestSignal.aborted) throw new ToolFailure('Image generation was cancelled.');
         if (timeoutController.signal.aborted) throw new ToolFailure('Image generation timed out.');

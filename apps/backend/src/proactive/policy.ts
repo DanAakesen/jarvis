@@ -22,6 +22,11 @@ export function classifySuggestionScope(
   return personal ? 'personal' : work ? 'work' : 'unknown';
 }
 
+/** The word in `text` that makes `classifySuggestionScope` read it as `scope`, so a refusal can say what it saw. */
+export function suggestionScopeWord(text: string, scope: Exclude<SuggestionScope, 'unknown'>): string | undefined {
+  return (scope === 'work' ? workScopePattern : personalScopePattern).exec(text)?.[0];
+}
+
 export function hasTravelEvidence(
   text: string,
   facts: readonly Pick<SourceFact, 'text'>[],
