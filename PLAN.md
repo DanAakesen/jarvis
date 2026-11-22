@@ -51,7 +51,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010), [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — truthful Chat status and typing | Build 124 still lags during typing after #2027 and #2034. The follow-up narrows draft observation, removes redundant editor layout and moves the screen-share heartbeat read off the UI thread. Pending an Apple build and device timing. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Build 124 test 9 passed. Dan wants the single Proactive suggestions switch directly on the main Settings page. The inline control awaits device acceptance. Voice gesture acceptance remains open. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | #2029 merged. Verify first dictation, recovery and stable Voice on Watch. |
-| [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Open. Track responsiveness and freshness separately from a successful response. |
+| [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Provider sync and search freshness remain open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Scope approved in E. Implementation pending. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |
 

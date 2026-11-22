@@ -810,8 +810,9 @@ return {
           let isSteering = false;
           let firstTurnTokenLogged = false;
           while (!controller.signal.aborted) {
-            const answer = '';
-            let partial = answer;
+            let partial = '';
+            let partialBytes = 0;
+            let lastCodeUnit = NaN;
             const roundController = new AbortController();
             activeTurn.roundController = roundController;
             activeTurn.phase = 'model';
@@ -900,7 +901,11 @@ return {
                   const progress = delta.text.trimStart();
                   // Progress is its own event. Text that was already streamed as reply is moved out of the reply; a repeated
                   // or unmatched line is only shown as progress and never ends the turn.
-                  if (progress && interim.startsWith(progress)) partial = interim.slice(progress.length);
+                  if (progress && interim.startsWith(progress)) {
+                    partial = interim.slice(progress.length);
+                    partialBytes = Buffer.byteLength(partial);
+                    lastCodeUnit = partial.charCodeAt(partial.length - 1);
+                  }
                   yield streamEvent(delta.type, { text: delta.text });
                   next = agentIterator.next();
                   continue;
@@ -913,8 +918,13 @@ return {
                   firstTurnTokenLogged = true;
                   logChatLatency(request, 'turn_first_token', turnStartedAt);
                 }
+                partialBytes += Buffer.byteLength(delta);
+                // Separately encoded surrogate halves cost six bytes. Once joined they cost four.
+                const first = delta.charCodeAt(0);
+                if (lastCodeUnit >= 0xd800 && lastCodeUnit <= 0xdbff && first >= 0xdc00 && first <= 0xdfff) partialBytes -= 2;
+                if (delta.length) lastCodeUnit = delta.charCodeAt(delta.length - 1);
+                if (partialBytes > 512 * 1024) throw new Error('Chat response exceeded the size limit');
                 partial += delta;
-                if (Buffer.byteLength(partial) > 512 * 1024) throw new Error('Chat response exceeded the size limit');
                 yield streamEvent('delta', { text: delta });
                 next = agentIterator.next();
               }
