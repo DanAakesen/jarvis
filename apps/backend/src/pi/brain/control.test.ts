@@ -9,6 +9,7 @@ import { createPiRoutes } from '../routes.js';
 import { createMemoryPiStore } from '../store.js';
 import { createPiTurnRegistry } from '../turns.js';
 import { createBrainControl } from './control.js';
+import type { BrainTickOutcome } from './outcomes.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const ownerToken = 'owner.token.fixture';
@@ -17,7 +18,7 @@ const bearer = (value: string) => `${['Bear', 'er'].join('')} ${value}`;
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function setup(options: { wired?: boolean } = {}) {
+function setup(options: { wired?: boolean; lastTick?: { at: Date; outcome: BrainTickOutcome }; nextDueAt?: Date } = {}) {
   const now = () => new Date('2026-11-16T10:00:00Z');
   const piStore = createMemoryPiStore(now);
   const proactive = createMemoryProactiveStore(config.auth.ownerObjectId);
@@ -35,6 +36,8 @@ function setup(options: { wired?: boolean } = {}) {
     brain: () => options.wired === false ? undefined : {
       wake: () => { woken += 1; },
       pendingLogs: 2,
+      lastTick: options.lastTick ?? null,
+      nextDueAt: options.nextDueAt ?? null,
       async status() {
         return {
           used: 0, allowed: 12, remaining: 12, lastAt: null, lastActivationType: null,
@@ -70,9 +73,22 @@ describe('the brain test switch', () => {
     const body = (await call('GET', ownerToken)).json();
     expect(body).toMatchObject({
       available: true, enabled: false, paused: false, logPending: 2,
-      budget: { limitDkk: 100, spentDkk: 82, state: 'warn' }, month: { wakes: 1, costDkk: 0.12 }, today: { messages: 0 },
+      budget: { limitDkk: 100, spentDkk: 82, state: 'warn' }, month: { wakes: 1, costDkk: 0.12 },
+      today: { messages: 0, usedTurns: 0, allowedTurns: 12, wakes: 1, costDkk: 0.12 },
       lastWake: { inputTokens: 12000, cachedTokens: 9000, outputTokens: 100, costDkk: 0.12, outcome: 'ok' },
+      slots: { queue: { pending: 0, leased: 0, retrying: 0 } },
     });
+  });
+
+  it('tells a switched-off brain from an idle one: the last pass of the ticker and when it looks again', async () => {
+    const quiet = setup();
+    expect((await quiet.call('GET', ownerToken)).json()).toMatchObject({ lastTick: null, nextDueAt: null });
+    const looked = setup({ lastTick: { at: new Date('2026-11-16T09:59:30Z'), outcome: 'off' }, nextDueAt: new Date('2026-11-16T10:05:00Z') });
+    expect((await looked.call('GET', ownerToken)).json()).toMatchObject({
+      enabled: false, lastTick: { at: '2026-11-16T09:59:30.000Z', outcome: 'off' }, nextDueAt: '2026-11-16T10:05:00.000Z',
+    });
+    const unwired = setup({ wired: false });
+    expect((await unwired.call('GET', ownerToken)).json()).toMatchObject({ available: false, lastTick: null, nextDueAt: null });
   });
 
   it('saves the switch, wakes the brain when it goes on, and is the owner\'s alone', async () => {

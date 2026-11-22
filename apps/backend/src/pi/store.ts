@@ -34,6 +34,8 @@ export type PiTurnKind = PiTurnRecord['kind'];
 /** The chat engine's own turns. The brain's wakes are a separate budget and never count against the chat cap. */
 export const chatTurnKinds: readonly PiTurnKind[] = ['chat', 'warm', 'smoke'];
 export const brainTurnKinds: readonly PiTurnKind[] = ['brain'];
+/** Everything in the ledger. A watch look is not a kind of its own: it rides inside a `brain` wake. */
+export const allTurnKinds: readonly PiTurnKind[] = [...chatTurnKinds, ...brainTurnKinds];
 
 export interface PiMessageRecord {
   readonly ownerObjectId?: string;

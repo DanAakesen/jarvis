@@ -3,6 +3,7 @@ import type { BackgroundJobHandle, BackgroundJobRegistry } from '../core/jobs.js
 import type { UsageStore } from '../core/usage.js';
 import { canRunWithinBudget, effectiveProactiveBudget, estimateCost } from './budget.js';
 import { detectFindings, normaliseFactText } from './detect.js';
+import { errorClassName } from '../logging.js';
 import type { ProactiveModel } from './model.js';
 import { sourceLabels, type FindingInput, type ProactiveStore } from './store.js';
 import { isQuietHour, monthKey } from './time.js';
@@ -67,7 +68,8 @@ export interface ProactiveEngineOptions {
   backgroundJobs?: Pick<BackgroundJobRegistry, 'start'>;
   usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
   now: () => Date;
-  logger?: { warn: (data: { runId: string; reason: string }, message: string) => void };
+  /** `stage` and `errorClass` say where a run failed and what was thrown (a class name, never its message). */
+  logger?: { warn: (data: { runId: string; reason: string; stage?: string; errorClass?: string }, message: string) => void };
   onFindingsStored?: readonly ((context: FindingsStoredContext) => void | Promise<void>)[];
   vaultMirrorStatusReader?: Pick<VaultMirrorStatusReader, 'read'>;
 }
@@ -140,7 +142,13 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
     };
     const heartbeat = () => {
       heartbeatTimer = setTimeout(() => {
-        void current().then(heartbeat, () => cancel(reason ?? 'internal_error'));
+        void current().then(heartbeat, (error: unknown) => {
+          // A heartbeat that failed because the run was already stopping is not a failure of its own.
+          if (!controller.signal.aborted) options.logger?.warn({
+            runId: run.id, reason: 'internal_error', stage: 'heartbeat', errorClass: errorClassName(error),
+          }, 'proactive.failed');
+          cancel(reason ?? 'internal_error');
+        });
       }, LEASE_HEARTBEAT_MS);
       heartbeatTimer.unref();
     };
@@ -350,11 +358,18 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       for (const hook of options.onFindingsStored ?? []) {
         await current();
         try { await abortable(Promise.resolve().then(() => hook(context)), controller.signal); }
-        catch { options.logger?.warn({ runId: run.id, reason: 'hook_failed' }, 'proactive.failed'); }
+        catch (error) {
+          options.logger?.warn({ runId: run.id, reason: 'hook_failed', errorClass: errorClassName(error) }, 'proactive.failed');
+        }
         check();
       }
       status = 'done';
-    } catch {
+    } catch (error) {
+      // A run stopped on purpose (quiet hours, a restart, its deadline, a lost lease, changed preferences) already has its reason.
+      // Anything else is a failure whose class was never logged.
+      if (reason === null && controller.signal.reason !== 'preferences_changed') options.logger?.warn({
+        runId: run.id, reason: 'internal_error', stage: 'run', errorClass: errorClassName(error),
+      }, 'proactive.failed');
       reason ??= controller.signal.reason === 'preferences_changed' ? 'preferences_changed' : 'internal_error';
     } finally {
       activeRuns.delete(controller);
@@ -370,10 +385,10 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           status = 'failed';
           reason = 'lease_lost';
         }
-      } catch {
+      } catch (error) {
         status = 'failed';
         reason = 'internal_error';
-        options.logger?.warn({ runId: run.id, reason }, 'proactive.failed');
+        options.logger?.warn({ runId: run.id, reason, stage: 'run_finish', errorClass: errorClassName(error) }, 'proactive.failed');
       }
       try {
         if (!jobStarted && status !== 'skipped') {
@@ -384,7 +399,9 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           else if (status === 'cancelled') await job.cancelled(jobReasons[reason ?? 'internal_error'] ?? jobReasons.internal_error!);
           else await job.fail(jobReasons[reason ?? 'internal_error'] ?? jobReasons.internal_error!);
         }
-      } catch { options.logger?.warn({ runId: run.id, reason: 'job_update_failed' }, 'proactive.failed'); }
+      } catch (error) {
+        options.logger?.warn({ runId: run.id, reason: 'job_update_failed', errorClass: errorClassName(error) }, 'proactive.failed');
+      }
     }
   };
 }

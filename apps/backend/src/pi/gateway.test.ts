@@ -473,6 +473,50 @@ describe('PI gateway', () => {
     await first.return(undefined).catch(() => undefined);
   });
 
+  it('attributes every turn in the ledger by kind, so a call that repeats on a schedule can be recognised', async () => {
+    const { gateway, store } = setup([]);
+    const base = { messageId: null, model: 'm', inputTokens: 4_000, cachedTokens: 0, outputTokens: 5, firstTextMs: 900, totalMs: 1_500, outcome: 'ok' as const };
+    // The setup clock reads 2026-11-15T16:00:00Z, so the first warm-up is outside the 24 hours.
+    store.turns.push(
+      { ...base, kind: 'warm', costDkk: 0.03, at: new Date('2026-11-14T14:00:00Z') },
+      { ...base, kind: 'warm', costDkk: 0.03, at: new Date('2026-11-15T13:00:00Z') },
+      { ...base, kind: 'warm', costDkk: 0.03, at: new Date('2026-11-15T14:00:00Z') },
+      { ...base, kind: 'chat', costDkk: 0.05, at: new Date('2026-11-15T14:30:00Z'), messageId: '42', activationType: 'chat', activationSource: 'chat' },
+      { ...base, kind: 'brain', costDkk: 0.2, inputTokens: 12_000, outputTokens: 300, at: new Date('2026-11-15T15:00:00Z'), activationType: 'event', activationSource: 'watch' },
+    );
+    const status = await gateway.status(new AbortController().signal);
+    expect(status.turns.last24h).toEqual({
+      chat: { turns: 1, costDkk: 0.05 }, warm: { turns: 2, costDkk: 0.06 }, smoke: { turns: 0, costDkk: 0 }, brain: { turns: 1, costDkk: 0.2 },
+    });
+    expect(status.turns.recent.map(turn => [turn.kind, turn.at])).toEqual([
+      ['brain', '2026-11-15T15:00:00.000Z'], ['chat', '2026-11-15T14:30:00.000Z'], ['warm', '2026-11-15T14:00:00.000Z'],
+      ['warm', '2026-11-15T13:00:00.000Z'], ['warm', '2026-11-14T14:00:00.000Z'],
+    ]);
+    expect(status.turns.recent[0]).toEqual({
+      at: '2026-11-15T15:00:00.000Z', kind: 'brain', outcome: 'ok', inputTokens: 12_000, cachedTokens: 0, outputTokens: 300, costDkk: 0.2, totalMs: 1_500,
+      activation: { type: 'event', source: 'watch' },
+    });
+    expect(status.turns.recent[2]).not.toHaveProperty('activation');
+    // The chat numbers keep their meaning: a Background PI wake is neither the last turn nor part of the chat month.
+    expect(status.lastTurn).toMatchObject({ kind: 'chat', at: '2026-11-15T14:30:00.000Z' });
+    expect(status.month.turns).toBe(4);
+    expect(JSON.stringify(status)).not.toContain('"42"');
+  });
+
+  it('keeps the newest twenty turns and nothing when the ledger is empty', async () => {
+    const { gateway, store } = setup([]);
+    expect((await gateway.status(new AbortController().signal)).turns).toEqual({
+      last24h: { chat: { turns: 0, costDkk: 0 }, warm: { turns: 0, costDkk: 0 }, smoke: { turns: 0, costDkk: 0 }, brain: { turns: 0, costDkk: 0 } }, recent: [],
+    });
+    for (let minute = 0; minute < 25; minute += 1) {
+      store.turns.push({ messageId: null, model: 'm', inputTokens: 1, cachedTokens: 0, outputTokens: 1, costDkk: 0.01, firstTextMs: 1, totalMs: 1, outcome: 'ok', kind: 'warm', at: new Date(Date.UTC(2026, 10, 15, 12, minute)) });
+    }
+    const { recent, last24h } = (await gateway.status(new AbortController().signal)).turns;
+    expect(recent).toHaveLength(20);
+    expect(recent[0]!.at).toBe('2026-11-15T12:24:00.000Z');
+    expect(last24h.warm).toEqual({ turns: 25, costDkk: 0.25 });
+  });
+
   it('does not spend on a warm-up once over the cap, and shows what is left', async () => {
     const { gateway, calls, store } = setup([]);
     expect((await gateway.status(new AbortController().signal)).month).toEqual({ spentDkk: 0, capDkk: 1, remainingDkk: 1, turns: 0 });

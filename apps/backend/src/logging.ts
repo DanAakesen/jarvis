@@ -6,6 +6,8 @@ import { systemSmokeCheckIds } from '@jarvis/contracts';
 import { safeSmokeReason } from './system-status.js';
 import { sanitizeManagedProviderCause } from './managed-provider-cause.js';
 import { voiceStages, voiceTimeoutStages, voiceEventTypes } from './voice/diagnostics.js';
+import { brainLogReasons, brainTickOutcomes } from './pi/brain/outcomes.js';
+import { allTurnKinds } from './pi/store.js';
 
 // This is the external export boundary, replaced by an offline sink in tests.
 export interface TelemetrySink {
@@ -76,6 +78,14 @@ const failureEvents = new Set([
 ]);
 const errorKinds = new Set(['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal']);
 
+/** The class of a thrown value, for diagnostics: a code identifier such as `RequestError` or `TypeError`, never its message. */
+export function errorClassName(error: unknown): string {
+  const name = error instanceof Error
+    ? error.constructor.name
+    : error === null ? 'null' : typeof error === 'object' ? 'Object' : typeof error;
+  return /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(name) ? name : 'Error';
+}
+
 export function safeErrorFields(error: unknown): { kind: string; statusCode?: number } {
   const details = error !== null && typeof error === 'object' ? error as Record<string, unknown> : {};
   const kind = typeof details.kind === 'string' && errorKinds.has(details.kind)
@@ -111,6 +121,9 @@ const events = new Set([
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable',
   'pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed', 'pi.mcp_tool',
+  'pi.brain', 'pi.brain_tick', 'pi.brain_state', 'pi.brain_run',
+  'pi.turn_record_failed', 'pi.usage_record_failed', 'pi.mark_warm_failed', 'pi.situation_stale_failed',
+  'pi.smoke_failed', 'pi.watches',
   'weather.phase',
   'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'voice.late_session_ended',
@@ -124,7 +137,9 @@ const events = new Set([
   'factory.issue_create_outcome_uncertain',
   'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
   'system.smoke_check',
-  'proactive.reminder_plan',
+  'proactive.reminder_plan', 'proactive.reminder_tick', 'proactive.alert',
+  'proactive.events', 'proactive.events_disabled', 'proactive.event_model_failed', 'proactive.event_producer',
+  'proactive.event_source',
   'phone.call_callback_processed', 'phone.incoming_call_rejected', 'phone.session_started',
 ]);
 
@@ -132,7 +147,10 @@ export function isRegisteredLogEvent(event: string): boolean {
   return events.has(event);
 }
 
-/** Historical logs are untrusted. Reuse the export allowlist, then omit free text and identifiers. */
+/**
+ * Historical logs are untrusted. Reuse the export allowlist, then omit free text and identifiers. The exception is an
+ * activation's id: a server-generated UUID that ties a wake to its ledger turn.
+ */
 export function safeHistoricalLogFields(input: Record<string, unknown>): Record<string, unknown> {
   const categories = new Set([
     'kind', 'method', 'reason', 'phase', 'stage', 'lastStage', 'outcome', 'decision', 'status',
@@ -140,6 +158,7 @@ export function safeHistoricalLogFields(input: Record<string, unknown>): Record<
     'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
     'errorCode', 'errorType', 'param', 'state', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
     'event', 'code', 'server', 'tool', 'azureCatalogue',
+    'errorClass', 'trigger', 'activationType', 'activationSource', 'activationId', 'classes',
   ]);
   return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
     typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
@@ -214,6 +233,17 @@ const piStreamReasons = new Set([
   'no_stream', 'no_conversation', 'busy', 'brain_wake_failed', 'client_tool_round_limit',
 ]);
 const piClientToolOutcomes = new Set(['answered_default', 'answered_task_client_owned', 'approved']);
+/** The brain's own words for what a pass decided and why a sweep or wake ended: the only vocabularies `pi.brain_tick` and `pi.brain` may carry. */
+const piBrainTickOutcomes = new Set<string>(brainTickOutcomes);
+const piBrainReasons = new Set<string>(brainLogReasons);
+/** Where a proactive scheduler, engine run or manual check failed: the only vocabulary `proactive.failed` may carry as a stage. */
+const proactiveFailureStages = new Set([
+  'startup', 'slot', 'run', 'run_finish', 'heartbeat', 'event_tick', 'manual_run', 'manual_run_finish',
+]);
+/** The kinds of turn the PI ledger records: the only vocabulary `pi.turn_record_failed` and `pi.usage_record_failed` may carry. */
+const piTurnKinds = new Set<string>(allTurnKinds);
+/** What a proactive push alert was about; `proactive.alert` lists them, comma-separated. */
+const proactiveAlertClasses = new Set(['deadline_24h', 'calendar_clash', 'travel_disruption', 'insight']);
 /** Who owned a harness call, and which rule decided: `native` calls ran inside the harness and were never answered. */
 const piHarnessCallClasses = new Set(['native', 'client_owned', 'unknown']);
 const piHarnessCallRules = new Set([
@@ -229,6 +259,7 @@ const piMcpOutcomes = new Set(['ok', 'refused', 'error']);
 const piMcpChannels = new Set(['chat', 'voice', 'wake', 'smoke']);
 const piMcpProviders = new Set(['local', 'gh_', 'az_']);
 const piMcpReplayChecks = new Set(['on', 'no_id', 'id_reused']);
+const uuidShape = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 const piAzureCatalogueStates = new Set([
   'idle', 'ready', 'stale', 'starting', 'unreachable', 'empty', 'not_configured', 'not_searched',
 ]);
@@ -478,6 +509,11 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.reason === 'string' &&
         ['internal_error', 'hook_failed', 'job_update_failed'].includes(input.reason)) fields.reason = input.reason;
+    // Where it failed, and the class of what was thrown (a code identifier such as `RequestError`), never its message.
+    if (typeof input.stage === 'string' && proactiveFailureStages.has(input.stage)) fields.stage = input.stage;
+    if (typeof input.errorClass === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(input.errorClass)) {
+      fields.errorClass = input.errorClass;
+    }
     return fields;
   }
   if (input.msg === 'proactive.todo_writer') {
@@ -534,6 +570,25 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         input.durationMs >= 0 && input.durationMs <= 180_000) fields.durationMs = input.durationMs;
     return fields;
   }
+  if (input.msg === 'proactive.reminder_tick' || input.msg === 'proactive.alert' || input.msg === 'proactive.events' ||
+      input.msg === 'proactive.events_disabled' || input.msg === 'proactive.event_model_failed' ||
+      input.msg === 'proactive.event_producer' || input.msg === 'proactive.event_source') {
+    // Our own reason words, a source's name, counts and timings: never a reminder, an alert, an event, its summary, a source's text or a push endpoint.
+    const fields: Record<string, unknown> = {};
+    const token = /^[a-z][a-z0-9_.-]{0,63}$/u;
+    if (typeof input.runId === 'string' && uuidShape.test(input.runId)) fields.runId = input.runId;
+    if (typeof input.reason === 'string' && token.test(input.reason)) fields.reason = input.reason;
+    if (typeof input.source === 'string' && token.test(input.source)) fields.source = input.source;
+    if (typeof input.classes === 'string' && input.classes.length <= 120 &&
+        input.classes.split(',').every((value) => proactiveAlertClasses.has(value))) fields.classes = input.classes;
+    for (const key of ['count', 'events', 'outreach', 'dropped', 'outputTokens']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000) fields[key] = value;
+    }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 3_600_000) fields.durationMs = input.durationMs;
+    return fields;
+  }
   if (typeof input.msg === 'string' && ownerSessionEvents.has(input.msg)) {
     if (input.msg === 'owner_session.boot_revoke') {
       const fields: Record<string, unknown> = {};
@@ -576,6 +631,57 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.elapsedMs = input.elapsedMs;
     }
     if (typeof input.host === 'string' && weatherHosts.has(input.host)) fields.host = input.host;
+    return fields;
+  }
+  if (input.msg === 'pi.brain_tick' || input.msg === 'pi.brain_state' || input.msg === 'pi.brain' || input.msg === 'pi.brain_run') {
+    // The brain's fixed words and numbers: never an event, its summary, a message to Dan, a tool argument, a provider message or the id of what it touched.
+    const fields: Record<string, unknown> = {};
+    const count = (value: unknown, max: number): value is number =>
+      typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= max;
+    const amount = (value: unknown, max: number): value is number =>
+      typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max;
+    if (input.msg === 'pi.brain_tick') {
+      if (typeof input.outcome === 'string' && piBrainTickOutcomes.has(input.outcome)) fields.outcome = input.outcome;
+      if (count(input.queued, 1_000_000)) fields.queued = input.queued;
+      if (count(input.wakesToday, 10_000)) fields.wakesToday = input.wakesToday;
+      if (count(input.nextDueInSec, 7 * 86_400)) fields.nextDueInSec = input.nextDueInSec;
+      if (amount(input.spendMonthDkk, 1_000_000)) fields.spendMonthDkk = input.spendMonthDkk;
+    } else if (input.msg === 'pi.brain_state') {
+      for (const key of ['enabled', 'paused']) if (typeof input[key] === 'boolean') fields[key] = input[key];
+      if (input.reason === 'unreadable') fields.reason = input.reason;
+    } else if (input.msg === 'pi.brain') {
+      if (typeof input.reason === 'string' && piBrainReasons.has(input.reason)) fields.reason = input.reason;
+      if (input.trigger === 'scheduled' || input.trigger === 'catchup' || input.trigger === 'manual') fields.trigger = input.trigger;
+      for (const key of ['events', 'sent', 'tools', 'pending']) if (count(input[key], 1_000_000)) fields[key] = input[key];
+      if (amount(input.costDkk, 1_000)) fields.costDkk = input.costDkk;
+    } else {
+      if (['ok', 'failed', 'cancelled', 'timeout'].includes(String(input.outcome))) fields.outcome = input.outcome;
+      for (const key of ['firstTextMs', 'totalMs']) if (amount(input[key], 3_600_000)) fields[key] = input[key];
+      for (const key of ['inputTokens', 'cachedTokens', 'outputTokens']) if (count(input[key], 100_000_000)) fields[key] = input[key];
+      for (const key of ['tools', 'staleSourceCount', 'actionCount', 'pushCount']) if (count(input[key], 10_000)) fields[key] = input[key];
+      if (count(input.stateRevision, Number.MAX_SAFE_INTEGER)) fields.stateRevision = input.stateRevision;
+      if (typeof input.estimated === 'boolean') fields.estimated = input.estimated;
+      if (amount(input.costDkk, 1_000)) fields.costDkk = input.costDkk;
+      if (typeof input.activationId === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(input.activationId)) {
+        fields.activationId = input.activationId;
+      }
+      if (['chat', 'voice', 'scheduled', 'event'].includes(String(input.activationType))) fields.activationType = input.activationType;
+      if (typeof input.activationSource === 'string' && /^[a-z][a-z0-9_.-]{0,63}$/u.test(input.activationSource)) {
+        fields.activationSource = input.activationSource;
+      }
+    }
+    return fields;
+  }
+  if (input.msg === 'pi.turn_record_failed' || input.msg === 'pi.usage_record_failed' ||
+      input.msg === 'pi.situation_stale_failed' || input.msg === 'pi.watches') {
+    // A write or refresh that failed and what it was for: the kind of turn, the wake's id or a fixed reason. Never the turn, its text or its cost.
+    const fields: Record<string, unknown> = {};
+    if (typeof input.kind === 'string' && piTurnKinds.has(input.kind) &&
+        (input.msg === 'pi.turn_record_failed' || input.msg === 'pi.usage_record_failed')) fields.kind = input.kind;
+    if (input.msg === 'pi.situation_stale_failed' && typeof input.activationId === 'string' && uuidShape.test(input.activationId)) {
+      fields.activationId = input.activationId;
+    }
+    if (input.msg === 'pi.watches' && input.reason === 'watch_index_refresh_failed') fields.reason = input.reason;
     return fields;
   }
   if (input.msg === 'pi.harness_item') {
@@ -635,7 +741,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     return fields;
   }
   if (input.msg === 'pi.stream_failed' || input.msg === 'pi.stream_retry' ||
-      input.msg === 'pi.mcp_list_failed' || input.msg === 'pi.mcp_call_failed') {
+      input.msg === 'pi.mcp_list_failed' || input.msg === 'pi.mcp_call_failed' || input.msg === 'pi.smoke_failed') {
     // Short fixed vocabulary, plain labels and numbers only: never a prompt, reply, tool argument, token or provider message.
     const fields: Record<string, unknown> = {};
     if (typeof input.reason === 'string' && piStreamReasons.has(input.reason)) fields.reason = input.reason;

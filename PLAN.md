@@ -53,6 +53,7 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 9. Dan decides the five choices the #2021 decision entry leaves open (chat-only rewrite of a meal estimate to the server's nutrition list, the chat-only reflex path that can run read tools before PI answers, voice sessions always stored as `en`, no `pi.turn` record for a turn refused before it starts, and a spoken failure stored as a transcript while a chat failure is not; the #2021 PLAN.md row names the first four). One live Chat and one live Voice trace of the same request is the live check of #2021's parity claim; it needs a live turn.
 10. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
 11. P1, proactive intelligence, ranks after P0 and is tracked in [#2011](https://github.com/DanAakesen/jarvis/issues/2011); the P0 acceptance list (daily-core requests in Chat and Voice) is [#2012](https://github.com/DanAakesen/jarvis/issues/2012). #2018 added the first signals Dan named to the proactive queue (GitHub releases, issues, comments, pull requests and failed default-branch checks, failed reminder deliveries, calendar clashes); the brain decides whether he is told, and #2018 lists weather, health and location events as not built. Dan ticks `Release` in the live GitHub App's settings (and confirms Issue comment, Issues, Pull request and Check run are ticked) and watches how the brain handles the new events behind the PI switch. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence"). [#2011](https://github.com/DanAakesen/jarvis/issues/2011) reports that no wake ran in 30 days of logs and lists releases, issue and PR events and reminder failures as not yet signals (#2018 has since added them); I did not re-check either.
+12. Making the brain visible is #2019 (open until merged). The "no wake in 30 days" reading above cannot be trusted: `pi.brain_run` and `pi.brain` were not registered log events, so any wake was exported as a bare `backend.event` with no fields. Once #2019 is deployed, read `pi.brain_state` (is the switch on?), `pi.brain_tick` (why a pass did not wake it), `GET /pi/brain` (`lastTick`, `nextDueAt`, `today`) and `GET /pi/status` `turns.recent` (who makes the hourly call of about 4k tokens; lead, unverified: `POST /pi/warm` on every app foreground). The old 07:00/18:00 slot engine stays until the brain's first proven wake; its deletion is parked on `danaakesen-shiny-carnival-engine-deletion`, and decision A (`docs/pi/cutover.md`) is Dan's.
 
 ## Chat and Voice parity replay — 21 November 2026 (#1967, #1988)
 
@@ -98,6 +99,21 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | Parity test: the tools `find_tools` shows a wake equal Chat's plus the brain-only tools; a failure lists the differences | Done |
 | Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
 | Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
+
+## See the brain — 21 November 2026 (Refs #1969)
+
+**Status: implemented; offline lint, build and the full backend suite pass (commands in the pull request). Not run: a live wake or a deploy. The first real `pi.brain_tick` and `pi.brain_run` lines after deploy are the live check. Turning the brain on stays the owner's `PUT /pi/brain`.**
+
+| Step | State |
+| --- | --- |
+| Log `pi.brain_tick` when the tick outcome changes and `pi.brain_state` at startup; register `pi.brain` and `pi.brain_run` (both were exported as `backend.event` without fields, so zero `pi.brain_run` lines proved nothing) | Done |
+| Extend `GET /pi/brain` with `lastTick`, `nextDueAt`, `today.wakes` and `today.costDkk` | Done |
+| Name the kind of every turn in `GET /pi/status` (`lastTurn.kind`, `turns.last24h`, `turns.recent`); label a wake that only a due watch caused `watch` | Done |
+| `proactive.failed` carries `stage` and `errorClass` on every path of the old engine, the scheduler and the manual check; every path reproduced in a test; the scheduler survives a failed startup write and retries a slot whose claim threw | Done |
+| Register the thirteen other `pi.*` and `proactive.*` events that were exported as bare `backend.event`, test that none can be added unregistered, and keep the error class, trigger and activation in `read_backend_logs` | Done |
+| Name the hourly call of about 4k tokens | Open: read `GET /pi/status` `turns.recent` on production |
+| Delete the old 07:00/18:00 slot engine (the brain's sweep has superseded it since #1964) | Prepared and tested on the parked branch `danaakesen-shiny-carnival-engine-deletion` (commit `1d912cda`, no pull request); meant to land only after the brain's first proven wake. Open |
+| Decide what the engine's hooks become (decision A, `docs/pi/cutover.md`, which now lists what each feature does without the engine) | Open, owner |
 
 ## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
 
