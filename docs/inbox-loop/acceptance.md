@@ -11,7 +11,7 @@ Dan approved capture and automatic follow-ups. Production parameters enable both
 
 Production overrides both template defaults in `infra/main.parameters.json`. Reviews require Background PI, an enabled Notes source and available budget. An earlier event can satisfy the PI wake for a slot while its Inbox review still runs once.
 
-## What is left for the owner
+## Deployment and acceptance
 
 1. **Switch-on:** read the deployed revision and `GET /inbox/status`. Confirm both flags before testing.
 2. **External assistants:** Use the [MCP contract](mcp.md). OAuth connectors are not built.
@@ -27,7 +27,7 @@ Use one test idea and its normal 07:00 or 18:00 Copenhagen review. An item recei
 - [ ] Ask Jarvis for an inbox credential, run the [Shortcut](shortcut.md) on iPhone and Watch, then verify the revoked credential no longer works.
 - [ ] Connect one [MCP assistant](mcp.md) and capture from it.
 - [ ] Open `GET /inbox/status` (owner token): live items, nudges, spend today and over 30 days by kind.
-- [ ] With nudges on: wait for 07:00 or 18:00 (or use the manual proactive check). A nudge arrives as a card and, for medium or high, as one push. Give it a thumb on the card; after the next run the note's trail shows it and `/inbox/status` counts it.
+- [ ] With nudges on: wait for 07:00 or 18:00 (or use the manual proactive check). When follow-up is warranted, check for a card and at most one eligible push. Give it a thumb on the card; after the next run the note's trail shows it and `/inbox/status` counts it.
 - [ ] After a day, check `lastAuditDay`; after a Sunday, `lastWeeklyReviewDay` and "what is my nudge style?" in chat.
 - [ ] Use the private status view to verify ledger entries by day and kind. Do not publish spend or owner limits.
 
@@ -38,4 +38,4 @@ Use one test idea and its normal 07:00 or 18:00 Copenhagen review. An item recei
 - ChatGPT and claude.ai custom connectors need the Entra OAuth registration above (owner action).
 - The inbox spend is also visible only in `/inbox/status`, not yet on the Proactive page.
 - After an index rebuild, nudge clocks restart at the rebuild time.
-- None of this has been run on a device or against the live vault.
+- A test item exists in the private vault. Capture in Chat or Voice, an ordinary follow-up and device delivery each need their own check.

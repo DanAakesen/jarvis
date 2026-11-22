@@ -20,6 +20,10 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
 
+### 23 November 2026 — iPhone entry points and Watch navigation
+
+On iPhone, one manual kcal entry adds one meal with unknown macros. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.
+
 ### 22 November 2026 — One continuous conversation and direct Settings access
 
 Dan confirmed that Chat and Voice share one ongoing conversation. Future context compaction must preserve it. On iPhone, the single Proactive suggestions switch belongs directly on the Settings page.
@@ -29,10 +33,6 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 ### 22 November 2026 — Qualify the exact PR tree before merge ([#2038](https://github.com/DanAakesen/jarvis/pull/2038))
 
 - **Decision:** The author may merge a reviewed PR after its exact head passes the gates on current `main`. Merge through a PR; Deploy requires a qualification receipt for the merged tree. Use the [merge procedure](agent-context.md#merge-and-release-procedure).
-
-### 23 November 2026 — Manual kcal on iPhone
-
-Dan chose one exact kcal entry per meal. Keep other nutrients unknown and count the entry in the same ledger as Chat and Voice.
 
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material
 
