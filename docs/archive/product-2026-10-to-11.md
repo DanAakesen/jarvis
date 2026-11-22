@@ -103,7 +103,7 @@ Ordinary infrastructure deployments preserve the existing PI agent, MCP secret, 
 
 The compact situational state is a server-initialised, model-maintained working model, not the source archive. It is bounded to about 500–2000 tokens, revision checked, source linked, freshness labelled and stored in Azure SQL. Mail, calendar, conversation, vault, health and provider records remain authoritative where they already live; stable provider identities, not list positions, link the compact facts. `situation_read`, `situation_lookup` and revision-checked `situation_patch` are available only under the live activation grant; compatibility `situation_commit` remains bounded, but PI patches only what changed. A model can derive facts only from server-observed refs or the canonical `verifiedRef` returned by a successful live lookup; it cannot mint reference authority, identity, label, original observation time or provider verification time. Source freshness and authority generation use `verifiedAt`, while the original mail/news/event instant remains `observedAt`. SQL admits a provider result before any state write; accepted provider status, authority, state revision and follow-up outbox commit together. An independent lookup remains a pending receipt and cannot change the active generation until the exact ref is committed by situation CAS. Final policy revision is checked in that SQL lock. A failed or cancelled source refresh invalidates only the affected source's observations and linked facts, never unrelated verified evidence.
 
-Background PI remains **off by default**. Enabling it activates one combined allowance of 1–12 scheduled, manual and event activations per Copenhagen day, with the existing ten-minute spacing, queue leases, identity/material dedupe and quiet rules. The authoritative Copenhagen time/day/quiet value is sampled after the owner reservation lock is held; the current policy revision, allowance, spacing, monthly worst-case reservation and batch row are committed together, then the actual cost is reconciled with spend. An event can consume the next scheduled sweep; it never creates an extra hidden turn. Source-linked `followUps[].dueAt` commitments use the existing `proactive_events` queue and a transactional revisioned outbox. Explicit policy/state invalidations are reopenable; a reopened item receives a new generation ID, so an old worker cannot settle or retry it. Delivered material remains deduped. The consumer applies only the latest situation revision, wakes at material changes and never leaves a committed state without durable queue work. A [amount omitted] preflight worst case is checked before a background call, and the effective monthly proactive hard cap remains [amount omitted]. Conservative estimates use [amount omitted] per cold sweep and [amount omitted] for a representative tool turn. Status reads never invoke a model.
+Background PI remains **off by default**. Enabling it activates one combined allowance of 1–12 scheduled, manual and event activations per Copenhagen day, with the existing ten-minute spacing, queue leases, identity/material dedupe and quiet rules. The authoritative Copenhagen time/day/quiet value is sampled after the owner reservation lock is held; the current policy revision, allowance, spacing, monthly worst-case reservation and batch row are committed together, then the actual cost is reconciled with spend. An event can consume the next scheduled sweep; it never creates an extra hidden turn. Source-linked `followUps[].dueAt` commitments use the existing `proactive_events` queue and a transactional revisioned outbox. Explicit policy/state invalidations are reopenable; a reopened item receives a new generation ID, so an old worker cannot settle or retry it. Delivered material remains deduped. The consumer applies only the latest situation revision, wakes at material changes and never leaves a committed state without durable queue work. A 0.804 DKK preflight worst case is checked before a background call, and the effective monthly proactive hard cap remains 100 DKK. Conservative estimates use 0.14–0.28 DKK per cold sweep and 0.17 DKK for a representative tool turn. Status reads never invoke a model.
 
 The Proactive menu remains the policy owner for sources, categories, Personal/Work/All scope, pause, guidance and budget. Turning a source off persists an invalidation epoch, retains the old authority receipt and its linked facts/summary/follow-ups as explicitly stale reconciliation input, stops its automatic read, and excludes that stale graph from activation context. A normal provider refresh can remap those links only when the same stable identity and material receives a server verification strictly newer than the epoch, even if the original mail/news occurrence instant is older. The refresh then restores the derived fact/summary and reopens the follow-up in the same generation. `message_dan` uses that matching verified generation; it does not revive an old row merely because a provider still lists the item. A direct owner Chat or Voice request can still use the underlying tool normally. Location is an independent coarse source: it has its own permission, observation time and freshness state, remains available when Weather is off, and can ground hotel, flight, driving, traffic and map requests. It is never presented as live GPS.
 
@@ -111,7 +111,7 @@ Standing watch notes remain the Vault truth. PI re-reads the latest revision and
 
 A brain push previews the first sentence and opens the exact Chat message when tapped. Dan can tell PI in Chat or Voice that the alert was useful or wrong; the next wake sees the latest rating without using another turn.
 
-The existing iOS and web Proactive pages show the Background PI switch, combined turns per day, estimated DKK/day and 30-day spend, the [amount omitted] completed-turn band, representative and worst-case figures, actual month spend, turns used/allowed, state/activation freshness, stale or missing sources, and queue recovery. There is no new main screen. Physical-device location permission, native rendering and live provider acceptance remain separate owner checks; all repository qualification is deterministic and offline.
+The existing iOS and web Proactive pages show the Background PI switch, combined turns per day, estimated DKK/day and 30-day spend, the 0.14–0.28 DKK completed-turn band, representative and worst-case figures, actual month spend, turns used/allowed, state/activation freshness, stale or missing sources, and queue recovery. There is no new main screen. Physical-device location permission, native rendering and live provider acceptance remain separate owner checks; all repository qualification is deterministic and offline.
 
 ## Generated content in Chat and Voice — 16 November 2026 (#1925; approved direction, not implemented here)
 
@@ -154,7 +154,7 @@ Move to folder, bulk selection and Undo are not offered because the vault cannot
 
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858)
 
-Jarvis reacts to events instead of only the 07:00 and 18:00 checks. Interrupt for reminders, stalled repos, prep or deadlines in mail and calendar, plan-versus-reality gaps, failed builds and deploys, and cost surprises; stay quiet about routine mail, unimportant calendar entries and routine successes. Three tiers: low is a card in the Now feed, medium is a push, high is a push (a call is added later). Every outreach has thumbs up or down, which Jarvis uses as context next time. Jarvis may draft or suggest in words and never sends mail. Budget: [amount omitted] a month in total, with a hard stop. Off until the owner switches it on.
+Jarvis reacts to events instead of only the 07:00 and 18:00 checks. Interrupt for reminders, stalled repos, prep or deadlines in mail and calendar, plan-versus-reality gaps, failed builds and deploys, and cost surprises; stay quiet about routine mail, unimportant calendar entries and routine successes. Three tiers: low is a card in the Now feed, medium is a push, high is a push (a call is added later). Every outreach has thumbs up or down, which Jarvis uses as context next time. Jarvis may draft or suggest in words and never sends mail. Budget: 100 DKK a month in total, with a hard stop. Off until the owner switches it on.
 
 ## Cognitive lattice orb and opening screen — 14 November 2026 (P15-143 / #1834)
 
@@ -1360,7 +1360,7 @@ questions honestly when asked; do not claim continuous video access.
 The coordinator identified the failed budget check: the image resolver refused
 `gpt-6.1-sol` because the model had no pricing-table entry. #707 merged on
 12 October to admit unpriced models with the existing conservative, unverified
-[amount omitted] reservation. The coordinator confirms #707 deployed on 12 October;
+0.1 DKK reservation. The coordinator confirms #707 deployed on 12 October;
 real image acceptance still needs proof.
 This admission fix does not remove the existing caption request before chat.
 General chat first-token times were 12.2-17.6 seconds in coordinator logs;
@@ -1853,7 +1853,7 @@ The separate daily web-research count includes successful, refused, and failed c
 
 ## Constraints and integrations
 
-- **Azure:** subscription [name omitted], tenant Novaro, region Sweden Central. Details in [docs/agent-context.md](../agent-context.md).
+- **Azure:** subscription [name omitted], tenant [name omitted], region Sweden Central. Details in [docs/agent-context.md](../agent-context.md).
 - **GitHub:** Dan's private repositories only; a GitHub App provides per-task tokens, webhooks, and merges.
 - **Coding agents:** Codex (ChatGPT Pro, Jarvis-only login) and Copilot (work seat) over ACP; their usage limits are shared with Dan's own use.
 - **Voice:** GPT-Live `gpt-live-1` on Foundry agent `jarvis-pi-live`; PI is the only tool and action engine. After a successful write, voice and chat give one short confirmation with at most a count, not a recap of approved details; failures and unverified outcomes stay explicit.
@@ -2094,7 +2094,7 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
   they never approve an action. Details never enter logs, metrics, errors or job
   output, and the payload is not stored. A user-triggered test is not proactive
   delivery. Teams is not used.
-- Cap estimated spend at [amount omitted] per Copenhagen month, warn at 80%, and label
+- Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label
   spend as an estimate.
 - Show every scheduled, catch-up or manual run in the header Background work
   popover as running, then done or failed.
@@ -2171,7 +2171,7 @@ Manual writes may run at any hour.
 
 The approved schedule uses 07:00 and 18:00 Europe/Copenhagen slots; scheduled
 work is forbidden from 22:00 to 07:00. The monthly estimate limit defaults to
-[amount omitted], warns at 80% and stops at 100%, including a conservative request-cost
+100 DKK, warns at 80% and stops at 100%, including a conservative request-cost
 pre-check. Idle scheduler ticks do not query SQL. Only the latest missed slot
 can catch up, while under 12 hours old; paused slots are recorded without replay.
 Scheduled checks still running at 22:00 are cancelled. Manual checks ignore quiet
@@ -2393,7 +2393,7 @@ revisions protect retries, including cleared preferences. These operations
 never create intake or Health exports and do not activate the connector.
 
 An independently opt-in internal `daily_food` tool supports direct requests
-such as `Log my favourite NAME` and `Log yoghurt: [measurement omitted], protein [measurement omitted]`.
+such as `Log my favourite NAME` and `Log yoghurt: 200 kcal, protein 10 g`.
 Only its operation is model input: names and exact quantities come from the
 verified current Dan message, with saved portions resolved server-side.
 Absent macros remain null and saved confidence/provenance remain intact.

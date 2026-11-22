@@ -22,7 +22,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 ### 22 November 2026 — Give Notes one title and a file inventory ([#2031](https://github.com/DanAakesen/jarvis/pull/2031))
 
 - **Decision:** Keep file inventory separate from search chunks (`0103`) so title-only notes can list. Use the leading H1 or readable filename and read pins by path. Refresh newest-first on open and show one headline without rewriting saved Markdown.
-- **Evidence:** Offline fixtures cover saves, refreshed lists/pins and partial backfill. Merged at `ee34f2c3e`; deployment and device acceptance are separate.
+- **Evidence:** Offline fixtures cover saves, refreshed lists/pins and partial backfill. Deploy passed at `ee34f2c3e`; device acceptance is pending.
 
 ### 22 November 2026 — Keep the established PI tool names and never replay an uncertain effect ([#2033](https://github.com/DanAakesen/jarvis/pull/2033), [#2032](https://github.com/DanAakesen/jarvis/pull/2032), [#2030](https://github.com/DanAakesen/jarvis/pull/2030))
 

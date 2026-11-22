@@ -6,7 +6,7 @@ Original wording is retained except for public-repo redactions and link/anchor m
 
 ## 22 November 2026 — Price PI cache reads correctly, clean up wakes, and make reach-outs actionable (Refs #2011)
 
-- Apply the Azure GPT-6.1 Terra meters to new PI ledger rows: [amount omitted] for cache reads, [amount omitted] for uncached input and [amount omitted] for output, per million tokens. Foundry usage has no cache-write count; the [amount omitted] meter is documented but input not reported as a cache read is estimated at 6.7. An unreported round that started uses 18,000 input tokens (about 18,008 observed), plus estimated output. No backfill, migration or change to the general Foundry usage meter. Foreground and proactive caps stay separate.
+- Apply the Azure GPT-6.1 Terra meters to new PI ledger rows: 0.34 DKK for cache reads, 6.7 for uncached input and 33.5 for output, per million tokens. Foundry usage has no cache-write count; the 8.39 DKK meter is documented but input not reported as a cache read is estimated at 6.7. An unreported round that started uses 18,000 input tokens (about 18,008 observed), plus estimated output. No backfill, migration or change to the general Foundry usage meter. Foreground and proactive caps stay separate.
 - Delete only the scratch conversations created for a wake or smoke, after any outcome. Cleanup waits at most five seconds, logs failure and does not change the turn result. Keep the owner conversation, the existing situational context and the 30-event batch. Which events deserve a message stays with the model.
 - Use the existing reply outbox and exact session/message link. Render the first sentence in a title of up to 60 characters and body of up to 180. Chat and Voice still read the same durable evidence and follow-up IDs. Store `useful`/`wrong` feedback on the exact message; the latest rating reaches the next otherwise due wake in one line, even after a pause. It stays available until a newer rating, without scheduling a wake or changing preferences.
 - Node 22.23.3 ignores the `ss` locale extension for sentence segmentation. Keep the built-in boundaries except after common Danish and English abbreviations such as `kl.`, `f.eks.` and `Dr.`. Keep the code-point caps, but clip at a whole grapheme so emoji, flags and accents stay intact.
@@ -469,7 +469,7 @@ A production Chat turn failed with `approval_or_function_call_item` and `sawTool
 
 - **State:** `dbo.pi_situational_state` is the only compact owner-scoped PI situational state. Its bounded JSON is revision/hash checked and source linked; raw source and conversation archives remain in their current authoritative stores. Foundry/Conversation state is not truth, and Foundry Memory is not a dependency.
 - **Activation:** one `PiActivationService` envelope spans Chat, Voice, scheduled, manual and event invocations. The same `jarvis-pi` agent, four existing Skills plus `jarvis-situational-context`, Jarvis MCP and tool catalogue are used. A harness invocation produces one `pi_turn` row; internal iterations do not create hidden turns.
-- **Cadence/cost:** `proactive_event_batches` is the persisted combined slot reservation. The owner chooses 1–12 background activations per Copenhagen day; ten-minute spacing, queue leases/deduplication, quiet behaviour and [amount omitted] preflight worst case remain exact. A recent event can satisfy the next scheduled sweep. The effective proactive hard cap is [amount omitted].
+- **Cadence/cost:** `proactive_event_batches` is the persisted combined slot reservation. The owner chooses 1–12 background activations per Copenhagen day; ten-minute spacing, queue leases/deduplication, quiet behaviour and 0.79 DKK preflight worst case remain exact. A recent event can satisfy the next scheduled sweep. The effective proactive hard cap is 100 DKK.
 - **Default:** the existing `pi_switch.brain` row remains off when absent. Timer and source pollers do no automatic work while off/paused; enabling never creates an extra fallback or compatibility model path.
 - **Policy:** disabled sources are excluded before automatic reads and MCP admission, and stale source facts are never reused proactively. Non-empty summaries and follow-ups need fresh raw refs, so an unsupported summary cannot survive a source switch. `message_dan` carries category, Personal/Work/unknown scope and evidence source IDs, and the server enforces category/source/scope policy plus owner guidance before delivery. A direct owner Chat/Voice request may use the underlying tool. Location is independent from Weather, coarse, permissioned, observed and freshness labelled.
 - **Delivery UI:** the existing Proactive page/settings on iOS and web show turns, costs, actual spend, source/state/activation freshness and recovery. There is no new main screen.
@@ -802,7 +802,7 @@ Owner, 16 November 2026, recorded as given: "If you keep adding restrictions we 
 | GitHub is offered through the Jarvis MCP door as `gh_` tools, not as a harness MCP tool | Measured after the full server was attached to the harness (Deploy 43901841128): input tokens per turn about 31k (17.7k before), warm first text 2.4 to 5.7 s (1.1 to 1.5 s before), a tool turn 95k input. The harness lists every tool of every MCP server in every turn. The next Deploy (43905474658, built-ins also on) measured about 37.5k input tokens, warm first text 3.5 to 4.3 s, voice plain 4.1 s and voice with a tool 8.9 s. Options checked: (a) GitHub's remote server has no dynamic or tool-search mode (its docs have toolsets, individual tools, read-only, lockdown, insiders and feature flags only); (b) tool search with `defer_loading` exists for the Azure OpenAI Responses API, but nothing says the harness prompt-agent definition accepts it, and a wrong field fails agent-version creation, so it cannot be tried safely; (c) our own `find_tools` pattern works today. Chosen: (c). The backend holds the token and a small MCP client, so PI keeps every GitHub tool and the prompt carries none until a search asks for them. The token also leaves the Foundry project connection, where project members could read it |
 | Harness built-ins on (`default_config.enabled: true`: shell, filesystem read and write, web, sub-agents) via `builtinTools: "enabled"` in `agents/pi/definition.json`; the provisioner reads it and the readback must match | Documented names are `filesystem_read`, `filesystem_write`, `shell`, `web` and `subagents`; the web tool covers fetching, and there is no separate web-search or file-input name (an unknown name makes agent-version creation fail), so none is configured. Foundry's own default is all five on |
 | **Measurement still open.** The Deploy `measure_pi` run needs the production Foundry project and a Deploy, which this change does not run. After merge and Deploy, compare first-text time and input tokens with the baseline (warm first text 1.1 to 1.3 s, cold 3.3 s, about 17.7k input tokens per warm turn; `docs/harness-trial/spike-results.md`). Rule from the owner: keep the built-ins on unless first text gets clearly worse (more than 2x); then set `builtinTools` back to `"disabled"` | The built-ins add tool descriptions to every prompt, so the effect has to be measured, not assumed |
-| Kept, because the owner set them: the [amount omitted] proactive budget and the chat cap. Kept as guards on a wake's cadence and noise, not on capability: at least 10 minutes between wakes, at most 12 wakes a day, at most 8 `message_dan` messages a day with exact repeats refused | Reported to the owner as remaining limits; removing them is one change each |
+| Kept, because the owner set them: the 100 DKK proactive budget and the chat cap. Kept as guards on a wake's cadence and noise, not on capability: at least 10 minutes between wakes, at most 12 wakes a day, at most 8 `message_dan` messages a day with exact repeats refused | Reported to the owner as remaining limits; removing them is one change each |
 | Left as technical, not policy: memory writes (they bind to a stored Dan message), Health changes and watch-for-camera (they act inside a live chat or voice session), the Gmail direct-access rule for computer use, secret scanning on vault writes and messages, the smoke role (Deploy test only) | A wake or a turn has nothing to attach these to, or the rule protects a credential or a provider term |
 
 ## 16 November 2026 — PI reach is unrestricted: full GitHub server, Azure Contributor, no hard-coded approval rules (#1886, P15-175)
@@ -885,7 +885,7 @@ Owner brief, quoted: "Standing watches must work inside the loop (free-text note
 | Only Dan's message opens or changes a watch; a wake can look and stop | Text read by a watch (web pages, feeds) is untrusted. A wake cannot create or widen a watch, start a Worker, send mail or write outside `PI/` |
 | Exact limits: 10 open, 8 looks a day each, 5 minutes apart; a limit moves the next look instead of leaving the watch due | The plan's proposal, kept. Without the move, a limit would make the same watch wake the brain every 10 minutes at a cost |
 | Cost per watch is an estimate: a wake's cost is split evenly over what woke it | Wakes are batched on purpose (the fixed prompt is paid once), so exact attribution does not exist. It is labelled as an estimate everywhere it is shown |
-| Watches spend on the shared proactive ledger and its [amount omitted] stop | One budget, one stop; no second meter |
+| Watches spend on the shared proactive ledger and its 100 DKK stop | One budget, one stop; no second meter |
 | Foundry routines and the reminder tool are tested by a manual probe on a throwaway agent, not adopted. **Result 16 November 2026: the reminder tool is rejected on a harness prompt agent (`bad_request`, tool type not supported for kind `prompt` with harness `github_copilot_preview`); routines are still untested. The ticker and the vault stay the waker, and the reminder step was removed from the probe** | The platform's wake-ups are preview, cover GitHub issues only (routines) or hosted agents (reminder tool) as documented, and would put the schedule where Dan cannot list or stop it from chat. The probe records what really happens; our ticker stays the waker either way |
 | No watch UI in the app; list, change and stop are chat and voice | The owner asked for them "from chat"; the Watch is parked |
 
@@ -901,7 +901,7 @@ Owner rules, quoted from the brief: no fallbacks, no dual or shadow paths, no tr
 | A wake has no owner message, so it can only read, speak, write PI's own notes and add an inbox trail line | Starting a Worker, sending mail, creating tasks and changing Dan's notes need his words. Text read from outside can therefore never cause them |
 | One chat message, no tiers: stored in the chat feed and pushed through the existing reply push; a limit of 8 messages a day and no exact repeats | "A chat message always pushes" holds only if the cap is on messages, not on pushes. The Watch gets the iOS notification mirrored by the phone; no Watch work was done |
 | The system writes the decision log; the model supplies its closing statement | "Every decision logged" must not depend on the model remembering to log. Facts are exact (events, tools from the MCP server's record, what was sent, cost); the reasoning is free text |
-| The brain's budget is the existing [amount omitted] proactive ledger, separate from the chat cap; stop before a wake, notice at 80 percent and at the stop | The owner already sets this budget; a stopped brain must tell Dan once instead of going quiet |
+| The brain's budget is the existing 100 DKK proactive ledger, separate from the chat cap; stop before a wake, notice at 80 percent and at the stop | The owner already sets this budget; a stopped brain must tell Dan once instead of going quiet |
 | Scratch conversation per wake | No shared growth, no leakage between wakes; the vault log is the memory. Cost of a new conversation (no cache, about 1.2 s start) is accepted and counted. Whether a cached long conversation is cheaper is a measurement for later |
 | Timer review alone is skipped in quiet hours | A review at night would cost money and the morning one covers it |
 | Not built: the owner's test switch for Watch, any call, the Now card, voice | Out of scope or parked by the owner |
@@ -947,12 +947,12 @@ Choices made while building (engineering decisions inside that scope; veto any):
 | --- | --- |
 | Reasoning effort `low` in the agent definition (not `none`) | Measured by the dispatcher: none or low must be set in the agent definition and gives true streaming; per-request reasoning, `service_tier` and `prompt_cache_key` are rejected. The 6 Nov rejection was tied to a forced `none` on Terra, so `low` avoids it. One line in `agents/pi/definition.json` |
 | The gateway calls the managed agent directly from the backend; no hosted-agent hop | Lever 8 of the plan; one container hop less |
-| One warm conversation per owner, stored in `dbo.pi_conversation`; a warm-up turn when the app opens, skipped when the cache is fresh (4 minutes) | Measured: a new conversation takes 3.7 to 4.4 s to first text, turn 2 and later about 1.9 s with the cached prompt. A warm-up costs about [amount omitted] and is counted in the budget |
+| One warm conversation per owner, stored in `dbo.pi_conversation`; a warm-up turn when the app opens, skipped when the cache is fresh (4 minutes) | Measured: a new conversation takes 3.7 to 4.4 s to first text, turn 2 and later about 1.9 s with the cached prompt. A warm-up costs about 0.075 DKK and is counted in the budget |
 | Jarvis tools over MCP as two meta tools, `find_tools` and `call_tool`, not about 150 schemas | Tools are already about 6.4k of the 11k prompt tokens; the current agent and voice use the same lookup |
 | Per-turn authority: the gateway opens a grant for the stored owner message and gives the model an unguessable `jt-` reference that every MCP call must present; the grant ends with the turn. The static MCP credential only proves the caller is the PI agent | The harness sends one static credential; whether the managed agent can pass a per-request header is unproven, so authority does not depend on it. The model can pass the reference but cannot change the message or session it names. Residual risk: a prompt-injected model can use the reference within its own turn, exactly as it can call any tool today; writes still need the tools' own approvals |
 | `call_tool` runs the tool through the normal `/tools/:name` route with an in-process random token | Validation, refusals, approvals, receipts and activity events are the existing ones, not a copy. The token never leaves the process |
 | Harness `require_approval: never` for the Jarvis MCP server; Jarvis's own approvals stay in the tools | The existing owner approval boundary is unchanged. If the harness still asks, the turn ends with an honest error rather than auto-approving |
-| Monthly cap [amount omitted] on PI chat, hard stop, no switch to another engine (`JARVIS_PI_MONTHLY_CAP_DKK`; the owner can raise it) | The plan proposed 250; lowered to 100 on the owner's cost caution after an earlier [amount omitted] bill. Cost uses list price and ignores the cached discount, so it never undercounts |
+| Monthly cap 100 DKK on PI chat, hard stop, no switch to another engine (`JARVIS_PI_MONTHLY_CAP_DKK`; the owner can raise it) | The plan proposed 250; lowered to 100 on the owner's cost caution after an earlier [amount omitted] bill. Cost uses list price and ignores the cached discount, so it never undercounts |
 | Spend safety: over the cap or after failures nothing runs by itself. A warm-up checks the cap first and is skipped (not an error) when over it; its tokens and DKK count toward the cap like a chat turn. A failed warm-up is not retried for 10 minutes, and three failed turns in a row pause warm-ups for 30 minutes (read from `dbo.pi_turn`, so a restart does not forget it). A failed chat turn is one honest message and one request; nothing retries it. A turn that ends after the model started but before usage arrives is charged at an estimate | The owner is cost-sensitive after an earlier [amount omitted] bill |
 | Test switch is per turn from the app (`engine: "pi"`), stored on the device; a PI turn that cannot run ends with its own error and never uses the current engine | No runtime fallback. The switch and its call sites are deleted at cutover |
 | The MCP secret lives as a Container App secret created by the Deploy job and in a Foundry project connection (`jarvis-pi-mcp`, custom keys, `Authorization: Bearer jp.<secret>`); the MCP tool names it with `project_connection_id` and carries no headers | Foundry refused inline headers (Deploy 43774326609: `definition.tools[1].headers`, "Use project_connection_id instead"). The connection is created by the Deploy job through ARM and rewritten only when the secret or URL changes |
@@ -992,7 +992,7 @@ still cannot close anything), and rewrites the nudge-style text (one row, at mos
 characters, readable, settable and resettable through `inbox_nudge_style`). Both run once a day or
 week, recorded in `dbo.inbox_state`. Spend per day and kind (review, audit, weekly,
 triage) is kept in `dbo.inbox_spend` (migration 0085) as well as in the shared
-proactive ledger, so the [amount omitted] a day ceiling holds across replicas and `/inbox/status`
+proactive ledger, so the 1 DKK a day ceiling holds across replicas and `/inbox/status`
 shows cost, counts, thumbs and last sweep days. The switch-on is two default-off
 parameters in `infra/main.bicep` (`inboxEnabled`, `inboxNudgesEnabled`); turning them on is
 the owner's call. Cost figures in the design are still estimates: nothing has run.
@@ -1022,7 +1022,7 @@ prompt's recent reactions. Thumbs on the push notification itself need native wo
 not built. A rebuilt index starts every nudge clock at the rebuild time (proactive
 history cannot be queried by item key), so a rebuild means no nudges for 48 hours. The
 weekly rewrite of the nudge-style text and the missed-capture audit belong to step 8.
-Daily ceiling [amount omitted] is counted per replica from recorded usage.
+Daily ceiling 1 DKK is counted per replica from recorded usage.
 Review follow-ups: a note from another tool keeps its path-derived id when the first edit
 adds the hidden marker (so its nudge clock and thumbs survive), a card's thumb is read every
 pass so a changed thumb reaches the index, trail and prompt, and one oversized note drops to its
@@ -1057,7 +1057,7 @@ shown once, in the owner's own chat) or the owner-only `/inbox/credentials` rout
 Raw text is structured by one low-effort call to the chat model (usage recorded under
 chat); a missing, busy, invalid or over-allowance model only costs structure, the
 raw text becomes the note and the owner's words are always kept verbatim. The daily
-allowance is 60 calls per replica, an approximation of the [amount omitted]/day inbox ceiling
+allowance is 60 calls per replica, an approximation of the 1 DKK/day inbox ceiling
 until step 8 measures cost. Idempotency: the client's key derives each note's id, the
 store resolves a supplied id in the vault before writing, and a repeat answers
 "Already in the inbox". The Watch path in this step is the Shortcut, which runs on
@@ -1107,13 +1107,13 @@ and thumbs are also written to the note's trail. This replaces the design's
 Owner: "for the model we should do gpt 6.1, that is very very cheap. so that should be very little. GO ahead and build this but without the calling to begin with." Tiers: low, medium and high; calls come later.
 
 - **Queue**: a table in the existing Azure SQL database (`proactive_events`, migration 0080), read by the existing 30-second proactive ticker. No new Azure service. Source, kind, summary and outcome are free text; state is derived from columns, not an enum.
-- **Cheap rules first, then the model**: exact checks with no model call (stale, routine success, source off, hourly cap, unchanged timer context), then one GPT-6.1 Terra call per batch of up to 10 events at low reasoning effort, with vault, memory, todo, calendar, factory and health context and recent thumbs. The model picks the tier and the words. At most 12 batches and 6 pushes a day; the monthly hard stop (default [amount omitted]) applies before every call.
+- **Cheap rules first, then the model**: exact checks with no model call (stale, routine success, source off, hourly cap, unchanged timer context), then one GPT-6.1 Terra call per batch of up to 10 events at low reasoning effort, with vault, memory, todo, calendar, factory and health context and recent thumbs. The model picks the tier and the words. At most 12 batches and 6 pushes a day; the monthly hard stop (default 100 DKK) applies before every call.
 - **Tiers**: low is a Now feed card that opens the finding; medium and high are a push. The call is not built: it is one more `OutreachChannel` for `high`. Quiet hours do not apply to this path (the owner's phone is on Do Not Disturb at night); the old 07:00 and 18:00 path and reminders keep theirs.
 - **Never send mail**: the path has no tool and no write access; it only writes words.
 - **Feedback**: thumbs up or down per outreach, stored in `proactive_outreach` and fed back as context. The Proactive page's useful and wrong buttons rate the same outreach.
 - **Mail and calendar**: polled every 15 minutes through the existing read-only sources. Gmail push needs Google Pub/Sub (a new service) and calendar watch needs a public receiver with renewal, so neither is used. Health reaches the model as context, not as events.
 - **GitHub**: only finished workflow runs and deployment results queue; pull request, push and check events do not (failed workflows cover builds; the timer review covers stalled repositories). *Superseded on 21 November 2026 (P1-2): releases, issues, comments, pull requests (opened, merged, review requested) and failed default-branch checks now queue; pushes still do not.*
-- **Budget meter fix**: Terra was unlisted and priced at the highest listed rate (Luna), about five times too low. It is now priced at [amount omitted] input and [amount omitted] output per million tokens (Azure OpenAI list price, Global short context, checked 15 November 2026; cached-input discounts ignored). Unlisted models still fall back to the highest listed rate, which is now Terra's.
+- **Budget meter fix**: Terra was unlisted and priced at the highest listed rate (Luna), about five times too low. It is now priced at USD 1 input and USD 5 output per million tokens (Azure OpenAI list price, Global short context, checked 15 November 2026; cached-input discounts ignored). Unlisted models still fall back to the highest listed rate, which is now Terra's.
 - **Switch**: `JARVIS_PROACTIVE_EVENTS_ENABLED` (Bicep `proactiveEventsEnabled`, default false) so the existing checks keep running alone until the new path is proven.
 - Evidence: unit and SQL Server 2022 integration tests, listed in PLAN.md. Not observed: live traffic, push delivery, a real model call, real cost. Estimates in `docs/proactive-events/design.md` are computed, not measured.
 
@@ -1259,7 +1259,7 @@ edit-friendly so the owner can refine it on the move. It is not a plan or
 history; `PLAN.md` and this log keep those. A separate cross-project `p0.md`
 lives in the private vault. Top priority recorded there: an inbox loop that
 turns the owner's loose ideas and asks into structured items with proactive
-follow-ups, plus proactive Jarvis within a [amount omitted] per month budget.
+follow-ups, plus proactive Jarvis within a 100 DKK per month budget.
 
 ## 13 November 2026 — Follow voice captions (#1823)
 
@@ -3475,10 +3475,10 @@ quality; the former automated canary and extended guide remain separate evidence
 
 ### 2026-11-08 — Make the harness comparison self-contained
 
-The owner has no appointments tomorrow and rejected the agenda-based prompt.
+The owner [schedule detail omitted] and rejected the agenda-based prompt.
 Replace it with a fixed-budget sample shopping task: save/read a Personal note,
 update the same note after a price correction, create one undated Personal task,
-and verify both. The expected final total is [amount omitted] with [amount omitted] remaining.
+and verify both. The expected final total is 1,450 DKK with 50 DKK remaining.
 Only the runtime label differs between fresh Current and Copilot conversations;
 model/settings stay equal. Judge actual saved results, owner intervention and
 time, without treating one successful run as proof of general superiority.
@@ -3533,7 +3533,7 @@ and native text selection, and applies to both runtime testers. Later pre-tool t
 uses additive commentary events, not model-private reasoning. Implementation is
 local; native qualification and deployment remain pending.
 
-The corrected lift test in 42494078211 reached the saved row: AX showed [measurement omitted] after
+The corrected lift test in 42494078211 reached the saved row: AX showed 83 kg after
 a verified 82.5 input. Last lifts used a whole-number formatter. Preserve decimals
 and requalify the unchanged save/reopen/swipe/delete assertions. Artifact 13622798399
 SHA256: 33737f4f61e37d05e4b4927c6c3979657e488424af9b19586d946479b3a0afaf.
@@ -4256,7 +4256,7 @@ Native gesture and visual acceptance is still pending.
 
 ## 15 November 2026 - Monthly budget raised to [amount omitted]
 
-The owner approved raising the resource group monthly budget from [amount omitted]. The expected run rate with PI is about [amount omitted] per month, so a [amount omitted] budget alerted constantly without informing anything. Alerts stay at [thresholds omitted] of actual cost. This is an alert threshold, not a spending cap; the proactive PI hard stop ([amount omitted]) is separate.
+The owner approved raising the resource group monthly budget from [amount omitted]. The expected run rate with PI is about [amount omitted] per month, so a [amount omitted] budget alerted constantly without informing anything. Alerts stay at 80% and 100% of actual cost. This is an alert threshold, not a spending cap; the proactive PI hard stop (100 DKK) is separate.
 ## 2026-11-15 P15-181: Single vault layout, cut over together with the vault clean-up
 
 - Decision: Jarvis uses only the new vault paths: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/`. The `gym-log` frontmatter type is kept. There is no dual support, no layout detection and no compatibility shim; a first draft of this change that accepted both layouts was dropped.
