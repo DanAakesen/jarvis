@@ -116,6 +116,7 @@ export const intentAliases: readonly IntentAlias[] = [
     terms: ['presence', 'away', 'mode'] },
   { stems: ['model*', 'modeller', 'reasoning', 'tænkning*'], terms: ['model', 'settings'] },
   { stems: ['personality', 'personlighed*', 'tone', 'tonen'], phrases: ['home city', 'home location', 'hjemby'], terms: ['settings'] },
+  { stems: [], phrases: ['where am i', 'my location', 'my current location', 'device location', 'hvor er jeg', 'min placering', 'min position'], terms: ['get_settings'] },
   { stems: ['pc', 'pcen', 'computer*', 'windows', 'laptop'], terms: ['pc'] },
   { stems: ['vindue*', 'window*'], terms: ['window'] },
   { stems: ['clipboard', 'udklipsholder*', 'udklip*'], terms: ['clipboard', 'pc'] },

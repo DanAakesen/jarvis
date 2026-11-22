@@ -149,9 +149,7 @@ final class JarvisChatModel: ObservableObject {
     private let client: JarvisChatClient?
     private let nowClient: JarvisNowFeedClient?
     private let updatesClient: JarvisWorkspaceClient?
-    private let settingsClient: JarvisSettingsClient?
     private let factoryClient: JarvisFactoryClient?
-    private let deviceLocation = JarvisDeviceLocation()
     private let watchClient: VisionWatchClient?
     private var liveStreamTask: Task<Void, Never>?
     private var historyPaging = ChatHistoryPagingState()
@@ -186,7 +184,6 @@ final class JarvisChatModel: ObservableObject {
         self.client = client.map { JarvisChatClient(client: $0) }
         nowClient = client.map { JarvisNowFeedClient(client: $0) }
         updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
-        settingsClient = client.map { JarvisSettingsClient(client: $0) }
         factoryClient = client.map { JarvisFactoryClient(client: $0) }
         watchClient = client.map { VisionWatchClient(client: $0) }
         if let client { JarvisFactoryLiveActivityController.configure(client: client) }
@@ -259,7 +256,6 @@ final class JarvisChatModel: ObservableObject {
             }
         }
         isLoading = false
-        if !fixtureMode, let settingsClient { _ = await deviceLocation.sync(using: settingsClient) }
         await refreshActivity()
 
         await reattachActiveTurnIfNeeded()

@@ -12,6 +12,7 @@ export interface PhraseRow {
 
 export const phraseTable: readonly PhraseRow[] = [
   // Weather
+  { intent: 'location', en: 'where am I', da: 'hvor er jeg', tools: ['get_settings'] },
   { intent: 'weather', en: 'what is the weather in Aarhus tomorrow', da: 'hvordan er vejret i Aarhus i morgen', tools: ['weather'] },
   { intent: 'weather', en: 'will it rain this weekend', da: 'bliver det regnvejr i weekenden', tools: ['weather'] },
   // Memory

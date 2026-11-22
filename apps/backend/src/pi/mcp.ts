@@ -274,6 +274,7 @@ export function createPiMcpRoutes(options: {
     if (name.startsWith('calendar_')) return ['calendar'];
     if (name.startsWith('mail_')) return ['mail'];
     if (name === 'weather') return ['weather'];
+    if (name === 'get_settings' && args.area === 'location') return ['location'];
     if (name.startsWith('memory_')) return ['memory'];
     if (name.startsWith('health_nutrition_') || name.startsWith('health_food') ||
         name.startsWith('health_meal') || name === 'health_saved_food') return ['nutrition'];

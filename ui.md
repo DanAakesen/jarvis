@@ -19,8 +19,8 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
 | **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
 | **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
-| **Proactive** | Proactive items and the single **Proactive suggestions** switch with its settings sheet. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
-| **Settings** | Saved values, editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
+| **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
+| **Settings** | The **Proactive suggestions** switch, saved values, editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
 | **Banking** | Listed in the sidebar but not navigable. Out of scope until Dan sets its approval rules ([PLAN decision F](PLAN.md#open-decisions-af)). | `JarvisDestination.banking` |
 
 Around the destinations: the opening screen (`JarvisOpeningView`, startup only), the lock and sign-in gate (`JarvisGateRootView`), the activity sheet, approval notifications and the shared task row (`JarvisTaskListRow`, used in Notes and Home).
