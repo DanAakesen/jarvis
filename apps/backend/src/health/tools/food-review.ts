@@ -50,7 +50,7 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
       if (request.healthConnectorPrincipal) throw new ToolRefusal('Use the separate nutrition connector boundary for external clients.');
       signal.throwIfAborted();
       const parsed = foodReviewSchema.safeParse(raw);
-      if (!parsed.success) throw new ToolRefusal('Choose a bounded food estimate, correction or deletion without authority flags.');
+      if (!parsed.success) throw new ToolRefusal('Send change with operation log_estimate (food: mealName plus energyKcal or referenceComponents), lookup_components (components), correct (idempotencyKey, expectedRevision, changes) or delete (idempotencyKey, expectedRevision), and no other field.');
       const change = structuredClone(parsed.data.change);
       const source = structuredClone(await foodSourceMessage(request, signal));
       const identity = foodMessageIdentity(owner, source);

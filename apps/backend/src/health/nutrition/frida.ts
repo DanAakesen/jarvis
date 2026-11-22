@@ -17,7 +17,7 @@ export interface FridaMatch {
   retrievedAt: string;
 }
 export interface FridaLookup {
-  status: 'complete' | 'partial'; confirmationRequired: true; reference: typeof fridaReference;
+  status: 'complete' | 'partial'; reference: typeof fridaReference;
   components: { input: LookupComponent; match: FridaMatch | null; candidates: { foodId: number; name: string }[]; unknowns: string[] }[];
   totals: Record<Parameter, number | null>; matchedSubtotals: Record<Parameter, number | null>;
   unknowns: string[];
@@ -170,7 +170,7 @@ export class FridaLookupAdapter {
         totals[key] = known.length === components.length ? matchedSubtotals[key] : null;
       }
       const unknowns = components.flatMap((component, index) => component.unknowns.map((unknown) => `${index}:${unknown}`));
-      return { status: unknowns.length ? 'partial' : 'complete', confirmationRequired: true, reference: fridaReference, components, totals, matchedSubtotals, unknowns };
+      return { status: unknowns.length ? 'partial' : 'complete', reference: fridaReference, components, totals, matchedSubtotals, unknowns };
     } catch {
       if (signal.aborted) throw signal.reason;
       this.session = null;

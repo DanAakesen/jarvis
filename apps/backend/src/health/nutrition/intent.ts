@@ -21,7 +21,7 @@ function requestedFood(message: string): string {
     throw new ToolRefusal('Use one food-log request. No intake was logged.');
   }
   const food = command.exec(normalized)?.[1]?.trim();
-  if (!food) throw new ToolRefusal('An explicit food-log request from Dan is required. No intake was logged.');
+  if (!food) throw new ToolRefusal('health_food logs only a message that starts with log, record, logge or registrer (optionally after "can you", "please" or "kan du"), as in "Log banana: 105 kcal, protein 1 g" or "Log my favourite oatmeal". This message does not, so no intake was logged. To log a meal Dan described in other words, use health_food_review.');
   if (qualified.test(food)) throw new ToolRefusal('Conditional, negated or time-qualified requests are not supported by this direct path. No intake was logged.');
   return food;
 }
@@ -37,11 +37,14 @@ export function favoriteIntent(message: string): string {
 /** Values come from the human message, never the tool's proposed nutrients. */
 export function exactLabelIntent(message: string): FoodDefinition {
   const food = requestedFood(message);
-  if (uncertain.test(food) || /\d,\d/u.test(food)) {
-    throw new ToolRefusal('Estimated or ambiguous quantities require a reviewed proposal. No intake was logged.');
+  if (uncertain.test(food)) {
+    throw new ToolRefusal('This message has a word such as about, roughly or estimate, so it is not an exact label and no intake was logged. health_food logs exact label values only; log an estimated or photographed meal with health_food_review.');
+  }
+  if (/\d,\d/u.test(food)) {
+    throw new ToolRefusal('This message has a comma between two digits, which this path does not read as a decimal, so no intake was logged. Ask Dan to write decimals with a dot ("protein 1.3 g", not "1,3 g") and send the message again.');
   }
   const match = new RegExp(`^("[^"]+"|[\\p{L}\\p{N}][\\p{L}\\p{N}'\\u2019_-]*)\\s*[:,]\\s*${quantity}\\s*(?:kcal|calories|kalorier)(.*)$`, 'iu').exec(food);
-  if (!match) throw new ToolRefusal('Supply an exact label as "Log food: 200 kcal, protein 10 g"; quote multiword food names. New estimates are not authorised by this path.');
+  if (!match) throw new ToolRefusal('This message is not an exact label, so no intake was logged. health_food needs the food name, a colon or comma, then calories: "Log yoghurt: 200 kcal, protein 10 g". Put a name of several words in quotes, as in "Log "Greek yoghurt": 200 kcal". For a meal without a label, use health_food_review.');
   const exact: Partial<Nutrients> = { energyKcal: Number(match[2]) };
   const rest = match[3]!.trim();
   if (rest && !rest.startsWith(',')) throw new ToolRefusal('All label quantities must be explicit named values. No intake was logged.');

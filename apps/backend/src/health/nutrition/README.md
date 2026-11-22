@@ -140,6 +140,9 @@ sourceIdempotencyKey or proposed definition. `save_plan` takes a name,
 description and owned favourite slot entries; `delete_plan` takes an exact ID
 and expected revision. `set_feedback` takes the exact favouriteId, preference
 (`like`, `dislike` or null) and expected revision. New records use revision0.
+The legacy `set_meal_preference` operation of `health_nutrition_history` accepts a
+`favorite:<id>` key and stores it under the bare favourite ID, the key that
+suggestions and `set_feedback` use; `meal:` keys are stored as given.
 Internal operation IDs derive server-side from the verified current human
 message; owner, operationId, confidence, provenance and confirmation arguments
 are not accepted. New definitions are estimates, not independently verified.
@@ -211,7 +214,7 @@ The tool and existing adapter use20second cancellation within ordinary caller
 budgets; voice retains30seconds, not the reviewed-food exception. Preserve the
 returned DTU5.5/release10/DOI attribution, retrieval time, incomplete totals,
 matched subtotals and unknowns. Reference quantities are not verified eaten food,
-and `confirmationRequired` never supplies native write authority. The shared
+and a lookup result never supplies native write authority. The shared
 response-byte limit refuses oversized evidence rather than truncating it.
 No SQL request/intake/Health write or refresh results from reference lookup.
 Sensitive audit and unsupported-phone denial remain; this source binding does
@@ -219,7 +222,7 @@ not activate Health, provision an account or verify a live provider/device.
 
 Coordinator supplied read-only source action contracts at original HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` and independently verified public Frida DTOs/session/endpoints. The migration deliberately pins release 10 / Frida 5.5 (November 2025), DOI https://doi.org/10.11583/DTU.29500682, dataset version 8 published 19 January 2026. DTU XLSX/ODS data are CC BY 4.0; PDF documentation retains DTU copyright. We use the documented public API, not downloaded dataset bytes, so no binary checksum/export claim is made. Every lookup carries DTU/version/release/DOI attribution and per-100-g edible-food basis.
 
-`FridaLookupAdapter` uses only `https://fcdb.fooddata.dk/api`: anonymous `/antiforgery`, `/food/10` and `/foodParameter/10/{foodId}/consumer`. No borrowed cookie/token or provider credential is used. Coordinator-observed immutable catalogue count 1381 guards against silent truncation, with duplicate/release validation. Nutrient IDs 356 kcal, 218 protein g, 172 available carbohydrates g, 168 fibre g, 141 fat g retain nullable values and source IDs. Inputs are 1–25 components, names/preparation ≤120 characters, grams >0 and ≤5000, with at most three candidates. Matching normalizes Danish ae/oe/aa/accents; a unique exact match or conservative separated token match is selected, otherwise ambiguity is explicit. Unverified preparation has an uncertainty marker, not an invented yield factor. Scale known values by grams/100; incomplete totals stay null and matched subtotals are separately labelled. Every lookup is read-only and confirmation-required.
+`FridaLookupAdapter` uses only `https://fcdb.fooddata.dk/api`: anonymous `/antiforgery`, `/food/10` and `/foodParameter/10/{foodId}/consumer`. No borrowed cookie/token or provider credential is used. Coordinator-observed immutable catalogue count 1381 guards against silent truncation, with duplicate/release validation. Nutrient IDs 356 kcal, 218 protein g, 172 available carbohydrates g, 168 fibre g, 141 fat g retain nullable values and source IDs. Inputs are 1–25 components, names/preparation ≤120 characters, grams >0 and ≤5000, with at most three candidates. Matching normalizes Danish ae/oe/aa/accents; a unique exact match or conservative separated token match is selected, otherwise ambiguity is explicit. Unverified preparation has an uncertainty marker, not an invented yield factor. Scale known values by grams/100; incomplete totals stay null and matched subtotals are separately labelled. Every lookup is read-only and its result carries no confirmation flag.
 
 Coordinator public-format verification at 16:17:51 UTC confirms an empty `/antiforgery` body, response `X-XSRF-TOKEN` header and `XSRF-TOKEN` cookie, synonym arrays, numeric nutrient values and numeric provenance arrays in the inspected sample. The adapter rejects string/null synonym fields and numeric-string nutrients; missing/null values and provenance stay unavailable rather than inventing zeros/IDs or source coverage. Unknown object/string provenance structures fail closed. No anonymous session values were shared or borrowed.
 
