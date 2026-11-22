@@ -14,10 +14,12 @@ import {
   type VaultGraphFile,
   type VaultIndexStore,
   type VaultIndexedChunk,
+  type VaultIndexedFile,
   type VaultSearchHit,
 } from '../database/memory-store.js';
 import { isGeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { aborted } from 'node:util';
 import { defaultSettings, readSettings, type SettingsStore } from '../core/settings.js';
 import {
   embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
@@ -41,7 +43,6 @@ import {
   VaultWriteConflictError,
   createGitHubVaultClient,
   type VaultFile,
-  type VaultTreeFile,
 } from './github-client.js';
 import {
   readVaultTasks, filterVaultTasks, inScope as inTaskScope, TodoDiscoveryError, type VaultTaskState,
@@ -67,6 +68,7 @@ const maxMarkdownFiles = 10_000;
 const maxVaultChunks = 512;
 const maxTitleBackfillReadsPerSync = 32;
 const titleBackfillTimeoutMs = 20_000;
+const vaultSyncTimeoutMs = 10 * 60_000;
 const maxBackfillEmbeddingsPerSync = 4_096;
 const maxMemoryBackfillEmbeddingsPerJob = 4_096;
 const maxThrottledEmbeddingAttempts = 4;
@@ -88,6 +90,7 @@ export interface VaultLogFields {
   readonly added?: number;
   readonly changed?: number;
   readonly removed?: number;
+  readonly failed?: number;
   readonly folder?: string;
   readonly folders?: readonly string[];
 }
@@ -99,8 +102,11 @@ export interface MemoryEmbeddingLogFields {
   readonly httpStatus?: number;
 }
 
+type VaultSyncSummary = { readonly added: number; readonly changed: number; readonly removed: number };
+
 export interface VaultModule extends BackendModule {
-  synchronize(signal: AbortSignal): Promise<{ readonly added: number; readonly changed: number; readonly removed: number }>;
+  synchronize(signal: AbortSignal): Promise<VaultSyncSummary>;
+  queueSynchronization(): Promise<VaultSyncSummary>;
   syncStatus(): {
     readonly outcome: VaultIndexOutcome['outcome'];
     readonly latestAttemptAt: string | null;
@@ -872,7 +878,8 @@ export function createVaultModule(options: {
   readonly watchTaskSubmissions?: WatchTaskSubmissionStore;
 }): VaultModule {
   const log = options.log ?? (() => {});
-  let synchronization: Promise<{ readonly added: number; readonly changed: number; readonly removed: number }> | undefined;
+  let synchronization: Promise<VaultSyncSummary> | undefined;
+  let queuedSynchronization: Promise<VaultSyncSummary> | undefined;
   let indexStatus: 'pending' | 'ready' | 'failed' = 'pending';
   let appMissing = false;
   let lastVaultSyncAt: string | null = null;
@@ -1029,7 +1036,7 @@ export function createVaultModule(options: {
     let added = 0;
     let changed = 0;
     let remainingBackfillEmbeddings = maxBackfillEmbeddingsPerSync;
-    const titlesToBackfill: VaultTreeFile[] = [];
+    const titlesToBackfill: VaultIndexedFile[] = [];
     const touchedFolders = new Set<string>();
 
     for (const file of markdown) {
@@ -1042,8 +1049,7 @@ export function createVaultModule(options: {
         continue;
       }
       if (unchanged && previous.titleMissing) {
-        // Even if embeddings are missing, a legacy note's title read is optional.
-        if (titlesToBackfill.length < maxTitleBackfillReadsPerSync) titlesToBackfill.push(file);
+        titlesToBackfill.push(previous);
         continue;
       }
       let note: VaultFile | null;
@@ -1087,24 +1093,59 @@ export function createVaultModule(options: {
       folders: [...new Set([...touchedFolders].map((folder) =>
         folderNames.has(folder) ? folder : 'other'))].sort(),
     });
-    return { summary, directoryTree: nextDirectoryTree, titlesToBackfill };
+    return {
+      summary,
+      directoryTree: nextDirectoryTree,
+      titlesToBackfill: titlesToBackfill
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.path.localeCompare(b.path))
+        .slice(0, maxTitleBackfillReadsPerSync),
+      async repairEmbeddings(note: VaultFile, title: string, batchSignal: AbortSignal) {
+        if (!embedder || !oldByPath.get(note.path)?.embeddingMissing || remainingBackfillEmbeddings === 0) return;
+        const sections = chunkMarkdown(note.content);
+        if (sections.length > remainingBackfillEmbeddings) return;
+        remainingBackfillEmbeddings -= sections.length;
+        const chunks = await makeChunks(sections, batchSignal, embedder, embeddingModel);
+        batchSignal.throwIfAborted();
+        await options.indexStore.replaceFile(
+          note.path, note.sha, title, chunks, extractLinkTargets(note.content), batchSignal, { onlyIfCurrent: true },
+        );
+      },
+    };
   }
 
-  async function backfillNoteTitles(files: readonly VaultTreeFile[], signal: AbortSignal) {
-    if (files.length === 0 || signal.aborted) return;
+  async function backfillNoteTitles(
+    files: readonly Pick<VaultIndexedFile, 'path' | 'blobSha'>[],
+    signal: AbortSignal,
+    repairEmbeddings?: (note: VaultFile, title: string, batchSignal: AbortSignal) => Promise<void>,
+  ) {
+    const titles = new Map<string, string>();
+    if (files.length === 0 || signal.aborted) return titles;
     const batchSignal = AbortSignal.any([signal, AbortSignal.timeout(titleBackfillTimeoutMs)]);
-    try {
-      for (const { path, sha } of files) {
+    // The shared GitHub token request can outlive a single batch.
+    const deadline = aborted(batchSignal, titles);
+    let failed = 0;
+    for (const { path, blobSha } of files) {
+      if (batchSignal.aborted) break;
+      try {
+        const note = await Promise.race([options.client.read(path, batchSignal), deadline]);
         batchSignal.throwIfAborted();
-        const note = await options.client.read(path, batchSignal);
-        if (note?.sha !== sha) continue;
-        await options.indexStore.backfillFileTitle(path, sha, noteTitle(path, note.content), batchSignal);
-        graphCache = undefined;
+        if (!note || note.path !== path || note.sha !== blobSha) {
+          failed += 1;
+          continue;
+        }
+        const title = noteTitle(path, note.content);
+        titles.set(path, title);
+        await Promise.race([options.indexStore.backfillFileTitle(path, blobSha, title, batchSignal), deadline]);
+        batchSignal.throwIfAborted();
+        if (repairEmbeddings) await Promise.race([repairEmbeddings(note, title, batchSignal), deadline]);
+        batchSignal.throwIfAborted();
+      } catch {
+        failed += 1;
       }
-    } catch {
-      // Keep the completed titles and leave the rest for a later sync.
-      log('vault.title_backfill', { outcome: 'error' });
     }
+    if (titles.size > 0) graphCache = undefined;
+    if (failed > 0 || batchSignal.aborted) log('vault.title_backfill', { outcome: 'error', failed });
+    return titles;
   }
 
   function synchronize(signal: AbortSignal) {
@@ -1112,7 +1153,7 @@ export function createVaultModule(options: {
       latestSyncAttemptAt = new Date().toISOString();
       lastIndexOutcome = { outcome: 'pending', at: latestSyncAttemptAt };
       synchronization = performSynchronization(signal)
-        .then(async ({ summary, directoryTree: nextDirectoryTree, titlesToBackfill }) => {
+        .then(async ({ summary, directoryTree: nextDirectoryTree, titlesToBackfill, repairEmbeddings }) => {
           indexStatus = 'ready';
           appMissing = false;
           lastSuccessfulSyncAt = new Date().toISOString();
@@ -1120,7 +1161,7 @@ export function createVaultModule(options: {
           lastIndexOutcome = { outcome: 'ok', at: lastSuccessfulSyncAt, ...summary };
           directoryTree = { ...nextDirectoryTree, updatedAt: lastSuccessfulSyncAt };
           graphCache = undefined;
-          await backfillNoteTitles(titlesToBackfill, signal);
+          await backfillNoteTitles(titlesToBackfill, signal, repairEmbeddings);
           return summary;
         }, (error: unknown) => {
           indexStatus = 'failed';
@@ -1132,6 +1173,18 @@ export function createVaultModule(options: {
         .finally(() => { synchronization = undefined; });
     }
     return synchronization;
+  }
+
+  function queueSynchronization() {
+    if (queuedSynchronization) return queuedSynchronization;
+    if (!synchronization) return synchronize(AbortSignal.timeout(vaultSyncTimeoutMs));
+    // The current tree may predate the push; give the follow-up its own deadline.
+    const startNext = () => {
+      queuedSynchronization = undefined;
+      return synchronize(AbortSignal.timeout(vaultSyncTimeoutMs));
+    };
+    queuedSynchronization = synchronization.then(startNext, startNext);
+    return queuedSynchronization;
   }
 
   async function reembed(
@@ -1480,11 +1533,7 @@ export function createVaultModule(options: {
 
   function indexAfterNoteWrite(): void {
     graphCache = undefined;
-    const signal = AbortSignal.timeout(10 * 60_000);
-    const refresh = synchronization
-      ? synchronization.catch(() => undefined).then(() => synchronize(signal))
-      : synchronize(signal);
-    void refresh.catch(() => {
+    void queueSynchronization().catch(() => {
       log('vault.index', { outcome: 'error', added: 0, changed: 0, removed: 0 });
     });
   }
@@ -1861,6 +1910,7 @@ export function createVaultModule(options: {
     id: 'vault',
     tools,
     synchronize,
+    queueSynchronization,
     syncStatus() {
       return {
         outcome: lastIndexOutcome.outcome,
@@ -2171,8 +2221,10 @@ export function createVaultModule(options: {
         const paths = request.body.paths.filter(isIndexedNotePath);
         if (paths.length === 0) return { notes: [] };
         try {
-          const files = await options.indexStore.graphFiles(AbortSignal.timeout(30_000), paths);
-          return { notes: files.map(noteSummary) };
+          const signal = AbortSignal.timeout(30_000);
+          const files = await options.indexStore.graphFiles(signal, paths);
+          const titles = await backfillNoteTitles(files.filter(({ title }) => title === null), signal);
+          return { notes: files.map((file) => noteSummary({ ...file, title: titles.get(file.path) ?? file.title })) };
         } catch {
           return reply.code(503).send({ error: 'Vault notes are temporarily unavailable' });
         }

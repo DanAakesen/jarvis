@@ -375,11 +375,12 @@ events
   warm root and Personal pages, including unconditional pull-to-refresh.
   SwiftUI still needs the macOS build and device acceptance.
 - `cd apps/backend && npm exec -- vitest run src/vault src/logging.test.ts src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`
-  exercises the shared Chat/Voice writer, capped legacy title backfill and
-  Notes routes with fixtures. `vault.title_backfill` reports an optional
-  batch failure without changing the index's readiness or logging note content. The
-  `database-ci.yml` loopback SQL fixture verifies migration `0103` and the
-  bodyless-note inventory without using providers or Dan's vault.
+  exercises the shared Chat/Voice writer, first-request pin titles, sync
+  coalescing and the legacy title deadline. `vault.title_backfill` reports
+  the count of failed attempts in an optional batch without changing index
+  readiness or logging paths or note content. `database-ci.yml` verifies
+  migration `0103`, bodyless-note inventory and guarded backfill writes against
+  loopback SQL without using providers or Dan's vault.
 - Deploy the backend with migration `0103` before delivering the phone build;
   the phone uses the new owner-only summary route and `sort=updated`.
   A vault commit and a successful index update are separate outcomes. If

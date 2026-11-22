@@ -479,15 +479,19 @@ The managed instructions read the tool reference from the first line. The normal
   stay as written. Remove the phone's saved-title override.
 - Keep note inventory and title separate from search chunks. Migration `0103`
   seeds existing paths and dates. After normal sync makes the index ready, read
-  up to 32 matching legacy blobs within 20 seconds to fill titles without
-  re-embedding. Serve readable filenames and existing search chunks meanwhile;
-  retain progress across failures and resume on a later sync. Do not invent a
-  search chunk for a title-only note.
+  up to 32 matching legacy blobs, newest first, within 20 seconds. Reuse a
+  successful read for embedding repair only if embeddings are also missing
+  and the existing budget allows it. Failed reads leave filename titles and
+  existing search chunks available while the batch continues. Do not invent
+  a search chunk for a title-only note. Coalesce pushes during sync into one
+  follow-up tree read so changes are not lost during the batch.
 - Keep the last Notes snapshot visible while rechecking on open. Read pins by
-  exact path, not through the capped graph; omit unusable paths from a batch and
-  keep unresolved pins removable on the phone. Load newest root and folder
-  entries without reusing an HTTP response or validator; other sort choices
-  still reorder the loaded rows. `Personal` still lists only its direct children.
+  exact path, not through the capped graph. Resolve missing titles for those
+  paths within 20 seconds without embedding work, so a legacy pin need not wait
+  for the background batch. Skip unusable paths and keep unresolved pins
+  removable. Load newest root and folder entries without reusing an HTTP
+  response or validator; other sort choices still reorder the loaded rows.
+  `Personal` still lists only its direct children.
 - Treat consecutive leading H1s with the same title as duplicate headlines.
   Drop them from newly created `vault_write` Markdown and from the reader
   presentation of existing notes. Do not rewrite existing files or remove later

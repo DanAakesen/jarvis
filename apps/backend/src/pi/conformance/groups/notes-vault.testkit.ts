@@ -105,7 +105,7 @@ function cosine(left: readonly number[], right: readonly number[]): number {
 }
 
 export function createVaultIndexFake(): VaultIndexStore & {
-  seedLegacyFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[]): void;
+  seedLegacyFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], indexedAt?: Date): void;
 } {
   const notes = new Map<string, IndexedNote>();
   const chunkRows = () => [...notes].sort(([left], [right]) => left.localeCompare(right))
@@ -113,8 +113,8 @@ export function createVaultIndexFake(): VaultIndexStore & {
   const hit = (path: string, chunk: VaultIndexedChunk, score: number): VaultSearchHit => ({ path, heading: chunk.heading, content: chunk.content, score });
 
   return {
-    seedLegacyFile(path, blobSha, chunks) {
-      notes.set(path, { blobSha, title: null, chunks, links: [], indexedAt: new Date() });
+    seedLegacyFile(path, blobSha, chunks, indexedAt = new Date()) {
+      notes.set(path, { blobSha, title: null, chunks, links: [], indexedAt });
     },
     async initialize() {},
     supportsVectorSearch: () => true,
@@ -131,13 +131,13 @@ export function createVaultIndexFake(): VaultIndexStore & {
     async files(embeddingModel, signal): Promise<VaultIndexedFile[]> {
       signal.throwIfAborted();
       return [...notes].sort(([left], [right]) => left.localeCompare(right)).map(([path, note]) => ({
-        path, blobSha: note.blobSha,
+        path, blobSha: note.blobSha, updatedAt: note.indexedAt,
         titleMissing: note.title === null,
         embeddingMissing: embeddingModel !== null &&
           note.chunks.some((chunk) => chunk.embedding === null || chunk.embeddingModel !== embeddingModel),
       }));
     },
-    async replaceFile(path, sha, title, chunks, links, signal) {
+    async replaceFile(path, sha, title, chunks, links, signal, options) {
       signal.throwIfAborted();
       if (!/^[\da-f]{40}$/u.test(sha) || chunks.length > 512 || links.length > 512) throw new TypeError('Vault index entry is invalid');
       for (const { embedding, embeddingModel } of chunks) {
@@ -147,6 +147,7 @@ export function createVaultIndexFake(): VaultIndexStore & {
         if (!valid) throw new TypeError('Vault index embedding is invalid');
       }
       const previous = notes.get(path);
+      if (options?.onlyIfCurrent && previous?.blobSha !== sha) return;
       const indexedAt = previous?.blobSha === sha ? previous.indexedAt : new Date();
       notes.set(path, { blobSha: sha, title, chunks: [...chunks], links: [...links], indexedAt });
     },
@@ -164,7 +165,7 @@ export function createVaultIndexFake(): VaultIndexStore & {
       const wanted = paths && new Set(paths);
       return [...notes].filter(([path]) => !wanted || wanted.has(path))
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([path, note]) => ({ path, title: note.title, updatedAt: note.indexedAt }));
+        .map(([path, note]) => ({ path, blobSha: note.blobSha, title: note.title, updatedAt: note.indexedAt }));
     },
     async graphData(paths, embeddingModel, signal): Promise<VaultGraphData> {
       signal.throwIfAborted();

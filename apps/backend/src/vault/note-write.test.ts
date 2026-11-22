@@ -1,10 +1,15 @@
+import { createHmac } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import { MEMORY_EMBEDDING_DIMENSIONS } from '../core/memory-embeddings.js';
+import { isVaultDefaultBranchPush } from '../github/webhook-mapping.js';
+import { createGithubWebhookModule } from '../github/webhook.js';
+import type { BackendModule } from '../modules.js';
 import { createMemoryVault, createVaultIndexFake } from '../pi/conformance/groups/notes-vault.testkit.js';
+import { VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
 import { createVaultModule, type VaultModule } from './index.js';
 
 const signal = new AbortController().signal;
@@ -17,8 +22,8 @@ const pergola = {
 const request = { principal: { objectId: 'owner' }, headers: { 'x-jarvis-message-id': '42' } } as unknown as FastifyRequest;
 const callTool = (module: VaultModule, name: string, args: Record<string, unknown>) =>
   module.tools.find((tool) => tool.name === name)!.execute(args, request, signal) as Promise<Record<string, unknown>>;
-const ownerApp = (module: VaultModule) => buildApp(config, undefined, {
-  modules: [module],
+const ownerApp = (...modules: BackendModule[]) => buildApp(config, undefined, {
+  modules,
   auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Fixture owner' }),
 });
 
@@ -206,14 +211,14 @@ describe('browsing committed vault notes', () => {
   });
 });
 
-function legacyFixture(count: number, withEmbedder = false) {
+function legacyFixture(count: number, withEmbedder = false, folder = 'Personal') {
   const vault = createMemoryVault();
   const index = createVaultIndexFake();
   const log = vi.fn();
   const embedding = Array<number>(MEMORY_EMBEDDING_DIMENSIONS).fill(1);
   const embed = vi.fn(async () => embedding);
   const model = 'fixture-model';
-  const paths = Array.from({ length: count }, (_, index) => `Personal/legacy-${String(index + 1).padStart(2, '0')}.md`);
+  const paths = Array.from({ length: count }, (_, index) => `${folder}/legacy-${String(index + 1).padStart(2, '0')}.md`);
   for (const [i, path] of paths.entries()) {
     const heading = `Saved title ${i + 1}`;
     const content = 'A legacy note body.';
@@ -221,7 +226,7 @@ function legacyFixture(count: number, withEmbedder = false) {
     vault.seed(path, `# ${heading}\n\n${content}`);
     index.seedLegacyFile(path, vault.shaOf(path)!, [{
       index: 0, heading, content, embedding: embedded ? embedding : null, embeddingModel: embedded ? model : null,
-    }]);
+    }], new Date(Date.UTC(2026, 10, 22, 0, i)));
   }
   const module = createVaultModule({
     client: vault, indexStore: index, log,
@@ -232,48 +237,144 @@ function legacyFixture(count: number, withEmbedder = false) {
 }
 
 describe('legacy vault title backfill', () => {
-  it('caps legacy reads while listing pending titles by filename, then resumes the remaining rows', async () => {
+  it('caps legacy reads in newest-first order and repairs a missing embedding in the same pass', async () => {
     const { vault, index, embed, model, paths, module } = legacyFixture(33, true);
-    const pendingPath = paths.at(-1)!; // Also missing its embedding.
+    const pendingPath = paths[0]!;
+    const dualMissingPath = paths.at(-1)!;
     const newPath = 'Personal/new-note.md';
     vault.seed(newPath, '# New title');
     const read = vi.spyOn(vault, 'read');
     const app = ownerApp(module);
     try {
       await expect(module.synchronize(signal)).resolves.toMatchObject({ added: 1 });
-      expect(read).toHaveBeenCalledTimes(33); // One new note and at most 32 old blobs.
-      expect(read).not.toHaveBeenCalledWith(pendingPath, expect.anything());
-      expect(embed).not.toHaveBeenCalled();
-      expect((await index.files(model, signal)).filter((file) => file.titleMissing))
-        .toMatchObject([{ path: pendingPath, embeddingMissing: true }]);
+      expect(read.mock.calls.map(([path]) => path)).toEqual([newPath, ...paths.slice(1).reverse()]);
+      expect(embed).toHaveBeenCalledTimes(1);
+      const indexed = await index.files(model, signal);
+      expect(indexed.filter((file) => file.titleMissing)).toMatchObject([{ path: pendingPath }]);
+      expect(indexed.find(({ path }) => path === dualMissingPath))
+        .toMatchObject({ titleMissing: false, embeddingMissing: false });
       const page = await app.inject({ url: '/notes?directory=Personal', headers });
       expect(page.statusCode).toBe(200);
       expect(page.json().notes).toEqual(expect.arrayContaining([
         expect.objectContaining({ path: newPath, title: 'New title' }),
-        expect.objectContaining({ path: pendingPath, title: 'Legacy 33' }),
+        expect.objectContaining({ path: pendingPath, title: 'Legacy 01' }),
       ]));
 
       read.mockClear();
       await module.synchronize(signal);
       expect(read.mock.calls.map(([path]) => path)).toEqual([pendingPath]);
       const refreshed = await app.inject({ url: '/notes?directory=Personal', headers });
-      expect(refreshed.json().notes).toContainEqual(expect.objectContaining({ path: pendingPath, title: 'Saved title 33' }));
+      expect(refreshed.json().notes).toContainEqual(expect.objectContaining({ path: pendingPath, title: 'Saved title 1' }));
       expect((await index.files(model, signal)).some((file) => file.titleMissing)).toBe(false);
     } finally { await app.close(); }
   });
 
-  it.each(['read failure', 'deadline'])('keeps serving through a title backfill %s', async (failure) => {
+  it('fills the requested Work pin on first view only, without applying a mismatched blob title', async () => {
+    const { vault, index, paths, module } = legacyFixture(32);
+    const pin = 'Work/Events/old-name.md';
+    const movedOn = 'Work/Events/another-old-name.md';
+    const hidden = 'Work/password.md';
+    for (const path of [pin, movedOn, hidden, 'Work/not-requested.md']) {
+      vault.seed(path, '---\ntags: [events]\n---\n\n# Changed agenda\n\nThe file name did not change.');
+      index.seedLegacyFile(path, vault.shaOf(path)!, [], new Date('2026-11-01T00:00:00Z'));
+    }
+    await module.synchronize(signal);
+    vault.seed(movedOn, '# Newer blob');
+    const read = vi.spyOn(vault, 'read');
+    const app = ownerApp(module);
+    try {
+      const request = { method: 'POST' as const, url: '/notes/summaries', headers, payload: {
+        paths: [pin, pin, paths[0], movedOn, 'Work/missing.md', hidden, '../bad.md'],
+      } };
+      const first = await app.inject(request);
+      expect(first.statusCode).toBe(200);
+      expect(first.json().notes).toMatchObject([
+        { path: paths[0], title: 'Saved title 1' },
+        { path: movedOn, title: 'Another old name' },
+        { path: pin, title: 'Changed agenda' },
+      ]);
+      expect(read.mock.calls.map(([path]) => path)).toEqual([movedOn, pin]);
+      expect((await index.graphFiles(signal, [pin, movedOn])).map(({ title }) => title)).toEqual([null, 'Changed agenda']);
+      const folder = await app.inject({ url: '/notes?directory=Work%2FEvents', headers });
+      expect(folder.json().notes).toContainEqual(expect.objectContaining({ path: pin, title: 'Changed agenda' }));
+
+      read.mockClear();
+      const second = await app.inject(request);
+      expect(second.json()).toEqual(first.json());
+      expect(read.mock.calls.map(([path]) => path)).toEqual([movedOn]);
+    } finally { await app.close(); }
+  });
+
+  it('counts a failed read, continues with later notes, and refreshes the graph once after the batch', async () => {
+    const { vault, index, log, paths: [oldest, middle, newest], module } = legacyFixture(3, false, 'General');
+    const read = vault.read;
+    const startNewest = Promise.withResolvers<void>();
+    const failNewest = Promise.withResolvers<void>();
+    const startOldest = Promise.withResolvers<void>();
+    const finishOldest = Promise.withResolvers<void>();
+    const readSpy = vi.spyOn(vault, 'read').mockImplementation(async (path, signal) => {
+      if (path === newest) {
+        startNewest.resolve();
+        await failNewest.promise;
+        throw new Error('GitHub fixture read failed');
+      }
+      if (path === oldest) {
+        startOldest.resolve();
+        await finishOldest.promise;
+      }
+      return read(path, signal);
+    });
+    const graphData = vi.spyOn(index, 'graphData');
+    const app = ownerApp(module);
+    const graph = () => app.inject({ url: '/knowledge/graph', headers });
+    const sync = module.synchronize(signal);
+    try {
+      await startNewest.promise;
+      const before = await graph();
+      expect(before.statusCode).toBe(200);
+      expect(before.json().nodes).toContainEqual(expect.objectContaining({ path: middle, title: 'Legacy 02' }));
+      failNewest.resolve();
+
+      // The middle title is already persisted, but the in-flight batch must not invalidate the graph yet.
+      await startOldest.promise;
+      expect((await index.graphFiles(signal, [middle!]))[0]?.title).toBe('Saved title 2');
+      expect((await graph()).json().nodes).toEqual(before.json().nodes);
+      expect(graphData).toHaveBeenCalledTimes(1);
+      finishOldest.resolve();
+
+      await sync;
+      expect(module.syncStatus().outcome).toBe('ok');
+      expect(log).toHaveBeenCalledWith('vault.title_backfill', { outcome: 'error', failed: 1 });
+      expect((await graph()).json().nodes).toMatchObject([
+        { path: oldest, title: 'Saved title 1' },
+        { path: middle, title: 'Saved title 2' },
+        { path: newest, title: 'Legacy 03' },
+      ]);
+      await graph();
+      expect(graphData).toHaveBeenCalledTimes(2);
+
+      readSpy.mockRestore();
+      await module.synchronize(signal);
+      expect((await index.graphFiles(signal, [newest!]))[0]?.title).toBe('Saved title 3');
+    } finally {
+      failNewest.resolve();
+      finishOldest.resolve();
+      await sync.catch(() => undefined);
+      await app.close();
+    }
+  });
+
+  it('bounds both background and pin title reads even if GitHub is still waiting', async () => {
     const { vault, log, paths, module } = legacyFixture(2);
     const read = vault.read;
     const startedRead = Promise.withResolvers<AbortSignal>();
     const resumeRead = Promise.withResolvers<void>();
-    vi.spyOn(vault, 'read').mockImplementationOnce(read).mockImplementationOnce(async (path, readSignal) => {
+    const readSpy = vi.spyOn(vault, 'read').mockImplementationOnce(read).mockImplementationOnce(async (path, readSignal) => {
       startedRead.resolve(readSignal);
       await resumeRead.promise;
-      if (failure === 'read failure') throw new Error('GitHub request failed');
       return read(path, readSignal);
     });
-    const deadline = new AbortController();
+    let deadline = new AbortController();
     const nativeTimeout = AbortSignal.timeout;
     const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) =>
       ms === 20_000 ? deadline.signal : nativeTimeout(ms));
@@ -284,30 +385,100 @@ describe('legacy vault title backfill', () => {
       const page = await app.inject({ url: '/notes?directory=Personal', headers });
       expect(page.statusCode).toBe(200);
       expect(page.json().notes).toMatchObject([
-        { path: paths[0], title: 'Saved title 1' },
-        { path: paths[1], title: 'Legacy 02' },
+        { path: paths[0], title: 'Legacy 01' },
+        { path: paths[1], title: 'Saved title 2' },
       ]);
 
-      if (failure === 'deadline') {
-        deadline.abort();
-        expect(batchSignal.aborted).toBe(true);
-        expect(signal.aborted).toBe(false);
-      }
-      resumeRead.resolve();
+      deadline.abort();
+      expect(batchSignal.aborted).toBe(true);
+      expect(signal.aborted).toBe(false);
       await expect(sync).resolves.toEqual({ added: 0, changed: 0, removed: 0 });
       expect(module.syncStatus().outcome).toBe('ok');
-      expect(log).toHaveBeenCalledWith('vault.title_backfill', { outcome: 'error' });
-      const pins = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths } });
+      expect(log).toHaveBeenCalledWith('vault.title_backfill', { outcome: 'error', failed: 1 });
+
+      deadline = new AbortController();
+      const startedPinRead = Promise.withResolvers<AbortSignal>();
+      readSpy.mockImplementationOnce(async (path, readSignal) => {
+        startedPinRead.resolve(readSignal);
+        await resumeRead.promise;
+        return read(path, readSignal);
+      });
+      const request = Promise.resolve(app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths } }));
+      const pinSignal = await startedPinRead.promise;
+      deadline.abort();
+      expect(pinSignal.aborted).toBe(true);
+      const pins = await request;
       expect(pins.statusCode).toBe(200);
-      expect(pins.json().notes).toMatchObject([{ title: 'Saved title 1' }, { title: 'Legacy 02' }]);
+      expect(pins.json().notes).toMatchObject([{ title: 'Legacy 01' }, { title: 'Saved title 2' }]);
       const graph = await app.inject({ url: '/knowledge/graph', headers });
       expect(graph.statusCode).toBe(200);
-      expect(graph.json().nodes).toContainEqual(expect.objectContaining({ path: paths[1], title: 'Legacy 02' }));
+      expect(graph.json().nodes).toContainEqual(expect.objectContaining({ path: paths[0], title: 'Legacy 01' }));
       expect(await callTool(module, 'vault_search', { query: 'legacy' })).toMatchObject({ count: 2 });
     } finally {
       resumeRead.resolve();
       await sync.catch(() => undefined);
       timeout.mockRestore();
+      await app.close();
+    }
+  });
+
+  it('coalesces vault push deliveries during title backfill into one fresh-tree sync', async () => {
+    const { vault, module } = legacyFixture(1);
+    const tree = vi.spyOn(vault, 'tree');
+    const read = vault.read;
+    const startedRead = Promise.withResolvers<void>();
+    const resumeRead = Promise.withResolvers<void>();
+    vi.spyOn(vault, 'read').mockImplementationOnce(async (path, signal) => {
+      startedRead.resolve();
+      await resumeRead.promise;
+      return read(path, signal);
+    });
+    const refreshes: Promise<unknown>[] = [];
+    const secret = 'vault-webhook-fixture';
+    const webhook = createGithubWebhookModule({
+      getSecret: async () => secret,
+      deliveryStore: { hasDelivery: async () => false, record: async () => true, recordPullRequest: async () => {} },
+      onMapping: async (mapping) => {
+        if (isVaultDefaultBranchPush(mapping)) refreshes.push(module.queueSynchronization());
+      },
+    });
+    const app = ownerApp(module, webhook);
+    const push = (id: string) => {
+      const payload = JSON.stringify({
+        repository: { full_name: VAULT_REPOSITORY, pushed_at: '2026-11-22T10:00:00Z' },
+        ref: `refs/heads/${VAULT_BRANCH}`, after: id.repeat(40),
+      });
+      return app.inject({
+        method: 'POST', url: '/github/webhooks', payload,
+        headers: {
+          'content-type': 'application/json', 'x-github-event': 'push', 'x-github-delivery': id,
+          'x-hub-signature-256': `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`,
+        },
+      });
+    };
+    const sync = module.synchronize(signal);
+    try {
+      await startedRead.promise;
+      const first = 'Personal/First push.md';
+      const last = 'Personal/Second push.md';
+      vault.seed(first, '# First push\n\nA new note.');
+      expect((await push('a')).json()).toEqual({ status: 'accepted' });
+      vault.seed(last, '# Second push\n\nAnother new note.');
+      expect((await push('b')).json()).toEqual({ status: 'accepted' });
+      expect(refreshes).toHaveLength(2);
+      expect(tree).toHaveBeenCalledTimes(1);
+
+      resumeRead.resolve();
+      await expect(sync).resolves.toMatchObject({ added: 0 });
+      await expect(Promise.all(refreshes)).resolves.toMatchObject([{ added: 2 }, { added: 2 }]);
+      expect(tree).toHaveBeenCalledTimes(2);
+      const page = await app.inject({ url: '/notes?directory=Personal', headers });
+      expect(page.json().notes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: first }), expect.objectContaining({ path: last }),
+      ]));
+    } finally {
+      resumeRead.resolve();
+      await Promise.allSettled([sync, ...refreshes]);
       await app.close();
     }
   });

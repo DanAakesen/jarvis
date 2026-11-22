@@ -815,9 +815,10 @@ Startup and verified `master` push syncs replace changed note chunks and delete
 removed paths. `0103_vault_note_metadata.sql` adds `dbo.vault_notes`, one row per
 indexed note, including title-only notes with no chunks. The row stores the
 path hash, path, blob SHA, nullable display title and content-update timestamp.
-Migrated rows retain their dates and use filename titles until a bounded batch
-fills the title for the matching SHA. Both tables are derived indexes; note
-content and durable facts remain authoritative in `DanAakesen/vault`.
+Migrated rows retain their dates and use filename titles until a bounded sync
+batch or an exact-path summary lookup fills the title for the matching SHA.
+Both tables are derived indexes; note content and durable facts remain
+authoritative in `DanAakesen/vault`.
 
 ## Owner session schema (group 12)
 

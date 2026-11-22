@@ -103,6 +103,7 @@ export interface MemoryStore {
 export interface VaultIndexedFile {
   readonly path: string;
   readonly blobSha: string;
+  readonly updatedAt: Date;
   readonly titleMissing: boolean;
   readonly embeddingMissing: boolean;
 }
@@ -124,6 +125,7 @@ export interface VaultSearchHit {
 
 export interface VaultGraphFile {
   readonly path: string;
+  readonly blobSha: string;
   readonly title: string | null;
   readonly updatedAt: Date;
 }
@@ -162,6 +164,7 @@ export interface VaultIndexStore {
     chunks: readonly VaultIndexedChunk[],
     links: readonly string[],
     signal: AbortSignal,
+    options?: { readonly onlyIfCurrent: boolean },
   ): Promise<void>;
   backfillFileTitle(path: string, blobSha: string, title: string, signal: AbortSignal): Promise<void>;
   deleteFiles(paths: readonly string[], signal: AbortSignal): Promise<void>;
@@ -957,19 +960,20 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       const result = await execute(request, signal, () => request.query<{
         path: string;
         blob_sha: string;
+        updated_at: Date;
         title_missing: boolean;
         embedding_missing: boolean;
       }>(
-        `SELECT TOP (@take) path, blob_sha, CONVERT(bit, CASE WHEN title IS NULL THEN 1 ELSE 0 END) AS title_missing,
+        `SELECT TOP (@take) path, blob_sha, updated_at, CONVERT(bit, CASE WHEN title IS NULL THEN 1 ELSE 0 END) AS title_missing,
             CONVERT(bit, ${missingEmbeddings}) AS embedding_missing
           FROM dbo.vault_notes AS note ORDER BY path;`,
       ));
-      return result.recordset.map(({ path, blob_sha, title_missing, embedding_missing }) => ({
-        path, blobSha: blob_sha.trim(), titleMissing: title_missing, embeddingMissing: embedding_missing,
+      return result.recordset.map(({ path, blob_sha, updated_at, title_missing, embedding_missing }) => ({
+        path, blobSha: blob_sha.trim(), updatedAt: updated_at, titleMissing: title_missing, embeddingMissing: embedding_missing,
       }));
     },
 
-    async replaceFile(path, blobSha, title, chunks, links, signal) {
+    async replaceFile(path, blobSha, title, chunks, links, signal, options) {
       ensureInitialized();
       if (!/^[\da-f]{40}$/u.test(blobSha) || !title || title.length > 200 || chunks.length > 512 || links.length > 512) {
         throw new TypeError('Vault index entry is invalid');
@@ -996,14 +1000,12 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         const embeddingValue = vectorSearchAvailable
           ? ', CASE WHEN chunk.embedding IS NULL THEN NULL ELSE CAST(chunk.embedding AS vector(1536)) END'
           : jsonEmbeddingAvailable ? ', chunk.embedding' : '';
-        const statement = `UPDATE dbo.vault_notes SET title = @title,
+        // Deferred embedding repair must not replace a concurrent edit or recreate a deleted note.
+        const updateNote = `UPDATE dbo.vault_notes SET title = @title,
             updated_at = CASE WHEN blob_sha <> @blobSha THEN SYSUTCDATETIME() ELSE updated_at END,
             blob_sha = @blobSha
-          WHERE path_hash = @pathHash;
-          IF @@ROWCOUNT = 0
-            INSERT INTO dbo.vault_notes (path_hash, path, blob_sha, title)
-            VALUES (@pathHash, @path, @blobSha, @title);
-          DELETE FROM dbo.vault_chunks WHERE path_hash = @pathHash;
+          WHERE path_hash = @pathHash${options?.onlyIfCurrent ? ' AND blob_sha = @blobSha' : ''};`;
+        const replaceChunks = `DELETE FROM dbo.vault_chunks WHERE path_hash = @pathHash;
           ${chunks.length === 0 ? '' : `INSERT INTO dbo.vault_chunks
             (path_hash, path, blob_sha, chunk_index, heading, content, embedding_model${embeddingColumn})
             SELECT @pathHash, @path, @blobSha, chunk.chunk_index, chunk.heading, chunk.content, chunk.embedding_model${embeddingValue}
@@ -1014,11 +1016,16 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
               embedding_model nvarchar(128) '$.embeddingModel',
               embedding nvarchar(max) '$.embedding' AS JSON
             ) AS chunk;`}`;
-        const linkStatement = `DELETE FROM dbo.vault_links WHERE source_path_hash = @pathHash;
+        const replaceLinks = `DELETE FROM dbo.vault_links WHERE source_path_hash = @pathHash;
           ${links.length === 0 ? '' : `INSERT INTO dbo.vault_links (source_path_hash, target_path)
             SELECT @pathHash, link.target_path
             FROM OPENJSON(@links) WITH (target_path nvarchar(180) '$') AS link;`}`;
-        await execute(request, signal, () => request.query(`${statement} ${linkStatement}`));
+        const statement = options?.onlyIfCurrent
+          ? `${updateNote} IF @@ROWCOUNT > 0 BEGIN ${replaceChunks} ${replaceLinks} END;`
+          : `${updateNote} IF @@ROWCOUNT = 0
+            INSERT INTO dbo.vault_notes (path_hash, path, blob_sha, title)
+            VALUES (@pathHash, @path, @blobSha, @title); ${replaceChunks} ${replaceLinks}`;
+        await execute(request, signal, () => request.query(statement));
         await transaction.commit();
         committed = true;
         invalidateEmbeddingMatrix();
@@ -1067,14 +1074,16 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       if (paths) request.input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(paths.map((path) => pathHash(path).toString('hex'))));
       const result = await execute(request, signal, () => request.query<{
         path: string;
+        blob_sha: string;
         title: string | null;
         updated_at: Date;
-      }>(`SELECT TOP (@take) path, title, updated_at
+      }>(`SELECT TOP (@take) path, blob_sha, title, updated_at
         FROM dbo.vault_notes
         ${paths ? 'WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes))' : ''}
         ORDER BY path;`));
-      return result.recordset.map(({ path, title, updated_at }) => ({
+      return result.recordset.map(({ path, blob_sha, title, updated_at }) => ({
         path,
+        blobSha: blob_sha.trim(),
         title,
         updatedAt: updated_at,
       }));

@@ -883,7 +883,11 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
           ? String(folder) : 'other'))].slice(0, 5);
     }
   }
-  if (input.msg === 'vault.title_backfill' && input.outcome === 'error') fields.outcome = input.outcome;
+  if (input.msg === 'vault.title_backfill' && input.outcome === 'error') {
+    fields.outcome = input.outcome;
+    const failed = input.failed;
+    if (typeof failed === 'number' && Number.isInteger(failed) && failed >= 0 && failed <= 50) fields.failed = failed;
+  }
   if (input.msg === 'vault.write') {
     if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
     fields.folder = ['People', 'Work', 'Personal', 'General'].includes(String(input.folder))

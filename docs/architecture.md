@@ -10333,21 +10333,27 @@ reader.
 For the build 122 follow-up, `dbo.vault_notes` stores the indexed path, blob SHA,
 display title and content-update time independently of `dbo.vault_chunks`.
 Migration `0103` copies existing paths and dates with null titles. Normal sync
-publishes inventory readiness before attempting up to 32 legacy reads under
-a separate 20-second deadline. It updates each title only for the matching
-blob SHA and keeps that progress if a batch fails. A later normal sync can
-resume; unfinished rows use readable filenames and remain searchable by
-their existing chunks. A row missing both title and embeddings can get
-embeddings on a later sync after its title is filled. Title-only notes have a
-file row and no search chunks. The REST writer indexes metadata and lexical
+publishes inventory readiness before attempting up to 32 legacy reads, in
+descending content-update order, under a separate 20-second deadline. Each
+successful title persists for the matching blob SHA without changing its date.
+Failed reads are counted and skipped; unfinished rows use readable filenames
+and remain searchable by existing chunks. The same read can repair missing
+embeddings within the normal embedding budget; deferred repairs cannot
+replace a newer SHA. Graph cache invalidation happens once after a batch that
+resolves titles. A verified vault push or a write during sync schedules one
+follow-up sync with a fresh tree. Title-only notes have an inventory row and
+no search chunks. The REST writer indexes metadata and lexical
 chunks after the commit. Chat and Voice share `vault_write`, which removes
 repeated leading title headings on creation and tries bounded vector
 indexing, falling back to lexical chunks and the title. An index update
 failure does not undo a Git commit; background sync remains the repair path.
 
-The owner-only `/notes`, `/notes/summaries` (bounded batches of exact paths)
-and `/knowledge/graph` use the metadata title. The phone revalidates its
-account-bound Notes snapshots on open and requests newest-first directory
+The owner-only `/notes`, `/notes/summaries`, and `/knowledge/graph` use the
+metadata title. Summaries attempt to fill missing titles on the first request
+for up to 50 exact paths, within the same 20-second deadline. This lookup
+does not embed or scan the vault; it returns partial results with filenames
+if the indexed blob is no longer current or the read fails. The phone
+revalidates its account-bound Notes snapshots on open and requests newest-first directory
 pages without HTTP cache reuse or `If-None-Match`; pull-to-refresh does the
 same at the root and in folders. The owner route still sends `no-store` and
 computes an ETag from the current payload for conditional clients. Pins are
