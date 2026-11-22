@@ -29,6 +29,10 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 
 - **Decision:** The author may merge a reviewed PR after its exact head passes the gates on current `main`. Merge through a PR; Deploy requires a qualification receipt for the merged tree. Use the [merge procedure](agent-context.md#merge-and-release-procedure).
 
+### 23 November 2026 — Manual kcal on iPhone
+
+Dan chose one exact kcal entry per meal. Keep other nutrients unknown and count the entry in the same ledger as Chat and Voice.
+
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material
 
 - **Decision:** [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) owns the working rules and document map; `AGENTS.md` links to it. Key files describe current state. Delete obsolete working material and shipped design references; use Git and PRs for history.

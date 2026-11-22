@@ -158,7 +158,7 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
+Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. Manual iPhone kcal entries use the same meal ledger and Copenhagen day as Chat and Voice. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
 ## Proactive wake and the old engine
 

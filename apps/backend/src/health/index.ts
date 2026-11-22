@@ -19,6 +19,7 @@ import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { healthSourceTools } from './tools/source-tools.js';
 import { isLegacyDailyRequest, serveLegacyDailyAlias } from './legacy-alias.js';
 import { gymTools } from './tools/gym.js';
+import { manualMealRoutes } from './routes/manual-meals.js';
 import { liftRoutes } from './routes/lifts.js';
 import { workoutRoutes } from './routes/workouts.js';
 import { deviceSyncRoutes } from './routes/sync.js';
@@ -50,6 +51,7 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
         await app.register(healthQueryRoutes(data.query));
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
+        if (internalNutrition) await app.register(manualMealRoutes(internalNutrition));
         if (data.lifts) await app.register(liftRoutes(data.lifts, data.liftCaptureModel));
         if (data.workouts) await app.register(workoutRoutes(data.workouts));
         if (data.deviceSync) await app.register(deviceSyncRoutes(data.deviceSync));

@@ -14,7 +14,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | **Chat** | The one PI conversation: streaming replies, composer with plus menu and dictation, grouped tool activity, generated blocks and charts, photos, reply targets from pushes, follow-latest, and the live Voice state when Voice is active. | `JarvisChatScreen`, `JarvisComposerBar`, `JarvisChatToolActivityList`, `JarvisChatBlockView`, `JarvisChatFollowLatest` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |
-| **Health** | Daily dashboard, body chart, workouts and the iPhone Gym lift log and editor, goals, and HealthKit sync. Nutrition totals live here. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
+| **Health** | Daily dashboard, body chart, workouts and the iPhone Gym lift log and editor, goals, and HealthKit sync. Swipe to Nutrition for totals, meal history and **Log meal kcal**. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
 | **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
@@ -50,6 +50,5 @@ Not built. Apple granted the Voice Based Conversation entitlement on 21 November
 | Item | State |
 | --- | --- |
 | Map and route card in Chat and Voice | Design brief only: [docs/ui/map-route-card/brief.md](docs/ui/map-route-card/brief.md). Dan chooses the layout, then it is built. |
-| Manual kcal entry on the Nutrition screen | Approved. Device acceptance is pending. |
 | Device acceptance of Chat typing, follow-latest, Voice state labels, Notes titles and Watch recovery | Build 124 testing is underway. [PLAN.md](PLAN.md) tracks the results of each check. |
 | CarPlay scenes | Not started. |

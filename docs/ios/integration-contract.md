@@ -128,6 +128,7 @@ this screen.
 | Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
 | Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
 | Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
+| Log meal kcal | Owner POST /health/meals with idempotencyKey (UUID), occurredAt (ISO timestamp) and energyKcal (above 0, up to 10,000). Keep all three on retry. A receipt confirms the key, kcal and Copenhagen mealDate. |
 | Edit training/nutrition targets | `GET` and `PATCH /health/training-targets` or `/health/nutrition-targets`. A patch is a top-level object of changed values; `null` clears a target. |
 | Read Health upload credential state | `GET /api/health/upload-credential` returns state and optional expiry. Minting through `POST` requires an Entra owner token, not an owner-session token; it is separate from native HealthKit sync. |
 | Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |

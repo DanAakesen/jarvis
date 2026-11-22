@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **124** | Uploaded from `ee34f2c3e` by [run #124](https://github.com/DanAakesen/jarvis/actions/runs/45071501953). Dan reports tests 1 (project status and issue lookup), 2 (Notes), 3 (creating and completing a task), 6 (weather in the ongoing conversation) and 9 (one Proactive switch) passed. A separate request for the phone’s location failed. The channels were unspecified. Test 7 failed for iPhone Chat typing lag ([#2026](https://github.com/DanAakesen/jarvis/issues/2026)). The other checks, including the Voice part of test 7, await feedback. |
+| TestFlight **124** | Uploaded from `ee34f2c3e` by [run #124](https://github.com/DanAakesen/jarvis/actions/runs/45071501953). Dan reports tests 1 (project status and issue lookup), 2 (Notes), 3 (creating and completing a task), 6 (weather in the ongoing conversation) and 9 (one Proactive switch) passed. Watch dictation also failed (test 8). A separate request for the phone’s location failed. The channels were unspecified. Test 7 failed for iPhone Chat typing lag ([#2026](https://github.com/DanAakesen/jarvis/issues/2026)). The other checks, including the Voice part of test 7, await feedback. |
 | Backend | The [latest main Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45078026398) passed exact-tree qualification and deterministic runtime readiness. The [Notes Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) delivered migration `0103` alongside the PI rate-limit and tool-access fixes and server-side `gym_lifts` discovery of iPhone Gym records. Readiness is not live provider acceptance. |
 | Background PI | Dan turned it on in build 124. The Proactive page shows turns used, allowance and last activation. Live delivery awaits verification. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
@@ -32,7 +32,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | | Decision needed | Until then |
 | --- | --- | --- |
 | **A** | Legacy proactive engine removal approved. | Move Inbox follow-ups to PI before retiring the old trigger. |
-| **B** | Manual kcal entry approved. | Implement on Nutrition and check that the day's totals update once. |
+| **B · decided** | Manual kcal adds one meal on iPhone. | Device check: in Health → Nutrition, log 100 kcal. Meals should gain one entry and Chat should report 100 more kcal for today. |
 | **C** | How and when should PI compact context within the one ongoing conversation? | Reported tool turns carried 84K–116K input tokens; the fresh instructions baseline was about 18K. Dan confirmed compaction is needed. Verify managed-endpoint support and context retention before implementation. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
 | **E** | Foundry administration approved: agent instructions, versions, activation, models and deployments. | Compare existing Azure tools, then implement missing operations with readback. [#2009](https://github.com/DanAakesen/jarvis/issues/2009). |
@@ -50,7 +50,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Editing merged in #2028 and first-page visibility and consistent titles in #2031. Dan reports test 2 passed. Editing an existing title was outside that check. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010), [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — truthful Chat status and typing | Build 124 still lags during typing after #2027 and #2034. The follow-up narrows draft observation, removes redundant editor layout and moves the screen-share heartbeat read off the UI thread. Pending an Apple build and device timing. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Build 124 test 9 passed. Dan wants the single Proactive suggestions switch directly on the main Settings page. The inline control awaits device acceptance. Voice gesture acceptance remains open. |
-| [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | #2029 merged. Verify first dictation, recovery and stable Voice on Watch. |
+| [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Build 124 test 8 failed dictation with a service/network error. Voice recovery still needs a device check. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Provider sync and search freshness remain open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Scope approved in E. Implementation pending. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |

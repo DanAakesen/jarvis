@@ -128,6 +128,18 @@ public enum JarvisHealthClientError: Error, Equatable, Sendable {
     case invalidStream
 }
 
+public struct JarvisManualMeal: Codable, Equatable, Sendable {
+    public let idempotencyKey: UUID
+    public let occurredAt: String
+    public let energyKcal: Double
+
+    public init(energyKcal: Double, now: Date = Date()) {
+        self.idempotencyKey = UUID()
+        self.occurredAt = ISO8601DateFormatter().string(from: now)
+        self.energyKcal = energyKcal
+    }
+}
+
 public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
     private let client: JarvisClient
     private static let responseLimit = 1024 * 1024
@@ -192,6 +204,21 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
             throw JarvisHealthClientError.invalidResponse
         }
         return JarvisHealthCapabilities(version: value.version, sources: value.sources)
+    }
+
+    public func saveManualMeal(_ meal: JarvisManualMeal) async throws {
+        guard meal.energyKcal.isFinite, meal.energyKcal > 0, meal.energyKcal <= 10_000 else {
+            throw JarvisClientError.invalidRequest
+        }
+        let response = try await client.performAuthenticatedRequest(
+            method: .post, path: ["health", "meals"], body: try JSONEncoder().encode(meal), idempotent: true
+        )
+        struct Receipt: Decodable { let idempotencyKey: UUID; let energyKcal: Double }
+        guard response.statusCode == 200,
+              let receipt: Receipt = try? decode(response.body),
+              receipt.idempotencyKey == meal.idempotencyKey, receipt.energyKcal == meal.energyKcal else {
+            throw JarvisHealthClientError.invalidResponse
+        }
     }
 
     public func trainingTargets() async throws -> JarvisHealthTargets {
