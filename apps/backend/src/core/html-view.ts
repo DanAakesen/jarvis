@@ -53,12 +53,14 @@ const updateHtmlViewSchema = {
   required: ['artifactId', 'html'],
   additionalProperties: false,
 };
-const invalidHtmlReason = 'The HTML app must be a valid HTML document, at most 512 KB, with up to 50 HTTPS sources and no base element or script src.';
+const invalidHtmlReason = 'The HTML app must be a valid HTML document that starts with <!doctype html> and has no HTML parse errors, at most 512 KB, with up to 50 HTTPS sources and no base element or script src.';
 const uuid = new RegExp(artifactIdPattern, 'iu');
 
+/** `html-<hex>` and `research-<hex>` windows carry their artifact id (a report is saved under its job id). */
 function artifactIdFromView(viewId: unknown): string | undefined {
-  if (typeof viewId !== 'string' || !/^html-[0-9a-f]{32}$/iu.test(viewId)) return undefined;
-  const id = viewId.slice(5).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/u, '$1-$2-$3-$4-$5');
+  const compact = typeof viewId === 'string' ? /^(?:html|research)-([0-9a-f]{32})$/iu.exec(viewId)?.[1] : undefined;
+  if (compact === undefined) return undefined;
+  const id = compact.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/u, '$1-$2-$3-$4-$5');
   return uuid.test(id) ? id.toLowerCase() : undefined;
 }
 
@@ -117,7 +119,7 @@ function createHtmlViewTool(
       if (!isJarvisToolCall(request)) throw new ToolRefusal('Only Jarvis can create HTML workspace apps.');
       if (!isObject(input) || Object.keys(input).length !== 3 ||
           !validateHtmlApp(input.title, input.html, input.sources)) {
-        throw new ToolRefusal('The HTML app must be a valid HTML document, at most 512 KB, with up to 50 HTTPS sources and no base element or script src.');
+        throw new ToolRefusal(invalidHtmlReason);
       }
       const ownerId = request.server.ownerObjectId;
       if (!request.server.workspaceCommands.isConnected(ownerId)) {
@@ -226,12 +228,23 @@ function updateHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
         commandId: randomUUID(), operation: 'update', viewId, view: htmlView(artifact.id, artifact.title),
       };
       if (!isWorkspaceCommand(command)) throw new ToolFailure(`HTML app ${artifact.id} version ${artifact.version} was saved, but its workspace view was invalid.`);
+      let opened = false;
       try {
-        await request.server.workspaceCommands.execute(ownerId, command, signal);
+        try {
+          await request.server.workspaceCommands.execute(ownerId, command, signal);
+        } catch (error) {
+          // The page refuses an update for a window that is not open: open the app the way weather and research do.
+          if (!(error instanceof ToolRefusal) || !request.server.workspaceCommands.isConnected(ownerId)) throw error;
+          await request.server.workspaceCommands.execute(ownerId, { ...command, commandId: randomUUID(), operation: 'create' }, signal);
+          opened = true;
+        }
       } catch {
         throw new ToolFailure(`HTML app ${artifact.id} version ${artifact.version} was saved, but the existing workspace window could not be updated. Read it before retrying.`);
       }
-      return { artifactId: artifact.id, version: artifact.version, confirmation: 'HTML app updated in the existing workspace window.' };
+      return {
+        artifactId: artifact.id, version: artifact.version,
+        confirmation: opened ? 'HTML app updated and opened in the workspace, because no window showed it.' : 'HTML app updated in the existing workspace window.',
+      };
     },
   };
 }
