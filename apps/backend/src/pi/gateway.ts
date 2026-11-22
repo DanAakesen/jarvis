@@ -210,6 +210,8 @@ const maxClientItemsPerRound = 16;
  * Calls beyond it are not tracked but the stream is still read to its end: they count as native when output follows them.
  */
 const maxTrackedCalls = 512;
+/** Output items tracked per response, by id and by output index. Past it the reply is whatever streamed: nothing is reconciled, so nothing can repeat. */
+const maxTrackedItems = 2048;
 const callItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
 
 /**
@@ -225,9 +227,24 @@ type HarnessCallClass = 'native' | 'client_owned' | 'unknown';
 interface HarnessCall {
   readonly item: Record<string, unknown>;
   native?: NativeEvidence;
+  /** The harness showed the item finished: a `completed` status, or a `done` event or final output entry that has no status. An item that was only added shows nothing. */
+  completed?: boolean;
+}
+
+/**
+ * An output item the response opened. `calls` is how many calls were tracked when it did and `overflow` whether calls beyond
+ * the tracking limit had been seen, so closing it later is not output that follows those calls. `text` is what the reply
+ * holds of the item, by content index.
+ */
+interface OutputSlot {
+  readonly calls: number;
+  readonly overflow: boolean;
+  readonly text: Map<number, string>;
 }
 
 const plainId = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 && value.length <= 512 ? value : undefined;
+/** An output or content index from an event: a non-negative integer, else nothing. */
+const indexOf = (value: unknown): number | undefined => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 
 /** The id a call is resolved by: a function call's `call_id`, an approval request's `id`. */
 const callKey = (item: Record<string, unknown>): string | undefined => {
@@ -235,21 +252,28 @@ const callKey = (item: Record<string, unknown>): string | undefined => {
   return id === undefined ? undefined : `${String(item.type)}:${id}`;
 };
 
-/** Adds the item, or merges it into the call already there with the same `call_id` or `id`; undefined when the response is at the tracking limit. */
-function trackCall(calls: HarnessCall[], item: Record<string, unknown>): { readonly call: HarnessCall; readonly created: boolean } | undefined {
+/** What an event says about whether the call's item finished: a status says so outright, a finished item without one counts as completed, and an item only added says nothing yet. */
+function noteStatus(call: HarnessCall, item: Record<string, unknown>, finished: boolean): void {
+  if (item.status !== undefined) call.completed = item.status === 'completed';
+  else if (finished) call.completed = true;
+}
+
+/** Adds the item, or merges it into the call already there with the same `call_id` or `id`; undefined when the response is at the tracking limit. `finished` is true for a `done` event or a final output entry. */
+function trackCall(calls: HarnessCall[], item: Record<string, unknown>, finished: boolean): { readonly call: HarnessCall; readonly created: boolean } | undefined {
   const callId = plainId(item.call_id);
   const id = plainId(item.id);
   const known = calls.find(entry => entry.item.type === item.type && ((callId !== undefined && entry.item.call_id === callId) || (id !== undefined && entry.item.id === id)));
-  if (known) { Object.assign(known.item, item); return { call: known, created: false }; }
+  if (known) { Object.assign(known.item, item); noteStatus(known, item, finished); return { call: known, created: false }; }
   if (calls.length >= maxTrackedCalls) return undefined;
   const call: HarnessCall = { item: { ...item } };
+  noteStatus(call, item, finished);
   calls.push(call);
   return { call, created: true };
 }
 
-/** Output that begins after the calls seen so far: the harness went on, so it ran them itself. */
-function markLaterOutput(calls: readonly HarnessCall[]): void {
-  for (const call of calls) call.native ??= 'later_output';
+/** Output that begins after the first `before` calls: the harness went on, so it ran those itself. */
+function markLaterOutput(calls: readonly HarnessCall[], before: number): void {
+  for (const call of calls.slice(0, before)) call.native ??= 'later_output';
 }
 
 /** A `function_call_output` (or `mcp_approval_response`) in the stream is the result of the call it names. */
@@ -266,7 +290,7 @@ function applyFinalOutput(calls: HarnessCall[], output: readonly unknown[]): voi
   output.forEach((entry, index) => {
     if (!isObject(entry) || typeof entry.type !== 'string') return;
     if (callItemTypes.has(entry.type)) {
-      const tracked = trackCall(calls, entry);
+      const tracked = trackCall(calls, entry, true);
       if (tracked && output.slice(index + 1).some(next => isObject(next) && typeof next.type === 'string' && !callItemTypes.has(next.type))) {
         tracked.call.native ??= 'final_output';
       }
@@ -276,8 +300,9 @@ function applyFinalOutput(calls: HarnessCall[], output: readonly unknown[]): voi
 
 /**
  * Decides who owns a call once its response completed. Native: the harness ran it (see `NativeEvidence`). Client-owned: the
- * response ended with it unanswered and its item is complete (no status, or `completed`), so the client must answer. Unknown: its
- * item has another status (`in_progress`, `failed`, `incomplete`, ...) and nothing followed it; it is left alone, because answering a call the harness may be running could repeat its work.
+ * response ended with it unanswered and its item is shown complete (`status: completed`, or a `done` event or final output entry
+ * without a status), so the client must answer. Unknown: nothing shows it complete (another status, or an item that was only
+ * added without one) and nothing followed it; it is left alone, because answering a call the harness may be running could repeat its work.
  * `resolved` holds the calls this turn already settled: a replayed one is never settled again.
  */
 function classifyHarnessCall(call: HarnessCall, resolved: ReadonlySet<string>): { readonly classification: HarnessCallClass; readonly rule: HarnessCallRule } {
@@ -286,8 +311,7 @@ function classifyHarnessCall(call: HarnessCall, resolved: ReadonlySet<string>): 
   if (call.native === 'result_item') return { classification: 'native', rule: 'result_item' };
   if (call.item.output !== undefined && call.item.output !== null) return { classification: 'native', rule: 'own_output' };
   if (call.native) return { classification: 'native', rule: call.native };
-  const status = call.item.status;
-  return status === undefined || status === 'completed'
+  return call.completed
     ? { classification: 'client_owned', rule: 'last_item_unanswered' }
     : { classification: 'unknown', rule: 'incomplete_item' };
 }
@@ -537,7 +561,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    * One request to the model. A stream that fails before any text, reasoning or tool call is tried once more (see `respond`),
    * and every failure here logs why with `pi.stream_failed`. The harness's calls (`function_call`, `mcp_approval_request`) are
    * collected while the response streams and never end it: the stream is read to its terminal event, so the harness can finish
-   * what it runs itself. They are returned once the response completed, for `respond` to classify.
+   * what it runs itself. They are returned once the response completed, for `respond` to classify. Reply text is forwarded as it
+   * streams; text that only a `response.output_text.done` event or the completed `output` carries is added once, as its missing end.
    */
   async function* respondOnce(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number,
@@ -557,7 +582,47 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     // Calls beyond the tracking limit are not tracked; they are only a problem when no output ever followed them.
     let overflowSeen = false;
     let overflowFollowed = false;
-    const laterOutput = () => { markLaterOutput(calls); if (overflowSeen) overflowFollowed = true; };
+    // The items the response opened. An item is found by its id, else by its output index, and each event gives it every name it has.
+    const slots = new Map<string, OutputSlot>();
+    let itemsTracked = 0;
+    // Past the tracking limit nothing is reconciled any more: the reply is what streamed, so nothing can repeat.
+    let reconciling = true;
+    const slotFor = (id: unknown, index: unknown): OutputSlot | undefined => {
+      const itemId = plainId(id);
+      const position = indexOf(index);
+      const names = [...(itemId === undefined ? [] : [`id:${itemId}`]), ...(position === undefined ? [] : [`index:${position}`])];
+      if (names.length === 0) return undefined;
+      let slot = names.map(name => slots.get(name)).find(found => found !== undefined);
+      if (!slot) {
+        if (itemsTracked >= maxTrackedItems) { reconciling = false; return undefined; }
+        itemsTracked += 1;
+        slot = { calls: calls.length, overflow: overflowSeen, text: new Map() };
+      }
+      for (const name of names) if (!slots.has(name)) slots.set(name, slot);
+      return slot;
+    };
+    // Text that arrived as deltas naming no item is matched, in order, against the text a done event or the completed output gives.
+    let unplaced = '';
+    // What done events that name no item gave. The completed output repeats it, so it is matched first, ahead of the deltas not yet matched.
+    let unnamedDone = '';
+    // What of a part's authoritative text the reply does not hold yet. Nothing when the two disagree: the reply is never corrupted.
+    const unstreamed = (slot: OutputSlot | undefined, part: number, text: string): string => {
+      if (!reconciling || text.length === 0) return '';
+      let streamed = slot?.text.get(part);
+      if (streamed === undefined) {
+        if (text.startsWith(unplaced)) { streamed = unplaced; unplaced = ''; }
+        else if (unplaced.startsWith(text)) { streamed = text; unplaced = unplaced.slice(text.length); }
+        else return '';
+      }
+      if (!text.startsWith(streamed)) return '';
+      if (slot) slot.text.set(part, text); else unnamedDone += text;
+      return text.slice(streamed.length);
+    };
+    // Output that began after the calls seen so far. Closing an item that opened before a call is not output that follows it.
+    const laterOutput = (slot?: OutputSlot) => {
+      markLaterOutput(calls, slot?.calls ?? calls.length);
+      if (overflowSeen && (slot?.overflow ?? true)) overflowFollowed = true;
+    };
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
     const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
@@ -586,7 +651,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.output_text.delta' && typeof payload.delta === 'string' && payload.delta.length > 0) {
             phase.sawText = true;
             laterOutput();
+            const slot = slotFor(payload.item_id, payload.output_index);
+            if (slot) { const part = indexOf(payload.content_index) ?? 0; slot.text.set(part, (slot.text.get(part) ?? '') + payload.delta); }
+            else if (reconciling) unplaced += payload.delta;
             yield { kind: 'delta', text: payload.delta };
+          } else if (type === 'response.output_text.done' && typeof payload.text === 'string') {
+            const slot = slotFor(payload.item_id, payload.output_index);
+            const missing = unstreamed(slot, indexOf(payload.content_index) ?? 0, payload.text);
+            // A done event that names no item is output after a call only when it brings text: closing what streamed before the call is not.
+            if (slot || missing.length > 0) laterOutput(slot);
+            if (missing.length > 0) { phase.sawText = true; yield { kind: 'delta', text: missing }; }
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
             remember(phase.itemTypes, harnessLabel(itemType));
@@ -598,14 +672,19 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
                 logHarnessItem('unknown_item', payload.item, phase, attempt);
               }
             }
-            if (itemType === 'mcp_call') { phase.sawTool = true; yield { kind: 'tool', server: label(payload.item.server_label) }; }
-            else if (typeof itemType === 'string' && callItemTypes.has(itemType)) {
+            if (itemType === 'mcp_call') {
               phase.sawTool = true;
-              const tracked = trackCall(calls, payload.item);
+              slotFor(payload.item.id, payload.output_index);
+              laterOutput();
+              yield { kind: 'tool', server: label(payload.item.server_label) };
+            } else if (typeof itemType === 'string' && callItemTypes.has(itemType)) {
+              phase.sawTool = true;
+              const tracked = trackCall(calls, payload.item, false);
               if (!tracked) overflowSeen = true;
               else if (tracked.created) yield { kind: 'tool', server: '' };
             } else {
               noteResult(calls, payload.item);
+              slotFor(payload.item.id, payload.output_index);
               laterOutput();
             }
           } else if (type === 'response.function_call_arguments.done' && typeof payload.arguments === 'string') {
@@ -615,25 +694,21 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.output_item.done' && isObject(payload.item)) {
             const item = payload.item;
             if (typeof item.type === 'string' && callItemTypes.has(item.type)) {
-              const tracked = trackCall(calls, item);
+              const tracked = trackCall(calls, item, true);
               if (!tracked) overflowSeen = true;
-              else {
-                // A finished item without a status is a completed one, whatever status it was added with.
-                if (item.status === undefined) tracked.call.item.status = 'completed';
-                if (tracked.created) yield { kind: 'tool', server: '' };
-              }
+              else if (tracked.created) yield { kind: 'tool', server: '' };
             } else if (item.type === 'mcp_call') {
-              laterOutput();
+              laterOutput(slotFor(item.id, payload.output_index));
               yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null, ...itemFailure(item) };
             } else if (item.type === 'mcp_list_tools') {
-              laterOutput();
+              laterOutput(slotFor(item.id, payload.output_index));
               yield {
                 kind: 'tools_listed', server: label(item.server_label), tools: Array.isArray(item.tools) ? item.tools.length : 0,
                 failed: item.error !== undefined && item.error !== null, ...itemFailure(item),
               };
             } else {
               noteResult(calls, item);
-              laterOutput();
+              laterOutput(slotFor(item.id, payload.output_index));
             }
           } else if (type === 'response.mcp_list_tools.failed') {
             yield { kind: 'tools_listed', server: '', tools: 0, failed: true };
@@ -642,8 +717,20 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
             completed = true;
             if (Array.isArray(payload.response.output)) {
+              // The completed output repeats what unnamed done events gave: it is the text of the first messages, so it is matched first.
+              unplaced = unnamedDone + unplaced;
+              unnamedDone = '';
               applyFinalOutput(calls, payload.response.output);
               if (payload.response.output.some(entry => isObject(entry) && typeof entry.type === 'string' && !callItemTypes.has(entry.type))) overflowFollowed = overflowSeen;
+              for (const [position, entry] of payload.response.output.entries()) {
+                if (!isObject(entry) || entry.type !== 'message' || !Array.isArray(entry.content)) continue;
+                const slot = slotFor(entry.id, position);
+                for (const [part, content] of entry.content.entries()) {
+                  if (!isObject(content) || content.type !== 'output_text' || typeof content.text !== 'string') continue;
+                  const missing = unstreamed(slot, part, content.text);
+                  if (missing.length > 0) { phase.sawText = true; yield { kind: 'delta', text: missing }; }
+                }
+              }
             }
             yield {
               kind: 'round_done',
@@ -857,7 +944,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (spent.costDkk >= options.monthlyCapDkk) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: 'budget_exhausted' };
     const paused = await warmPause(signal);
     if (paused) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: paused };
-    const context = await options.context(signal);
+    // The context a turn sends: persona and situational state. The warm-up sends and records the same text, so a turn after it
+    // repeats nothing, and a warm-up right after a turn finds the conversation warm instead of sending it all again.
+    const context = [await options.context(signal), (await options.activations.situation.context(signal)).text].filter(Boolean).join('\n\n');
     const stored = await options.store.getConversation(options.owner, signal);
     const fresh = stored?.agentName === options.agentName && stored.warmedAt !== null && stored.contextHash === contextHash(context) &&
       now().getTime() - stored.warmedAt.getTime() < warmFreshMs;

@@ -3,7 +3,7 @@ import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type {
   PiActivationType, PiSituationActivation, PiSituationService, PiSituationView,
 } from './situation.js';
-import { sourceIds, type SourceId } from '../proactive/types.js';
+import { eventSourceSwitch } from '../proactive/events/types.js';
 
 export interface PiActivationStart {
   readonly type: PiActivationType;
@@ -87,11 +87,7 @@ export function createPiActivationService(options: {
       const activation = metadata(grant);
       const baseline = grant.activation;
       if (!baseline) return;
-      const source = baseline.type === 'event'
-        ? (sourceIds as readonly string[]).includes(activation.source ?? '')
-          ? activation.source as SourceId
-          : activation.source === 'github' || activation.source === 'worker' ? 'factory' as const : undefined
-        : undefined;
+      const source = baseline.type === 'event' ? eventSourceSwitch(activation.source ?? '') : undefined;
       await options.situation.markFailed({
         activation: { ...activation, at },
         expectedRevision: baseline.stateRevision,

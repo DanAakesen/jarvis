@@ -1,12 +1,13 @@
 import type { ConversationAgent } from '../core/chat-agent.js';
-import { PiGatewayError } from '../pi/errors.js';
+import { PiGatewayError, piTurnFailedMessage } from '../pi/errors.js';
 
 /** A voice turn that has run this long is stopped and said so; the gateway's own deadline is longer than anyone waits on a call. */
 export const PI_VOICE_TURN_DEADLINE_MS = 90_000;
 
 const timeoutReply = 'PI took too long and was stopped. An action may already have completed; check its status before trying again.';
-const failedReply = 'PI could not answer that. No other engine was used.';
-const emptyReply = 'PI sent no answer. No other engine was used.';
+// Shared with chat, so the same failure reads and sounds the same.
+const failedReply = piTurnFailedMessage;
+const emptyReply = piTurnFailedMessage;
 
 /** The PI agent as the voice relay uses it: a turn, and an optional warm-up that primes the shared conversation. */
 export interface PiVoiceAgent extends ConversationAgent {

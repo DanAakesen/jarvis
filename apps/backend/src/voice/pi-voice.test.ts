@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk, ConversationAgentInput } from '../core/chat-agent.js';
-import { PiGatewayError } from '../pi/errors.js';
+import { PiGatewayError, piTurnFailedMessage } from '../pi/errors.js';
 import { createPiVoiceTurns, type PiVoiceAgent, type PiVoiceTurnLog } from './pi-voice.js';
 
 const turn = { text: 'what is next', messageId: '42', sessionId: '7', startedAt: 0 };
@@ -95,14 +95,14 @@ describe('PI voice turns', () => {
     const { turns, spoken, settled } = setup(agent);
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['PI could not answer that. No other engine was used.']);
+    expect(spoken).toEqual([piTurnFailedMessage]);
   });
 
   it('treats an empty answer as a failure instead of speaking silence', async () => {
     const { turns, spoken, logs, settled } = setup(replying('  '));
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['PI sent no answer. No other engine was used.']);
+    expect(spoken).toEqual([piTurnFailedMessage]);
     expect(logs[0]).toMatchObject({ outcome: 'failed' });
   });
 
