@@ -252,7 +252,7 @@ export interface ModelCatalogue {
 export function isModelCatalogue(value: unknown): value is ModelCatalogue;
 export const generatedViewRenderers: readonly [
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
-  'knowledge-graph', 'code',
+  'knowledge-graph', 'code', 'map',
 ];
 export const htmlArtifactByteLimit: 524288;
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
@@ -361,7 +361,24 @@ interface GeneratedViewBase {
   actions?: GeneratedViewAction[];
 }
 
+export interface AppleMapsPoint { latitude: number; longitude: number }
+export interface AppleMapsPlace extends AppleMapsPoint {
+  name: string; address: string; travelSeconds?: number; distanceMeters?: number; path?: AppleMapsPoint[];
+}
+export interface AppleMapsQuery {
+  query: string; origin?: string; mode?: 'driving' | 'walking'; arriveBy?: string; bufferMinutes?: number;
+}
+export interface AppleMapsResult {
+  places: AppleMapsPlace[]; mode: 'driving' | 'walking'; observedAt: string;
+  origin?: AppleMapsPoint & { name: string }; arriveBy?: string; bufferMinutes?: number; reason?: string;
+}
+export const appleMapsQuerySchema: Readonly<Record<string, unknown>>;
+export const appleMapsResultSchema: Readonly<Record<string, unknown>>;
+export function isAppleMapsQuery(value: unknown): value is AppleMapsQuery;
+export function isAppleMapsResult(value: unknown): value is AppleMapsResult;
+
 export type GeneratedView =
+  | (GeneratedViewBase & { renderer: 'map'; data: AppleMapsResult })
   | (GeneratedViewBase & {
     renderer: 'table';
     data: { columns: string[]; rows: (string | number | boolean | null)[][] };
@@ -466,6 +483,7 @@ export interface WorkspaceSnapshotWindow {
 export type WorkspaceDeviceKind = 'desktop' | 'phone' | 'tablet';
 export type WorkspaceCommandTarget = 'active' | 'desktop' | 'phone' | 'all';
 export interface WorkspaceDevice {
+  appleMaps?: true;
   kind: WorkspaceDeviceKind;
   label?: string;
 }
@@ -532,6 +550,7 @@ export type WorkspaceSettingsSection = typeof workspaceSettingsSections[number];
 
 /** `target` is optional on every operation and addresses a device kind; the broker routes it (P9-61). */
 export type WorkspaceCommand = { target?: WorkspaceCommandTarget } & (
+  | (AppleMapsQuery & { commandId: string; operation: 'apple-maps'; target: 'phone' })
   | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
   | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
   | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
@@ -708,7 +727,7 @@ export const chatBlockForecastSymbols: readonly [
 ];
 export const chatBlockChartKinds: readonly ['line', 'bar', 'area'];
 export const chatBlockViewRenderers: readonly [
-  'text', 'list', 'table', 'detail', 'timeline', 'task-card', 'status', 'image',
+  'text', 'list', 'table', 'detail', 'timeline', 'task-card', 'status', 'image', 'map',
 ];
 export const chatBlockLimits: Readonly<{
   blocksPerMessage: number; bytes: number; panels: number; seriesPerPanel: number; pointsPerSeries: number;

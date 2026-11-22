@@ -10,6 +10,8 @@ export {
   chatBlockLimits,
 } from './chat-blocks.js';
 
+import { appleMapsQuerySchema, appleMapsResultSchema, isAppleMapsQuery, isAppleMapsResult } from './apple-maps.js';
+export { appleMapsQuerySchema, appleMapsResultSchema, isAppleMapsQuery, isAppleMapsResult };
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
   'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
@@ -163,7 +165,7 @@ export function isModelCatalogue(value) {
 
 export const generatedViewRenderers = Object.freeze([
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
-  'knowledge-graph', 'code',
+  'knowledge-graph', 'code', 'map',
 ]);
 export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link', 'call-tool', 'window']);
 
@@ -381,6 +383,7 @@ export const webResearchResultSchema = Object.freeze(object({
 }));
 const cell = { anyOf: [string(2_000), { type: 'number' }, { type: 'boolean' }, { type: 'null' }] };
 const dataSchemas = {
+  map: appleMapsResultSchema,
   table: object({
     columns: array(string(80, 1), 20, 1),
     rows: array(array(cell, 20), rowLimit),
@@ -510,7 +513,8 @@ export const workspaceDeviceKinds = Object.freeze(['desktop', 'phone', 'tablet']
 export const workspaceCommandTargets = Object.freeze(['active', 'desktop', 'phone', 'all']);
 
 function isWorkspaceDevice(value) {
-  return isObject(value) && Object.keys(value).every((key) => ['kind', 'label'].includes(key)) &&
+  return isObject(value) && Object.keys(value).every((key) => ['kind', 'label', 'appleMaps'].includes(key)) &&
+    (value.appleMaps === undefined || (value.kind === 'phone' && value.appleMaps === true)) &&
     workspaceDeviceKinds.includes(value.kind) &&
     (value.label === undefined || boundedString(value.label, 60, 1));
 }
@@ -743,6 +747,8 @@ function validData(renderer, data, trustedBlobHost) {
               boundedString(detail.label, 100, 1) && boundedString(detail.value, 2_000)))) &&
           (item.action === undefined || (isObject(item.action) &&
             ['open-route', 'open-link'].includes(item.action.type) && validAction(item.action))));
+    case 'map':
+      return isAppleMapsResult(data);
     case 'detail':
       return Object.keys(data).every((key) => key === 'fields') && Array.isArray(data.fields) &&
         data.fields.length <= 100 && data.fields.every((field) => isObject(field) &&
@@ -1016,6 +1022,10 @@ export function isWorkspaceCommand(value, options = {}) {
   const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', 'target', ...keys].includes(key));
   if (value.target !== undefined && !workspaceCommandTargets.includes(value.target)) return false;
   switch (value.operation) {
+    case 'apple-maps': {
+      const { commandId, operation, target, ...query } = value;
+      return target === 'phone' && isAppleMapsQuery(query);
+    }
     case 'navigate':
       return hasOnly('page', 'section', 'taskId', 'issueNumber') && workspaceNavigationPages.includes(value.page) &&
         (value.section === undefined ||
@@ -1119,6 +1129,7 @@ const generatedSourceKeys = Object.freeze(['id', 'status', 'updatedAt', 'reason'
 const generatedViewExample =
   '{"version":1,"title":"...","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"..."}]}}';
 const generatedDataShapes = Object.freeze({
+  map: { example: 'Use apple_maps for a result from the iPhone.', keys: Object.keys(appleMapsResultSchema.properties), required: appleMapsResultSchema.required },
   table: { example: '{"columns":["A","B"],"rows":[["x","y"]]}', keys: ['columns', 'rows'], required: ['columns', 'rows'] },
   list: { example: '{"items":[{"title":"..."}]}', keys: ['items'], required: ['items'] },
   detail: { example: '{"fields":[{"label":"...","value":"..."}]}', keys: ['fields'], required: ['fields'] },
@@ -1371,6 +1382,9 @@ function generatedDataProblems(renderer, data, options, problems) {
         eachWorkspaceItem(data.items, problems, (item, index) =>
           generatedListItemProblems(item, `${path}.items[${index}]`, problems, options));
       }
+      break;
+    case 'map':
+      if (!isAppleMapsResult(data)) addWorkspaceProblem(problems, path, 'must contain a valid Apple Maps result');
       break;
     case 'detail':
       if (collection('fields', 100, 'fields')) {
