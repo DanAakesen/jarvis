@@ -420,7 +420,7 @@ export function createPiMcpRoutes(options: {
               // The stored owner message of this turn, from the grant. A brain wake has no owner message: it carries its run id.
               ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' }
                 : grant.brain ? { 'x-jarvis-pi': 'wake', 'x-jarvis-brain': grant.brain.runId }
-                  : { 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': grant.messageId }),
+                  : { 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': grant.messageId, ...(grant.activation?.type === 'voice' ? { 'x-jarvis-pi-channel': 'voice' } : {}) }),
               ...(grant.activation ? { 'x-jarvis-activation': grant.activation.id } : {}),
             },
             payload: JSON.stringify(input.arguments),

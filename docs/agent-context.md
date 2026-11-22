@@ -1,3 +1,10 @@
+## Chat/Voice parity replay — 21 November 2026 (#1967, #1988)
+
+- `cd apps/backend && npx vitest run src/voice/chat-voice-parity.test.ts --reporter=verbose` prints a side-by-side Chat/Voice table per scenario (the default reporter hides logs of passing runs); it takes about 40 s offline, makes no provider, paid or voice call and needs no database. Run it, then `src/pi src/voice`, backend build and lint, after any change to `pi/gateway.ts`, `pi/mcp.ts`, `core/conversation.ts`, `voice/relay.ts` or `voice/pi-voice.ts`.
+- A failing table row means Chat and Voice diverged. Fix the code unless the difference is a real channel difference; then declare it in `channelDifferences` or the scenario rules in `voice/parity-report.testkit.ts` and assert its exact shape. Never loosen a facet to make a row pass. The harness lives in `voice/parity-*.testkit.ts`; notes, tasks, gym and Google run the production tool code, Factory/GitHub and nutrition are contract fixtures with the real tool names.
+- Harness timing rule: a step waits for what the relay has observed (`voice.received`, stored messages, `voice.settle()`), never for a bare sleep; the one sleep left is the relay's own 1.5 s quiet window, counted from the relay's receipt of the aside (S12c). `speechLagMs` makes the GPT-Live stub speak late, in order; S12a-c run with the first note 1.8 s late, because a note that reaches the relay after Dan's next words joins that reply and the test must not hang on how quick the stub is.
+- Product rule for the scenarios: a non-delete write finishes in one turn with no confirmation; only a delete may ask. Do not add an approval step to a PI tool.
+
 ## Explicit owner-reminder delivery evidence — 20 November 2026 (#1990)
 
 - Migration `0102_owner_reminder_delivery_outbox.sql` is required before this
