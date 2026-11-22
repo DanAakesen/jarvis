@@ -188,14 +188,14 @@ enum JarvisDesignTokens {
     static let voiceScreenShareBarHeight: CGFloat = 58
     static let voiceScreenShareBarSpacing: CGFloat = 14
     static let voiceIdleCaptionReservation: CGFloat = 132
-    static let voiceCaptionMaximumHeight: CGFloat = 176
-    static let voiceAccessibilityCaptionMaximumHeight: CGFloat = 320
+    static let voiceCaptionMaximumHeight: CGFloat = 236
+    static let voiceAccessibilityCaptionMaximumHeight: CGFloat = 360
     static let voiceCaptionFadeDepth: CGFloat = 16
     static let voiceCaptionSpeakerSpacing: CGFloat = 6
     static let voiceCaptionLineSpacing: CGFloat = 4
     static let voiceStatusFontSize: CGFloat = 17
     static let voiceContentSpacing: CGFloat = 14
-    static let voiceMinimizeDragDistance: CGFloat = 32
+    static let voiceVerticalSwipeDistance: CGFloat = 32
     static let voiceMinimizeSpringResponse: CGFloat = 0.38
     static let voiceMinimizeSpringDamping: CGFloat = 0.9
     /// The orb stepping back for generated content and returning: one eased, critically damped spring, never linear.

@@ -64,6 +64,33 @@ extension View {
     }
 }
 
+struct JarvisPanelGrabber: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Capsule()
+            .fill(.secondary)
+            .frame(width: 36, height: 5)
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel(Text(title))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { action() }
+    }
+}
+
+struct JarvisSettingsSwitch: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(title, isOn: $isOn)
+            .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
+    }
+}
+
 /// What the composer is doing, as the board's `data-cs` states: sets the rim's strength, speed and width.
 enum JarvisRimState {
     case idle, typing, thinking, listening

@@ -327,6 +327,13 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 - Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text is edited in the Foundry portal (it is not deployed from the repo); after a Foundry edit run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.
 - Not verifiable here: the Azure MCP container's own logs (no Azure access from the build environment).
 
+## iPhone TestFlight checks — 22 November 2026 (#2005, #2007, #2008)
+
+- From `apps/ios/Packages/JarvisCore`, `swift test --filter 'JarvisNotesRedesignTests|PiRuntimeTests|VoiceVisualHistoryTests|VoiceCaptionTests'` exercises title edits, the Proactive request contract and Voice direction/selection with fixtures. Linux Swift 6.2 can build JarvisCore and parse SwiftUI sources but cannot type-check or render the iPhone app. The macOS `watch` job builds the app.
+- When removing shared keys or APIs, check callers across all of `apps/ios`, including shorthand enum members such as `.paused`. Swift syntax parsing does not catch missing members; the macOS `capture` and `watch` jobs compile the app.
+- On a Mac simulator, `--ui-test-navigation --screenshot-screen=notes` provides a headingless root note (**Welcome**) and `--screenshot-settings-fixture` provides in-memory Settings. Use the Voice fixture flags below for the compact and expanded carousel. Static captures do not verify gestures or VoiceOver.
+- This PR uses offline and fixture checks only: no `measure_pi`, Foundry probes or live model smoke. The single Proactive switch is in iPhone Settings; do not add one back to the Proactive editor or change the owner `/pi/brain` contract.
+
 ## iPhone Voice carousel — 18 November 2026 (#1958, P15-210)
 
 - Run `swift test --filter 'VoiceVisualHistoryTests|VoiceCaptionTests'` in `apps/ios/Packages/JarvisCore`. The macOS iPhone screenshot step in `watch-build.yml` uses `--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel` with synthetic captions and chart/HTML pages. Add `--screenshot-voice-chart` for the older native chart or `--screenshot-voice-fullscreen` for the full-screen HTML fixture. Static captures do not test swipes, arrival during a call, or motion.
