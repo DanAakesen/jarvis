@@ -59,7 +59,7 @@ it('answers the iPhone Azure question through PI MCP in a reused owner conversat
   const store = createMemoryPiStore();
   let activationSequence = 0;
   const activations: PiActivationService = {
-    situation: {} as never,
+    situation: { context: async () => ({ text: '', view: {} as never }) } as never,
     async begin(input) {
       activationSequence += 1;
       const id = `00000000-0000-4000-8000-${String(activationSequence).padStart(12, '0')}`;

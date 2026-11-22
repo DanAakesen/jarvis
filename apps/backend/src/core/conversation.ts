@@ -48,7 +48,7 @@ import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
 import { approvalDeciderFor } from './approval-interpreter.js';
 import { readRuntimeTests, runtimeTestUnavailableMessage } from './runtime-test-availability.js';
-import { PiGatewayError } from '../pi/errors.js';
+import { PiGatewayError, piTurnFailedMessage } from '../pi/errors.js';
 import { createUnconfiguredPiAgent } from '../pi/gateway.js';
 import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 import { showInChatTool } from './chat-blocks.js';
@@ -1015,7 +1015,7 @@ return {
               ? error.code : error instanceof ChatAgentInvocationError && chatAgentInvocationReasons.has(error.reason)
                 ? error.reason : undefined;
             yield streamEvent('error', {
-              error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+              error: piTurnFailedMessage,
               ...(code === undefined ? {} : { code }),
               ...(error instanceof ChatAgentError && error.providerCause
                 ? { providerCause: error.providerCause } : {}),
