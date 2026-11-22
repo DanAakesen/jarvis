@@ -94,7 +94,7 @@ Start dictation and Voice on the first press, recover the route when it drops, a
 - **Model first.** Leave choices to PI unless an exact result is needed. Do not add PI approvals, confirmations or guardrails except for DELETE actions.
 - **One path.** Build the new path, test it, then delete the old path as an explicit last phase. No fallback, parallel compatibility path or shim. A short deliberate break during cutover is acceptable only when called out.
 - **No unapproved cost.** Work locally; no new cloud sandboxes without approval. No live or paid tests (`measure_pi`, model/provider smoke, Foundry probes or paid benchmarks) without Dan approving the exact command. Do not add cost without his approval. Workers use `gpt-6.2-sol` at the highest reasoning effort.
-- **Few, substantial issues and PRs.** Open a PR only when ready for review. Agents never merge their own PR. Independent exact-head review and green exact-head CI are required; High findings block, Mediums become fixes or follow-ups.
+- **Few, substantial issues and PRs.** Open a PR only when ready for review. Independent exact-head review and green exact-head CI are required; High findings block, Mediums become fixes or follow-ups.
 - **Use Astra for real decisions.** Astra's advice file, `CopilotAndCodex.md`, exists only on Dan's machine. Never commit it.
 - **Ask for a device test after delivery.** State the build and exactly what to test in daily-core order. Do not ask for a retest during an in-flight fix. Lead with the answer and keep replies short; put a legend on diagrams.
 
