@@ -12,6 +12,8 @@ import type { FindingInput } from './store.js';
 import type { SuggestionScope } from './types.js';
 import { findingAllowed, proactiveSourceAllowed } from './policy.js';
 import type { OwnerReminderSchedule, OwnerReminderStore } from './owner-reminder-store.js';
+import { reminderFailureEvent } from './events/producers.js';
+import type { ProactiveEventSink } from './events/types.js';
 
 const tickIntervalMs = 30_000;
 const retryDelayMs = 5 * 60_000;
@@ -129,6 +131,8 @@ export function createReminderTicker(options: {
   ledger?: Pick<AlertLedgerStore, 'get'>;
   ownerObjectId: string;
   send: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
+  /** Where an explicit reminder whose delivery ended failed is reported, so the brain can tell Dan. */
+  events?: ProactiveEventSink;
   now: () => Date;
   logger?: ReminderTickerLogger;
 }) {
@@ -170,6 +174,16 @@ export function createReminderTicker(options: {
 
   async function update(row: ReminderRow, values: Parameters<ProactiveReminderStore['updatePending']>[1]) {
     return options.reminders.updatePending(row.id, values, row.fireAt);
+  }
+
+  async function reportDeliveryFailed(failure: Parameters<typeof reminderFailureEvent>[0]): Promise<void> {
+    if (!options.events) return;
+    try {
+      await options.events.enqueue(reminderFailureEvent(failure, options.now()));
+    } catch {
+      // The schedule row already carries the outcome; only the proactive signal was lost, and the log says so.
+      log('warn', 'delivery_failed_event_unavailable', options.now().getTime());
+    }
   }
 
   async function processDue(now: Date, signal: AbortSignal): Promise<void> {
@@ -483,32 +497,49 @@ export function createReminderTicker(options: {
           outcome.reason === 'registration_removed' ||
           outcome.reason === 'registration_expired' ||
           outcome.reason === 'delivery_expired';
-        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
+        const reason = retryAt ? outcome.reason : outcome.reason === 'retry_exhausted' ||
+          outcome.reason === 'provider_unavailable' && sendAttempts >= 2
+          ? 'retries_exhausted'
+          : outcome.reason === 'delivery_expired' ? 'missed_time' : outcome.reason;
+        const providerOutcome = outcome.providerOutcome ?? (
+          outcome.reason === 'retry_exhausted' ? 'retry_exhausted' :
+            outcome.reason === 'delivery_evidence_unavailable' ? 'delivery_evidence_unavailable' :
+            outcome.reason === 'delivery_expired' ? 'delivery_expired' :
+            outcome.reason === 'apns_invalid_token' ? 'apns_invalid_token' :
+              outcome.reason === 'registration_removed' ? 'registration_removed' :
+                outcome.reason === 'registration_expired' ? 'registration_expired' :
+                  outcome.reason === 'provider_rejected' ? 'provider_rejected' :
+                    outcome.reason === 'provider_unavailable' ? 'provider_unavailable' :
+                      'delivery_failed'
+        );
+        const recipientCount = evidence?.recipientCount ?? Math.max(outcome.attempted, 0);
+        const acceptedRecipientCount = evidence?.acceptedRecipientCount ?? outcome.accepted;
+        const finished = await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: retryAt ? 'retrying' : suppressed ? 'suppressed' : 'failed',
-          reason: retryAt ? outcome.reason : outcome.reason === 'retry_exhausted' ||
-            outcome.reason === 'provider_unavailable' && sendAttempts >= 2
-            ? 'retries_exhausted'
-            : outcome.reason === 'delivery_expired' ? 'missed_time' : outcome.reason,
+          reason,
           sendAttempts,
           nextAttemptAt: retryAt,
           itemId: item.id,
           lastDelivery: retryAt ? 'retrying' : suppressed ? 'suppressed' : 'failed',
           lastProvider: outcome.provider ?? (evidence ? 'apns' : null),
-          lastProviderOutcome: outcome.providerOutcome ?? (
-            outcome.reason === 'retry_exhausted' ? 'retry_exhausted' :
-              outcome.reason === 'delivery_evidence_unavailable' ? 'delivery_evidence_unavailable' :
-              outcome.reason === 'delivery_expired' ? 'delivery_expired' :
-              outcome.reason === 'apns_invalid_token' ? 'apns_invalid_token' :
-                outcome.reason === 'registration_removed' ? 'registration_removed' :
-                  outcome.reason === 'registration_expired' ? 'registration_expired' :
-                    outcome.reason === 'provider_rejected' ? 'provider_rejected' :
-                      outcome.reason === 'provider_unavailable' ? 'provider_unavailable' :
-                        'delivery_failed'
-          ),
+          lastProviderOutcome: providerOutcome,
           lastProviderStatusCode: outcome.statusCode,
-          recipientCount: evidence?.recipientCount ?? Math.max(outcome.attempted, 0),
-          acceptedRecipientCount: evidence?.acceptedRecipientCount ?? outcome.accepted,
+          recipientCount,
+          acceptedRecipientCount,
         });
+        // A retry is not the end of delivery. Once the row says it ended without a device, the brain is told, once.
+        if (finished && !retryAt) {
+          await reportDeliveryFailed({
+            scheduleId: schedule.id,
+            occurrenceAt: schedule.fireAt,
+            title: reminderTitle(task!.text),
+            reason,
+            providerOutcome,
+            attempts: sendAttempts,
+            recipients: recipientCount,
+            accepted: acceptedRecipientCount,
+          });
+        }
       } else if (outcome.reason === 'no_subscription') {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'suppressed',

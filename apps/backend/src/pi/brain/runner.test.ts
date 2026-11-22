@@ -454,6 +454,25 @@ describe('seeing the brain: what it logs and reports about itself', () => {
     expect(logs.named('pi.brain').map((line) => line.data.reason)).toEqual(['spend_record_failed', 'scheduled_done']);
     expect(logs.named('pi.brain').at(-1)!.data).toMatchObject({ trigger: 'manual', events: 0, sent: 0, tools: 0 });
   });
+
+  it.each([
+    ['github', 'release.published', {}],
+    ['reminder', 'reminder.delivery_failed', { evidenceSources: ['todos'] }],
+    ['calendar', 'calendar.clash', {}],
+  ])('attributes a wake that only a %s signal caused to that source', async (source, kind, detail) => {
+    const t = setup();
+    await t.enqueue({ source, kind, dedupeKey: `${source}:1`, summary: `A ${kind} signal`, detail, occurredAt: t.now() });
+    expect((await t.tick()).outcome).toBe('done');
+    expect(t.gateway.wakes[0]!.body).toContain(`Activation: type=event source=${source}.`);
+  });
+
+  it('calls a wake that two kinds of signal caused mixed', async () => {
+    const t = setup();
+    await t.enqueue({ source: 'github', kind: 'release.published', dedupeKey: 'github:1', summary: 'A release', occurredAt: t.now() });
+    await t.enqueue({ source: 'calendar', kind: 'calendar.clash', dedupeKey: 'calendar:1', summary: 'A clash', occurredAt: t.now() });
+    expect((await t.tick()).outcome).toBe('done');
+    expect(t.gateway.wakes[0]!.body).toContain('Activation: type=event source=mixed.');
+  });
 });
 
 describe('replaying recorded past events through the loop', () => {

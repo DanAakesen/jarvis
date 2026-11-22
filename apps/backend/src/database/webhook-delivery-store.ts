@@ -17,7 +17,9 @@ function bindNumbers(request: sql.Request, values: readonly number[]): string {
 async function applyMapping(transaction: sql.Transaction, mapping: GithubWebhookMapping): Promise<ActivityAlert | undefined> {
   const request = new sql.Request(transaction).input('repository', sql.NVarChar(140), mapping.repository);
 
-  if (mapping.kind === 'issue_labeled') return undefined;
+  // Nothing to store for these: onMapping starts a task or queues a proactive event from them.
+  if (mapping.kind === 'issue_labeled' || mapping.kind === 'issue' || mapping.kind === 'issue_comment' ||
+      mapping.kind === 'release') return undefined;
 
   if (mapping.kind === 'pull_request') {
     request

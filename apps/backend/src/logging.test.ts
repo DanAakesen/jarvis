@@ -527,6 +527,7 @@ describe('structured log export', () => {
     ['pi.smoke_failed', { code: 'pi_timeout' }],
     ['pi.watches', { reason: 'watch_index_refresh_failed' }],
     ['proactive.reminder_tick', { reason: 'provider_unavailable', count: 3, durationMs: 840 }],
+    ['proactive.reminder_tick', { reason: 'delivery_failed_event_unavailable', durationMs: 12 }],
     ['proactive.alert', {
       runId: '11111111-1111-4111-8111-111111111111', reason: 'daily_cap', count: 2, classes: 'calendar_clash,deadline_24h', durationMs: 12,
     }],
@@ -575,6 +576,18 @@ describe('structured log export', () => {
       msg: 'proactive.alert', runId, reason: 'daily_cap', classes: 'calendar_clash,deadline_24h', count: 2, durationMs: 12,
     })).toEqual({ reason: 'daily_cap', classes: 'calendar_clash,deadline_24h', count: 2, durationMs: 12 });
   });
+
+  it.each(['github', 'reminder', 'calendar', 'alert', 'worker', 'mail', 'timer', 'manual', 'watch', 'mixed'])(
+    'keeps %s as the activation source of a wake, in the export and in a log read back', (source) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const logger = createLogger({ logLevel: 'info' }, undefined, output);
+      const fields = { outcome: 'ok', activationType: 'event', activationSource: source };
+      logger.info(fields, 'pi.brain_run');
+      expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.brain_run', ...fields });
+      expect(safeHistoricalLogFields({ msg: 'pi.brain_run', ...fields })).toEqual(fields);
+    },
+  );
 
   it('registers every pi.* and proactive.* event the backend emits, so none is exported as a bare backend.event', () => {
     const root = new URL('.', import.meta.url);

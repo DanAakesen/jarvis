@@ -21,6 +21,7 @@
     "issues",
     "pull_request",
     "push",
+    "release",
     "workflow_run"
   ]
 }

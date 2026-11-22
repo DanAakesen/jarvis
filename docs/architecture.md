@@ -1,3 +1,291 @@
+## System map — PI, tools, voice and who owns what (21 November 2026)
+
+This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `b6d19328` (#2018, 22 November 2026, 08:04 UTC). I read most code facts at `df84095f` (#2014). Since then #2013 changed only the iPhone voice client, and #2018 changed the proactive event queue, the GitHub webhook mapping and the reminder ticker (it has its own section below); this section does not cover either. #2016 changed the MCP door, `logging.ts`, `turns.ts` and `tool-registry.ts`, #2021 changed the failure wording of Chat and Voice, what the gateway sends in the voice warm-up and the channel label on a spoken turn's tool activity, and #2020 changed how the gateway reads a response stream; I checked the code facts this section states about #2016, #2021 and #2020 against that code. Sentences attributed to a PR entry or its description are quoted and were not re-checked.
+
+### Legend
+
+Diagram colours say who changes a thing, not how important it is. Every node also says it in words, so the diagrams stay readable without colour.
+
+```mermaid
+flowchart TB
+    L1["Foundry-owned<br/>Dan edits it in the portal"]:::foundry
+    L2["Code-owned<br/>repository, CI, Deploy"]:::code
+    L3["Foundry-hosted<br/>settings are code-owned"]:::hosted
+    L4[("Data store")]:::data
+    L5["External service"]:::external
+    L6["Client app"]:::client
+    L1 ~~~ L5
+    L2 ~~~ L6
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+    classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
+    classDef external fill:#eeeeee,stroke:#555555,color:#222222,stroke-dasharray:4 3
+    classDef client fill:#ffffff,stroke:#333333,color:#111111
+```
+
+| Colour | Meaning |
+| --- | --- |
+| Amber | Foundry-owned. Dan edits it in the Foundry portal. After version 1 Deploy never writes, compares or restores it |
+| Blue | Code-owned. In the repository, shipped by CI and Deploy |
+| Green | Hosted in Foundry. The agent's model, harness, tools and delegation are code-owned |
+| Purple | Data store |
+| Grey, dashed | External service Jarvis calls |
+| White | Client app |
+
+### Runtime map
+
+```mermaid
+flowchart TB
+    APP["iPhone, Watch, web<br/>client"]
+    CHAT["Chat turn route<br/>backend"]
+    VOICE["Voice relay /voice<br/>backend"]
+    LIVET["Instructions, voice,<br/>greeting, store<br/>Foundry-owned"]
+    LIVE["jarvis-pi-live<br/>GPT-Live voice, no tools<br/>Foundry-hosted"]
+    GW["PI gateway<br/>one conversation per owner<br/>one grant per turn<br/>backend"]
+    PIT["Instructions text<br/>Foundry-owned"]
+    PI["jarvis-pi, gpt-6.1-terra<br/>managed Copilot harness<br/>Foundry-hosted"]
+    BI["Harness built-ins<br/>shell, files, web fetch,<br/>sub-agents<br/>run by Foundry"]
+    DOOR["MCP door /pi/mcp<br/>find_tools, call_tool<br/>backend"]
+    TOOLS["Jarvis tools, about 140<br/>backend"]
+    BR["GitHub and Azure bridges<br/>gh_ and az_ tools<br/>backend"]
+    SQL[("Azure SQL")]
+    VAULT[("Vault")]
+    WK["Factory workers"]
+    EXT["Open-Meteo,<br/>Google, APNs"]
+    GH["GitHub MCP"]
+    AZ["Azure MCP"]
+    APP -->|"typed chat"| CHAT
+    APP <-->|"audio"| VOICE
+    VOICE <-->|"Live session"| LIVE
+    LIVET -.-> LIVE
+    CHAT --> GW
+    VOICE -->|"whole spoken request"| GW
+    GW --> PI
+    PIT -.-> PI
+    PI --- BI
+    PI -->|"MCP"| DOOR
+    DOOR --> TOOLS
+    DOOR --> BR
+    TOOLS --> SQL
+    TOOLS --> VAULT
+    TOOLS --> WK
+    TOOLS --> EXT
+    BR --> GH
+    BR --> AZ
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+    classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
+    classDef external fill:#eeeeee,stroke:#555555,color:#222222,stroke-dasharray:4 3
+    classDef client fill:#ffffff,stroke:#333333,color:#111111
+    class PIT,LIVET foundry
+    class CHAT,VOICE,GW,DOOR,TOOLS,BR code
+    class PI,BI,LIVE hosted
+    class SQL,VAULT data
+    class GH,AZ,WK,EXT external
+    class APP client
+```
+
+- Both agents live in the one Foundry project in Sweden Central. Typed Chat and Voice share one PI conversation per owner (`dbo.pi_conversation`), the same per-turn grant, the same tool door and the same receipts. Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap.
+- GPT-Live listens and speaks and has no tools. A spoken request that needs work reaches the relay as `session.delegation.created` (its `delegation.target` is `client`; the agent definition says `delegation: {type: client}`); the relay stores Dan's words and runs PI.
+- PI reaches the Jarvis tools only through the MCP door. GitHub and Azure tools come through the same door from backend bridges, not as harness tools. The harness built-ins are separate: Foundry runs them inside the turn and the backend never runs them.
+
+### The two Foundry agents: who owns what
+
+| Field | `jarvis-pi` | `jarvis-pi-live` |
+| --- | --- | --- |
+| Instructions text | Foundry | Foundry |
+| Output voice, greeting, `store`, any other portal field | not applicable | Foundry (`store` is seeded `false`; the portal saves `true`) |
+| Model | code: `gpt-6.1-terra`, reasoning effort `low` | code: `gpt-live-1` and its deployment (`2026-09-10`, GlobalStandard, capacity 10) |
+| Kind | code: `microsoft_copilot_preview` harness | code: `voice`, `sub_protocol: live`, `model_type: self_deployed` |
+| Tools | code: harness built-ins by one flag (`builtinTools: "enabled"` in `agents/pi/definition.json`), the `jarvis` MCP tool on connection `jarvis-pi-mcp` with approval `never`, five skills | none; delegation `{type: client}` and PCM 24 kHz audio are code-owned |
+| Version that serves traffic | the pinned version | the pinned version |
+
+```mermaid
+flowchart TB
+    A["Dan saves version N+1<br/>in the portal"]:::foundry
+    B["N+1 exists but does<br/>not serve traffic"]:::foundry
+    C["Dan sets N+1 Active<br/>the pin rule Deploy reads"]:::foundry
+    D["N+1 serves traffic"]:::hosted
+    E["Next Deploy reads<br/>the Active version"]:::code
+    F["jarvis-pi, code-owned part changed:<br/>publish N+2 with the live text<br/>carried forward, verify, pin"]:::code
+    G["jarvis-pi, nothing changed:<br/>no write"]:::code
+    H["jarvis-pi-live:<br/>verify the technical contract,<br/>never write"]:::code
+    I["Rollback: Dan sets the<br/>previous version Active"]:::foundry
+    A --> B --> C --> D --> E
+    E --> F
+    E --> G
+    E --> H
+    D --> I
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+```
+
+- Deploy creates version 1 only when the agent is missing, from `agents/pi/instructions.md` (or `voice-definition.json` and `voice-instructions.md`), and pins it. After that the instruction files change nothing. In `voice-definition.json` only the output voice and `store` are seed-only: its contract fields (model, deployment, delegation, audio format) and `agentName` are validated and used on every Deploy.
+- `jarvis-pi`: a code-owned change (skills, MCP URL or tool, `definition.json` settings) makes Deploy publish one new version that carries the serving version's instructions forward, verify the code-owned fields and pin it. An unchanged fingerprint publishes nothing. Deploy re-reads the serving version before the POST and before the pin and fails with `agent_changed_during_deploy` if it moved, so do not set a version Active while Deploy runs; if it fails this way, run Deploy again.
+- `jarvis-pi-live`: an existing agent is never written. Every Deploy verifies the effective version: kind, sub-protocol, model type, model, delegation `client`, PCM 24 kHz and the `gpt-live-1` deployment. Drift fails with `voice_readback_*_mismatch`, `voice_agent_*` or `voice_deployment_*` and is never auto-fixed.
+- Deploy pins with one rule, `FixedRatio` 100% to one version (`pin()` in `provision_pi_agent.py`), and reads the serving version from `rules[0].agent_version`; with no rule the latest serves. Dan reports that saving in the portal does not activate the new version and that he sets it Active. The code is consistent with that, but it is an assumption that the portal's Set Active writes the same kind of rule. Not tested against the live portal.
+- Rollback is setting the previous version Active. The next Deploy then carries that version's text forward if it has to publish.
+- Never paste the voice text into `jarvis-pi`. It removes the tool contract (the `[Turn ...]` line, `find_tools`, `call_tool`) and PI can no longer reach a Jarvis tool. The seed wraps that section in `KEEP THIS BLOCK: backend tool contract (start)` and `(end)`; keep both lines and everything between them in the live text. Reported by Dan; the markers and the contract are in `agents/pi/instructions.md`, but the live text can only be read in Foundry.
+- A portal-saved version may drop the fingerprint metadata Deploy stores. Then the next Deploy publishes one more version with the same text and pins it (decision of 2026-11-20; unverified live).
+
+### One door, and the intended layers by weight
+
+- One MCP door (`pi/mcp.ts`, `/pi/mcp`) with two tools. `find_tools` takes the turn reference and a few keywords and returns matching tools with their schemas. `call_tool` runs a tool by exact name, only if `find_tools` returned it in the same turn (names in `otherMatches` count). The door runs the same registry and guards as Chat.
+- About 140 Jarvis tools (141 reported from production; a rough static count of tool definitions in `apps/backend/src` gives 136 to 146 depending on what is counted, and the registered number depends on the enabled modules), plus the `gh_` GitHub tools and the `az_` Azure tools offered by the backend bridges. Chat and Voice do not see the legacy confirmation tools or the brain-only tools; a background wake sees the brain-only tools too.
+- Local-first loading. A search returns local tools at once. A bridge starts idle, with no warm-up at start-up or from `/pi/warm`, and loads only when the query names it (for example GitHub, issue, repo, Azure, resource, or a `gh_` / `az_` tool name). It then gets an 8 s bounded wait and a "search again shortly" note. The first Azure question after a quiet period therefore needs a second search.
+- Exact-name calls rank first; `intentAliases` in `pi/tool-search.ts` maps English and Danish wording (for example "vejr" to `weather`).
+- A capability note (connection states plus a capability index, at most 1,500 characters) goes with the first turn of a Foundry conversation and again only when the GitHub/Azure connection state changes. It is held in memory, so a backend restart sends it once more. A background wake always runs in a new scratch conversation, so every wake carries the note (one gateway helper, `overviewFor` in `pi/gateway.ts`, serves Chat and wakes), and a wake never counts as the note having been sent for Dan's Chat conversation (#2014).
+- Tool authority is the exact owner message attached to the turn (`core/owner-message.ts`), not the newest stored message.
+- Door ledger and replays (#2016). Every finished `find_tools` or `call_tool` writes one `pi.mcp_tool` line (see "Safe logs"). An identical action under a different request always runs. Only a replay is answered from the first result, with `duplicate: true` and without running again: the same `_meta` call id (a key ending in `call_id`, `callId` and the like), the same tool and the same arguments, for a call that `effectOf` (`core/tool-registry.ts`) classes as an action, after a first success. Reads, tools with no `execution` metadata and remote `gh_` and `az_` calls always run, and the JSON-RPC id is never an identity because the door is stateless. Without a call id nothing is recognised and only the ledger works. Nothing is refused and no approval was added.
+- GPT-Live has no tools at all; it only delegates.
+
+Intended layering, as Dan reported it to me: the work is layered by weight. This is his design, not something the repository enforces or I could verify. The repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives: Azure to `az_`, code and issues to `gh_`, notes, tasks, mail, calendar and health to the Jarvis tools, and Dan's PC when he asks or names something that only exists there. I did not read the live `jarvis-pi` text in Foundry, so whether it holds weight-based rules is unknown. Writing them there is a next step for Dan (`PLAN.md`, "Next steps").
+
+```mermaid
+flowchart LR
+    R["Dan's request"] --> W{"How heavy is the job?"}
+    RULES["Intended routing rules<br/>in the Foundry-owned<br/>jarvis-pi instructions<br/>live text not read"]:::foundry -.-> W
+    W -->|"quick, same turn"| T["Jarvis tools through the door<br/>find_tools, then call_tool<br/>plus gh_ and az_"]:::code
+    W -->|"scratch compute"| B["Harness built-ins, run by Foundry<br/>files, shell, web fetch, sub-agents"]:::hosted
+    W -->|"deep or durable"| F["Factory workers<br/>coding sessions, results return as events"]:::code
+    W -->|"knowledge"| K["Vault notes and Personal Memory<br/>vault_ and memory_ tools"]:::data
+    classDef foundry fill:#fff1cc,stroke:#b7791f,color:#3b2a06
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+    classDef hosted fill:#e2f4e8,stroke:#2f855a,color:#0b2e1a
+    classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
+```
+
+PI is unrestricted: no guardrails or read-only defaults. Dan's rule, as relayed (recorded in issues [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)): no approvals, confirmations or gates except DELETE actions (`PRODUCT.md`, "North star"). #2021 reports that no non-delete confirmation is reachable by a Chat or Voice PI turn, and that the phone-call approval (`phone/approval.ts`) is the one live non-delete gate, on the phone channel. I did not re-check that and did not audit the rest of the code. The MCP tool runs with approval `never`.
+
+### Gateway and the harness stream
+
+```mermaid
+flowchart TB
+    S["Foundry response stream"] --> I{"Output item type"}
+    I -->|"message, reasoning,<br/>mcp_call, mcp_list_tools"| H["Handled: text, progress,<br/>tool and list results"]:::code
+    I -->|"other typed items<br/>(Dan reports shell_call)"| U["Logged once per type as<br/>pi.harness_item unknown_item<br/>The stream continues"]:::code
+    I -->|"function_call or<br/>mcp_approval_request"| F["Never end the stream.<br/>Read to the terminal event,<br/>then classify each call"]:::code
+    F --> N["Native: Foundry already<br/>ran it, for example a task<br/>sub-agent. Never answered"]:::code
+    F --> C["Client-owned: the response<br/>ended with it unanswered<br/>One follow-up, same<br/>conversation, max 8<br/>responses per turn"]:::code
+    F --> Q["Unknown: left<br/>alone, logged"]:::code
+    classDef code fill:#e3effd,stroke:#2b6cb0,color:#0b2545
+```
+
+- The harness's `task` function_call is a native sub-agent that Foundry had already run. In the production trace it searched, called `calendar_list_events` through the Jarvis door and answered. The gateway then threw `approval_or_function_call_item` and closed the stream, and Foundry's outer request recorded HTTP 500. The first fix attempt (answering `task` with "not available") was wrong for that reason and was replaced before #2004 merged.
+- Other built-ins appear as typed items such as `shell_call` and `shell_call_output`. On `main` any item type other than `message`, `reasoning`, `mcp_call`, `mcp_list_tools`, `function_call` and `mcp_approval_request` is only logged, once per type, and the stream continues. The item names are Dan's production observation: they appear nowhere else in the repository, and no code handles them by name.
+- Rule since #2004 (completion refined by #2020): never end the stream for a call. Read to the terminal event, then classify each call. Native (a `function_call_output`, the item's own output or later output shows the harness ran it; later output is text, reasoning, an `mcp_call` even if only added, or an item first seen after the call, and closing an item that opened before the call does not count when the done event names that item by id or output index; an item that names neither counts as output after the call): never answered. Client-owned (the response ended with the call unanswered and its item shown complete: a `completed` status, or a `done` event or completed-output entry that has no status): one follow-up `responses.create` on the same conversation with an honest "not available" output (`task` has no handler) and `approve: true` for a genuine approval request, at most 8 responses per turn; a call id settles once per turn. Unknown (nothing shows the item complete, that is another status or an item that was only added with no status, and nothing followed): left alone and logged as `incomplete_item`. The gateway never runs shell or starts an agent. It fails the turn with `approval_or_function_call_item` for a client-owned call without a usable id, for more than 16 client-owned calls in one response, or for more than 512 calls with no output after them, and with `client_tool_round_limit` when client-owned calls are still pending after the 8th response. Native calls are not capped, but only 512 are tracked per response.
+- Reply text (#2020). Text deltas stream as they arrive. Text that only a `response.output_text.done` event or the completed `output` carries is added once, as the part the reply does not hold yet; before #2020 it was dropped, so a turn could be `ok` with an empty reply. Items are matched by id, else by output index; at most 2048 are tracked per response, and past that nothing is reconciled. If the authoritative text does not start with what streamed, nothing is added. The #2020 entry lists the cases with unnamed events where text can be missing or, for partly named events, repeat; it says a conformant server does not produce them.
+- Retry safety (#1999, kept by #2004): `respond()` retries a Foundry stream once, after 750 ms, only when nothing observable can have run (a stream that carried any call or tool output is never retried, and only the first response of a turn can be): a turn grant exists, no text, reasoning, tool call, function call, unknown event, unparseable or half-read frame, no MCP request, tool result, action or push, and a transient failure (a stream that ends or breaks, or `response.failed` / `error` with `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`). A stream that ended or broke has its response cancelled first, and the retry needs that cancel confirmed (the cancel succeeds and the response no longer reads `in_progress` or `queued`). Events whose response id is unknown end the turn, while a stream that died before any event has no response id and is retried without a cancel. A transient `response.failed` or `error` needs no cancel. The turn is billed once. Details are in the section "Remote MCP catalogues load on demand".
+- Weather timeouts: a Chat `weather` call returned after exactly 8015 ms on build 119. The tool now logs `weather.phase` per step and retries each fetch once after a timeout, network error, 429 or 5xx, inside the same 8 s budget (an attempt takes at most 3 s). Dan reports that the forecast fetch stalls intermittently and that the one retry recovered it in production; the repository cannot show this.
+
+### Voice: how a spoken request reaches PI
+
+```mermaid
+sequenceDiagram
+    participant D as Dan
+    participant L as GPT-Live
+    participant R as Voice relay
+    participant G as PI gateway
+    D->>L: speaks
+    L-->>R: transcript deltas, still arriving
+    L-->>R: session.delegation.created<br/>offset_ms is logged, never used to cut a turn
+    R->>R: wait 1.5 s of quiet, max 3 s
+    R->>R: store one owner message
+    R->>G: start PI once
+    D->>L: mm-hm
+    Note over R,G: a backchannel never cancels PI.<br/>Only a new delegation or<br/>the session end does
+    G-->>R: first sentence, then answer
+    R->>L: session.commentary.append
+    L-->>D: speaks
+```
+
+- `offset_ms` on the delegation is not the end of Dan's utterance: GPT-Live sends the delegation while the transcript is still arriving. The relay logs it and never cuts words with it.
+- The relay assembles the whole spoken turn: every input delta joins the open turn until PI starts for it or the reply to it begins. A delegation waits for 1.5 s of quiet (`VOICE_TURN_QUIET_MS`, at most 3 s `VOICE_TRANSCRIPT_MAX_WAIT_MS`), stores the whole turn once and starts PI once. A direct (non-delegated) turn is stored after the same 1.5 s. Only the assistant's output is still grouped on 0.6 s of quiet.
+- A delegation that arrives after GPT-Live began answering adopts the stored direct turn if no reply has completed for it, nothing newer was said and it is at most 10 s old. An empty turn at the 3 s bound gets "did not catch that".
+- Backchannels never cancel PI. Only a new delegation (which supersedes the turn in flight, as steering does in Chat), the session ending, or the 90 s voice turn deadline (`PI_VOICE_TURN_DEADLINE_MS`, after which Jarvis says so) stops it. There is no separate stop command; "stop that" reaches PI as a delegation.
+- Ordering is Dan before Jarvis: the reply is stored after the owner message it answers, within a bounded wait, so restored history keeps the order.
+- Parity with Chat (#2021). `voice/chat-voice-parity.test.ts` replays 24 scenarios (27 tests) through the real chat route and the real `/voice` relay on the real gateway, MCP door and tool route (each channel runs in its own world with its own gateway and app; only S15 runs both channels through one), with a scripted Foundry and a stub GPT-Live, and fails on any difference not declared in `channelDifferences` (`voice/parity-report.testkit.ts`) or in the scenario's own `rules`. It found and fixed three divergences. The persona and situation block reached PI twice in a voice conversation, because the warm-up recorded less than a turn sends. An unexpected failure or an empty reply was worded one way in Chat and another in Voice; both now use `piTurnFailedMessage`, a gateway error keeps its own message, and the 90 s deadline keeps its own. A spoken turn's tool activity was labelled `chat`; the door now sends `x-jarvis-pi-channel: voice`. Left for Dan to decide, as the #2021 entry lists it (I confirmed only that `runChatReflex` and `presentNutritionList` exist in `core/conversation.ts` and `core/food-presentation.ts`): Chat rewrites a meal estimate to the server's nutrition list while Voice speaks PI's sentence, a chat-only reflex path (`runChatReflex`) can run read tools before PI answers, voice sessions are stored as `en`, a turn refused before it starts writes no `pi.turn` record in either channel, and a spoken failure is stored as a transcript while a chat failure is not.
+- Relay log events (ids, lengths, states and reasons only, never words): `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started`, `voice.activity_published`, `voice.upstream_event_error`, and `voice.pi_turn` from the PI side.
+
+### Safe logs
+
+Every backend log record passes `safeFields` in `apps/backend/src/logging.ts` before stdout or Application Insights sees it. Only registered event names keep their name (any other becomes `backend.event`), and each event exports only its own scalar fields and fixed vocabularies. Headers, bodies, URLs, prompts, replies, tool arguments, tokens, provider messages and free text are dropped, and ids appear only as opaque tokens or as booleans, never as content. A new field is invisible until it is added to that allowlist; test it in `logging.test.ts`. For the `pi.*` and `proactive.*` families a test reads the backend source and fails on an event name that is not registered (#2019).
+
+| Event | Added | Safe fields |
+| --- | --- | --- |
+| `pi.stream_failed` | #1999 (`client_tool_round_limit` added by #2004) | `reason` (fixed list), `event`, `code`, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput`, `previousCancelled` |
+| `pi.stream_retry` | #1999 | the same fields for the retried attempt |
+| `pi.harness_item` | #2002, extended by #2004 | `trigger` (`harness_call`, `rejected_item`, `unknown_item`), `itemType`, `name`, `serverLabel`, `itemStatus`, `hasId`, `hasCallId`, `argumentsLength`, `eventTypes`, `itemTypes` (at most 25 each); on `harness_call` also `classification` (`native`, `client_owned`, `unknown`), `rule`, `round`, `outcome` and `argumentKeys` (key names only, at most 12) |
+| `pi.mcp_list_failed`, `pi.mcp_call_failed` | #1999 | `server`, `tool`, `code`, `status`, `elapsedMs` |
+| `pi.mcp_tool` | #2016 | one line per finished `find_tools` or `call_tool`: `tool`, `outcome` (`ok`, `refused`, `error`), `elapsedMs` (the call's own time; `pi.mcp_call_failed.elapsedMs` counts from the start of the turn), `resultBytes`, `truncated`, `duplicate`, `sameArgsRepeat`, `replayCheck` (`on`, `no_id`, `id_reused`), `metaKeys` (names only, at most 12), `turnHash` (8 hex of a SHA-256 of the turn reference), `channel` (`chat`, `voice`, `wake`, `smoke`), `provider` (`local`, `gh_`, `az_`). `read_backend_logs` keeps only booleans, numbers and a short list of text fields, so it drops `replayCheck`, `metaKeys` and `turnHash`: read those in Log Analytics |
+| `pi.turn` | #1996, #1999, #2004 | `toolCount`, `azureCatalogue`, `budgetRead: unavailable`, `rounds` (1 to 8), `clientItems`, `nativeCalls`, with the existing outcome, timing, token and cost fields |
+| `pi.budget_unreadable` | #1996 | the spend could not be read; the turn still ran |
+| `pi.brain_tick` | #2019 | one line when a pass that read the queue decides something different from the pass before: `outcome` (`off`, `paused`, `no_sources`, `empty`, `spaced`, `daily_cap`, `budget_exhausted`, `quiet_hours`, `policy_changed`, `filtered`, `watches_unavailable`, `done`, `failed`), `queued`, `wakesToday`, `spendMonthDkk`, `nextDueInSec` |
+| `pi.brain_state` | #2019 | once at start: `enabled`, `paused`, or `reason: unreadable` |
+| `pi.brain` | #2019 | a wake's result or a skipped sweep: `reason` (fixed list in `pi/brain/outcomes.ts`), `trigger` (`scheduled`, `catchup`, `manual`), `events`, `sent`, `tools`, `pending`, `costDkk` |
+| `pi.brain_run` | #2019 | one line per wake from the gateway: `outcome`, `firstTextMs`, `totalMs`, token counts, `tools`, `staleSourceCount`, `actionCount`, `pushCount`, `stateRevision`, `estimated`, `costDkk`, `activationId`, `activationType` (`chat`, `voice`, `scheduled`, `event`) and `activationSource` (`timer`, `manual`, `watch`, `mixed` or the event's own source, such as `github`, `reminder`, `calendar`). `read_backend_logs` keeps the activation fields too |
+| `proactive.failed` | extended by #2019 | `runId`, `reason` (`internal_error`, `hook_failed`, `job_update_failed`), `stage` (`startup`, `slot`, `run`, `run_finish`, `heartbeat`, `event_tick`, `manual_run`, `manual_run_finish`) and `errorClass` (a class name, never a message) |
+| `pi.turn_record_failed`, `pi.usage_record_failed`, `pi.situation_stale_failed`, `pi.mark_warm_failed`, `pi.smoke_failed`, `pi.watches` | #2019 | a write or refresh that failed: `kind` (`chat`, `warm`, `smoke`, `brain`), `activationId`, `code` or `reason: watch_index_refresh_failed`. A failed ledger write makes `GET /pi/status` and `today.wakes` undercount |
+| `proactive.reminder_tick`, `proactive.alert`, `proactive.events`, `proactive.events_disabled`, `proactive.event_model_failed`, `proactive.event_producer`, `proactive.event_source` | #2019 | `reason` (a lower-case token), `source`, `classes` (alert classes), `runId`, `count`, `events`, `outreach`, `dropped`, `outputTokens`, `durationMs` |
+| `weather.phase` | #2003 | `phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host` |
+| `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started` | #2000 (outcomes extended by #2001) | `delegationId`, `groupId`, `textLength`, `offsetMs`, `quietMs`, `waitedMs`, `reusedGroup`, `outcome` or `reason`, `language` |
+| `voice.activity_published` | #2001 | `state`, `reason`, `sinceLastMs`, `outputActive`, `piBusy`, `delegationPending` |
+| `voice.upstream_event_error` | extended by #2001 | `errorType`, `errorCode`, `param` (short tokens). The relay passes no message. An older allowlist branch could export up to 300 plain characters of `upstreamMessage` for `errorCode: invalid_function_parameters`, but nothing emits that field |
+
+The gateway also computes `azureToolsOffered` and `azureCalls` for `pi.turn`, but the allowlist drops them, so they never reach the logs. Query recipes are in `docs/agent-context.md`, "Working rules".
+
+### Not verified
+
+- Live behaviour. The PRs of the week ran offline checks only. Production logs and a Foundry trace informed #2001 and #2004, and Dan reported the weather result; Dan owns live and device acceptance.
+- The portal behaviour (a saved version is not Active until Dan sets it), the loss of the version fingerprint on a portal save, and the exact tool count in production.
+- The `task` behaviour is in the #2004 decision text, which cites a Foundry trace that is not in the repository. The `shell_call` and `shell_call_output` item names are Dan's production observation and appear nowhere else in the repository.
+- Whether the live `jarvis-pi` instructions carry weight-based routing rules. I did not read them; the repository seed routes only by where a thing lives.
+- #2004 is merged but has not been seen in a real trace. The four points the #2004 decision lists (every native call shows a native signal before `response.completed`, a client-owned call is accepted while the previous response reads `in_progress`, the real `status` of an approval request, and whether native children outlive `response.completed`) are open.
+- #2016 was tested offline with stub tools only. Whether the harness sends a `_meta` call id, under which key, and whether its call ids are unique, is unknown: the harness spike never ran. Until live `pi.mcp_tool` lines show it (`replayCheck`, `metaKeys`), nothing is recognised as a replay. The #2016 entry reports no evidence that Foundry replays a call.
+- #2021 ran offline against a scripted Foundry and a stub GPT-Live. Real GPT-Live speech, real Foundry stores, cancels and replays, real latencies, and what the iPhone, Watch and web render for a spoken turn's tool events (`source: "voice"`) are unproven; the #2021 entry lists them.
+- #2020 hardens the stream handling against five shapes an independent advisor generated offline (byte-fragmented streams). Its entry says whether the provider emits any of them is unknown and that it fixes no production failure.
+
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+```mermaid
+flowchart LR
+    GH["GitHub webhook<br/>tracked repositories only"] --> MAP["webhook-mapping.ts<br/>payload to typed mapping"]
+    MAP --> GE["githubEvent<br/>release, issues, comment, pull request,<br/>failed default-branch check, workflow, deploy"]
+    CAL["Calendar poll, 15 min<br/>facts already read"] --> CL["clashEvents<br/>one event per overlapping pair"]
+    REM["Reminder ticker<br/>delivery ended failed after retries"] --> RF["reminderFailureEvent"]
+    GE --> GATE
+    CL --> GATE
+    RF --> GATE
+    GATE{"Queue entrance<br/>is every Proactive source it rests on on?<br/>github, worker: Factory<br/>calendar: Calendar<br/>failed reminder: Todos"}
+    GATE -->|"yes, or it rests on none"| Q[("Event queue<br/>identity + material = dedupe")]
+    GATE -->|no| NO["not queued"]
+    Q --> BR["PI brain<br/>decides whether Dan hears"]
+    BR -->|"wake evidence: one tuple per source the event rests on"| MD["message_dan<br/>accepts only that evidence"]
+    LEG["Legend: arrows are data flow; no model call and no rule about Dan before the queue"]:::legend
+```
+
+| Event (source: kind) | Made from | Dedupe key (identity plus material) |
+| --- | --- | --- |
+| `github: release.published` | `release` published | `github:release:<repo>:<release id>:<published_at>` |
+| `github: issues.opened`, `issues.closed`, `issues.reopened` | `issues` | `github:issues:<repo>#<number>:<action>:<time>`, the time being `created_at`, `closed_at` or `updated_at` |
+| `github: issue_comment.created` | `issue_comment` created, on an issue or a pull request | `github:issue_comment:<repo>:<comment id>` |
+| `github: pull_request.opened` | `pull_request` opened | `github:pull_request:<repo>#<number>:opened` |
+| `github: pull_request.closed` | `pull_request` closed **and merged** | `github:pull_request:<repo>#<number>:closed:<merged_at>` |
+| `github: pull_request.review_requested` | `pull_request` review requested | `github:pull_request:<repo>#<number>:review_requested:<reviewer>:<updated_at>` |
+| `github: check_run.failure` | `check_run` completed, failed, head branch is the repository default branch | `github:check_run:<repo>:<check run id>:failure` |
+| `reminder: reminder.delivery_failed` | `reminder-ticker.ts`, after `finishClaim` wrote a terminal failed outcome; rests on **Todos** (`detail.evidenceSources`) | identity `reminder:<schedule id>`, material the due time |
+| `calendar: calendar.clash` | `scheduled-producers.ts`, from the calendar poll's facts | identity `calendar:clash:<hash of the two entry identities>`, material both entries and their time ranges |
+
+- **Code:** `github/webhook-mapping.ts` (typed mappings: `release`, `issue`, `issue_comment`, and extra fields on `pull_request` and `check_run`), `github/webhook.ts` (accepts `release` and `issue_comment`; `githubWebhookEvents` is the list a test compares with the App manifest), `proactive/events/producers.ts` (`githubEvent`, `clashEvents`, `reminderFailureEvent`), `proactive/events/wiring.ts` (the entrance), `proactive/events/types.ts` (`eventSourceSwitch`, `eventSourceSwitches`). Every GitHub event is keyed only by the payload, so a redelivered webhook is the same event; summaries are at most 400 UTF-16 units; free text from a payload is cleaned of control, format (zero-width, bidirectional, tag) and separator characters and cut to one line, in the summary and in `detail` alike. Tests: `github/webhook.test.ts` (signed payloads through the route into the queue) and `pi/brain/signals.test.ts` (the real brain loop and `message_dan`).
+- **Entrance and switches:** `createEventPath().sink`, the queue's one entrance for the webhook, alerts, Worker results, reminder failures and the pollers, reads the Proactive settings and does not queue an event while a source it rests on is off. `eventSourceSwitches` lists those sources: the one its own source follows (`github` and `worker` follow **Factory**, a source id is its own) and any it declares in `detail.evidenceSources` (a failed reminder: **Todos**); `alert`, `timer` and `cost` rest on none. The brain still settles what was queued before a switch went off. The brain, its wake evidence and the activation service use the same helpers; their private copies are gone.
+- **Evidence for a message:** a wake can back a message to Dan only with evidence it supplied. `pi/brain/runner.ts` builds one tuple (source, event ID, identity, observed and verified instants) per source an event rests on, and `message_dan` (`pi/brain/tools.ts`) matches the model's tuple against those. An event that rests on no Proactive source can therefore never back a message: every producer needs a source that follows a switch or a declared `evidenceSources`, and `pi/brain/signals.test.ts` runs the real tool for each kind and fails otherwise. Todos off means no failed-reminder signal; the reminder still fires and `owner_reminders.read` still reports its delivery.
+- **Reminder signal:** `createReminderTicker` takes the entrance as `events`. `composition.ts` now builds the event path before the ticker. A retrying reminder is silent; a failed or suppressed-by-delivery outcome is reported once, and an enqueue failure is only logged.
+- **Webhook route:** the mapped `issues` actions (`opened`, `closed`, `reopened`) now take the mapped path (recorded `ok`, Now feed refreshed, Factory board refreshed) instead of being recorded as ignored; every other `issues` action keeps the old ignored path. `issue_comment` and `release` neither touch the Factory tables nor the board.
+- **Not covered:** repositories the receiver does not track (the vault and active Factory projects), pushes, and cancelling a pending clash whose entries moved apart. `release.published` is a GitHub release (a tag published with notes), not the Factory's `releases` table, where a release is one merge to the default branch.
+
 ## Seeing the brain — 21 November 2026 (Refs #1969)
 
 ```mermaid
@@ -27,6 +315,7 @@ flowchart LR
 - **Every `pi.*` and `proactive.*` event is registered.** An event name that is not in the `events` set of `logging.ts` is exported as a bare `backend.event`; `logging.test.ts` reads the backend source for these two families and fails on a name that is not registered. `safeHistoricalLogFields` (behind `read_backend_logs`) keeps the error class, trigger, alert classes and the activation's type, source and id of a record; other identifiers stay out.
 - **Scheduler and engine failures:** `proactive.failed` carries a `reason` (`internal_error`, or `hook_failed` / `job_update_failed` from the engine), a `stage` and an `errorClass` (a class name, never a message). The engine now logs a run that threw (`run`) and a heartbeat that failed (`heartbeat`), which left no line before. `tick()` no longer rejects: a failing slot check is logged and the event tick still runs. A failed startup write is logged and the scheduler still starts. A slot is marked handled only after its settings read and claim were answered, so a thrown claim is retried on the next tick (a claim that returns no row, because the slot already has one, still settles it).
 - **Status:** `GET /pi/brain` reads `lastTick` and `nextDueAt` from the running brain (memory, null before the first pass) and `today.wakes` / `today.costDkk` from `pi_turn`; `GET /pi/status` reads `recentTurns` over every kind and `spendSince` per kind for 24 hours. Both are database reads; neither starts a model.
+- **What woke a wake** is recorded as its activation source: the event's own source (`github`, `reminder`, `calendar`, `alert`, `worker`, `mail`, ...; the signals of #2018 included), `timer`, `manual`, `watch`, or `mixed` when several kinds arrived together. It is the `activationSource` of `pi.brain_run` and the `source` of a turn in `GET /pi/status` `turns.recent`; `logging.test.ts` and `brain/runner.test.ts` pin it for the new signals.
 
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 
@@ -187,8 +476,8 @@ flowchart LR
 - A progress event (`acknowledgment`, `commentary`) is separate from reply text: the conversation route removes streamed text that equals it from the reply, and a repeated or unmatched progress line is shown as progress without ending the turn (`core/conversation.ts`).
 - Owner authority is the exact owner message attached to the turn (`core/owner-message.ts`: `attachedOwnerMessageId`, `readAttachedOwnerMessage`), not the newest stored message, so a proactive message arriving mid-turn does not invalidate it. The Gmail/computer, calendar, Factory, GitHub-write, Health, reminder, feedback and proactive-preference guards use it; they add no new restriction.
 - Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
-- On a normal PI turn, the live tool reference is the first line of the Foundry message, even when the backend resends the trusted context. The gateway's `pi.turn` log separates the last Azure catalogue state seen by `find_tools`, the number of Azure tool schemas returned during the turn, and the number and outcomes of `az_` call attempts. It does not record searches, arguments, results or references.
-- PI failure diagnostics (`pi/gateway.ts`, `logging.ts`): every `pi_failed` site logs one `pi.stream_failed` with a fixed `reason` (`foundry_response_failed` with the provider's `event` and `code`, `stream_ended_without_completed`, `stream_broke`, `approval_or_function_call_item` (a client item without an id the gateway can answer), `client_tool_round_limit`, `no_stream`, `no_conversation`, `busy`, `brain_wake_failed`) and, for a stream, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput` and `previousCancelled` (the previous turn was cancelled in the last two minutes). `pi.harness_item` names the shape of an output item: `trigger` is `harness_call` for every harness function call or approval request (see the harness calls row below), `rejected_item` for a client-owned one it cannot answer, `unknown_item` for any other unknown type (logged once per sanitised label, at most 5 per stream); fields on `harness_call`: `classification` (`native`, `client_owned`, `unknown`), `rule`, `round`, `outcome` (`answered_default`, `answered_task_client_owned`, `approved`, only when answered) and `argumentKeys` (key names only, max 12, each `^[a-z0-9_.-]{1,32}$`, never values); then `itemType`, `name`, `serverLabel`, `itemStatus` (lowercase tokens, else `other`), `hasId`, `hasCallId`, `argumentsLength` (a number, never the content) and the distinct `eventTypes` and `itemTypes` seen so far (max 25). `pi.mcp_list_failed` and `pi.mcp_call_failed` carry `server`, `tool`, the harness's own short `code` and HTTP `status` when it sent them, and `elapsedMs`. `pi.turn` keeps `toolCount` and `azureCatalogue` and adds `rounds` (responses in the turn, 1 to 8), `clientItems` (client-owned items answered) and `nativeCalls` (calls the harness ran itself). The log allowlist exports only these scalar fields and fixed vocabularies; never prompts, replies, tool arguments, tokens or provider messages.
+- On a normal PI turn, the live tool reference is the first line of the Foundry message, even when the backend resends the trusted context. The gateway computes the last Azure catalogue state seen by `find_tools`, the number of Azure tool schemas returned during the turn, and the number and outcomes of `az_` call attempts, but the log allowlist exports only `azureCatalogue` and `toolCount`; `azureToolsOffered` and `azureCalls` are dropped before they reach the logs. It does not record searches, arguments, results or references.
+- PI failure diagnostics (`pi/gateway.ts`, `logging.ts`): every `pi_failed` site logs one `pi.stream_failed` with a fixed `reason` (`foundry_response_failed` with the provider's `event` and `code`, `stream_ended_without_completed`, `stream_broke`, `approval_or_function_call_item` (a client-owned item without an id the gateway can answer, more than 16 client-owned calls in one response, or more than 512 calls with no output after them), `client_tool_round_limit`, `no_stream`, `no_conversation`, `busy`, `brain_wake_failed`) and, for a stream, `attempt`, `elapsedMs`, `firstEventMs`, `sawText`, `sawTool`, `sawOutput` and `previousCancelled` (the previous turn was cancelled in the last two minutes). `pi.harness_item` names the shape of an output item: `trigger` is `harness_call` for every harness function call or approval request (see the harness calls row below), `rejected_item` for a client-owned one it cannot answer, `unknown_item` for any other unknown type (logged once per sanitised label, at most 5 per stream); fields on `harness_call`: `classification` (`native`, `client_owned`, `unknown`), `rule`, `round`, `outcome` (`answered_default`, `answered_task_client_owned`, `approved`, only when answered) and `argumentKeys` (key names only, max 12, each `^[a-z0-9_.-]{1,32}$`, never values); then `itemType`, `name`, `serverLabel`, `itemStatus` (lowercase tokens, else `other`), `hasId`, `hasCallId`, `argumentsLength` (a number, never the content) and the distinct `eventTypes` and `itemTypes` seen so far (max 25). `pi.mcp_list_failed` and `pi.mcp_call_failed` carry `server`, `tool`, the harness's own short `code` and HTTP `status` when it sent them, and `elapsedMs`. `pi.turn` keeps `toolCount` and `azureCatalogue` and adds `rounds` (responses in the turn, 1 to 8), `clientItems` (client-owned items answered) and `nativeCalls` (calls the harness ran itself). The log allowlist exports only these scalar fields and fixed vocabularies; never prompts, replies, tool arguments, tokens or provider messages.
 - MCP door ledger and replayed requests (`pi/mcp.ts`, `pi/turns.ts`, `core/tool-registry.ts` `effectOf`, `logging.ts`; #1967): `find_tools` and `call_tool` each write one `pi.mcp_tool` line when they finish, however they end (also a refusal for an unknown or closed turn reference, and an exception): `tool`, `outcome` (`ok`, `refused`, `error`), `elapsedMs` (the call's own time, unlike `pi.mcp_call_failed`, which counts from the start of the turn), `resultBytes` (UTF-8 bytes of the text given to the model), `truncated`, `duplicate` (the request was a replay and was answered without running), `sameArgsRepeat` (an earlier action of the turn with the same tool and arguments had run, or was running, and this one ran too), `replayCheck` (`on`, `no_id`, `id_reused`: whether replays could be recognised), `metaKeys` (the names, never the values, of the request's `_meta` keys: sorted, at most 12, `^[A-Za-z0-9_.:/-]{1,64}$`; omitted without a `_meta`), `turnHash` (first 8 hex of the SHA-256 of the turn reference, never the reference), `channel` (`chat`, `voice`, `wake`, `smoke`; omitted when the reference resolves to no live turn) and `provider` (`local`, `gh_`, `az_`; for `find_tools` the remote catalogue the search waited on, else `local`). Never arguments, `_meta` values or result text. An identical action under a different request always runs. A replay is a request with the same **call id** (a string in its `_meta` under a key ending in `call_id` or `callId`) asking for the same tool and canonical (sorted-key) arguments: it gets the first result with `duplicate: true` and does not run again, also while the first is still running. The JSON-RPC id is not an identity: the door is stateless (no MCP session), so a client that opens a connection per model round numbers its requests 1, 2, 1, 2, and a deliberate repeat is then byte-identical to a retried POST. A request without a call id is never recognised (`no_id`). The grant keeps `actionRuns` (what each action asked for, under which call id, and whether it is running, ok or failed) and `identities` (what each door request asked for, by call id); `noteRequest` turns recognition off for the rest of a turn (`id_reused`) once a call id has asked for something else. That catches a call id reused for different requests; one reused for identical requests looks exactly like a replay, so recognition rests on the harness's call ids being unique per call (unverified). Only a success is kept: a refusal declined the action and an error reported no success, so a replay of either runs again. That is not proof that an error did nothing, because the tool route also reports `error` after the tool ran (an invalid, unserialisable or over-1-MiB result, a failed audit record), so such a replay can run its effect a second time. A call is an action by `effectOf` (the tool's `defaultEffect`, or the operation named in the arguments for a tool that classifies its operations); reads, unclassified tools and remote calls always run. This recognises a replay, it is not a gate: nothing is refused. A call rejected by schema validation before it reaches the door writes no line.
 - `respond()` retries a Foundry stream once (`pi.stream_retry`, after 750 ms), and only when nothing observable can have happened. Required together: the call has a turn grant (warm-ups and the smoke never retry); no text, reasoning, tool call, function call or unknown event, no unparseable frame and no unread partial frame; no MCP request (counted when `find_tools` or `call_tool` enters the server, `grant.requests`), tool result, action or push on the grant, checked again after the pause; and a transient failure: a stream that ends or breaks, or `response.failed`/`error` with the code `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`. `response.incomplete`, content filters, tool errors and unknown or missing codes are never retried. A stream that merely stopped has its response cancelled first, and the retry needs a confirmed cancel (a failed or still-running cancel, or events whose response id is unknown, ends the turn). It is the same conversation and message, so the turn is billed once (the usage of the successful attempt). Cancel, the turn deadline, an HTTP error or a missing stream end the turn as before.
 
@@ -340,7 +629,7 @@ sequenceDiagram
     R->>V: session.input_audio.append
     V-->>R: input transcript deltas
     V-->>R: session.delegation.created (client target)
-    R->>R: 0.6 s quiet, max 3 s; persist Dan's exact message
+    R->>R: whole open turn, 1.5 s quiet, max 3 s, store one owner message
     R->>G: stream(text, voice channel, stored message id)
     G->>P: same PI conversation / owner turn grant
     P-->>G: sentence before a tool call
@@ -387,7 +676,7 @@ one Jarvis MCP door and one `/tools/:name` route, so the same owner request must
 run the same tools under the same owner-message grant, charge the same budget
 and write one `pi.turn` log (only `channel` differs). `voice/chat-voice-parity.test.ts`
 replays each scenario through the real chat route and the real `/voice` relay
-(stub GPT-Live) on that shared gateway, with a scripted Foundry and the real
+(stub GPT-Live), each channel in its own world with its own gateway (S15 runs both through one), with a scripted Foundry and the real
 tool route, and compares what Dan reads or hears, the stored owner and assistant
 messages, the PI input, Foundry requests and follow-ups, tool calls, grant,
 ledger, usage, logs and tool activity. A difference fails the suite unless it is
@@ -445,11 +734,12 @@ The brain is the PI agent woken by a trigger, with the `jarvis-brain` skill. One
 ```mermaid
 flowchart TB
     subgraph SIG["Signals (existing producers, one queue)"]
-        S1["GitHub webhook<br/>workflow and deploy results"]
+        S1["GitHub webhook<br/>builds, deploys, releases, issues,<br/>pull requests, failed default-branch checks"]
         S2["Alerts: budget, deploy, sandbox"]
-        S3["Mail and calendar changes<br/>polled every 15 min"]
+        S3["Mail and calendar changes, calendar clashes<br/>polled every 15 min"]
         S4["Timer review<br/>every 6 h, not at night"]
         S5["Worker results<br/>done, needs attention, cancelled, PR opened"]
+        S6["Failed reminder delivery"]
     end
     Q[("dbo.proactive_events<br/>queue, dedupe, leases")]
     T["30 s ticker<br/>(proactive scheduler)"]
@@ -479,7 +769,7 @@ flowchart TB
 | Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
 | Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
 | Budget | `proactive_spend` ledger, settings `monthlyBudgetDkk` (default 100) | Hard stop before a wake (worst case of one wake against what is left), one chat notice at 80 percent and one at the stop, a note in the wake text after 80 percent. The brain and the watches share this ledger. Chat and voice keep their own cap (`pi_turn` kinds `chat`, `warm`, `smoke`) |
-| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, "PI brain (test)" | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called. `GET` also says what the last pass decided (`lastTick`), when it looks again (`nextDueAt`) and today's wakes and DKK, so off and idle can be told apart |
+| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, Proactive, "Background PI" (was "PI brain (test)" until #1966) | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called. `GET` also says what the last pass decided (`lastTick`), when it looks again (`nextDueAt`) and today's wakes and DKK, so off and idle can be told apart |
 | One reader | `proactive/events/wiring.ts` | The queue has one reader: the brain **or** the old one-shot pipeline. Turning both on is a startup `ConfigurationError`, so nothing runs in parallel or in shadow. The old pipeline stays switched off and is deleted in #1887 |
 
 Not covered: the call channel, the Now card, tiers (owner decision: none for now), voice, standing watches (next pull request).
@@ -511,11 +801,11 @@ flowchart LR
 | GitHub | remote server `https://api.githubcopilot.com/mcp/x/all` (the all-toolsets URL; the bare `/mcp/` serves only the default toolsets, without Actions and Copilot), reached by the backend (`pi/github-bridge.ts`, a small Streamable HTTP client) and offered through the Jarvis MCP door as tools named `gh_<tool>` | **Not a harness tool.** Attached as a harness MCP tool, the full server put its whole tool list (about 13k input tokens, and a tool listing per turn) in every turn: first text went from 1.1 to 1.5 s to 2.4 to 5.7 s (Deploy 43901841128). Through the door, `find_tools` ranks the GitHub tools with the Jarvis ones and `call_tool` forwards the call, so the harness lists two tools and nothing is lost. The token is the repository secret `PI_GITHUB_TOKEN`: fine-grained only (the script refuses a classic token), held by the backend as the Container App secret `pi-github-token` (env `JARVIS_PI_GITHUB_TOKEN`, a fingerprint in `JARVIS_PI_GITHUB_FP`), no longer in a Foundry connection (the old `jarvis-pi-github` connection is deleted by the Deploy). Its permissions, set by the owner, are the only limit. The tool list is cached for 30 minutes |
 | Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Jarvis backend's managed identity (set up by `infra/setup-azure-mcp.ps1`, which also removes any other holder). Outgoing calls use the container's own system identity with the **Contributor** role on `rg-jarvis`; widening beyond that resource group is the owner's call. The unauthenticated call returns 401 (observed) |
 | Environment note | `pi/context.ts` (`buildPiEnvironment`), wired in `index.ts` | The backend parses the Azure subscription and the Jarvis resource group from its own `BACKEND_CONTAINER_APP_RESOURCE_ID` and adds the GitHub defaults (DanAakesen, DanAakesen/jarvis, DanAakesen/vault). The note is part of the trusted context block (first turn, again on change, every wake); the smoke's Azure turn carries it. No identifier is committed. Without the setting the Azure line is omitted |
-| Azure through the door | `pi/remote-mcp.ts` (the same client as GitHub), backend settings `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` (set by the Deploy), tools named `az_<tool>` | Attached to the harness as an MCP tool with a `ProjectManagedIdentity` connection, the first Deploy with Azure (43924888427) failed the very first turn after about 28 s ("PI stopped before it finished the reply"): the harness fails the whole turn when a server's tool list does not come back, and a scale-to-zero container plus a project-identity token is exactly where that happens. So Azure is a door tool: the backend calls the guarded server with its own managed identity (token for `api://<client id>/.default`, app role granted to the backend identity by `infra/setup-azure-mcp.ps1`), a catalogue read waits at most 8 s in a search but the refresh itself may take 90 s so a cold container can finish starting, `/pi/warm` and the smoke start it, and a call may take 120 s. A failed stream now logs `pi.stream_failed` with the provider's short error code, and the smoke's HTTP 502 shows it |
+| Azure through the door | `pi/remote-mcp.ts` (the same client as GitHub), backend settings `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` (set by the Deploy), tools named `az_<tool>` | Attached to the harness as an MCP tool with a `ProjectManagedIdentity` connection, the first Deploy with Azure (43924888427) failed the very first turn after about 28 s ("PI stopped before it finished the reply"): the harness fails the whole turn when a server's tool list does not come back, and a scale-to-zero container plus a project-identity token is exactly where that happens. So Azure is a door tool: the backend calls the guarded server with its own managed identity (token for `api://<client id>/.default`, app role granted to the backend identity by `infra/setup-azure-mcp.ps1`), a catalogue read waits at most 8 s in a search but the refresh itself may take up to 200 s so a cold container can finish starting, nothing starts it at start-up or from `/pi/warm` since #1996 (a search that names Azure does, and the Deploy smoke wakes it first), and a call may take 120 s. A failed stream now logs `pi.stream_failed` with the provider's short error code, and the smoke's HTTP 502 shows it |
 | Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | PI starts, steers and retries Workers on its own judgement, in a chat turn or in a wake. Results come back as queue events (below) and as the existing chat notice |
 | Worker results as signals | `workerEvent` in `proactive/events/producers.ts`, subscribed to the task event hub in `index.ts` | Source `worker`, kinds `task.done`, `task.needs_attention`, `task.cancelled`, `task.pull_request_opened` (the queue only accepts lowercase kinds; a test normalises each one), one dedupe key per task and state. They enter the existing queue; the queue has no consumer until the brain (next pull request) |
 | Stream parsing | `pi/gateway.ts` | The harness's `mcp_list_tools` and finished `mcp_call` items are read (labels sanitised) so the smoke and the logs can say which servers are attached and whether a call failed. A failed list or call is logged; it does not by itself fail a chat turn |
-| Harness calls | `pi/gateway.ts` (`respond`, `classifyHarnessCall`), `pi/client-tools.ts` | The managed harness emits `function_call` items `{type, id, call_id, name, arguments}` (and may emit an `mcp_approval_request`). Most are **native**: the harness runs them itself (a sub-agent `task`, shell and file tools: the trace of a Chat turn showed a child agent calling our MCP) and streams on. The gateway never ends or aborts the stream for a call: it reads to the terminal event, merging arguments from `response.function_call_arguments.done` / `response.output_item.done`, and forwards text as before. Text that only a `response.output_text.done` event or the completed `output` carries is added once, and only what the reply does not hold yet: reconciled per item and content index (an item is found by its id, else by its output index), and nothing is added when that text does not start with what was streamed. Text events that name no item are matched in order, and what done events naming none gave is remembered so the completed `output` does not add it again; a done event that names no item counts as output after a call only when it brings text. At most 2048 items are tracked per response, and past that nothing is reconciled. When the response completed, each call is classified. Native: a `function_call_output` for its `call_id` is in the stream, the item has its own `output`, or other output follows it (events, or the completed `output` list): text, reasoning, an `mcp_call` that was only added, any other item, or the done event of an item first seen after the call; a done event for an item that opened before the call (by id or output index) only closes it and is not output after the call. Client-owned: the response ended with the call unanswered and its item shown complete (status `completed`, or a `done` event or completed `output` entry that has no status; `function_call_arguments.done` does not complete the item). Unknown: nothing shows the item complete (another status such as `in_progress`, `failed`, `incomplete`, or an item that was only added, with no status, no `done` event and no completed `output` entry) and nothing followed; it is left alone. Native and unknown calls are never answered. For client-owned calls ONE follow-up `responses.create` goes out on the same `conversation` (no `previous_response_id`, no `store`) with a `{type:'function_call_output', call_id, output}` per call (the honest default text; `task` has no handler) and a `{type:'mcp_approval_response', approval_request_id, approve:true}` per approval, in arrival order, for at most 8 responses per turn inside the turn deadline and abort signal. A call id is settled once per turn, so a replay is ignored. Usage is summed per turn and billed once; a failed turn is charged the completed rounds plus an estimate for the one in flight. A stream that carried any call or tool output is never retried, and only the first response of a turn can be. No shell or other code ever runs in the gateway and it never starts an agent. A client-owned call without a `call_id` / `id`, or more than 16 client-owned ones in one response, fails the turn with `approval_or_function_call_item` after the stream was read. Native calls are not capped: up to 512 are tracked per response, and beyond that the stream is still read and the rest count as native when output follows. |
+| Harness calls | `pi/gateway.ts` (`respond`, `classifyHarnessCall`), `pi/client-tools.ts` | The managed harness emits `function_call` items `{type, id, call_id, name, arguments}` (and may emit an `mcp_approval_request`). Most are **native**: the harness runs them itself (a sub-agent `task`, shell and file tools: the trace of a Chat turn showed a child agent calling our MCP) and streams on. The gateway never ends or aborts the stream for a call: it reads to the terminal event, merging arguments from `response.function_call_arguments.done` / `response.output_item.done`, and forwards text as before. Text that only a `response.output_text.done` event or the completed `output` carries is added once, and only what the reply does not hold yet: reconciled per item and content index (an item is found by its id, else by its output index), and nothing is added when that text does not start with what was streamed. Text events that name no item are matched in order, and what done events naming none gave is remembered so the completed `output` does not add it again; a done event that names no item counts as output after a call only when it brings text. At most 2048 items are tracked per response, and past that nothing is reconciled. When the response completed, each call is classified. Native: a `function_call_output` for its `call_id` is in the stream, the item has its own `output`, or other output follows it (events, or the completed `output` list): text, reasoning, an `mcp_call` that was only added, any other item, or the done event of an item first seen after the call; a done event for an item that opened before the call (by id or output index) only closes it and is not output after the call. Client-owned: the response ended with the call unanswered and its item shown complete (status `completed`, or a `done` event or completed `output` entry that has no status; `function_call_arguments.done` does not complete the item). Unknown: nothing shows the item complete (another status such as `in_progress`, `failed`, `incomplete`, or an item that was only added, with no status, no `done` event and no completed `output` entry) and nothing followed; it is left alone. Native and unknown calls are never answered. For client-owned calls ONE follow-up `responses.create` goes out on the same `conversation` (no `previous_response_id`, no `store`) with a `{type:'function_call_output', call_id, output}` per call (the honest default text; `task` has no handler) and a `{type:'mcp_approval_response', approval_request_id, approve:true}` per approval, in arrival order, for at most 8 responses per turn inside the turn deadline and abort signal. A call id is settled once per turn, so a replay is ignored. Usage is summed per turn and billed once; a failed turn is charged the completed rounds plus an estimate for the one in flight. A stream that carried any call or tool output is never retried, and only the first response of a turn can be. No shell or other code ever runs in the gateway and it never starts an agent. A client-owned call without a `call_id` / `id`, or more than 16 client-owned ones in one response, fails the turn with `approval_or_function_call_item` after the stream was read. Native calls are not capped: up to 512 are tracked per response, and beyond that the stream is still read and the rest count as native when output follows; if no output follows them the turn fails with `approval_or_function_call_item` too. |
 | Smoke | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | Lists the servers the harness reports, runs one read per attached reach server and adds a check for each. The report prints in the job log as well as the summary |
 
 Cost and latency: the Azure container is 0.25 vCPU and 0.5 GiB and scales to zero (about 5 DKK a month in the plan, less when idle). A new conversation lists the servers' tools; a cold container adds its start time to that first turn. Not yet measured.
@@ -2294,7 +2584,7 @@ WebSocket adapter against the #1391 core seam.
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
-| Voice | One backend-owned `/voice` route connects to immutable Foundry agent `jarvis-pi-live` on `gpt-live-1`. GPT-Live provides native 24 kHz full duplex with the voice chosen in Foundry; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
+| Voice | One backend-owned `/voice` route connects to Foundry agent `jarvis-pi-live` on `gpt-live-1` (Deploy verifies its technical contract; its instructions, voice, greeting and `store` are tuned in Foundry). GPT-Live provides native 24 kHz full duplex with the voice chosen in Foundry; client delegation enters the existing PI gateway and never exposes provider events or tool control to the clients. | Offline state/transcript/integration qualification; provider audio and physical-device acceptance are open |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
@@ -7448,7 +7738,7 @@ invalid input. `issue_comment` remains a Factory tool.
 
 GitHub reads return labelled untrusted content, bound page sizes and output fields; each HTTP request has a ten-second timeout and one-megabyte response cap. Comments and issue bodies are byte-bounded. Outgoing text is secret-scanned. Ordinary writes execute when Dan requests them; issue/PR closure, PR merge, file writes to the default branch and public-repository file publication require a later Dan message, from the same session, that clearly approves the staged action (the shared approval interpreter decides the meaning). `pr_merge` verifies the expected head SHA and refuses failing check runs or commit statuses unless Dan explicitly says to proceed. Public image publication retains its visible warning and simple approval. No `apps/web`, persistence, migration or dependency changes.
 
-[`github-app-manifest.json`](github-app-manifest.json) is the initial private-App setup template, not a current permission source. Its requested permissions and subscribed events record the original P3/P7 setup; the live installation map is authoritative for tool access. P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled.
+[`github-app-manifest.json`](github-app-manifest.json) is the initial private-App setup template, not a current permission source. Its requested permissions and subscribed events record the original P3/P7 setup; the live installation map is authoritative for tool access. P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled. P1-2 adds the `release` subscription to the file for the proactive signals (a test requires every event the receiver accepts to be listed); the live App needs `Release` ticked in its settings by Dan.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens

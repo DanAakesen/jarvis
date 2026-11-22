@@ -4,14 +4,18 @@ import type { NowFeedStatusKind } from '../core/now.js';
 import { mapGithubWebhook, type GithubWebhookMapping } from './webhook-mapping.js';
 import type { WebhookDeliveryStore } from './webhook-delivery.js';
 
-const acceptedEvents = new Set([
+/** The events this receiver acts on. The GitHub App must subscribe to each one (docs/github-app-manifest.json). */
+export const githubWebhookEvents = [
   'pull_request',
   'check_run',
   'workflow_run',
   'deployment_status',
   'push',
   'issues',
-]);
+  'issue_comment',
+  'release',
+] as const;
+const acceptedEvents = new Set<string>(githubWebhookEvents);
 
 interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;

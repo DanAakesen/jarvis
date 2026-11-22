@@ -1,3 +1,103 @@
+## Working rules — PI, tools and voice (21 November 2026)
+
+Read this before you touch PI, the tool door, the voice relay or the Foundry agents. It collects what the 20–21 November 2026 work established. The dated sections below keep their own commands. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Summary and diagrams: `docs/architecture.md`, "System map". Plan: `PLAN.md`, "Week summary 2026-11-21".
+
+### Toolchain and checks
+
+- Node.js **22.23.3** (`.nvmrc`), npm 10.9.9 (`packageManager`), `engines` `>=22 <23`, Python 3.12.14 (`.python-version`). CI reads `.nvmrc`. Results from Node 24 or newer do not replace Node 22 qualification. A coding session can default to a newer Node (this one had Node 26.13.0 and npm 11.20.0 on 21 November). Switch with `nvm use` or `fnm use` if installed. `npx -y node@22.23.3 --version` also fetches a Node 22 binary (checked on 21 November).
+- Install from the repository root with `npm ci`.
+- Backend PI and voice: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run src/pi src/voice src/logging.test.ts`.
+- Provisioner and CI scripts: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests` (88 tests passed on 21 November). CI runs it in "Python lint, test and build".
+- A docs-only PR selects only the Python job, "CI result" and the PR title check. There is no Markdown or Mermaid lint, so render new Mermaid blocks yourself. Do not edit `docs/features.md` in a docs-only change: it is built into the backend image and selects the backend checks. A new `P##-##` row in a `PLAN.md` task table (columns ID, Issue, Task, Acceptance criteria, Depends on, Status) creates a GitHub issue on the next push to `main` that touches `PLAN.md` (`plan-status.yml`), so write summaries as prose or as tables without those columns.
+- PR title: `docs: ...` and `fix-main: ...` are valid next to `<task ID>: ...` (`.github/scripts/normalize-pr-title.sh`).
+
+### Verify the live agents (read-only)
+
+Use this to see what Foundry serves after Dan saved or activated a version, or after a Deploy. It needs `az login` with Foundry access. Coding sessions have no Azure access (see "No Azure access for agents"), so Dan or the dispatcher runs it. Use GET only: writes belong to Deploy (`provision_pi_agent.py`). The requests copy `Az.rest()` in that script. They were not run against the live project in this change.
+
+```bash
+# Project endpoint: the Foundry portal project overview, or the foundryAdminEndpoint output of infra/main.bicep
+FOUNDRY="https://<foundry-account>.services.ai.azure.com/api/projects/<project>"
+H_PI="Foundry-Features=MicrosoftCopilot=V1Preview,Skills=V1Preview"
+H_LIVE="Foundry-Features=VoiceAgents=V1Preview"
+
+# Which version serves traffic? A pin rule (FixedRatio 100%) wins; without a rule the latest serves.
+az rest --method get --url "$FOUNDRY/agents/jarvis-pi?api-version=v1" --resource https://ai.azure.com --headers "$H_PI" \
+  --query "{rules:agent_endpoint.version_selector.version_selection_rules, latest:versions.latest}"
+
+# Code-owned fields and the tool-contract markers of that version (no instruction text is printed)
+az rest --method get --url "$FOUNDRY/agents/jarvis-pi/versions/<version>?api-version=v1" --resource https://ai.azure.com --headers "$H_PI" \
+  --query "{status:status, model:definition.model, harness:definition.harness, reasoning:definition.reasoning.effort, tools:definition.tools[].{type:type, label:server_label, connection:project_connection_id, enabled:default_config.enabled, approval:require_approval}, contractStart:contains(definition.instructions, 'KEEP THIS BLOCK: backend tool contract (start)'), contractEnd:contains(definition.instructions, 'KEEP THIS BLOCK: backend tool contract (end)')}"
+
+# The voice agent
+az rest --method get --url "$FOUNDRY/agents/jarvis-pi-live?api-version=v1" --resource https://ai.azure.com --headers "$H_LIVE" \
+  --query "{rules:agent_endpoint.version_selector.version_selection_rules, latest:versions.latest}"
+az rest --method get --url "$FOUNDRY/agents/jarvis-pi-live/versions/<version>?api-version=v1" --resource https://ai.azure.com --headers "$H_LIVE" \
+  --query "{status:status, kind:definition.kind, subProtocol:definition.sub_protocol, modelType:definition.model_type, model:definition.model, delegation:definition.delegation, audio:definition.audio.format}"
+```
+
+Expected, from `verify()` and `verify_voice_agent()`:
+
+| Agent | Expect |
+| --- | --- |
+| `jarvis-pi` | `status` active; model `gpt-6.1-terra`; harness `microsoft_copilot_preview`; reasoning `low`; one `microsoft_copilot_toolset_preview` tool with `enabled` true; one `mcp` tool labelled `jarvis` on connection `jarvis-pi-mcp` with approval `never`; `contractStart` and `contractEnd` both true |
+| `jarvis-pi-live` | `status` active; kind `voice`; sub-protocol `live`; model type `self_deployed`; model `gpt-live-1`; delegation `{type: client}`; audio `audio/pcm` at 24000 |
+
+Do not check or "fix" the instructions text, the voice, the greeting or `store`: they are Foundry-owned. If a marker is false, restore the block in the portal and set that version Active.
+
+### Query the logs
+
+The backend writes JSON lines to the Container App console: table `ContainerAppConsoleLogs_CL`, column `Log_s`, in the Log Analytics workspace `law-jarvis-<suffix>` in resource group `rg-jarvis`. The backend app is `ca-jarvis-backend-<suffix>` and shares the 13-character suffix. The repository docs do not hold the workspace GUID, so look it up read-only. Dan runs the query in the portal (workspace, Logs) or with his own `az login`.
+
+```bash
+az monitor log-analytics workspace show -g rg-jarvis -n law-jarvis-<suffix> --query customerId -o tsv
+# then, with the log-analytics extension on older CLIs (not run here):
+az monitor log-analytics query -w <customerId> --analytics-query "<the query below, on one line>"
+```
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(2h)
+| where ContainerAppName_s == 'ca-jarvis-backend-<suffix>'
+| extend r = parse_json(Log_s)
+| where tostring(r.msg) in ('pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed', 'pi.mcp_tool', 'pi.turn', 'weather.phase')
+| project TimeGenerated, msg = tostring(r.msg), reason = tostring(r.reason), outcome = tostring(r.outcome), phase = tostring(r.phase), attempt = toint(r.attempt), elapsedMs = toint(r.elapsedMs), toolCount = toint(r.toolCount)
+| order by TimeGenerated asc
+```
+
+For voice, swap the event list for `'voice.delegation_received', 'voice.owner_group_persisted', 'voice.did_not_catch', 'voice.pi_turn_started', 'voice.activity_published', 'voice.upstream_event_error', 'voice.pi_turn'` and project `groupId`, `delegationId`, `textLength`, `quietMs`, `waitedMs`, `state`. The log allowlist exports only fixed fields, so a field that is not in `apps/backend/src/logging.ts` is not in the table (`docs/architecture.md`, "Safe logs"). Never put credentials, prompts or tokens into a query or a document.
+
+| Symptom | Look at |
+| --- | --- |
+| Chat says PI stopped or failed | `pi.stream_failed` (`reason`, `attempt`, `firstEventMs`, `sawText`, `sawTool`), a `pi.stream_retry` just before it, `pi.mcp_*_failed`, the closing `pi.turn` |
+| `approval_or_function_call_item` or `client_tool_round_limit` | `pi.harness_item` (`trigger: harness_call` with `classification`, `rule`, `round`, `outcome`, `argumentKeys`; `rejected_item` for a client-owned call without a usable id). Since #2004 only a client-owned call without a usable id, more than 16 client-owned calls in one response, or more than 512 calls with no output after them fails a turn with `approval_or_function_call_item`, and client-owned calls still pending after the 8th response fail it with `client_tool_round_limit`; a native call such as a `task` sub-agent never does |
+| PI says a tool is missing | `pi.turn` `toolCount` and `azureCatalogue`; was the provider named in the search? The GitHub and Azure bridges start idle |
+| A PI tool call was slow, failed or ran twice | `pi.mcp_tool` (`tool`, `outcome`, `elapsedMs`, `duplicate`, `sameArgsRepeat`, `replayCheck`, `metaKeys`, `channel`). `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`, so read those in Log Analytics |
+| `weather` slow or failed | `weather.phase` per step (`phase`, `outcome`, `status`, `attempt`, `elapsedMs`, `host`) |
+| A spoken request was cut, split, repeated or "did not catch that" | `voice.delegation_received` (`outcome`, `offsetMs`, `textLength`), `voice.owner_group_persisted` (`reason`, `textLength`), `voice.did_not_catch`, `voice.pi_turn_started` |
+| Voice state looks wrong | `voice.activity_published` (`state`, `reason`, `sinceLastMs`, `outputActive`, `piBusy`, `delegationPending`) |
+| Provider error in Voice | `voice.upstream_event_error` (`errorType`, `errorCode`, `param`) |
+
+### Rules
+
+1. **Foundry owns the agent text.** Edit the `jarvis-pi` and `jarvis-pi-live` instructions (and the voice agent's voice, greeting and `store`) in the Foundry portal, then set the new version Active. Dan reports that a saved version is not served until he does; the code reads the pin rule first, but this was not tested against the live portal. Editing `agents/pi/instructions.md` or `voice-instructions.md` changes nothing once version 1 exists, and in `voice-definition.json` only the output voice and `store` are seed-only (its contract fields are validated and verified on every Deploy). The portal saves `store: true`, which Deploy accepts since #1998. Roll back by setting the previous version Active.
+2. **Keep the tool contract.** Never paste the voice text, or any other text, over the `jarvis-pi` instructions. Keep the `KEEP THIS BLOCK: backend tool contract (start)` and `(end)` lines and everything between them. Without them PI loses the `[Turn ...]` line, `find_tools` and `call_tool` and cannot use any Jarvis tool. After every save, run the read-only check above.
+3. **Do not set a version Active while a Deploy runs.** Deploy re-reads the serving version before it publishes and pins, and fails with `agent_changed_during_deploy` if it moved. Run Deploy again.
+4. **Tools.** PI has one door, `find_tools` and `call_tool`. Add a Jarvis tool to the registry, not to the agent. GitHub and Azure tools load only when a search names them: add no start-up warm-ups. GPT-Live gets no tools. The harness built-ins are one flag, `builtinTools` in `agents/pi/definition.json`. Dan's intended layering by weight (quick work through Jarvis tools, scratch compute through built-ins, deep or durable work through Factory workers, knowledge through the Vault and Personal Memory) is his design as reported; its routing rules belong in the Foundry-owned instructions. The live text was not read, and the repository seed routes only by where a thing lives. An identical action under a different request always runs; only a replayed request (the same `_meta` call id, tool and arguments) is answered from the first result (#2016): add no refusal, approval or argument-equality rule to that. A new log field must be added to the allowlist in `logging.ts`, or it never appears; test it in `logging.test.ts`.
+5. **PI is unrestricted.** Add no guardrail, completion classifier, answer buffering, GPT-Live output gate, conversation rotation or read-only default. Dan rejected them (`docs/decisions.md`, "Week summary 2026-11-21"). Dan's rule, as relayed (recorded in issues [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)): no approvals, confirmations or gates except DELETE actions (`PRODUCT.md`, "North star"), so add no other approval, confirmation or gate. #2021 reports that no non-delete confirmation is reachable by a Chat or Voice PI turn (not re-checked here).
+6. **Voice.** `offset_ms` is not the end of an utterance, so do not cut a request with it. A backchannel never cancels PI. Test voice changes with event shapes taken from real logs: the tests of #1993 and #2000 used idealised events and passed while real traffic fragmented requests. Chat and Voice must behave the same for the same request: after a change to the gateway, the MCP door, the voice relay or the tool route, run the parity suite (command under "Chat/Voice parity replay" below). A failing row means they diverged: fix the code, or declare a real channel difference and assert its shape; never loosen a row.
+7. **Delivery.** A PR must contain current `main` and have green aggregate CI on its exact head before it merges, or Deploy stops at `exact_qualification_missing` and ships nothing. An independent review of the exact head comes before the merge. Agents never merge their own PRs.
+8. **No paid or live tests.** Do not run `measure_pi`, `probe_pi_wake`, a live smoke, a voice session, a Foundry, Azure or GitHub MCP call or a paid canary from a coding session. Dan owns Deploy, live and device acceptance. See "Test policy and Azure cost".
+
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+- GitHub releases, issues, comments, pull requests and failed default-branch checks, failed reminder deliveries and calendar clashes now reach the proactive event queue as plain events (`docs/architecture.md`, "Signals that matter to Dan"). No migration, setting or switch was added: an event follows the existing source switches it rests on (**Factory** for GitHub and Worker, **Calendar**, and **Todos** for a failed reminder), and the queue's entrance does not queue an event while one of them is off.
+- New event producers: the brain can tell Dan about an event only with evidence the wake supplied, one tuple per source the event rests on. Either the event's source follows a Proactive switch (`eventSourceSwitch` in `proactive/events/types.ts`) or the event declares `detail.evidenceSources` (first key of `detail`, because the wake clips `detail=` to 400 characters); otherwise `message_dan` refuses it for every source. Add a row for the new kind to `pi/brain/signals.test.ts`, which runs the real brain loop and the real `message_dan`.
+- Manual step for Dan, not done here: in the GitHub App's settings subscribe to **Release** and confirm **Issue comment**, **Issues**, **Pull request** and **Check run** are ticked. `docs/github-app-manifest.json` is only the setup reference; nothing in this change calls GitHub. Only tracked repositories (the vault and active Factory projects) reach the queue.
+- Offline gates (Node 22, `.nvmrc`): `npm test --workspace @jarvis/backend -- --run src/github/webhook.test.ts src/proactive/events src/proactive/owner-reminder-ticker.test.ts src/pi/brain`, then `npm run build`, `npm run lint` and `npm test` with `--workspace @jarvis/backend`. The webhook test posts signed payload fixtures (`github/webhook.testkit.ts`) through the real route and mapping into the memory queue; it also fails when the receiver accepts an event the App manifest does not list. `pi/brain/signals.test.ts` feeds the same fixtures, a clash and a failed reminder through the real brain loop and the real `message_dan` over `/pi/mcp`, with the model's evidence built only from what the wake prints.
+- No model, GitHub, Azure, APNs or live webhook call is made or authorized. Whether the brain handles the new events well is Dan's to judge behind the PI switch.
+- Operate: events show in `proactive_events` with source `github`, `reminder` or `calendar`. A lost reminder signal logs `delivery_failed_event_unavailable` on `proactive.reminder_tick`; the schedule row stays the record of the delivery.
+
 ## Chat/Voice parity replay — 21 November 2026 (#1967, #1988)
 
 - `cd apps/backend && npx vitest run src/voice/chat-voice-parity.test.ts --reporter=verbose` prints a side-by-side Chat/Voice table per scenario (the default reporter hides logs of passing runs); it takes about 40 s offline, makes no provider, paid or voice call and needs no database. Run it, then `src/pi src/voice`, backend build and lint, after any change to `pi/gateway.ts`, `pi/mcp.ts`, `core/conversation.ts`, `voice/relay.ts` or `voice/pi-voice.ts`.
@@ -17,7 +117,7 @@
   | Did a wake happen, and what did it cost? | `pi.brain_run` (outcome, timings, tokens, DKK, tool/action/push counts, activation id, type and source), `pi.brain` (`reason`, `events`, `sent`, `tools`, `costDkk`); `GET /pi/brain` `lastWake`, `today.wakes`, `today.costDkk`, `month`, `budget` |
   | Why did the 07:00, 18:00 or Check now sweep not run? | `pi.brain` `reason` with `trigger` (`background_off`, `paused`, `no_sources`, `daily_cap`, `satisfied_by_event`, `satisfied_by_recent_activation`, `satisfied_by_active_activation`, `budget_exhausted`, `quiet_hours`, `policy_changed`, `situation_sources_unavailable`); `GET /proactive/runs` has the same reason on the run row |
   | How many events wait? | `GET /pi/brain` `slots.queue` (`pending` includes `leased` and `retrying`) |
-  | Who made a background call (a warm-up, a wake, the smoke)? | `GET /pi/status` `turns.recent` (newest 20, any kind, a wake with `activation.type` and `source`) and `turns.last24h` per kind (`chat`, `warm`, `smoke`, `brain`). A wake that only a due watch caused has source `watch`; there is no `watch` ledger kind |
+  | Who made a background call (a warm-up, a wake, the smoke)? | `GET /pi/status` `turns.recent` (newest 20, any kind, a wake with `activation.type` and `source`: `timer`, `manual`, `watch`, `mixed` or the event's own source, such as `github`, `reminder` or `calendar` for the signals of #2018) and `turns.last24h` per kind (`chat`, `warm`, `smoke`, `brain`). A wake that only a due watch caused has source `watch`; there is no `watch` ledger kind |
   | Why did a proactive check fail? | `proactive.failed`: `reason` (`internal_error`; from the engine also `hook_failed`, `job_update_failed`), `stage` (`startup`, `slot`, `run`, `run_finish`, `heartbeat`, `event_tick`, `manual_run`, `manual_run_finish`) and `errorClass` (the thrown class, never its message), plus `runId` when there is one |
   | Did a ledger write fail? | `pi.turn_record_failed` and `pi.usage_record_failed` (`kind`): the turn or its usage is missing from the ledger, so `GET /pi/status` and `today.wakes` undercount; `pi.situation_stale_failed` (`activationId`), `pi.mark_warm_failed`, `pi.watches` (`reason`) |
 
@@ -78,7 +178,7 @@
 - Migration `0091_memory_action_provenance.sql` is required. Conversation tools retain a Dan source message; owner Settings correction/deletion provenance is the Fastify-generated request UUID plus authenticated owner object ID. Never pass the historical capture message as a Settings action source.
 - Migration `0092_memory_embedding_quarantine.sql` is required. Unsafe legacy rows are quarantined before an embedding provider call and excluded from later backfill queries; a safe correction clears quarantine.
 - PI situational SQL reads use a structural legacy parser plus recursive application of the shared Memory policy. Every string-bearing nested shape is classified; credential-bearing objects are removed or safe fields are cleared, then the row is atomically rewritten with a new revision/hash before Chat, Voice or a background activation continues. The strict parser remains authoritative for new commits.
-- PI context carries `memory.automaticCapture` plus current owner-instruction authority. `agents/pi/instructions.md` and capability instructions require bounded `memory_search` recall separately from Vault search and confirm only an `ok` write.
+- PI context carries `memory.automaticCapture` plus current owner-instruction authority. The seed `agents/pi/instructions.md` (the live `jarvis-pi` text is Foundry-owned and can differ) and the capability instructions ask for bounded `memory_search` recall separately from Vault search and confirm only an `ok` write.
 - Successful memory actions arrive through existing `tool-call-finished` activity. Web resets the first page and advances by raw server `count`; iPhone invalidates Settings memory caches and reloads an open Memory screen. Keep both handling Chat and Voice.
 - Offline checks: `npm test --workspace @jarvis/backend -- src/core/memory.test.ts src/pi/context.test.ts src/pi/mcp.test.ts`; backend build/lint; `npm test --workspace @jarvis/web -- src/MemorySettings.test.tsx`; web build/lint; `swift:6.2` `swift test -j 2 --filter ChatToolKindTests`. No live model, provider, deployment or paid canary is allowed.
 
@@ -185,7 +285,7 @@
 ## PI Azure on iPhone — 18 November 2026 (#1922, Build 113)
 
 - Check with `cd apps/backend && npx vitest run src/pi src/voice/pi-voice.test.ts`. The normal chat regression uses a reused Foundry conversation and fixture Azure data, not a live service.
-- Device acceptance: ask “what's in my Jarvis resource group?” in normal chat (there is no Settings engine choice). The reply should list actual resources. Match its time to the backend's `pi.turn`: `azureCatalogue` is the state at the last completed search, `azureToolsOffered` counts Azure schemas actually shown, and `azureCalls` counts attempts and recorded outcomes. A ready catalogue with no tools offered indicates no Azure schema made the search result; an offer with zero attempts means PI did not select one. A successful call is separate from a correct reply.
+- Device acceptance: ask “what's in my Jarvis resource group?” in normal chat (there is no Settings engine choice). The reply should list actual resources. Match its time to the backend's `pi.turn`: `azureCatalogue` is the state at the last completed search and `toolCount` the number of tool results. The gateway also computes `azureToolsOffered` and `azureCalls`, but the log allowlist does not export them, so they never reach the logs. A successful call is separate from a correct reply.
 
 ## PI smoke parts — 17 November 2026 (#1910, P15-209)
 
@@ -284,7 +384,7 @@
 ## PI brain: turn it on and watch it (#1886, P15-175)
 
 - Needs: PI configured (the Deploy `pi-agent` job), `JARVIS_PROACTIVE_ENABLED` (it is already on in Bicep), the vault (the decision log lives there), migration `0087_pi_brain.sql` (applied by the normal migration step), and `JARVIS_PROACTIVE_EVENTS_ENABLED` **off** (the old pipeline; both on stops the backend at startup).
-- Switch: iOS Settings, General, "PI brain (test)", or `PUT /pi/brain {"enabled": true}` with the owner token. Off by default; turning it on wakes the brain at once if events are waiting. `GET /pi/brain` shows availability, pause, budget, wakes and cost this month and today, messages today, the last wake, the last pass of the ticker (`lastTick`) with when it looks again (`nextDueAt`), the queue (`slots.queue`) and decision-log entries waiting for the vault.
+- Switch: iOS Settings, Proactive, "Background PI" (it was "PI brain (test)" under General until #1966), or `PUT /pi/brain {"enabled": true}` with the owner token. Off by default; turning it on wakes the brain at once if events are waiting. `GET /pi/brain` shows availability, pause, budget, wakes and cost this month and today, messages today, the last wake, the last pass of the ticker (`lastTick`) with when it looks again (`nextDueAt`), the queue (`slots.queue`) and decision-log entries waiting for the vault.
 - Budget: the proactive page's monthly budget (default 100 DKK). The brain stops before a wake that could pass it and tells Dan once at 80 percent and once at the stop.
 - Read what it did: `PI/Log/<day>.md` in the vault (every wake: events, tools, what Dan was told, cost, the model's statement), `proactive.events` is not used; the brain logs `pi.brain_state` at start, `pi.brain_tick` when a pass decides something different, `pi.brain` (wake result, skipped sweep and reason, counts, DKK, never message text) and `pi.brain_run` (see "See the brain" above for the fields).
 - Rollback: turn the switch off, or revert the commit. The migration has a down script that removes the brain's tables and `brain` turns.
@@ -309,7 +409,7 @@ Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .githu
 - `pi-agent` also creates the Foundry project connection `jarvis-pi-mcp` (custom keys, holds the MCP secret) through ARM before the agent version; it needs the deploy identity to write project connections (`Microsoft.CognitiveServices/accounts/projects/connections/write`). The MCP tool refers to it by `project_connection_id`.
 - If `pi-agent` fails, its error line carries Foundry's sanitized `code`, `param` and `message` (never the request body or any credential). The agent is created with `POST /agents/jarvis-pi/versions` (versions first; no separate `POST /agents`).
 - Live proof: run Deploy by hand (`workflow_dispatch`) with `measure_pi` on a main commit. It calls `POST /pi/smoke` and writes first-text bars, tokens and DKK to the job summary. It spends about 0.5 DKK and never runs automatically.
-- Switch the engine in iOS Settings, General, Test switch. Roll back by turning the switch to Current, redeploying the previous release, or reverting the commit; the migration has a down script (`db/migrations/down/0086_pi_chat.sql`).
+- There is no engine switch since #1966: PI is the only normal Chat and Voice route. Roll back by a reviewed revert and a redeploy of the prior release; the migration has a down script (`db/migrations/down/0086_pi_chat.sql`). To undo only an instructions edit, set the previous agent version Active in the Foundry portal (see "Working rules").
 - Local checks: `cd apps/backend && npx vitest run src/pi`, `npx eslint src`, `npx tsc --noEmit -p tsconfig.json`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; SQL Server integration (`npm run test:database`, needs the loopback SQL Server container from `database-ci.yml`).
 
 
@@ -5190,7 +5290,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Actions | Read-only | Read workflow runs |
 | Deployments | Read-only | Read deployment status |
 
-Subscribe to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
+Subscribe to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, `release`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
 
 Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL. A GitHub App ID is not a secret; the private key and webhook secret are.
 
