@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryProactiveStore } from '../store.js';
 import type { EventQueueStore } from './event-queue.js';
-import { alertEvent, githubEvent, workerEvent } from './producers.js';
+import { alertEvent, githubEvent, reminderFailureEvent, workerEvent } from './producers.js';
 import type { ProactiveEventInput } from './types.js';
 import { createEventPath } from './wiring.js';
 
@@ -18,6 +18,11 @@ const workerDone = workerEvent({
 }, NOW)!;
 const budget = alertEvent({ type: 'budget_threshold', dedupeKey: 'budget-80:2026-11', title: 'Budget at 80%', link: null }, NOW)!;
 const clash: ProactiveEventInput = { source: 'calendar', kind: 'calendar.clash', dedupeKey: 'calendar:clash:x', summary: 'Two meetings overlap', occurredAt: NOW };
+const failedReminder = reminderFailureEvent({
+  scheduleId: '5a1d6a34-0000-4000-8000-000000000001', occurrenceAt: new Date('2026-11-21T11:00:00.000Z'),
+  title: 'Send the final draft', reason: 'provider_rejected', providerOutcome: 'provider_rejected',
+  attempts: 1, recipients: 1, accepted: 0,
+}, NOW);
 
 function build() {
   const store = createMemoryProactiveStore(OWNER);
@@ -65,5 +70,24 @@ describe('the event queue entrance and the Proactive source switches', () => {
     expect(await queue.hasSource('calendar')).toBe(true);
     expect(wake).toHaveBeenCalledTimes(2);
     expect((await queue.claim(NOW, 10, 60_000)).map(({ kind }) => kind).sort()).toEqual(['calendar.clash', 'release.published']);
+  });
+
+  it('treats a source an event declares as evidence like its own: a failed reminder follows Todos, nothing else does', async () => {
+    const { sink, store, wake, queue } = build();
+    await store.settings.patch({ sources: { todos: false } });
+    wake.mockClear();
+
+    await sink.enqueue(failedReminder);
+    expect(await queue.hasSource('reminder')).toBe(false);
+    expect(wake).not.toHaveBeenCalled();
+    // An alert rests on no source, so the Todos switch is none of its business.
+    await sink.enqueue(budget);
+    expect(await queue.hasSource('alert')).toBe(true);
+
+    await store.settings.patch({ sources: { todos: true } });
+    wake.mockClear();
+    await sink.enqueue(failedReminder);
+    expect(await queue.hasSource('reminder')).toBe(true);
+    expect(wake).toHaveBeenCalledTimes(1);
   });
 });

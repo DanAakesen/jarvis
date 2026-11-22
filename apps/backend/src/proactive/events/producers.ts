@@ -7,8 +7,12 @@ import { dayKey, localTimeLabel } from '../time.js';
 import type { SourceFact } from '../types.js';
 import { EVENT_SUMMARY_MAX, type ProactiveEventInput } from './types.js';
 
+/**
+ * One line of free text that came from outside. Control, format (zero-width, bidirectional, tag) and line or paragraph
+ * separator characters become spaces, as the queue does for a summary, so none reaches the wake through `detail`.
+ */
 function oneLine(value: string, max: number): string {
-  return Array.from(value.replace(/\s+/gu, ' ').trim()).slice(0, max).join('');
+  return Array.from(value.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, ' ').replace(/\s+/gu, ' ').trim()).slice(0, max).join('');
 }
 
 /** The summary column counts UTF-16 units, so clip by units and never split a surrogate pair. */
@@ -39,7 +43,8 @@ function githubSignal(
  * What the GitHub webhook tells the queue: build and deploy results, and what happens to the tracked repositories
  * (a release, an issue opened, closed or reopened, a comment, a pull request opened, merged or sent for review, a
  * failed check on the default branch). A push is not news on its own and the Jarvis label starts a task instead.
- * Adding a kind here is the only change a new webhook event needs.
+ * A new kind also needs its mapping in `github/webhook-mapping.ts`, its event in `githubWebhookEvents` and the App manifest, and
+ * a row in `pi/brain/signals.test.ts`, which runs the real `message_dan` against it.
  */
 export function githubEvent(mapping: GithubWebhookMapping, now: Date): ProactiveEventInput | undefined {
   const by = (actor: string | null) => actor ? ` (by ${actor})` : '';
@@ -251,6 +256,9 @@ export function clashEvents(facts: readonly SourceFact[], now: Date): ProactiveE
 /**
  * An explicit owner reminder whose push delivery ended without reaching a device, after its retries. The reminder is the identity
  * and the due time its material, so one failure is one event and a rescheduled reminder that fails again is a new one.
+ * The reminder belongs to a task, so the event rests on the Todos source: it is what the wake can offer as evidence when
+ * the brain tells Dan, and Dan's Todos switch governs it like any other source. `evidenceSources` comes first so the wake's
+ * clipped `detail=` can never cut it off.
  */
 export function reminderFailureEvent(failure: {
   scheduleId: string;
@@ -272,6 +280,7 @@ export function reminderFailureEvent(failure: {
       `Reminder "${oneLine(failure.title, 80)}" due ${localStamp(failure.occurrenceAt)} could not be delivered to a device (${failure.reason ?? 'delivery failed'}) after ${failure.attempts} attempt${failure.attempts === 1 ? '' : 's'}`,
     ),
     detail: {
+      evidenceSources: ['todos'],
       reminderId: failure.scheduleId, occurrenceAt: occurrence, reason: failure.reason,
       providerOutcome: failure.providerOutcome, attempts: failure.attempts,
       recipients: failure.recipients, accepted: failure.accepted,

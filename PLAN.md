@@ -12,7 +12,7 @@
 
 ## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
 
-**Status: implemented and qualified offline (fixtures only); the live GitHub App subscription to `Release` and Dan's observation of real events behind the PI switch are open.** Producers only record what happened; the brain decides whether Dan hears it. No model call at ingestion, and no new guardrail, approval or setting; the only exact check is Dan's existing source switch.
+**Status: implemented and qualified offline (fixtures only); the independent review's High and Low findings are fixed; the live GitHub App subscription to `Release` and Dan's observation of real events behind the PI switch are open.** Producers only record what happened; the brain decides whether Dan hears it. No model call at ingestion, and no new guardrail, approval or setting; the only exact check is Dan's existing source switches.
 
 | Step | State |
 | --- | --- |
@@ -20,12 +20,14 @@
 | List the `release` subscription in `docs/github-app-manifest.json`; a test requires every accepted event to be listed | Done (file only; no GitHub call) |
 | `reminder.delivery_failed` from the reminder ticker when delivery ended failed after its retries, identity the reminder ID | Done |
 | `calendar.clash` from the 15-minute calendar poll, one event per overlapping pair, keyed by pair and times | Done |
-| Queue entrance respects the Factory (GitHub, Worker) and Calendar source switches; one `eventSourceSwitch` replaces two private copies | Done |
+| Queue entrance respects the source switches an event rests on (Factory for GitHub and Worker, Calendar, Todos for a failed reminder); one `eventSourceSwitches` replaces the private copies | Done |
 | Payload fixtures through the real route, replays and redeliveries, a reminder-failure fixture, clash fixtures and disabled-source cases | Done |
+| Review High: a failed reminder rests on Todos (`detail.evidenceSources`), so the wake supplies evidence for it; the real `message_dan` over `/pi/mcp` accepts every new kind (`pi/brain/signals.test.ts`) | Done |
+| Review Low: free text in event `detail` is cleaned like the summary (a fork's branch name) | Done |
 | Update PRODUCT, architecture, agent context and decisions | Done |
 | Dan ticks `Release` in the live GitHub App and watches the brain's handling of the new events | **Open** |
 
-Not built: polling GitHub, cancelling a pending clash whose entries moved apart, filtering Jarvis's own GitHub activity, health, location and weather events, any UI.
+Not built: polling GitHub, cancelling a pending clash whose entries moved apart, telling Dan about a failed reminder while Todos is off, filtering Jarvis's own GitHub activity, health, location and weather events, any UI.
 
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 

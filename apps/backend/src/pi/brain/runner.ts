@@ -4,12 +4,12 @@ import {
 } from '../../proactive/budget.js';
 import type { EventQueueStore } from '../../proactive/events/event-queue.js';
 import { MAX_EVENT_ATTEMPTS } from '../../proactive/events/rules.js';
-import { eventSourceSwitch, type QueuedEvent } from '../../proactive/events/types.js';
+import { eventSourceSwitches, type QueuedEvent } from '../../proactive/events/types.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import {
   copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
 } from '../../proactive/time.js';
-import { sourceIds, type SourceId } from '../../proactive/types.js';
+import { sourceIds } from '../../proactive/types.js';
 import { proactiveSettingsRevision } from '../../proactive/preferences.js';
 import { PI_MODEL } from '../definition.js';
 import type { PiBrainRun } from '../turns.js';
@@ -89,16 +89,8 @@ export function createBrain(options: BrainOptions) {
   const notified = new Set<string>();
 
   const wake = (at: Date) => { if (nextWorkAt === null || at < nextWorkAt) nextWorkAt = at; };
-  const eventSources = (event: QueuedEvent): SourceId[] => {
-    const direct = eventSourceSwitch(event.source);
-    const evidence = Array.isArray(event.detail.evidenceSources)
-      ? event.detail.evidenceSources.filter((value): value is SourceId =>
-        typeof value === 'string' && (sourceIds as readonly string[]).includes(value))
-      : [];
-    return [...new Set([...(direct ? [direct] : []), ...evidence])];
-  };
   const activationEvidence = (events: readonly QueuedEvent[]): PiProactiveEvidence[] =>
-    events.flatMap((event) => eventSources(event).map((source) => ({
+    events.flatMap((event) => eventSourceSwitches(event).map((source) => ({
       source,
       ref: event.id,
       identity: event.identity ?? event.dedupeKey,
@@ -211,7 +203,7 @@ export function createBrain(options: BrainOptions) {
     for (const event of claimed) {
       const maxAge = event.source === 'timer' ? timerMaxAgeMs : defaultMaxAgeMs;
       if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
-      else if (eventSources(event).some((source) => !settings.sources[source])) {
+      else if (eventSourceSwitches(event).some((source) => !settings.sources[source])) {
         settled.push({ id: event.id, outcome: 'source disabled', reopenable: true });
       }
       else if (current.getTime() - event.occurredAt.getTime() > maxAge) {

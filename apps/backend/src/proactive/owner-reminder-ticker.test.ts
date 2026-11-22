@@ -274,6 +274,7 @@ describe('owner reminder delivery failure signal', () => {
         kind: 'reminder.delivery_failed',
         identity: `reminder:${fixture.schedule.id}`,
         detail: {
+          evidenceSources: ['todos'],
           reminderId: fixture.schedule.id,
           occurrenceAt: fireAt.toISOString(),
           reason: 'provider_rejected',
