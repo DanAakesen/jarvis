@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMemoryProactiveStore } from './store.js';
 import { createMemoryProactiveReminderStore } from './reminder-store.js';
 import { createMemoryOwnerReminderStore, type OwnerReminderDeliverySummary } from './owner-reminder-store.js';
-import { createReminderTicker } from './reminder-ticker.js';
+import { createReminderTicker, type ReminderTickerLogger } from './reminder-ticker.js';
 import { readVaultTasks } from './todo-discovery.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
+import { createMemoryEventQueueStore } from './events/event-queue.js';
+import type { ProactiveEventInput, ProactiveEventSink } from './events/types.js';
 
 const owner = randomUUID();
 const title = 'Send the final draft';
@@ -37,8 +39,11 @@ async function setup(options: {
   done?: boolean;
   stableId?: string;
   taskIdentity?: string;
+  events?: ProactiveEventSink;
+  logger?: ReminderTickerLogger;
 }) {
-  const current = () => new Date(options.now);
+  const clock = { at: new Date(options.now) };
+  const current = () => new Date(clock.at);
   const proactive = createMemoryProactiveStore(owner, current);
   const reminders = createMemoryProactiveReminderStore(owner);
   const ownerReminders = createMemoryOwnerReminderStore();
@@ -80,6 +85,8 @@ async function setup(options: {
     hasNativeRecipients: async () => options.recipients !== false,
     ownerObjectId: owner,
     send,
+    ...(options.events ? { events: options.events } : {}),
+    ...(options.logger ? { logger: options.logger } : {}),
     now: current,
   });
   await ticker.start();
@@ -90,6 +97,7 @@ async function setup(options: {
     pushes,
     send,
     updateItemDelivery,
+    advance: (milliseconds: number) => { clock.at = new Date(clock.at.getTime() + milliseconds); },
   };
 }
 
@@ -206,6 +214,151 @@ describe('owner reminder ticker delivery boundary', () => {
       expect(noRecipient.send).not.toHaveBeenCalled();
     } finally {
       await noRecipient.ticker.stop();
+    }
+  });
+});
+
+describe('owner reminder delivery failure signal', () => {
+  const fireAt = new Date('2026-11-20T10:00:00.000Z');
+  const retryAt = new Date(fireAt.getTime() + 300_000);
+  const evidence = (overrides: Partial<OwnerReminderDeliverySummary>): OwnerReminderDeliverySummary => ({
+    evidenceAvailable: true,
+    recipientCount: 1,
+    acceptedRecipientCount: 0,
+    pendingRecipientCount: 0,
+    attemptCount: 1,
+    providerOutcome: 'provider_rejected',
+    providerStatusCode: 400,
+    nextAttemptAt: null,
+    ...overrides,
+  });
+  const rejected: SystemPushOutcome = {
+    status: 'failed',
+    reason: 'provider_rejected',
+    attempted: 1,
+    accepted: 0,
+    statusCode: 400,
+    providerOutcome: 'provider_rejected',
+    deliveryEvidence: evidence({}),
+  };
+  const unavailable: SystemPushOutcome = {
+    status: 'failed',
+    reason: 'provider_unavailable',
+    attempted: 1,
+    accepted: 0,
+    statusCode: 503,
+    providerOutcome: 'provider_unavailable',
+    deliveryEvidence: evidence({
+      pendingRecipientCount: 1, providerOutcome: 'provider_unavailable', providerStatusCode: 503, nextAttemptAt: retryAt,
+    }),
+  };
+  const queueSink = () => {
+    const queue = createMemoryEventQueueStore();
+    const inserted: boolean[] = [];
+    const sink = {
+      enqueue: vi.fn(async (event: ProactiveEventInput) => { inserted.push((await queue.enqueue(event, fireAt)).inserted); }),
+    };
+    return { queue, inserted, sink };
+  };
+
+  it('tells the queue once when delivery ended without a device, with the reminder as identity', async () => {
+    const { queue, sink } = queueSink();
+    const fixture = await setup({ now: fireAt, outcome: rejected, events: sink });
+    try {
+      await fixture.ticker.tick();
+      expect(await fixture.ownerReminders.get(fixture.schedule.id)).toMatchObject({ state: 'failed', reason: 'provider_rejected' });
+      expect(sink.enqueue).toHaveBeenCalledTimes(1);
+      const [event] = await queue.claim(fireAt, 10, 60_000);
+      expect(event).toMatchObject({
+        source: 'reminder',
+        kind: 'reminder.delivery_failed',
+        identity: `reminder:${fixture.schedule.id}`,
+        detail: {
+          evidenceSources: ['todos'],
+          reminderId: fixture.schedule.id,
+          occurrenceAt: fireAt.toISOString(),
+          reason: 'provider_rejected',
+          providerOutcome: 'provider_rejected',
+          attempts: 1,
+          recipients: 1,
+          accepted: 0,
+        },
+      });
+      expect(event!.summary).toContain(title);
+      expect(event!.summary.length).toBeLessThanOrEqual(400);
+
+      // Nothing claims the failed reminder again, and the same failure offered twice is one event.
+      await fixture.ticker.tick();
+      expect(sink.enqueue).toHaveBeenCalledTimes(1);
+      expect((await queue.enqueue(sink.enqueue.mock.calls[0]![0], fireAt)).inserted).toBe(false);
+    } finally {
+      await fixture.ticker.stop();
+    }
+  });
+
+  it('waits for the retry to fail as well before it says so', async () => {
+    const { sink } = queueSink();
+    const fixture = await setup({ now: fireAt, outcome: unavailable, events: sink });
+    try {
+      await fixture.ticker.tick();
+      expect(await fixture.ownerReminders.get(fixture.schedule.id)).toMatchObject({ state: 'retrying' });
+      expect(sink.enqueue).not.toHaveBeenCalled();
+
+      fixture.advance(300_000);
+      fixture.send.mockResolvedValueOnce({
+        ...unavailable,
+        reason: 'retry_exhausted',
+        providerOutcome: 'retry_exhausted',
+        deliveryEvidence: evidence({
+          attemptCount: 2, providerOutcome: 'retry_exhausted', providerStatusCode: 503,
+        }),
+      });
+      await fixture.ticker.tick();
+      expect(await fixture.ownerReminders.get(fixture.schedule.id)).toMatchObject({
+        state: 'failed', reason: 'retries_exhausted', sendAttempts: 2,
+      });
+      expect(sink.enqueue).toHaveBeenCalledTimes(1);
+      expect(sink.enqueue.mock.calls[0]![0].detail).toMatchObject({ reason: 'retries_exhausted', attempts: 2 });
+    } finally {
+      await fixture.ticker.stop();
+    }
+  });
+
+  it('stays quiet when the push was accepted or there was no device to try', async () => {
+    const accepted = queueSink();
+    const sent = await setup({ now: fireAt, events: accepted.sink });
+    const none = queueSink();
+    const noDevice = await setup({ now: fireAt, recipients: false, events: none.sink });
+    try {
+      await sent.ticker.tick();
+      await noDevice.ticker.tick();
+      expect(await sent.ownerReminders.get(sent.schedule.id)).toMatchObject({ state: 'completed' });
+      expect(await noDevice.ownerReminders.get(noDevice.schedule.id)).toMatchObject({ state: 'suppressed', reason: 'no_subscription' });
+      expect(accepted.sink.enqueue).not.toHaveBeenCalled();
+      expect(none.sink.enqueue).not.toHaveBeenCalled();
+    } finally {
+      await sent.ticker.stop();
+      await noDevice.ticker.stop();
+    }
+  });
+
+  it('logs a signal it could not queue and leaves the delivery result as it was', async () => {
+    const warn = vi.fn();
+    const fixture = await setup({
+      now: fireAt,
+      outcome: rejected,
+      events: { enqueue: vi.fn(async () => { throw new Error('queue down'); }) },
+      logger: { warn },
+    });
+    try {
+      await fixture.ticker.tick();
+      expect(await fixture.ownerReminders.get(fixture.schedule.id)).toMatchObject({ state: 'failed', reason: 'provider_rejected' });
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: 'delivery_failed_event_unavailable' }),
+        'proactive.reminder_tick',
+      );
+    } finally {
+      await fixture.ticker.stop();
     }
   });
 });
