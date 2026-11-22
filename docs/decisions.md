@@ -24,6 +24,13 @@ Index only: no new decision, evidence or trade-off. Each row names the detailed 
 
 Rejected by Dan, so not to be rebuilt without a new decision (list in the #1996 entry): a GPT-Live output gate or exact-transcript matching (the idea to speak PI's commentary exactly); fresh conversation rotation and replay; the request/completion classifier; pre-call action refusal; per-tool contracts; withholding or buffering the final answer; `pi_incomplete`; Memory write contracts; wake receipts; durable-work enforcement; persona as a Foundry `pi_context` input. PI stays unrestricted: no guardrails or read-only defaults were added. Dan's rule of 21 November 2026, as relayed: no approvals, confirmations or gates except DELETE actions (`PRODUCT.md`, "North star"). The #2021 entry reports that no non-delete confirmation is reachable by a Chat or Voice PI turn (not re-checked here).
 
+## 22 November 2026 — Chat and Voice wait on the same PI conversation (Refs #1967, #1988)
+
+- **Decision:** The gateway admits Chat and Voice in arrival order. Crossing channels does not stop the active request; a new delegation supersedes only the previous turn in that voice session. A wait counts against the existing 180 s gateway deadline and the shorter 90 s Voice deadline; an expired waiter is removed without sending its message to PI.
+- **Cancellation:** A stopped response releases its tool grant and conversation lock before the next request. For a known unfinished response the gateway waits at most 5 s for one best-effort cancel request, even when the stream itself does not finish closing. The cancel does not promise that a write was undone or that Foundry stopped if it did not answer.
+- **Startup:** Audio does not wait for the optional proactive receipt context. A read still has a 1.5 s bound and a diagnostic when unavailable. The relay refreshes at the delegated turn boundary so a newer receipt is not lost.
+- **Evidence:** Offline stub streams cover cross-channel ordering, supersession and session end, timeout copy and lock release, and startup with a stalled context read. No live provider or device acceptance was run.
+
 ## 21 November 2026 — Harden the gateway stream handling against five contract gaps (Refs #1967)
 
 - **Evidence:** an independent advisor reproduced five offline contract failures on the real `respond()` at `6379822d` (in-memory `fetch`, 420 generated cases, byte-fragmented streams): all 101 gateway tests passed, 21 new shape groups were added, 16 passed and 5 failed. Whether the provider emits these shapes in production is **unknown**; this is defensive hardening of the documented client-owned loop, not a fix for a production failure.

@@ -14,3 +14,4 @@ export class PiGatewayError extends Error {
 
 /** What Dan is told when a turn fails without a plain cause of its own. Chat shows it and Voice speaks it, so both say the same thing. */
 export const piTurnFailedMessage = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
+export const piTurnTimeoutMessage = 'That took too long, so I stopped, and part of it may already be done, so check before trying again.';

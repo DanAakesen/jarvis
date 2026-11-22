@@ -737,6 +737,37 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       expectParity(rows);
     }, 90_000);
 
+    it.each(['voice', 'chat'] as const)('a %s reply in flight lets the other channel queue without losing either request', async (firstChannel) => {
+      const world = await createParityWorld();
+      const voiceText = 'First voice question.';
+      const chatText = 'First chat question.';
+      const [firstText, secondText] = firstChannel === 'voice' ? [voiceText, chatText] : [chatText, voiceText];
+      const [firstReply, secondReply] = firstChannel === 'voice' ? ['Voice answer.', 'Chat answer.'] : ['Chat answer.', 'Voice answer.'];
+      try {
+        const voice = await world.openVoice();
+        world.foundry.enqueue(
+          { steps: [{ hold: 'first-channel' }, { say: firstReply }] },
+          { steps: [{ say: secondReply }] },
+        );
+        if (firstChannel === 'voice') voice.say(voiceText);
+        const chat = firstChannel === 'chat' ? await world.chat.start(chatText) : undefined;
+        await world.foundry.reached('first-channel');
+        if (firstChannel === 'chat') voice.say(voiceText);
+        const chatTurn = chat ?? await world.chat.start(chatText);
+        await until(() => world.taps.length === 2, 'both turns to enter the gateway');
+        const requests = () => world.foundry.requests.filter(request => request.kind === 'turn');
+        expect(requests()).toHaveLength(1);
+        world.foundry.release('first-channel');
+        expect((await chatTurn.ended).events.find(event => event.name === 'done')?.data.text).toBe('Chat answer.');
+        await voiceTurn(world, voice, 1);
+        expect(voice.commentary().map(part => part.content)).toEqual(['Voice answer.']);
+        expect(world.store.messages.filter(message => message.role === 'dan').map(message => message.text)).toEqual([firstText, secondText]);
+        expect(requests().map(request => request.text?.split('\n').at(-1))).toEqual([firstText, secondText]);
+        expect(new Set(requests().map(request => request.conversation)).size).toBe(1);
+        expect(world.foundry.cancels).toEqual([]);
+      } finally { await world.close(); }
+    }, 30_000);
+
     it('S16a the monthly cap stops a turn before anything is sent, with the same words', async () => {
       const cap = 'PI has used 5.00 of its 1 DKK monthly cap, so it stopped. Nothing was sent. No other engine was used.';
       const { rows, chat, voice, chatWorld, voiceWorld } = await runBoth({

@@ -208,7 +208,7 @@ function registerVoiceRoute(
     let piBusy = false;
     let outputActive = false;
     let finalization: Promise<void> | undefined;
-    let proactiveContext: string | undefined;
+    let proactiveRead: Promise<string | undefined> | undefined;
     let currentInput: InputGroup | undefined;
     let latestInput: InputGroup | undefined;
     let activeOutput: OutputGroup | undefined;
@@ -237,25 +237,19 @@ function registerVoiceRoute(
     const termination = new VoiceTerminationStateMachine();
     let terminalTeardownStarted = false;
     const refreshProactiveContext = async (): Promise<string | undefined> => {
-      if (!app.proactiveConversationContext) {
-        proactiveContext = undefined;
-        return undefined;
-      }
-      try {
-        proactiveContext = await diagnostics.bound(
-          'proactive_context',
-          1_500,
-          () => app.proactiveConversationContext!.read(request.principal!.objectId),
-        );
-        return proactiveContext;
-      } catch (error) {
-        proactiveContext = undefined;
-        diagnostics.stage('proactive_context_unavailable');
+      const reader = app.proactiveConversationContext;
+      if (!reader) return undefined;
+      proactiveRead ??= diagnostics.bound('proactive_context', 1_500, () => reader.read(request.principal!.objectId)).then(text => {
+        diagnostics.stage('proactive_context_loaded');
+        return text;
+      }, (error: unknown) => {
         if (!controller.signal.aborted) {
+          diagnostics.stage('proactive_context_unavailable');
           log.warn({ failure: safeFailure(error), language }, 'voice.proactive_context_unavailable');
         }
         return undefined;
-      }
+      }).finally(() => { proactiveRead = undefined; });
+      return proactiveRead;
     };
 
     const publishActivity = (
@@ -1180,7 +1174,7 @@ function registerVoiceRoute(
 
     void (async () => {
       try {
-        await refreshProactiveContext();
+        void refreshProactiveContext();
         const [, token] = await Promise.all([
           sessionReady,
           diagnostics.bound('credential', TOKEN_TIMEOUT_MS, () => credential(getToken, controller.signal)),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk, ConversationAgentInput } from '../core/chat-agent.js';
-import { PiGatewayError, piTurnFailedMessage } from '../pi/errors.js';
+import { PiGatewayError, piTurnFailedMessage, piTurnTimeoutMessage } from '../pi/errors.js';
 import { createPiVoiceTurns, type PiVoiceAgent, type PiVoiceTurnLog } from './pi-voice.js';
 
 const turn = { text: 'what is next', messageId: '42', sessionId: '7', startedAt: 0 };
@@ -116,7 +116,7 @@ describe('PI voice turns', () => {
     const { turns, spoken, logs, settled } = setup(agent, { deadlineMs: 5 });
     turns.start(turn);
     await settled();
-    expect(spoken[0]).toContain('An action may already have completed');
+    expect(spoken).toEqual([piTurnTimeoutMessage]);
     expect(logs[0]).toMatchObject({ outcome: 'timeout' });
   });
 
@@ -142,29 +142,7 @@ describe('PI voice turns', () => {
     expect(busy).toEqual([true, true, false]);
   });
 
-  it('runs the new turn only after the cancelled one has released the conversation', async () => {
-    const events: string[] = [];
-    const agent: PiVoiceAgent = {
-      async *stream(input, _authorization, signal) {
-        events.push(`start ${input.text}`);
-        if (input.text === 'first') {
-          await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
-          await new Promise(resolve => setTimeout(resolve, 5));
-          events.push('first released');
-          throw signal.reason;
-        }
-        yield 'ok';
-      },
-    };
-    const { turns, settled } = setup(agent);
-    turns.start({ ...turn, text: 'first' });
-    await new Promise(resolve => setTimeout(resolve, 1));
-    turns.start({ ...turn, text: 'second' });
-    await settled();
-    expect(events).toEqual(['start first', 'first released', 'start second']);
-  });
-
-  it('says nothing more when Dan starts speaking while PI is still working', async () => {
+  it('says nothing more when the relay explicitly stops the turn', async () => {
     let aborted = false;
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {
@@ -180,7 +158,7 @@ describe('PI voice turns', () => {
     await settled();
     expect(aborted).toBe(true);
     expect(spoken).toEqual([]);
-    expect(logs[0]).toMatchObject({ outcome: 'superseded' });
+    expect(logs[0]).toMatchObject({ outcome: 'cancelled' });
   });
 
   it('says nothing when the voice session ends mid-turn', async () => {

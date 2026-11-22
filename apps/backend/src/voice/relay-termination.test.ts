@@ -1,4 +1,5 @@
 import { AddressInfo } from 'node:net';
+import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 import { buildApp } from '../app.js';
@@ -26,7 +27,7 @@ async function until(check: () => boolean, label: string, attempts = 200) {
 }
 
 describe('GPT-Live graceful termination', () => {
-  it('refreshes proactive receipt context at the native delegated turn boundary', async () => {
+  it('starts audio without waiting for proactive context and refreshes at the delegated turn boundary', async () => {
     const upstream = new WebSocketServer({ port: 0 });
     const sockets: WebSocket[] = [];
     upstream.on('connection', (socket) => {
@@ -39,6 +40,8 @@ describe('GPT-Live graceful termination', () => {
     await new Promise<void>(resolve => upstream.once('listening', resolve));
     const upstreamUrl = `ws://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
     const inputs: ConversationAgentInput[] = [];
+    const logs: string[] = [];
+    const startupRead = Promise.withResolvers<string>();
     let reads = 0;
     const store = {
       createSession: async () => ({
@@ -56,7 +59,9 @@ describe('GPT-Live graceful termination', () => {
     } as unknown as ConversationStore;
     const app = buildApp(
       config,
-      createLogger({ ...config, logLevel: 'silent' } as typeof config),
+      createLogger({ logLevel: 'info' }, undefined, new Writable({
+        write(chunk: Buffer, _encoding, done) { logs.push(chunk.toString()); done(); },
+      })),
       {
         auth: async () => ({
           objectId: config.auth.ownerObjectId,
@@ -67,7 +72,7 @@ describe('GPT-Live graceful termination', () => {
         proactiveConversationContext: {
           async read() {
             reads += 1;
-            return reads === 1 ? 'Earlier suggestion.' : 'Latest suggestion and evidence.';
+            return reads === 1 ? startupRead.promise : 'Latest suggestion and evidence.';
           },
           async select() { return true; },
           subscribe() { return () => {}; },
@@ -104,6 +109,13 @@ describe('GPT-Live graceful termination', () => {
         reads >= 1 && sockets.length === 1,
       'voice ready and initial proactive read',
     );
+    expect(logs.some(line => line.includes('"msg":"voice.proactive_context_unavailable"'))).toBe(false);
+    await until(
+      () => logs.some(line => line.includes('"msg":"voice.proactive_context_unavailable"')),
+      'slow proactive context to be logged',
+      600,
+    );
+    startupRead.resolve('Earlier suggestion.');
     sockets[0]!.send(JSON.stringify({
       type: 'session.input_transcript.delta',
       event_id: 'input-1',
@@ -124,7 +136,7 @@ describe('GPT-Live graceful termination', () => {
       text: 'Do that',
       channel: 'voice',
       proactiveContext: 'Latest suggestion and evidence.',
-    });
+    }, 10_000);
   });
 
   it('waits for session.closed usage before reporting a clean client end', async () => {

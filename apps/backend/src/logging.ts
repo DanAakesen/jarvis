@@ -230,7 +230,7 @@ const approvalPaths = new Set(['fast', 'model', 'failed']);
 /** Why a PI turn failed, in our own words: the only vocabulary `pi.stream_failed` and `pi.stream_retry` may carry as a reason. */
 const piStreamReasons = new Set([
   'foundry_response_failed', 'stream_ended_without_completed', 'stream_broke', 'approval_or_function_call_item',
-  'no_stream', 'no_conversation', 'busy', 'brain_wake_failed', 'client_tool_round_limit',
+  'no_stream', 'no_conversation', 'cancel_request_failed', 'brain_wake_failed', 'client_tool_round_limit',
 ]);
 const piClientToolOutcomes = new Set(['answered_default', 'answered_task_client_owned', 'approved']);
 /** The brain's own words for what a pass decided and why a sweep or wake ended: the only vocabularies `pi.brain_tick` and `pi.brain` may carry. */

@@ -17,6 +17,10 @@ Dan's intended layering is by weight of the job. That is his design as he report
 
 PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)): no approvals, confirmations or gates except DELETE actions. #2021 lists the existing non-delete confirmation gates and reports that none is reachable from a Chat or Voice PI turn (the phone-call approval is the one live non-delete gate, on the phone channel). I did not re-check that, and I did not audit the rest of the code.
 
+### P0 follow-up: shared turn lifetimes
+
+Chat and Voice now queue on the shared conversation rather than returning `busy`. The offline replays cover both arrival orders, voice supersession and session end, a deadline with one honest spoken sentence, and audio startup while proactive context stalls. Device and live verification remain with Dan. The next change is to bound MCP result size after the write-safety PR lands, then expose the three quick tools directly on the same MCP connection.
+
 ### Completed 20–21 November
 
 | Step | PRs | Outcome |

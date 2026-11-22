@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk } from '../core/chat-agent.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
 import { defaultSettings } from '../core/settings.js';
+import { createPiVoiceTurns } from '../voice/pi-voice.js';
 import { buildPiContext, buildPiEnvironment } from './context.js';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
@@ -61,7 +62,7 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
   const calls: Call[] = [];
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
-  let cancelReply: () => Response = () => Response.json({});
+  let cancelReply: () => Response | Promise<Response> = () => Response.json({});
   const fetcher = (async (url: string, init: RequestInit) => {
     const call: Call = { url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
     calls.push(call);
@@ -80,7 +81,8 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
     return chunks;
   };
   return {
-    gateway, store, registry, calls, usage, run, conversations: () => conversations, setCancel: (reply: () => Response) => { cancelReply = reply; },
+    gateway, store, registry, calls, usage, run, conversations: () => conversations,
+    setCancel: (reply: typeof cancelReply) => { cancelReply = reply; },
     setSituation: (text: string) => { situationText = text; },
   };
 }
@@ -447,30 +449,91 @@ describe('PI gateway', () => {
     expect(second.store.turns.map(turn => turn.kind)).toEqual(['chat']);
   });
 
-  it('records a claim refusal without sending a model request', async () => {
+  it('times out in the queue without sending that turn or taking the slot from the turn after it', async () => {
     const evidence: Array<Record<string, unknown>> = [];
-    const { gateway, calls } = setup([
+    const { gateway, calls, run } = setup([
       () => new Response(new ReadableStream({
         start(controller) { controller.enqueue(new TextEncoder().encode(delta('first'))); },
       }), { headers: { 'content-type': 'text/event-stream' } }),
+      () => sse(delta('third'), completed(1, 0, 1)),
     ], { onRuntimeTurn: (entry) => evidence.push({ ...entry }) });
-    const controller = new AbortController();
+    const active = new AbortController();
     const first = gateway.stream(
-      { messageId: '42', sessionId: '7', text: 'first' }, '', controller.signal,
+      { messageId: '42', sessionId: '7', text: 'first', channel: 'voice' }, '', active.signal,
     );
     expect((await first.next()).value).toBe('first');
-    const second = async () => {
-      for await (const chunk of gateway.stream(
-        { messageId: '43', sessionId: '7', text: 'second' }, '', new AbortController().signal,
-      )) void chunk;
-    };
-    await expect(second()).rejects.toMatchObject({ code: 'pi_failed' });
+    const queued = new AbortController();
+    const second = run('second', queued.signal);
+    const third = run('third');
+    queued.abort(new DOMException('test deadline', 'TimeoutError'));
+    await expect(second).rejects.toMatchObject({ code: 'pi_timeout' });
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
     expect(evidence).toContainEqual(expect.objectContaining({
-      channel: 'chat', outcome: 'failed', source: 'turn', reason: 'busy',
+      channel: 'chat', outcome: 'timeout', source: 'turn', reason: 'conversation_wait_timeout',
     }));
-    controller.abort();
-    await first.return(undefined).catch(() => undefined);
+    const finishing = first.next();
+    active.abort();
+    await expect(finishing).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(third).resolves.toEqual(['third']);
+  });
+
+  it('cancels the old response once and waits for the cancel before sending the next turn', async () => {
+    const { gateway, calls, registry, run, setCancel } = setup([
+      () => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(frame({ type: 'response.created', response: { id: 'resp_first' } }) + delta('first')));
+        },
+        cancel: () => new Promise(() => {}), // A stream adapter that never finishes closing.
+      }), { headers: { 'content-type': 'text/event-stream' } }),
+      () => sse(delta('second'), completed(1, 0, 1)),
+    ]);
+    const cancelStarted = Promise.withResolvers<void>();
+    const cancelResponse = Promise.withResolvers<Response>();
+    setCancel(() => { cancelStarted.resolve(); return cancelResponse.promise; });
+    const active = new AbortController();
+    const first = gateway.stream({ messageId: '42', sessionId: '7', text: 'first', channel: 'voice' }, '', active.signal);
+    expect((await first.next()).value).toBe('first');
+    const finishing = first.next();
+    active.abort();
+    const second = run('second');
+    await cancelStarted.promise;
+    expect(calls.filter(call => call.url.includes('/responses')).map(call => new URL(call.url).pathname.split('/openai')[1])).toEqual([
+      '/responses', '/responses/resp_first/cancel',
+    ]);
+    cancelResponse.resolve(Response.json({ status: 'cancelled' }));
+    await expect(finishing).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(second).resolves.toEqual(['second']);
+    expect(calls.filter(call => call.url.includes('/cancel'))).toHaveLength(1);
+    expect(registry.size).toBe(0);
+  });
+
+  it('speaks one honest sentence at the voice deadline, cancels the stream, and lets Chat continue', async () => {
+    const started = Promise.withResolvers<void>();
+    const { gateway, calls, registry, run, store } = setup([
+      () => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(frame({ type: 'response.created', response: { id: 'resp_timeout' } }) + delta('Unfinished')));
+        },
+        pull() { started.resolve(); },
+      }), { headers: { 'content-type': 'text/event-stream' } }),
+      () => sse(delta('Chat answer'), completed(1, 0, 1)),
+    ]);
+    const spoken: string[] = [];
+    const finished = Promise.withResolvers<string>();
+    const voice = createPiVoiceTurns({
+      agent: gateway, signal: new AbortController().signal, deadlineMs: 150,
+      speak: text => spoken.push(text), busy: () => {},
+      log: turn => finished.resolve(turn.outcome),
+    });
+    voice.start({ messageId: '42', sessionId: '7', text: 'voice', startedAt: performance.now() });
+    await started.promise;
+    const chat = run('chat');
+    await expect(finished.promise).resolves.toBe('timeout');
+    expect(spoken).toEqual(['That took too long, so I stopped, and part of it may already be done, so check before trying again.']);
+    expect(calls.filter(call => call.url.includes('/responses/resp_timeout/cancel'))).toHaveLength(1);
+    await expect(chat).resolves.toEqual(['Chat answer']);
+    expect(store.turns.map(turn => turn.outcome)).toEqual(['timeout', 'ok']);
+    expect(registry.size).toBe(0);
   });
 
   it('attributes every turn in the ledger by kind, so a call that repeats on a schedule can be recognised', async () => {
