@@ -77,6 +77,18 @@ describe('tool search wording', () => {
     expect(top('please run get_usage now')[0]).toBe('get_usage');
   });
 
+  it('lets a verb count only next to its noun: "tick off" and "rename" mean a vault task only when a task is named', () => {
+    const tasks = ['vault_task_complete', 'vault_task_edit', 'vault_write', 'create_task', 'cancel_task'];
+    const ranked = (query: string) => searchJarvisTools({
+      list: () => tasks.map((name) => ({ name, description: `Tool ${name}.`, inputSchema: { type: 'object' } }) as RegisteredTool), get: () => undefined,
+    }, query, () => true).map((tool) => tool.name);
+    expect(ranked('tick off the milk task')[0]).toBe('vault_task_complete');
+    expect(ranked('rename the milk task')[0]).toBe('vault_task_edit');
+    // Without the noun the verb alone names no tool, and next to a note it edits the note.
+    expect(ranked('tick off the milk')).toEqual([]);
+    expect(ranked('add this to my note')[0]).toBe('vault_write');
+  });
+
   it('names a remote provider only for its own words or tool prefix', () => {
     expect([...providersNamedBy('github issue')]).toEqual(['gh_']);
     expect([...providersNamedBy('ressourcer i azure')]).toEqual(['az_']);

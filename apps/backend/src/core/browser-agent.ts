@@ -257,8 +257,10 @@ function safeUrl(value: string): string | undefined {
   }
 }
 
+const secretPattern = /\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card(?: number)?|cvv|cvc)\b/iu;
+
 function secretRequest(goal: string): boolean {
-  return /\b(?:pass(?:word|phrase|code)s?|one[- ]time (?:code|password)|verification code|security code|otp|(?:credit|debit)[ -]card(?: number)?|card(?: number)?|cvv|cvc)\b/iu.test(goal);
+  return secretPattern.test(goal);
 }
 
 function oneTimeCode(value: string): boolean {
@@ -571,8 +573,11 @@ export function createJevBrowserPlanner(
 
   return {
     async decide(input, signal) {
-      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
-          secretRequest(input.goal)) return null;
+      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted) return null;
+      const secret = secretPattern.exec(input.goal)?.[0];
+      if (secret) {
+        throw new ToolRefusal(`The goal mentions "${secret}", and I do not work with passwords, payment cards or one-time codes, so I stopped before acting on the page.`);
+      }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(jevTimeoutMs)]);
       let decision: DecisionTarget | undefined;
       try {
@@ -750,7 +755,7 @@ function browserExecutor(request: FastifyRequest): BrowserExecutor {
       if (!safe) throw new ToolRefusal('Only valid HTTP or HTTPS browser URLs can be opened.');
       const result = await invoke('pc_open', { target: 'url', value: safe }, signal);
       if (isRecord(result) && typeof result.note === 'string') {
-        throw new ToolRefusal(result.note);
+        throw new ToolRefusal('The page was opened, but the Jarvis Chrome extension is not connected, so I cannot read or control it.');
       }
     },
     async listTabs(signal) {
@@ -840,7 +845,7 @@ async function chooseTab(
   const focused = tabs.filter(({ focused }) => focused);
   if (focused.length === 1) return focused[0]!;
   if (tabs.length === 1) return tabs[0]!;
-  throw new ToolRefusal('Choose the Chrome tab to use.');
+  throw new ToolRefusal('Chrome has no single focused tab, so I cannot tell which one to use. Give the url to open, or the tabId of a tab listed by pc_browser_tabs.');
 }
 
 const genericTabWords = new Set([

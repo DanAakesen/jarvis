@@ -159,6 +159,7 @@ async function repositoryMetadata(
 }
 
 function decodeContent(value: unknown): { text: string; size: number } {
+  if (Array.isArray(value)) throw new ToolRefusal('That repository path is a folder, not a file; use repo_list to see what is in it.');
   const content = requireObject(value);
   const size = content.size;
   if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) {

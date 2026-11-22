@@ -20,8 +20,8 @@ const issueBackfillQueues = new Map<string, Promise<void>>();
 export type IssueExecutor = 'jarvis' | 'copilot' | 'none';
 
 export class IssueDraftValidationError extends Error {
-  constructor() {
-    super('Issue content is invalid or contains a secret');
+  constructor(reason: string) {
+    super(reason);
   }
 }
 
@@ -102,10 +102,10 @@ export function containsLikelySecret(value: string): boolean {
 export function validateIssueDraft(title: string, body: string): void {
   if (!title.trim() || title.trim().length > 200 || !body.trim() ||
       Buffer.byteLength(body, 'utf8') > 50_000) {
-    throw new IssueDraftValidationError();
+    throw new IssueDraftValidationError('I can’t use this issue; it needs a title of at most 200 characters and a text of at most 50,000 bytes, and neither may be empty. Nothing was written.');
   }
   if (containsLikelySecret(title) || containsLikelySecret(body)) {
-    throw new IssueDraftValidationError();
+    throw new IssueDraftValidationError('I can’t use this issue’s title or text; it may contain a secret or credential. Nothing was written.');
   }
 }
 

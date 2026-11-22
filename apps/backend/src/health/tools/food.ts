@@ -73,7 +73,7 @@ export function foodMessageIdentity(owner: string, source: ConversationMessage) 
 
 export function foodReceipt(row: Record<string, unknown>, key: string, sourceFingerprint: string, operation: string, proposalFingerprint?: string) {
   if (!row || typeof row.id !== 'string' || row.idempotency_key !== key || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
-    throw new ToolFailure('The intake may have committed, but its receipt is unavailable. Retry this same message; do not create a new intake.');
+    throw new ToolFailure('The intake may have committed, but its receipt is unavailable. Retry this same message; do not create a new intake.', { outcomeUnknown: true });
   }
   if (row.deleted_at !== null) throw new ToolRefusal('This message previously logged an intake that was deleted. It was not recreated.');
   const provenance: unknown = typeof row.nutrient_provenance_json === 'string' ? JSON.parse(row.nutrient_provenance_json) : null;
@@ -82,7 +82,7 @@ export function foodReceipt(row: Record<string, unknown>, key: string, sourceFin
   if (!origin || typeof origin !== 'object' || Array.isArray(origin) ||
       (origin as Record<string, unknown>).sourceFingerprint !== sourceFingerprint ||
       (origin as Record<string, unknown>).operation !== operation ||
-      proposalFingerprint !== undefined && (origin as Record<string, unknown>).proposalFingerprint !== proposalFingerprint) throw new ToolRefusal('This message has a different committed intake. Read it before correcting it; no new intake was logged.');
+      proposalFingerprint !== undefined && (origin as Record<string, unknown>).proposalFingerprint !== proposalFingerprint) throw new ToolRefusal('This message already logged a different intake, and one message logs one intake, so nothing new was logged. To change that intake, read it and correct it with health_food_review. A different meal needs a new message from Dan.');
   const quantity = (key: string): number | null => typeof row[key] === 'number' && Number.isFinite(row[key]) ? row[key] : null;
   return { status: 'committed', record: projectNutritionRecord(row, 'history'),
     presentation: `Logged nutrition:\n${nutritionSummary({ energyKcal: quantity('energy_kcal'),

@@ -92,9 +92,10 @@ function category(value: unknown): MemoryCategory {
 }
 
 function memoryKey(value: unknown): string {
-  const key = requiredString(value, 'key', 100).toLowerCase();
-  if (!/^[a-z0-9][a-z0-9._-]{0,99}$/u.test(key)) {
-    throw new ToolRefusal('Use a short, stable memory key made of letters, numbers, dots, hyphens or underscores.');
+  // Letters of any language are fine (træningstid); NFC keeps one spelling per key, as the column compares bytes.
+  const key = requiredString(value, 'key', 100).toLowerCase().normalize('NFC');
+  if (key.length > 100 || !/^[\p{L}\p{N}][\p{L}\p{M}\p{N}._-]*$/u.test(key)) {
+    throw new ToolRefusal('Use a short, stable memory key made of letters in any language, numbers, dots, hyphens or underscores, starting with a letter or number.');
   }
   return key;
 }

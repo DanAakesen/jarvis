@@ -6,8 +6,9 @@ import { buildApp } from '../app.js';
 import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
-import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { createLogger } from '../logging.js';
+import { createVaultModule } from '../vault/index.js';
 import { requestIdentity } from './mcp.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
@@ -39,7 +40,7 @@ const probe: JarvisTool = {
 
 function setup(
   bridges: RemoteMcpBridge[] = [],
-  options: { tools?: JarvisTool[]; situation?: PiSituationService; smokeBudgetExhausted?: boolean; rawLog?: boolean } = {},
+  options: { tools?: JarvisTool[]; situation?: PiSituationService; smokeBudgetExhausted?: boolean; rawLog?: boolean; auditDown?: boolean } = {},
 ) {
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
@@ -67,7 +68,10 @@ function setup(
       if (token !== ownerToken) throw new Error('rejected');
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' };
     },
-    toolCallStore: { record: async (call) => { recorded.push({ messageId: call.messageId, tool: call.tool }); } },
+    toolCallStore: { record: async (call) => {
+      if (options.auditDown === true) throw new Error('audit store is down');
+      recorded.push({ messageId: call.messageId, tool: call.tool });
+    } },
     piAuth: auth,
   });
   apps.push(app);
@@ -617,7 +621,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
 
   it('does not keep an action that failed or was refused: a replay of it runs again, and nothing is refused', async () => {
     const steps = [
-      () => { throw new Error('flaky'); },
+      () => { throw new ToolFailure('Nothing was saved.'); },
       () => { throw new ToolRefusal('not now'); },
       () => ({ saved: true }),
     ];
@@ -690,7 +694,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
       if (run > 1) return { saved: true };
       entered();
       await new Promise<void>((resolve) => { release = resolve; });
-      throw new Error('first run failed');
+      throw new ToolFailure('Nothing was saved.');
     });
     const { registry, tool, ledger } = setup([], { tools: [write.tool] });
     const grant = open(registry);
@@ -766,6 +770,110 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     expect(other.body).toMatchObject({ outcome: 'ok', result: { run: 2 } });
     expect(other.body).not.toHaveProperty('duplicate');
     expect(write.runs.count).toBe(2);
+  });
+
+  it('counts an action by what the call did: the operation it named, and a writer that declares nothing, but not a list or a read', async () => {
+    const operations = counting('probe_ops', { defaultEffect: 'action', operation: { field: 'operation', effects: { list: 'read', create: 'action' } } });
+    // A writer with no declaration of its own: tool-effects.ts says issue_comment writes.
+    const writer = counting('issue_comment', undefined);
+    const reader = counting('probe_plain', undefined);
+    const { registry, tool } = setup([], { tools: [operations.tool, writer.tool, reader.tool] });
+    const grant = open(registry);
+    for (const name of ['probe_ops', 'issue_comment', 'probe_plain']) grant.discovered.add(name);
+    await tool('call_tool', call(grant.turn, 'probe_ops', { operation: 'list' }));
+    await tool('call_tool', call(grant.turn, 'probe_plain', { text: 'x' }));
+    expect(grant.actions.count).toBe(0);
+    await tool('call_tool', call(grant.turn, 'probe_ops', { operation: 'create' }));
+    await tool('call_tool', call(grant.turn, 'issue_comment', { text: 'x' }));
+    expect(grant.actions.count).toBe(2);
+    expect(grant.results).toHaveLength(4);
+  });
+
+  it('does not run again a replay of an action that may have gone through, and runs one that says nothing happened', async () => {
+    const unknown = counting('probe_write', { defaultEffect: 'action' }, () => {
+      throw new ToolFailure('The save may or may not have gone through.', { outcomeUnknown: true });
+    });
+    const nothing = counting('probe_other', { defaultEffect: 'action' }, () => { throw new ToolFailure('Nothing was saved.'); });
+    const crashing = counting('probe_boom', { defaultEffect: 'action' }, () => { throw new Error('connection reset by peer'); });
+    const { registry, tool } = setup([], { tools: [unknown.tool, nothing.tool, crashing.tool] });
+    const grant = open(registry);
+    for (const name of ['probe_write', 'probe_other', 'probe_boom']) grant.discovered.add(name);
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    expect(first.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(replay.body).toEqual({ ...first.body, duplicate: true });
+    expect(unknown.runs.count).toBe(1);
+    // An error nobody expected, from a tool that writes, may have done its work as well: its replay is not run again either.
+    const crashed = await tool('call_tool', call(grant.turn, 'probe_boom', { text: 'a' }), as('call-4'));
+    expect(crashed.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect((await tool('call_tool', call(grant.turn, 'probe_boom', { text: 'a' }), as('call-4'))).body).toEqual({ ...crashed.body, duplicate: true });
+    expect(crashing.runs.count).toBe(1);
+    // A failure that claims nothing happened is run again, as before; and so is a deliberate new call of the first. Nothing is refused.
+    await tool('call_tool', call(grant.turn, 'probe_other', { text: 'a' }), as('call-2'));
+    expect((await tool('call_tool', call(grant.turn, 'probe_other', { text: 'a' }), as('call-2'))).body).not.toHaveProperty('duplicate');
+    expect(nothing.runs.count).toBe(2);
+    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-3'));
+    expect(unknown.runs.count).toBe(2);
+    expect(grant.actions.count).toBe(0);
+  });
+
+  it('does not append to a note a second time when the first append could not be confirmed (the real vault_write)', async () => {
+    const write = vi.fn(async () => { throw new Error('socket hang up'); });
+    const vault = createVaultModule({
+      client: { read: async () => null, write, tree: async () => [] } as never,
+      indexStore: { supportsVectorSearch: () => false } as never,
+      memoryStore: { getSourceMessage: async (messageId: string) => ({ messageId, text: 'Add to my pergola note.' }) } as never,
+    });
+    const { registry, tool } = setup([], { tools: vault.tools.filter(({ name }) => name === 'vault_write') });
+    const grant = open(registry);
+    grant.discovered.add('vault_write');
+    const append = { path: 'Personal/Pergola.md', append: 'Build the pergola.', reason: 'Dan asked for it', automaticCapture: false };
+
+    const first = await tool('call_tool', call(grant.turn, 'vault_write', append), as('call-1'));
+    const replay = await tool('call_tool', call(grant.turn, 'vault_write', append), as('call-1'));
+
+    expect(first.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(replay.body).toEqual({ ...first.body, duplicate: true });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it('says an action may have gone through when the route fails after the tool could have run, and not when it was rejected before', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const read = counting('probe_read', { defaultEffect: 'read' });
+    const { app, registry, tool } = setup([], { tools: [write.tool, read.tool] });
+    let status = 500;
+    app.addHook('onSend', async (request, reply, payload) => {
+      if (request.url.startsWith('/tools/probe_')) void reply.code(status);
+      return payload;
+    });
+    const grant = open(registry);
+    for (const name of ['probe_write', 'probe_read']) grant.discovered.add(name);
+    const lost = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    expect(lost.isError).toBe(true);
+    expect(lost.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(lost.body?.result.error).toMatch(/may or may not have gone through/u);
+    // The write ran once; its replay is answered with that and does not run it again.
+    expect((await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'))).body).toEqual({ ...lost.body, duplicate: true });
+    expect(write.runs.count).toBe(1);
+    // A read cannot have changed anything; and a route that said no before the tool started changed nothing either.
+    expect((await tool('call_tool', call(grant.turn, 'probe_read', { text: 'a' }))).body?.result)
+      .toEqual({ error: 'The tool could not run. Nothing is confirmed as done.' });
+    status = 503;
+    expect((await tool('call_tool', call(grant.turn, 'probe_write', { text: 'b' }), as('call-2'))).body?.result)
+      .toEqual({ error: 'The tool could not run. Nothing is confirmed as done.' });
+  });
+
+  it('reports a write as written when only its audit row was lost, and does not write it again on the replay', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool } = setup([], { tools: [write.tool], auditDown: true });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    expect(first.isError).toBe(false);
+    expect(first.body).toMatchObject({ outcome: 'ok', result: { run: 1 } });
+    expect((await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'))).body).toEqual({ ...first.body, duplicate: true });
+    expect(write.runs.count).toBe(1);
+    expect(grant.actions.count).toBe(1);
   });
 
   it('finds the identity of a request in its meta only: a string call id under a key ending in call_id or callId', () => {

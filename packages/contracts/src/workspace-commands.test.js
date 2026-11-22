@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isWorkspaceCommand, workspaceCommandProblems } from './index.js';
+import { isWorkspaceCommand, workspaceCommandProblems, workspaceCommandSchema } from './index.js';
+
+test('the schema the model reads offers only actions and values that some command accepts', () => {
+  const { action, value } = workspaceCommandSchema.properties;
+  const accepted = (command) => isWorkspaceCommand({ commandId: 'offered', ...command });
+  for (const name of action.enum) {
+    const commands = [
+      { operation: 'conversation', action: name },
+      { operation: 'context-panel', action: name },
+      ...value.enum.map((given) => ({ operation: 'session', action: name, value: given })),
+    ];
+    assert.ok(commands.some(accepted), `the schema offers action ${name}, but no command accepts it`);
+  }
+  for (const name of value.enum) {
+    assert.ok(['voice', 'camera'].some((action) => accepted({ operation: 'session', action, value: name })),
+      `the schema offers value ${name}, but no session command accepts it`);
+  }
+});
 
 test('a session command other than ending the voice session or setting the camera is refused and names the supported actions', () => {
   const command = { commandId: 'session-language', operation: 'session', action: 'language', value: 'en' };

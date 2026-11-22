@@ -313,6 +313,30 @@ describe('a brain wake over the Jarvis MCP server', () => {
     });
     expect(refused).toMatchObject({
       outcome: 'refused',
+      result: { refused: expect.stringContaining('The factory evidence was verified before that source was last switched off') },
+    });
+    expect(pushes).toEqual([]);
+    // Only evidence the server really offered gets that explanation; a made-up tuple is still told it does not match.
+    const invented = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The invented deploy event failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory',
+          ref: 'github:workflow_run:999',
+          identity: 'github:workflow_run:999',
+          label: 'Invented deploy',
+          observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(invented).toMatchObject({
+      outcome: 'refused',
       result: { refused: expect.stringContaining('does not match') },
     });
     expect(pushes).toEqual([]);
@@ -381,6 +405,69 @@ describe('a brain wake over the Jarvis MCP server', () => {
     });
     expect(pushes).toEqual([]);
     expect(conversations.proactiveReceipts.size).toBe(0);
+  });
+
+  it.each([
+    { text: 'The deploy job failed on main.', declared: 'unknown', reads: 'work', word: 'job' },
+    { text: 'The home page deploy failed on main.', declared: 'work', reads: 'personal', word: 'home' },
+  ])('names the scope it read and the word behind it when the declared scope differs: "$word"', async ({ text, declared, reads, word }) => {
+    const { tool, wake, pushes } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text,
+        category: 'status',
+        suggestionScope: declared,
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory', ref: 'github:workflow_run:42', identity: 'github:workflow_run:42',
+          label: 'Deploy 42', observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: {
+        refused: `The message reads as ${reads} because it says "${word}", but its scope was declared ${declared}. Declare ${reads} or reword the message. Nothing was sent.`,
+      },
+    });
+    expect(pushes).toEqual([]);
+  });
+
+  it.each([
+    { number: 51002, says: 'The evidence behind this message changed just before delivery.' },
+    { number: 51001, says: 'Another message to Dan was still being delivered.' },
+  ])('tells the brain in words when the chat store throws SQL error $number, not "Tool execution failed"', async ({ number, says }) => {
+    const { tool, wake, pushes, conversations } = setup();
+    (conversations.store as { addProactiveMessage: unknown }).addProactiveMessage =
+      async () => { throw Object.assign(new Error('SQL text that must not reach the brain'), { number }); };
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message dan' });
+    const refused = await tool('call_tool', {
+      turn: grant.turn,
+      name: 'message_dan',
+      arguments: {
+        text: 'The deploy failed.',
+        category: 'status',
+        suggestionScope: 'unknown',
+        evidenceSources: ['factory'],
+        evidence: [{
+          source: 'factory', ref: 'github:workflow_run:42', identity: 'github:workflow_run:42',
+          label: 'Deploy 42', observedAt: '2026-11-16T09:58:00.000Z',
+          verifiedAt: '2026-11-16T09:59:00.000Z',
+        }],
+      },
+    });
+    expect(refused).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining(says) },
+    });
+    expect(JSON.stringify(refused)).not.toContain('SQL text');
+    expect(pushes).toEqual([]);
   });
 
   it.each([

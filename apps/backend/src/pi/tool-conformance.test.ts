@@ -1,7 +1,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
+import { readOnlyTools, writingTools } from '../core/tool-effects.js';
+import { compactLargeSchema } from './compact-schema.js';
 import { allGroups, buildConformanceWorld } from './conformance/world.testkit.js';
 import { goldenIntents, phraseTable } from './conformance/phrases.testkit.js';
 import { descriptionViolations, harnessManagedNames, nameViolations, schemaViolations, tokensOf } from './conformance/schema.testkit.js';
@@ -94,6 +97,19 @@ describe('composition', () => {
     const bytes = Buffer.byteLength(JSON.stringify(tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))));
     expect(bytes).toBeLessThanOrEqual(MAX_CATALOGUE_BYTES);
     expect(tools.every((tool) => tool.description.length <= MAX_TOOL_DESCRIPTION_CHARACTERS)).toBe(true);
+  });
+
+  it('knows what every tool does to the world, so the door counts what Jarvis wrote and does not write a replay twice', () => {
+    const names = new Set(tools.map((tool) => tool.name));
+    const unaccounted = tools.filter((tool) => tool.execution === undefined && !readOnlyTools.has(tool.name)).map((tool) => tool.name);
+    expect(unaccounted, 'tools with no declared effect: list a tool that writes in writingTools and one that only reads or shows in readOnlyTools (core/tool-effects.ts), or give it execution metadata').toEqual([]);
+    expect([...Object.keys(writingTools), ...readOnlyTools].filter((name) => !names.has(name)), 'tool-effects.ts names a tool that does not exist').toEqual([]);
+    expect([...readOnlyTools].filter((name) => names.has(name) && tools.find((tool) => tool.name === name)!.execution !== undefined),
+      'a tool listed as read-only that also declares an effect').toEqual([]);
+    // The registry lets a tool's own declaration win over the table, so one that differs would hide its row. The suite sees only the
+    // merged value, so an identical second declaration passes: that is harmless, it repeats the row.
+    expect(Object.entries(writingTools).filter(([name, effect]) => !isDeepStrictEqual(tools.find((tool) => tool.name === name)?.execution, effect)).map(([name]) => name),
+      'a tool is in writingTools (core/tool-effects.ts) and its own execution metadata says something else: keep one of the two').toEqual([]);
   });
 });
 
@@ -453,7 +469,8 @@ describe('report', () => {
         name: tool.name, group: group?.id ?? 'none', visibility: visibilityOf(tool.name),
         effect: tool.execution?.defaultEffect ?? 'unclassified',
         staticProblems: entry.static ?? [], discover: entry.discover, callable: status,
-        schemaTokens: tokensOf(tool.inputSchema), definitionTokens: tokensOf({ name: tool.name, description: tool.description, parameters: tool.inputSchema }),
+        schemaTokens: tokensOf(tool.inputSchema), sentTokens: tokensOf(compactLargeSchema(tool.inputSchema)),
+        definitionTokens: tokensOf({ name: tool.name, description: tool.description, parameters: tool.inputSchema }),
         notes: [
           ...(largeSchemas[tool.name] ? [`large schema: ${largeSchemas[tool.name]!.reason}`] : []),
           ...(status?.kind === 'requiresExternal' ? [`needs outside help: ${status.reason}`] : []),
@@ -465,7 +482,7 @@ describe('report', () => {
     const summary = summarize(rows);
     console.info(`Per-tool table (the same rows are committed in docs/tool-conformance.md):\n${renderTextTable(rows)}`);
     console.info(`Tool conformance summary: ${JSON.stringify(summary)}`);
-    console.info(`Largest schemas (tokens = characters / 4):\n${largestSchemas(rows).map((row, index) => `${String(index + 1).padStart(2)}. ${row.name.padEnd(26)} schema ${String(row.schemaTokens).padStart(6)}  definition ${String(row.definitionTokens).padStart(6)}`).join('\n')}`);
+    console.info(`Largest schemas (tokens = characters / 4):\n${largestSchemas(rows).map((row, index) => `${String(index + 1).padStart(2)}. ${row.name.padEnd(26)} schema ${String(row.schemaTokens).padStart(6)}  sent ${String(row.sentTokens).padStart(6)}  definition ${String(row.definitionTokens).padStart(6)}`).join('\n')}`);
     const markdown = renderReport(rows, { ceiling: defaultSchemaTokens, oversize: largeSchemas });
     const file = resolve(import.meta.dirname, '../../../../docs/tool-conformance.md');
     if (process.env.UPDATE_TOOL_CONFORMANCE === '1') {

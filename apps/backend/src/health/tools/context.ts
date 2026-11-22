@@ -19,7 +19,7 @@ export async function currentHealthMessage(request: FastifyRequest, signal: Abor
 export async function activeHealthSession(request: FastifyRequest, source: ConversationMessage, signal: AbortSignal, clock: number) {
   if (!(source.at instanceof Date) || !Number.isFinite(source.at.getTime()) ||
       source.at.getTime() > clock + 300_000 || clock - source.at.getTime() > 600_000) {
-    throw new ToolRefusal('The Health request is no longer current. Nothing was changed.');
+    throw new ToolRefusal('This Health change must come from a message Dan sent within the last 10 minutes, and this one did not. Nothing was changed; ask Dan to send the request again.');
   }
   const session = await request.server.conversationStore?.getSession(source.sessionId);
   signal.throwIfAborted();
