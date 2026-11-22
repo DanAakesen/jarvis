@@ -470,6 +470,7 @@ export class BrowserVoiceClient {
   private sessionReady = false;
   private playbackAllowed = false;
   private responseFinished = false;
+  private relayThinking = false;
   private responseId: string | undefined;
   private responseAudioQueued = false;
   private responseAudioDrained = false;
@@ -496,7 +497,7 @@ export class BrowserVoiceClient {
       if (this.responseAudioQueued) this.responseAudioDrained = true;
       if (this.running && !this.stopping && this.microphoneOpen && this.responseFinished) {
         this.sendPlaybackCompletion(this.responseAudioQueued && this.responseAudioDrained);
-        this.publish('listening', 'Listening for your voice.');
+        this.publishRestingActivity();
       }
     });
     this.audio.setInputEndedHandler(() => this.microphoneLost());
@@ -777,6 +778,8 @@ export class BrowserVoiceClient {
           this.screenSessionReady = false;
           this.playbackAllowed = false;
           this.responseFinished = false;
+          this.responseId = undefined;
+          this.relayThinking = false;
           this.audio.stopPlayback();
           this.audio.detachInput();
           if (this.microphone === 'live') this.setMicrophone('granted');
@@ -832,10 +835,9 @@ export class BrowserVoiceClient {
       }
     } else if (event.type === 'jarvis.voice.activity' && typeof event.state === 'string' &&
         this.running && !this.stopping && this.microphoneOpen) {
-      if (event.state === 'thinking') {
-        this.publish('thinking', 'Jarvis is thinking.');
-      } else if (event.state === 'listening' && !this.audio.hasPlayback()) {
-        this.publish('listening', 'Listening for your voice.');
+      if (event.state === 'thinking' || event.state === 'listening' || event.state === 'speaking') {
+        this.relayThinking = event.state === 'thinking';
+        if (!this.audio.hasPlayback()) this.publishRestingActivity();
       } else if (event.state === 'reconnecting') {
         this.publish('reconnecting', 'Voice connection failed. Reconnecting…');
       }
@@ -920,8 +922,16 @@ export class BrowserVoiceClient {
         this.sendPlaybackCompletion(this.responseAudioQueued && this.responseAudioDrained);
       }
       if (!this.audio.hasPlayback()) {
-        this.publish('listening', 'Listening for your voice.');
+        this.publishRestingActivity();
       }
+    }
+  }
+
+  private publishRestingActivity(): void {
+    if (this.relayThinking || (this.responseId && !this.responseFinished)) {
+      this.publish('thinking', 'Jarvis is thinking.');
+    } else {
+      this.publish('listening', 'Listening for your voice.');
     }
   }
 

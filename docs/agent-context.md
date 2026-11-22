@@ -160,6 +160,12 @@ events
 - Run the full backend fixture suite (`npm test --workspace @jarvis/backend`) plus lint and build on the pinned Node version. The route and Chat/Voice parity tests use scripted replies. Run `npm run test:database --workspace @jarvis/backend` against the isolated loopback SQL Server from `database-ci.yml`. `conversation-blocks.integration.test.ts` checks the saved reply's turn ID with and without a reply notification, and paging across a message ID digit boundary. Do not run `measure_pi`, a deploy smoke or a Foundry probe.
 - On iPhone, enable Background motion, leave Voice and sharing idle and type rapidly in a 100+ message Chat. Verify each character, the keyboard and scrolling. Check a completed answer, Stop before completion and a follow-up while Jarvis is still answering. Open Plus > **Test a reply** and send a short prompt in an available setup; check the reply and return to the unchanged normal draft/history.
 
+## Build 122 live Voice and Chat checks — 22 November 2026 (#2008, #2010)
+
+- `src/voice/relay-events.test.ts` replays GPT-Live transcript, delegation and audio shapes on loopback. Its acknowledgement test holds both tool work and the transcript write; Voice must leave Speaking before the write is released. Keep the Chat/Voice parity suite's stored row counts and ordering. The web client's playback fixture checks that relay Thinking waits to display until audio drains.
+- `PiRuntimeTests`, `ChatFollowStateTests` and `ChatTranscriptTests` cover response overlap and playback receipts, manual pause and jump, and repeated or edited pages in long history. Linux can build and test JarvisCore and parse SwiftUI source; Xcode CI type-checks the iPhone target. The actual scroll and keyboard check is Dan's on the phone with the updated app and relay, as listed in `PLAN.md`. Do not run a live provider or model check to validate this change.
+- For #2034's follow-up, replay delayed final audio after a spoken acknowledgement, a layout change under a held touch, programmatic scrolling, and a failed background history refresh. With VoiceOver on in Chat, check that status changes are announced and a muted mic does not hide Thinking or Speaking.
+
 ## See the brain — 21 November 2026 (Refs #1969)
 
 - Where to look (every field below is a number or a fixed word; Application Insights `traces`, `message` is the event name and the fields are in `customDimensions`, or the container's stdout JSON):

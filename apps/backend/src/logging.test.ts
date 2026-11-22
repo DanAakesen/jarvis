@@ -176,6 +176,7 @@ describe('structured log export', () => {
       ...text, state: 'speaking', reason: 'output_audio', sinceLastMs: 1_250, outputActive: true, piBusy: false,
       delegationPending: false, language: 'en',
     }, 'voice.activity_published');
+    logger.info({ ...text, state: 'listening', reason: 'delegation_settled' }, 'voice.activity_published');
     logger.info({ ...text, state: 'private', reason: 'private', sinceLastMs: -1 }, 'voice.activity_published');
     logger.warn({
       ...text, failure: 'provider_error', errorType: 'server_error', errorCode: 'rate_limit_exceeded',
@@ -183,11 +184,12 @@ describe('structured log export', () => {
     }, 'voice.upstream_event_error');
     logger.warn({ errorType: 'private words', errorCode: 'private words', param: 'private words' },
       'voice.upstream_event_error');
-    const [published, rejected, error, rejectedError] = records.map((record) => JSON.parse(record));
+    const [published, settled, rejected, error, rejectedError] = records.map((record) => JSON.parse(record));
     expect(published).toMatchObject({
       msg: 'voice.activity_published', state: 'speaking', reason: 'output_audio', sinceLastMs: 1_250,
       outputActive: true, piBusy: false, delegationPending: false, language: 'en',
     });
+    expect(settled).toMatchObject({ msg: 'voice.activity_published', state: 'listening', reason: 'delegation_settled' });
     expect(rejected).toEqual({
       level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'voice.activity_published',
     });

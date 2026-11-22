@@ -151,6 +151,47 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(machine.state, .listening)
     }
 
+    func testVoiceWaitsForWorkAfterAnAcknowledgementAndReturnsToListeningAfterTheAnswer() {
+        var machine = VoiceSessionStateMachine()
+        machine.apply(.start)
+        machine.apply(.sessionReady)
+        let replay: [(VoiceSessionEvent, VoiceSessionState)] = [
+            (.activity(.listening), .listening),
+            (.activity(.thinking), .thinking),
+            (.responseCreated(id: "ack"), .thinking),
+            (.audioDelta(responseID: "ack"), .speaking),
+            (.activity(.speaking), .speaking),
+            (.activity(.thinking), .speaking),
+            (.responseFinished(responseID: "ack"), .speaking),
+            (.playbackFinished(responseID: "ack"), .thinking),
+            (.playbackFinished(responseID: "ack"), .thinking),
+            (.responseCreated(id: "answer"), .thinking),
+            (.audioDelta(responseID: "answer"), .speaking),
+            (.activity(.speaking), .speaking),
+            (.activity(.listening), .speaking),
+            (.responseFinished(responseID: "answer"), .speaking),
+            (.playbackFinished(responseID: "answer"), .listening),
+        ]
+        for (event, expected) in replay {
+            machine.apply(event)
+            XCTAssertEqual(machine.state, expected, "\(event)")
+        }
+    }
+
+    func testCancelledAudioAndRelaySpeakingCannotBringBackAnOldResponse() {
+        var machine = VoiceSessionStateMachine()
+        for event in [VoiceSessionEvent.start, .sessionReady, .responseCreated(id: "old"),
+                      .audioDelta(responseID: "old"), .responseCancelled(responseID: "old"),
+                      .audioDelta(responseID: "old"), .activity(.speaking)] {
+            machine.apply(event)
+        }
+        XCTAssertEqual(machine.state, .listening)
+        machine.apply(.activity(.thinking))
+        machine.apply(.responseFinished(responseID: "old"))
+        machine.apply(.playbackFinished(responseID: "old"))
+        XCTAssertEqual(machine.state, .thinking)
+    }
+
     func testVoiceEndWaitsForTheServerTerminalBeforeClosing() async throws {
         let socket = VoiceEndSocket()
         let client = VoiceSessionClient(

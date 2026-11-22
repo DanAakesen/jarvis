@@ -8,6 +8,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var selection: ChatRuntimeTest?
     @Published var session: ChatSession?
     @Published var messages: [JarvisChatRow] = []
+    private(set) var latestHistoryRevision = 0
     @Published var sendRevision = 0
     @Published var composerDraft = ComposerDraft()
     @Published var partial = ""
@@ -86,6 +87,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
             let page = try await client.history(before: older ? nextCursor : nil, sessionId: session.id)
             try Task.checkCancellation()
             let incoming = page.messages.map(JarvisChatRow.init)
+            if !older, incoming != messages { latestHistoryRevision += 1 }
             messages = older ? incoming + messages.filter { row in !incoming.contains { $0.id == row.id } } : incoming
             nextCursor = page.nextCursor
             guard !older else { return }
@@ -253,6 +255,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     }
 
     private func append(_ message: JarvisChatRow) {
+        latestHistoryRevision += 1
         messages.removeAll { $0.id == message.id }
         messages.append(message)
     }
@@ -311,7 +314,6 @@ struct JarvisRuntimeTestSheet: View {
                                 perform { await model.refreshHistory() }
                             }
                         }
-                        Color.clear.frame(height: 1).id("runtimeTest.bottom")
                     }
                     .padding(JarvisDesignTokens.chatHorizontalInset)
                 }
@@ -320,16 +322,14 @@ struct JarvisRuntimeTestSheet: View {
                 }
                 .modifier(JarvisChatFollowLatest(
                     proxy: proxy,
-                    bottomID: "runtimeTest.bottom",
                     contentState: JarvisChatFollowContent(
-                        messages: model.messages,
+                        historyRevision: model.latestHistoryRevision,
                         isSending: model.sending,
                         acknowledgment: model.acknowledgment,
                         progressUpdates: model.progressUpdates,
                         streamingText: model.partial,
                         tools: model.tools,
                         isReconnecting: model.isReconnecting,
-                        confirmations: [],
                         errors: [model.error.map { copy($0) }, model.turnFeedback]
                     ),
                     sendRevision: model.sendRevision,

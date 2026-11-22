@@ -86,7 +86,7 @@ public enum VoiceSessionEvent: Equatable, Sendable {
 public struct VoiceSessionStateMachine: Sendable {
     public private(set) var state: VoiceSessionState = .idle
     public private(set) var endRequested = false
-    private var activity: VoiceActivityState = .listening
+    private var relayActivity: VoiceActivityState = .listening
     private var responses: [String: ResponseState] = [:]
 
     public init() {}
@@ -96,19 +96,20 @@ public struct VoiceSessionStateMachine: Sendable {
         case .start where state == .idle:
             state = .connecting
             endRequested = false
-            activity = .listening
+            relayActivity = .listening
             responses.removeAll()
         case .connected:
             break
         case .sessionReady where state == .connecting || isReconnecting:
-            activity = .listening
+            relayActivity = .listening
             responses.removeAll()
             state = .listening
         case .activity(let value) where isLive:
-            activity = value
+            relayActivity = value
             switch value {
             case .reconnecting:
                 state = .reconnecting(attempt: reconnectAttempt)
+                responses.removeAll()
             case .failed:
                 state = .failed
                 responses.removeAll()
@@ -116,40 +117,27 @@ public struct VoiceSessionStateMachine: Sendable {
                 state = .ended
                 responses.removeAll()
             case .listening, .thinking, .speaking:
-                refreshActiveState()
+                if canProcessResponses { refreshActiveState() }
             }
         case .microphoneActive, .microphoneMuted:
             break
-        case .responseCreated(let id) where canProcessResponses:
-            responses[id] = .init()
-            activity = .thinking
+        case .responseCreated(let id) where canProcessResponses && responses[id] == nil:
+            responses[id] = .waiting
             refreshActiveState()
-        case .audioDelta(let responseID) where canProcessResponses:
-            var response = responses[responseID] ?? .init()
-            response.hasAudio = true
-            responses[responseID] = response
-            activity = .speaking
-            state = .speaking
+        case .audioDelta(let responseID) where acceptsAudio(for: responseID):
+            responses[responseID] = .streamingAudio
+            refreshActiveState()
         case .responseFinished(let responseID) where canProcessResponses:
-            if var response = responses[responseID] {
-                response.finished = true
-                responses[responseID] = response
-            }
-            if responses[responseID]?.hasAudio == false {
-                responses.removeValue(forKey: responseID)
-            }
-            activity = hasPlayback ? .speaking : .listening
-            refreshActiveState()
-        case .responseCancelled(let responseID) where canProcessResponses:
-            responses.removeValue(forKey: responseID)
-            activity = hasPlayback ? .speaking : .listening
-            refreshActiveState()
-        case .playbackFinished(let id) where canProcessResponses:
-            responses.removeValue(forKey: id)
-            if !hasPlayback {
-                activity = .listening
+            switch responses[responseID] {
+            case .waiting: responses.removeValue(forKey: responseID)
+            case .streamingAudio: responses[responseID] = .drainingAudio
+            default: break
             }
             refreshActiveState()
+        case .responseCancelled(let id), .playbackFinished(let id):
+            if canProcessResponses, responses.removeValue(forKey: id) != nil {
+                refreshActiveState()
+            }
         case .connectionDropped where isLive:
             state = .reconnecting(attempt: 0)
             responses.removeAll()
@@ -173,35 +161,25 @@ public struct VoiceSessionStateMachine: Sendable {
     }
 
     private mutating func refreshActiveState() {
-        if hasPlayback || activity == .speaking {
+        // The relay describes generation; only the matching local playback can keep the label on Speaking.
+        if responses.values.contains(where: { $0 != .waiting }) {
             state = .speaking
-            return
-        }
-        if hasPendingResponse || activity == .thinking {
+        } else if !responses.isEmpty || relayActivity == .thinking {
             state = .thinking
-            return
-        }
-        switch activity {
-        case .listening:
+        } else {
             state = .listening
-        case .thinking, .speaking, .reconnecting, .failed, .ended:
-            break
         }
     }
 
-    private var hasPlayback: Bool {
-        responses.values.contains { $0.hasAudio }
-    }
-
-    private var hasPendingResponse: Bool {
-        responses.values.contains { !$0.finished }
+    fileprivate func acceptsAudio(for id: String) -> Bool {
+        canProcessResponses && (responses[id] == .waiting || responses[id] == .streamingAudio)
     }
 
     private var canProcessResponses: Bool {
         switch state {
-        case .connecting, .thinking, .listening, .speaking:
+        case .thinking, .listening, .speaking:
             return true
-        case .idle, .reconnecting, .ended, .failed:
+        case .idle, .connecting, .reconnecting, .ended, .failed:
             return false
         }
     }
@@ -225,9 +203,8 @@ public struct VoiceSessionStateMachine: Sendable {
         }
     }
 
-    private struct ResponseState: Sendable {
-        var hasAudio = false
-        var finished = false
+    private enum ResponseState: Equatable, Sendable {
+        case waiting, streamingAudio, drainingAudio
     }
 }
 
@@ -467,6 +444,7 @@ public actor VoiceSessionClient {
         let message = VoiceServerMessage.decode(raw)
         if let eventID = message.eventID, !remember(eventID) { return }
         if isReconnecting, isResponseEvent(message) { return }
+        if case .audioDelta(_, _, let id, _) = message, !machine.acceptsAudio(for: id) { return }
         if case .sessionEnded = message {
             apply(.sessionEnded)
             guard machine.state == .ended else { return }

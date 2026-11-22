@@ -9,6 +9,7 @@ struct JarvisChatRow: Identifiable, Equatable {
     let role: ConversationRole
     var text: String
     let at: String
+    let order: ChatTranscript.Order
     var interrupted: Bool
     var toolCalls: [ChatHistoryToolCall]
     let attachments: [ChatHistoryAttachment]
@@ -22,6 +23,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         role = message.role
         text = message.text
         at = message.at
+        order = .init(id: message.id, at: message.at)
         interrupted = message.interrupted
         toolCalls = message.toolCalls
         attachments = message.attachments.filter { !Self.isLiveFrame($0) }
@@ -40,6 +42,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         self.role = role
         self.text = text
         self.at = at
+        order = .init(id: id, at: at)
         interrupted = false
         toolCalls = []
         attachments = []
@@ -52,11 +55,20 @@ struct JarvisChatRow: Identifiable, Equatable {
         role = message.role
         text = message.text
         at = message.at
+        order = .init(id: message.id, at: message.at)
         interrupted = false
         toolCalls = []
         self.attachments = attachments
         blocks = message.blocks
     }
+}
+
+struct RenderedChatRow: Identifiable {
+    let message: JarvisChatRow
+    let replyTools: [ChatHistoryToolCall]
+    let unansweredTools: [ChatHistoryToolCall]
+
+    var id: String { message.id }
 }
 
 /// A live screen-share or camera frame sent with a turn. It reaches the model as labelled live input, not a file.
@@ -85,7 +97,9 @@ struct PendingChatAttachment: Identifiable {
 
 @MainActor
 final class JarvisChatModel: ObservableObject {
-    @Published var messages: [JarvisChatRow] = []
+    @Published private(set) var messages: [JarvisChatRow] = []
+    private(set) var renderedRows: [RenderedChatRow] = []
+    private(set) var latestHistoryRevision = 0
     let composerDraft = ChatComposerDraft()
     @Published var pendingAttachments: [PendingChatAttachment] = []
     @Published var isLoading = true
@@ -285,7 +299,7 @@ final class JarvisChatModel: ObservableObject {
         isLoadingOlder = true
         do {
             let page = try await client.history(before: cursor, sessionId: historySessionID)
-            apply(page, replacing: false)
+            apply(page, replacing: false, older: true)
             historyPaging.appendOlderPage(nextCursor: page.nextCursor)
         } catch {
             actionError = message(for: error)
@@ -320,7 +334,7 @@ final class JarvisChatModel: ObservableObject {
         do {
             repeat {
                 let page = try await client.history(limit: 100, before: before, sessionId: target.sessionID)
-                apply(page, replacing: pages == 0)
+                apply(page, replacing: pages == 0, older: pages > 0)
                 if pages == 0 {
                     historyPaging.replaceHistory(nextCursor: page.nextCursor)
                 } else {
@@ -497,7 +511,7 @@ final class JarvisChatModel: ObservableObject {
             do {
                 if let saved = try await client.steerTurn(sessionId: sessionID, text: text) {
                     turnMessageIDs.insert(saved.id)
-                    messages.removeAll { $0.id == followUpID }
+                    removeMessages(ids: [followUpID])
                     steeringMessageIDs.removeAll { $0 == followUpID }
                     addOrReplace(JarvisChatRow(saved))
                     return
@@ -507,7 +521,7 @@ final class JarvisChatModel: ObservableObject {
                 actionError = message(for: error)
             }
             steeringMessageIDs.removeAll { $0 == followUpID }
-            messages.removeAll { $0.id == followUpID }
+            removeMessages(ids: [followUpID])
             if composerDraft.value.text.isEmpty { composerDraft.value.replace(with: text) }
         }
     }
@@ -607,6 +621,8 @@ final class JarvisChatModel: ObservableObject {
     func watchActivity() async {
         guard !fixtureMode || JarvisChatFeedbackFixtureTransport.isEnabled else { return }
         guard let updatesClient else { return }
+        let (refreshes, refresh) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        async let reload: Void = watchLiveRefreshes(refreshes)
         do {
             for try await event in updatesClient.events() {
                 try Task.checkCancellation()
@@ -615,17 +631,10 @@ final class JarvisChatModel: ObservableObject {
                     observePersonalMemoryWrite(tool)
                     guard isSending, tool.source == "chat" else { continue }
                     recordToolActivity(tool)
-                case .pendingConfirmationsChanged:
-                    await refreshActivity()
-                    if !isSending { await refreshHistory() }
-                case .activityChanged:
-                    await refreshActivity()
-                    // Replies that finish while the user is in voice or screen sharing must show up without a message.
-                    if !isSending { await refreshHistory() }
-                case .factoryBoardChanged:
-                    await refreshActivity()
+                case .pendingConfirmationsChanged, .activityChanged, .factoryBoardChanged:
+                    refresh.yield(())
                 case .workspaceReady:
-                    await refreshActivity()
+                    refresh.yield(())
                     await reattachActiveTurnIfNeeded()
                 default:
                     break
@@ -633,9 +642,22 @@ final class JarvisChatModel: ObservableObject {
             }
         } catch is CancellationError {
         } catch {
-            if nowFeed == nil {
+            if !Task.isCancelled && nowFeed == nil {
                 activityError = message(for: error)
             }
+        }
+        refresh.finish()
+        await reload
+    }
+
+    private func watchLiveRefreshes(_ refreshes: AsyncStream<Void>) async {
+        for await _ in refreshes {
+            guard !Task.isCancelled else { return }
+            // One read per batch; keep a trailing invalidation if anything changed during it.
+            async let history: Void = refreshHistory(.liveUpdate)
+            await refreshActivity()
+            await history
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
         }
     }
 
@@ -812,7 +834,7 @@ final class JarvisChatModel: ObservableObject {
             discardOptimisticMessage()
             discardSteeringPlaceholders()
             // The reply is already on screen from the stream, so a history refresh that fails now is not the turn failing.
-            await refreshHistory(reportsFailure: false)
+            await refreshHistory(.afterTurn)
         } catch {
             discardOptimisticMessage()
             discardSteeringPlaceholders()
@@ -826,13 +848,13 @@ final class JarvisChatModel: ObservableObject {
         guard !steeringMessageIDs.isEmpty else { return }
         let ids = Set(steeringMessageIDs)
         steeringMessageIDs = []
-        messages.removeAll { ids.contains($0.id) }
+        removeMessages(ids: ids)
     }
 
     private func discardOptimisticMessage() {
         guard let id = optimisticMessageID else { return }
         optimisticMessageID = nil
-        messages.removeAll { $0.id == id }
+        removeMessages(ids: [id])
     }
 
     private func reattach(_ turn: ActiveChatTurn) async {
@@ -840,7 +862,7 @@ final class JarvisChatModel: ObservableObject {
         guard let client else { return }
         do {
             try await consume(client.reattachTurn(sessionId: turn.sessionId, messageId: turn.messageId))
-            await refreshHistory(reportsFailure: false)
+            await refreshHistory(.afterTurn)
         } catch {
             await reportTurnEnding(error)
         }
@@ -879,7 +901,7 @@ final class JarvisChatModel: ObservableObject {
             unconfirmedTurnID = turnID
             turnNotice = chatCopy(.turnUnconfirmed)
             streamingText = ""
-            await refreshHistory(reportsFailure: false)
+            await refreshHistory(.afterTurn)
         }
     }
 
@@ -994,57 +1016,64 @@ final class JarvisChatModel: ObservableObject {
         throw JarvisChatClientError.streamEnded
     }
 
-    /// `reportsFailure` is false straight after a turn, when the reply is already on screen from the stream.
-    private func refreshHistory(reportsFailure: Bool = true) async {
+    private func refreshHistory(_ refresh: ChatTranscript.Refresh = .normal) async {
         guard let client else { return }
+        let session = historySessionID
         do {
-            let page = try await client.history(sessionId: historySessionID)
-            apply(page, replacing: false)
+            let page = try await client.history(sessionId: session)
+            guard !Task.isCancelled, historySessionID == session else { return }
+            // The typed stream owns its optimistic rows until it finishes. Voice can still add new rows.
+            apply(page, replacing: false, voiceOnly: refresh == .liveUpdate && isSending)
             historyPaging.refreshLatestPage(nextCursor: page.nextCursor)
         } catch {
-            if reportsFailure { actionError = message(for: error) }
+            guard !Task.isCancelled, historySessionID == session,
+                  let notice = refresh.failureNotice(message(for: error)) else { return }
+            actionError = notice
         }
     }
 
-    private func apply(_ page: ChatHistoryPage, replacing: Bool) {
+    private func apply(_ page: ChatHistoryPage, replacing: Bool, older: Bool = false, voiceOnly: Bool = false) {
         let incoming = page.messages
-            .filter { $0.channel == .chat || $0.channel == .voice }
+            .filter { $0.channel == .voice || (!voiceOnly && $0.channel == .chat) }
             .map(JarvisChatRow.init)
-        messages = sorted(replacing ? incoming : messages + incoming)
+        if replacing {
+            setMessages(ChatTranscript.merging(incoming, into: [], by: \.order) ?? [])
+        } else if let merged = ChatTranscript.merging(incoming, into: messages, by: \.order) {
+            setMessages(merged, latestChanged: !older)
+        }
         if let unconfirmedTurnID, page.confirmsReply(toTurn: unconfirmedTurnID) {
             dismissTurnNotice()
         }
         // One visible conversation, with transport-specific session IDs kept
         // separate so a typed reply never targets an ended voice session.
-        if let latest = messages.last(where: { $0.channel == .chat }) {
-            let latestMessage = page.messages.first { $0.id == latest.id }
-            sessionID = latestMessage?.sessionId ?? sessionID
+        if let latest = incoming.last(where: { $0.channel == .chat }),
+           latest.id == messages.last(where: { $0.channel == .chat })?.id {
+            sessionID = latest.sessionID
         }
     }
 
     private func addOrReplace(_ message: JarvisChatRow) {
-        if let index = messages.firstIndex(where: { $0.id == message.id }) {
-            messages[index] = message
-        } else {
-            messages.append(message)
-        }
-        messages = sorted(messages)
-    }
-
-    private func sorted(_ values: [JarvisChatRow]) -> [JarvisChatRow] {
-        values.reduce(into: [String: JarvisChatRow]()) { result, message in
-            result[message.id] = message
-        }.values.sorted {
-            if $0.at == $1.at { return $0.id < $1.id }
-            return (date(from: $0.at) ?? .distantPast) < (date(from: $1.at) ?? .distantPast)
+        if let merged = ChatTranscript.merging([message], into: messages, by: \.order) {
+            setMessages(merged)
         }
     }
 
-    private func date(from value: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions.insert(.withFractionalSeconds)
-        return formatter.date(from: value)
+    private func removeMessages(ids: Set<String>) {
+        let remaining = messages.filter { !ids.contains($0.id) }
+        if remaining.count != messages.count { setMessages(remaining) }
+    }
+
+    private func setMessages(_ values: [JarvisChatRow], latestChanged: Bool = true) {
+        let placement = ChatToolPlacement(messages: values.map {
+            .init(id: $0.id, sessionID: $0.sessionID, channel: $0.channel, role: $0.role,
+                  tools: $0.toolCalls, interrupted: $0.interrupted)
+        })
+        renderedRows = values.map { message in
+            RenderedChatRow(message: message, replyTools: placement.replies[message.id] ?? [],
+                            unansweredTools: placement.unanswered[message.id] ?? [])
+        }
+        if latestChanged { latestHistoryRevision += 1 }
+        messages = values
     }
 
     private func message(for error: any Error) -> String {

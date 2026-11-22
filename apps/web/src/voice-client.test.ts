@@ -8,15 +8,20 @@ const OPEN = 1;
 const CLOSED = 3;
 
 class VoiceAudioFixture implements VoiceAudio {
+  private playing = false;
+  private onStarted?: () => void;
+  private onEnded?: () => void;
+
   async prepare() {}
   async requestMicrophone() {}
   async open() {}
   detachInput() {}
-  play() {}
-  stopPlayback() {}
-  hasPlayback() { return false; }
-  setPlaybackStartedHandler() {}
-  setPlaybackEndedHandler() {}
+  play() { this.playing = true; this.onStarted?.(); }
+  stopPlayback() { this.playing = false; }
+  finishPlayback() { this.stopPlayback(); this.onEnded?.(); }
+  hasPlayback() { return this.playing; }
+  setPlaybackStartedHandler(handler: () => void) { this.onStarted = handler; }
+  setPlaybackEndedHandler(handler: () => void) { this.onEnded = handler; }
   setInputEndedHandler() {}
   playbackLevel() { return 0; }
   inputLevel() { return 0; }
@@ -86,13 +91,14 @@ async function until(check: () => boolean, label: string): Promise<void> {
 function makeClient(failEnd = false) {
   let socket: VoiceSocketFixture | undefined;
   const statuses: VoiceStatus[] = [];
+  const audio = new VoiceAudioFixture();
   let ended = 0;
   const client = new BrowserVoiceClient({
     backendUrl: 'https://fixture.example.invalid/api',
     getAccessToken: async () => 'fixture.token',
     onStatus: status => statuses.push(status),
     onSessionEnded: () => { ended += 1; },
-    createAudio: () => new VoiceAudioFixture(),
+    createAudio: () => audio,
     createSocket: () => {
       socket = new VoiceSocketFixture(failEnd);
       return socket;
@@ -100,6 +106,7 @@ function makeClient(failEnd = false) {
   });
   return {
     client,
+    audio,
     statuses,
     get ended() { return ended; },
     get socket() {
@@ -130,6 +137,30 @@ describe('BrowserVoiceClient terminal ownership', () => {
     expect(fixture.statuses.at(-1)).toBe('listening');
     fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'reconnecting' });
     expect(fixture.statuses.at(-1)).toBe('reconnecting');
+  });
+
+  it('keeps speaking until the acknowledgement drains, then shows the work still underway', async () => {
+    const fixture = makeClient();
+    fixture.client.start();
+    await until(() => {
+      try { return fixture.socket.readyState === OPEN; } catch { return false; }
+    }, 'open voice socket');
+    fixture.socket.emit({
+      type: 'jarvis.session.ready',
+      sessionId: '42',
+      audio: { format: 'pcm16le', sampleRate: 24_000, channels: 1 },
+    });
+    await until(() => fixture.statuses.at(-1) === 'listening', 'voice listening');
+    fixture.socket.emit({ type: 'jarvis.voice.response.started', responseId: 'ack' });
+    fixture.socket.emit({ type: 'jarvis.voice.audio.delta', responseId: 'ack', delta: 'AAE=' });
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'speaking' });
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'thinking' });
+    fixture.socket.emit({ type: 'jarvis.voice.response.completed', responseId: 'ack' });
+    expect(fixture.statuses.at(-1)).toBe('speaking');
+    fixture.audio.finishPlayback();
+    expect(fixture.statuses.at(-1)).toBe('thinking');
+    fixture.socket.emit({ type: 'jarvis.voice.activity', state: 'listening' });
+    expect(fixture.statuses.at(-1)).toBe('listening');
   });
 
   it.each([
