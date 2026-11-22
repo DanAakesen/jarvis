@@ -189,7 +189,8 @@ function createSpendTracker() {
 }
 /**
  * A failure that Foundry itself reported before the model produced anything or reached a tool did nothing, and saying so tells Dan a
- * retry is safe. A stream that merely stopped may still be running on Foundry's side, so it never gets this.
+ * retry is safe. A stream that merely stopped may still be running on Foundry's side, so it never gets this. `phase` is a single
+ * response, so the caller only asks about the first response of a turn.
  */
 function untouched(error: unknown, phase: StreamPhase, grant: PiTurnGrant | undefined): unknown {
   if (!(error instanceof PiGatewayError) || error.kind !== 'cut_off' || phase.failure !== 'foundry_response_failed' ||
@@ -797,7 +798,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
           phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
         if (!retryable || attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
-          !grant || toolMayHaveRun(grant)) throw untouched(error, phase, grant);
+          !grant || toolMayHaveRun(grant)) {
+          // `phase` is one response. Only the first response of a turn can say nothing happened: a later one exists because the
+          // first ended on a call, so the turn has already streamed text or reached a tool, which this phase cannot see.
+          throw retryable ? untouched(error, phase, grant) : error;
+        }
         if (phase.failure !== 'foundry_response_failed') {
           // A stream that merely stopped may still be running on Foundry's side. Without a confirmed stop, or with events whose
           // response is unknown, it may be running a tool: do not ask again.

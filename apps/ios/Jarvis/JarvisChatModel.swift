@@ -1013,10 +1013,11 @@ final class JarvisChatModel: ObservableObject {
     }
 
     private func message(for error: any Error) -> String {
-        // A failed turn carries the server's own plain message (what failed, and that an action may have completed); show it instead of the generic turn text.
+        // A failed turn carries the server's own plain message (what failed, and that an action may have completed); show it instead of the
+        // generic turn text. Every error the server sends for a turn is one fixed sentence from the shared table, with or without a code,
+        // so the iPhone reads what the web reads.
         if let error = error as? JarvisChatClientError,
-           case .serverEvent(let code, let text) = error,
-           code != nil,
+           case .serverEvent(_, let text) = error,
            let text, !text.isEmpty {
             return text
         }

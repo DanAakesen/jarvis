@@ -1188,6 +1188,32 @@ describe('PI gateway', () => {
       expect(responsesOf(ended.calls)).toHaveLength(1);
     });
 
+    describe('a failure in a later response', () => {
+      const failed = frame({ type: 'response.failed', response: { error: { code: 'content_filter' } } });
+      /** A first response that ends on a client-owned call, which is the only reason a turn has a second response. */
+      const firstResponses: Array<[string, () => Response]> = [
+        ['it had already streamed text', () => sse(created('resp_1'), ...message('Let me check. '), ...functionCall('lookup', 'call_owned', '{}'), completed(1, 0, 1))],
+        ['a native call had already run in it', () => sse(
+          created('resp_1'), ...functionCall('task', 'call_native', '{}'), ...result('call_native'), ...message('Child is done. '),
+          ...functionCall('lookup', 'call_owned', '{}'), completed(1, 0, 1),
+        )],
+        ['its client-owned call had been answered', () => sse(created('resp_1'), ...functionCall('lookup', 'call_owned', '{}'), completed(1, 0, 1))],
+        ['its approval request had been approved', () => sse(created('resp_1'), ...approval('mcpr_1'), completed(1, 0, 1))],
+      ];
+
+      it.each(firstResponses)('says part of it may already be done, never that nothing was done, when it fails quietly after %s', async (_name, first) => {
+        const { run, calls } = setup([first, () => sse(created('resp_2'), failed)]);
+        await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', kind: 'cut_off', userMessage: failureCopy.cut_off.chat });
+        expect(responsesOf(calls)).toHaveLength(2);
+      });
+
+      it('still says nothing was done when the first response fails quietly before anything happened', async () => {
+        const { run, calls } = setup([() => sse(created('resp_1'), failed)]);
+        await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', kind: 'cut_off_clean', userMessage: failureCopy.cut_off_clean.chat });
+        expect(responsesOf(calls)).toHaveLength(1);
+      });
+    });
+
     it('answers up to 16 client-owned calls in one response and fails with the 17th, after reading the whole stream', async () => {
       const calls = (count: number) => Array.from({ length: count }, (_, index) => functionCall('lookup', `call_${index}`, '{}')).flat();
       const within = setup([

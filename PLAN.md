@@ -113,6 +113,8 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | A saved reply is never failed for its size: the clients read up to 4 MiB (progress frames stop at 1 MiB, `done` carries the reply) | Done (review); the web test fails on the old 1 MiB ceiling, the Swift test `ChatStreamLimitTests` runs in CI |
 | Tool confirmations keep the plain cause; a tool that threw something unexpected is described by error class and declared effect | Done |
 | A write whose request may have been delivered says its outcome is unknown, never "Not done." (review); the error class is logged as `tool.execution_failed` | Done; a real local service that runs the side effect and drops the socket is the test, and it fails when the tool's effect is ignored |
+| "Nothing was done" is judged on the first response of a turn only; a quiet failure in a later response says part of it may already be done (second review) | Done; four gateway tests fail without the gate |
+| The iPhone shows the server's sentence for every turn error, with or without a code, so it reads what the web reads (second review) | Done; the app target is compiled by the macOS CI job only |
 | List the messages that exist only because of non-delete approval gates (owner rule: none except deletes); remove none | Done in the pull request |
 | Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`, `ChatStreamLimitTests`) and the app build | Written; run in CI (Linux `swift test`, macOS app build), not in the dev container |
 | Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
