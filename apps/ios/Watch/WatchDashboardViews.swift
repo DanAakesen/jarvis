@@ -144,14 +144,13 @@ struct WatchDashboardView: View {
                 HStack(alignment: .firstTextBaseline) {
                     WatchDashboardHeading(title: "Up Next")
                     Spacer(minLength: 3)
-                    if let next { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 if snapshot == nil {
                     missing(loading ? "Loading agenda…" : "Agenda unavailable")
                 } else if snapshot?.agenda != nil {
-                    if current {
-                        WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
-                    }
                     if let next {
                         Text(next.title).font(.system(.body, design: .rounded, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
@@ -163,6 +162,9 @@ struct WatchDashboardView: View {
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
                                                 time: .shortened))
                             .font(.caption).foregroundStyle(.secondary)
+                        if current && entries.count > 1 {
+                            WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
+                        }
                     } else if current { missing("No more events today") }
                     else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }

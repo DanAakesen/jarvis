@@ -192,6 +192,32 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(machine.state, .thinking)
     }
 
+    func testWatchAudioWaitsForTheRelayToOpenTheMicrophone() async throws {
+        let socket = VoiceEndSocket()
+        let client = VoiceSessionClient(
+            baseURL: try XCTUnwrap(URL(string: "https://example.invalid/api")),
+            transport: socket
+        )
+        let audio = Data([1, 0])
+        try await client.start(accessToken: "a.b.c")
+        try await client.sendAudio(audio)
+        let connectingFrames = await socket.sentTexts()
+        XCTAssertTrue(connectingFrames.isEmpty)
+
+        await socket.emit(#"{"type":"jarvis.session.ready","sessionId":"42"}"#)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while await client.state() == .connecting, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        try await client.sendAudio(audio)
+        let frames = await socket.sentTexts()
+        XCTAssertEqual(frames, [
+            try VoiceClientMessage.microphoneActive.jsonString(),
+            try VoiceClientMessage.appendAudio(VoiceAudioCodec.encodePCM16(audio)).jsonString()
+        ])
+        await socket.emit(#"{"type":"jarvis.session.ended"}"#)
+    }
+
     func testVoiceEndWaitsForTheServerTerminalBeforeClosing() async throws {
         let socket = VoiceEndSocket()
         let client = VoiceSessionClient(
