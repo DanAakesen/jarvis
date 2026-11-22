@@ -620,7 +620,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
 
   it('does not keep an action that failed or was refused: a replay of it runs again, and nothing is refused', async () => {
     const steps = [
-      () => { throw new Error('flaky'); },
+      () => { throw new ToolFailure('Nothing was saved.'); },
       () => { throw new ToolRefusal('not now'); },
       () => ({ saved: true }),
     ];
@@ -693,7 +693,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
       if (run > 1) return { saved: true };
       entered();
       await new Promise<void>((resolve) => { release = resolve; });
-      throw new Error('first run failed');
+      throw new ToolFailure('Nothing was saved.');
     });
     const { registry, tool, ledger } = setup([], { tools: [write.tool] });
     const grant = open(registry);
@@ -793,14 +793,20 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
       throw new ToolFailure('The save may or may not have gone through.', { outcomeUnknown: true });
     });
     const nothing = counting('probe_other', { defaultEffect: 'action' }, () => { throw new ToolFailure('Nothing was saved.'); });
-    const { registry, tool } = setup([], { tools: [unknown.tool, nothing.tool] });
+    const crashing = counting('probe_boom', { defaultEffect: 'action' }, () => { throw new Error('connection reset by peer'); });
+    const { registry, tool } = setup([], { tools: [unknown.tool, nothing.tool, crashing.tool] });
     const grant = open(registry);
-    for (const name of ['probe_write', 'probe_other']) grant.discovered.add(name);
+    for (const name of ['probe_write', 'probe_other', 'probe_boom']) grant.discovered.add(name);
     const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
     const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
     expect(first.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
     expect(replay.body).toEqual({ ...first.body, duplicate: true });
     expect(unknown.runs.count).toBe(1);
+    // An error nobody expected, from a tool that writes, may have done its work as well: its replay is not run again either.
+    const crashed = await tool('call_tool', call(grant.turn, 'probe_boom', { text: 'a' }), as('call-4'));
+    expect(crashed.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect((await tool('call_tool', call(grant.turn, 'probe_boom', { text: 'a' }), as('call-4'))).body).toEqual({ ...crashed.body, duplicate: true });
+    expect(crashing.runs.count).toBe(1);
     // A failure that claims nothing happened is run again, as before; and so is a deliberate new call of the first. Nothing is refused.
     await tool('call_tool', call(grant.turn, 'probe_other', { text: 'a' }), as('call-2'));
     expect((await tool('call_tool', call(grant.turn, 'probe_other', { text: 'a' }), as('call-2'))).body).not.toHaveProperty('duplicate');

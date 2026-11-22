@@ -6,6 +6,7 @@ import { createPcBridgeModule, PcBridgeConnection, type PcBridgeConnectionOption
 
 const logger = { info: () => undefined };
 const live = () => new AbortController().signal;
+const mute = { name: 'media', arguments: { action: 'mute' } } as const;
 const tab = { tabId: 'tab_1204118371', snapshotId: '2ed79a11-b638-5283-84d6-a362ee8fc50f' };
 const pressEnter = { name: 'browser_act', arguments: { ...tab, action: 'keys', keys: ['Enter'], confirmed: false, closeIntent: false } } as never;
 const typeText = { name: 'browser_act', arguments: { ...tab, action: 'type', elementIndex: 0, text: 'calendar' } } as never;
@@ -44,6 +45,38 @@ async function rejection(promise: Promise<unknown>): Promise<Error> {
   try { await promise; } catch (error) { return error as Error; }
   throw new Error('The command did not fail');
 }
+
+describe('a command whose outcome the bridge cannot tell', () => {
+  const outcomeUnknown = (error: Error) => error instanceof ToolFailure && error.outcomeUnknown;
+
+  it('is a failure that says it may not have happened when the PC does not answer in time, drops the line or answers unreadably', async () => {
+    const { connection: slow } = connect({ timeoutMs: 10 });
+    const timedOut = await rejection(slow.execute(mute, live(), logger));
+    expect(timedOut.message).toMatch(/may not have happened/u);
+    expect(outcomeUnknown(timedOut)).toBe(true);
+
+    const dropped = connect();
+    const lost = rejection(dropped.connection.execute(mute, live(), logger));
+    dropped.socket.close();
+    const disconnected = await lost;
+    expect(disconnected.message).toMatch(/may not have happened/u);
+    expect(outcomeUnknown(disconnected)).toBe(true);
+
+    const garbled = connect();
+    const unreadable = rejection(garbled.connection.execute(mute, live(), logger));
+    garbled.socket.answer({ type: 'result', result: { unexpected: true } });
+    expect(outcomeUnknown(await unreadable)).toBe(true);
+  });
+
+  it('is not marked when the PC itself said the command failed', async () => {
+    const { connection, socket } = connect();
+    const failed = rejection(connection.execute(mute, live(), logger));
+    socket.answer({ type: 'error', error: 'failed' });
+    const error = await failed;
+    expect(error).toBeInstanceOf(ToolFailure);
+    expect(outcomeUnknown(error)).toBe(false);
+  });
+});
 
 describe('a keystroke the PC refuses', () => {
   it('says what blocked it: Chrome not in front, not a password', async () => {

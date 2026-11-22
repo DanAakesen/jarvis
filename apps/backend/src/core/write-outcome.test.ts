@@ -1,11 +1,13 @@
 import { Writable } from 'node:stream';
+import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BackendModule } from '../modules.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { coreModule } from './index.js';
-import { ToolFailure } from './tool-registry.js';
+import { executeReflexAction } from './reflex.js';
+import { ToolFailure, type RegisteredTool } from './tool-registry.js';
 
 const config = { ...loadConfig({}), logLevel: 'info' as const };
 const cleanups: Array<() => Promise<unknown>> = [];
@@ -48,6 +50,55 @@ describe('a tool that says its outcome is not known', () => {
     expect(unknown.body).toMatchObject({ outcome: 'error', result: { error: 'The PC did not answer in time; the action may not have happened.', outcomeUnknown: true } });
     const nothing = await callWrite(() => { throw new ToolFailure('I couldn’t start that issue. Nothing was started.'); });
     expect(nothing.body.result).toEqual({ error: 'I couldn’t start that issue. Nothing was started.' });
+  });
+
+  it('is confirmed as written, and only a failure that claims nothing happened is "Not done"', async () => {
+    const unknown = await callWrite(() => { throw new ToolFailure('The PC did not answer in time; the action may not have happened.', { outcomeUnknown: true }); });
+    expect(unknown.body.confirmation).toBe('The PC did not answer in time; the action may not have happened.');
+    const partial = await callWrite(() => {
+      throw new ToolFailure('Issue https://github.com/DanAakesen/jarvis/issues/42 was created as P11-42, but its jarvis handoff could not be confirmed. Check the issue before retrying.', { outcomeUnknown: true });
+    });
+    expect(partial.body.confirmation).toMatch(/^Issue \S+ was created as P11-42, but its jarvis handoff could not be confirmed\./u);
+    const nothing = await callWrite(() => { throw new ToolFailure('I couldn’t start that issue. Nothing was started.'); });
+    expect(nothing.body.confirmation).toBe('Not done. I couldn’t start that issue. Nothing was started.');
+  });
+});
+
+describe('the reflex executor, which runs a tool without the route', () => {
+  /** A reflex-safe write that fails the way `fail` says, run for a chat message as the reflex would. */
+  async function reflex(fail: () => never) {
+    const probe = {
+      name: 'probe_write', description: 'Write something somewhere.', inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execution: { defaultEffect: 'action' }, reflexSafe: true, moduleId: 'probe', execute: async () => fail(),
+    } as unknown as RegisteredTool;
+    const request = {
+      principal: { objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef' },
+      log: { warn: () => undefined, info: () => undefined, error: () => undefined },
+      routeOptions: { url: '/chat' },
+      compileValidationSchema: () => () => true,
+      server: {
+        toolCallStore: { record: async () => undefined },
+        jarvisActivityHub: { publish: () => undefined },
+        systemHealthDiagnostics: { record: () => undefined },
+      },
+    } as unknown as FastifyRequest;
+    return executeReflexAction(
+      { addressed: true, intent: 'action', confidence: 1, needsConfirmation: false, target: { choice: 'probe', tool: probe, arguments: {} } },
+      request, '101', new AbortController().signal,
+    );
+  }
+
+  it('passes the flag on and relays the failure as written', async () => {
+    const text = 'The PC did not answer in time; the action may not have happened.';
+    const done = await reflex(() => { throw new ToolFailure(text, { outcomeUnknown: true }); });
+    expect(done).toMatchObject({ outcome: 'error', result: { failure: text, outcomeUnknown: true } });
+    expect(done!.note).toBe(`Reflex already did probe_write (error): ${text}`);
+  });
+
+  it('keeps "Not done." for a failure that claims nothing happened', async () => {
+    const done = await reflex(() => { throw new ToolFailure('Nothing was saved.'); });
+    expect(done!.result).toEqual({ failure: 'Nothing was saved.' });
+    expect(done!.note).toBe('Reflex already did probe_write (error): Not done. Nothing was saved.');
   });
 });
 
