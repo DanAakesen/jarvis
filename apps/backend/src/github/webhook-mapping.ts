@@ -1,5 +1,15 @@
 import { VAULT_BRANCH, VAULT_REPOSITORY } from '../vault/github-client.js';
 
+type PullRequestActivity = {
+  /** GitHub's own action name: opened, closed, review_requested, synchronize and so on. */
+  readonly action: string;
+  readonly title: string;
+  readonly author: string | null;
+  readonly actor: string | null;
+  readonly reviewer: string | null;
+  readonly updatedAt: string;
+};
+
 type PullRequestMapping = {
   readonly kind: 'pull_request';
   readonly repository: string;
@@ -9,6 +19,8 @@ type PullRequestMapping = {
   readonly state: 'open' | 'merged' | 'closed';
   readonly openedAt: string;
   readonly mergedAt: string | null;
+  /** What the webhook said happened. Absent on the mapping Jarvis builds itself when it opens a pull request. */
+  readonly activity?: PullRequestActivity;
 }
 
 type CheckRunMapping = {
@@ -18,6 +30,46 @@ type CheckRunMapping = {
   readonly pullRequestNumbers: readonly number[];
   readonly status: 'queued' | 'in_progress' | 'completed';
   readonly conclusion: 'success' | 'failure' | 'cancelled' | null;
+  readonly id: number | null;
+  readonly name: string | null;
+  readonly branch: string | null;
+  readonly defaultBranch: string | null;
+  readonly completedAt: string | null;
+};
+
+type ReleaseMapping = {
+  readonly kind: 'release';
+  readonly repository: string;
+  readonly id: number;
+  readonly tag: string;
+  readonly name: string | null;
+  readonly prerelease: boolean;
+  readonly publishedAt: string;
+  readonly actor: string | null;
+};
+
+type IssueMapping = {
+  readonly kind: 'issue';
+  readonly repository: string;
+  readonly action: 'opened' | 'closed' | 'reopened';
+  readonly number: number;
+  readonly title: string;
+  readonly actor: string | null;
+  /** When this change happened: creation, closing or reopening. */
+  readonly at: string;
+};
+
+type IssueCommentMapping = {
+  readonly kind: 'issue_comment';
+  readonly repository: string;
+  readonly id: number;
+  readonly number: number;
+  readonly title: string;
+  /** GitHub sends comments on pull requests through the same event. */
+  readonly pullRequest: boolean;
+  readonly commenter: string | null;
+  readonly excerpt: string;
+  readonly at: string;
 };
 
 type WorkflowRunMapping = {
@@ -70,7 +122,10 @@ export type GithubWebhookMapping =
   | WorkflowRunMapping
   | PushMapping
   | DeploymentStatusMapping
-  | IssueLabeledMapping;
+  | IssueLabeledMapping
+  | ReleaseMapping
+  | IssueMapping
+  | IssueCommentMapping;
 
 export function isVaultDefaultBranchPush(
   mapping: GithubWebhookMapping,
@@ -92,6 +147,17 @@ function text(value: unknown, maxLength: number): string | undefined {
   return typeof value === 'string' && value.length > 0 && value.length <= maxLength
     ? value
     : undefined;
+}
+
+/** Free text from a payload: one line, cut to a length, never rejected for being long. */
+function clip(value: unknown, maxLength: number): string | undefined {
+  return typeof value === 'string'
+    ? Array.from(value.replace(/[\p{Cc}\p{Cf}\s]+/gu, ' ').trim()).slice(0, maxLength).join('')
+    : undefined;
+}
+
+function person(value: unknown): string | null {
+  return clip(value, 80) || null;
 }
 
 function number(value: unknown): number | undefined {
@@ -178,6 +244,8 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
     if (numberValue === undefined || !branch || !headSha || !openedAt ||
         (pullRequest?.state !== 'open' && pullRequest?.state !== 'closed') ||
         (mergedAt === undefined) || (merged && !mergedAt)) return undefined;
+    const teamSlug = clip(object(payload.requested_team)?.slug, 80);
+    const action = clip(payload.action, 32);
     return {
       kind: 'pull_request',
       repository: repo,
@@ -187,6 +255,16 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       state: merged ? 'merged' : pullRequest.state,
       openedAt,
       mergedAt,
+      ...(action ? {
+        activity: {
+          action,
+          title: clip(pullRequest?.title, 200) ?? '',
+          author: person(object(pullRequest?.user)?.login),
+          actor: person(object(payload.sender)?.login),
+          reviewer: person(object(payload.requested_reviewer)?.login) ?? (teamSlug ? `team:${teamSlug}` : null),
+          updatedAt: timestamp(pullRequest?.updated_at) ?? openedAt,
+        },
+      } : {}),
     };
   }
 
@@ -203,6 +281,11 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       pullRequestNumbers: pullRequestNumbers(checkRun?.pull_requests),
       status,
       conclusion: result,
+      id: externalId(checkRun?.id) ?? null,
+      name: clip(checkRun?.name, 255) || null,
+      branch: clip(object(checkRun?.check_suite)?.head_branch, 255) || null,
+      defaultBranch: clip(object(payload.repository)?.default_branch, 255) || null,
+      completedAt: timestamp(checkRun?.completed_at) ?? null,
     };
   }
 
@@ -282,6 +365,50 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
       !object(issue?.pull_request) &&
       typeof label?.name === 'string' && label.name.toLowerCase() === 'jarvis') {
       return { kind: 'issue_labeled', repository: repo, number: numberValue, label: 'Jarvis' };
+    }
+    const action = payload.action;
+    const title = clip(issue?.title, 200);
+    const at = action === 'opened' ? timestamp(issue?.created_at)
+      : action === 'closed' ? timestamp(issue?.closed_at) ?? timestamp(issue?.updated_at)
+        : action === 'reopened' ? timestamp(issue?.updated_at) : undefined;
+    if ((action === 'opened' || action === 'closed' || action === 'reopened') &&
+        numberValue && title !== undefined && at && !object(issue?.pull_request)) {
+      return {
+        kind: 'issue', repository: repo, action, number: numberValue, title,
+        actor: person(object(payload.sender)?.login), at,
+      };
+    }
+  }
+
+  if (event === 'issue_comment') {
+    const issue = object(payload.issue);
+    const comment = object(payload.comment);
+    const id = externalId(comment?.id);
+    const numberValue = number(issue?.number);
+    const title = clip(issue?.title, 200);
+    const at = timestamp(comment?.created_at);
+    if (payload.action === 'created' && id && numberValue && title !== undefined && at) {
+      return {
+        kind: 'issue_comment', repository: repo, id, number: numberValue, title,
+        pullRequest: object(issue?.pull_request) !== undefined,
+        commenter: person(object(comment?.user)?.login),
+        excerpt: clip(comment?.body, 200) ?? '',
+        at,
+      };
+    }
+  }
+
+  if (event === 'release') {
+    const release = object(payload.release);
+    const id = externalId(release?.id);
+    const tag = clip(release?.tag_name, 255);
+    const publishedAt = timestamp(release?.published_at) ?? timestamp(release?.created_at);
+    if (payload.action === 'published' && id && tag && publishedAt) {
+      return {
+        kind: 'release', repository: repo, id, tag, name: clip(release?.name, 200) || null,
+        prerelease: release?.prerelease === true, publishedAt,
+        actor: person(object(payload.sender)?.login),
+      };
     }
   }
 

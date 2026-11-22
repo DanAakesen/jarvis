@@ -4,7 +4,7 @@ import { dayKey } from '../time.js';
 import type { ProactiveSource, SourceId, SourceResult } from '../types.js';
 import type { ProactiveSettings } from '../types.js';
 import type { EventQueueStore } from './event-queue.js';
-import { factEvent } from './producers.js';
+import { clashEvents, factEvent } from './producers.js';
 import type { ProactiveEventSink } from './types.js';
 
 const SIX_HOURS_MS = 6 * 60 * 60_000;
@@ -100,6 +100,7 @@ export function createTimerProducer(options: {
  * Mail and calendar have no change notification this backend can receive (Gmail push needs Google Pub/Sub,
  * a new cloud service), so the existing read-only sources are polled. Each fact keeps one dedupe key; the
  * queue's unique key is the memory of what was already seen. The first poll of a source is a baseline.
+ * A calendar poll also queues one `calendar.clash` event per pair of overlapping entries.
  */
 export function createSourceChangePoller(options: {
   sources: readonly ProactiveSource[];
@@ -179,19 +180,23 @@ export function createSourceChangePoller(options: {
       return;
     }
     if (result.state !== 'ok') return;
+    const id = source.id;
+    const events = [
+      ...result.facts.map((fact) => factEvent(id, fact, now)),
+      // Overlapping calendar entries are found in the facts just read; there is no second read.
+      ...(id === 'calendar' ? clashEvents(result.facts, now) : []),
+    ];
     if (!baselined.has(source.id)) {
       baselined.add(source.id);
       // A source with earlier events is not new: only a source never seen before is baselined.
       const baseline = !await options.queue.hasSource(source.id);
-      for (const fact of result.facts) {
-        const event = factEvent(source.id, fact, now);
+      for (const event of events) {
         seen.add(event.dedupeKey);
         await options.sink.enqueue({ ...event, baseline });
       }
       return;
     }
-    for (const fact of result.facts) {
-      const event = factEvent(source.id, fact, now);
+    for (const event of events) {
       if (seen.has(event.dedupeKey)) continue;
       await options.sink.enqueue(event);
       seen.add(event.dedupeKey);

@@ -25,7 +25,6 @@ const CALENDAR_HORIZON_MS = 14 * 24 * HOUR_MS;
 const routine: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^github:(?:workflow_run|check_run)\.(?:success|cancelled|neutral|skipped|in_progress|queued)$/u, reason: 'routine_build_result' },
   { pattern: /^github:deployment_status\.(?:success|in_progress|queued)$/u, reason: 'routine_deploy_result' },
-  { pattern: /^github:pull_request\.closed$/u, reason: 'routine_closed_without_merge' },
 ];
 
 function instant(value: unknown): number | undefined {
