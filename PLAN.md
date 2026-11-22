@@ -1,6 +1,6 @@
 ## Week summary 2026-11-21 — PI tools and reliability (current focus)
 
-**Status: the 20–21 November work is merged on `main` (#2013 last, at 06:49 UTC on 22 November). Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
+**Status: the 20–21 November work is merged on `main` (#2016 last, at 07:11 UTC on 22 November). Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
 
 ### Current focus: tool design and PI reliability (Dan's P0)
 
@@ -35,6 +35,7 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | Native harness calls finish on their own: the gateway reads the stream to its end and answers only client-owned calls | #2004 | Merged at 21:47 UTC. Offline tests. Whether the native signals and the client-owned shape hold in a real trace is open |
 | A wake gets the same tool overview as Chat, and parity tests pin that `find_tools` shows a wake what it shows Chat plus the brain-only tools | #2014 | Merged at 23:23 UTC. Offline tests. No wake has run in production, so how a real wake uses the overview is unobserved |
 | The iPhone and Watch Voice screen no longer stays on Speaking when a newer response is cancelled: the audio engine reports every response a stop silences (`VoicePlaybackLedger`) | #2013 | Merged at 06:49 UTC on 22 November. A JarvisCore test fails without the fix; the app target is compiled only by CI's Apple Watch job. Dan's device retest open |
+| Every MCP door call writes one `pi.mcp_tool` line, and a replayed request (same `_meta` call id, tool and arguments) is answered from the first result. An identical action under a different request always runs | #2016 | Merged at 07:11 UTC on 22 November. Offline tests with stubs only. Whether Foundry sends a call id is unknown, so recognising replays may never trigger; the ledger works either way |
 
 ### Next steps (proposals; each needs Dan's go-ahead)
 
@@ -45,8 +46,9 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 5. Open question, unverified: whether Foundry stores the message of a failed response, so a stream retry could show it twice (#1999).
 6. Known trade-off of #1996: the first Azure question after a quiet period needs a second search while the container wakes.
 7. Read the next `weather.phase` lines if a weather call fails again.
-8. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
-9. P1, proactive intelligence, ranks after P0 and is tracked in [#2011](https://github.com/DanAakesen/jarvis/issues/2011); the P0 acceptance list (daily-core requests in Chat and Voice) is [#2012](https://github.com/DanAakesen/jarvis/issues/2012). This summary does not repeat either. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence"). [#2011](https://github.com/DanAakesen/jarvis/issues/2011) reports that no wake ran in 30 days of logs; I did not re-check that.
+8. After the next deploy, read the `pi.mcp_tool` lines in Log Analytics (`read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): do action requests carry a `_meta` call id, and under which key? The plan is in `docs/decisions.md`, "Every MCP door call is logged" (#2016).
+9. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
+10. P1, proactive intelligence, ranks after P0 and is tracked in [#2011](https://github.com/DanAakesen/jarvis/issues/2011); the P0 acceptance list (daily-core requests in Chat and Voice) is [#2012](https://github.com/DanAakesen/jarvis/issues/2012). This summary does not repeat either. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence"). [#2011](https://github.com/DanAakesen/jarvis/issues/2011) reports that no wake ran in 30 days of logs; I did not re-check that.
 
 ## MCP door call ledger and replay recognition — 21 November 2026 (#1967)
 
