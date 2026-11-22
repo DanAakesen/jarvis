@@ -1088,7 +1088,7 @@ try {
       }
       if (isVaultDefaultBranchPush(mapping)) {
         if (vaultModule) {
-          void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
+          void vaultModule.queueSynchronization().catch(() => {
             logger.warn({
               msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
             }, 'vault.index');

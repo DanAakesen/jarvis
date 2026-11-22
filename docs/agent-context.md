@@ -34,6 +34,8 @@ Run these from the repository root unless the row says otherwise. These commands
 
 [Aggregate CI](../.github/workflows/ci.yml) qualifies ready PRs. [Its impact rules](../.github/scripts/pipeline_impact.py) select checks; shared or unknown inputs get wider coverage. Python tests come from the aggregate job. Depending on the change, the workflow calls web/contracts, backend (including a local container smoke and PC bridge), Vault mirror, SQL integration, offline Foundry contracts, runner, legacy agent, and JarvisCore jobs, or runs Bicep checks. **CI result** and its receipt are the merge evidence. The separate macOS Apple Watch build runs on iOS changes; general CI does not claim Simulator UI or physical-device acceptance.
 
+For a Notes change, run `swift test --filter 'JarvisNotesRedesignTests|JarvisClientTransportTests'` from `apps/ios/Packages/JarvisCore`. From `apps/backend` run `npm exec -- vitest run src/vault src/logging.test.ts src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`. These use local fixtures. [Database CI](../.github/workflows/database-ci.yml) covers the note metadata migration and guarded backfill on loopback SQL.
+
 ## Development workflow
 
 Keep [AGENTS.md](../AGENTS.md) as the entry point and read only the project context needed for the change. Use local worktrees. Bundle related work into fewer, larger issues and PRs; do not bundle unrelated changes or open placeholders. Keep a single owner per file or feature until handoff.
@@ -132,6 +134,8 @@ Normal Chat and Voice are PI, not the [legacy `agents/jarvis` program](../agents
 Start with the [style guide](ui/style-guide.md) and [shared control geometry](../DESIGN.md#shared-control-geometry). Use shared design-system controls and keep spacing in the parent layout. Put state in text or an accessible label as well as colour. Do not add screen-local glass or button styles.
 
 ## Troubleshooting
+
+**Saved note not visible:** Check the exact Vault path, current folder and index state separately. A Vault commit is not proof that the index update succeeded. `vault.title_backfill` reports a failed-attempt count without logging note paths or content. Deploy the backend with [migration 0103](../db/migrations/0103_vault_note_metadata.sql) before shipping the iPhone client that uses owner-only `/notes/summaries` and `sort=updated`.
 
 | Symptom | Check |
 | --- | --- |

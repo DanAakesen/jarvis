@@ -138,15 +138,20 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
             folderOrder[parent] = folders.isEmpty ? nil : folders
             return try json(["parent": parent, "folders": folders])
         case (.get, "/api/notes"):
-            let matches = notes.filter {
+            var matches = notes.filter {
                 if let directory = query["directory"] { return $0.directory == directory }
                 if let folder = query["folder"] { return $0.folder == folder }
                 return true
             }
+            // Every fixture note has the same timestamp.
+            if query["sort"] == "updated" { matches.sort { $0.path < $1.path } }
             let offset = Int(query["offset"] ?? "0") ?? 0
             let limit = Int(query["limit"] ?? "50") ?? 50
             return try json(["notes": matches.dropFirst(max(0, offset)).prefix(max(0, limit)).map(summary),
                              "limit": limit, "offset": offset, "hasMore": offset + limit < matches.count])
+        case (.post, "/api/notes/summaries"):
+            let paths = Set(body["paths"] as? [String] ?? [])
+            return try json(["notes": notes.filter { paths.contains($0.path) }.map(summary)])
         case (.post, "/api/notes/folders"):
             guard let path = body["path"] as? String, !path.isEmpty, JarvisNotesLogic.validFolder(path),
                   !inventory.contains(where: { $0 == path || $0.hasPrefix(path + "/") }) else {

@@ -150,6 +150,12 @@ flowchart TB
 | Vault Knowledge | Markdown and tasks in the GitHub vault via Notes and `vault_*` tools. SQL keeps a rebuildable search/index projection, not a second note source of truth. Re-read the exact Vault revision before writes. |
 | Vault mirror | Separate scheduled Container Apps job, with its own identity and base/status blobs. A successful job status is not proof a client has refreshed. Bicep defaults write-back to `dry-run`; do not infer the production setting from that default. |
 
+### Vault note inventory and title repair
+
+[#2031](https://github.com/DanAakesen/jarvis/pull/2031) adds [`dbo.vault_notes`](../db/migrations/0103_vault_note_metadata.sql), which indexes path, blob SHA, display title and content-update time separately from search chunks. Title-only notes still have inventory rows. Normal sync marks the inventory ready before a bounded title backfill (up to 32 legacy reads by most recent edit, with a separate 20-second deadline). Repair only updates the matching SHA and does not change the content date. A write or Vault push during sync schedules one fresh-tree pass. A Git commit can succeed even if indexing fails; sync is the repair path.
+
+The owner Notes and Graph routes share the metadata title. `/notes/summaries` checks up to 50 exact paths for pins regardless of the current page or graph. Missing or stale metadata uses a readable filename; it does not require a Vault scan or embeddings. iPhone can show an account-bound warm snapshot, then revalidates with current newest-first directory pages without HTTP cache reuse. Deployed freshness and physical-device acceptance remain separate checks.
+
 ### Daily integration boundary (P12-01)
 
 Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. See the [data model](data-model.md), [Health module](../apps/backend/src/health/README.md) and [historical migration record](daily-migration.md).

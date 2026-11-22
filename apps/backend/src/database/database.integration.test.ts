@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, type Migration } from './migrations.js';
 import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-credential.js';
+import { MEMORY_EMBEDDING_DIMENSIONS } from '../core/memory-embeddings.js';
 import { createInboxIndexStore } from './inbox-index-store.js';
 import { createInboxOpsStore } from './inbox-ops-store.js';
 import { createPiStore } from './pi-store.js';
@@ -13,7 +14,7 @@ import { createPiSituationStore } from './pi-situation-store.js';
 import { parsePiSituationState } from '../pi/situation.js';
 import { sourceIds } from '../proactive/types.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
-import { createMemoryStore } from './memory-store.js';
+import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createMemoryProactiveStore } from '../proactive/store.js';
 import { createPiActivationService } from '../pi/activation.js';
 import { createPiSituationService, piSituationHash } from '../pi/situation.js';
@@ -62,6 +63,71 @@ describe('real SQL Server migration contract', () => {
       expect(rows.recordset).toEqual([{ id: 1, value: 'original' }]);
       expect((await pool.request().query('SELECT name FROM dbo.schema_migrations')).recordset).toEqual([{ name: first.name }]);
     } finally { await other.close(); }
+  });
+
+  it('migrates existing vault summaries and lists notes with no search chunks', async () => {
+    const migrationFiles = ['0021_vault_memory_index.sql', '0027_vault_knowledge_graph.sql', '0103_vault_note_metadata.sql'];
+    const [chunks, links, notes] = await Promise.all(migrationFiles.map((name) =>
+      readFile(new URL(`../../../../db/migrations/${name}`, import.meta.url), 'utf8')));
+    await pool.request().batch(chunks!);
+    await pool.request().batch(links!);
+    const legacyPath = 'Work/Events/old-name.md';
+    const titleOnlyPath = 'Personal/Test 2.md';
+    const sha = 'a'.repeat(40);
+    const signal = AbortSignal.timeout(10_000);
+    try {
+      // Apply the vault columns from 0028 and 0031 without the unrelated memory and job tables.
+      await pool.request().batch(`ALTER TABLE dbo.vault_chunks ADD embedding_model nvarchar(128) NULL;
+        IF TYPE_ID(N'vector') IS NULL
+          ALTER TABLE dbo.vault_chunks ADD embedding_json nvarchar(max) NULL;`);
+      await pool.request()
+        .input('hash', sql.Binary(32), createHash('sha256').update(legacyPath).digest())
+        .input('path', sql.NVarChar(180), legacyPath)
+        .input('sha', sql.Char(40), sha)
+        .query(`INSERT INTO dbo.vault_chunks (path_hash, path, blob_sha, chunk_index, heading, content)
+          VALUES (@hash, @path, @sha, 0, N'Wrong section', N'Original searchable content')`);
+      await pool.request().batch(notes!);
+      const store = createVaultIndexStore(pool);
+      await store.initialize();
+      const previous = (await store.graphFiles(signal))[0]!;
+      expect(await store.files(null, signal)).toMatchObject([{
+        path: legacyPath, titleMissing: true, blobSha: sha, updatedAt: previous.updatedAt,
+      }]);
+      expect(previous.blobSha).toBe(sha);
+      await store.backfillFileTitle(legacyPath, 'b'.repeat(40), 'Wrong blob', signal);
+      expect(await store.graphFiles(signal)).toEqual([previous]);
+      await store.backfillFileTitle(legacyPath, sha, 'Edited > title', signal);
+      expect(await store.graphFiles(signal, [legacyPath])).toEqual([{ ...previous, title: 'Edited > title' }]);
+      expect(await store.files(null, signal)).toMatchObject([{ path: legacyPath, titleMissing: false }]);
+
+      await store.replaceFile(titleOnlyPath, sha, 'Test 2', [], [], signal);
+      expect(await store.graphFiles(signal, [titleOnlyPath, 'Missing.md'])).toMatchObject([{ path: titleOnlyPath, title: 'Test 2' }]);
+      expect(await store.summary(null, signal)).toMatchObject({ notes: 2, chunks: 1 });
+      expect(await store.searchByTerms(['Original'], 5, signal)).toMatchObject([{ path: legacyPath }]);
+      await store.deleteFiles([titleOnlyPath], signal);
+      await store.replaceFile(titleOnlyPath, sha, 'Removed note', [], [], signal, { onlyIfCurrent: true });
+      expect(await store.graphFiles(signal, [titleOnlyPath])).toEqual([]);
+      expect(await store.summary(null, signal)).toMatchObject({ notes: 1, chunks: 1 });
+
+      const embeddingModel = 'fixture-model';
+      const repaired = [{
+        index: 0, heading: '', content: 'Repaired chunks',
+        embedding: Array<number>(MEMORY_EMBEDDING_DIMENSIONS).fill(0.25), embeddingModel,
+      }];
+      expect(await store.files(embeddingModel, signal)).toMatchObject([{ path: legacyPath, embeddingMissing: true }]);
+      await store.replaceFile(legacyPath, sha, 'Edited > title', repaired, [], signal, { onlyIfCurrent: true });
+      expect(await store.graphFiles(signal, [legacyPath])).toEqual([{ ...previous, title: 'Edited > title' }]);
+      expect(await store.files(embeddingModel, signal)).toMatchObject([{ path: legacyPath, embeddingMissing: false }]);
+      expect(await store.searchByTerms(['Repaired'], 5, signal)).toMatchObject([{ path: legacyPath }]);
+      const newSha = 'b'.repeat(40);
+      const newer = [{ ...repaired[0]!, content: 'Newer version' }];
+      await store.replaceFile(legacyPath, newSha, 'Newer title', newer, [], signal);
+      await store.replaceFile(legacyPath, sha, 'Old title', repaired, [], signal, { onlyIfCurrent: true });
+      expect(await store.graphFiles(signal, [legacyPath])).toMatchObject([{ path: legacyPath, title: 'Newer title', blobSha: newSha }]);
+      expect(await store.searchByTerms(['Newer'], 5, signal)).toMatchObject([{ path: legacyPath }]);
+    } finally {
+      await pool.request().batch('DROP TABLE IF EXISTS dbo.vault_notes, dbo.vault_links, dbo.vault_chunks;');
+    }
   });
 
   it('stores Settings corrections and deletion audits as Settings actions, never as the capture message', async () => {

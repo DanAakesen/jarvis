@@ -65,7 +65,7 @@ extension JarvisNotesArea {
                 Button { sheet = .reorderPins } label: {
                     Label(copy[.reorderPins], systemImage: "arrow.up.arrow.down")
                 }
-                .disabled(pinnedPaths.count < 2)
+                .disabled(pinnedItems.count < 2)
             }
         case .tasks:
             JarvisMenuButton(

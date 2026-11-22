@@ -486,6 +486,25 @@ Apple CI. Dan then checks the three flows on his iPhone, including a long
 caption scroll and paging through three expanded visuals. Do not run live
 or paid checks for this change.
 
+### Notes follow-up for TestFlight 122 (Refs #2005, #2012)
+
+- Confirmed in code: summary titles came from search-chunk headings, pins could fall back to the filename,
+  and the phone could reopen a folder from a five-minute cache. A title-only note produced no SQL chunks
+  and therefore no list row. An older path-sorted page could also hide a new note.
+- The vault index now stores a display title and inventory row per file. The phone rechecks Notes on open,
+  looks pins up by path, and asks for newest-first folder pages. Paths and folder scope are unchanged.
+- After the index is ready, each sync tries at most 32 legacy reads in 20 seconds, newest first. An
+  owner pin lookup reads only requested notes still missing titles, with the same deadline. If a read
+  fails, use the filename until retry; a missing note can still be unpinned by its path. Pushes during
+  an active sync schedule one follow-up to pick up the latest vault changes.
+- The reader already extracted the first H1; a repeat in the Markdown still rendered below it. The reader
+  now hides repeated leading H1s without changing saved Markdown, and `vault_write` removes the same repeats
+  when creating a file. Newest-first root and folder pages bypass HTTP caches and validators on refresh.
+- Offline fixtures cover a Chat tool write with body text appearing on Personal's first page before sync,
+  warm root and Personal refreshes, first-view pin titles, and a vault push during a partial backfill.
+  Apple compilation and Dan's device check remain separate. We did not inspect Dan's saved Markdown or
+  verify the production cause of the missing note.
+
 ## iPhone Voice carousel and captions (#1958, P15-210)
 
 **Status: implemented; all 212 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**
