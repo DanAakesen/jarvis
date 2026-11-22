@@ -1,3 +1,19 @@
+## MCP door call ledger and replay recognition — 21 November 2026 (#1967)
+
+**Status: implemented and checked offline; exact-head CI and the first live measurement are pending.** The first version answered any second identical action of a turn from the first result; review rejected it because it would silently swallow intended repeats (three sets of the same lift, two identical entries, parallel identical calls), and nothing shows that Foundry replays calls. The second version used the JSON-RPC id as a fallback identity; a second review showed the stateless door can then swallow a deliberate repeat (a connection per model round numbers its requests 1, 2, 1, 2), so only a `_meta` call id is an identity now. An identical action under a different request always runs.
+
+| Step | State |
+| --- | --- |
+| One `pi.mcp_tool` line per finished `find_tools` / `call_tool`: tool, outcome, elapsedMs, resultBytes, truncated, duplicate, sameArgsRepeat, replayCheck, metaKeys, turn hash (8 hex), channel, provider; no arguments, results, `_meta` values or reference | Done |
+| Fields in the `logging.ts` allow-list; tested in `logging.test.ts` and, before the allow-list, in `mcp.test.ts` | Done |
+| Replay recognition: the same `_meta` call id asking for the same tool and arguments gets the first result with `duplicate: true`, also while the first is still running; failed and refused calls are not kept; reads never kept | Done |
+| No call id (the JSON-RPC id is never one), or a call id reused for something else: nothing is recognised as a replay (`replayCheck` `no_id` / `id_reused`) | Done |
+| `metaKeys`: the names of the request's `_meta` keys, so the harness's real call-id key can be read from live lines | Done |
+| `sameArgsRepeat` observation of identical actions that ran anyway (never changes execution) | Done |
+| Remote `gh_` / `az_` calls | Out of scope; never recognised |
+| Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
+| Measure in production (Log Analytics; `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): the `replayCheck` mix, which `_meta` keys Foundry sends, whether `duplicate` ever appears, what `sameArgsRepeat` shows (plan in `docs/decisions.md`) | Open; needs live turns |
+
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
 **Status: implemented and offline-tested; the PR's exact-head CI is the gate. No wake has run in production, so how a real wake uses the overview is unobserved.**
