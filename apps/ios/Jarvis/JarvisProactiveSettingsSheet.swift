@@ -23,16 +23,12 @@ struct JarvisProactiveSettingsSheet: View {
     @State private var saveToken = 0
     @State private var pendingPatch: JarvisProactiveSettingsPatch?
     @State private var newFeed = ""
-    @State private var background: PiBrainStatus?
-    @State private var backgroundFailure = false
-    @State private var backgroundUpdating = false
-    @State private var requestedBackgroundEnabled: Bool?
 
     private func text(_ key: JarvisInsightsLocalizationKey) -> String {
         jarvisInsightsText(key, language)
     }
 
-    private var isSaving: Bool { editor?.state == .saving || backgroundUpdating }
+    private var isSaving: Bool { editor?.state == .saving }
 
     var body: some View {
         NavigationStack {
@@ -67,26 +63,13 @@ struct JarvisProactiveSettingsSheet: View {
         }
         load = .loading
         do {
-            async let settings = client.settings()
-            let loadedSettings = try await settings
-            await loadBackground()
+            let loadedSettings = try await client.settings()
             if Task.isCancelled { return }
             editor = JarvisProactiveSettingsEditor(settings: loadedSettings)
             load = .loaded(())
         } catch {
             if Task.isCancelled { return }
             load = .failed(JarvisInsightsFailure(error))
-        }
-    }
-
-    private func loadBackground() async {
-        guard let client else { return }
-        backgroundFailure = false
-        requestedBackgroundEnabled = nil
-        do {
-            background = try await client.backgroundStatus()
-        } catch {
-            if !Task.isCancelled { backgroundFailure = true }
         }
     }
 
@@ -135,54 +118,6 @@ struct JarvisProactiveSettingsSheet: View {
                     Section { stateView }
                 }
                 stateBanner
-                Section {
-                    if editor != nil {
-                        Toggle(text(.editorPause), isOn: draft(\.paused, fallback: false))
-                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .accessibilityIdentifier("proactive.edit.pause")
-                    } else { pendingValue(text(.editorPause)) }
-                }
-                Section {
-                    if let background {
-                        Toggle(text(.editorBackgroundEnable), isOn: Binding(
-                            get: { background.enabled },
-                            set: { enabled in Task { await setBackgroundEnabled(enabled) } }
-                        ))
-                            .disabled(backgroundUpdating || !background.available)
-                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .accessibilityIdentifier("proactive.edit.background")
-                        if !background.available {
-                            Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        if backgroundFailure, let requestedBackgroundEnabled {
-                            HStack(spacing: 10) {
-                                Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
-                                Spacer(minLength: 0)
-                                JarvisIconButton(
-                                    title: text(.retry),
-                                    systemImage: "arrow.clockwise",
-                                    identifier: "proactive.edit.background.saveRetry",
-                                    isDisabled: backgroundUpdating
-                                ) { Task { await setBackgroundEnabled(requestedBackgroundEnabled) } }
-                            }
-                        }
-                    } else if backgroundFailure {
-                        HStack(spacing: 10) {
-                            Text(text(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
-                            Spacer(minLength: 0)
-                            JarvisIconButton(
-                                title: text(.retry),
-                                systemImage: "arrow.clockwise",
-                                identifier: "proactive.edit.background.retry",
-                                isDisabled: backgroundUpdating
-                            ) { Task { await loadBackground() } }
-                        }
-                    } else {
-                        pendingValue(text(.editorBackgroundEnable))
-                    }
-                } header: {
-                    Text(text(.proactiveBackground))
-                }
                 Section {
                     ForEach(JarvisProactiveSourceID.allCases) { id in
                         if editor != nil {
@@ -374,21 +309,6 @@ struct JarvisProactiveSettingsSheet: View {
 
     private var budgetValue: Int { editor?.draft.budget ?? 0 }
     private var backgroundTurns: Int { editor?.draft.backgroundTurnsPerDay ?? 12 }
-
-    private func setBackgroundEnabled(_ enabled: Bool) async {
-        guard let client, !backgroundUpdating else { return }
-        backgroundUpdating = true
-        defer { backgroundUpdating = false }
-        do {
-            background = try await client.setBackgroundEnabled(enabled)
-            backgroundFailure = false
-            requestedBackgroundEnabled = nil
-            onSaved()
-        } catch {
-            backgroundFailure = true
-            requestedBackgroundEnabled = enabled
-        }
-    }
 
     private var budgetSlider: Binding<Double> {
         Binding(

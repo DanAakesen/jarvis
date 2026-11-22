@@ -200,11 +200,6 @@ public struct JarvisHealthUploadCredential: Codable, Equatable, Sendable {
     public let expiresAt: String?
 }
 
-public struct JarvisProactiveSettings: Codable, Equatable, Sendable {
-    public let paused: Bool
-    public let revision: String
-}
-
 public struct JarvisMemoryItem: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public let kind: String
@@ -443,16 +438,6 @@ public struct JarvisSettingsClient: Sendable {
         try await send(.get, path: ["health", "upload-credential"], idempotent: true)
     }
 
-    public func loadProactiveSettings() async throws -> JarvisProactiveSettings {
-        try await send(.get, path: ["proactive", "settings"], idempotent: true)
-    }
-
-    public func saveProactivePaused(_ paused: Bool, expectedRevision: String) async throws -> JarvisProactiveSettings {
-        guard JarvisSettingsLogic.validRevision(expectedRevision) else { throw JarvisSettingsClientError.invalidRequest }
-        let body = try JSONEncoder().encode(ProactivePatch(paused: paused, expectedRevision: expectedRevision))
-        return try await send(.patch, path: ["proactive", "settings"], body: body)
-    }
-
     public func loadMemory(query: String = "", offset: Int = 0, limit: Int = JarvisSettingsLogic.memoryPageSize) async throws -> JarvisMemoryPage {
         guard JarvisSettingsLogic.validMemoryPage(offset: offset, limit: limit),
               query.utf8.count <= JarvisSettingsLogic.maximumMemoryQueryBytes else {
@@ -648,11 +633,6 @@ private struct TargetPatch: Encodable {
             try container.encode(value, forKey: DynamicCodingKey(stringValue: key)!)
         }
     }
-}
-
-private struct ProactivePatch: Encodable {
-    let paused: Bool
-    let expectedRevision: String
 }
 
 private struct MemoryPatch: Encodable {
@@ -900,10 +880,6 @@ public enum JarvisSettingsLogic {
 
     public static func validRoutineID(_ id: String) -> Bool {
         matches(id, pattern: #"^[a-f0-9]{64}$"#)
-    }
-
-    public static func validRevision(_ revision: String) -> Bool {
-        matches(revision, pattern: #"^[a-f0-9]{64}$"#)
     }
 
     public static func numericBounds(area: String, key: String) -> ClosedRange<Double>? {

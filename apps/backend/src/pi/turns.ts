@@ -67,7 +67,7 @@ export interface PiTurnGrant {
   readonly smoke?: boolean;
   /** A brain wake: there is no owner message. It has the chat tools plus the brain's own (message to Dan, notes, trail, looks). */
   readonly brain?: PiBrainRun;
-  /** Tools find_tools returned in this turn; call_tool refuses anything else, as the current agent does. */
+  /** Tools already advertised by the door, through find_tools or as direct tools on the connection. */
   readonly discovered: Set<string>;
   /** What each tool this turn actually ran returned, recorded by the MCP server itself, never taken from model text. */
   readonly results: { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];

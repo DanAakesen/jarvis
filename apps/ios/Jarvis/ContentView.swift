@@ -134,7 +134,7 @@ struct ContentView: View {
             ? (healthState == nil ? JarvisHealthPreview.makeClient()
                 : try? JarvisHealthLiftFixture.makeClient(empty: healthState == "empty"))
             : Self.makeHealthClient(fixtureMode: fixtureMode))
-        let insightsClient = navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
+        let insightsClient = fixtureMode || navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
         _usageClient = State(initialValue: insightsClient.map { JarvisUsageClient(client: $0) })
         _statusClient = State(initialValue: insightsClient.map { JarvisStatusClient(client: $0) })
         _proactiveClient = State(initialValue: insightsClient.map { JarvisProactiveClient(client: $0) })
@@ -417,9 +417,7 @@ struct ContentView: View {
             JarvisSettingsArea(
                 storedTheme: $storedTheme,
                 client: settingsClient,
-                piClient: fixtureMode
-                    ? try? JarvisFixtureScenario.makeSettingsPiClient()
-                    : chatClient.map { JarvisChatClient(client: $0) },
+                proactiveClient: proactiveClient,
                 onSignedOut: {
                     NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
                 }
@@ -613,7 +611,7 @@ struct ContentView: View {
     }
 
     private func remakeInsightsClients() {
-        let client = navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
+        let client = fixtureMode || navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
         usageClient = client.map { JarvisUsageClient(client: $0) }
         statusClient = client.map { JarvisStatusClient(client: $0) }
         proactiveClient = client.map { JarvisProactiveClient(client: $0) }

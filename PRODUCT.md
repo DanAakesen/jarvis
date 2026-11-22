@@ -287,7 +287,14 @@ failure and a result the app could not confirm.
 
 PI is the only normal Chat and Voice route. The obsolete engine selector, saved device choice, Chat test badge and client `engine` parameters are removed. The server accepts an older client's explicit `pi` only; `current` and every other value are refused. Isolated runtime tests keep their own selected runtime. Watch and web follow the server's one normal route; PI web voice still does not support camera or screen sharing. A PI failure does not switch engines.
 
-Background PI is a separate policy decision in Settings > Proactive, not an engine selector: it is off by default, and its existing loading, unavailable and save-failure states have a visible Retry path. Removing the normal selector does not remove the old harness infrastructure; that broader retirement remains gated separately.
+Background suggestions are a separate policy decision, not an engine
+selector. On iPhone, Settings > Proactive has one switch for them (#2007). It
+is off by default, resumes an existing pause when explicitly turned on, and
+keeps its state after reopening the app. An off switch prevents new background
+wakes without pausing reminders; being on does not bypass source, budget or
+scheduling policy. Read and save failures offer Retry. Removing the normal
+engine selector does not remove the old harness infrastructure; that
+broader retirement remains gated separately.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
@@ -334,9 +341,12 @@ TestFlight keychain/Entra configuration require separate verification.
 ## Native iPhone Voice screen (#1401; 30 October 2026)
 
 The approved Voice screen presents one orb and one short live status, with mute,
-add, captions and end controls during a session. A downward swipe minimizes
-without ending the session. Ending voice, including from the minimized bar, Lock
-Screen Live Activity or Dynamic Island, stops the backend session and returns to
+add, captions and end controls during a session. A downward swipe over the orb
+or status minimises without ending the session; scrolling captions or a visual
+does not minimise Voice (#2008). The visual grabber expands the panel on swipe
+up and shrinks it on swipe down without losing the selected visual. Ending Voice,
+including from the minimised bar, Lock Screen Live Activity or Dynamic Island,
+stops the backend session and returns to
 Chat with a cleared navigation stack and a usable sidebar. Ending while backgrounded
 must leave Chat ready on return, not an ended/error screen or a restarted session.
 Ending or failing a session also releases the shared voice owner. Watch Start
@@ -2947,6 +2957,11 @@ complete original Markdown including frontmatter. Saving retains optimistic SHA
 conflict checks and must never silently overwrite another edit. Done saves changed
 content before returning to the library. Dark pages share the approved Ember background.
 
+On iPhone, the title shown in the reader is editable for existing notes
+(#2005). Use the leading Markdown title heading if it exists, otherwise the
+readable filename. Renaming updates the reader and list without renaming the
+vault file, removing the first body line or changing its properties.
+
 On iPhone, a 72-point note-row swipe pins or unpins; a 160-point swipe asks
 Yes or No before deleting. The editor offers the same confirmation, including a
 warning for unsaved changes. Delete uses the loaded version and reports conflicts
@@ -3028,7 +3043,7 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 
 Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
-Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. It falls back to the paired iPhone, then offers keyboard entry when neither path works; it never sends the draft automatically. Transcription is bounded and cancellable, with a clear failure and keyboard fallback if it cannot complete. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
+Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. If the direct connection is unavailable, try the paired iPhone without waiting for a direct route to return. Fall back on a service failure too, but never send the draft automatically. Transcription is bounded and cancellable. If it cannot complete or no words are recognised, show a clear message, Retry and keyboard entry. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Voice explains audio-route or connection loss, resumes the same call when it can, and offers Retry when it cannot. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
 
 ## Intelligent proactive notifications — 9 November 2026
 

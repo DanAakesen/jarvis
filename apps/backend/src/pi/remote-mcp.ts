@@ -21,12 +21,19 @@ const searchWaitMs = 8_000;
 const refreshTimeoutMs = 200_000;
 const callTimeoutMs = 120_000;
 
-interface RemoteTool { readonly name: string; readonly description?: string; readonly inputSchema?: Record<string, unknown> }
+interface RemoteTool {
+  readonly name: string;
+  readonly description?: string;
+  readonly inputSchema?: Record<string, unknown>;
+  readonly annotations?: { readonly readOnlyHint?: boolean };
+}
 interface RpcResponse { readonly result?: Record<string, unknown>; readonly error?: { readonly message?: string } }
 
 export interface GithubCallResult {
   readonly outcome: 'ok' | 'error';
   readonly result: unknown;
+  /** Only an explicitly annotated read may have its result shortened. */
+  readonly readOnly?: true;
 }
 
 export type RemoteMcpStatus =
@@ -168,6 +175,7 @@ export function createRemoteMcpBridge(options: {
       name: `${options.prefix}${tool.name}`,
       description: `${options.label}: ${tool.description ?? tool.name}`,
       inputSchema: tool.inputSchema ?? { type: 'object' },
+      ...(tool.annotations?.readOnlyHint === true ? { execution: { defaultEffect: 'read' as const } } : {}),
       moduleId: 'github',
       execute: async () => { throw new Error('Remote tools run through the bridge'); },
     }));
@@ -196,6 +204,7 @@ export function createRemoteMcpBridge(options: {
 
     async call(name, args, signal) {
       if (!name.startsWith(options.prefix)) throw new Error('not_a_remote_tool');
+      const readOnly = listed?.tools.some((tool) => tool.name === name && tool.execution?.defaultEffect === 'read');
       const bounded = AbortSignal.any([signal, AbortSignal.timeout(callTimeoutMs)]);
       try {
         const result = await withSession(() => rpc('tools/call', { name: name.slice(options.prefix.length), arguments: args }, bounded), bounded);
@@ -203,7 +212,7 @@ export function createRemoteMcpBridge(options: {
         let parsed: unknown = body;
         try { parsed = JSON.parse(body); } catch { /* plain text stays text */ }
         if (result.isError === true) return { outcome: 'error', result: { error: body || `${options.label} returned an error.` } };
-        return { outcome: 'ok', result: result.structuredContent ?? parsed };
+        return { outcome: 'ok', result: result.structuredContent ?? parsed, ...(readOnly ? { readOnly: true } : {}) };
       } catch (error) {
         if (signal.aborted) throw error;
         return { outcome: 'error', result: { error: `${options.label} could not be reached. Nothing is confirmed as done.` } };

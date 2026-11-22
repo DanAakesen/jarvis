@@ -1,7 +1,10 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum WatchDictationError: Error, Equatable, Sendable {
-    case timedOut
+    case timedOut, noSpeech
 
     public static func forHTTPStatus(_ status: Int) -> Self? {
         status == 504 ? .timedOut : nil
@@ -10,6 +13,7 @@ public enum WatchDictationError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .timedOut: "Transcription timed out. Try again, or tap Message to type."
+        case .noSpeech: "No words were recognised. Speak clearly and try again, or tap Message to type."
         }
     }
 }
@@ -17,6 +21,18 @@ public enum WatchDictationError: Error, Equatable, Sendable {
 /// Transcription is safe to fall back; chat/voice mutations must never use this policy.
 @MainActor
 public enum WatchDictationRouting {
+    public static func directSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        #if canImport(Darwin)
+        // An unavailable direct route should fall back to the phone, not use the recognition window.
+        configuration.waitsForConnectivity = false
+        #endif
+        configuration.timeoutIntervalForResource = WatchDictationDeadline.directSeconds
+        return configuration
+    }
+
     public static func transcribe(
         direct: (@MainActor () async throws -> String)?,
         phone: () async throws -> String,
@@ -30,10 +46,12 @@ public enum WatchDictationRouting {
             do {
                 let text = try await boundedDirect(direct, window: directWindow, sleep: sleep)
                 try Task.checkCancellation()
-                return text
+                return try transcript(text)
             }
             catch {
                 try checkCancellation(error)
+                // A completed recognition with no words isn't a transport failure. Both paths use the same transcriber.
+                if error as? WatchDictationError == .noSpeech { throw error }
                 directFailure = error
                 try onDirectFailure(error)
             }
@@ -42,22 +60,31 @@ public enum WatchDictationRouting {
         do {
             let text = try await phone()
             try Task.checkCancellation()
-            return text
+            return try transcript(text)
         }
         catch {
             try checkCancellation(error)
+            if error as? WatchDictationError == .noSpeech { throw error }
             if directFailure as? WatchDictationError == .timedOut {
                 switch error as? WatchFailure {
                 case .unavailable, .network, .failed, nil: throw WatchDictationError.timedOut
                 default: break
                 }
             }
+
             if error as? WatchFailure == .unavailable {
                 if let directFailure { throw directFailure }
                 if direct == nil { throw WatchFailure.dictationSetup }
             }
             throw error
         }
+    }
+
+    private static func transcript(_ text: String) throws -> String {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw WatchDictationError.noSpeech }
+        guard text.utf8.count <= 8_000 else { throw WatchFailure.failed }
+        return text
     }
 
     private static func boundedDirect(

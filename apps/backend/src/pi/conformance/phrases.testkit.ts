@@ -27,6 +27,10 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'reminder', en: 'remind me in 20 minutes to call mum', da: 'påmind mig om 20 minutter om at ringe til mor', tools: ['owner_reminders'] },
   { intent: 'reminder', en: 'set a reminder for tomorrow at 9', da: 'sæt en påmindelse til i morgen klokken 9', tools: ['owner_reminders'] },
   { intent: 'reminder', en: 'snooze the reminder for an hour', da: 'udskyd påmindelsen en time', tools: ['owner_reminders'] },
+  // Feedback on one proactive chat message, not on a finding.
+  { intent: 'proactive message feedback', en: 'that message was useful', da: 'den besked var nyttig', tools: ['proactive_message_feedback'] },
+  { intent: 'proactive message feedback', en: 'that notification was wrong', da: 'den notifikation var forkert', tools: ['proactive_message_feedback'] },
+  { intent: 'proactive message feedback', en: 'that alert was no use', da: 'den advarsel var til ingen nytte', tools: ['proactive_message_feedback'] },
   // Calendar
   { intent: 'calendar', en: 'what is on my calendar today', da: 'hvad er der i min kalender i dag', tools: ['calendar_today_agenda', 'calendar_list_events'] },
   { intent: 'calendar', en: 'when is my next meeting', da: 'hvornår er mit næste møde', tools: ['calendar_next_event'] },

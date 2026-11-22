@@ -90,6 +90,14 @@ struct WatchChatView: View {
                             if !message.user { Spacer(minLength: 0) }
                         }.id(message.id)
                     }
+                    if let failure = model.audioFailure {
+                        Text(failure.message).font(.caption).fixedSize(horizontal: false, vertical: true)
+                        WatchLabelledButton(title: "Retry", systemName: "arrow.clockwise") {
+                            Task { await model.retryAudio() }
+                        }
+                        .disabled(composerDisabled)
+                        .accessibilityHint(failure.action == .dictation ? "Try dictation again" : "Start voice again")
+                    }
                     Color.clear.frame(height: clearance).id("latest").accessibilityHidden(true)
                 }
             }
@@ -133,6 +141,11 @@ struct WatchChatView: View {
             .onChange(of: clearance) { _, _ in
                 // A taller composer (status row) must not slide the newest message back under it.
                 guard !reading else { return }
+                proxy.scrollTo("latest", anchor: .bottom)
+            }
+            .onChange(of: model.audioFailure) { _, failure in
+                guard failure != nil else { return }
+                reopened = true
                 proxy.scrollTo("latest", anchor: .bottom)
             }
             .onChange(of: model.messages.last?.text) { _, _ in
@@ -230,7 +243,7 @@ struct WatchChatView: View {
                 if model.dictationState == .connecting {
                     Text("Preparing microphone…")
                 } else if model.dictationState == .listening {
-                    Text("Listening…")
+                    Text(model.repairingAudio ? "Audio changed. Reconnecting…" : "Listening…")
                 } else {
                     Text("Transcribing…")
                 }

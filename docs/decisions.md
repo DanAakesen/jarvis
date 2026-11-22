@@ -449,9 +449,32 @@ A production Chat turn failed with `approval_or_function_call_item` and `sawTool
 
 The managed instructions read the tool reference from the first line. The normal chat formatter put the owner's context before it whenever context was first sent or changed. A test of the normal PI chat route reproduced the missing reference on a reused owner conversation; putting the reference first lets the contract-following harness fixture discover and call Azure through Jarvis MCP. The smoke's environment note is not that context block. Run 44185584236 proved Azure reach in a separate conversation, not what happened on the phone. Keep the existing turn grant and tool checks; use content-free counts to tell catalogue, selection and execution failures apart in device testing.
 
+## 22 November 2026 — iPhone TestFlight corrections (Refs #2005, #2007, #2008)
+
+- **Notes:** a nonempty leading Markdown H1 is the title; otherwise use the
+  readable filename rather than taking the first line from the note. Renaming
+  a headingless note inserts an H1 after any frontmatter, keeps the body and
+  filename, and uses the existing SHA-checked save. A body-only edit does not
+  add a heading.
+- **Proactive:** Settings owns the iPhone's only master switch; the Proactive
+  editor keeps source and policy controls. On means the backend can start a
+  background wake (`available && enabled && !paused`), not that it will start
+  one immediately. A backend pause reads as Off on iPhone. Turning Off writes
+  the owner flag only, not the pause setting; turning On clears an existing
+  pause by revision before enabling the flag. Reminders, the web UI and
+  scheduling limits are unchanged.
+- **Voice:** replace the Resize button and top-left Close from #1958 with a
+  scroll-free resize grabber and top-right Close. Use the existing full-screen
+  carousel when expanded. The footer means the Previous/Next row, not the
+  main call controls. Voice minimising listens only over the orb and status,
+  not to a whole-screen drag checked against saved rectangles.
+- **Verification:** native compilation belongs to Apple CI; Dan owns
+  acceptance on an iPhone. No live model, provider or paid check is needed.
+
 ## 18 November 2026 — iPhone Voice keeps visuals for the current call (#1958, P15-210)
 
 Use the existing phone workspace events to populate a local Voice carousel, without changing the backend window contract. A new ID appends and takes focus; an update to an existing ID replaces that page. Close clears the carousel, Collapse returns from full screen, and minimising the call keeps its visual history. Use the existing glass controls over the page and let the HTML document own its heading and authored colours; WebKit gets the active appearance, Jarvis theme variables and readable defaults. Apple compilation, rendering and live call acceptance remain unverified.
+The control placement and resize interaction were superseded by #2008.
 
 ## 19 November 2026 — Treat Vault Mirror and Status uncertainty as evidence, not a green/red guess (#1962)
 
@@ -13963,6 +13986,32 @@ The delayed silence check is bound to its capture (`WatchCaptureGeneration`): `s
 
 Open: none of the capture changes is verified on a Watch. Whether the cause is the mode, the channel mixing or something else is not proven; the logs from the next run decide. Build 113 backend logs (18 Nov, no device attribution) show two /voice sockets near the owner's test that reached upstream `session_updated`, played Jarvis's output audio and closed 1006 after about 19 to 23 s with no input speech, commit or transcription, and no dictation upload at all. So socket and upstream setup work and the input audio never carried speech, which matches silence from the Watch capture; it does not prove it. The earlier "no voice socket" lead is superseded.
 
+## 22 November 2026 — Recover Watch audio and retry failures (Refs #2006)
+
+- **Confirmed voice bugs:** the route observer ended voice for any reported
+  change except category changes. That path matches Dan's build 120 message.
+  The startup retry also called `VoiceAudioEngine.stop()` after installing the
+  playback-finished callback, so later replies could leave voice on Speaking.
+- **Confirmed dictation gaps:** both launchers use the same Watch recorder.
+  After Stop, an audio interruption or screen sleep could cancel its upload;
+  an empty recognition result looked like a transport failure. Keep the
+  bounded upload running and report no words separately, without replaying it.
+- **Decision:** take a new graph and the negotiated format for each capture.
+  Check again after 250 ms: only changed ports or a stopped graph need a
+  rebuild. Allow two recoveries per capture in a rolling ten seconds, with
+  up to three attempts per recovery on the same stream. More instability
+  stops the capture and shows Retry instead of repeatedly cutting playback.
+  Install playback completion on the successful startup attempt. On a
+  phone-link gap, allow ten seconds including heartbeat replies; don't replay
+  audio or open a second voice session.
+- **Dictation fallback:** keep the recognition deadline for an active
+  transfer, but don't wait for connectivity when the direct path is
+  unavailable. Try the paired iPhone once instead.
+- **Still inferred:** cold/stale audio routing could contribute to build 120
+  dictation failures. Prior reports show a Speech start stall (#1950) and
+  silent Watch captures (#1943), not which stage failed on build 120. No backend
+  change or live test; use the next Watch run to separate capture and upload.
+
 ## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
 
 The owner heard nothing from the Watch: dictation reported a timeout and live voice never heard him. Backend logs (Log Analytics, 14:49Z) for two 10 s dictations: `audio_received` at 0.7 s and 2.6 s with 489,082 bytes / 10,189 ms (real 24 kHz audio, so capture and upload worked), the speech token acquired at the same moment, then no `recognizer_started`, `session_started`, speech or error row for 6.5 to 9.4 s until the Watch disconnected. The SDK reports start only after its Speech connection opens, so that connection never opened. The Watch transcriber was the only Speech caller using a fixed `speechRecognitionLanguage` on the universal v2 endpoint; the live partial recognizer, probed live on 6 October (L111), uses language identification there.
@@ -14117,3 +14166,11 @@ Dan reported the iPhone Voice screen staying on "Speaking" after Jarvis had stop
 - **Reworked from #2023.** After #2022 merged, #2023 was reduced to what main lacked: the html-view window ids and update, the brain refusal wording, the Danish memory key, finding a note straight after writing it, Google free slots and the receipt of a refused write, `set_theme` glow and radius 0, `get_usage` rounding and the log limit text, the two giant tool schemas sent with their repeated parts once, the Chrome-keys and `codex_prompt` ordering fixes, `browser_do` texts and `browser_do_shared` from PI, the disliked-meal key, the gym and food texts, and the Factory task data and issue-start texts. Dropped because #2022 fixed the same bug (main's wording wins): `workspaces_open` not-found, the reminder key, the system-health clock skew, the grouped Health arguments and the recursive `$ref`, the PC bridge typed failures, the GitHub outage texts and untitled events. #2023's own suite is dropped; #2022's covers it.
 - **Left as main has it:** `health_query` still answers a lift source with a redirect to `gym_lifts` (the assistant is not offered the browser accessor); reading the lifts there instead would save a call.
 - **Not verified:** all offline. Whether Foundry sends a call id (so replay recognition is on) is still unmeasured. Dan's live Chat and Voice retest of the daily-core scenarios is open. The comment marker has not been seen on a real GitHub issue.
+
+## 22 November 2026 — Shorten large PI reads and list three quick tools on the existing MCP connection
+
+- Large tool results remain in the conversation and can be sent again on later model calls. Reduce the old 200,000-character door cap to 24,000 characters for successful read results. Measure the serialized `result` in UTF-16 code units, so `totalCharacters` describes the original JSON length. Keep paging/status and top-level evidence fields (`confirmation`, `receipt`, `receipts`, `verifiedRef`) intact even if those fields alone exceed the cap. Shorten the rest to a JSON preview, and say when the first array item does not fit. The door adds a shortened-result notice to the original confirmation without changing what was audited. Keep `list_capabilities` whole: it has no way to fetch a missing page of tools or features. Do not shorten errors, write results or remote results without an explicit read-only annotation. This changes payloads, not access, execution or auditing.
+- List `weather`, `calendar_list_events` and `owner_reminders` beside `find_tools` and `call_tool`. Use the existing registry and one dispatcher: the same turn, tool, arguments and `_meta` call id identify a replay across both call forms. Weather's report still saves and opens a workspace item unless `report: false`; calendar is read-only; reminders use their existing per-operation effects. Keep the Foundry-owned instructions unchanged.
+- If weather saves a report but cannot finish setting it up, mark the failure as partial so replaying the same call does not create another report.
+- Three Danish phrases for #2025's `proactive_message_feedback` missed on the first search. Add noun-scoped aliases and English/Danish fixture pairs without changing the ranking algorithm.
+- **Trade-off:** every turn can see three more schemas, but common calls need no search. The before/after query in `docs/agent-context.md` measures search count and input tokens from normal use. Only offline fixture results are verified; the savings and harness selection are not measured live.

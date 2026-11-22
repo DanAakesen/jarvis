@@ -293,7 +293,10 @@ export const healthGroup: GroupFactory = (context): ConformanceGroup => {
         expect(result.period).toMatchObject({ startDate: weekAgo, endDate: day });
         expect(result.sleep.items).toHaveLength(7);
       }),
-      query('history without dates is the latest 30 days', { operation: 'get_health_history' }, (result) => expect(result.sleep.items).toHaveLength(7)),
+      query('history without dates is the latest 30 days', { operation: 'get_health_history', limit: 7 }, (result) => {
+        expect(result.period).toMatchObject({ startDate: shiftDay(day, -29), endDate: day });
+        expect(result.sleep.items).toHaveLength(7);
+      }),
     ],
     health_nutrition_history: [
       query('meals over the last week', { operation: 'get_nutrition_history', startDate: weekAgo, endDate: day }, (result) => { expect(result.status).toBe('available'); expect(result.meals.length).toBeGreaterThanOrEqual(2); }),

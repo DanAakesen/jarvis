@@ -12,7 +12,7 @@ Brain pushes use the first sentence without cutting off common abbreviations or 
 
 Dan's goal for PI is a bot experience that is "always on", knows him, "can be proactive" and knows him "super well" when he reaches out himself (his words; `PRODUCT.md`, "North star"). It is recorded as issues [#2012](https://github.com/DanAakesen/jarvis/issues/2012) (P0) and [#2011](https://github.com/DanAakesen/jarvis/issues/2011) (P1). Priorities as relayed: **P0** every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. **P1** proactive intelligence. Most of the work in this section is P0; #2018 is a first P1 step (the signals Dan named); P1 otherwise ranks after P0. The offline evidence that Chat and Voice behave the same is #2021 (24 scenarios); the live check is open (Next steps). Inference: these are priority ranks, not the plan phases P0–P15.
 
-Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches the Jarvis tools through one door (`find_tools`, `call_tool`).
+Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches Jarvis tools through one MCP door: three direct tools and `find_tools` / `call_tool` for the rest.
 
 | Weight of the job | Layer | Examples |
 | --- | --- | --- |
@@ -25,7 +25,11 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 
 ### P0 follow-up: shared turn lifetimes
 
-Chat and Voice now queue on the shared conversation rather than returning `busy`. The offline replays cover both arrival orders, one stored typed message and one reply after a voice turn, voice supersession and session end, and audio startup while proactive context stalls. At its deadline Voice uses the same `failureCopy` sentence as Chat (#2017) and speaks it before provider cancellation, while the next turn still waits. Device and live verification remain with Dan. The next change is to bound MCP result size after #2023 lands, then expose the three quick tools directly on the same MCP connection.
+Chat and Voice now queue on the shared conversation rather than returning `busy`. The offline replays cover both arrival orders, one stored typed message and one reply after a voice turn, voice supersession and session end, and audio startup while proactive context stalls. At its deadline Voice uses the same `failureCopy` sentence as Chat (#2017) and speaks it before provider cancellation, while the next turn still waits. Device and live verification remain with Dan.
+
+### P0 follow-up: smaller reads and direct quick tools
+
+After #2023, the MCP door shortens successful read results over 24,000 characters without cutting paging details, write results, confirmations or receipts. `list_capabilities` stays whole because its catalogue cannot be paged. Chat, Voice and wakes can call `weather`, `calendar_list_events` and `owner_reminders` directly through the same dispatcher and replay checks. Three Danish phrases now find #2025's `proactive_message_feedback` in the top three on the first search. Offline coverage and the generated conformance table are in place; changes in search count and input tokens are not measured live.
 
 ### Completed 20–21 November
 
@@ -452,6 +456,19 @@ Completion means the existing PI activation envelope and one background queue ow
 | Push one ready PR against `main`, qualify that exact head, address CI/review and hand off to Dispatcher | In progress |
 
 Completion means deterministic backend, web, contracts, script, migration/SQL and JarvisCore checks pass at the PR head, CI and review findings are addressed, and Dispatcher receives the exact SHA and TestFlight/live gaps. Merge, deployment and TestFlight remain Dispatcher-owned.
+
+## iPhone TestFlight corrections — 22 November 2026 (Refs #2005, #2007, #2008)
+
+Implemented in one iPhone PR: editable titles on old notes, one Proactive
+switch, and separate gestures for caption scrolling, Voice minimising and
+visual expansion. Backend routes, the web UI and the Watch UI are unchanged.
+Offline: 263 JarvisCore tests and 52 backend wake-switch/runner fixture tests
+passed. Apple CI caught stale Settings localisation references and a stale
+Today note-editor callback on the first revision. The follow-up fixes both
+and audits removed symbols across iOS. The updated iPhone build still needs
+Apple CI. Dan then checks the three flows on his iPhone, including a long
+caption scroll and paging through three expanded visuals. Do not run live
+or paid checks for this change.
 
 ## iPhone Voice carousel and captions (#1958, P15-210)
 
@@ -5816,6 +5833,22 @@ Implemented the owner-approved handover: one Chat row, bottom-right menu button,
 ## Watch build 113 follow-up — 18 November 2026 (P15-211 / #1943)
 
 Owner on build 113: dictation and live voice both report no sound, native Apple Dictation works, and the newest Chat message still sits behind the composer. The new silence check proved the Watch tap delivers exact digital silence (not a transport or Speech fault), so the capture path is the suspect, independent of permission and hardware. Done in code: dictation records in the plain session mode and live voice in voice-chat mode, each restarting once in the other mode when the first seconds are exact silence; several microphone channels are folded to mono explicitly; the tap's input peak, channels, rate, route and permission are logged (`WatchAudio`, `WatchVoice`). The newest message now clears the composer through real end content measured from the composer and safe area. Backend logs agree: voice sockets reached upstream and played audio but never heard speech, and no dictation reached the backend. Next: a paired-Watch run reading the `WatchAudio`/`WatchVoice` lines (they show the mode that works and whether the input or the conversion lost the signal), and the simulator `chat-ready.png` / `chat-reading.png` captures for the overlap.
+
+## Watch dictation and voice reliability — 22 November 2026 (Refs #2006)
+
+Implemented in source: recover the Watch audio graph without closing the phone
+voice session, keep playback completion after capture retries, confirm the same
+session after a short connection loss, and show Retry for failed dictation or
+voice. Transcription survives an audio interruption after Stop and never
+automatically sends the draft. An unavailable direct route falls through to
+the phone without waiting for connectivity. Once a route has settled, an
+active capture can rebuild its graph at most twice per ten seconds; further
+instability offers Retry. Native CI caught route-recovery callbacks reading
+Watch state outside the main actor. The corrected model type-checks
+against JarvisCore and Linux platform stubs. Next: macOS Watch rebuild, then
+Dan's paired-Watch checks in `docs/agent-context.md`. Build 120's dictation
+cause and hardware acceptance remain open. The no-buffer watchdog and tests
+that drive the Watch app's audio/companion wiring are follow-ups.
 
 ## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
 

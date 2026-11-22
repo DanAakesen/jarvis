@@ -7,7 +7,6 @@ actor JarvisSettingsFixtureTransport: HTTPTransport {
     private var training = ["gymSessionsPerWeek": 4, "runSessionsPerWeek": 1, "dailySteps": 6000]
     private var nutrition = ["restingKcal": 2200, "deficitKcal": 300, "proteinGrams": 160]
     private var reads: [String: Int] = [:]
-    private var backgroundPiEnabled = false
 
     init(scenario: Data) throws {
         let root = try JSONSerialization.jsonObject(with: scenario) as! [String: Any]
@@ -39,14 +38,6 @@ actor JarvisSettingsFixtureTransport: HTTPTransport {
             return HTTPResponse(statusCode: 200, body: try JSONSerialization.data(withJSONObject: [
                 "items": items, "count": items.count, "limit": 50, "offset": 0, "hasMore": false,
             ]))
-        }
-        if request.url.path == "/api/pi/brain" {
-            if request.method == .put, let body = request.body,
-               let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-               let enabled = value["enabled"] as? Bool {
-                backgroundPiEnabled = enabled
-            }
-            return HTTPResponse(statusCode: 200, body: try backgroundPiStatus())
         }
         if request.url.path == "/api/settings" {
             if request.method == .patch, let data = request.body,
@@ -89,36 +80,6 @@ actor JarvisSettingsFixtureTransport: HTTPTransport {
         return HTTPResponse(statusCode: 200, body: try JSONSerialization.data(withJSONObject: [
             "targets": targets, "bounds": bounds, "missing": [], "updatedAt": "2026-11-07T12:00:00Z",
         ]))
-    }
-
-    private func backgroundPiStatus() throws -> Data {
-        try JSONSerialization.data(withJSONObject: [
-            "available": true,
-            "enabled": backgroundPiEnabled,
-            "updatedAt": "2026-11-19T15:00:00Z",
-            "paused": false,
-            "budget": ["limitDkk": 100, "spentDkk": 0.34, "state": "ok"],
-            "month": ["wakes": 2, "costDkk": 0.34],
-            "today": ["messages": 0, "usedTurns": 2, "allowedTurns": 12],
-            "lastWake": NSNull(),
-            "logPending": 0,
-            "slots": [
-                "used": 2, "allowed": 12, "remaining": 10, "lastAt": "2026-11-19T14:30:00Z",
-                "lastActivationType": "event", "lastSatisfiedSlot": "2026-11-19T18:00",
-                "nextAllowedAt": NSNull(), "quiet": false,
-                "queue": ["pending": 0, "leased": 0, "retrying": 0],
-            ],
-            "situation": [
-                "revision": 3, "asOf": "2026-11-19T14:30:00Z", "updatedAt": "2026-11-19T14:30:00Z",
-                "staleSources": [], "missingSources": ["weather"], "disabledSources": [],
-            ],
-            "cost": [
-                "coldSweepMinDkk": 0.14, "coldSweepMaxDkk": 0.28,
-                "representativeToolTurnDkk": 0.17, "preflightWorstCaseDkk": 0.79,
-                "estimatedDayMinDkk": 1.68, "estimatedDayMaxDkk": 3.36,
-                "estimatedThirtyDayMinDkk": 50.4, "estimatedThirtyDayMaxDkk": 100,
-            ],
-        ])
     }
 
     func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse { throw HTTPTransportFailure.network }
