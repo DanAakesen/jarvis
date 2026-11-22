@@ -106,7 +106,13 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-The Apple build number is the workflow run number. Check that the exact build has finished processing in App Store Connect and is available in TestFlight; a successful upload alone does not prove either. Name the available build and exact device checks in [the plan's](../PLAN.md) daily-core order. Do not ask the owner to test an unshipped build or a fix still in flight. Reopen an acceptance issue if linking a PR closed it prematurely.
+The Apple build number is the workflow run number. After upload, the workflow makes a bounded read-only App Store Connect check for the configured app bundle and exact build number, then verifies the returned marketing version against the checked-in iOS project. It uses Apple's [Apps](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-apps) and [Builds](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds) endpoints. It reports processing state, the Apple [internal testing state](https://developer.apple.com/documentation/appstoreconnectapi/internalbetastate), and the count of associated internal groups without exposing Apple app IDs, group names, or tester identities. A successful upload alone does not prove processing or availability. If processing is still pending, dispatch the same workflow on `main` with `receipt_build_number` set to the existing build number; this runs only the readback job and does not archive or upload. That readback reports Apple's marketing version for the selected build. The original run's `run_number` is the build number; its Actions run ID is a different value. For a later readback, the displayed SHA/ref identify the readback workflow; the original upload run carries the build's source SHA/ref. A receipt still does not prove device installation. Name the available build and exact device checks in [the plan's](../PLAN.md) daily-core order. Do not ask the owner to test an unshipped build or a fix still in flight. Reopen an acceptance issue if linking a PR closed it prematurely.
+
+```sh
+gh workflow run ios-testflight.yml --ref main -f branch=main -f receipt_build_number=BUILD_NUMBER
+```
+
+Replace `BUILD_NUMBER` with the build number from the original successful iOS TestFlight run. Receipt mode reads Apple state only; the source commit and branch remain recorded on the original upload run.
 
 ## Cost and safety
 

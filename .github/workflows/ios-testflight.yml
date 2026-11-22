@@ -8,6 +8,10 @@ on:
         required: true
         default: main
         type: string
+      receipt_build_number:
+        description: Existing build number for readback only; setting it skips archive and upload
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -18,6 +22,7 @@ concurrency:
 
 jobs:
   upload:
+    if: inputs.receipt_build_number == ''
     name: Archive and upload to TestFlight
     environment: ios-testflight
     runs-on: macos-26
@@ -197,6 +202,17 @@ jobs:
                 done || true
             exit 1
           fi
+      - name: Read TestFlight processing and internal availability
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          TARGET_BUILD_NUMBER: ${{ github.run_number }}
+          TARGET_VERIFY_MARKETING_VERSION: 'true'
+          TARGET_SOURCE_SHA: ${{ github.sha }}
+          TARGET_SOURCE_REF: ${{ github.ref }}
+          TESTFLIGHT_RECEIPT_WAIT_SECONDS: '180'
+        run: ruby .github/scripts/testflight_receipt.rb
       - name: Add preview build notes
         if: github.ref != 'refs/heads/main'
         run: |
@@ -219,3 +235,22 @@ jobs:
       - name: Delete App Store Connect key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+  receipt:
+    if: inputs.receipt_build_number != '' && github.ref == 'refs/heads/main'
+    name: Read-only TestFlight receipt
+    environment: ios-testflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - name: Read existing build from App Store Connect
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          TARGET_BUILD_NUMBER: ${{ inputs.receipt_build_number }}
+          TESTFLIGHT_RECEIPT_WAIT_SECONDS: '0'
+        run: ruby .github/scripts/testflight_receipt.rb
