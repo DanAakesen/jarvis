@@ -1069,11 +1069,11 @@ export function createTaskStore(
         if (isPolicyBlocked) {
           const latest = await new sql.Request(transaction)
             .input('taskId', sql.BigInt, BigInt(event.taskId))
-            .query<InsertedEventRow>(`SELECT TOP (1) CAST(id AS varchar(19)) AS id, type,
-              summary, payload, source, at FROM dbo.task_events
+            .query<InsertedEventRow>(`SELECT TOP (1) CAST(e.id AS varchar(19)) AS id, type,
+              summary, payload, source, at FROM dbo.task_events AS e
               WHERE task_id = @taskId AND (type = N'state_changed'
                 OR (type = N'project_policy_blocked' AND source = N'backend'))
-              ORDER BY id DESC;`);
+              ORDER BY e.id DESC;`);
           const previous = latest.recordset[0];
           const reason = record(parsePayload(payload))?.reason;
           if (previous?.type === 'project_policy_blocked' && typeof reason === 'string' &&

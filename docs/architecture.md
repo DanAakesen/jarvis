@@ -1209,7 +1209,9 @@ A saved typed reply carries `replyToTurnId`, the accepted message ID that
 opened the stream, even if a follow-up steered it. The conversation store writes
 the link in the existing message metadata and exposes it in history. Chat
 dismisses an unconfirmed notice only on the linked saved reply, never on an
-unrelated message such as a proactive update in the same session.
+unrelated message such as a proactive update in the same session. History sorts
+by the underlying `bigint` message ID before dropping the oldest lookahead row.
+The returned IDs and cursor are still strings.
 
 The iPhone **Test a reply** sheet still uses the existing isolated `current` and
 `copilot` sessions. It reports a reply from `done` or, after a disconnect, from a

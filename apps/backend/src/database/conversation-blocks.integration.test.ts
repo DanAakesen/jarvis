@@ -298,6 +298,27 @@ describe('conversation blocks in the message store', () => {
     expect(second?.id).toBe(history.messages[3]!.id);
   });
 
+  it('pages across a message ID digit boundary without skipping or repeating a row', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'chat', language: 'en' });
+    await pool.request()
+      .input('sessionId', sql.BigInt, BigInt(session.id))
+      .query(`SET IDENTITY_INSERT dbo.messages ON;
+        INSERT INTO dbo.messages (id, jarvis_session_id, role, text) VALUES
+          (999998, @sessionId, N'dan', N'First question'),
+          (999999, @sessionId, N'jarvis', N'First reply'),
+          (1000000, @sessionId, N'dan', N'Second question'),
+          (1000001, @sessionId, N'jarvis', N'Second reply');
+        SET IDENTITY_INSERT dbo.messages OFF;`);
+
+    const latest = await store.getHistory({ limit: 2, sessionId: session.id });
+    expect(latest.messages.map(({ id }) => id)).toEqual(['1000000', '1000001']);
+    expect(latest.nextCursor).toBe('1000000');
+    const earlier = await store.getHistory({ limit: 2, before: latest.nextCursor!, sessionId: session.id });
+    expect(earlier.messages.map(({ id }) => id)).toEqual(['999998', '999999']);
+    expect(earlier.nextCursor).toBeNull();
+  });
+
   it('refuses blocks on the owner\'s own message, empty lists and broken blocks', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'chat', language: 'en' });

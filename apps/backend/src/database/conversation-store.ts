@@ -718,10 +718,10 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     async getDanMessageIdBySourceItemId(sourceItemId) {
       const result = await databaseReadRequest(pool)
         .input('sourceItemId', sql.NVarChar(128), sourceItemId)
-        .query<{ id: string }>(`SELECT TOP (1) CONVERT(varchar(20), id) AS id
-          FROM dbo.messages
-          WHERE source_item_id = @sourceItemId AND role = N'dan'
-          ORDER BY id DESC;`);
+        .query<{ id: string }>(`SELECT TOP (1) CONVERT(varchar(20), m.id) AS id
+          FROM dbo.messages AS m
+          WHERE m.source_item_id = @sourceItemId AND m.role = N'dan'
+          ORDER BY m.id DESC;`);
       return result.recordset[0]?.id ?? null;
     },
 
@@ -804,11 +804,11 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
                 SELECT 1 FROM dbo.session_runtime_tests r WHERE r.jarvis_session_id = s.id))))
           ORDER BY m.id DESC;
 
-          SELECT CONVERT(varchar(20), id) AS id,
+          SELECT CONVERT(varchar(20), h.id) AS id,
             CONVERT(varchar(20), session_id) AS session_id, channel, language, role, text, model,
             interrupted, voice_minutes, metadata, at
-          FROM @history
-          ORDER BY id;
+          FROM @history AS h
+          ORDER BY h.id;
 
           SELECT CONVERT(varchar(20), tc.id) AS id,
             CONVERT(varchar(20), tc.message_id) AS message_id, tc.tool, tc.outcome,
