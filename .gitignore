@@ -43,3 +43,6 @@ infra/*.json
 
 # Private keys (for example the GitHub App key) must never be committed.
 *.pem
+
+# Editor settings are per machine
+.vscode/
