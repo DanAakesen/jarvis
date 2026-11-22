@@ -121,6 +121,12 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 - Harness timing rule: a step waits for what the relay has observed (`voice.received`, stored messages, `voice.settle()`), never for a bare sleep; the one sleep left is the relay's own 1.5 s quiet window, counted from the relay's receipt of the aside (S12c). `speechLagMs` makes the GPT-Live stub speak late, in order; S12a-c run with the first note 1.8 s late, because a note that reaches the relay after Dan's next words joins that reply and the test must not hang on how quick the stub is.
 - Product rule for the scenarios: a non-delete write finishes in one turn with no confirmation; only a delete may ask. Do not add an approval step to a PI tool.
 
+## iPhone Chat composer and reply checks — 22 November 2026 (#2026, #2010)
+
+- Use the JarvisCore suite (`swift test --package-path apps/ios/Packages/JarvisCore` or the `swift:6.2` Linux container used by `ios-ci.yml`). The draft, reply outcome and SSE tests are offline. The watch-build job compiles the iPhone app with Xcode; Linux cannot qualify the SwiftUI layout or UIKit keyboard.
+- The backend fixture checks are `npm test --workspace @jarvis/backend -- src/pi/engine-selector.test.ts src/core/recoverable-chat.test.ts src/voice/chat-voice-parity.test.ts`. They use scripted replies, not a live provider. Do not run `measure_pi`, a deploy smoke or a Foundry probe to qualify this change.
+- On iPhone, enable Background motion, leave Voice and sharing idle and type rapidly in a 100+ message Chat. Verify each character, the keyboard and scrolling. Check a completed answer, Stop before completion and a follow-up while Jarvis is still answering. Open Plus > **Test a reply** and send a short prompt in an available setup; check the reply and return to the unchanged normal draft/history.
+
 ## See the brain — 21 November 2026 (Refs #1969)
 
 - Where to look (every field below is a number or a fixed word; Application Insights `traces`, `message` is the event name and the fields are in `customDimensions`, or the container's stdout JSON):

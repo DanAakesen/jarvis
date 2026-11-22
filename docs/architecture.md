@@ -1187,6 +1187,27 @@ already exclude runtime tests. `copilot_not_configured` means no managed verifie
 is wired; `copilot_not_verified` means configured metadata does not verify. No raw
 provider body is returned by availability.
 
+### iPhone draft and reply status (22 November 2026; #2026, #2010)
+
+`JarvisChatModel` keeps one `ChatComposerDraft` for typing, dictation, Home handoff
+and send. Only the composer observes it; editing text does not publish through
+the transcript's `ObservableObject`. Its existing editor revision still rejects a
+late UIKit edit after send.
+
+The stream stops at the saved `done` reply. An `error` with code `stopped` uses
+the existing `failureCopy` sentence without marking the turn failed. Stop leaves
+the stream open, so a reply saved in the race still wins. Steering retains any
+saved `interrupted` reply fragment; if there is none, `superseded` carries the
+request ID while the replacement continues. Replay loss leaves the result
+unconfirmed rather than failed. A reply notification failure cannot change the
+saved reply's result.
+
+The iPhone **Test a reply** sheet still uses the existing isolated `current` and
+`copilot` sessions. It reports a reply from `done` or, after a disconnect, from a
+complete reply after the accepted request and before the next request in the
+same test session. A fragment or a later request's answer does not count. It does
+not rerun an accepted message, and a history read cannot release a managed claim.
+
 An explicit `refresh_managed_chat_definition` deployment input may create one new
 immutable version of the existing comparison agent when no current-manifest match
 exists. Unique exact matches are reused, including on a later operator-reviewed

@@ -88,6 +88,7 @@ public enum ChatEvent: Equatable, Sendable {
     case progress(ChatProgress)
     case foodInvitation(ChatFoodInvitation?)
     case interrupted(ChatMessage)
+    case superseded(messageID: String)
     case done(ChatMessage)
     case error(ChatTurnFailure)
     case unknown(name: String, data: String)
@@ -213,6 +214,15 @@ public enum ChatHistoryOrdering {
 public struct ChatHistoryPage: Codable, Equatable, Sendable {
     public let messages: [ChatHistoryMessage]
     public let nextCursor: String?
+
+    /// In an isolated test, the next Dan message bounds what could be this request's reply.
+    public func confirmsTestReply(to messageID: String, sessionID: String) -> Bool {
+        let rows = ChatHistoryOrdering.ordered(messages.filter { $0.sessionId == sessionID && $0.channel == .chat })
+        guard let request = rows.firstIndex(where: { $0.id == messageID && $0.role == .dan }) else { return false }
+        return rows.dropFirst(request + 1).prefix { $0.role != .dan }.contains {
+            !$0.interrupted && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 }
 
 public struct ChatAttachmentUpload: Sendable {
@@ -239,6 +249,11 @@ public enum JarvisChatClientError: Error, Equatable, Sendable {
     case reattachTimedOut
     case streamEnded
     case serverEvent(code: String?, message: String?)
+
+    public var serverFailure: ChatTurnFailure? {
+        guard case let .serverEvent(code, message) = self else { return nil }
+        return ChatTurnFailure(code: code, message: message?.isEmpty == false ? message : nil)
+    }
 }
 
 public struct ReattachPolicy: Sendable {

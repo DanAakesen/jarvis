@@ -278,6 +278,11 @@ A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
 
+On iPhone, **Test a reply** tries the earlier Jarvis setup or Copilot in an
+isolated conversation, not the model used by normal Chat. Report a received reply
+only when there is a completed answer; distinguish a confirmed stop, a known
+failure and a result the app could not confirm.
+
 ## PI-only normal chat and voice (#1887, #1910, #1966)
 
 PI is the only normal Chat and Voice route. The obsolete engine selector, saved device choice, Chat test badge and client `engine` parameters are removed. The server accepts an older client's explicit `pi` only; `current` and every other value are refused. Isolated runtime tests keep their own selected runtime. Watch and web follow the server's one normal route; PI web voice still does not support camera or screen sharing. A PI failure does not switch engines.

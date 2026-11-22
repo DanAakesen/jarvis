@@ -933,6 +933,7 @@ return {
                 })
                 : null;
               if (partialMessage) yield streamEvent('interrupted', { ...partialMessage, interrupted: true });
+              else yield streamEvent('superseded', { messageId: turnMessageId });
               const latest = steeringMessages.at(-1)!;
               activeTurn.consumedThrough = latest.id;
               turnMessageId = latest.id;
@@ -981,7 +982,11 @@ return {
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
-            app.notifyReply({ sessionId, messageId: assistantMessage.id });
+            try {
+              app.notifyReply({ sessionId, messageId: assistantMessage.id });
+            } catch {
+              request.log.warn('reply_notification.delivery_unavailable');
+            }
             logChatLatency(request, 'turn_complete', turnStartedAt);
             if (visualContext) {
               request.log.info({
@@ -1001,13 +1006,14 @@ return {
                 ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
                   visualResult ? {} : { visualReason: 'legacy_agent' }),
               } : {}) });
-            break;
+            return;
           }
-          if (controller.signal.aborted) yield streamEvent('error', { error: failureCopy.stopped.chat });
+          publishActivity('interrupted');
+          yield streamEvent('error', { code: 'stopped', error: failureCopy.stopped.chat });
         } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
-            yield streamEvent('error', { error: failureCopy.stopped.chat });
+            yield streamEvent('error', { code: 'stopped', error: failureCopy.stopped.chat });
           } else {
             request.log.warn(
               { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown',

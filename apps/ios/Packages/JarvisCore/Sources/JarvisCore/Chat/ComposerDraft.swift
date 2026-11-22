@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// A submitted editor is a different input session from the next draft. Text-input
 /// systems may deliver a final edit after submit; that edit must not restore it.
@@ -20,5 +21,18 @@ public struct ComposerDraft: Equatable, Sendable {
         revision = UUID()
         text = ""
         return submitted
+    }
+}
+
+/// Chat observes text edits in the composer, not through its transcript model.
+@MainActor
+@Observable
+public final class ChatComposerDraft {
+    public var value = ComposerDraft()
+
+    public init() {}
+
+    public var hasMessage: Bool {
+        !value.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

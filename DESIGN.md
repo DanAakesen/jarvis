@@ -270,6 +270,12 @@ task creation/queueing from observed runner execution and completed delivery.
 
 ## Approved runtime test entry (#1350; 29 October 2026)
 
+On iPhone since #2010, the shared Plus menu says **Test a reply**. The sheet
+labels the two isolated choices **Previous Jarvis setup** and **Copilot** and
+makes clear that neither tests nor changes normal Chat. The saved reply and
+its result appear together; a stop or an unconfirmed result is not an error
+label on the reply. The existing shared controls and normal draft stay in place.
+
 On iOS, Test agent runtime follows Voice language in the shared Home/Chat Plus
 menu. A large sheet uses the shared glass choice buttons, loading feedback and
 composer. The title names the chosen runtime and stays marked as a test. The

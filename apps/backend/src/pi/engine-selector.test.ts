@@ -18,7 +18,12 @@ const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestatica
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function setup(options: { piAgent?: ConversationAgent; pi?: PiModuleOptions; runtimeTest?: string } = {}) {
+function setup(options: {
+  piAgent?: ConversationAgent;
+  pi?: PiModuleOptions;
+  runtimeTest?: string;
+  notifyReply?: NonNullable<Parameters<typeof buildApp>[2]>['notifyReply'];
+} = {}) {
   const messages: ConversationMessage[] = [];
   const piAgent = options.pi?.gateway ?? options.piAgent;
   const store = {
@@ -28,7 +33,8 @@ function setup(options: { piAgent?: ConversationAgent; pi?: PiModuleOptions; run
       messages.push(message);
       return message;
     },
-    getDanMessagesAfter: async () => [],
+    getDanMessagesAfter: async ({ sessionId, after }: { sessionId: string; after: string }) =>
+      messages.filter(message => message.sessionId === sessionId && message.role === 'dan' && BigInt(message.id) > BigInt(after)),
     getDanMessageIdBySourceItemId: async () => null,
     readRecentUserMessages: async () => [],
   } as unknown as ConversationStore;
@@ -40,6 +46,7 @@ function setup(options: { piAgent?: ConversationAgent; pi?: PiModuleOptions; run
     conversationStore: store, conversationAgent: current,
     ...(piAgent ? { piAgent } : {}),
     ...(options.pi ? { piAuth: options.pi.auth } : {}),
+    ...(options.notifyReply ? { notifyReply: options.notifyReply } : {}),
   });
   apps.push(app);
   const turn = async (payload: Record<string, unknown>) => {
@@ -162,6 +169,61 @@ describe('PI is the default engine on the chat turn', () => {
     expect(result.events.map((event) => event.name)).toEqual(['user', 'delta', 'done']);
     expect(result.events[1]!.data.text).toBe('from PI');
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
+  });
+
+  it('still delivers a saved reply when its notification fails', async () => {
+    const { turn, messages } = setup({
+      piAgent: { stream: async function* () { yield 'Saved answer'; } },
+      notifyReply: () => { throw new Error('fixture notification failed'); },
+    });
+    const result = await turn({ text: 'hi' });
+    expect(result.events.map(event => event.name)).toEqual(['user', 'delta', 'done']);
+    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'Saved answer' });
+  });
+
+  it('confirms a stopped reply separately from a failure', async () => {
+    const entered = Promise.withResolvers<void>();
+    const { app, turn, messages } = setup({
+      piAgent: { stream: async function* (_input, _authorization, signal) {
+        entered.resolve();
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        if (!signal.aborted) yield 'Uncancelled fixture reply';
+      } },
+    });
+    const result = turn({ text: 'hi' });
+    await entered.promise;
+    expect((await app.inject({
+      method: 'POST', url: '/conversation/sessions/7/turns/1/cancel',
+      headers: { authorization: 'Bearer a.b.c' }, payload: {},
+    })).statusCode).toBe(200);
+    expect((await result).events.at(-1)).toEqual({
+      name: 'error', data: { code: 'stopped', error: failureCopy.stopped.chat },
+    });
+    expect(messages.map(message => message.role)).toEqual(['dan']);
+  });
+
+  it('marks a steered attempt with no partial reply as replaced and still delivers the new answer', async () => {
+    const entered = Promise.withResolvers<void>();
+    const { app, turn } = setup({
+      piAgent: { stream: async function* (input, _authorization, signal) {
+        if (input.steering) {
+          yield 'Reply to the follow-up';
+        } else {
+          entered.resolve();
+          await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        }
+      } },
+    });
+    const result = turn({ text: 'hi' });
+    await entered.promise;
+    expect((await app.inject({
+      method: 'POST', url: '/conversation/sessions/7/steer',
+      headers: { authorization: 'Bearer a.b.c' }, payload: { text: 'Actually, try this' },
+    })).statusCode).toBe(202);
+    const { events } = await result;
+    expect(events.map(event => event.name)).toEqual(['user', 'superseded', 'delta', 'done']);
+    expect(events[1]!.data).toEqual({ messageId: '1' });
+    expect(events.at(-1)?.data.text).toBe('Reply to the follow-up');
   });
 
   it('refuses the obsolete Current engine selection', async () => {

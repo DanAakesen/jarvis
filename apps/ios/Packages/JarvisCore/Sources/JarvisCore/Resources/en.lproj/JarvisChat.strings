@@ -116,23 +116,24 @@
 "chat.activity.alert" = "Alerts";
 
 // Explicit isolated runtime tests.
-"chat.runtime.runtimeTest" = "Test agent runtime";
-"chat.runtime.runtimeTestIntro" = "Choose a runtime for a separate test conversation. Your normal voice and chat history stays together. The runtime cannot change during a test.";
-"chat.runtime.runtimeCurrent" = "Current";
+"chat.runtime.runtimeTest" = "Test a reply";
+"chat.runtime.runtimeTestIntro" = "Choose a setup to try in a separate conversation. This does not test or change your normal Chat.";
+"chat.runtime.runtimeCurrent" = "Previous Jarvis setup";
 "chat.runtime.runtimeOpen" = "Open test conversation";
-"chat.runtime.runtimeChecking" = "Checking runtimes";
+"chat.runtime.runtimeChecking" = "Checking what's available";
 "chat.runtime.runtimeRetry" = "Check again";
-"chat.runtime.runtimeUnavailable" = "This runtime is unavailable.";
+"chat.runtime.runtimeUnavailable" = "This test is unavailable.";
 "chat.runtime.runtimeNotConfigured" = "Copilot testing has not been activated on the server.";
 "chat.runtime.runtimeNotVerified" = "The selected settings and Copilot runtime have not been verified.";
-"chat.runtime.runtimePolicyNotVerified" = "Copilot has not passed the check for applying Jarvis’s instructions. Use Current.";
+"chat.runtime.runtimePolicyNotVerified" = "Copilot has not passed the check for following Jarvis's instructions.";
 "chat.runtime.runtimeVerificationFailed" = "Could not verify Copilot. Try checking again.";
+"chat.runtime.availabilityFailed" = "Couldn't check which tests are available. Try again.";
 "chat.runtime.runtimeStorageUnavailable" = "Conversation storage is unavailable.";
 "chat.runtime.runtimeSettingsMismatch" = "Copilot needs a configuration update for the selected chat settings.";
 "chat.runtime.runtimeDefinitionMismatch" = "Copilot needs a configuration update before testing.";
 "chat.runtime.runtimeTitle" = "Test conversation";
 "chat.runtime.runtimeHistoryNotice" = "Test messages stay out of your normal conversation.";
-"chat.runtime.runtimeEmpty" = "Send a message to try this runtime.";
+"chat.runtime.runtimeEmpty" = "Send a message to test a reply.";
 "chat.runtime.runtimeReturn" = "Return to normal conversation";
 "chat.runtime.runtimeMessage" = "Test message";
 "chat.runtime.runtimeSending" = "Waiting for test reply";
@@ -142,12 +143,17 @@
 "chat.runtime.runtimeCreateFailed" = "Could not open the test. Check availability and try again.";
 "chat.runtime.runtimeUncertain" = "The reply may have completed or performed an action. Refresh history and check action status before sending a new message. Nothing will be resent automatically.";
 "chat.runtime.runtimeBlocked" = "This test has an unfinished reply and cannot continue safely. Check history and action status, then return to your normal conversation. Refreshing does not clear the unfinished reply.";
-"chat.runtime.runtimeStopFailed" = "Could not confirm that the reply stopped. Wait for the reply and check action status.";
+"chat.runtime.replyReceived" = "Reply received.";
 "chat.runtime.runtimeYou" = "You";
 "chat.runtime.older" = "Load older messages";
 
 "chat.turn.working" = "Working…";
 "chat.turn.writing" = "Writing reply…";
+"chat.turn.partial" = "Unfinished reply.";
+"chat.turn.superseded" = "Replaced by your follow-up.";
+"chat.turn.stopped" = "Reply stopped.";
+"chat.turn.stopUnconfirmed" = "Couldn't confirm that the reply stopped. Wait for the reply.";
+"chat.turn.unconfirmed" = "I couldn't confirm that reply. If you asked me to do something, check what happened before trying again.";
 "chat.turn.toolCall" = "Call";
 "chat.turn.tools" = "Tool activity";
 "chat.turn.toolRunning" = "Running";

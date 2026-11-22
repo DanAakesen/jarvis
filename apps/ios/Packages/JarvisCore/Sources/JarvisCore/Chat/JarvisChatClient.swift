@@ -527,6 +527,10 @@ public final class JarvisChatClient: Sendable {
             return .foodInvitation(invitation)
         case "interrupted":
             return .interrupted(try decodeMessage(data, expectedRole: .jarvis, sessionId: sessionId))
+        case "superseded":
+            let payload = try JSONDecoder().decode(SupersededPayload.self, from: data)
+            guard validID(payload.messageId) else { throw JarvisChatClientError.invalidResponse }
+            return .superseded(messageID: payload.messageId)
         case "done":
             return .done(try decodeMessage(data, expectedRole: .jarvis, sessionId: sessionId))
         case "error":
@@ -634,4 +638,8 @@ private struct CancelTurnResponse: Decodable {
 
 private struct TextPayload: Decodable {
     let text: String
+}
+
+private struct SupersededPayload: Decodable {
+    let messageId: String
 }

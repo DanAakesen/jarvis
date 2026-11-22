@@ -148,6 +148,12 @@ No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or
 | Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`, `ChatStreamLimitTests`) and the app build | Written; run in CI (Linux `swift test`, macOS app build), not in the dev container |
 | Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
 
+## iPhone Chat typing and reply status — 22 November 2026 (Refs #2026, #2010)
+
+- Draft edits now update the composer without publishing a change to the transcript. The draft revision, keyboard, dictation, Home handoff and attachment controls stay in place; the neural background and screen sharing keep their existing behaviour.
+- A saved reply wins over Stop and notification trouble. A stopped reply gets the server's plain notice, a replaced attempt names the follow-up, and a lost connection is not proof of failure. Plus > **Test a reply** names the isolated choices and distinguishes a received reply from a failure or an unconfirmed result.
+- **Open, Dan on iPhone:** with Background motion on and Voice and sharing idle, type quickly in a conversation with 100+ messages and scroll while the keyboard is open. Try a successful reply, Stop, and a follow-up before the first reply finishes. Open **Test a reply**, choose an available setup, send a simple message and confirm it stays out of normal Chat.
+
 ## See the brain — 21 November 2026 (Refs #1969)
 
 **Status: implemented; offline lint, build and the full backend suite pass (commands in the pull request). Not run: a live wake or a deploy. The first real `pi.brain_tick` and `pi.brain_run` lines after deploy are the live check. Turning the brain on stays the owner's `PUT /pi/brain`.**

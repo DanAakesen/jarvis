@@ -35,6 +35,13 @@ private struct RenderedChatRow: Identifiable {
     var id: String { message.id }
 }
 
+/// Compute the draft-dependent controls inside this view, not inside the transcript's parent.
+private struct JarvisChatComposerEditor<Content: View>: View {
+    @Bindable var draft: ChatComposerDraft
+    @ViewBuilder let content: (Binding<ComposerDraft>) -> Content
+
+    var body: some View { content($draft.value) }
+}
 
 struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -193,7 +200,7 @@ struct JarvisChatScreen: View {
             // Chat before its parent refreshes. Readiness replaces the old 10s poll.
             guard !Task.isCancelled, let pending = handoff,
                   pending.action != nil || model.isReadyForHandoff else { return }
-            model.draft = pending.text
+            model.composerDraft.value.replace(with: pending.text)
             if let action = pending.action {
                 composerFocused = true
                 performPlusAction(action)
@@ -428,14 +435,14 @@ struct JarvisChatScreen: View {
                                                         language: appLanguage, identifier: "chat.turn.elapsed")
                                 }
                                 if let acknowledgment = model.acknowledgment {
-                                    messageBubble(text: acknowledgment, role: .jarvis, interrupted: false, messageID: "acknowledgment")
+                                    messageBubble(text: acknowledgment, role: .jarvis, messageID: "acknowledgment")
                                 }
                                 ForEach(Array(model.progressUpdates.enumerated()), id: \.offset) { index, text in
-                                    messageBubble(text: text, role: .jarvis, interrupted: false, messageID: "update-\(index)")
+                                    messageBubble(text: text, role: .jarvis, messageID: "update-\(index)")
                                 }
                                 if !model.streamingText.isEmpty {
                                     messageBubble(text: model.streamingText, role: .jarvis,
-                                                  interrupted: !model.isSending, messageID: "streaming")
+                                                  note: model.isSending ? nil : copy(.turnPartial), messageID: "streaming")
                                         .id("streaming-message")
                                 }
                                 if model.isSending { turnStatus }
@@ -471,7 +478,7 @@ struct JarvisChatScreen: View {
                         tools: model.liveTools,
                         isReconnecting: model.isReconnecting,
                         confirmations: model.nowFeed?.confirmations ?? [],
-                        errors: [model.historyError, model.actionError]
+                        errors: [model.historyError, model.actionError, model.turnNotice]
                     ),
                     sendRevision: sendRevision,
                     keyboardRevision: keyboardRevision,
@@ -505,11 +512,16 @@ struct JarvisChatScreen: View {
                 messageBubble(
                     text: row.message.text,
                     role: row.message.role,
-                    interrupted: row.message.interrupted,
+                    note: row.message.interrupted ? copy(row.message.channel == .chat ? .turnSuperseded : .turnPartial) : nil,
                     messageID: row.message.id,
                     onTap: { toggleTimestamp(row.id) }
                 )
                 .accessibilityAction(named: copy(.turnShowTime)) { toggleTimestamp(row.id) }
+            }
+            if model.supersededMessageIDs.contains(row.id) {
+                Text(copy(.turnSuperseded))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
             if !row.message.blocks.isEmpty {
@@ -590,7 +602,7 @@ struct JarvisChatScreen: View {
     private func messageBubble(
         text: String,
         role: ConversationRole,
-        interrupted: Bool,
+        note: String? = nil,
         messageID: String,
         onTap: (() -> Void)? = nil
     ) -> some View {
@@ -607,8 +619,8 @@ struct JarvisChatScreen: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
             }
-            if interrupted {
-                Text("Interrupted")
+            if let note {
+                Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -680,14 +692,14 @@ struct JarvisChatScreen: View {
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                     .accessibilityAddTraits(.updatesFrequently)
             }
-            if let error = model.actionError {
+            if let feedback = model.actionError ?? model.turnNotice {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(error)
+                    Text(feedback)
                         .font(.footnote)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(model.actionError == nil ? Color.secondary : Color.red)
                         .accessibilityAddTraits(.isStaticText)
                     Spacer(minLength: 0)
-                    if model.failedTurn != nil {
+                    if model.actionError != nil && model.failedTurn != nil {
                         JarvisLabelledButton(
                             title: "Retry",
                             isDisabled: model.isSending,
@@ -697,8 +709,11 @@ struct JarvisChatScreen: View {
                     JarvisLabelledButton(
                         title: "Dismiss",
                         isDisabled: model.isSending,
-                        accessibilityTitle: "Dismiss error"
-                    ) { model.actionError = nil }
+                        accessibilityTitle: "Dismiss chat notice"
+                    ) {
+                        if model.actionError != nil { model.actionError = nil }
+                        else { model.turnNotice = nil }
+                    }
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
@@ -706,62 +721,67 @@ struct JarvisChatScreen: View {
             if model.shouldShowNowBar {
                 nowBar
             }
-            JarvisComposerBar(
-                placeholder: copy(.messagePlaceholder),
-                draft: $model.composerDraft,
-                isFocused: $composerFocused,
-                inputIdentifier: "chat.input",
-                inputHint: model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "",
-                isInputDisabled: model.fixtureTurnUnavailable,
-                rimState: rimState,
-                isRimAnimated: !model.fixtureMode,
-                waveformLevels: dictation.isListening ? dictation.levels : nil,
-                onSubmit: sendMessage,
-                header: {
-                    if !model.pendingAttachments.isEmpty {
-                        ScrollView(.horizontal) {
-                            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                                ForEach(model.pendingAttachments) { attachment in
-                                    if attachment.contentType.hasPrefix("image/") {
-                                        JarvisChatPhotoPreview(
-                                            name: attachment.name,
-                                            size: JarvisDesignTokens.chatComposerPhotoSize,
-                                            language: appLanguage,
-                                            localData: attachment.data
-                                        )
-                                        .overlay(alignment: .topTrailing) {
-                                            attachmentRemoveButton(attachment)
-                                        }
-                                        .accessibilityIdentifier("chat.pendingPhoto.\(attachment.id)")
-                                    } else {
-                                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                                            Image(systemName: "doc")
-                                                .accessibilityHidden(true)
-                                            Text(attachment.name)
-                                                .lineLimit(1)
-                                            attachmentRemoveButton(attachment)
-                                        }
-                                        .font(.caption)
-                                        .padding(JarvisDesignTokens.chatMessageSpacing)
-                                        .jarvisGlassSurface()
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
-                            .padding(.top, JarvisDesignTokens.chatComposerSpacing / 2)
-                        }
-                        .scrollIndicators(.hidden)
+            JarvisChatComposerEditor(draft: model.composerDraft) { draft in
+                JarvisComposerBar(
+                    placeholder: copy(.messagePlaceholder),
+                    draft: draft,
+                    isFocused: $composerFocused,
+                    inputIdentifier: "chat.input",
+                    inputHint: model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "",
+                    isInputDisabled: model.fixtureTurnUnavailable,
+                    rimState: rimState,
+                    isRimAnimated: !model.fixtureMode,
+                    waveformLevels: dictation.isListening ? dictation.levels : nil,
+                    onSubmit: sendMessage,
+                    header: { composerAttachments },
+                    leading: { plusMenu },
+                    actions: {
+                        dictateButton
+                        trailingButton
                     }
-                },
-                leading: { plusMenu },
-                actions: {
-                    dictateButton
-                    trailingButton
-                }
-            )
+                )
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.dock")
+    }
+
+    @ViewBuilder
+    private var composerAttachments: some View {
+        if !model.pendingAttachments.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    ForEach(model.pendingAttachments) { attachment in
+                        if attachment.contentType.hasPrefix("image/") {
+                            JarvisChatPhotoPreview(
+                                name: attachment.name,
+                                size: JarvisDesignTokens.chatComposerPhotoSize,
+                                language: appLanguage,
+                                localData: attachment.data
+                            )
+                            .overlay(alignment: .topTrailing) {
+                                attachmentRemoveButton(attachment)
+                            }
+                            .accessibilityIdentifier("chat.pendingPhoto.\(attachment.id)")
+                        } else {
+                            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                Image(systemName: "doc")
+                                    .accessibilityHidden(true)
+                                Text(attachment.name)
+                                    .lineLimit(1)
+                                attachmentRemoveButton(attachment)
+                            }
+                            .font(.caption)
+                            .padding(JarvisDesignTokens.chatMessageSpacing)
+                            .jarvisGlassSurface()
+                        }
+                    }
+                }
+                .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
+                .padding(.top, JarvisDesignTokens.chatComposerSpacing / 2)
+            }
+            .scrollIndicators(.hidden)
+        }
     }
 
     private var rimState: JarvisRimState {
@@ -803,8 +823,8 @@ struct JarvisChatScreen: View {
             do {
                 try dictation.start(
                     locale: .current,
-                    base: model.draft
-                ) { model.draft = $0 }
+                    base: model.composerDraft.value.text
+                ) { model.composerDraft.value.replace(with: $0) }
                 model.actionError = nil
             } catch {
                 model.actionError = copy(.dictationUnavailable)
@@ -1147,8 +1167,7 @@ struct JarvisChatScreen: View {
 
     private var sendHint: String {
         if model.fixtureTurnUnavailable { return "The fixture supports one sample turn." }
-        if model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           !model.pendingAttachments.isEmpty {
+        if !model.composerDraft.hasMessage, !model.pendingAttachments.isEmpty {
             return "Enter a message to send these attachments."
         }
         return ""
