@@ -972,6 +972,7 @@ export const factoryTools: readonly JarvisTool[] = [
           if (!isPiCall(request) && input.repository === undefined && input.project === undefined && requiresProjectSelector(source.text)) {
             throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
           }
+          if (!input.text.trim()) throw new ToolRefusal('The comment has no words to post. Nothing was posted.');
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
           const selectedProject = !input.repository && input.project
             ? await (isPiCall(request) ? resolveProject(input.project, request.server.projectStore ?? null)
@@ -1006,7 +1007,7 @@ export const factoryTools: readonly JarvisTool[] = [
             }
             try {
               if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
-              await request.server.githubIssueClient!.createComment(repository, input.issueNumber, `${input.text}\n\n${marker}`, signal);
+              await request.server.githubIssueClient!.createComment(repository, input.issueNumber, input.text, signal, marker);
             } catch (error) {
               if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
               const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;

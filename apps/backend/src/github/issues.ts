@@ -44,7 +44,11 @@ export interface GitHubIssueClient {
     body: string,
     options?: GitHubIssueCreateOptions,
   ): Promise<GitHubIssueReference>;
-  createComment(repository: string, issue: number, body: string, signal?: AbortSignal): Promise<void>;
+  /**
+   * Posts a comment of at most 4,000 characters. `receipt` is the hidden line a comment can end with so that a repeat of it can be
+   * found on the issue (`<!-- jarvis-comment:… -->`, see factory/tools.ts); it follows the words and is not counted in the 4,000.
+   */
+  createComment(repository: string, issue: number, body: string, signal?: AbortSignal, receipt?: string): Promise<void>;
   addLabels(repository: string, issue: number, labels: readonly string[]): Promise<void>;
   removeLabel(repository: string, issue: number, label: string): Promise<void>;
   publishIssueImage?(repository: string, issue: number, bytes: Buffer, extension: 'png' | 'jpeg' | 'webp', signal?: AbortSignal): Promise<string>;
@@ -63,6 +67,9 @@ export class GitHubIssueResponseTooLargeError extends Error {
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+/** One hidden HTML-comment line on a single line, short and unable to close early: the only thing a comment may carry beyond its 4,000 characters. */
+const receiptLine = /^<!-- [\w:.-]{1,160} -->$/u;
 
 function repositoryPath(repository: string): string {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
@@ -362,12 +369,13 @@ export function createGitHubIssueClient(
       const token = await issueToken(repository, 'write');
       await request(fetchImpl, token, `/repos/${path}/issues/${issue}/labels`, 'POST', { labels });
     },
-    async createComment(repository, issue, body, signal) {
+    async createComment(repository, issue, body, signal, receipt) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
-        !body.trim() || body.length > 4_000) throw new Error('Invalid issue comment');
+        !body.trim() || body.length > 4_000 || (receipt !== undefined && !receiptLine.test(receipt))) throw new Error('Invalid issue comment');
       const token = await issueToken(repository, 'write');
-      await request(fetchImpl, token, `/repos/${path}/issues/${issue}/comments`, 'POST', { body }, signal);
+      await request(fetchImpl, token, `/repos/${path}/issues/${issue}/comments`, 'POST',
+        { body: receipt === undefined ? body : `${body}\n\n${receipt}` }, signal);
     },
     async removeLabel(repository, issue, label) {
       const path = repositoryPath(repository);
