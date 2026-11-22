@@ -1,8 +1,0 @@
-.venv/
-__pycache__/
-.pytest_cache/
-.ruff_cache/
-infra/.deployment-state.json
-results/audio/
-*.pyc
-results/voice-samples/

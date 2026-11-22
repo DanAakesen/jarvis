@@ -2,9 +2,9 @@ import Foundation
 
 /// The sparse, dim network behind the orb, on every screen: a handful of small nodes joined by long, angular lines
 /// that run off the edges of the screen. Every visible node has a link running toward the orb, so no dot is
-/// isolated; those links pass behind the orb or end at its centre (`orbAnchor`), hidden by the sphere. Fixed
-/// positions as fractions of the screen (modelled on `docs/ui/opening-final-2026-11-14/jarvis-opening-selected.png`),
-/// so the background is the same on every launch. `routes` are the paths a neuron takes from the orb to a node.
+/// isolated; those links pass behind the orb or end at its centre (`orbAnchor`), hidden by the sphere.
+/// Positions are fixed fractions of the screen, so the background is the same on every launch.
+/// `routes` are the paths a neuron takes from the orb to a node.
 public struct JarvisNeuralNetwork: Sendable {
     public struct Node: Equatable, Sendable {
         public let x: Double

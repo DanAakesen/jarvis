@@ -17,7 +17,6 @@ public enum JarvisOpeningProgress: Equatable, Sendable {
 }
 
 /// Where the opening screen puts things, for any screen size and safe area. Points, y down.
-/// The reference is `docs/ui/opening-final-2026-11-14/jarvis-opening-selected.png`; the raster is not a pixel spec.
 public struct JarvisOpeningLayout: Equatable, Sendable {
     public let orbDiameter: Double
     public let orbCenterY: Double

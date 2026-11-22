@@ -1,7 +1,6 @@
 # Coding runner
 
-Python Foundry Invocations adapter for Copilot CLI and Codex over ACP. Ported
-from the read-only [prototype](../docs/reference/coding-sandbox-prototype/runner/).
+Python Foundry Invocations adapter for Copilot CLI and Codex over ACP.
 Production has no crash-test command. P2-03 implements task-scoped event delivery;
 live Azure identity verification remains a post-merge step. Frequent branch pushes
 remain issue #35.

@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from pipeline_evidence import ci_evidence
 from hermetic import setUpModule  # noqa: F401
-from pipeline_impact import CHECKS, PARTS, require_results, selection, workflow_recipe
+from pipeline_impact import CHECKS, PARTS, deploy_parts, require_results, selection, workflow_recipe
 from release_state import (
     budget_contacts_match, component_selection, prepare, qualify, record, select,
 )
@@ -48,6 +48,21 @@ def smoke():
 
 
 class QualificationTests(unittest.TestCase):
+    def test_daily_reference_change_only_runs_the_default_python_checks(self):
+        selected = selection(["docs/reference/daily-v182/daily-source-schema.sql"])
+        self.assertEqual({check for check, needed in selected.items() if needed}, {"python"})
+
+    def test_agent_manifest_change_still_qualifies_the_live_agent(self):
+        selected = selection(["agents/jarvis/requirements.txt"])
+        self.assertTrue(selected["jarvis-agent"])
+        self.assertTrue(selected["python"])
+
+    def test_retired_proactive_mockup_is_not_a_deployment_input(self):
+        self.assertEqual(deploy_parts("idea.proactive.html"), set())
+        self.assertEqual(deploy_parts("apps/web/index.html"), {"web"})
+        selected = selection(["idea.proactive.html"])
+        self.assertEqual({check for check, needed in selected.items() if needed}, {"python"})
+
     def test_missing_recipe_fails_closed(self):
         for source in ("nothing", "jobs:\n  smoke:\n    run: true"):
             with self.assertRaises(ValueError):

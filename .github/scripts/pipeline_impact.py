@@ -37,13 +37,18 @@ def git(*args: str) -> str:
     return result.stdout.decode("utf-8").strip()
 
 
+def is_documentation(path: str) -> bool:
+    # Classify the retired root mockup when planning its deletion.
+    return path == "idea.proactive.html" or path.endswith(".md") or path.startswith("docs/")
+
+
 def deploy_parts(path: str) -> set[str]:
     if path.startswith("apps/ios/"):
         return set()
     # These Markdown/JSON files really enter the backend image.
     if path in {"docs/features.md", "agents/jarvis/presence-instructions.json"}:
         return {"backend"} | ({"agent"} if path.startswith("agents/") else set())
-    if path.endswith(".md") or path.startswith("docs/"):
+    if is_documentation(path):
         return set()
     if path.startswith("infra/"):
         return {"infra"}
@@ -94,9 +99,7 @@ def checks_for(path: str) -> set[str]:
         return {"ios"}
     if path == "docs/features.md":
         return {"backend"}
-    if path.startswith("docs/reference/"):
-        return {"jarvis-agent", "python"}
-    if path.endswith(".md") or path.startswith("docs/"):
+    if is_documentation(path):
         return set()
     if path.startswith("apps/web/"):
         return {"web", "backend"} if path.endswith("/package.json") else {"web"}

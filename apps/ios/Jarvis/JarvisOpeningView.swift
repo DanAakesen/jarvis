@@ -15,7 +15,7 @@ enum JarvisOpening {
 }
 
 /// The cold-start opening screen: the cognitive lattice orb, the name and a slim bar on the living neural
-/// background, with no caption. Specification: docs/ui/opening-final-2026-11-14/README.md. Neurons fire out from the
+/// background, with no caption. Neurons fire out from the
 /// orb and return while the app starts (full effects, the working state); it never touches the microphone and never
 /// claims progress it cannot measure.
 struct JarvisOpeningView: View {

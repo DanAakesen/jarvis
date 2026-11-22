@@ -319,7 +319,7 @@ enum JarvisDesignTokens {
         dark: UIColor(red: 1, green: 205.0 / 255, blue: 120.0 / 255, alpha: 1)
     )
 
-    // The cold-start opening screen is always dark, whatever the theme (docs/ui/opening-final-2026-11-14).
+    // The cold-start opening screen is always dark, whatever the theme.
     static let openingBackground = Color(red: 2.0 / 255, green: 7.0 / 255, blue: 15.0 / 255)
     static let openingTrack = Color(red: 29.0 / 255, green: 55.0 / 255, blue: 84.0 / 255)
     static let openingAmber = Color(red: 253.0 / 255, green: 205.0 / 255, blue: 81.0 / 255)
