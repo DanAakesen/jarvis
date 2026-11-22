@@ -17,36 +17,38 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 ## Decisions of the last 14 days
 
-Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep this page under 20 KB.
+Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
+
+### 22 November 2026 — Qualify the exact PR tree before merge ([#2038](https://github.com/DanAakesen/jarvis/pull/2038))
+
+- **Decision:** The author may merge a reviewed PR after its exact head passes the gates on current `main`. Merge through a PR; Deploy requires a qualification receipt for the merged tree. Use the [merge procedure](agent-context.md#merge-and-release-procedure).
 
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material
 
-- **Decision:** [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) is the single source of truth for working here and maps the key files: `p0.md`, `PRODUCT.md`, `PLAN.md`, `DESIGN.md`, `ui.md` and the key docs. `AGENTS.md` only points to it. Key files describe the project as it is now; history lives in Git and this log. Obsolete notes, handoffs, evidence files, screenshots and prototypes are deleted, not archived; design references go once built. `p0.md` (Dan's priorities) and `ui.md` (now the screen map) were kept and rewritten.
-- **Why:** Dan, 22 November: agents had become less useful because the repository was impossible to make sense of, and Astra could not be onboarded from it. Docs were over 1 MB each and the working tree about 500 MB.
-- **Evidence:** Tracked files fell from 3,233 to about 1,800 and tracked docs to about 3 MB. Every markdown link and anchor in the live docs resolves. Pipeline tests 24/24.
-- **Consequence:** Software Factory prompts embed the root `AGENTS.md` as "Repository agent rules" ([`issues.ts`](../apps/backend/src/factory/issues.ts)), so workers now receive the pointer, not the rules. Workers still have the checkout. Reading `.github/copilot-instructions.md` there instead is a backend change, not made.
+- **Decision:** [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) owns the working rules and document map; `AGENTS.md` links to it. Key files describe current state. Delete obsolete working material and shipped design references; use Git and PRs for history.
+- **Why:** Keep context small enough to onboard agents from the checkout. [Agent context](agent-context.md#agent-context) describes how Factory workers get the pointer.
 
 ### 22 November 2026 — Give Notes one title and a file inventory ([#2031](https://github.com/DanAakesen/jarvis/pull/2031))
 
 - **Decision:** Keep file inventory separate from search chunks (`0103`) so title-only notes can list. Use the leading H1 or readable filename and read pins by path. Refresh newest-first on open and show one headline without rewriting saved Markdown.
-- **Evidence:** Offline fixtures cover saves, refreshed lists/pins and partial backfill. Deploy passed at `ee34f2c3e`; device acceptance is pending.
+- **Why:** A file can exist without search chunks. Index it separately so it can still appear in Notes and pins.
 
 ### 22 November 2026 — Keep the established PI tool names and never replay an uncertain effect ([#2033](https://github.com/DanAakesen/jarvis/pull/2033), [#2032](https://github.com/DanAakesen/jarvis/pull/2032), [#2030](https://github.com/DanAakesen/jarvis/pull/2030))
 
 - **Decision:** Use `find_tools`/`call_tool` for weather, calendar and reminders. Drop #2030's three direct names; keep paging, the 24,000-character read cap, receipts, effect metadata and Danish aliases. Keep `list_capabilities` whole (not paged).
 - **Why:** Build 122 reported a weather session-policy denial before any tool call reached the door. A stale Foundry catalogue is plausible, not proven. Send the corrected tool overview to the existing conversation without reset, rebind or compaction.
 - **Decision:** Retry rate-limited requests only when safe and within the turn deadline, using the same request and results. Never replay accepted native work with tool/output evidence. Return the completed-tool receipt if the reply fails. Include iPhone Gym notes on the first `gym_lifts list` page without moving or duplicating them.
-- **Evidence:** [Gateway fixtures](../apps/backend/src/pi/gateway.test.ts) cover safe retry and the accepted-stream boundary; [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) covers Notes, Tasks and iPhone Gym. [Infrastructure](../infra/main.parameters.json) sets Terra to 600K tokens/min. #2032 and #2033 deployed after the 122 upload and apply to that build. Live rate-limit wording, cause and tool access in an existing conversation remain unverified. The owner raised the PI monthly cap above the default, per the handoff. Its value lives in the deployment env `JARVIS_PI_MONTHLY_CAP_DKK` (default `100`), not read back here.
+- **Evidence:** [Gateway fixtures](../apps/backend/src/pi/gateway.test.ts) cover safe retry and the accepted-stream boundary; [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) covers Notes, Tasks and iPhone Gym. [Infrastructure](../infra/main.parameters.json) sets Terra to 600K tokens/min. Existing-conversation tool access is unverified.
 
 ### 22 November 2026 — Show iPhone Voice and Chat state from what actually happened ([#2034](https://github.com/DanAakesen/jarvis/pull/2034), [#2027](https://github.com/DanAakesen/jarvis/pull/2027), [#2028](https://github.com/DanAakesen/jarvis/pull/2028))
 
 - **Decision:** Keep draft edits local, cancel only obsolete follow work, follow the live Voice exchange unless Dan scrolls back, and show the active Voice state in Chat. Thinking persists during tool work; audio completion does not wait for transcript writes. One Proactive settings panel, editable Notes titles, and Voice caption scroll that does not close Voice.
-- **Why/evidence:** #2027 and #2028 shipped in 122. #2034 is in the next build with Notes #2031. The [iOS follow modifier](../apps/ios/Jarvis/JarvisChatFollowLatest.swift) and [relay fixtures](../apps/backend/src/voice/relay-events.test.ts) cover transitions. #2034 reports 37 offline parity scenarios. Scrolling, labels, interruptions and gestures need device acceptance.
+- **Why:** Keep draft changes off the expensive transcript update path; preserve the reader's scroll position. The [plan](../PLAN.md) owns physical testing.
 
 ### 22 November 2026 — Recover Watch capture and show an honest reconnect ([#2029](https://github.com/DanAakesen/jarvis/pull/2029), [#2013](https://github.com/DanAakesen/jarvis/pull/2013))
 
 - **Decision/why:** Recover broken dictation/Voice routes instead of presenting a stale connected state. For stopped playback, report every response it silenced; a missing completion receipt can leave Voice stuck on Speaking.
-- **Evidence:** [Watch recovery](../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Watch/WatchVoiceRecovery.swift) and [playback ledger tests](../apps/ios/Packages/JarvisCore/Tests/JarvisCoreTests/VoicePlaybackLedgerTests.swift). TestFlight 121 carried #2013; 122 carried #2029. First-press capture, route changes and call recovery still need device acceptance.
+- **Implementation:** [Watch recovery](../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Watch/WatchVoiceRecovery.swift) and the [playback ledger](../apps/ios/Packages/JarvisCore/Tests/JarvisCoreTests/VoicePlaybackLedgerTests.swift). See the [plan](../PLAN.md) for device acceptance.
 
 ### 22 November 2026 — Keep write effects and receipts explicit ([#2023](https://github.com/DanAakesen/jarvis/pull/2023), [#2016](https://github.com/DanAakesen/jarvis/pull/2016))
 
@@ -60,7 +62,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 
 ### 22 November 2026 — Prove tool reach and stream contracts offline ([#2022](https://github.com/DanAakesen/jarvis/pull/2022), [#2021](https://github.com/DanAakesen/jarvis/pull/2021), [#2020](https://github.com/DanAakesen/jarvis/pull/2020), [#2004](https://github.com/DanAakesen/jarvis/pull/2004))
 
-- **Decision:** Check the registered Jarvis surface with [tool conformance](../apps/backend/src/pi/tool-conformance.test.ts); [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) flags undeclared channel differences. #2021 started with 24 scenarios (27 tests). Separate fixtures only where interfaces differ.
+- **Decision:** Check the registered Jarvis surface with [tool conformance](../apps/backend/src/pi/tool-conformance.test.ts); [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) flags undeclared channel differences. Separate fixtures only where interfaces differ.
 - **Evidence:** Gateway fixtures fragment streams by byte. Native harness work needs the full stream, not a second response. Answer only completed client-owned calls and recover terminal-only text. Live event shapes and non-DELETE gates outside ordinary PI Chat/Voice were not re-audited.
 
 ### 22 November 2026 — Make brain work and follow-ups observable ([#2025](https://github.com/DanAakesen/jarvis/pull/2025), [#2019](https://github.com/DanAakesen/jarvis/pull/2019), [#2018](https://github.com/DanAakesen/jarvis/pull/2018), [#2014](https://github.com/DanAakesen/jarvis/pull/2014))
@@ -76,7 +78,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 
 ### 21 November 2026 — Keep live agents Foundry-owned ([#1998](https://github.com/DanAakesen/jarvis/pull/1998), [#1994](https://github.com/DanAakesen/jarvis/pull/1994), [#1992](https://github.com/DanAakesen/jarvis/pull/1992))
 
-- **Decision:** Foundry owns `jarvis-pi` instructions and `jarvis-pi-live` instructions, voice, greeting and `store`. Deploy seeds version 1, preserves owner edits and checks the technical contract. Keep `KEEP THIS BLOCK` unchanged. Active versions `v26` and `v16` were last reported in the handoff, not checked against the live portal.
+- **Decision:** Foundry owns `jarvis-pi` instructions and `jarvis-pi-live` instructions, voice, greeting and `store`. Deploy seeds version 1, preserves owner edits and checks the technical contract. Keep `KEEP THIS BLOCK` unchanged.
 - **Why/evidence:** A code-owned `store` check blocked Deploy; preserving live settings is intentional. [Provisioner tests](../.github/scripts/tests/test_pi_agent.py) are offline proof of that split, not a production readback.
 
 ### 21 November 2026 — Apple granted the CarPlay entitlement (Dan's report)
@@ -87,7 +89,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 ### 21 November 2026 — Start from tools people can actually find ([#1996](https://github.com/DanAakesen/jarvis/pull/1996), [#1999](https://github.com/DanAakesen/jarvis/pull/1999), [#2002](https://github.com/DanAakesen/jarvis/pull/2002), [#2003](https://github.com/DanAakesen/jarvis/pull/2003))
 
 - **Decision:** Search local tools first, resolve exact names and aliases, bind activity to the owner message, and show progress without ending the turn. Diagnose harness item shape, dead streams and weather phases. Do not add a completion classifier, answer buffer, GPT-Live output gate, fresh-conversation replay or read-only default.
-- **Why/evidence:** Build uploads: [117](https://github.com/DanAakesen/jarvis/actions/runs/44920585768) (#1996); [118](https://github.com/DanAakesen/jarvis/actions/runs/44933285803), [119](https://github.com/DanAakesen/jarvis/actions/runs/44945898531) and [120](https://github.com/DanAakesen/jarvis/actions/runs/44954608415) (spoken-turn and stream follow-ups); [121](https://github.com/DanAakesen/jarvis/actions/runs/44996709049) (#2013); [122](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) (#2027, #2028, #2029 and #2030). Uploads are not device acceptance.
+- **Why:** Discovery and progress belong to the same turn as the request; a second classifier or runtime would hide the failure rather than fix it.
 
 ### 20 November 2026 — Keep Memory separate and use one PI voice action path ([#1983](https://github.com/DanAakesen/jarvis/pull/1983), [#1984](https://github.com/DanAakesen/jarvis/pull/1984))
 
@@ -111,7 +113,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 ### 9–14 November 2026 — Keep earlier delivery decisions as history
 
 - **Decision:** Explicit reminders are distinct from proactive suggestions; preserve honest scheduled and delivered states ([#1706](https://github.com/DanAakesen/jarvis/issues/1706), later #1995). Native Watch capture and Live Activity depend on the actual voice session and transport, not a screen flag ([#1796](https://github.com/DanAakesen/jarvis/issues/1796), [#1798](https://github.com/DanAakesen/jarvis/issues/1798), [#1807](https://github.com/DanAakesen/jarvis/issues/1807)).
-- **Status:** These decisions predate the PI and GPT-Live cutovers; their dated entries in the November index record the earlier rationale and evidence, not a second current path.
+- **Status:** These decisions predate the PI and GPT-Live cutovers; they do not establish a second path.
 
 ## Open questions and proposals
 
@@ -119,44 +121,40 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 
 ## Index of older decisions
 
-Each index lists the dates, outcomes and archive links, with proposals separate. The November index also links to the full evidence for recent summaries.
-
-- [October 2026 index](archive/decisions-index-2026-10.md) · [October full text](archive/decisions-2026-10.md).
-- [November 2026 index](archive/decisions-index-2026-11.md) · [November full text](archive/decisions-2026-11.md).
-- Code pointers [L1–L78](archive/decisions-2026-10.md#l1) and [L79–L137](archive/decisions-2026-10.md#l79) resolve in the [October Learnings table](archive/decisions-2026-10.md#learnings). Search by ID or use its anchor (`#l78`); L33 and L34 remain reserved.
+The [October](archive/decisions-index-2026-10.md) and [November](archive/decisions-index-2026-11.md) indexes point to full historical decisions in Git. Search October learnings by `LN` (for example `L63`); L33 and L34 remain reserved.
 
 ### P7-23 latency evidence
 
-[Archived P7-23 table](archive/decisions-2026-10.md#p7-23-latency-evidence).
+[P7-23 table in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L8138).
 
 <a name="catalogue-count-is-not-a-global-limit-22-october-2026-1204"></a>
 
 ### Catalogue count is not a global limit
 
-[Archived tool catalogue ruling and route inventory](archive/decisions-2026-10.md#catalogue-count-is-not-a-global-limit-22-october-2026-1204).
+[Tool catalogue ruling and route inventory](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L1559).
 
 ### Daily renamed to Health
 
-[Daily rename and legacy feeds](archive/decisions-2026-11.md#daily-renamed-to-health-legacy-feeds-retired-p15-78-2026-11-04) records the route aliases. The name change is not a new authorization to remove existing routes.
+[Daily rename and legacy feeds](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-11.md?plain=1#L2667) records the route aliases.
 
 <a name="keep-the-first-web-push-proof-dark-and-user-triggered-17-october-2026-p13-01-917"></a>
 
 ### Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
 
-[Read the archived entry](archive/decisions-2026-10.md#keep-the-first-web-push-proof-dark-and-user-triggered-17-october-2026-p13-01--917).
+[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L4152).
 
 ### P14-35 — Daily v182 unresolved delivery questions (19 October 2026; #1095)
 
-[Read the archived entry](archive/decisions-2026-10.md#p14-35--daily-v182-unresolved-delivery-questions-19-october-2026-1095).
+[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2535).
 
 ### Schema field-mapping scope
 
-[Read the archived entry](archive/decisions-2026-10.md#schema-field-mapping-scope).
+[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2540).
 
 ### Selected tool packaging
 
-[Read the archived entry](archive/decisions-2026-10.md#selected-tool-packaging).
+[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2638).
 
 ### Favorites query contract
 
-[Read the archived entry](archive/decisions-2026-10.md#favorites-query-contract).
+[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2651).

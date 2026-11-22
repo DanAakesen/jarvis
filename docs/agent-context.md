@@ -1,6 +1,16 @@
 # Jarvis operator manual
 
-Use this when starting on a new machine or handing off a task. [Plan](../PLAN.md) owns current priorities and release status. [Product](../PRODUCT.md) owns requirements. [Architecture](architecture.md) explains the runtime; [decisions](decisions.md) record why it works that way. Start with the [style guide](ui/style-guide.md) for design or the [documentation index](README.md) for other references. Archive: 3 October–22 November 2026.
+Use this when starting work. The [plan](../PLAN.md) owns release status, [architecture](architecture.md) explains the runtime, and the [index](README.md) points to other references.
+
+## Agent context
+
+- **Repository work:** read [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs. [Factory issue starts](../apps/backend/src/factory/issues.ts) prompt with the issue, comments and root `AGENTS.md`; workers follow that pointer in their checkout. This is not the owner's PI conversation.
+- **PI Chat and delegated Voice:** Foundry owns the live instruction text. The [backend context builder](../apps/backend/src/pi/context.ts) adds owner settings, presence, Memory policy and known environment defaults. The [gateway](../apps/backend/src/pi/gateway.ts) combines it with current activation state and sends the block at warm-up or when its hash changes. Each turn still has its own reference and owner message. Attachments and screen excerpts are data, not instructions. Foundry keeps conversation history separately from the app's stored messages and receipts.
+- **Proactive wakes:** the same PI agent starts a scratch conversation with fresh trusted context, activation evidence and a tool overview. Wakes do not append to the foreground Foundry conversation. Durable Personal Memory and Vault Knowledge are distinct sources; see [architecture](architecture.md#memory-and-vault-knowledge).
+
+## Agent logs
+
+Start with [the log source map](reference/logs.md) and a time window. PI turns, the MCP door, Voice and brain decisions emit structured backend events; they do not expose Foundry's hidden reasoning. Read the conversation for stored replies and the Factory timeline for worker progress. A backend log entry, a runner event and a GitHub check each answer a different question. Do not paste raw logs, prompts or accounts into a PR.
 
 ## Setup and commands
 
@@ -13,7 +23,7 @@ Use this when starting on a new machine or handing off a task. [Plan](../PLAN.md
 
 ### Offline checks
 
-Run these from the repository root unless the row says otherwise. These commands are declared by the checked-in scripts or used in CI; that identifies the supported check, not a claim that every command ran during this docs refresh. No production authentication is needed.
+Run from the repository root unless noted. These checks are declared in scripts or CI; no production authentication is needed.
 
 | Scope | Command or check |
 | --- | --- |
@@ -59,13 +69,13 @@ Start from [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 | Runtime, data flow, identity, deployment or schema | [Architecture](architecture.md), and [data model](reference/data-model.md) for database changes. |
 | Approved decision, setup or check | [Decisions](decisions.md) for rationale and evidence; this manual for commands and operations. |
 
-See [decisions.md](decisions.md) for where new entries go. Use the next unused number in each series (`#N` for decisions, `LN` for learnings). When using the **Decisions of the last 14 days** section, add confirmed entries at the top, newest first. Move older entries to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep proposals separate from confirmed decisions.
+Add confirmed entries at the top of [decisions.md](decisions.md), newest first. Move decisions older than 14 days out of the live log: keep a dated link with the original ID in the archive index and leave the full text in Git history. Keep proposals separate.
 
 Run the focused offline checks, inspect the diff, and open **one ready PR** when it can be reviewed. Use `<task ID>: ...`, `fix-main: ...` or `docs: ...` as the [title workflow](../.github/workflows/pr-title.yml) requires. Give concrete tests, exact results and unverified behaviour. Use `Refs #N` for partial work or device acceptance; use an explicit closing reference only if the issue's acceptance is complete. Check native closing links as well as the PR body.
 
 ### Task board
 
-GitHub issues are the live backlog. [Plan status](../.github/scripts/plan_status.py) syncs task rows and dependencies. The [Project Jarvis board](https://github.com/users/DanAakesen/projects/2) is a view, populated by [project-board.yml](../.github/workflows/project-board.yml) and [project_board.py](../.github/scripts/project_board.py). Do not hand-move cards to work around a sync.
+GitHub issues are the live backlog. [Plan status](../.github/scripts/plan_status.py) syncs task rows and dependencies. The private Project Jarvis board is a view populated by [project-board.yml](../.github/workflows/project-board.yml) and [project_board.py](../.github/scripts/project_board.py). Do not hand-move cards to work around a sync.
 
 A new `P##-##` row in a `PLAN.md` task table creates a GitHub issue if none matches on the next push to `main` that changes the plan ([plan-status.yml](../.github/workflows/plan-status.yml)). Use prose or an ordinary table for status recaps that should not create issues.
 
@@ -84,10 +94,8 @@ The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it
 
 ## Merge and release procedure
 
-The dispatcher/coordinator uses local merge scripts that are not in the repository. This is the procedure in words; another machine does not need those scripts to understand the checks.
-
-1. The coordinator or owner verifies independent review of the **exact head**, no unresolved threads or High findings, and exact-head required checks green. Fix Medium findings or record explicit follow-ups. Merge through a PR: a push to `main` with no CI-qualified PR behind it makes Deploy fail with `exact_qualification_missing`. Do not bypass checks.
-2. Bring the branch up to `origin/main`, resolving documentation conflicts additively rather than choosing one side wholesale. Re-run checks and review the updated head. The merged tree must equal the tree tested in CI; a green run for a previous head or a merely similar diff does not qualify. The checked-in enforcement is the [CI receipt](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
+1. Verify independent review of the **exact head**, no unresolved threads or High findings, and green required checks for that head. Fix Medium findings or record explicit follow-ups. The PR author may merge after the gates pass. A Deploy-triggering push to `main` without a qualified PR fails with `exact_qualification_missing`.
+2. Bring the branch up to `origin/main` before qualifying it. Keep both sides of additive docs conflicts and take main's version for untouched content. Recheck the new head after any update. The merged tree must equal the tree tested in CI; see [CI receipts](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
 3. After each merge to `main`, refresh and requalify other affected PRs. Updating another open iOS PR triggers `synchronize` and restarts its macOS checks. The update, not the push to `main` on its own, is the trigger. Batch coordinated merges instead of repeatedly updating native PRs.
 
 ### TestFlight build
@@ -107,8 +115,6 @@ The Apple build number is the workflow run number. Check that the exact build ha
 - **Product rules.** Keep PI model-driven. Use deterministic checks for facts, provenance and exact outcomes, not to add a second decision-maker. No new PI confirmation or approval except delete; preserve auth and sensible retry safety. Build the replacement, test it, then delete the old path explicitly. No new fallback, dual path or compatibility shim. Note any deliberately accepted cutover gap.
 - **Public repository.** Use secret names, never values. Keep live logs, captures, tokens, account details and real personal data out of docs, test evidence, cards and PRs. Use synthetic fixtures, not real examples.
 
-Do not rebuild the PI guardrails rejected in [the decisions log](decisions.md) (#1996): request/completion classifiers, pre-call refusals, per-tool contracts, answer withholding or buffering, `pi_incomplete`, Memory write contracts, wake receipts, durable-work enforcement, persona as a `pi_context` input, conversation rotation or replay, GPT-Live output gates or transcript matching, or a read-only default. This does not remove auth, delete confirmation or same-request tool dedupe.
-
 For Voice changes, test event shapes seen in real logs using sanitised, synthetic fixtures. Idealised sequences missed fragmented requests. An `offset_ms` value is not the end of an utterance, and a backchannel never cancels PI. Run the Chat/Voice parity suite for relay, gateway, MCP door and tool-route changes.
 
 ## Repository hygiene
@@ -117,7 +123,7 @@ The repository must stay small enough for a new agent to read it. [.github/copil
 
 - **One doc per topic, updated in place.** Put a decision in [decisions](decisions.md), progress in [the plan](../PLAN.md), runtime changes in [architecture](architecture.md), procedures here. Do not add a new file when an existing one fits.
 - **Do not commit working material.** Per-build or per-task notes, handoffs, review write-ups, evidence JSON, screenshots, captures, prototypes and exported chats belong in the pull request body or CI artifacts. Design references may sit in `docs/ui/` only until implemented. When the feature ships, move the lasting rules into [the style guide](ui/style-guide.md) or [DESIGN.md](../DESIGN.md) and delete the images.
-- **Delete, do not archive.** Git history keeps removed files. Only decision history stays in `docs/archive/`.
+- **Delete, do not archive.** Git history keeps removed files; `docs/archive/` holds only decision indexes.
 - **Key files stay current.** `p0.md`, `PRODUCT.md`, `PLAN.md`, `DESIGN.md`, `ui.md` and the key docs listed in the instructions file describe the project as it is now. A change that makes one wrong updates it in the same change.
 - **A new markdown file** is added to the map in `.github/copilot-instructions.md` and to [docs/README.md](README.md) in the same change. That file started from shared-project-templates 2.2.3 and is now maintained by hand. `AGENTS.md` only points to it. Keep the hashes in `.template-state.json` as they are so a template sync treats both files as customised, and keep the map when re-syncing.
 - **Fixed paths.** `docs/features.md`, `docs/github-app-manifest.json` and `docs/tool-conformance.md` are read by code, the Docker build or CI. Moving or editing them is a code change.
@@ -149,17 +155,9 @@ Do not use a production setting as a local default. See [`config.ts`](../apps/ba
 
 The GitHub App manifest and Azure bindings are maintained separately from developer GitHub CLI sign-in. The backend reads the App key through Key Vault under its managed identity; never give it to a client or a sandbox. The [infra guide](../infra/README.md) describes the boundary. App creation, credential rotation and permission changes are owner operations, not onboarding.
 
-### Cloud agent environments
-
-Do not create a GitHub cloud sandbox or cloud agent environment without Dan's explicit approval; sandboxes are billed. The working path is a local worktree, even when the remote is GitHub.
-
 ### Jarvis agent
 
-Normal Chat and Voice are PI, not the [legacy `agents/jarvis` program](../agents/jarvis/README.md). Deploy can still maintain the isolated old agent path. Use that component's own pinned dev requirements and CI for changes to it; no live run as an offline check.
-
-## Jarvis control styling
-
-Start with the [style guide](ui/style-guide.md) and [shared control geometry](../DESIGN.md#shared-control-geometry). Use shared design-system controls and keep spacing in the parent layout. Put state in text or an accessible label as well as colour. Do not add screen-local glass or button styles.
+Normal Chat and Voice use PI. The [legacy hosted agent](../agents/jarvis/README.md) is separately deployed and still has its own offline CI.
 
 ## Troubleshooting
 

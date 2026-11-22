@@ -38,11 +38,11 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ### Software Factory — task view
 
-Show actual issues, PRs, worker state and releases, and surface what needs Dan's attention. From Chat or Voice, Dan can ask about the project, start work in an identified project, and follow or steer an existing worker. A coding change is not delivered just because a worker stopped: show the real PR/check/release state. See the historical task lifecycle for the state model.
+Show actual issues, PRs, worker state and releases, and surface what needs Dan's attention. From Chat or Voice, Dan can ask about the project, start work in an identified project, and follow or steer an existing worker. A coding change is not delivered just because a worker stopped: show the real PR/check/release state.
 
 ### Notes
 
-The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not move or rename the file. A missing note can still be unpinned by path. The inventory and title fixes in [#2031](https://github.com/DanAakesen/jarvis/pull/2031) merged; device acceptance is pending.
+The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not move or rename the file. A missing note can still be unpinned by path.
 
 ### Tasks
 
