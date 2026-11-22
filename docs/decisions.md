@@ -495,6 +495,32 @@ The managed instructions read the tool reference from the first line. The normal
 - **Verification:** native compilation belongs to Apple CI; Dan owns
   acceptance on an iPhone. No live model, provider or paid check is needed.
 
+### TestFlight 122 follow-up: Notes labels come from the note (Refs #2005, #2012)
+
+- Use the same leading H1 (after frontmatter) or readable filename in the
+  reader, list, Pinned and generated connection labels. The path and SHA-checked
+  editing stay unchanged; explicit wiki aliases and authored Markdown link labels
+  stay as written. Remove the phone's saved-title override.
+- Keep note inventory and title separate from search chunks. Migration `0103`
+  seeds existing paths and dates. After normal sync makes the index ready, read
+  up to 32 matching legacy blobs, newest first, within 20 seconds. Reuse a
+  successful read for embedding repair only if embeddings are also missing
+  and the existing budget allows it. Failed reads leave filename titles and
+  existing search chunks available while the batch continues. Do not invent
+  a search chunk for a title-only note. Coalesce pushes during sync into one
+  follow-up tree read so changes are not lost during the batch.
+- Keep the last Notes snapshot visible while rechecking on open. Read pins by
+  exact path, not through the capped graph. Resolve missing titles for those
+  paths within 20 seconds without embedding work, so a legacy pin need not wait
+  for the background batch. Skip unusable paths and keep unresolved pins
+  removable. Load newest root and folder entries without reusing an HTTP
+  response or validator; other sort choices still reorder the loaded rows.
+  `Personal` still lists only its direct children.
+- Treat consecutive leading H1s with the same title as duplicate headlines.
+  Drop them from newly created `vault_write` Markdown and from the reader
+  presentation of existing notes. Do not rewrite existing files or remove later
+  sections, different headings, or ordinary body text.
+
 ## 18 November 2026 — iPhone Voice keeps visuals for the current call (#1958, P15-210)
 
 Use the existing phone workspace events to populate a local Voice carousel, without changing the backend window contract. A new ID appends and takes focus; an update to an existing ID replaces that page. Close clears the carousel, Collapse returns from full screen, and minimising the call keeps its visual history. Use the existing glass controls over the page and let the HTML document own its heading and authored colours; WebKit gets the active appearance, Jarvis theme variables and readable defaults. Apple compilation, rendering and live call acceptance remain unverified.

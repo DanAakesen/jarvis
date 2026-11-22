@@ -47,7 +47,7 @@ enum JarvisNotesPendingDeletion: Identifiable {
 }
 
 enum JarvisNotesReadSection: CaseIterable, Hashable, Sendable {
-    case graph, tasks, tree, directory, folderOrder
+    case graph, tasks, tree, directory, folderOrder, pins
 }
 
 /// Notes, Tasks and Graph: one simple, fast page structure like Apple Notes and Reminders. A page title with its
@@ -74,10 +74,9 @@ struct JarvisNotesArea: View {
     @State var folderOrderSaveFailed = false
     @State var folderOrderStale = false
     @State var pinnedPaths: [String] = []
+    @State var pinnedSummaries: [String: VaultNoteSummary] = [:]
     @State var pinnedTaskIDs: [String] = []
     @State var directoryNotes: [String: [VaultNoteSummary]] = [:]
-    // The confirmed title for a renamed note while the vault's asynchronous index catches up.
-    @State var savedNoteTitles: [String: String] = [:]
     @State var directoryHasMore: [String: Bool] = [:]
     @State var directoryLoading = Set<String>()
     @State var directoryRequests: [String: UUID] = [:]
@@ -161,10 +160,7 @@ struct JarvisNotesArea: View {
                         Task { await noteDeleted(path) }
                     },
                     onNoteChanged: { refreshed in
-                        let title = JarvisNoteTitle.title(content: refreshed.content, path: refreshed.path)
-                        if title != JarvisNoteTitle.title(content: current.content, path: current.path) {
-                            savedNoteTitles[refreshed.path] = title
-                        }
+                        applyReadTitle(refreshed)
                         reader = refreshed
                         refreshVersion += 1
                     },
@@ -238,8 +234,10 @@ struct JarvisNotesArea: View {
                 JarvisReorderSheet(
                     title: copy[.reorderPins], identifierPrefix: "pins", copy: copy, items: pinnedItems,
                     onChanged: { order in
-                        pinnedPaths = order
-                        Task { await JarvisAppCache.shared.setPinnedNotePaths(order) }
+                        let ordered = Set(order)
+                        let paths = order + pinnedPaths.filter { !ordered.contains($0) }
+                        pinnedPaths = paths
+                        Task { await JarvisAppCache.shared.setPinnedNotePaths(paths) }
                     },
                     onClose: { sheet = nil }
                 )
@@ -337,7 +335,7 @@ struct JarvisNotesArea: View {
         signInUnavailable = false
         let sections: [JarvisNotesReadSection]
         switch tab {
-        case .notes: sections = [.graph, .tree, .directory, .folderOrder]
+        case .notes: sections = [.graph, .tree, .directory, .folderOrder, .pins]
         case .tasks: sections = [.tasks]
         case .graph: sections = [.graph]
         }
@@ -366,7 +364,7 @@ struct JarvisNotesArea: View {
                 let repository = await treeRepository(client)
                 if !force, tree == nil, let cachedTree = await repository.resolve(cacheOnly: true).value {
                     guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
-                    applyTree(cachedTree)
+                    tree = cachedTree
                 }
                 let resolved = await repository.resolve(force: force)
                 guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
@@ -376,6 +374,26 @@ struct JarvisNotesArea: View {
                 await loadDirectory(selectedFolder, offset: 0, force: force)
             case .folderOrder:
                 try await readFolderOrder(client)
+            case .pins:
+                let paths = Set(pinnedPaths)
+                guard !paths.isEmpty else { pinnedSummaries = [:]; return }
+                let repository: JarvisRepository<[VaultNoteSummary]> = await JarvisAppCache.repository(.notes, scope: "pins") { _ in
+                    .modified(try await client.noteSummaries(paths: paths.sorted()), validator: nil)
+                }
+                for await update in repository.updates(force: force) {
+                    guard !Task.isCancelled, loadRequest == request, selectedTab == tab,
+                          Set(pinnedPaths) == paths else { return }
+                    switch update {
+                    case .cached(let value, _):
+                        if pinnedSummaries.isEmpty {
+                            pinnedSummaries = Dictionary(value.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+                        }
+                    case .fresh(let value):
+                        pinnedSummaries = Dictionary(value.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+                    case .failed(let error, _): throw error
+                    case .refreshing: break
+                    }
+                }
             case .tasks:
                 let repository: JarvisRepository<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
                     try await client.fetchOpenTasks(validator: $0)
@@ -418,7 +436,7 @@ struct JarvisNotesArea: View {
         tree = nextTree
         if !selectedFolder.isEmpty,
            !nextTree.directories.contains(where: { $0 == selectedFolder || $0.hasPrefix(selectedFolder + "/") }) {
-            selectedFolder = ""
+            navigateToFolder("")
         }
     }
 
@@ -493,9 +511,8 @@ struct JarvisNotesArea: View {
         do {
             if offset == 0 {
                 let retainedCount = directoryNotes[directory]?.count ?? 0
-                let repository: JarvisRepository<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: "dir:\(directory)") {
-                    try await client.fetchNotes(directory: directory, validator: $0)
-                }
+                await JarvisAppCache.bindIfNeeded()
+                let repository = client.directoryRepository(cache: JarvisAppCache.shared, directory: directory)
                 for await update in repository.updates(force: force) {
                     guard !Task.isCancelled, directoryRequests[directory] == request else { return }
                     switch update {
@@ -508,23 +525,20 @@ struct JarvisNotesArea: View {
                         var notes = page.notes
                         var hasMore = page.hasMore
                         while hasMore, notes.count < retainedCount {
-                            let next = try await client.notes(directory: directory, offset: notes.count)
+                            let next = try await client.notes(directory: directory, offset: notes.count, recentFirst: true)
                             guard !Task.isCancelled, directoryRequests[directory] == request else { return }
                             guard !next.notes.isEmpty else { break }
                             notes += next.notes
                             hasMore = next.hasMore
                         }
                         directoryNotes[directory] = notes
-                        for note in notes where savedNoteTitles[note.path] == note.title {
-                            savedNoteTitles.removeValue(forKey: note.path)
-                        }
                         directoryHasMore[directory] = hasMore
                     case .failed(let error, _): throw error
                     case .refreshing: break
                     }
                 }
             } else {
-                let page = try await client.notes(directory: directory, offset: offset)
+                let page = try await client.notes(directory: directory, offset: offset, recentFirst: true)
                 guard !Task.isCancelled, directoryRequests[directory] == request else { return }
                 directoryNotes[directory] = (directoryNotes[directory] ?? []) + page.notes
                 directoryHasMore[directory] = page.hasMore
@@ -629,9 +643,7 @@ struct JarvisNotesArea: View {
         do {
             let note = try await client.readNote(path: path)
             guard !Task.isCancelled, openingNoteRequest == request else { return }
-            if savedNoteTitles[path] != nil {
-                savedNoteTitles[path] = JarvisNoteTitle.title(content: note.content, path: path)
-            }
+            applyReadTitle(note)
             reader = note
             readerPresented = true
         } catch {
@@ -645,6 +657,20 @@ struct JarvisNotesArea: View {
     func setPinned(_ path: String, pinned: Bool) async {
         await JarvisAppCache.shared.setNotePinned(path: path, pinned: pinned)
         pinnedPaths = await JarvisAppCache.shared.pinnedNotePaths()
+        if pinned { refreshVersion += 1 }
+    }
+
+    /// Replace the visible snapshots after a direct read; later server refreshes can overwrite them.
+    private func applyReadTitle(_ note: VaultNote) {
+        let title = JarvisNoteTitle.title(content: note.content, path: note.path)
+        func updated(_ row: VaultNoteSummary) -> VaultNoteSummary {
+            VaultNoteSummary(path: row.path, title: title, folder: row.folder, directory: row.directory, updatedAt: row.updatedAt)
+        }
+        let directory = note.path.split(separator: "/").dropLast().joined(separator: "/")
+        if let rows = directoryNotes[directory], let index = rows.firstIndex(where: { $0.path == note.path }) {
+            directoryNotes[directory]?[index] = updated(rows[index])
+        }
+        if let row = pinnedSummaries[note.path] { pinnedSummaries[note.path] = updated(row) }
     }
 
     func setTaskPinned(_ id: String, pinned: Bool) async {
@@ -656,7 +682,7 @@ struct JarvisNotesArea: View {
         await JarvisAppCache.invalidateAll(.notes)
         await JarvisAppCache.invalidateAll(.tasks)
         await setPinned(path, pinned: false)
-        savedNoteTitles.removeValue(forKey: path)
+        pinnedSummaries.removeValue(forKey: path)
         for directory in Array(directoryNotes.keys) {
             directoryNotes[directory]?.removeAll { $0.path == path }
         }

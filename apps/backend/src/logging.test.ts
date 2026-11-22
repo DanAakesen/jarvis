@@ -1236,11 +1236,16 @@ describe('structured log export', () => {
     logger.info({
       outcome: 'ok', folder: 'Customers', path: 'Customers/private-note.md', content: 'note-secret',
     }, 'vault.write');
+    logger.info({ outcome: 'error', failed: 2, path: 'Work/private-note.md', content: 'note-secret' }, 'vault.title_backfill');
 
     expect(JSON.parse(records[0]!)).toMatchObject({
       outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'other'], msg: 'vault.index',
     });
     expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'other', msg: 'vault.write' });
+    expect(JSON.parse(records[2]!)).toMatchObject({ outcome: 'error', failed: 2, msg: 'vault.title_backfill' });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'vault.title_backfill', properties: { service: 'jarvis-backend', outcome: 'error', failed: 2 },
+    }));
     expect(records.join('')).not.toContain('private-note');
     expect(records.join('')).not.toContain('note-secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('note-secret');

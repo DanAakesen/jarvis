@@ -55,7 +55,9 @@ public final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
     }
 
     private static func urlRequest(from request: HTTPRequest) -> URLRequest {
-        var urlRequest = URLRequest(url: request.url)
+        let cachePolicy: URLRequest.CachePolicy = request.headers["Cache-Control"] == "no-cache"
+            ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
+        var urlRequest = URLRequest(url: request.url, cachePolicy: cachePolicy)
         urlRequest.httpMethod = request.method.rawValue
         urlRequest.httpBody = request.body
         let timeout = request.timeout.components
