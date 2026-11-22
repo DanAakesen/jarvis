@@ -100,10 +100,6 @@ enum JarvisFixtureScenario {
         JarvisSettingsClient(client: try makeSettingsJarvisClient())
     }
 
-    static func makeSettingsPiClient() throws -> JarvisChatClient {
-        JarvisChatClient(client: try makeSettingsJarvisClient())
-    }
-
     private static func makeSettingsJarvisClient() throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(

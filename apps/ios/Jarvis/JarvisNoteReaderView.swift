@@ -208,11 +208,9 @@ struct JarvisNoteReaderView: View {
         }
         .sheet(isPresented: $editing) {
             if let client {
-                JarvisNoteEditorSheet(client: client, copy: copy, mode: .edit(note)) { _, refreshed in
-                    if let refreshed {
-                        note = refreshed
-                        onNoteChanged(refreshed)
-                    }
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .edit(note)) { refreshed in
+                    note = refreshed
+                    onNoteChanged(refreshed)
                 }
             }
         }

@@ -46,16 +46,16 @@ enum JarvisNotesPreview {
 private actor JarvisNotesPreviewTransport: HTTPTransport {
     private struct Note {
         let path: String
-        let title: String
         var content: String
         var sha = String(repeating: "a", count: 40)
+        var title: String { JarvisNoteTitle.title(content: content, path: path) }
         var directory: String { path.split(separator: "/").dropLast().joined(separator: "/") }
         var folder: String { directory.split(separator: "/").first.map(String.init) ?? "" }
     }
     private var notes: [Note] = [
-        Note(path: "welcome.md", title: "Welcome — synthetic", content: "# Welcome\n\nSynthetic root note."),
-        Note(path: "Work/Projects/release.md", title: "Release plan — synthetic", content: "# Release plan\n\nSynthetic project note. See [[weekend]].\n"),
-        Note(path: "Personal/weekend.md", title: "Weekend — synthetic", content: "---\ntags: [synthetic]\n---\n# Weekend\n\nKeep decisions and next steps together.\n\n## Plan\n\n- [ ] Check the list\n- [ ] Plan the day\n\nSee also [[release]].\n"),
+        Note(path: "welcome.md", content: "Synthetic root note with no title heading."),
+        Note(path: "Work/Projects/release.md", content: "# Release plan\n\nSynthetic project note. See [[weekend]].\n"),
+        Note(path: "Personal/weekend.md", content: "---\ntags: [synthetic]\n---\n# Weekend\n\nKeep decisions and next steps together.\n\n## Plan\n\n- [ ] Check the list\n- [ ] Plan the day\n\nSee also [[release]].\n"),
     ]
     private var inventory = ["Work", "Work/Projects", "Personal", "Attachments/Scans"]
     private var folderOrder: [String: [String]] = [:]
@@ -74,7 +74,7 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
             // Synthetic inventory: exercise a real, growing library without owner data or network writes.
             notes += (0..<1_000).map { index in
                 let name = String(format: "note-%04d", index)
-                return Note(path: "Personal/\(name).md", title: "Synthetic library note \(index)",
+                return Note(path: "Personal/\(name).md",
                             content: "# Synthetic library note \(index)\n\nNavigation regression fixture.")
             }
         }
@@ -162,8 +162,7 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
                   JarvisNotesLogic.validNotePath(path), !notes.contains(where: { $0.path == path }) else {
                 return try json(["error": "Synthetic note conflict"], status: 409)
             }
-            let title = path.split(separator: "/").last.map(String.init)?.replacingOccurrences(of: ".md", with: "") ?? path
-            let note = Note(path: path, title: title, content: content)
+            let note = Note(path: path, content: content)
             notes.append(note)
             if !note.directory.isEmpty, !inventory.contains(note.directory) { inventory.append(note.directory) }
             return try json(["path": path, "commit": String(repeating: "b", count: 40), "url": noteURL(path)])

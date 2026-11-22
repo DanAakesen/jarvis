@@ -505,7 +505,12 @@ flowchart LR
 - No backend change. The workspace command path is unchanged (`workspace_command` → SSE → `WorkspaceRuntime.presentedView`).
 - Presenters: `ContentView` shows the sheet only when the current page is not Voice; `VoiceScreenView` hosts `VoiceContentSlot` (observes the runtime) and `VoiceContentPanel`. `prepareNavigation` dismisses the panel when the owner leaves Voice.
 - `performGeneratedViewAction` is the single place that runs an action from generated content (sheet, panel and chat blocks).
-- Layout: the slot reports the panel's height and frame to `VoiceScreenView`, which adds the height to `voiceBottomReservation` (orb sizing) and excludes the frame from the minimise drag.
+- Layout: the slot reports only its height to `VoiceScreenView` for
+  `voiceBottomReservation`. The minimise drag is attached to the orb/status
+  region, outside the sibling caption scroll view and visual panel (#2008).
+  The visual grabber owns the resize drag so HTML/native scrolling and
+  horizontal paging keep their own gestures. Compact and full-screen carousels
+  read and update the same selection in `WorkspaceRuntime`.
 
 ## Conversational blocks (17 November 2026, #1925, P15-190)
 
@@ -782,7 +787,7 @@ flowchart TB
 | Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
 | Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
 | Budget | `proactive_spend` ledger, settings `monthlyBudgetDkk` (default and hard ceiling 100) | Reserve 0.804 DKK before a wake if it fits the remaining headroom, then reconcile with the wake's cache-aware cost. One chat notice at 80 percent and one at the stop, a note in the wake text after 80 percent. The brain and watches share this ledger. Chat and Voice keep their own cap (`pi_turn` kinds `chat`, `warm`, `smoke`) |
-| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, Proactive, "Background PI" (was "PI brain (test)" until #1966) | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called. `GET` also says what the last pass decided (`lastTick`), when it looks again (`nextDueAt`) and today's wakes and DKK, so off and idle can be told apart |
+| Wake switch | `dbo.pi_switch`, owner-only `GET` and `PUT /pi/brain`; iPhone Settings > Proactive (#2007) | Off until the owner turns it on; saved on the backend. While off, producers still queue events but no new model wake starts. `GET` also reports `lastTick`, `nextDueAt` and today's wakes and DKK so off and idle can be told apart. On iPhone, `JarvisProactiveClient` reads the switch and `paused` together. On clears an existing pause with revision-checked `PATCH /proactive/settings` before writing `{ "enabled": true }`. Off writes `{ "enabled": false }` without changing other policy or reminders. Neither route contract changed. |
 | One reader | `proactive/events/wiring.ts` | The queue has one reader: the brain **or** the old one-shot pipeline. Turning both on is a startup `ConfigurationError`, so nothing runs in parallel or in shadow. The old engine remains in place; deleting it is Dan's decision |
 
 Not covered: the call channel, the Now card, tiers (owner decision: none for now), voice, standing watches (next pull request).
@@ -10286,6 +10291,11 @@ frontmatter, unknown syntax, whitespace or line endings. The formatted and raw
 editors share the same draft and existing SHA-checked write/reload conflict flow.
 The local account-bound cache stores pinned paths separately from note response
 cache invalidation. No vault schema changes or synthetic live content are added.
+On iPhone (#2005), `JarvisNoteParts` projects the leading H1 or filename into
+the same editable title field. The editor saves Markdown to the same path and
+invalidates Notes and Tasks caches before reading the saved note back for the
+reader. The list can show that confirmed title before the asynchronous vault
+index returns it.
 JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.
 
