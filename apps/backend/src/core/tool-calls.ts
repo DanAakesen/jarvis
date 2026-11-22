@@ -1,3 +1,5 @@
+import type { ToolEffect } from './tool-registry.js';
+
 export type ToolCallOutcome = 'ok' | 'refused' | 'error';
 
 export interface ToolCallRecord {
@@ -108,28 +110,82 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
     const reason = (result as { refused?: unknown } | null)?.refused;
     return typeof reason === 'string' ? `Not done. ${reason}` : 'Not done. It was refused.';
   }
-  // The cause is the tool's own plain sentence (a `ToolFailure` message) or the dispatcher's fixed fallback, never provider text.
-  const failed = result as { failure?: unknown; error?: unknown } | null;
+  // The cause is the tool's own plain sentence (a `ToolFailure` message) or the dispatcher's class sentence, never provider text.
+  // A failure marked `outcomeUnknown` already says the tool may have done its work, so it must not also say "Not done."
+  const failed = result as { failure?: unknown; error?: unknown; outcomeUnknown?: unknown } | null;
   const failure = failed?.failure ?? failed?.error;
-  return typeof failure === 'string' ? `Not done. ${failure}` : "Not done. It didn't work, and no reason came back.";
+  if (typeof failure !== 'string') return "Not done. It didn't work, and no reason came back.";
+  return failed?.outcomeUnknown === true ? failure : `Not done. ${failure}`;
 }
 
-const networkCodes = /^(?:ECONN\w*|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|EPIPE|UND_ERR\w*)$/u;
+export type ToolFailureClass = 'stopped' | 'timeout' | 'dropped' | 'not_sent' | 'unexpected';
+
+export interface UnexpectedToolFailure {
+  /** Stored and returned to the model. `outcomeUnknown` means the tool may have done its work, so "Not done." is not claimed. */
+  readonly result: { readonly error: string; readonly outcomeUnknown?: true };
+  /** Fixed-vocabulary fields for the `tool.execution_failed` log: error class tokens only, never error text. */
+  readonly log: {
+    readonly failureClass: ToolFailureClass;
+    readonly effect: ToolEffect | 'none';
+    readonly errorName?: string;
+    readonly errorCode?: string;
+    readonly causeName?: string;
+    readonly causeCode?: string;
+  };
+}
+
+// The connection was never made, so the request cannot have been delivered.
+const notSentCodes = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT']);
+// The request was, or may have been, delivered before the call ended, so the other side may have acted on it.
+const timeoutCodes = new Set(['ETIMEDOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT']);
+const droppedCodes = new Set(['ECONNRESET', 'ECONNABORTED', 'EPIPE', 'UND_ERR_SOCKET', 'UND_ERR_CLOSED', 'UND_ERR_ABORTED', 'UND_ERR_DESTROYED']);
+
+const causeSentences: Record<ToolFailureClass, string> = {
+  stopped: 'It was stopped before it finished',
+  timeout: 'It did not finish in time',
+  dropped: 'The connection dropped before it finished',
+  not_sent: 'It could not reach the service it needs',
+  unexpected: 'It hit an unexpected problem',
+};
+
+const nameToken = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(value) ? value : undefined;
+const codeToken = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/u.test(value) ? value : undefined;
 
 /**
- * The plain cause for a tool that threw something that is not a `ToolFailure`, chosen by class from the error's name or code so no
- * provider text reaches Dan or the model. The agent reads it, so it names what went wrong instead of "tool execution failed".
+ * The plain result for a tool that threw something that is not a `ToolFailure`, chosen by error class (name and code only, so no
+ * provider text reaches Dan or the model). Only a tool declared read-only can say plainly that nothing changed. For any other tool
+ * a call that may have been delivered (a timeout, a dropped connection, a stop, an unknown error) says its outcome is unknown, and
+ * only a call that provably never left says so, because a retry of a write that already happened would do it twice.
  */
-export function unexpectedToolFailure(error: unknown, aborted: boolean): string {
-  if (aborted) return 'It was stopped before it finished.';
-  const named = (value: unknown): { name?: unknown; code?: unknown; cause?: unknown } =>
-    value !== null && typeof value === 'object' ? value as { name?: unknown; code?: unknown; cause?: unknown } : {};
-  const outer = named(error);
-  const inner = named(outer.cause);
-  if (outer.name === 'TimeoutError' || inner.name === 'TimeoutError' || outer.code === 'ETIMEDOUT' || inner.code === 'ETIMEDOUT') {
-    return 'It did not finish in time.';
-  }
-  const codes = [outer.code, inner.code];
-  if (codes.some((code) => typeof code === 'string' && networkCodes.test(code))) return 'It could not reach the service it needs.';
-  return 'It hit an unexpected problem.';
+export function unexpectedToolFailure(error: unknown, aborted: boolean, effect: ToolEffect | undefined): UnexpectedToolFailure {
+  const read = (value: unknown) => {
+    const fields = value !== null && typeof value === 'object' ? value as { name?: unknown; code?: unknown } : {};
+    return { name: nameToken(fields.name), code: codeToken(fields.code) };
+  };
+  const outer = read(error);
+  const inner = read(error !== null && typeof error === 'object' ? (error as { cause?: unknown }).cause : undefined);
+  const codes = [outer.code, inner.code].filter((code): code is string => code !== undefined);
+  // Any sign the request left wins over a sign it did not.
+  const failureClass: ToolFailureClass = aborted ? 'stopped'
+    : outer.name === 'TimeoutError' || inner.name === 'TimeoutError' || codes.some((code) => timeoutCodes.has(code)) ? 'timeout'
+      : codes.some((code) => droppedCodes.has(code)) ? 'dropped'
+        : codes.some((code) => notSentCodes.has(code)) ? 'not_sent' : 'unexpected';
+  const what = causeSentences[failureClass];
+  const readOnly = effect === 'read';
+  const sentence = readOnly ? `${what}.` : failureClass === 'not_sent'
+    ? `${what}, so that request was not sent.`
+    : `${what}, so it may or may not have gone through. Check before trying again.`;
+  return {
+    result: readOnly ? { error: sentence } : { error: sentence, outcomeUnknown: true },
+    log: {
+      failureClass,
+      effect: effect ?? 'none',
+      ...(outer.name ? { errorName: outer.name } : {}),
+      ...(outer.code ? { errorCode: outer.code } : {}),
+      ...(inner.name ? { causeName: inner.name } : {}),
+      ...(inner.code ? { causeCode: inner.code } : {}),
+    },
+  };
 }

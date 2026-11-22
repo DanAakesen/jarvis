@@ -24,6 +24,7 @@ export class RecoverableChat {
     if (this.ended || this.overflowed) return false;
     const name = frameName.exec(frame)?.[1];
     // A saved reply is never reported as failed afterwards: a late error frame is dropped, and the `done` frame itself always fits.
+    // The clients read up to 4 MiB of a reply stream (web `maxChatStreamBytes`, iPhone `maximumStreamBytes`), which covers this cap plus `done`.
     if (this.delivered && name === 'error') return true;
     this.bytes += Buffer.byteLength(frame);
     if (this.bytes > 1024 * 1024 && name !== 'done') {

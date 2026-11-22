@@ -454,8 +454,10 @@ export async function executeReflexAction(
       outcome = 'error';
       result = { failure: error.message };
     } else {
+      const unexpected = unexpectedToolFailure(error, signal.aborted, target.tool.execution?.defaultEffect);
       outcome = 'error';
-      result = { error: unexpectedToolFailure(error, signal.aborted) };
+      result = unexpected.result;
+      request.log.warn({ tool: target.tool.name, ...unexpected.log }, 'tool.execution_failed');
     }
   } finally {
     if (outcome === 'error') request.server.systemHealthDiagnostics.record('failed');

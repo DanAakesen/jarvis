@@ -21,9 +21,11 @@
 | Keep the six `pi_*` codes; technical detail in `detail` and the log; plain `userMessage` and one spoken sentence per class | Done |
 | Say "nothing was done" only when nothing ran; otherwise say an action may have happened | Done |
 | A saved reply is never followed by an error; Stop is not a failure; a failed refresh after a reply is not a failed turn; tool rows no longer say "Failed" | Done; the web, backend and contracts tests fail on the old code |
-| Tool confirmations keep the plain cause; the dispatcher's fallback names the class | Done |
+| A saved reply is never failed for its size: the clients read up to 4 MiB (progress frames stop at 1 MiB, `done` carries the reply) | Done (review); the web test fails on the old 1 MiB ceiling, the Swift test `ChatStreamLimitTests` runs in CI |
+| Tool confirmations keep the plain cause; a tool that threw something unexpected is described by error class and declared effect | Done |
+| A write whose request may have been delivered says its outcome is unknown, never "Not done." (review); the error class is logged as `tool.execution_failed` | Done; a real local service that runs the side effect and drops the socket is the test, and it fails when the tool's effect is ignored |
 | List the messages that exist only because of non-delete approval gates (owner rule: none except deletes); remove none | Done in the pull request |
-| Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`) and the app build | Written; run in CI, not in the dev container |
+| Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`, `ChatStreamLimitTests`) and the app build | Written; run in CI (Linux `swift test`, macOS app build), not in the dev container |
 | Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
 
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)

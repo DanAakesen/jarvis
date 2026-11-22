@@ -224,6 +224,10 @@ function stableChatMessage(value: unknown, fallback: string): string {
   return typeof value === 'string' && stableChatMessages.has(value) ? value : fallback;
 }
 
+// The server stops a reply's progress frames at 1 MiB but always sends `done`, which carries the saved reply (its text came through
+// those frames, plus at most 8 blocks of 64 KiB). Reading stops only well above both, so a saved reply is never failed for its size.
+const maxChatStreamBytes = 4 * 1024 * 1024;
+
 async function chatResponse(
   getAccessToken: () => Promise<string>,
   config: PublicConfig,
@@ -510,7 +514,7 @@ export async function sendChatTurn(
       const { done, value } = chunk;
       if (done) break;
       receivedBytes += value.byteLength;
-      if (receivedBytes > 1024 * 1024) throw new Error(failureCopy.reply_too_long.chat);
+      if (receivedBytes > maxChatStreamBytes) throw new Error(failureCopy.reply_too_long.chat);
       buffer += decoder.decode(value, { stream: true });
       const frames = buffer.split(/\r?\n\r?\n/u);
       buffer = frames.pop() ?? '';

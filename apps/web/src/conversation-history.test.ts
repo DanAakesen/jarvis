@@ -63,4 +63,16 @@ describe('a chat turn on the web', () => {
     const failure = await sendChatTurn(async () => 'token', config, session, 'hi', () => {}, () => {}).catch((error: unknown) => error);
     expect(failure).toMatchObject({ message: failureCopy.still_answering.chat, delivery: 'not_accepted' });
   });
+
+  it('delivers a saved reply whose done frame takes the stream past 1 MiB', async () => {
+    // The server stops progress frames at 1 MiB but always sends `done`, so this is a stream it accepted and saved.
+    const long = 'a'.repeat(600_000);
+    const message = await send(user, frame('delta', { text: long }), frame('done', { id: '43', sessionId: '7', role: 'jarvis', text: long, model: 'pi', at: '2026-11-21T10:00:01.000Z' }));
+    expect(message.text).toHaveLength(long.length);
+  });
+
+  it('still stops a stream that runs far past what the server ever sends', async () => {
+    const chunk = frame('delta', { text: 'a'.repeat(900_000) });
+    await expect(send(user, chunk, chunk, chunk, chunk, chunk)).rejects.toThrow(failureCopy.reply_too_long.chat);
+  });
 });

@@ -315,8 +315,10 @@ export const coreModule: BackendModule = {
             outcome = 'error';
             result = { error: error.message };
           } else {
+            const unexpected = unexpectedToolFailure(error, controller.signal.aborted, tool.execution?.defaultEffect);
             outcome = 'error';
-            result = { error: unexpectedToolFailure(error, controller.signal.aborted) };
+            result = unexpected.result;
+            request.log.warn({ tool: tool.name, ...unexpected.log }, 'tool.execution_failed');
           }
         } finally {
           if (outcome === 'error') app.systemHealthDiagnostics.record('failed');
