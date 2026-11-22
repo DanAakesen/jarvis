@@ -48,10 +48,13 @@ export const googleGroup: GroupFactory = (context) => {
       ],
       calendar_list_events: [
         named('this week', { start: '2026-11-23', end: '2026-11-29' }, 'what is on my calendar this week?', (result) => {
-          expect(subjects(result)).toEqual(expect.arrayContaining(['Sync with Anna', 'Lunch with Mette', 'Team offsite', 'Quarterly review']));
+          // calendar_update_event renames the quarterly review ("Quarterly review (room 4)"), so it is matched by its start.
+          expect(subjects(result)).toEqual(expect.arrayContaining(['Sync with Anna', 'Lunch with Mette', 'Team offsite']));
+          expect(subjects(result).some((subject) => subject.startsWith('Quarterly review'))).toBe(true);
           expect(list(object(result).events).find((event) => event.subject === 'Team offsite')).toMatchObject({ allDay: true, start: '2026-11-25', end: '2026-11-27' });
         }),
-        named('by event text', { start: '2026-11-23', end: '2026-11-29', query: 'dentist' }, 'when is my dentist appointment?', (result) => {
+        // The range reaches Monday 30 November: the calendar_move_event case moves the dentist there, whichever case ran first.
+        named('by event text', { start: '2026-11-23', end: '2026-12-06', query: 'dentist' }, 'when is my dentist appointment?', (result) => {
           expect(subjects(result)).toEqual(['Dentist appointment']);
         }),
         named('two months, more than one page', { start: '2026-11-01', end: '2026-12-31', maxResults: 100 }, 'what is on my calendar in November and December?', (result) => {

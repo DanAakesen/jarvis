@@ -225,7 +225,8 @@ export const factoryCases: Readonly<Record<string, readonly ToolCase[]>> = {
   ],
   github_read: [
     ok('one issue', { operation: 'issue_get', number: 700 }, (result) => expect(as<{ title: string }>(result).title).toBe('Deploy smoke test issue')),
-    ok('issue comments', { operation: 'issue_comments', number: 700, perPage: 5 }, (result) => expect(as<{ comments: unknown[] }>(result).comments).toHaveLength(1)),
+    // The issue_comment case adds a comment to issue 700, so the seeded one is what must be there, not the only one.
+    ok('issue comments', { operation: 'issue_comments', number: 700, perPage: 5 }, (result) => expect(as<{ comments: { body: string }[] }>(result).comments.map((comment) => comment.body)).toContain('This issue must stay open.')),
     ok('issue search', { operation: 'issue_search', query: 'login' }, (result) => expect(as<{ results: { number: number }[] }>(result).results.map((row) => row.number)).toContain(704)),
     ok('pull request search', { operation: 'pr_search', query: 'Now view', state: 'all' }, (result) => expect(as<{ results: { number: number }[] }>(result).results.map((row) => row.number)).toEqual([705])),
     ok('open pull requests', { operation: 'pr_list' }, (result) => expect(as<{ pullRequests: unknown[] }>(result).pullRequests.length).toBeGreaterThan(3)),

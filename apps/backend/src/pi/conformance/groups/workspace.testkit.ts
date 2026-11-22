@@ -99,13 +99,19 @@ export const workspaceGroup: GroupFactory = (context) => {
     ...module, registerServices: (app) => { application = app as unknown as FastifyInstance; },
   });
   // A retry starts from a research job that has already failed, which happens in the background after `research` answered.
+  // retry_job brings its own failed job (its case names none), so it does not depend on what another case left behind.
+  let failedBeforeRetry = '';
   const waitForFailedResearch = (module: BackendModule): BackendModule => ({
     ...module,
     tools: module.tools.map((tool) => tool.name !== 'retry_job' ? tool : {
       ...tool,
       execute: async (input, request, signal) => {
-        await failedResearchSettled(request.server.backgroundJobs, (input as { jobId?: string }).jobId);
-        return tool.execute(input, request, signal);
+        const research = module.tools.find((candidate) => candidate.name === 'research');
+        if (!research) return tool.execute(input, request, signal);
+        const started = await research.execute({ topic: `retry me (${outageMarker})`, title: 'Retry me', depth: 'quick' }, request, signal) as { jobId: string };
+        failedBeforeRetry = started.jobId;
+        await failedResearchSettled(request.server.backgroundJobs, started.jobId);
+        return tool.execute({ ...(input as object), jobId: started.jobId }, request, signal);
       },
     }),
   });
@@ -161,9 +167,6 @@ export const workspaceGroup: GroupFactory = (context) => {
       expect(result).toMatchObject({ id: `knowledge_graph:${oldGraph}`, deleted: true });
     } },
   ];
-
-  /** The failed research job `retry_job` retries: started by the `research` outage case, which runs just before it (tools run sorted by name). */
-  const failedResearch: { jobId: string } = { jobId: '00000000-0000-4000-8000-000000000000' };
 
   const cases: Record<string, readonly ToolCase[]> = {
     workspaces_search: searchCases,
@@ -271,18 +274,18 @@ export const workspaceGroup: GroupFactory = (context) => {
         expect(result).toMatchObject({ jobId: expect.stringMatching(uuid), message: expect.stringContaining('Research has started') });
       } },
       // The runner drops out for this one, so the job fails in the background and stays retryable for `retry_job`.
-      { label: 'a run that cannot finish still starts and stays retryable', arguments: { topic: `solid-state battery supply (${outageMarker})`, title: 'Solid-state batteries', depth: 'quick' }, check: (result) => {
-        failedResearch.jobId = (result as { jobId: string }).jobId;
-        expect(failedResearch.jobId).toMatch(uuid);
+      { label: 'a run that cannot finish still starts', arguments: { topic: `solid-state battery supply (${outageMarker})`, title: 'Solid-state batteries', depth: 'quick' }, check: (result) => {
+        expect((result as { jobId: string }).jobId).toMatch(uuid);
       } },
     ],
     retry_job: [{
       label: 'starts the failed research again',
-      get arguments() { return { jobId: failedResearch.jobId }; },
+      // The job id is replaced by the failed job retry_job starts for itself (see waitForFailedResearch).
+      arguments: { jobId: '00000000-0000-4000-8000-000000000000' },
       check: (result) => {
         const retried = result as { jobId: string };
         expect(retried.jobId).toMatch(uuid);
-        expect(retried.jobId).not.toBe(failedResearch.jobId);
+        expect(retried.jobId).not.toBe(failedBeforeRetry);
       },
     }],
   };

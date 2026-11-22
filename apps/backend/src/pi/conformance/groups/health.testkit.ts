@@ -139,6 +139,11 @@ export const healthGroup: GroupFactory = (context): ConformanceGroup => {
     expect(result.status).toBe('available');
     expect(result.items).toHaveLength(count);
   };
+  /** For records another tool's case also adds or removes (saved plans): there is at least this many, whichever case ran first. */
+  const availableAtLeast = (count: number) => (result: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    expect(result.status).toBe('available');
+    expect(result.items.length).toBeGreaterThanOrEqual(count);
+  };
 
   // One intake written twice by the same message must be one intake (the first write's id is what the replay returns).
   let firstExactId: unknown;
@@ -157,7 +162,7 @@ export const healthGroup: GroupFactory = (context): ConformanceGroup => {
       query('what was eaten today', { source: sources.meals, startDate: day, endDate: day }, (result) => expect(result.items.length).toBeGreaterThanOrEqual(2)),
       query('nutrition totals per day', { source: sources.days, startDate: weekAgo, endDate: day }, (result) => expect(result.items.length).toBeGreaterThanOrEqual(2)),
       query('saved favourites', { source: sources.favorites }, (result) => expect(result.items.length).toBeGreaterThanOrEqual(4)),
-      query('saved meal plans', { source: sources.plans }, available(1)),
+      query('saved meal plans', { source: sources.plans }, availableAtLeast(1)),
       query('owner training targets', { source: sources.trainingTargets }, (result) => expect(result.items[0]).toMatchObject({ targets: { dailySteps: 10_000 } })),
       query('upload and processing evidence', { source: sources.sync }, available(1)),
       query('brief history', { source: sources.briefs }, available(1)),
@@ -261,9 +266,11 @@ export const healthGroup: GroupFactory = (context): ConformanceGroup => {
         definition: { mealName: 'Shake', energyKcal: 200 } }, expect: 'refused' },
     ],
     health_nutrition_targets: [
-      { label: 'read the targets', arguments: { operation: 'read' }, check: (result) => expect(result).toMatchObject({ status: 'configured', targets: { restingKcal: 2700, deficitKcal: 300, proteinGrams: 150 }, missing: [] }) },
-      { label: 'set the protein target', arguments: { operation: 'set_targets', targets: { proteinGrams: 160 } }, check: (result) => expect(result).toMatchObject({ status: 'committed', changed: ['proteinGrams'], targets: { proteinGrams: 160 } }) },
-      { label: 'the same target again changes nothing', arguments: { operation: 'set_targets', targets: { proteinGrams: 160 } }, check: (result) => expect(result).toMatchObject({ status: 'unchanged' }) },
+      // The golden scenario sets the protein target to 160 g, so these cases do not depend on whether it ran first: the protein
+      // target is only required to be a number, and the write below uses a value the scenario never sets.
+      { label: 'read the targets', arguments: { operation: 'read' }, check: (result) => expect(result).toMatchObject({ status: 'configured', targets: { restingKcal: 2700, deficitKcal: 300, proteinGrams: expect.any(Number) }, missing: [] }) },
+      { label: 'set the protein target', arguments: { operation: 'set_targets', targets: { proteinGrams: 170 } }, check: (result) => expect(result).toMatchObject({ status: 'committed', changed: ['proteinGrams'], targets: { proteinGrams: 170 } }) },
+      { label: 'the same target again changes nothing', arguments: { operation: 'set_targets', targets: { proteinGrams: 170 } }, check: (result) => expect(result).toMatchObject({ status: 'unchanged' }) },
       { label: 'a target outside its range', arguments: { operation: 'set_targets', targets: { proteinGrams: 5 } }, expect: 'refused' },
     ],
     health_nutrition_suggest: [

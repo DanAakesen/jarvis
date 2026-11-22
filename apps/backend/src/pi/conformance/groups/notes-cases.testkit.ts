@@ -213,7 +213,8 @@ export function buildNotesCases(fixtures: NotesFixtures): Readonly<Record<string
       },
     ],
     inbox_items: [
-      { label: 'lists the open items', arguments: {}, check: (result) => { expect(Number(record(result).count)).toBeGreaterThanOrEqual(2); } },
+      // inbox_capture adds an item and inbox_close closes one, so what must be there is the one nobody touches.
+      { label: 'lists the open items', arguments: {}, check: (result) => { expect(Number(record(result).count)).toBeGreaterThanOrEqual(1); expect(JSON.stringify(record(result).items)).toContain('standing desk'); } },
       { label: 'finds an item by its words', arguments: { query: 'desk' }, check: (result) => { expect(record(result).count).toBe(1); } },
       { label: 'also shows what was closed', arguments: { includeClosed: true }, check: (result) => { expect((record(result).items as Json[]).some((item) => item.closed === true)).toBe(true); } },
       {
