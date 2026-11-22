@@ -853,6 +853,7 @@ return {
               }
               agentIterator = agent.stream({
                 messageId: turnMessageId,
+                requestId: request.id,
                 agentSessionId,
                 text: turnText,
                 ...(proactiveContext ? { proactiveContext } : {}),

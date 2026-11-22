@@ -173,7 +173,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `proactive_message_feedback` | pi | chat and voice | action | ok | "that message was useful" (en, #1) | ok | 52 |  |
 | `proactive_preferences` | notes | chat and voice | unclassified | ok | "Read current proactive preferences or capability-backed help, or chan…" (derived, #1) | ok (8 calls) | 152 |  |
 | `proactive_recent_items` | notes | chat and voice | read | ok | "that finding was not useful" (en, #3) | ok (2 calls) | 49 |  |
-| `read_backend_logs` | core | chat and voice | read | ok | "why did you fail yesterday" (en, #1) | ok (2 calls) | 85 |  |
+| `read_backend_logs` | core | chat and voice | read | ok | "why did you fail yesterday" (en, #1) | ok (2 calls) | 205 |  |
 | `read_html_view` | workspace | chat and voice | unclassified | ok | "Read an existing HTML report or app by artifactId or workspace viewId…" (derived, #1) | ok (3 calls) | 84 |  |
 | `read_window` | core | chat and voice | unclassified | ok | "Read a workspace window by viewId from the latest snapshot" (derived, #1) | ok (2 calls) | 37 |  |
 | `renew_credential` | core | chat and voice | action | ok | "Start renewal of the Jarvis Codex login when Dan requests it" (derived, #2) | ok | 33 |  |

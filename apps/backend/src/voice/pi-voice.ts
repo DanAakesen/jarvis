@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { failureCopy } from '@jarvis/contracts';
 import { PiGatewayError } from '../pi/errors.js';
 import type { PiGateway } from '../pi/gateway.js';
@@ -25,6 +26,7 @@ export interface PiVoiceTurn {
 }
 
 export interface PiVoiceTurnLog {
+  readonly reqId: string;
   readonly outcome: 'ok' | 'failed' | 'timeout' | 'cancelled' | 'superseded';
   readonly transcriptToFirstTextMs: number | null;
   readonly transcriptToDoneMs: number;
@@ -65,6 +67,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
   let running = 0;
 
   async function run(turn: PiVoiceTurn, controller: AbortController): Promise<void> {
+    const requestId = randomUUID();
     const deadlineAt = performance.now() + deadlineMs;
     const deadline = AbortSignal.timeout(deadlineMs);
     const signal = AbortSignal.any([options.signal, controller.signal, deadline]);
@@ -77,7 +80,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       signal.throwIfAborted();
       let partial = '';
       for await (const chunk of options.agent.stream({
-        messageId: turn.messageId, sessionId: turn.sessionId, text: turn.text, channel: 'voice', deadlineAt,
+        messageId: turn.messageId, requestId, sessionId: turn.sessionId, text: turn.text, channel: 'voice', deadlineAt,
         ...(turn.proactiveContext ? { proactiveContext: turn.proactiveContext } : {}),
         onTurnDeadline(text) {
           if (timeoutSpoken || options.signal.aborted || controller.signal.aborted) return;
@@ -116,7 +119,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
     if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = failureCopy.no_reply.voice; }
     // A cancelled or superseded turn says nothing: the session ended, or Dan has already moved on.
     if (reply && !timeoutSpoken && !options.signal.aborted && !controller.signal.aborted) options.speak(reply, turn.delegationId);
-    options.log({ outcome, transcriptToFirstTextMs: firstTextMs, transcriptToDoneMs: Math.round(now() - turn.startedAt), acknowledged });
+    options.log({ reqId: requestId, outcome, transcriptToFirstTextMs: firstTextMs, transcriptToDoneMs: Math.round(now() - turn.startedAt), acknowledged });
   }
 
   return {

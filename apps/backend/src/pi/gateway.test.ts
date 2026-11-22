@@ -80,9 +80,9 @@ function setup(replies: Array<(call: Call) => Response | Promise<Response>>, ove
     store, registry, activations, fetcher, getToken: async () => 'token', context: async () => 'CONTEXT BLOCK',
     recordUsage: async (record) => { usage.push(record); }, now: () => new Date('2026-11-15T16:00:00Z'), streamRetryDelayMs: 0, ...overrides,
   });
-  const run = async (text: string, signal = new AbortController().signal) => {
+  const run = async (text: string, signal = new AbortController().signal, requestId?: string) => {
     const chunks: ConversationAgentChunk[] = [];
-    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text }, 'Bearer x', signal)) chunks.push(chunk);
+    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text, ...(requestId ? { requestId } : {}) }, 'Bearer x', signal)) chunks.push(chunk);
     return chunks;
   };
   return {
@@ -883,7 +883,8 @@ describe('PI gateway', () => {
     ])('retries once on %s, with the same message and conversation, billing the turn once', async (_name, first, reason, cancelsFirst) => {
       const { logs, log } = capture();
       const { run, calls, store, usage, conversations } = setup([first, () => sse(created, delta('Hi'), completed(100, 0, 10))], { log });
-      expect(await run('private question')).toEqual(['Hi']);
+      const requestId = '28d1efca-d8d7-4090-8822-9105c58652ad';
+      expect(await run('private question', undefined, requestId)).toEqual(['Hi']);
       const responses = responsesOf(calls);
       expect(responses).toHaveLength(2);
       expect(responses[1]!.body).toEqual(responses[0]!.body);
@@ -892,10 +893,10 @@ describe('PI gateway', () => {
       // A response that only stopped may still run on Foundry's side, so it is cancelled before the retry; a failed one is already over.
       expect(calls.filter(call => call.url.includes('/responses/resp_1/cancel'))).toHaveLength(cancelsFirst ? 1 : 0);
       expect(logs.filter(([event]) => event === 'pi.stream_failed')).toEqual([[
-        'pi.stream_failed', expect.objectContaining({ reason, attempt: 1, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }),
+        'pi.stream_failed', expect.objectContaining({ reqId: requestId, reason, attempt: 1, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }),
       ]]);
       expect(logs.filter(([event]) => event === 'pi.stream_retry')).toEqual([[
-        'pi.stream_retry', expect.objectContaining({ reason, attempt: 1, elapsedMs: expect.any(Number) }),
+        'pi.stream_retry', expect.objectContaining({ reqId: requestId, reason, attempt: 1, elapsedMs: expect.any(Number) }),
       ]]);
       // One turn, one usage report, one cap check: the failed attempt is not billed a second time.
       expect(store.turns).toHaveLength(1);

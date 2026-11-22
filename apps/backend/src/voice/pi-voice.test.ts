@@ -33,13 +33,13 @@ describe('PI voice turns', () => {
     const after = performance.now();
     await settled();
     expect(inputs).toEqual([{
-      messageId: '42', sessionId: '7', text: 'what is next', channel: 'voice',
+      messageId: '42', requestId: expect.stringMatching(/^[a-f0-9-]{36}$/u), sessionId: '7', text: 'what is next', channel: 'voice',
       proactiveContext: 'Jarvis told Dan about a build.', onTurnDeadline: expect.any(Function), deadlineAt: expect.any(Number),
     }]);
     expect(inputs[0]!.deadlineAt).toBeGreaterThanOrEqual(before + PI_VOICE_TURN_DEADLINE_MS);
     expect(inputs[0]!.deadlineAt).toBeLessThanOrEqual(after + PI_VOICE_TURN_DEADLINE_MS);
     expect(spoken).toEqual(['Two meetings today.']);
-    expect(logs).toEqual([{ outcome: 'ok', transcriptToFirstTextMs: 100, transcriptToDoneMs: 100, acknowledged: false }]);
+    expect(logs).toEqual([{ reqId: inputs[0]!.requestId, outcome: 'ok', transcriptToFirstTextMs: 100, transcriptToDoneMs: 100, acknowledged: false }]);
     expect(busy).toEqual([true, false]);
   });
 

@@ -38,6 +38,7 @@ export interface FoundryAgentSessionTelemetry {
 
 export interface ConversationAgentInput {
   readonly messageId: string;
+  readonly requestId?: string;
   readonly sessionId?: string;
   readonly agentSessionId?: string;
   readonly turnId?: string;

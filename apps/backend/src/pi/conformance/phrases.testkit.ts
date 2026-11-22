@@ -161,6 +161,7 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'system', en: 'how is the research going', da: 'hvordan går det med researchen', tools: ['list_jobs', 'get_job'] },
   { intent: 'system', en: 'stop the research job', da: 'stop den research opgave', tools: ['cancel_job'] },
   { intent: 'system', en: 'why did you fail yesterday', da: 'hvorfor fejlede du i går', tools: ['read_backend_logs'] },
+  { intent: 'system', en: 'why did that request fail', da: 'hvorfor fejlede den anmodning', tools: ['read_backend_logs'] },
   { intent: 'workspace', en: 'tidy up my windows', da: 'ryd op i mine vinduer', tools: ['workspace_command'] },
   { intent: 'workspace', en: 'delete my routine', da: 'slet min rutine', tools: ['task_routines', 'task_recipes'] },
   { intent: 'workspace', en: 'what do I have pinned', da: 'hvad har jeg fastgjort', tools: ['pins_list'] },

@@ -137,7 +137,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['working', 'virker', 'fungerer', 'status', 'operational'], terms: ['status', 'system'] },
   { stems: ['backend', 'system*', 'server*', 'services', 'tjenester', 'healthy', 'broken', 'ødelagt'],
     phrases: ['something wrong', 'noget galt', 'virker ikke', 'er noget'], terms: ['system', 'status'] },
-  { stems: ['fejlede', 'fejl'], phrases: ['why did you fail', 'why did it fail', 'what went wrong', 'hvad gik galt', 'your errors', 'dine fejl', 'backend logs'], terms: ['backend', 'logs'] },
+  { stems: ['fejlede', 'fejl'], phrases: ['why did you fail', 'why did it fail', 'why did that request fail', 'what went wrong', 'hvad gik galt', 'your errors', 'dine fejl', 'backend logs'], terms: ['backend', 'logs'] },
   { stems: [], phrases: ['tidy up', 'ryd op', 'arrange windows', 'close all windows', 'side by side', 'minimise', 'minimize', 'luk alle vinduer', 'ordne vinduer'], terms: ['workspace', 'command'] },
   { stems: [], phrases: ['research going', 'how is the research', 'går det med research', 'research job', 'status of the research'], terms: ['jobs', 'job'] },
   { stems: [], phrases: ['stop research', 'cancel research', 'stop den research', 'afbryd research', 'stop the research'], terms: ['cancel', 'job'] },

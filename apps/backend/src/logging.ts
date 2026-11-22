@@ -268,6 +268,10 @@ const piAzureCatalogueStates = new Set([
   'idle', 'ready', 'stale', 'starting', 'unreachable', 'empty', 'not_configured', 'not_searched',
 ]);
 
+export function isBackendRequestId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(value);
+}
+
 function safeRequestId(value: unknown): value is string {
   return typeof value === 'string' && /^[\da-f-]{36}$/iu.test(value);
 }
@@ -765,6 +769,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       input.msg === 'pi.mcp_list_failed' || input.msg === 'pi.mcp_call_failed' || input.msg === 'pi.smoke_failed') {
     // Fixed summaries, short labels and numbers only: never raw provider text.
     const fields: Record<string, unknown> = {};
+    if (isBackendRequestId(input.reqId)) fields.reqId = input.reqId;
     if (typeof input.reason === 'string' && piStreamReasons.has(input.reason)) fields.reason = input.reason;
     if (typeof input.event === 'string' && piStreamEvents.has(input.event)) fields.event = input.event;
     if (typeof input.code === 'string' && /^[A-Za-z0-9_.:-]{1,64}$/u.test(input.code)) fields.code = input.code;
@@ -802,6 +807,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {
     const fields: Record<string, unknown> = {};
+    if (isBackendRequestId(input.reqId)) fields.reqId = input.reqId;
     if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
     if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
         input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;

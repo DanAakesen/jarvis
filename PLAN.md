@@ -27,6 +27,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 **Unverified:** whether Foundry sends a usable `_meta` call ID (the ledger still works without one); real provider rate-limit message and cause (reported error code and offline fixtures are evidence, not a new live trace); iPhone follow/Voice label and Watch recovery on physical devices; Background PI message delivery. Do not treat an offline replay or a merged fix as device acceptance.
 
+Backend diagnostics use a backend-only log grant. Verify production readback and one owner request before accepting. See [log access](docs/reference/logs.md).
+
 ### Open decisions A–F
 
 | | Decision | Next check |

@@ -5,6 +5,9 @@
     "foundryNameTimestamp": {
       "value": "20261003200000"
     },
+    "backendLogAccess": {
+      "value": "enabled"
+    },
     "inboxEnabled": {
       "value": true
     },

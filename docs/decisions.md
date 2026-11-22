@@ -20,6 +20,10 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
 
+### 23 November 2026 — PI can diagnose its backend requests
+
+Dan approved read-only access to sanitized backend diagnostics in Chat and Voice. A request ID links related events. Keep other apps, device logs and raw personal content outside the reader.
+
 ### 23 November 2026 — iPhone entry points and Watch navigation
 
 On iPhone, one manual kcal entry adds one meal with unknown macros. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.

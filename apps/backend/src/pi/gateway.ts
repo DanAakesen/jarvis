@@ -421,6 +421,7 @@ type StreamFailureFields = { event?: string; code?: string; status?: number; pro
 
 /** What one attempt at a reply stream has seen so far: it explains a failure and decides whether a retry could repeat anything. */
 interface StreamPhase {
+  readonly requestId?: string | undefined;
   readonly round: number;
   readonly attempt: number;
   readonly startedAt: number;
@@ -446,6 +447,7 @@ interface StreamPhase {
 }
 
 interface ResponseTurn {
+  readonly requestId?: string | undefined;
   readonly grant: PiTurnGrant;
   readonly deadlineAt: number;
   retriesLeft: number;
@@ -453,8 +455,8 @@ interface ResponseTurn {
   phase?: StreamPhase | undefined;
 }
 
-const responseTurn = (grant: PiTurnGrant, deadlineAt: number): ResponseTurn =>
-  ({ grant, deadlineAt, retriesLeft: maxResponseRetries, unverifiedWork: false });
+const responseTurn = (grant: PiTurnGrant, deadlineAt: number, requestId?: string): ResponseTurn =>
+  ({ grant, deadlineAt, requestId, retriesLeft: maxResponseRetries, unverifiedWork: false });
 
 function actionUnverified(turn: ResponseTurn): boolean {
   const { grant, phase } = turn;
@@ -727,6 +729,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   function phaseFields(phase: StreamPhase) {
     return {
+      ...(phase.requestId ? { reqId: phase.requestId } : {}),
       elapsedMs: Math.round(performance.now() - phase.startedAt),
       ...(phase.firstEventMs !== null ? { firstEventMs: phase.firstEventMs } : {}),
       sawText: phase.sawText, sawTool: phase.sawTool, sawOutput: phase.sawOutput, previousCancelled: previousCancelled(),
@@ -993,7 +996,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const sendsApproval = input.some(item => isObject(item) && item.type === 'mcp_approval_response');
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
-        round, attempt, startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
+        requestId: turn?.requestId, round, attempt, startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
         responseId: null, requestSent: false, rejected: false, sendsApproval, unverifiedWork: false, sawHarnessCall: false,
         pendingDoorCalls: new Set(), failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
@@ -1278,7 +1281,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal: deadline,
       });
       grant = activation.grant;
-      turn = responseTurn(grant, deadlineAt);
+      turn = responseTurn(grant, deadlineAt, input.requestId);
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
       const overview = overviewFor(conversationId);
@@ -1387,6 +1390,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         if (result.tool.startsWith(azureToolPrefix)) azureCalls[result.outcome] += 1;
       }
       log('pi.turn', {
+        ...(input.requestId ? { reqId: input.requestId } : {}),
         channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
         estimated: usage === undefined && billed !== undefined, costDkk: billed ? piCostDkk(billed) : 0,
         activationId: grant?.activation?.id ?? null,

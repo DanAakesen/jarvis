@@ -91,6 +91,10 @@ param proactiveEventsEnabled bool = false
 @minValue(1)
 param terraChatCapacity int
 
+@description('Read access to retained backend diagnostics. Grant prepares the scoped role alone; enabled also configures the PI reader.')
+@allowed(['off', 'grant', 'enabled'])
+param backendLogAccess string = 'off'
+
 @description('Private main-preflight inputs for fixed backend-identity authorization observations. Empty keeps probes off; these never enable log reads or assign roles.')
 param backendLogProbeWorkspaceId string = ''
 param backendLogProbePrincipalId string = ''
@@ -171,6 +175,20 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
     retentionInDays: 30
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
+  }
+}
+
+// Restrict the data action to the backend's console rows. Other actions on this role read workspace metadata.
+var logDataReaderRoleId = '3b03c2da-16b3-4a49-8834-0f8130efdd3b'
+resource backendLogReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (backendLogAccess != 'off') {
+  name: guid(logAnalytics.id, backendIdentity.id, logDataReaderRoleId)
+  scope: logAnalytics
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', logDataReaderRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    conditionVersion: '2.0'
+    condition: '(!(ActionMatches{\'Microsoft.OperationalInsights/workspaces/tables/data/read\'}) OR (@Resource[Microsoft.OperationalInsights/workspaces/tables:name] StringEquals \'ContainerAppConsoleLogs_CL\' AND @Resource[Microsoft.OperationalInsights/workspaces/tables/record:ContainerAppName_s<$key_case_sensitive$>] StringEquals \'${backendAppName}\'))'
   }
 }
 
@@ -913,6 +931,18 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
             }
             {
+              name: 'JARVIS_BACKEND_LOGS_ENABLED'
+              value: string(backendLogAccess == 'enabled')
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_WORKSPACE_ID'
+              value: logAnalytics.properties.customerId
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_APP_NAME'
+              value: backendAppName
+            }
+            {
               name: 'JARVIS_BACKEND_LOGS_PROBE_WORKSPACE_ID'
               value: backendLogProbeWorkspaceId
             }
@@ -1122,6 +1152,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
     blobDataAssignment
     blobUserDelegatorAssignment
     taskEventsContainer
+    backendLogReaderAssignment
     backendFoundrySpeechUserAssignment
     backendFoundryDeploymentReaderAssignment
     backendFoundryDeploymentContributorAssignment
