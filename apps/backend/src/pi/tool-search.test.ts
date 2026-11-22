@@ -61,6 +61,11 @@ describe('tool search wording', () => {
     expect(top('min huskeliste').slice(0, 3)).not.toContain('memory_remember');
   });
 
+  it('does not wait for the Azure bridge for a request that only says group', () => {
+    for (const query of ['send til gruppen', 'create a group chat', 'gruppe', 'group']) expect([...providersNamedBy(query)]).toEqual([]);
+    for (const query of ['mine ressourcegrupper', 'list the resource group', 'azure group']) expect([...providersNamedBy(query)]).toEqual(['az_']);
+  });
+
   it('ignores words that carry no meaning instead of letting them score long descriptions', () => {
     expect(top('hvad er det')).toEqual([]);
     expect(top('what is it')).toEqual([]);

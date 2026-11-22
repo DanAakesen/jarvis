@@ -99,7 +99,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['pr', 'prs', 'pull', 'pullrequest*', 'pullanmodning*', 'request*'], phrases: ['pull request'], terms: ['pr'] },
   { stems: ['azure*', 'az', 'ressource*', 'resource*', 'subscription*', 'abonnement*', 'container*'],
     terms: ['azure', 'resource'], provider: 'az_' },
-  { stems: ['group*', 'gruppe*', 'ressourcegrupp*', 'ressourcegruppe*'], terms: ['group'], provider: 'az_' },
+  { stems: ['ressourcegrupp*'], phrases: ['resource group'], terms: ['group'], provider: 'az_' },
   { stems: ['workspace*', 'arbejdsområde*', 'arbejdsomraade*', 'folio'], terms: ['workspace', 'workspaces', 'folio'] },
   { stems: ['pin', 'pins', 'pinned', 'pinnede', 'unpin', 'fastgør*', 'fastgjort*', 'fastgjorte'], terms: ['pins'] },
   { stems: ['pin', 'unpin', 'fastgør*'], terms: ['workspaces', 'manage', 'folio'] },
