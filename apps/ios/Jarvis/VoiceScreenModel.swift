@@ -1,33 +1,34 @@
-import Combine
 import Foundation
 import JarvisCore
+import Observation
 import UIKit
 
 @MainActor
-final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
-    @Published private(set) var voiceState: VoiceSessionState = .idle
-    @Published private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
-    @Published private(set) var microphoneDenied = false
-    @Published private(set) var signInRequired = false
-    @Published private(set) var isAudioReady = false
-    @Published private(set) var isMuted = false
-    @Published private(set) var isCaptionsEnabled = false
-    @Published private(set) var isMinimized = false
-    @Published private(set) var returnToChatRequested = false
-    @Published private(set) var isCameraEnabled = false
+@Observable
+final class VoiceScreenModel: VoiceLiveActivityControlling {
+    private(set) var voiceState: VoiceSessionState = .idle
+    private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
+    private(set) var microphoneDenied = false
+    private(set) var signInRequired = false
+    private(set) var isAudioReady = false
+    private(set) var isMuted = false
+    private(set) var isCaptionsEnabled = false
+    private(set) var isMinimized = false
+    private(set) var returnToChatRequested = false
+    private(set) var isCameraEnabled = false
     private(set) var isPhotoSession = false
-    @Published private(set) var cameraPermissionDenied = false
-    @Published private(set) var isScreenSharing = false
-    @Published private(set) var visualInputUnavailable = false
-    @Published private(set) var captions = VoiceCaptions()
+    private(set) var cameraPermissionDenied = false
+    private(set) var isScreenSharing = false
+    private(set) var visualInputUnavailable = false
+    private(set) var captions = VoiceCaptions()
     var userCaption: String { captions.user }
     var assistantCaption: String { captions.assistant }
     var captionEntries: [VoiceCaptionEntry] { captions.entries }
-    @Published private(set) var errorMessage: String?
-    @Published private(set) var camera: VoiceCameraCapture?
-    @Published private(set) var photoIsReady = false
+    private(set) var errorMessage: String?
+    private(set) var camera: VoiceCameraCapture?
+    private(set) var photoIsReady = false
     /// Images and video frames handed to the assistant this session, newest last, shown with the transcript.
-    @Published private(set) var sentMedia: [VoiceSentMedia] = []
+    private(set) var sentMedia: [VoiceSentMedia] = []
 
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
@@ -251,13 +252,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 baseURL: baseURL,
                 transport: URLSessionWebSocketTransport(),
                 onMessage: { [weak self] message in
-                    Task { @MainActor in
+                    // Deliver buffers and their completion to the player in socket order.
+                    DispatchQueue.main.async { [weak self] in
                         guard let self, self.sessionGeneration == generation else { return }
                         self.receive(message)
                     }
                 },
                 onStateChange: { [weak self] state in
-                    Task { @MainActor in
+                    DispatchQueue.main.async { [weak self] in
                         guard let self, self.sessionGeneration == generation else { return }
                         self.receiveSessionState(state)
                     }

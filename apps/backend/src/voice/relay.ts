@@ -35,8 +35,8 @@ const ADOPTABLE_TURN_MAX_AGE_MS = 10_000;
 
 type ActivityReason =
   | 'response_started' | 'response_completed' | 'pi_started' | 'pi_finished' | 'delegation_received'
-  | 'input_transcript' | 'input_audio' | 'output_audio' | 'microphone_active' | 'microphone_muted'
-  | 'playback_completed' | 'session_ended' | 'session_failed' | 'session_reconnecting';
+  | 'delegation_settled' | 'output_audio' | 'microphone_active'
+  | 'session_ended' | 'session_failed' | 'session_reconnecting';
 
 interface InputGroup {
   readonly id: string;
@@ -65,6 +65,7 @@ interface OutputGroup {
   quietTimer?: ReturnType<typeof setTimeout>;
   persistenceTimer?: ReturnType<typeof setTimeout>;
   completed: boolean;
+  hasAudio: boolean;
   nextEventSequence: number;
 }
 
@@ -207,7 +208,6 @@ function registerVoiceRoute(
     let microphoneActive = false;
     let microphoneMuted = true;
     let piBusy = false;
-    let outputActive = false;
     let finalization: Promise<void> | undefined;
     let proactiveRead: Promise<string | undefined> | undefined;
     let currentInput: InputGroup | undefined;
@@ -267,7 +267,7 @@ function registerVoiceRoute(
         state: type,
         reason,
         ...(lastActivityPublishAt === undefined ? {} : { sinceLastMs: Math.round(publishedAt - lastActivityPublishAt) }),
-        outputActive,
+        outputActive: activeOutput !== undefined,
         piBusy,
         delegationPending: pendingDelegation !== undefined,
         language,
@@ -277,6 +277,13 @@ function registerVoiceRoute(
       if (type !== 'interrupted') {
         sendClient({ type: 'jarvis.voice.activity', state: type });
       }
+    };
+
+    const refreshActivity = (reason: ActivityReason) => {
+      if (!providerReady || !termination.isActive || controller.signal.aborted) return;
+      if (activeOutput?.hasAudio) publishActivity('speaking', reason);
+      else if (activeOutput || piBusy || pendingDelegation) publishActivity('thinking', reason);
+      else if (microphoneActive || activityState !== null) publishActivity('listening', reason);
     };
 
     const sendClient = (event: Record<string, unknown>, callback?: (error?: Error) => void) => {
@@ -354,23 +361,17 @@ function registerVoiceRoute(
       if (group.quietTimer) clearTimeout(group.quietTimer);
       if (group.persistenceTimer) clearTimeout(group.persistenceTimer);
       if (activeOutput === group) activeOutput = undefined;
-      outputActive = false;
       if (terminal === 'completed' && group.answers) group.answers.answered = true;
-      if (terminal === 'cancelled' && termination.isActive && !controller.signal.aborted) {
-        sendClient({ type: 'jarvis.voice.response.cancelled', responseId: group.id });
+      // Work may continue after a spoken acknowledgement. Publish that before the player drains.
+      refreshActivity('response_completed');
+      if (termination.isActive && !controller.signal.aborted) {
+        sendClient({
+          type: terminal === 'completed' ? 'jarvis.voice.response.completed' : 'jarvis.voice.response.cancelled',
+          responseId: group.id,
+        });
       }
-      void persistOutput(group).finally(() => {
-        if (terminal === 'completed' && termination.isActive && !controller.signal.aborted) {
-          sendClient({
-            type: 'jarvis.voice.response.completed',
-            responseId: group.id,
-          });
-          if (microphoneActive && !piBusy && !outputActive &&
-              pendingDelegation === undefined) {
-            publishActivity('listening', 'response_completed');
-          }
-        }
-      });
+      // Completion describes the audio stream, not whether Chat history has been written.
+      void persistOutput(group);
     };
 
     const persistOutput = (group: OutputGroup): Promise<void> => {
@@ -438,16 +439,16 @@ function registerVoiceRoute(
           ? { answers: owner } : {}),
         persistedTextLength: 0,
         completed: false,
+        hasAudio: false,
         nextEventSequence: 0,
       };
       activeOutput = group;
-      outputActive = true;
       sendClient({
         type: 'jarvis.voice.response.started',
         responseId: group.id,
         ...(delegationId ? { delegationId } : {}),
       });
-      publishActivity('thinking', 'response_started');
+      refreshActivity('response_started');
       scheduleOutputPersistence(group);
       return group;
     };
@@ -472,10 +473,7 @@ function registerVoiceRoute(
       speak: (text, delegationId) => sendCommentary(text, delegationId ?? null),
       busy: (active) => {
         piBusy = active;
-        if (active && microphoneActive) publishActivity('thinking', 'pi_started');
-        else if (!active && microphoneActive && !outputActive && pendingDelegation === undefined) {
-          publishActivity('listening', 'pi_finished');
-        }
+        refreshActivity(active ? 'pi_started' : 'pi_finished');
         if (!active) statusAnnouncer?.flush();
       },
       log: (turn) => {
@@ -610,9 +608,6 @@ function registerVoiceRoute(
         delta,
         eventId: normalizedEventId,
       });
-      if (microphoneActive && !outputActive && !piBusy && pendingDelegation === undefined) {
-        publishActivity('listening', 'input_transcript');
-      }
     };
 
     const persistDelegatedTurn = async (group: InputGroup, delegationId: string, signal: AbortSignal) => {
@@ -718,7 +713,7 @@ function registerVoiceRoute(
       pendingDelegation?.abort();
       pendingDelegation = pending;
       pendingDelegationGroup = group;
-      publishActivity('thinking', 'delegation_received');
+      refreshActivity('delegation_received');
       const work = persistDelegatedTurn(group, value.id, AbortSignal.any([controller.signal, pending.signal]))
         .catch((error: unknown) => {
           if (controller.signal.aborted || pending.signal.aborted) return;
@@ -731,6 +726,7 @@ function registerVoiceRoute(
         if (pendingDelegation === pending) {
           pendingDelegation = undefined;
           pendingDelegationGroup = undefined;
+          refreshActivity('delegation_settled');
         }
       });
     };
@@ -835,6 +831,7 @@ function registerVoiceRoute(
         diagnostics.stage('session_started');
         flushQueuedProviderEvents();
         sendClient({ type: 'jarvis.session.ready', sessionId, audio: { format: 'pcm16le', sampleRate: VOICE_SAMPLE_RATE, channels: 1 } });
+        refreshActivity('microphone_active');
         if (sessionId && statusAnnouncer) {
           unregisterVisionVoice = visionWatch?.registerVoice(
             sessionId,
@@ -909,7 +906,10 @@ function registerVoiceRoute(
           ...(typeof event.end_ms === 'number' ? { endMs: event.end_ms } : {}),
         };
         sendClient(audio);
-        if (microphoneActive) publishActivity('speaking', 'output_audio');
+        if (!group.hasAudio) {
+          group.hasAudio = true;
+          refreshActivity('output_audio');
+        }
         scheduleOutputPersistence(group);
         return;
       }
@@ -1049,7 +1049,7 @@ function registerVoiceRoute(
     const statusAnnouncer = createVoiceStatusAnnouncer({
       taskEvents: app.eventHub,
       nowEvents: app.nowEventHub,
-      canSpeak: () => providerReady && termination.isActive && !piBusy && !outputActive &&
+      canSpeak: () => providerReady && termination.isActive && !piBusy && !activeOutput &&
         browser.readyState === WebSocket.OPEN && upstream?.readyState === WebSocket.OPEN,
       speak: (text) => sendCommentary(text, null),
     });
@@ -1105,9 +1105,7 @@ function registerVoiceRoute(
         const providerEvent = { type: 'session.input_audio.unmute' };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent);
-        if (!piBusy && !outputActive && pendingDelegation === undefined) {
-          publishActivity('listening', 'microphone_active');
-        }
+        refreshActivity('microphone_active');
         return;
       }
       if (event.type === 'jarvis.microphone.muted') {
@@ -1116,7 +1114,6 @@ function registerVoiceRoute(
         const providerEvent = { type: 'session.input_audio.mute' };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent);
-        if (activeOutput) publishActivity('speaking', 'microphone_muted');
         return;
       }
       if (event.type === 'jarvis.voice.input_audio.append') {
@@ -1127,9 +1124,6 @@ function registerVoiceRoute(
         const providerEvent = { type: 'session.input_audio.append', audio: event.audio };
         if (providerReady) sendUpstream(providerEvent);
         else queueProviderEvent(providerEvent, Buffer.byteLength(event.audio, 'base64'));
-        if (microphoneActive && !outputActive && !piBusy && pendingDelegation === undefined) {
-          publishActivity('listening', 'input_audio');
-        }
         return;
       }
       if (event.type === 'jarvis.voice.playback.completed') {
@@ -1137,9 +1131,6 @@ function registerVoiceRoute(
             typeof event.audible !== 'boolean') {
           closeSession(1008, 'Invalid voice playback receipt');
           return;
-        }
-        if (microphoneActive && !piBusy && !outputActive && pendingDelegation === undefined) {
-          publishActivity('listening', 'playback_completed');
         }
         return;
       }

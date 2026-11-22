@@ -33,9 +33,20 @@ Draft for the native iPhone app, derived from reading the current backend and we
   only when `retryable` is true.
 - Language: read `settings.voice.defaultLanguage` from the existing authenticated `GET /settings` route for each new session; the default is `da`.
 - Audio: base64 PCM16 little-endian, mono, 24 kHz inside JSON messages. There is no Opus.
-- The microphone is open (no push to talk). Starting to speak during playback must stop playback at once.
-- Client sends: `input_audio_buffer.append {audio}`, `jarvis.microphone.active`, `jarvis.microphone.muted`, `jarvis.session.end`, `jarvis.camera.state`, `jarvis.voice.playback.completed {responseId, audible}`, `jarvis.screen.context`, and `jarvis.screen.context.unavailable`.
-- Server sends: `jarvis.session.ready` (with a numeric session id), `jarvis.session.ended`, `conversation.item.input_audio_transcription.completed`, `input_audio_buffer.speech_started`, `response.created`, `response.audio.delta` or `response.output_audio.delta {delta}`, `response.done` or `response.cancelled`.
+- The microphone is open (no push to talk). The relay owns turn boundaries;
+  a partial transcript or short backchannel is not a command to stop playback or tool work.
+- Client sends: `jarvis.voice.input_audio.append {audio}`, `jarvis.microphone.active`, `jarvis.microphone.muted`, `jarvis.session.end`, `jarvis.camera.state`, `jarvis.voice.playback.completed {responseId, audible}`, `jarvis.screen.context`, and `jarvis.screen.context.unavailable`.
+- Server sends `jarvis.session.ready` with a numeric session ID, `jarvis.voice.activity`,
+  `jarvis.voice.input_transcript.delta` / `.completed`, `jarvis.voice.output_transcript.delta`,
+  and `jarvis.voice.response.started`, `jarvis.voice.audio.delta`, and
+  `jarvis.voice.response.completed` / `.cancelled` keyed by `responseId`.
+  GPT-Live upstream sends `session.input_transcript.delta`, `session.delegation.created`,
+  `session.output_transcript.delta` and `session.output_audio.delta`; this route does not
+  send Realtime `speech_started` / `speech_stopped` or `response.done`.
+- A response completion marks the end of its audio stream, not a saved reply.
+  The client's Speaking status lasts until the matching local playback drains
+  (or is cancelled); then it reflects relay Thinking or Listening. Chat refreshes
+  stored rows on the existing Now `refresh` event.
 - Reconnect: exponential backoff, up to 8 attempts, at most 10 seconds apart.
 - Camera: post a JPEG to `POST /screen/frames` with `sessionId`, `frame`, `question`, `turnId`, and `mode: "handle"`; use its `frameId` and `capturedAt` in a `jarvis.screen.context` message with `source: "camera"` and the same `itemId`.
 - Screen sharing: inspect the latest JPEG through the same authenticated `POST /screen/frames` route without `mode`; send its `description` and `capturedAt` in `jarvis.screen.context` with `source: "screen"`. Report capture failures with `jarvis.screen.context.unavailable`.

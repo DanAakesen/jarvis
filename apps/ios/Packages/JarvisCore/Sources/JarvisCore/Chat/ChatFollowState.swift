@@ -1,4 +1,4 @@
-/// Following is sticky across layout changes, but only a user scroll can resume it.
+/// Following is sticky across layout changes and pauses while the owner reads older messages.
 public struct ChatFollowState: Equatable, Sendable {
     public private(set) var isFollowing = true
     public private(set) var hasNewMessages = false
@@ -19,29 +19,19 @@ public struct ChatFollowState: Equatable, Sendable {
         isInteracting = true
     }
 
-    public mutating func interactionEnded(distanceFromBottom: Double?) {
-        guard isInteracting else { return }
+    @discardableResult
+    public mutating func interactionEnded(distanceFromBottom: Double?) -> Bool {
+        guard isInteracting else { return false }
         isInteracting = false
-        if let distanceFromBottom, distanceFromBottom <= 44 {
-            isFollowing = true
-            hasNewMessages = false
-        } else if distanceFromBottom != nil {
-            isFollowing = false
+        if let distanceFromBottom {
+            isFollowing = distanceFromBottom <= 44
         }
+        if shouldFollow { hasNewMessages = false }
+        return shouldFollow
     }
 
     public mutating func messageArrived() {
-        if !shouldFollow { hasNewMessages = true }
-    }
-
-    public mutating func contentChanged<Message: Equatable>(
-        from oldMessages: [Message], to newMessages: [Message], hasOtherChanges: Bool
-    ) {
-        let onlyOlderMessagesAdded = !oldMessages.isEmpty && newMessages.count > oldMessages.count
-            && newMessages.suffix(oldMessages.count).elementsEqual(oldMessages)
-        if hasOtherChanges || (oldMessages != newMessages && !onlyOlderMessagesAdded) {
-            messageArrived()
-        }
+        hasNewMessages = !shouldFollow
     }
 
     public mutating func messageSent() {
@@ -72,6 +62,7 @@ public struct ChatFollowState: Equatable, Sendable {
             selectedMessages.insert(messageID)
         } else {
             selectedMessages.remove(messageID)
+            if shouldFollow { hasNewMessages = false }
         }
     }
 }

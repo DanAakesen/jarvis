@@ -941,6 +941,43 @@ describe('GPT-Live authoritative client events', () => {
     const activity = (relay: Relay) =>
       relay.received.filter(event => event.type === 'jarvis.voice.activity').map(event => event.state);
 
+    it('returns to thinking when an acknowledgement ends, even while its history write is blocked', async () => {
+      const { agent, runs } = gatedAgent();
+      const writes: Array<{ role: string; text: string }> = [];
+      const store = recordingStore(writes);
+      const addMessage = store.addMessage;
+      let releaseWrite!: () => void;
+      const writeGate = new Promise<void>(resolve => { releaseWrite = resolve; });
+      store.addMessage = async input => {
+        if (input.role === 'jarvis') await writeGate;
+        return addMessage(input);
+      };
+      const relay = await startRelay(store, agent);
+      relay.browser.send(JSON.stringify({ type: 'jarvis.microphone.active' }));
+      await until(() => activity(relay).at(-1) === 'listening', 'microphone active');
+      word(relay, 'activity-question', 'Check my calendar', 0, 800);
+      delegate(relay, 'activity-delegation', 800);
+      await until(() => runs.length === 1, 'delegated tool work');
+      try {
+        expect(activity(relay).at(-1)).toBe('thinking');
+        speak(relay, 'activity-ack', 'I will check.');
+        await until(() => activity(relay).at(-1) === 'speaking', 'acknowledgement audio');
+        await until(() => relay.received.some(event => event.type === 'jarvis.voice.response.completed'),
+          'acknowledgement completed');
+        expect(activity(relay)).toEqual(['listening', 'thinking', 'speaking', 'thinking']);
+        expect(writes).toEqual([{ role: 'dan', text: 'Check my calendar', sourceItemId: expect.any(String) }]);
+      } finally {
+        releaseWrite();
+        runs[0]!.reply('Your calendar is clear.');
+      }
+      await until(() => activity(relay).at(-1) === 'listening', 'delegated work finished');
+      speak(relay, 'activity-answer', 'Your calendar is clear.');
+      await until(() => relay.received.filter(event => event.type === 'jarvis.voice.response.completed').length === 2,
+        'answer completed');
+      expect(activity(relay).slice(-4)).toEqual(['listening', 'thinking', 'speaking', 'listening']);
+      await until(() => writes.length === 3, 'acknowledgement and answer persisted');
+    }, 20_000);
+
     it('keeps one owner message and one PI turn when the delegation lands mid-sentence', async () => {
       const writes: Array<{ role: string; text: string; sourceItemId?: string }> = [];
       const { agent, runs } = gatedAgent();

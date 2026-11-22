@@ -574,6 +574,11 @@ a separate concern; no fake conversation or successful live sign-in is implied.
 The activity sheet keeps the no-activity icon and text without empty category rows.
 The composer Now bar appears only when there is visible background activity,
 an approval or a feed update. Finished routine jobs alone do not display it.
+If Voice is still running when Dan returns to Chat, its compact controls sit
+above the composer independently of background activity. They show Listening,
+Thinking or Speaking and let him return to Voice, mute the mic or end the session.
+Chat follows new or growing Voice transcript rows at the bottom. Scrolling up
+keeps older messages in view; **Jump to latest** appears when new content arrives.
 
 The notifications toolbar button keeps its badge inside the 44-point control,
 including two-digit counts. Notifications and Background activity sheets use a

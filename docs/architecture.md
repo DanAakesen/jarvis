@@ -1231,6 +1231,24 @@ and on that send's revision. A reply notification failure cannot change the
 saved reply's result. A service shutdown cuts off the reply; only an explicit
 stop request produces a `stopped` result.
 
+### Live Voice in iPhone Chat (22 November 2026; #2008, #2010)
+
+The relay derives `jarvis.voice.activity` from its current output group,
+delegation and PI work. Transcript deltas update captions; they do not decide
+whether Dan has finished speaking. The end of an output group emits its response
+completion independently of storage. `VoiceSessionStateMachine` combines relay
+work with started, playing and draining response IDs. A cancellation, reconnect
+or playback receipt cannot complete a different response. The web client likewise
+keeps playback separate from the relay's Thinking state.
+
+Once a Voice row is committed, the relay sends the existing Now `refresh` event.
+Chat reads `/history`, upserts rows in numeric message-ID order, and rebuilds its
+tool placements only if the ordered history changed. During a typed turn the
+typed stream owns its rows; a live refresh can still apply Voice rows. Older
+pages do not advance the follow-latest revision. Caption Observation is local
+to the Voice surface; the shared mini-bar in Chat observes Voice controls and
+status, not the caption stream.
+
 A saved typed reply carries `replyToTurnId`, the accepted message ID that
 opened the stream, even if a follow-up steered it. The conversation store writes
 the link in the existing message metadata and exposes it in history. Chat

@@ -3,7 +3,7 @@ import JarvisCore
 import SwiftUI
 
 struct VoiceActivityScreenshotView: View {
-    @StateObject private var model = VoiceScreenModel()
+    @State private var model = VoiceScreenModel()
 
     var body: some View {
         VoiceScreenView(

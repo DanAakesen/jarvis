@@ -3428,6 +3428,11 @@ activity sheet. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
+With Voice minimised into Chat, put the existing Voice mini-bar in the pinned
+composer stack, above any background Now bar. Use its shared waveform, status
+text, microphone and End controls. The status remains readable without colour,
+and opening Voice restores the same session. Do not add a second floating bar.
+
 The composer Chat/Voice switch navigates to the native Voice screen. The plus
 button opens a native popover above its own hit target with Camera, Attach,
 Enable video, Share screen and Voice language, in the board's bottom-up order.
@@ -4096,14 +4101,14 @@ The composer/Now dock must contain no active-turn progress copy.
 ## Chat follow-latest behavior (P15-125; 12 November 2026)
 
 Keep the newest sent message and reply visible above the composer, including
-immediately on Send and throughout thinking, progress, tool-status updates,
-streaming, approvals and errors. Observe content values, not just message IDs or
-the presence of an incoming reply, and keep the bottom anchored as content or the
-composer changes size. Manual scrolling up pauses following until the owner sends
-another message. If chat content changes while paused, show a small down-arrow
-utility above the composer; tapping it returns to the latest message and resumes
-following. Use the existing shared icon-button
-surface and a localized accessible label.
+immediately on Send and throughout thinking, progress, tool updates, streaming
+and reply notices. Follow newly saved Voice rows and edits to a growing Voice
+reply without animating the scroll. Anchor to the bottom edge as the transcript
+or composer changes size. Manual scrolling up or selecting text pauses
+following. If the conversation changes while paused, show the shared down-arrow
+icon button with a localized **Jump to latest** label. Loading older pages or
+changing the Voice badge alone does not show it. Jump, Send, opening the keyboard
+or manually returning to the bottom resumes following.
 
 
 ## Notification and Factory navigation (8 November 2026)

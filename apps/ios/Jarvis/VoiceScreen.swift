@@ -8,7 +8,7 @@ struct VoiceScreenView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.jarvisWorkspaceRuntime) private var workspaceRuntime
-    @ObservedObject var model: VoiceScreenModel
+    let model: VoiceScreenModel
     let language: JarvisAppLanguage
     var fixtureMode = false
     let onMinimize: () -> Void
@@ -720,10 +720,17 @@ private struct VoicePhotoViewfinder: View {
 }
 
 struct VoiceMiniBar: View {
-    @ObservedObject var model: VoiceScreenModel
+    let model: VoiceScreenModel
     let onRestore: () -> Void
 
+    @ViewBuilder
     var body: some View {
+        if model.isMinimized {
+            controls
+        }
+    }
+
+    private var controls: some View {
         HStack(spacing: JarvisDesignTokens.voiceStatusSpacing) {
             JarvisLabelledButton(
                 title: model.statusText,
@@ -751,7 +758,7 @@ struct VoiceMiniBar: View {
             ) { Task { await model.end() } }
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceScreenShareBarHeight / 2))
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
     }
 }

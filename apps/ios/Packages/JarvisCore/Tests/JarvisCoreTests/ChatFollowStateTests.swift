@@ -75,14 +75,13 @@ final class ChatFollowStateTests: XCTestCase {
     func testContentUpdatesDuringScrollKeepJumpIndicatorAfterPausing() {
         var state = ChatFollowState()
         state.interactionBegan()
-        state.contentChanged(from: ["sent"], to: ["sent"], hasOtherChanges: true)
-        state.interactionEnded(distanceFromBottom: 120)
+        state.messageArrived()
+        XCTAssertFalse(state.interactionEnded(distanceFromBottom: 120))
 
         XCTAssertFalse(state.shouldFollow)
         XCTAssertTrue(state.shouldShowJumpToLatest)
 
-        state.contentChanged(from: ["sent"], to: ["sent"], hasOtherChanges: true)
-        state.contentChanged(from: ["sent"], to: ["sent", "reply"], hasOtherChanges: false)
+        state.messageArrived()
         XCTAssertFalse(state.shouldFollow)
         XCTAssertTrue(state.shouldShowJumpToLatest)
     }
@@ -98,41 +97,50 @@ final class ChatFollowStateTests: XCTestCase {
         XCTAssertFalse(state.shouldShowJumpToLatest)
 
         for _ in 0..<5 {
-            state.contentChanged(from: ["sent"], to: ["sent"], hasOtherChanges: true)
+            state.messageArrived()
             XCTAssertTrue(state.shouldFollow)
             XCTAssertFalse(state.shouldShowJumpToLatest)
         }
     }
 
-    func testOlderHistoryDoesNotShowJumpIndicatorButNewOrEditedContentDoes() {
+    func testNewVoiceRowsFollowUntilUserMovesAwayAndJumpResumesFollowing() {
         var state = ChatFollowState()
-        state.interactionBegan()
-        state.interactionEnded(distanceFromBottom: 120)
-
-        state.contentChanged(from: ["latest"], to: ["older", "latest"], hasOtherChanges: false)
+        state.messageArrived()
+        XCTAssertTrue(state.shouldFollow)
         XCTAssertFalse(state.shouldShowJumpToLatest)
-        XCTAssertFalse(state.shouldFollow)
 
-        state.contentChanged(from: ["older", "latest"], to: ["older", "latest", "reply"], hasOtherChanges: false)
-        XCTAssertTrue(state.shouldShowJumpToLatest)
+        state.interactionBegan()
+        XCTAssertFalse(state.interactionEnded(distanceFromBottom: 120))
+        state.messageArrived()
         XCTAssertFalse(state.shouldFollow)
+        XCTAssertTrue(state.shouldShowJumpToLatest)
 
         state.jumpedToLatest()
-        state.interactionBegan()
-        state.interactionEnded(distanceFromBottom: 120)
-        state.contentChanged(from: ["reply"], to: ["updated reply"], hasOtherChanges: false)
-        XCTAssertTrue(state.shouldShowJumpToLatest)
-        XCTAssertFalse(state.shouldFollow)
+        state.messageArrived()
+        XCTAssertTrue(state.shouldFollow)
+        XCTAssertFalse(state.shouldShowJumpToLatest)
     }
 
-    func testActiveTurnUpdateStillShowsJumpIndicatorWhenHistoryIsPrepended() {
+    func testRowArrivingUnderATouchFollowsAfterReleaseIfTheUserDidNotScroll() {
         var state = ChatFollowState()
         state.interactionBegan()
-        state.interactionEnded(distanceFromBottom: 120)
-
-        state.contentChanged(from: ["latest"], to: ["older", "latest"], hasOtherChanges: true)
-
-        XCTAssertTrue(state.shouldShowJumpToLatest)
+        state.messageArrived()
         XCTAssertFalse(state.shouldFollow)
+        XCTAssertTrue(state.shouldShowJumpToLatest)
+        XCTAssertTrue(state.interactionEnded(distanceFromBottom: nil))
+        XCTAssertFalse(state.shouldShowJumpToLatest)
+        XCTAssertFalse(state.interactionEnded(distanceFromBottom: 0))
+    }
+
+    func testEndingSelectionAtTheLatestRowClearsThePendingJump() {
+        var state = ChatFollowState()
+        state.selectionChanged(messageID: "reply", isSelected: true)
+        state.messageArrived()
+        XCTAssertTrue(state.shouldShowJumpToLatest)
+
+        state.selectionChanged(messageID: "reply", isSelected: false)
+        state.interactionBegan()
+        XCTAssertFalse(state.interactionEnded(distanceFromBottom: 120))
+        XCTAssertFalse(state.shouldShowJumpToLatest)
     }
 }

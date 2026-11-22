@@ -27,14 +27,6 @@ private enum ChatSheet: Identifiable {
     }
 }
 
-private struct RenderedChatRow: Identifiable {
-    let message: JarvisChatRow
-    let replyTools: [ChatHistoryToolCall]
-    let unansweredTools: [ChatHistoryToolCall]
-
-    var id: String { message.id }
-}
-
 /// Compute the draft-dependent controls inside this view, not inside the transcript's parent.
 private struct JarvisChatComposerEditor<Content: View>: View {
     @Bindable var draft: ChatComposerDraft
@@ -70,6 +62,7 @@ struct JarvisChatScreen: View {
     private let notificationContextError: String?
     private let replyTarget: JarvisReplyNotificationTarget?
     private let onReplyTargetOpened: (() -> Void)?
+    private let voiceModel: VoiceScreenModel?
     let onNavigate: (JarvisDestination) -> Void
     @Binding private var handoff: JarvisChatHandoff?
     @EnvironmentObject private var navigation: JarvisNavigationModel
@@ -92,6 +85,7 @@ struct JarvisChatScreen: View {
 
     init(
         client: JarvisClient?,
+        voiceModel: VoiceScreenModel? = nil,
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
@@ -113,22 +107,9 @@ struct JarvisChatScreen: View {
         self.notificationContextError = notificationContextError
         self.replyTarget = replyTarget
         self.onReplyTargetOpened = onReplyTargetOpened
+        self.voiceModel = voiceModel
         self.onNavigate = onNavigate
         _handoff = handoff
-    }
-
-    private var renderedRows: [RenderedChatRow] {
-        let placement = ChatToolPlacement(messages: model.messages.map {
-            .init(id: $0.id, sessionID: $0.sessionID, channel: $0.channel, role: $0.role,
-                  tools: $0.toolCalls, interrupted: $0.interrupted)
-        })
-        return model.messages.map { message in
-            return RenderedChatRow(
-                message: message,
-                replyTools: placement.replies[message.id] ?? [],
-                unansweredTools: placement.unanswered[message.id] ?? []
-            )
-        }
     }
 
     private var appLanguage: JarvisAppLanguage {
@@ -421,7 +402,7 @@ struct JarvisChatScreen: View {
                             .frame(maxWidth: .infinity)
                             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
                         }
-                        ForEach(renderedRows) { row in
+                        ForEach(model.renderedRows) { row in
                             messageRow(row)
                                 .id(row.message.id)
                             if !row.unansweredTools.isEmpty && !model.isSending {
@@ -456,9 +437,6 @@ struct JarvisChatScreen: View {
                                 }
                             }
                         }
-                        Color.clear
-                            .frame(height: 1)
-                            .id("conversation-bottom")
                     }
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                     .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
@@ -468,16 +446,14 @@ struct JarvisChatScreen: View {
                 .scrollEdgeEffectHidden()
                 .modifier(JarvisChatFollowLatest(
                     proxy: proxy,
-                    bottomID: "conversation-bottom",
                     contentState: JarvisChatFollowContent(
-                        messages: model.messages,
+                        historyRevision: model.latestHistoryRevision,
                         isSending: model.isSending,
                         acknowledgment: model.acknowledgment ?? "",
                         progressUpdates: model.progressUpdates,
                         streamingText: model.streamingText,
                         tools: model.liveTools,
                         isReconnecting: model.isReconnecting,
-                        confirmations: model.nowFeed?.confirmations ?? [],
                         errors: [model.historyError, model.actionError, model.turnNotice]
                     ),
                     sendRevision: sendRevision,
@@ -718,6 +694,9 @@ struct JarvisChatScreen: View {
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
+            }
+            if let voiceModel {
+                VoiceMiniBar(model: voiceModel) { onNavigate(.voice) }
             }
             if model.shouldShowNowBar {
                 nowBar
