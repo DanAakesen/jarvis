@@ -239,6 +239,12 @@ node positions, not a screenshot.
   Crossfade to Home over 0.3s without shrinking the orb; do not replay the opening on a warm resume.
 - **Chat:** only the user bubble has a surface. While Jarvis works, show one steady line naming the step ("Searching your
   notes…"), not a canned spinner.
+- **Tool activity:** a running row traces the icon outline and shimmers the action label, without pulsing the icon.
+  Reduce Motion leaves the status readable without animation. Groups reflect the worst child state.
+- **Notes graph:** label the folder clusters. Ring notes with open tasks and show the actual task count in the
+  selected-note preview.
+- **Watch Chat and Voice:** collapse Chat to Reply only when no draft, dictation or call would be interrupted. In
+  focused Voice, replace the composer and start control with Mute and End for the same session.
 - **Status under the orb:** unframed white text with a soft shadow. Transient feedback is a bottom-right smoked-glass toast
   with a dismiss control.
 - **Status chips:** a dot plus a label, so colour never carries the meaning alone (presence, task state).
