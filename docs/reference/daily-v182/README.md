@@ -1,7 +1,0 @@
-# Original Daily v182 reference
-
-This is the original Sites Daily Overview source contract, not Jarvis's API. Read the [pinned API](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/reference/daily-v182/daily-api.md), [source data flows](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/reference/daily-v182/daily-source-contract.md) and [31-table schema](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/reference/daily-v182/daily-schema.md) in Git history. The original [OpenAPI](daily-openapi.json), [MCP definitions](daily-mcp-tools.json) and [SQLite DDL](daily-source-schema.sql) are reference data, never run against Jarvis.
-
-[#1005](https://github.com/DanAakesen/jarvis/issues/1005) owns the selected source scope; it did not approve porting all 36 tools. Jarvis uses its own owner authorization, Azure SQL and native tool registry. Inbound numeric Health uploads and named meals use separate paths. Health export, meal plans and the legacy coaching renderers were not part of this port.
-
-For the current implementation read [Jarvis Health](../../../apps/backend/src/health/README.md), the [Health upload contract](../daily/health-ingestion.md), and [SQL field mapping](../daily/schema-mapping.md). Neither the old source contract nor an offline test establishes a successful upload from a device.

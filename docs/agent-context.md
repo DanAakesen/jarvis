@@ -4,13 +4,13 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent context
 
-- **Repository work:** read [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs. [Factory issue starts](../apps/backend/src/factory/issues.ts) prompt with the issue, comments and root `AGENTS.md`; workers follow that pointer in their checkout. This is not the owner's PI conversation.
-- **PI Chat and delegated Voice:** Foundry owns the live instruction text. The [backend context builder](../apps/backend/src/pi/context.ts) adds owner settings, presence, Memory policy and known environment defaults. The [gateway](../apps/backend/src/pi/gateway.ts) combines it with current activation state and sends the block at warm-up or when its hash changes. Each turn still has its own reference and owner message. Attachments and screen excerpts are data, not instructions. Foundry keeps conversation history separately from the app's stored messages and receipts.
-- **Proactive wakes:** the same PI agent starts a scratch conversation with fresh trusted context, activation evidence and a tool overview. Wakes do not append to the foreground Foundry conversation. Durable Personal Memory and Vault Knowledge are distinct sources; see [architecture](architecture.md#memory-and-vault-knowledge).
+- **Repository work:** start with [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs. [Factory issue starts](../apps/backend/src/factory/issues.ts) put root `AGENTS.md` in the worker prompt and quote the issue and owner comments as untrusted request data. The Jarvis `AGENTS.md` points workers to this checkout's working agreement. This prompt is not the owner's PI conversation.
+- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies settings, presence, Memory policy and known environment defaults, not the repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) adds current situation/activation context and sends the block at warm-up or when it changes. This hash controls resending, not compaction. Each turn gets its own reference and owner message; attachments and quoted content are data, not instructions. Foundry history is separate from app messages and receipts.
+- **Proactive wakes:** fresh context, activation evidence and a tool overview go to a scratch PI conversation, not the foreground one. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Start with [the log source map](reference/logs.md) and a time window. PI turns, the MCP door, Voice and brain decisions emit structured backend events; they do not expose Foundry's hidden reasoning. Read the conversation for stored replies and the Factory timeline for worker progress. A backend log entry, a runner event and a GitHub check each answer a different question. Do not paste raw logs, prompts or accounts into a PR.
+Start with a UTC window and [the log source map](reference/logs.md). Use stored Chat messages and receipts for what was committed; the Factory timeline for worker progress; backend events for PI, MCP, Voice and brain outcomes; and exact-head GitHub checks for qualification. Diagnostic events are not model reasoning. Keep raw output and prompts out of PRs.
 
 ## Setup and commands
 
@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-The Apple build number is the workflow run number. Check that the exact build has finished processing in App Store Connect and is available in TestFlight; a successful upload alone does not prove either. Name the available build and exact device checks in [the plan's](../PLAN.md) daily-core order. Do not ask the owner to test an unshipped build or a fix still in flight. Reopen an acceptance issue if linking a PR closed it prematurely.
+The Apple build number is the workflow run number. Check the export/upload step, then confirm the exact build has finished processing in App Store Connect and is available to the intended TestFlight testers. If only Actions is accessible, report upload only; do not dispatch another build for readback. Name the available build and the [plan's](../PLAN.md) daily-core checks. A successful upload is **not accepted on device**. Reopen an acceptance issue if linking a PR closed it prematurely.
 
 ## Cost and safety
 
@@ -135,7 +135,7 @@ Local work does not require Azure credentials. Production inspection requires th
 
 ### Verify the live agents (read-only)
 
-After every save of the agent text in the Foundry portal, Dan activates the intended version and checks what is serving. This is an owner check, not an offline test. With authorised Foundry access, use only `GET /agents/<name>` and `GET /agents/<name>/versions/<version>` on the project endpoint. Inspect the 100% pin first and the latest version only if there is no pin. Follow the API version and feature headers in the [provisioner](../.github/scripts/provision_pi_agent.py) or use the read-only query example.
+After saving agent text in Foundry, Dan activates the intended version and checks what is serving. With authorised access, use `GET /agents/<name>` and `GET /agents/<name>/versions/<version>` on the project endpoint. Check the 100% pin, or latest if unpinned. Use the API version and headers in the [provisioner](../.github/scripts/provision_pi_agent.py).
 
 For `jarvis-pi`, check the model, harness, tool setup and both `KEEP THIS BLOCK` markers. For `jarvis-pi-live`, check the live voice kind, client delegation and audio contract. Compare the results to the checked-in [Chat](../agents/pi/definition.json) and [Voice](../agents/pi/voice-definition.json) definitions without printing the instruction text. If the intended version or tool block is missing, correct it in the portal and verify again. Do not run this check from a coding session without approval of the exact command.
 
@@ -168,7 +168,5 @@ Normal Chat and Voice use PI. The [legacy hosted agent](../agents/jarvis/README.
 | `node` is missing, wrong version or the npm cache misses | Check `.nvmrc`, PATH and `node --version` in this shell. Don't borrow a machine's unpinned Node for sign-off. Report a blocked offline install rather than downloading implicitly. |
 | Fixture paths fail on Windows | Check whether the suite assumes POSIX paths, Git executable bits, case sensitivity, or mode bits. The Python secret-file test uses `os.fchmod`, unavailable on Windows; use Linux for that exact assertion. Python reports with non-ASCII output need UTF-8. Do not patch tests for a docs-only change. |
 | JWKS/auth fixture fails near a timeout | Rerun the focused offline [`auth.test.ts`](../apps/backend/src/auth/auth.test.ts) and note the runner/platform and timing. Investigate a repeatable failure. Do not label a failing run green or reach out to the real issuer. |
-| Tool or turn fails in use | Start with backend log fields and [the runbook](runbook.md), not raw prompts. Compare `pi.stream_failed`/`pi.mcp_call_failed` to `pi.mcp_tool`; absence at the door can mean harness policy refused the name. Keep recorded writes and uncertain outcomes distinct. |
-| Brain appears idle | From authorised evidence, distinguish Off, paused, no sources, no due work, and a failed wake. `pi.brain_tick`, `pi.brain_run` and `/pi/brain` explain attempts; status does not invoke a model. |
-| Deploy says exact qualification missing | Compare PR/head, run and attempt, and `git rev-parse 'HEAD^{tree}'` for the tested and merged revisions. Requalify the real candidate. Do not use an older receipt. |
-| TestFlight succeeded but the fix isn't visible | Check the uploaded run number and the version installed on the device. Native signing, APNs display and real Voice behavior are not proved by fixture tests. |
+
+For production symptoms, use the [runbook](runbook.md#triage).

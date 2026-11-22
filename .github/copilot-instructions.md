@@ -12,7 +12,7 @@ These files describe the project **as it is now**, not its history (Git and `doc
 | --- | --- |
 | `.github/copilot-instructions.md` | This file: the working rules and the map of every important document. |
 | `AGENTS.md` | Pointer to this working agreement for tools that start at the root. |
-| `p0.md` | Dan's current priorities, short. Dan edits it freely and Jarvis reads it. It says what comes first; it is not a plan or a history. |
+| `p0.md` | Dan's current priorities. Read it first when working on Jarvis; it is not a plan or a history. |
 | `PRODUCT.md` | What Jarvis is for, who uses it, the daily core, requirements per area, success criteria, what is out of scope and Dan's standing rules. |
 | `PLAN.md` | Current state and what is in flight, next steps, blockers, open decisions A to F, the active issue backlog and the task tables the plan-status bot reads. Ideas are proposals, not authorization. |
 | `DESIGN.md` | How each surface should compose and behave: Chat, Voice, Notes, Watch, Home and the rest. |
@@ -30,7 +30,7 @@ These files describe the project **as it is now**, not its history (Git and `doc
 
 Start with `README.md` (what the repo is and how to run it) and `docs/README.md` (index of the `docs/` folders).
 
-- **Contracts and reference:** `docs/ios/integration-contract.md` (native backend endpoints), `docs/ios/apple-capabilities.md` (entitlements), `docs/reference/README.md` (reference index), `docs/reference/data-model.md` (SQL ownership), `docs/reference/daily/*.md` (Health upload and SQL mapping), `docs/reference/daily-v182/README.md` (pinned source contract).
+- **Contracts and reference:** `docs/ios/integration-contract.md` (native backend endpoints), `docs/ios/apple-capabilities.md` (entitlements), `docs/reference/README.md` (reference index), `docs/reference/data-model.md` (SQL ownership), `docs/reference/daily/*.md` (Health upload, scope and SQL mapping).
 - **Switch-on and parked work:** `docs/pi/cutover.md` (PI switch-on and open decisions), `docs/inbox-loop/*.md` (inbox activation and acceptance, MCP and Shortcut), `docs/ui/map-route-card/brief.md` (unbuilt design).
 - **Decision history:** `docs/archive/decisions-index-*.md` points to dated decisions in Git history. Do not copy the full text into the archive.
 - **Component READMEs:** `db/README.md` and `db/migrations/README.md` (SQL), `infra/README.md` (Bicep), `runner/README.md` (coding runner), `apps/vault-mirror/README.md` (mirror), `agents/jarvis/README.md` (legacy hosted Python agent), `apps/backend/src/modules.README.md` (module index) and `apps/backend/src/**/README.md` (module contracts).
@@ -68,7 +68,7 @@ Start with `README.md` (what the repo is and how to run it) and `docs/README.md`
 
 ## Frontend requirements
 
-These requirements apply to user-facing UI changes. They are included directly in the project entrypoints and apply even when a skill is not selected.
+These requirements apply to user-facing UI changes, even when a skill is not selected.
 
 1. Before creating, reviewing, or changing UI layout, styling, animation, charts, assets, or interaction behavior, read `.agents/skills/product-ui/SKILL.md`, `docs/ui/style-guide.md`, `ui.md` and the relevant parts of `PRODUCT.md` and `DESIGN.md`. Backend-only edits and nonvisual corrections do not require this skill; the requirements here still apply to any affected UI.
 2. Use one headline per content block. No eyebrow/kicker above a main heading, no subtitle/secondary heading below it, and no combination of these. Supporting explanation belongs in ordinary body text.
@@ -81,7 +81,7 @@ These requirements apply to user-facing UI changes. They are included directly i
 
 ## Engineering requirements
 
-Apply these requirements to software changes, including small corrections. They are embedded in both project entrypoints and apply even when a skill is not selected.
+Apply these requirements to software changes, including small corrections, even when a skill is not selected.
 
 1. Before changing business logic, APIs, persistence/migrations, authentication/permissions, jobs, integrations, runtime/build configuration, or system structure, read `.agents/skills/engineering/SKILL.md` and the affected project context. Read only the relevant sections. UI composition and interaction work uses `product-ui`; a change spanning both domains uses both workflows.
 2. Follow the selected stack and nearby conventions. Make the smallest coherent change; add layers, packages, services, or automation only for a demonstrated need. Solo work requires no PR, agent team, or fixed ceremony.

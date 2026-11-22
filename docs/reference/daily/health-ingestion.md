@@ -2,7 +2,7 @@
 
 **Status:** The checked-in contract and Daily freshness evidence were last updated on 20 October 2026. The upload routes and SQL processor are implemented behind `JARVIS_HEALTH_UPLOAD_ENABLED`. It defaults to false in code; the checked-in backend Bicep sets it to true. The deployed flag and credential state, real upload and processing, and phone acceptance were not verified for this refresh.
 
-Health upload reuses Jarvis's backend and SQL. Use the [pinned Daily v182 reference](../daily-v182/README.md) for the source protocol.
+Health upload reuses Jarvis's backend and SQL. For legacy input compatibility, see the [original Daily v182 source protocol in Git](https://github.com/DanAakesen/jarvis/blob/060e3eb568e2a1cb4e7aa7048841640d8a47394b/docs/reference/daily-v182/README.md). It is not a runtime dependency.
 
 ## Acceptance contract
 

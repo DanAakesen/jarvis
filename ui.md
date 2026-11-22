@@ -1,6 +1,6 @@
 # Jarvis UI map
 
-Every screen Jarvis has today, by surface. [DESIGN.md](DESIGN.md) says how each should behave, the [style guide](docs/ui/style-guide.md) says how it looks, [PRODUCT.md](PRODUCT.md) says what it must do, and [PLAN.md](PLAN.md) says what has been accepted on a device. The code is the source of truth for what exists: this page was checked against `apps/ios`, `apps/web` and the shared `JarvisDestination` list on 22 November 2026. Merged means in source. It does not mean accepted on a phone or Watch.
+Screens and widgets in source, by surface. [DESIGN.md](DESIGN.md) owns behaviour, the [style guide](docs/ui/style-guide.md) owns appearance, [PRODUCT.md](PRODUCT.md) owns requirements, and [PLAN.md](PLAN.md) owns device acceptance. In source does not mean accepted on a phone or Watch.
 
 Update this page in the same change that adds, removes, renames or retires a screen. Do not record designs here until they exist.
 
@@ -27,23 +27,23 @@ Around the destinations: the opening screen (`JarvisOpeningView`, startup only),
 
 ## Apple Watch
 
-One app (`apps/ios/Watch`) with these screens: **Chat** (one entry point with an adaptive composer, dictation and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**. Complications show steps and the Gym lift entry.
+One app (`apps/ios/Watch`) with these screens: **Chat** (one entry point with an adaptive composer, dictation and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**.
 
 ## Widgets and Live Activities
 
-- **Home screen widgets** (`apps/ios/Widgets`): Gym (steps, workouts, medium, large), Software Factory (status, done, medium, large) and Notes (small).
+- **iPhone Home screen widgets** ([bundle](apps/ios/Widgets/JarvisWidgets.swift)): Gym (small Steps and Workouts, plus medium and large), Software Factory (small Status and Done, plus medium and large), Notes and Home (each in small, medium and large).
 - **Live Activities:** Software Factory task and Voice call.
-- **Watch widgets** (`apps/ios/WatchWidgets`).
+- **Watch complications** ([bundle](apps/ios/WatchWidgets/JarvisWatchWidgets.swift)): rectangular Steps, Nutrition, Home, task list and Body Fat; circular Tasks Today, Dictate, Voice Session and Log Lift. Dictate opens a draft; it does not send a message.
 
 Widgets and Live Activities are glanceable summaries and routes back into the real screen. They are not second editors.
 
 ## Web
 
-`apps/web` is the browser surface: a centred Jarvis stage for Chat and Voice, with these areas: **Notes**, **Health** (with its own pages), **Software Factory** (kanban, tasks, release), **Usage**, **Status** and **Settings**, plus **Proactive** items when the proactive source is enabled. The old `/daily` path redirects to Health, and `/knowledge` redirects to Notes.
+`apps/web` is the browser surface: a centred Jarvis stage for Chat and Voice, plus **Notes**, **Software Factory** (kanban, tasks, releases), **Usage** and **Status**. **Health** and **Proactive** are feature-gated areas. **Settings** has its own route; an exact Proactive item link is available when push or Proactive is enabled. The old `/daily` path redirects to Health, and `/knowledge` redirects to Notes.
 
 ## CarPlay
 
-Not built. Apple granted the Voice Based Conversation entitlement on 21 November 2026, but the capability is not configured in the app or tested in a car. In-car use is voice-first. See [PRODUCT.md](PRODUCT.md#carplay) and [Apple capabilities](docs/ios/apple-capabilities.md).
+No CarPlay scene in source; **not accepted on device**. See [Apple capabilities](docs/ios/apple-capabilities.md) for the grant and [PRODUCT.md](PRODUCT.md#carplay) for the voice-first requirement.
 
 ## Open UI items
 
@@ -52,4 +52,3 @@ Not built. Apple granted the Voice Based Conversation entitlement on 21 November
 | Map and route card in Chat and Voice | Design brief only: [docs/ui/map-route-card/brief.md](docs/ui/map-route-card/brief.md). Dan chooses the layout, then it is built. |
 | Manual kcal entry on the Nutrition screen | Not built; waiting for [decision B](PLAN.md#open-decisions-af). |
 | Follow-latest, Voice state labels, Notes titles, Watch dictation and recovery | Not accepted on device. See [PLAN.md](PLAN.md) for the current build and checks. |
-| CarPlay scenes | Not started. |
