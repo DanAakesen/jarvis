@@ -55,6 +55,8 @@
 | `proactive.failed` carries `stage` and `errorClass` on every path of the old engine, the scheduler and the manual check; every path reproduced in a test; the scheduler survives a failed startup write and retries a slot whose claim threw | Done |
 | Register the thirteen other `pi.*` and `proactive.*` events that were exported as bare `backend.event`, test that none can be added unregistered, and keep the error class, trigger and activation in `read_backend_logs` | Done |
 | Name the hourly call of about 4k tokens | Open: read `GET /pi/status` `turns.recent` on production |
+| Delete the old 07:00/18:00 slot engine (the brain's sweep has superseded it since #1964) | Prepared and tested on the parked branch `danaakesen-shiny-carnival-engine-deletion` (commit `1d912cda`, no pull request); meant to land only after the brain's first proven wake. Open |
+| Decide what the engine's hooks become (decision A, `docs/pi/cutover.md`, which now lists what each feature does without the engine) | Open, owner |
 
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
