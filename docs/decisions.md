@@ -13986,6 +13986,32 @@ The delayed silence check is bound to its capture (`WatchCaptureGeneration`): `s
 
 Open: none of the capture changes is verified on a Watch. Whether the cause is the mode, the channel mixing or something else is not proven; the logs from the next run decide. Build 113 backend logs (18 Nov, no device attribution) show two /voice sockets near the owner's test that reached upstream `session_updated`, played Jarvis's output audio and closed 1006 after about 19 to 23 s with no input speech, commit or transcription, and no dictation upload at all. So socket and upstream setup work and the input audio never carried speech, which matches silence from the Watch capture; it does not prove it. The earlier "no voice socket" lead is superseded.
 
+## 22 November 2026 — Recover Watch audio and retry failures (Refs #2006)
+
+- **Confirmed voice bugs:** the route observer ended voice for any reported
+  change except category changes. That path matches Dan's build 120 message.
+  The startup retry also called `VoiceAudioEngine.stop()` after installing the
+  playback-finished callback, so later replies could leave voice on Speaking.
+- **Confirmed dictation gaps:** both launchers use the same Watch recorder.
+  After Stop, an audio interruption or screen sleep could cancel its upload;
+  an empty recognition result looked like a transport failure. Keep the
+  bounded upload running and report no words separately, without replaying it.
+- **Decision:** take a new graph and the negotiated format for each capture.
+  Check again after 250 ms: only changed ports or a stopped graph need a
+  rebuild. Allow two recoveries per capture in a rolling ten seconds, with
+  up to three attempts per recovery on the same stream. More instability
+  stops the capture and shows Retry instead of repeatedly cutting playback.
+  Install playback completion on the successful startup attempt. On a
+  phone-link gap, allow ten seconds including heartbeat replies; don't replay
+  audio or open a second voice session.
+- **Dictation fallback:** keep the recognition deadline for an active
+  transfer, but don't wait for connectivity when the direct path is
+  unavailable. Try the paired iPhone once instead.
+- **Still inferred:** cold/stale audio routing could contribute to build 120
+  dictation failures. Prior reports show a Speech start stall (#1950) and
+  silent Watch captures (#1943), not which stage failed on build 120. No backend
+  change or live test; use the next Watch run to separate capture and upload.
+
 ## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
 
 The owner heard nothing from the Watch: dictation reported a timeout and live voice never heard him. Backend logs (Log Analytics, 14:49Z) for two 10 s dictations: `audio_received` at 0.7 s and 2.6 s with 489,082 bytes / 10,189 ms (real 24 kHz audio, so capture and upload worked), the speech token acquired at the same moment, then no `recognizer_started`, `session_started`, speech or error row for 6.5 to 9.4 s until the Watch disconnected. The SDK reports start only after its Speech connection opens, so that connection never opened. The Watch transcriber was the only Speech caller using a fixed `speechRecognitionLanguage` on the universal v2 endpoint; the live partial recognizer, probed live on 6 October (L111), uses language identification there.

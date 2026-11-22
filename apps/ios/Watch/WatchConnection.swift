@@ -57,7 +57,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self; WCSession.default.activate()
     }
-    func request(_ request: WatchRequest, waitForReadiness: Bool = true) async throws -> WatchReply {
+    func request(_ request: WatchRequest, waitForReadiness: Bool = true, timeout: Duration? = nil) async throws -> WatchReply {
         guard request.isValid else { throw WatchFailure.invalidRequest }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return try WatchPreview.reply(to: request) }
@@ -76,7 +76,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             return try await withCheckedThrowingContinuation { continuation in
                 pending[request.id] = continuation
                 deadlines[request.id] = Task { [weak self] in
-                    try? await Task.sleep(for: request.action == .finishDictation ? WatchLimits.dictationWatchTimeout : .seconds(25))
+                    try? await Task.sleep(for: timeout ?? (request.action == .finishDictation ? WatchLimits.dictationWatchTimeout : .seconds(25)))
                     guard !Task.isCancelled else { return }
                     self?.complete(request.id, .failure(WatchFailure.unavailable))
                 }

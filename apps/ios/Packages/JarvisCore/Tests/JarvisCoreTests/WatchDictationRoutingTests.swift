@@ -45,6 +45,33 @@ final class WatchDictationRoutingTests: XCTestCase {
         XCTAssertEqual(calls, ["direct", "failure", "phone"])
     }
 
+    func testUnavailableDirectRouteUsesPhoneBeforeTheTranscriptionDeadline() async throws {
+        #if canImport(Darwin)
+        XCTAssertFalse(WatchDictationRouting.directSessionConfiguration().waitsForConnectivity)
+        #endif
+        let direct = Gate<Void>()
+        let timer = Gate<Void>()
+        let phoneStarted = XCTestExpectation(description: "Phone fallback without advancing the direct deadline")
+        phoneStarted.assertForOverFulfill = true
+        let task = Task {
+            try await WatchDictationRouting.transcribe(direct: {
+                await direct.wait()
+                throw WatchFailure.network
+            }, phone: {
+                phoneStarted.fulfill()
+                return "Phone transcript"
+            }, sleep: { _ in await timer.wait() })
+        }
+        let noRoute = await direct.next()
+        let deadline = await timer.next()
+        noRoute.resume()
+        let outcome = await XCTWaiter.fulfillment(of: [phoneStarted], timeout: 1)
+        deadline.resume()
+        XCTAssertEqual(outcome, .completed)
+        let text = try await task.value
+        XCTAssertEqual(text, "Phone transcript")
+    }
+
     func testGatewayTimeoutUsesTimeoutRecoveryInsteadOfNetworkFailure() async {
         XCTAssertEqual(WatchDictationError.forHTTPStatus(504), .timedOut)
         XCTAssertNil(WatchDictationError.forHTTPStatus(503))
@@ -80,6 +107,44 @@ final class WatchDictationRoutingTests: XCTestCase {
             throw WatchDictationError.timedOut
         }, phone: { "Phone transcript" })
         XCTAssertEqual(text, "Phone transcript")
+    }
+
+    func testFiveDictationsAppendExactlyOneTranscriptEachAfterDirectAndPhoneRecovery() async throws {
+        var composer = WatchComposer()
+        composer.draft = "Typed"
+        var phoneCalls = 0
+        for clip in 1...5 {
+            let text = try await WatchDictationRouting.transcribe(direct: {
+                if clip.isMultiple(of: 2) { throw WatchFailure.network }
+                return " \(clip)\n"
+            }, phone: {
+                phoneCalls += 1
+                return "\(clip)"
+            })
+            composer.appendDictation(text)
+        }
+        XCTAssertEqual(phoneCalls, 2)
+        XCTAssertEqual(composer.draft, "Typed 1 2 3 4 5")
+        XCTAssertFalse(composer.sending)
+    }
+
+    func testDirectNoSpeechDoesNotSendTheSameClipToThePhone() async {
+        do {
+            _ = try await WatchDictationRouting.transcribe(direct: { " \n" }, phone: {
+                XCTFail("A successful request with no words should not replay the audio")
+                return "Unexpected"
+            })
+            XCTFail("Expected a no-speech error")
+        } catch { XCTAssertEqual(error as? WatchDictationError, .noSpeech) }
+    }
+
+    func testPhoneNoSpeechIsReportedRatherThanTheEarlierDirectTimeout() async {
+        do {
+            _ = try await WatchDictationRouting.transcribe(direct: {
+                throw WatchDictationError.timedOut
+            }, phone: { "" })
+            XCTFail("Expected a no-speech error")
+        } catch { XCTAssertEqual(error as? WatchDictationError, .noSpeech) }
     }
 
     func testStalledDirectRequestLeavesTimeForPhoneWithoutWaitingForCancellation() async throws {

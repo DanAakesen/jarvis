@@ -7,8 +7,12 @@ struct WatchVoiceView: View {
     @EnvironmentObject private var model: WatchModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Muted wins the label: the display must never say Listening while the microphone is off.
-    private var label: String { model.muted ? "Muted" : (model.voiceState.isEmpty ? "Connecting" : model.voiceState) }
+    private var recovery: String? {
+        model.voiceRecoveryStatus ?? (model.voiceState == "Reconnecting" ? "Network connection lost. Reconnecting…" : nil)
+    }
+    private var label: String {
+        recovery ?? (model.muted ? "Muted" : (model.voiceState.isEmpty ? "Connecting" : model.voiceState))
+    }
     private var transcript: String? {
         guard let text = model.messages.last?.text, !text.isEmpty else { return nil }
         return text
@@ -16,12 +20,12 @@ struct WatchVoiceView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            WatchOrb(activity: JarvisOrbActivity(watchVoiceStatus: model.voiceState, isMuted: model.muted), isAnimated: !reduceMotion)
+            WatchOrb(activity: JarvisOrbActivity(watchVoiceStatus: recovery == nil ? model.voiceState : "Reconnecting", isMuted: model.muted), isAnimated: !reduceMotion)
                 .frame(width: 44, height: 44)
             Text(label).font(.system(.footnote, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
                 .multilineTextAlignment(.center)
                 .accessibilityLabel("Voice")
-                .accessibilityValue(model.muted ? "Muted, \(model.voiceState)" : label)
+                .accessibilityValue(model.muted ? "Muted, \(recovery ?? model.voiceState)" : label)
             ScrollView {
                 if let transcript {
                     Text(transcript).font(.body).frame(maxWidth: .infinity, alignment: .leading)
