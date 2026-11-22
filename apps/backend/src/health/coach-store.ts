@@ -164,7 +164,7 @@ export class SqlHealthCoachStore implements HealthCoachStore {
     } catch (error) {
       if (started) await tx.rollback().catch(() => undefined);
       if (signal.aborted || error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
-      throw new ToolFailure('The coach profile update could not be confirmed. Read the profile before retrying.');
+      throw new ToolFailure('The coach profile update could not be confirmed. Read the profile before retrying.', { outcomeUnknown: true });
     }
   }
 

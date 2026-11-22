@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import { buildApp } from '../app.js';
+import { loadConfig } from '../config.js';
+import { coreModule } from '../core/index.js';
 import type { VaultIndexStore, VaultIndexedChunk } from '../database/memory-store.js';
 import type { createGitHubVaultClient } from './github-client.js';
 import { createVaultModule } from './index.js';
@@ -48,7 +51,7 @@ async function fixture() {
   const request = { principal: { objectId: 'owner' }, headers: { 'x-jarvis-message-id': '42' } } as unknown as FastifyRequest;
   const call = (name: string, args: Record<string, unknown>) =>
     module.tools.find((tool) => tool.name === name)!.execute(args, request, signal) as Promise<Record<string, unknown>>;
-  return { index, module, call, releaseReindex };
+  return { index, client, module, call, releaseReindex };
 }
 
 describe('vault_search straight after vault_write', () => {
@@ -78,5 +81,57 @@ describe('vault_search straight after vault_write', () => {
     releaseReindex();
     await module.synchronize(signal);
     expect((await call('vault_search', { query: 'pergola terrace' })).count).toBe(1);
+  });
+});
+
+describe('a vault write whose commit cannot be confirmed', () => {
+  const config = { ...loadConfig({}), logLevel: 'silent' as const };
+
+  /** One tool call through the real tool route, as Jarvis makes it; `confirmation` is what Dan reads. */
+  async function viaRoute(module: ReturnType<typeof createVaultModule>, name: string, payload: Record<string, unknown>) {
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, module],
+      auth: async () => ({ kind: 'jarvis-agent', objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef', tenantId: config.auth.tenantId }),
+      toolCallStore: { record: async () => {} },
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST', url: `/tools/${name}`, payload,
+        headers: { authorization: ['Bearer', 'header.agent.signature'].join(' '), 'x-jarvis-message-id': '42' },
+      });
+      return response.json() as { outcome: string; result: Record<string, unknown>; confirmation: string };
+    } finally {
+      await app.close();
+    }
+  }
+
+  it('is told as it is: the append may have gone through, so it does not say "Not done."', async () => {
+    const { client, module } = await fixture();
+    client.write.mockRejectedValueOnce(new Error('socket hang up'));
+
+    const answer = await viaRoute(module, 'vault_write', { path: pergola.path, append: 'Build the pergola.', reason: pergola.reason, automaticCapture: false });
+
+    expect(answer).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(answer.confirmation).toBe(answer.result.error);
+    expect(answer.confirmation).toMatch(/^Vault write could not be confirmed\./u);
+  });
+
+  it('says "Not done." when the note changed, because the vault says nothing was committed', async () => {
+    const { module } = await fixture();
+
+    const answer = await viaRoute(module, 'vault_write', { path: 'Personal/Garden plan.md', content: '# Garden plan\n\nNew.', reason: pergola.reason, automaticCapture: false });
+
+    expect(answer.result).not.toHaveProperty('outcomeUnknown');
+    expect(answer.confirmation).toMatch(/^Not done\. The note changed or its read version is missing\./u);
+  });
+
+  it('is told as it is for a task too: "the task save outcome is unknown" is not "Not done."', async () => {
+    const { client, module } = await fixture();
+    client.write.mockRejectedValueOnce(new Error('socket hang up'));
+
+    const answer = await viaRoute(module, 'vault_task_create', { text: 'Order the pergola kit' });
+
+    expect(answer).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(answer.confirmation).toMatch(/^The task save outcome is unknown\./u);
   });
 });

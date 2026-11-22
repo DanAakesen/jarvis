@@ -147,12 +147,12 @@ function createHtmlViewTool(
         view: htmlView(artifact.id, artifact.title),
       };
       if (!isWorkspaceCommand(command)) {
-        throw new ToolFailure(`HTML app ${artifact.id} was saved, but its workspace view was invalid.`);
+        throw new ToolFailure(`HTML app ${artifact.id} was saved, but its workspace view was invalid.`, { outcomeUnknown: true });
       }
       try {
         await request.server.workspaceCommands.execute(ownerId, command, signal);
       } catch {
-        throw new ToolFailure(`HTML app ${artifact.id} was saved, but the active workspace could not display it.`);
+        throw new ToolFailure(`HTML app ${artifact.id} was saved, but the active workspace could not display it.`, { outcomeUnknown: true });
       }
       return { artifactId: artifact.id, confirmation: 'HTML app opened in the sandboxed workspace.' };
     },
@@ -227,7 +227,7 @@ function updateHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
       const command: WorkspaceCommand = {
         commandId: randomUUID(), operation: 'update', viewId, view: htmlView(artifact.id, artifact.title),
       };
-      if (!isWorkspaceCommand(command)) throw new ToolFailure(`HTML app ${artifact.id} version ${artifact.version} was saved, but its workspace view was invalid.`);
+      if (!isWorkspaceCommand(command)) throw new ToolFailure(`HTML app ${artifact.id} version ${artifact.version} was saved, but its workspace view was invalid.`, { outcomeUnknown: true });
       let opened = false;
       try {
         try {
@@ -239,7 +239,7 @@ function updateHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
           opened = true;
         }
       } catch {
-        throw new ToolFailure(`HTML app ${artifact.id} version ${artifact.version} was saved, but the existing workspace window could not be updated. Read it before retrying.`);
+        throw new ToolFailure(`HTML app ${artifact.id} version ${artifact.version} was saved, but the existing workspace window could not be updated. Read it before retrying.`, { outcomeUnknown: true });
       }
       return {
         artifactId: artifact.id, version: artifact.version,

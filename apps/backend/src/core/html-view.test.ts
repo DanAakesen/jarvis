@@ -20,6 +20,7 @@ const current = (id: string) => {
 };
 const store = {
   readVersion: async (id: string) => current(id),
+  create: async () => current(artifactId),
   update: async (id: string) => { current(id); version += 1; return current(id); },
 };
 
@@ -60,7 +61,7 @@ async function callTool(name: string, payload: Record<string, unknown>) {
     method: 'POST', url: `/tools/${name}`, payload,
     headers: { authorization: ['Bearer', 'header.agent.signature'].join(' '), 'x-jarvis-message-id': '101' },
   });
-  return response.json() as { outcome: string; result: Record<string, unknown> };
+  return response.json() as { outcome: string; result: Record<string, unknown>; confirmation: string };
 }
 
 describe('read_html_view by window id', () => {
@@ -86,11 +87,21 @@ describe('update_html_view', () => {
     expect(sent).toEqual([{ operation: 'update', viewId: `html-${compactId}` }, { operation: 'create', viewId: `html-${compactId}` }]);
   });
 
-  it('still reports the saved version when no window can show it', async () => {
+  it('still reports the saved version when no window can show it, as written and not as "Not done."', async () => {
     applies = () => false;
     const answer = await callTool('update_html_view', update);
     expect(answer.outcome).toBe('error');
     expect(answer.result.error).toMatch(new RegExp(`${artifactId} version 2 was saved`, 'u'));
+    // The version is saved: the call is not "Not done", and a replay of it must not save a third version.
+    expect(answer.result.outcomeUnknown).toBe(true);
+    expect(answer.confirmation).toBe(answer.result.error);
+  });
+
+  it('says the same for a new app that was saved but could not be opened', async () => {
+    applies = () => false;
+    const answer = await callTool('create_html_view', { title: 'Report', html: page('first'), sources: [] });
+    expect(answer).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(answer.confirmation).toMatch(/^HTML app \S+ was saved, but the active workspace could not display it\.$/u);
   });
 });
 

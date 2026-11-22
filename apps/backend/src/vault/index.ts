@@ -1489,7 +1489,8 @@ export function createVaultModule(options: {
       } catch (error) {
         if (error instanceof TaskWriteError) {
           if (error.statusCode === 400 || error.statusCode === 409) throw new ToolRefusal(error.message);
-          throw new ToolFailure(error.message);
+          // "The task save outcome is unknown": it is read as written, not as "Not done.", and a replay does not save it again.
+          throw new ToolFailure(error.message, error.outcomeUnknown ? { outcomeUnknown: true } : {});
         }
         throw error;
       }
@@ -1692,7 +1693,7 @@ export function createVaultModule(options: {
             throw new ToolFailure('That note is larger than 256 KB, so it cannot be changed here. Nothing was written.');
           }
           logWrite('error');
-          throw new ToolFailure('Vault write could not be confirmed. Reread the note before reapplying; do not blindly repeat an append or creation.');
+          throw new ToolFailure('Vault write could not be confirmed. Reread the note before reapplying; do not blindly repeat an append or creation.', { outcomeUnknown: true });
         }
         const url = commitUrl(result.commit);
         const confirmation = `Saved to vault: ${result.path} — ${url}`;

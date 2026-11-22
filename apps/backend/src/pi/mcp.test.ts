@@ -8,6 +8,7 @@ import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { createLogger } from '../logging.js';
+import { createVaultModule } from '../vault/index.js';
 import { requestIdentity } from './mcp.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
@@ -814,6 +815,26 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-3'));
     expect(unknown.runs.count).toBe(2);
     expect(grant.actions.count).toBe(0);
+  });
+
+  it('does not append to a note a second time when the first append could not be confirmed (the real vault_write)', async () => {
+    const write = vi.fn(async () => { throw new Error('socket hang up'); });
+    const vault = createVaultModule({
+      client: { read: async () => null, write, tree: async () => [] } as never,
+      indexStore: { supportsVectorSearch: () => false } as never,
+      memoryStore: { getSourceMessage: async (messageId: string) => ({ messageId, text: 'Add to my pergola note.' }) } as never,
+    });
+    const { registry, tool } = setup([], { tools: vault.tools.filter(({ name }) => name === 'vault_write') });
+    const grant = open(registry);
+    grant.discovered.add('vault_write');
+    const append = { path: 'Personal/Pergola.md', append: 'Build the pergola.', reason: 'Dan asked for it', automaticCapture: false };
+
+    const first = await tool('call_tool', call(grant.turn, 'vault_write', append), as('call-1'));
+    const replay = await tool('call_tool', call(grant.turn, 'vault_write', append), as('call-1'));
+
+    expect(first.body).toMatchObject({ outcome: 'error', result: { outcomeUnknown: true } });
+    expect(replay.body).toEqual({ ...first.body, duplicate: true });
+    expect(write).toHaveBeenCalledTimes(1);
   });
 
   it('says an action may have gone through when the route fails after the tool could have run, and not when it was rejected before', async () => {

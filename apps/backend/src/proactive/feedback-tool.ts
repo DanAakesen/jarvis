@@ -219,7 +219,7 @@ export function createItemFeedbackCapability(store: ProactiveStore, owner: strin
         return feedbackResult(item, input.action);
       } catch (error) {
         if (error instanceof ToolRefusal) throw error;
-        throw new ToolFailure('Finding feedback could not be verified or saved. No success was confirmed; read its current state before retrying.');
+        throw new ToolFailure('Finding feedback could not be verified or saved. No success was confirmed; read its current state before retrying.', { outcomeUnknown: true });
       }
     },
   };
