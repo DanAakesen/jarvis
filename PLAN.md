@@ -1,6 +1,6 @@
 # Project plan
 
-## Current state (2026-11-22)
+## Current state
 
 ### Current focus
 
@@ -14,8 +14,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **124** | [Upload succeeded](https://github.com/DanAakesen/jarvis/actions/runs/45071501953) from `ee34f2c3e`. Includes Notes inventory and titles ([#2031](https://github.com/DanAakesen/jarvis/pull/2031)), live Voice follow and status ([#2034](https://github.com/DanAakesen/jarvis/pull/2034)), and Watch recovery ([#2029](https://github.com/DanAakesen/jarvis/pull/2029)). Installability not verified; **not accepted on device**. |
-| Backend | The [latest main Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45078026398) passed exact-tree qualification and deterministic runtime readiness. The [Notes Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) delivered migration `0103` alongside the PI rate-limit and tool-access fixes and server-side `gym_lifts` discovery of iPhone Gym records. Readiness is not live provider acceptance. |
+| TestFlight **124** | [Export and upload succeeded](https://github.com/DanAakesen/jarvis/actions/runs/45071501953) from `ee34f2c3e`. Includes the native Notes title and list updates ([#2031](https://github.com/DanAakesen/jarvis/pull/2031)), live Voice follow and status ([#2034](https://github.com/DanAakesen/jarvis/pull/2034)), and Watch recovery ([#2029](https://github.com/DanAakesen/jarvis/pull/2029)). Apple processing and tester availability are unverified; **not accepted on device**. |
+| Backend | The [latest main Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45078026398) has an accepted release receipt and passed deterministic runtime readiness. Its source includes the [Notes release](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) with migration `0103`, the PI rate-limit and tool-access fixes, and `gym_lifts` discovery of iPhone Gym records. The manual live acceptance job did not run. |
 | Background PI | Off by default in code; production setting not read back. Dan controls it in **Settings → Proactive**. The old engine stays until decision A. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
