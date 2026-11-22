@@ -5373,11 +5373,16 @@ authorize execution: the core registers a schema-validated
 cancellation signal to its handler, then writes the arguments, result and outcome
 to `tool_calls` using the process-owned SQL pool. A tool may provide a bounded safe
 failure explanation with `ToolFailure`; other unexpected errors remain generic.
-A `ToolFailure` whose text says the work may have happened carries
-`{ outcomeUnknown: true }` (the PC bridge's "the action may not have happened", a
-GitHub write that could not be confirmed, a Health save that "may have
-committed"): the route and the reflex executor put it on the result, so the
-confirmation Dan reads is that text without "Not done." in front of it. If the
+A `ToolFailure` whose text says the work may have happened, or that only part of
+it was done, carries `{ outcomeUnknown: true }` (the PC bridge's "the action may
+not have happened", a GitHub write that could not be confirmed, a Health save
+that "may have committed", an HTML app that "was saved, but" could not be shown,
+a vault write that "could not be confirmed"): the route and the reflex executor
+put it on the result, so the confirmation Dan reads is that text without "Not
+done." in front of it, and a replay of the call is not run again by the PI door.
+`core/tool-failure-flags.test.ts` fails for a written-out text of that kind
+without the flag; the list of what is flagged is in `docs/decisions.md`
+(22 November 2026). A failure that says nothing was done keeps "Not done.". If the
 audit record cannot be stored after the tool ran, the route logs
 `tool.audit_failed` (tool, outcome and error kind only) and still returns the
 tool's real reply, so the model's retry does not write again.

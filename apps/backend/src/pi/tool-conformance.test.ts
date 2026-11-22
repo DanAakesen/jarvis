@@ -106,9 +106,10 @@ describe('composition', () => {
     expect([...Object.keys(writingTools), ...readOnlyTools].filter((name) => !names.has(name)), 'tool-effects.ts names a tool that does not exist').toEqual([]);
     expect([...readOnlyTools].filter((name) => names.has(name) && tools.find((tool) => tool.name === name)!.execution !== undefined),
       'a tool listed as read-only that also declares an effect').toEqual([]);
-    // The registry lets a tool's own declaration win over the table, so a production tool that declares its own effect would hide its row.
+    // The registry lets a tool's own declaration win over the table, so one that differs would hide its row. The suite sees only the
+    // merged value, so an identical second declaration passes: that is harmless, it repeats the row.
     expect(Object.entries(writingTools).filter(([name, effect]) => !isDeepStrictEqual(tools.find((tool) => tool.name === name)?.execution, effect)).map(([name]) => name),
-      'a tool is in writingTools (core/tool-effects.ts) and also declares its own execution metadata: keep one of the two').toEqual([]);
+      'a tool is in writingTools (core/tool-effects.ts) and its own execution metadata says something else: keep one of the two').toEqual([]);
   });
 });
 

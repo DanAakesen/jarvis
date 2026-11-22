@@ -16,6 +16,7 @@ const saysTheWorkMayHaveHappened = [
   /\bmay or may not\b/iu,
   /\bcould(?: not|n’t) (?:be )?confirm/iu, // "could not be confirmed", "couldn’t confirm"
   /\bnot confirmed as\b/iu, // "was not confirmed as saved"
+  /\bcould not be verified or (?:saved|applied)\b/iu, // "could not be verified or saved": the save may have happened
   /\b(?:saved|created|stored|applied|queued|completed), but\b/iu, // "was saved, but …", "The task completed, but …"
   /\boutcome (?:is|was) unknown\b/iu,
 ];

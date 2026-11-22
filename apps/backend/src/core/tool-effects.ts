@@ -2,8 +2,8 @@ import type { ToolExecutionMetadata } from './tool-registry.js';
 
 /**
  * What a call does to the world, for the tools that do not declare `execution` themselves (a tool's own declaration wins, so a
- * test double that declares its own effect is left alone; the conformance suite fails when a production tool is declared in both
- * places). Only the PI door and the failure wording read it: the door counts a call as an
+ * test double that declares its own effect is left alone; the conformance suite fails when a production tool's own declaration
+ * differs from its row here, but not when it repeats it exactly). Only the PI door and the failure wording read it: the door counts a call as an
  * action by it, and answers a replay of an action without running it again. A tool that only reads, searches or shows is not
  * listed here but in `readOnlyTools`; the conformance suite fails for a tool that is in neither, so a new tool that writes
  * cannot be forgotten. List a tool as `action` when a call of it changes something outside Jarvis's own screen: a calendar, a
