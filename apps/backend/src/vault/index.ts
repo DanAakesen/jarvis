@@ -1260,7 +1260,7 @@ export function createVaultModule(options: {
   }
 
   async function searchVault(query: string, limit: number, signal: AbortSignal): Promise<VaultSearchHit[]> {
-    if (synchronization) throw new ToolFailure('The vault is synchronizing. Please try again shortly.');
+    // A background re-index after a write does not stop a search: the index stays usable while it runs.
     if (indexStatus !== 'ready') {
       throw new ToolFailure(appMissing
         ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
@@ -1340,6 +1340,7 @@ export function createVaultModule(options: {
           current?.sha,
           signal,
         );
+        await indexWrittenNote(path, next, signal);
         return { path, commit: sha };
       } catch (error) {
         if (!(error instanceof VaultWriteConflictError) || value.content !== undefined || attempt === 1) throw error;
@@ -1373,6 +1374,26 @@ export function createVaultModule(options: {
     const folder = safeFolder(path);
     assertCaptureIsSafe(reason, `${content}\n${reason}`);
     return { path, content, reason, folder };
+  }
+
+  /** The sha Git and the vault tree give a file: the hash of "blob <size>", a NUL and the bytes. */
+  function gitBlobSha(content: string): string {
+    const bytes = Buffer.from(content, 'utf8');
+    return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+  }
+
+  /** Indexes a note Jarvis just wrote, so a search straight after the write finds it; the sync that follows then sees it unchanged. */
+  async function indexWrittenNote(path: string, content: string, signal: AbortSignal): Promise<void> {
+    // Bounded, so a throttled embedding service cannot hold up a saved note.
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(5_000)]);
+    try {
+      const embedder = await activeEmbedder();
+      const note = { path, sha: gitBlobSha(content), content };
+      const chunks = await makeChunks(note, bounded, embedder, await activeEmbeddingModel(embedder));
+      await options.indexStore.replaceFile(path, note.sha, chunks, extractLinkTargets(content), bounded);
+    } catch {
+      // The note is saved either way, and the background sync indexes it if this did not finish.
+    }
   }
 
   function indexAfterNoteWrite(): void {
