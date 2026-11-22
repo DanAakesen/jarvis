@@ -50,6 +50,23 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 9. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
 10. P1, proactive intelligence, ranks after P0 and is tracked in [#2011](https://github.com/DanAakesen/jarvis/issues/2011); the P0 acceptance list (daily-core requests in Chat and Voice) is [#2012](https://github.com/DanAakesen/jarvis/issues/2012). This summary does not repeat either. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence"). [#2011](https://github.com/DanAakesen/jarvis/issues/2011) reports that no wake ran in 30 days of logs; I did not re-check that.
 
+## Chat and Voice parity replay — 21 November 2026 (#1967, #1988)
+
+**Status: harness, 24 scenarios (27 tests) and three fixes done and qualified offline, and an independent review's harness race (S12b) fixed; one live Chat plus one live Voice trace of the same request are pending.**
+
+| Step | State |
+| --- | --- |
+| Drive one scripted scenario through the real chat route and the real `/voice` relay on the same gateway, MCP door and tool route; print a side-by-side table; fail on any undeclared difference | Done (`voice/chat-voice-parity.test.ts`) |
+| Dan's daily-core requests: Jarvis work and issue, notes, tasks, workouts, nutrition; one tool failure; non-delete write in one turn with no confirmation | Done (notes, tasks, gym, calendar run production tool code; Factory/GitHub and nutrition are contract fixtures) |
+| Native `task` call, client-owned call (one follow-up), very large result, Danish, stop/supersede, owner-message binding with a proactive message, replay/reconnect, blocks once per conversation, wake, cap, error mapping | Done |
+| Fix: voice warm-up delivered the persona twice; warm-up now sends and records what a turn sends | Done |
+| Fix: the same failure was told two ways; one `piTurnFailedMessage` in both channels | Done |
+| Fix: a voice turn's tool activity was labelled `chat`; the MCP door sends the channel and the route labels it `voice` | Done |
+| Review: S12b raced the stub's speech (the first note could reach the relay after Dan's next words and join that reply). Steps now wait for what the relay has observed; S12a-c also run with the first note 1.8 s late, and a failing row prints both sides | Done |
+| List existing non-delete confirmation gates for Dan | Done (PR body); none is reachable from a Chat or Voice PI turn |
+| Dan decides: chat-only nutrition-list rewrite, chat-only reflex path, voice session language, no `pi.turn` for refused turns | **Open** |
+| One live Chat and one live Voice trace of the same request (GPT-Live speech, Foundry signals, `source: "voice"` rendering) | **Open**; needs a live turn |
+
 ## MCP door call ledger and replay recognition — 21 November 2026 (#1967)
 
 **Status: implemented and checked offline; exact-head CI and the first live measurement are pending.** The first version answered any second identical action of a turn from the first result; review rejected it because it would silently swallow intended repeats (three sets of the same lift, two identical entries, parallel identical calls), and nothing shows that Foundry replays calls. The second version used the JSON-RPC id as a fallback identity; a second review showed the stateless door can then swallow a deliberate repeat (a connection per model round numbers its requests 1, 2, 1, 2), so only a `_meta` call id is an identity now. An identical action under a different request always runs.

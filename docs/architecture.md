@@ -589,6 +589,27 @@ only then deletes the replaced 2.1 deployments through ARM. Barge-in is native.
 Physical/provider audio and device acceptance are still open; no live call was
 made for this source cutover.
 
+### Chat/Voice parity — 21 November 2026 (Refs #1967, #1988)
+
+Chat and Voice are two doors onto one PI conversation, one gateway `respond()`,
+one Jarvis MCP door and one `/tools/:name` route, so the same owner request must
+run the same tools under the same owner-message grant, charge the same budget
+and write one `pi.turn` log (only `channel` differs). `voice/chat-voice-parity.test.ts`
+replays each scenario through the real chat route and the real `/voice` relay
+(stub GPT-Live) on that shared gateway, with a scripted Foundry and the real
+tool route, and compares what Dan reads or hears, the stored owner and assistant
+messages, the PI input, Foundry requests and follow-ups, tool calls, grant,
+ledger, usage, logs and tool activity. A difference fails the suite unless it is
+declared in `voice/parity-report.testkit.ts` (voice note, spoken progress note
+and transcript storage, stop notice, `captureMethod`, language) and its exact
+shape is asserted. The persona and situation blocks and the capability note reach
+PI once per conversation whichever channel speaks first (the warm-up sends and
+records exactly what a turn sends), both channels tell a failed or empty turn
+with `piTurnFailedMessage`, and a spoken turn's tool activity carries
+`source: "voice"` through the `x-jarvis-pi-channel` header on the MCP door. No
+non-delete approval exists on either path. Print the side-by-side tables with
+`npx vitest run src/voice/chat-voice-parity.test.ts --reporter=verbose`.
+
 ## PI standing watches (#1886, P15-175, part 3)
 
 "Keep me updated on X" is a free-text note in the vault, looked at by the brain loop. Our own ticker is the waker; the vault is the truth.

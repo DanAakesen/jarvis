@@ -251,7 +251,8 @@ export const coreModule: BackendModule = {
         }
 
         const activityId = randomUUID();
-        const source = voiceItemHeader === undefined ? 'chat' : 'voice';
+        // The PI door says a call belongs to a spoken turn; only its in-process identity gets this far with a PI header.
+        const source = voiceItemHeader !== undefined || (piHeader === 'turn' && request.headers['x-jarvis-pi-channel'] === 'voice') ? 'voice' : 'chat';
         const activityMessage = validMessageId ? { messageId: messageId! } : {};
         const activity = (type: 'tool-call-started' | 'tool-call-finished' | 'failed', outcome?: ToolCallOutcome) => {
           if (type === 'tool-call-started') {

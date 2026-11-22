@@ -11,3 +11,6 @@ export class PiGatewayError extends Error {
     this.detail = options?.detail;
   }
 }
+
+/** What Dan is told when a turn fails without a plain cause of its own. Chat shows it and Voice speaks it, so both say the same thing. */
+export const piTurnFailedMessage = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
