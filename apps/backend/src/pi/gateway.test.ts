@@ -7,6 +7,7 @@ import { buildPiContext, buildPiEnvironment } from './context.js';
 import { failureCopy } from '@jarvis/contracts';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
+import { runPiSmoke } from './smoke.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
@@ -23,7 +24,7 @@ const sse = (...frames: string[]) => new Response(new ReadableStream({
 const delta = (text: string) => frame({ type: 'response.output_text.delta', delta: text });
 const tool = frame({ type: 'response.output_item.added', item: { type: 'mcp_call' } });
 
-interface Call { url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
+interface Call { method: string | undefined; url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
 
 function setup(replies: Array<(call: Call) => Response | Promise<Response>>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
   const store = createMemoryPiStore(() => new Date('2026-11-15T16:00:00Z'));
@@ -64,9 +65,11 @@ function setup(replies: Array<(call: Call) => Response | Promise<Response>>, ove
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
   let cancelReply: () => Response | Promise<Response> = () => Response.json({});
+  let cleanupReply: (signal: AbortSignal) => Response | Promise<Response> = () => new Response(null, { status: 204 });
   const fetcher = (async (url: string, init: RequestInit) => {
-    const call: Call = { url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
+    const call: Call = { method: init.method, url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
     calls.push(call);
+    if (init.method === 'DELETE') return cleanupReply(init.signal!);
     if (url.includes('/conversations')) { conversations += 1; return Response.json({ id: `conv_${conversations}` }); }
     if (url.includes('/cancel')) return cancelReply();
     return replies.shift()!(call);
@@ -84,6 +87,7 @@ function setup(replies: Array<(call: Call) => Response | Promise<Response>>, ove
   return {
     gateway, store, registry, calls, usage, run, conversations: () => conversations,
     setCancel: (reply: typeof cancelReply) => { cancelReply = reply; },
+    setCleanup: (reply: typeof cleanupReply) => { cleanupReply = reply; },
     setSituation: (text: string) => { situationText = text; },
   };
 }
@@ -116,9 +120,17 @@ describe('PI gateway', () => {
     expect(store.turns.map(turn => [turn.kind, turn.outcome, turn.inputTokens, turn.cachedTokens, turn.outputTokens])).toEqual([
       ['chat', 'ok', 11_000, 9_000, 20], ['chat', 'ok', 11_100, 11_000, 10],
     ]);
-    expect(store.turns[0]!.costDkk).toBeCloseTo(11_000 * 6.5785 / 1e6 + 20 * 32.8925 / 1e6, 5);
+    expect(store.turns[0]!.costDkk).toBe(0.01713);
     expect(usage[0]).toMatchObject({ model: 'gpt-6.1-terra', inputTokens: 11_000, outputTokens: 20 });
     expect(registry.size).toBe(0);
+  });
+
+  it('charges a 95% cache hit turn at the Azure cache-read rate in the monthly ledger', async () => {
+    const { run, store, gateway } = setup([() => sse(delta('Done.'), completed(100_000, 95_000, 2_000))]);
+    await run('hi');
+    // 95k cache reads + 5k uncached input + 2k output = 0.1328 DKK, not the old ~0.72.
+    expect(store.turns[0]).toMatchObject({ inputTokens: 100_000, cachedTokens: 95_000, outputTokens: 2_000, costDkk: 0.1328 });
+    expect((await gateway.status(new AbortController().signal)).month.spentDkk).toBe(0.1328);
   });
 
   it('hands the agent a live turn reference during the turn and ends it with the turn', async () => {
@@ -195,16 +207,22 @@ describe('PI gateway', () => {
 
   it('runs a brain wake in its own scratch conversation, bills it as a brain turn, and leaves the chat cap and conversation alone', async () => {
     const { gateway, store, registry, calls, usage, conversations } = setup([() => sse(delta('Nothing for Dan.'), completed(12_000, 0, 40))]);
+    const signal = new AbortController().signal;
+    await store.bindConversation(owner, 'jarvis-pi', 'owner_conv', signal);
     let opened: string | undefined;
     const original = registry.open.bind(registry);
     registry.open = (input) => { const grant = original(input); opened = grant.turn; expect(grant.brain?.runId).toBe('run-1'); return grant; };
-    const result = await gateway.runBrain({ runId: 'run-1', body: 'WAKE BODY' }, new AbortController().signal);
+    const result = await gateway.runBrain({ runId: 'run-1', body: 'WAKE BODY' }, signal);
     expect(result).toMatchObject({ ok: true, text: 'Nothing for Dan.', outcome: 'ok', estimated: false });
     expect(result.usage).toEqual({ inputTokens: 12_000, cachedTokens: 0, outputTokens: 40 });
     expect(result.costDkk).toBeGreaterThan(0);
-    // A new conversation of its own; the owner's stored chat conversation was never bound.
     expect(conversations()).toBe(1);
-    expect(await store.getConversation(owner, new AbortController().signal)).toBeNull();
+    expect(await store.getConversation(owner, signal)).toMatchObject({ conversationId: 'owner_conv' });
+    expect(calls.filter(call => call.method === 'DELETE')).toEqual([{
+      method: 'DELETE',
+      url: 'https://acct.services.ai.azure.com/api/projects/proj/agents/jarvis-pi/endpoint/protocols/openai/conversations/conv_1?api-version=v1',
+      body: undefined, headers: calls[0]!.headers,
+    }]);
     const sent = (calls.find(call => call.url.includes('/responses'))!.body!.input as Array<{ content: string }>)[0]!.content;
     expect(sent).toContain('CONTEXT BLOCK');
     expect(sent).toContain(`[Turn ${opened}`);
@@ -213,7 +231,7 @@ describe('PI gateway', () => {
     expect(store.turns.map(turn => turn.kind)).toEqual(['brain']);
     expect(usage).toHaveLength(1);
     // Over the chat cap or not, a brain wake does not touch it: chat spend is chat, warm-up and smoke only.
-    expect(await store.spendSince(new Date(0), chatTurnKinds, new AbortController().signal)).toEqual({ costDkk: 0, turns: 0 });
+    expect(await store.spendSince(new Date(0), chatTurnKinds, signal)).toEqual({ costDkk: 0, turns: 0 });
   });
 
   it('returns a failed brain wake with what was billed instead of throwing, and never retries it', async () => {
@@ -222,8 +240,59 @@ describe('PI gateway', () => {
     expect(result).toMatchObject({ ok: false, outcome: 'failed', estimated: true });
     expect(result.error).toMatchObject({ code: 'pi_failed' });
     expect(result.costDkk).toBeGreaterThan(0);
-    expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'failed' });
+    expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'failed', inputTokens: 18_000 });
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+    expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: expect.stringContaining('/conversations/conv_1?') });
+  });
+
+  it('deletes the scratch conversation when the wake is cancelled, even with an aborted turn signal', async () => {
+    const controller = new AbortController();
+    const { gateway, calls, setCleanup } = setup([], {
+      context: async () => { controller.abort(); controller.signal.throwIfAborted(); return ''; },
+    });
+    setCleanup(signal => {
+      expect(signal.aborted).toBe(false);
+      return new Response(null, { status: 204 });
+    });
+    const result = await gateway.runBrain({ runId: 'run-3', body: 'WAKE' }, controller.signal);
+    expect(result).toMatchObject({ ok: false, outcome: 'cancelled', costDkk: 0 });
+    expect(calls.map(call => call.method)).toEqual(['POST', 'DELETE']);
+  });
+
+  it.each(['request_failed', 'timeout'])('keeps a successful wake successful when scratch cleanup reports %s', async (reason) => {
+    vi.useFakeTimers();
+    try {
+      const logs: Array<[string, Record<string, unknown>]> = [];
+      const { gateway, setCleanup, registry } = setup([() => sse(delta('Done.'), completed(1, 0, 1))], {
+        log: (event, fields) => logs.push([event, fields]),
+      });
+      const cleanup = vi.fn((signal: AbortSignal): Response | Promise<Response> => {
+        expect(signal.aborted).toBe(false);
+        return reason === 'timeout' ? new Promise(() => {}) : new Response(null, { status: 503 });
+      });
+      setCleanup(cleanup);
+      const run = gateway.runBrain({ runId: 'run-4', body: 'WAKE' }, new AbortController().signal);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+      expect(registry.size).toBe(0);
+      if (reason === 'timeout') {
+        await vi.advanceTimersByTimeAsync(4_999);
+        expect(cleanup.mock.calls[0]![0].aborted).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(cleanup.mock.calls[0]![0].aborted).toBe(true);
+      }
+      await expect(run).resolves.toMatchObject({ ok: true, outcome: 'ok', text: 'Done.' });
+      expect(logs).toContainEqual(['pi.conversation_cleanup_failed', { kind: 'brain', reason }]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each([true, false])('cleans up both core smoke conversations even when a reply fails (success=%s)', async (ok) => {
+    const reply = () => sse(delta('Ready.'), completed(4, 0, 1));
+    const { gateway, calls } = setup(ok ? Array.from({ length: 5 }, () => reply) : [() => new Response(null, { status: 400 })]);
+    const smoke = runPiSmoke(gateway, new AbortController().signal, { part: 'core', warmTurns: 0 });
+    if (ok) await expect(smoke).resolves.toMatchObject({ part: 'core' });
+    else await expect(smoke).rejects.toBeInstanceOf(PiGatewayError);
+    expect(calls.filter(call => call.method === 'DELETE').map(call => new URL(call.url).pathname.split('/').at(-1))).toEqual(['conv_2', 'conv_1']);
   });
 
   it('stops before sending anything once the monthly cap is reached', async () => {
@@ -298,16 +367,18 @@ describe('PI gateway', () => {
       expect(lastTurn()).not.toContain(overview.text);
     });
 
-    it('shares the turn line, trusted context, environment note and tool overview with the first turn of a chat conversation', async () => {
+    it('shares the trusted context, environment, compact situation and tool overview with the first chat turn', async () => {
       const environment = buildPiEnvironment({ BACKEND_CONTAINER_APP_RESOURCE_ID: containerApp });
       const context = buildPiContext(defaultSettings, defaultAwayModeState, environment);
-      const { gateway, calls, run } = setup([reply, reply], { context: async () => context });
+      const { gateway, calls, run, setSituation } = setup([reply, reply], { context: async () => context });
+      const situation = '[Current PI situational state from Jarvis.]\n{"revision":2,"freshSources":["calendar"]}';
+      setSituation(situation);
       gateway.setCapabilityNote?.(() => overview);
       await run('CHAT MESSAGE');
       await gateway.runBrain({ runId: 'run-1', body: 'WAKE MESSAGE' }, new AbortController().signal);
       const [chat, wake] = turnTexts(calls);
       for (const text of [chat, wake]) {
-        for (const block of [context, environment, overview.text]) expect(text).toContain(block);
+        for (const block of [context, environment, situation, overview.text]) expect(text).toContain(block);
       }
       // Structure, not wording: apart from the turn reference and the message itself, both turns are the same blocks in the same order.
       const shape = (text: string | undefined, message: string) => text?.replace(/jt-[A-Za-z0-9_-]{22}/u, '[turn]').replace(message, '[message]');
@@ -332,8 +403,7 @@ describe('PI gateway', () => {
     const odd = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'not a code with spaces' } } }))]);
     await expect(odd.run('hi')).rejects.toMatchObject({ detail: 'response.failed' });
     // The model had started, so the turn is charged at an estimate and counts toward the cap.
-    expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 12_000, outputTokens: 2 });
-    expect(failed.store.turns[0]!.costDkk).toBeGreaterThan(0.07);
+    expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 18_000, outputTokens: 2, costDkk: 0.120667 });
     const refused = setup([() => new Response('{}', { status: 429 })]);
     await expect(refused.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable' });
     expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
@@ -674,7 +744,7 @@ describe('PI gateway', () => {
       () => sse(delta('ready'), completed(11_000, 0, 2)),
     ], { now: () => clock, monthlyCapDkk: 100 });
     await expect(gateway.warm(new AbortController().signal)).rejects.toMatchObject({ code: 'pi_failed' });
-    expect(store.turns[0]).toMatchObject({ kind: 'warm', outcome: 'failed', inputTokens: 12_000 });
+    expect(store.turns[0]).toMatchObject({ kind: 'warm', outcome: 'failed', inputTokens: 18_000 });
     const requests = () => calls.filter(call => call.url.includes('/responses')).length;
     expect(requests()).toBe(1);
     clock = new Date('2026-11-15T16:05:00Z');

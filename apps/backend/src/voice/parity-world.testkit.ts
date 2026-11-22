@@ -6,6 +6,7 @@ import { createPiAuth, piMcpPath } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
 import type { ConversationAgentChunk } from '../core/chat-agent.js';
+import type { ConversationMessage } from '../core/conversation-store.js';
 import { createConversationModule } from '../core/conversation.js';
 import { coreModule } from '../core/index.js';
 import { readAttachedOwnerMessage } from '../core/owner-message.js';
@@ -18,9 +19,10 @@ import { createLogger } from '../logging.js';
 import type { PiActivationService } from '../pi/activation.js';
 import { buildPiContext, buildPiEnvironment } from '../pi/context.js';
 import { createPiGateway, type PiGateway } from '../pi/gateway.js';
+import { createProactiveConversationContext } from '../proactive/conversation-context.js';
 import { dayKey } from '../proactive/time.js';
 import { createPiRoutes } from '../pi/routes.js';
-import { createMemoryPiStore } from '../pi/store.js';
+import { createMemoryPiStore, type PiMessageRecord } from '../pi/store.js';
 import { createPiTurnRegistry, type PiTurnGrant } from '../pi/turns.js';
 import { createMemoryConversationStore, type MemoryConversationStore } from './parity-memory-store.testkit.js';
 import {
@@ -120,7 +122,7 @@ export interface ParityWorld {
   readonly today: string;
   readonly tomorrow: string;
   readonly registrySize: () => number;
-  proactiveText: string | undefined;
+  deliverProactive(text: string, receipt?: Pick<PiMessageRecord, 'evidence' | 'followUpIds'>): Promise<ConversationMessage>;
   situation: string;
   /** The harness calling Jarvis over MCP with the static credential. */
   mcp(tool: 'find_tools' | 'call_tool', args: Record<string, unknown>): Promise<McpOutcome>;
@@ -224,7 +226,18 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
     },
   }));
 
-  const world = { proactiveText: undefined as string | undefined, situation: options.situation ?? 'SITUATIONAL STATE revision 1' } as ParityWorld;
+  const world = {
+    situation: options.situation ?? 'SITUATIONAL STATE revision 1',
+    async deliverProactive(text, receipt = {}) {
+      const session = await store.createSession({ channel: 'chat', language: 'en' });
+      const message = (await store.addMessage({ sessionId: session.id, role: 'jarvis', text, model: 'pi' }))!;
+      await piStore.recordMessage({
+        ...receipt, ownerObjectId: parityOwner, runId: 'fixture-wake', sessionId: session.id,
+        messageId: message.id, textHash: 'a'.repeat(64), text,
+      }, fixedNow, new AbortController().signal);
+      return message;
+    },
+  } as ParityWorld;
 
   const activations: PiActivationService = {
     situation: { context: async () => ({ text: world.situation, view: {} as never }) } as never,
@@ -341,7 +354,10 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
   const app = buildApp(config, logger, {
     auth: async () => ({ objectId: parityOwner, tenantId: config.auth.tenantId, displayName: 'Dan' }),
     conversationStore: store, piAgent: tapped, piAuth: secretAuth, toolCallStore,
-    proactiveConversationContext: { read: async () => world.proactiveText, select: async () => true, subscribe: () => () => {} },
+    proactiveConversationContext: createProactiveConversationContext(
+      parityOwner, { get: async () => undefined },
+      { read: async () => undefined, select: async () => {} }, piStore, () => fixedNow,
+    ),
     notifyReply: (reply) => { replyPushes.push({ sessionId: reply.sessionId, messageId: reply.messageId }); },
     awaitReplyNotificationApproval: async () => {},
     modules: [

@@ -36,5 +36,6 @@ export function canRunWithinBudget(monthlyLimitDkk: number, estimatedSpendDkk: n
   if (![monthlyLimitDkk, estimatedSpendDkk, worstCaseDkk].every((amount) => Number.isFinite(amount) && amount >= 0)) {
     throw new RangeError('Budget amounts must be nonnegative finite numbers');
   }
-  return worstCaseDkk <= Math.max(0, monthlyLimitDkk - estimatedSpendDkk);
+  // Round binary subtraction to pricing precision so an exact reservation is not rejected.
+  return worstCaseDkk <= Math.max(0, Number((monthlyLimitDkk - estimatedSpendDkk).toFixed(8)));
 }

@@ -21,15 +21,15 @@ and when this file no longer matches the registry.
 
 | What | Count |
 | --- | ---: |
-| Registered tools | 157 |
-| Visible to chat and voice | 143 |
+| Registered tools | 158 |
+| Visible to chat and voice | 144 |
 | Visible only in an activation turn (situation tools) | 4 |
 | Visible only to a background wake | 4 |
 | Legacy confirmation endpoints (HTTP only, not advertised) | 6 |
-| Static contract ok | 157 |
-| Discoverable, top 3 | 150 |
+| Static contract ok | 158 |
+| Discoverable, top 3 | 151 |
 | Discoverable, listed (callable by name) | 1 |
-| Callable: ok | 151 |
+| Callable: ok | 152 |
 | Callable: refusal | 0 |
 | Callable: failure (typed) | 0 |
 | Callable: requiresExternal | 0 |
@@ -48,7 +48,7 @@ and when this file no longer matches the registry.
 | 6 | `health_show` | 498 | 1065 |
 | 7 | `health_saved_food` | 489 | 686 |
 | 8 | `health_nutrition_history` | 447 | 660 |
-| 9 | `message_dan` | 397 | 751 |
+| 9 | `message_dan` | 397 | 808 |
 | 10 | `health_query` | 391 | 1182 |
 | 11 | `github_read` | 325 | 627 |
 | 12 | `pc_browser_act` | 281 | 392 |
@@ -169,6 +169,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `pr_get` | factory | chat and voice | unclassified | ok | "Read a pull request summary, linked issues and check summary" (derived, #7) | ok (2 calls) | 89 |  |
 | `pr_reviews` | factory | chat and voice | unclassified | ok | "Read bounded pull request review threads and comments, including reso…" (derived, #2) | ok | 89 |  |
 | `proactive_item_feedback` | notes | chat and voice | unclassified | ok | "Mark one proactive finding seen, dismiss, snooze, or rate useful/wrong" (derived, #1) | ok (3 calls) | 106 |  |
+| `proactive_message_feedback` | pi | chat and voice | action | ok | "Record Dan’s useful or wrong feedback on one proactive PI chat message" (derived, #1) | ok | 52 |  |
 | `proactive_preferences` | notes | chat and voice | unclassified | ok | "Read current proactive preferences or capability-backed help, or chan…" (derived, #1) | ok (8 calls) | 152 |  |
 | `proactive_recent_items` | notes | chat and voice | read | ok | "Read recent proactive findings by state" (derived, #1) | ok (2 calls) | 49 |  |
 | `read_backend_logs` | core | chat and voice | read | ok | "why did you fail yesterday" (en, #1) | ok (2 calls) | 85 |  |

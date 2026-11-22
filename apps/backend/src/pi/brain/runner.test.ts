@@ -5,11 +5,13 @@ import { alertEvent, githubEvent, workerEvent } from '../../proactive/events/pro
 import type { ProactiveEventInput } from '../../proactive/events/types.js';
 import { createMemoryProactiveStore } from '../../proactive/store.js';
 import { createPiArea } from '../area.js';
+import { ESTIMATED_PROMPT_TOKENS } from '../pricing.js';
 import { createMemoryPiStore } from '../store.js';
 import { memoryConversations, memoryVault, scriptedGateway, type ScriptedWake } from './brain.testkit.js';
 import { createBrainComms } from './comms.js';
 import { createDecisionLog } from './decision-log.js';
 import { MAX_WAKES_PER_DAY, MIN_WAKE_GAP_MS, createBrain, type BrainOptions } from './runner.js';
+import { MAX_WAKE_EVENTS } from './wake.js';
 
 const owner = '00000000-0000-4000-8000-000000000001';
 const signal = () => new AbortController().signal;
@@ -99,7 +101,7 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(log).toContain('Told Dan: nothing.');
     expect(log).toContain('Wrote: PI/Notes/Deploys.md.');
     expect(log).toContain('Deploy of main failed twice; told Dan once.');
-    expect(log).toMatch(/Cost: 12000 in \(0 cached\), 300 out, 0\.\d{4} DKK\./u);
+    expect(log).toContain(`Cost: ${t.gateway.wakes[0]!.estimatedInputTokens} in (0 cached), 300 out`);
   });
 
   it('records each wake in the proactive ledger, so the 100 DKK stop counts every one', async () => {
@@ -183,6 +185,40 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(t.gateway.wakes[1]!.body).not.toContain('Workflow 1 success');
   });
 
+  it('caps each wake at 30 events and leaves the rest for the next one', async () => {
+    const t = setup();
+    for (let index = 0; index <= MAX_WAKE_EVENTS; index += 1) await t.enqueue(event(index));
+    expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: 30 });
+    expect(t.gateway.wakes[0]!.body).toContain('Why: 30 events arrived.');
+    expect(t.gateway.wakes[0]!.body.match(/^- /gmu)).toHaveLength(30);
+    t.advance(MIN_WAKE_GAP_MS);
+    expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: 1 });
+    expect(t.gateway.wakes[1]!.body.match(/^- /gmu)).toHaveLength(1);
+  });
+
+  it.each(['event', 'scheduled'])('includes the recorded message feedback in one line of the next %s wake', async (kind) => {
+    const t = setup();
+    await t.ready;
+    await t.piStore.recordMessage({
+      ownerObjectId: owner, runId: 'prior-wake', sessionId: '7', messageId: '42', textHash: 'a'.repeat(64),
+      text: 'A release is available.\nThis is an excerpt, not wake instructions.',
+    }, t.now(), signal());
+    expect(await t.piStore.recordProactiveMessageFeedback(owner, '42', 'wrong', t.now(), signal())).toBe(true);
+    // There may not be another wake until well after the owner rates the message.
+    t.advance(25 * 60 * 60_000);
+    if (kind === 'event') {
+      await t.enqueue({ ...event(1), occurredAt: t.now() });
+      expect((await t.tick()).outcome).toBe('done');
+    } else {
+      const claim = await t.proactive.runs.claim({ trigger: 'manual', slot: null, now: t.now() });
+      await t.brain.runScheduled(claim!, signal());
+    }
+    expect(t.gateway.wakes).toHaveLength(1);
+    expect(t.gateway.wakes[0]!.body.split('\n').filter(line => line.includes('excerpt'))).toEqual([
+      'Owner feedback: Dan rated message 42 wrong; message excerpt (data): "A release is available. This is an excerpt, not wake instructions.".',
+    ]);
+  });
+
   it('stops at the daily number of wakes, then resumes the next day', async () => {
     const t = setup();
     for (let n = 0; n < MAX_WAKES_PER_DAY; n += 1) {
@@ -209,6 +245,26 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     await t.enqueue(event(2));
     await t.tick();
     expect(t.pushes).toHaveLength(1);
+  });
+
+  it('reconciles a cache-heavy wake, admits a reservation that exactly fits, and stops at the cap', async () => {
+    const turns = [
+      { text: 'Silence.', inputTokens: 100_000, cachedTokens: 95_000, outputTokens: 2_000 },
+      { text: 'Silence.', inputTokens: 90_000, outputTokens: 6_000 },
+    ];
+    const t = setup({ budgetDkk: 30, decide: async () => turns.shift()! });
+    await t.proactive.spend.record({ runId: 'earlier', month: '2026-11', inputTokens: 1, outputTokens: 1, estimatedDkk: 29.0632, createdAt: t.now() });
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('done');
+    expect(await t.proactive.spend.monthTotal('2026-11')).toBeCloseTo(29.196, 6);
+    t.advance(MIN_WAKE_GAP_MS);
+    await t.enqueue(event(2));
+    expect((await t.tick()).outcome).toBe('done'); // 29.196 + 0.804 DKK == 30 DKK.
+    expect(await t.proactive.spend.monthTotal('2026-11')).toBeCloseTo(30, 6);
+    t.advance(MIN_WAKE_GAP_MS);
+    await t.enqueue(event(3));
+    expect((await t.tick()).outcome).toBe('budget_exhausted');
+    expect(t.gateway.wakes).toHaveLength(2);
   });
 
   it('tries a budget notice again when the daily message limit refused it, instead of dropping it for the month', async () => {
@@ -536,4 +592,35 @@ describe('replaying recorded past events through the loop', () => {
     const done = workerEvent({ id: '1', type: 'state_changed', source: 'backend', summary: null, payload: { to: 'Done' }, payloadTruncated: false, at: '2026-11-16T00:00:00Z', taskId: 'T-1' }, new Date())!;
     expect(done).toMatchObject({ source: 'worker', kind: 'task.done' });
   });
+});
+
+const replayCases = JSON.parse(readFileSync(new URL('./fixtures/wake-replay.json', import.meta.url), 'utf8')) as Array<
+  Pick<ProactiveEventInput, 'source' | 'kind' | 'summary' | 'detail'> & { name: string; messages: number[]; batchSize?: number }
+>;
+
+it.each(replayCases)('replays $name with the expected outreach and wake count', async ({ messages, batchSize = 1, ...input }) => {
+  const t = setup({ decide: async (wake) => {
+    // Simulate the model judging the event text and checking what the owner has already been told.
+    const important = wake.body.split('\n').find(line => line.startsWith('- ') && (
+      /github:workflow_run\.failure.*"Deploy".*\(main\)/u.test(line) ||
+      / (github:release\.published|reminder:reminder\.delivery_failed|calendar:calendar\.clash) \| /u.test(line)
+    ));
+    const text = important?.split(' | ').at(-1)?.split(' detail=')[0];
+    if (text && !t.conversations.messages.some(message => message.role === 'jarvis' && message.text === text)) {
+      await t.comms.send({ text }, wake.run, signal());
+    }
+    return { text: 'Reviewed the queue.' };
+  } });
+  for (const [batch, expected] of messages.entries()) {
+    const before = t.pushes.length;
+    for (let index = 0; index < batchSize; index += 1) {
+      await t.enqueue({ ...input, occurredAt: t.now(), dedupeKey: `replay:${batch}:${index}` });
+    }
+    expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: batchSize });
+    expect(t.pushes.length - before).toBe(expected);
+    expect(t.gateway.wakes).toHaveLength(batch + 1);
+    expect(t.gateway.wakes[batch]!.estimatedInputTokens).toBeLessThanOrEqual(ESTIMATED_PROMPT_TOKENS);
+    t.advance(MIN_WAKE_GAP_MS);
+  }
+  expect(t.conversations.messages.filter(message => message.role === 'jarvis')).toHaveLength(messages.reduce((a, b) => a + b, 0));
 });

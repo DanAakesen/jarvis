@@ -517,10 +517,12 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 
 | Budget | Rule |
 | --- | --- |
-| Proactive: 100 DKK per month | The brain **and** the watches go through the same ledger (`proactive/budget.ts`, `proactive_spend`) with the same hard stop and the 80 percent warning. 100 DKK buys at least about 1,300 minimal wakes, so batching matters more than the cap |
-| Chat and voice on the harness | A separate monthly model cap in the gateway (proposal 250 DKK). Reaching it ends turns with a clear message, never a silent switch to another path |
+| Proactive: 100 DKK per month or lower | The brain and watches use `proactive_spend` with the same hard stop and 80 percent warning. A PI wake reserves 0.804 DKK (90k uncached input and 6k output) if it fits, then reconciles with actual reported or estimated usage |
+| Chat and Voice on the harness | The gateway's separate `JARVIS_PI_MONTHLY_CAP_DKK` (code default 100) reads `pi_turn` for Chat/Voice, warm-up and smoke. Reaching it ends turns with a clear message, never a silent switch to another path |
 | The cliff | If the managed sandbox is **not** released when idle, the sandbox line is about 590 instead of 60, about +530 a month. P15-174 and the December bill must rule this out |
 | Comparison with the trial | The trial assumed 0.29 DKK per expected turn and 779 for the same work; the measured 0.075 per plain turn is why this plan's expected total is lower |
+
+New PI ledger rows use the Azure Terra meters in `apps/backend/src/pi/pricing.ts`: 0.34 DKK cache read, 8.39 cache write, 6.7 uncached input and 33.5 output per million tokens. Foundry usage does not report a cache-write count, so all input not reported as a cache read is estimated at the uncached input rate. A started round with no usage is estimated at 18,000 input tokens plus estimated output. Old ledger rows and the general Foundry usage meter are unchanged.
 
 ## 9. Risks
 

@@ -2,7 +2,8 @@ import type { FastifyRequest } from 'fastify';
 import { createHash } from 'node:crypto';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
-import { attachedOwnerMessageId, readAttachedOwnerMessage } from '../core/owner-message.js';
+import { attachedOwnerMessageId, messageIdPattern, readAttachedOwnerMessage } from '../core/owner-message.js';
+import type { PiProactiveMessageFeedback, PiStore } from '../pi/store.js';
 import { itemFeedback, itemIdPattern } from './feedback.js';
 import { dayKey, localDateTimeInstant, localTimeLabel } from './time.js';
 import type { FeedbackAction, ProactiveStore } from './store.js';
@@ -238,5 +239,47 @@ function feedbackResult(item: Item, action: FeedbackAction) {
     confirmation: local ? `Finding snoozed until ${local} (Europe/Copenhagen).`
       : action === 'seen' ? `Finding state: ${item.state}.`
         : action === 'dismiss' ? 'Finding dismissed.' : `Finding rated ${item.feedback}.`,
+  };
+}
+
+export function createProactiveMessageFeedbackTool(
+  store: Pick<PiStore, 'recordProactiveMessageFeedback'>,
+  owner: string,
+  now: () => Date = () => new Date(),
+): JarvisTool {
+  const parse = (raw: unknown): Pick<PiProactiveMessageFeedback, 'messageId' | 'rating'> | undefined => {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const { messageId, rating } = raw as Record<string, unknown>;
+    if (typeof messageId !== 'string' || !messageIdPattern.test(messageId) || BigInt(messageId) > 9_223_372_036_854_775_807n ||
+        (rating !== 'useful' && rating !== 'wrong')) return undefined;
+    return { messageId, rating };
+  };
+  return {
+    name: 'proactive_message_feedback',
+    description: 'Record Dan’s useful or wrong feedback on one proactive PI chat message. Use the exact messageId from the recent proactive context when he says that alert was useful or wrong. Only use this for feedback from Dan, not merely because he opened or acted on an alert.',
+    denyOnPhone: true,
+    execution: { defaultEffect: 'action' },
+    inputSchema: {
+      type: 'object',
+      properties: { messageId: { type: 'string', pattern: messageIdPattern.source }, rating: { type: 'string', enum: ['useful', 'wrong'] } },
+      required: ['messageId', 'rating'], additionalProperties: false,
+    },
+    validateInput: raw => parse(raw) !== undefined,
+    async execute(raw, request, signal) {
+      const input = parse(raw);
+      if (!input) throw new ToolRefusal('Use an exact proactive message ID and a useful or wrong rating. Nothing was saved.');
+      try {
+        if (!authorized(request, owner) || !await readAttachedOwnerMessage(request, signal)) {
+          throw new ToolRefusal('Proactive message feedback needs a current owner chat or voice turn. Nothing was saved.');
+        }
+        if (!await store.recordProactiveMessageFeedback(owner, input.messageId, input.rating, now(), signal)) {
+          throw new ToolRefusal('That proactive message was not found. Nothing was saved.');
+        }
+      } catch (error) {
+        if (error instanceof ToolRefusal) throw error;
+        throw new ToolFailure('The proactive message feedback could not be saved.');
+      }
+      return { ...input, saved: true };
+    },
   };
 }

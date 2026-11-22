@@ -142,6 +142,14 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 - Turning the brain on is the owner's `PUT /pi/brain {"enabled": true}`; nothing here does it.
 - Offline gates: `cd apps/backend && npx eslint . --max-warnings 0 && npx tsc --noEmit -p tsconfig.json && npx vitest run` (CI runs `npm run lint`, `npm test` and `npm run build --workspace @jarvis/backend`); narrow runs: `npx vitest run src/pi/brain src/pi/gateway.test.ts src/pi/status-route.test.ts src/logging.test.ts src/proactive/engine.test.ts src/proactive/events/routes-and-scheduler.test.ts src/pi/watch/brain.test.ts`. No live model, deploy, `measure_pi` or SQL container is needed; there is no SQL change.
 
+## PI ledger, scratch wakes and reply feedback — 22 November 2026 (Refs #2011)
+
+- Read `pi_turn.cost_dkk` through `/pi/status`; pricing for new rows lives in `pi/pricing.ts`. The foreground cap still covers Chat, Voice, warm-up and smoke. Background PI reserves and reconciles separately in `proactive_spend`; `pi.brain_tick` still reports `budget_exhausted`. Old rows are not repriced.
+- `pi.conversation_cleanup_failed` has `kind` (`brain` or `smoke`) and `reason` (`timeout` or `request_failed`). It means a scratch conversation could not be confirmed deleted. `pi.brain` with `reason: feedback_unavailable` means the optional rating read failed; neither failure changes the wake result.
+- Offline: `npm test --workspace @jarvis/backend -- src/pi/gateway.test.ts src/pi/smoke.test.ts src/pi/brain src/pi/conformance src/push/reply-notifications.test.ts`; run the Chat/Voice parity command above for S19 ("do that"). SQL contract: `npm run test:database --workspace @jarvis/backend -- src/database/conversation-blocks.integration.test.ts src/database/reply-notification-store.integration.test.ts` against the isolated loopback fixture from `database-ci.yml`.
+- Run the push fixtures on the Node version in `.nvmrc`. They check that `kl. 14.30`, `Dr. Hansen` and `f.eks. Ring 3` survive sentence extraction, and that clipping keeps emoji, flags and combining marks intact.
+- Only Dan enables Background PI and verifies delivery, the message tap and a real follow-up on device. No live smoke, paid turn, deployment or Foundry instruction edit is needed to qualify the change.
+
 ## Explicit owner-reminder delivery evidence — 20 November 2026 (#1990)
 
 - Migration `0102_owner_reminder_delivery_outbox.sql` is required before this

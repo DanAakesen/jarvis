@@ -25,6 +25,7 @@ describe('proactive conversation context', () => {
               identity: 'calendar-event:42',
               label: 'Flight to London',
               observedAt: '2026-11-20T08:00:00.000Z',
+              verifiedAt: '2026-11-20T09:54:00.000Z',
             }],
             followUpIds: ['follow:flight'],
             at: new Date('2026-11-20T09:55:00.000Z'),

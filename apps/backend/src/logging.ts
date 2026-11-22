@@ -122,7 +122,7 @@ const events = new Set([
   'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable',
   'pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed', 'pi.mcp_tool',
   'pi.brain', 'pi.brain_tick', 'pi.brain_state', 'pi.brain_run',
-  'pi.turn_record_failed', 'pi.usage_record_failed', 'pi.mark_warm_failed', 'pi.situation_stale_failed',
+  'pi.turn_record_failed', 'pi.usage_record_failed', 'pi.mark_warm_failed', 'pi.situation_stale_failed', 'pi.conversation_cleanup_failed',
   'pi.smoke_failed', 'pi.watches',
   'weather.phase',
   'pc_bridge.command_timing', 'pc_bridge.wake_word',
@@ -702,6 +702,12 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (input.msg === 'pi.watches' && input.reason === 'watch_index_refresh_failed') fields.reason = input.reason;
     return fields;
+  }
+  if (input.msg === 'pi.conversation_cleanup_failed') {
+    return {
+      ...(input.kind === 'brain' || input.kind === 'smoke' ? { kind: input.kind } : {}),
+      ...(input.reason === 'timeout' || input.reason === 'request_failed' ? { reason: input.reason } : {}),
+    };
   }
   if (input.msg === 'pi.harness_item') {
     // The shape of an item the harness sent: lowercase tokens, booleans and numbers only, and for a function call or approval request its owner (native or client-owned), the deciding rule and the argument key names. Never argument values, output, ids, URLs or free text.

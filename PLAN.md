@@ -1,3 +1,9 @@
+## P1 — Background PI budget and reach-outs (22 November 2026, Refs #2011)
+
+New PI ledger rows price cached input at the Azure cache-read rate. The wake budget still stops before a reservation that will not fit. Wakes and smoke clean up their scratch conversations, and the wake replay pins all seven decision fixtures with a scripted model.
+
+Brain pushes use the first sentence without cutting off common abbreviations or splitting emoji, and link to the exact chat message. The offline Chat/Voice replay follows the same evidence and follow-up IDs for “do that”. A useful/wrong rating goes into the next otherwise due wake. No live or device acceptance has run: Dan owns the Background PI switch and the iPhone/Watch check. The old proactive engine stays; weather signals are outside this step.
+
 ## Week summary 2026-11-21 — PI tools and reliability (current focus)
 
 **Status: the 20–21 November work is merged on `main` (#2018 last, at 08:04 UTC on 22 November). Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** The Deploy workflow succeeded on `main` for every merge commit from #2004 to #2020 (the run for #2018 was still going when I checked), and the iOS TestFlight workflow uploaded build 121 from `main` at `9e41b8e6` (#2013 included; #2016, #2018, #2020 and #2021 change only the backend, which Deploy ships). Both facts come from GitHub Actions run lists: I did not check what Azure serves or App Store Connect. This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
