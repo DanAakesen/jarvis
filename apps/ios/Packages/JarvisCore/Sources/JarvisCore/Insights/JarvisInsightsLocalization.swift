@@ -283,6 +283,8 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case proactiveBackgroundOn = "insights.proactiveBackgroundOn"
     case proactiveBackgroundOff = "insights.proactiveBackgroundOff"
     case proactiveTurnsToday = "insights.proactiveTurnsToday"
+    case proactiveCheckSchedule = "insights.proactiveCheckSchedule"
+    case proactiveQueuedCheck = "insights.proactiveQueuedCheck"
     case proactiveCostEstimate = "insights.proactiveCostEstimate"
     case proactiveCostActual = "insights.proactiveCostActual"
     case proactiveStateFresh = "insights.proactiveStateFresh"

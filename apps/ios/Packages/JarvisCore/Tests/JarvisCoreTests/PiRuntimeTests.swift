@@ -401,7 +401,7 @@ final class PiRuntimeTests: XCTestCase {
          "budget":{"limitDkk":100,"spentDkk":82.5,"state":"warn"},
          "month":{"wakes":14,"costDkk":1.9},"today":{"messages":2,"usedTurns":3,"allowedTurns":12},
          "lastWake":{"at":"2026-11-16T10:00:00.000Z","totalMs":4100,"inputTokens":12000,"cachedTokens":9000,"outputTokens":300,"costDkk":0.09,"outcome":"ok"},
-         "logPending":1,
+         "logPending":1,"nextDueAt":"2026-11-16T10:30:00.000Z",
          "slots":{"used":3,"allowed":12,"remaining":9,"lastAt":"2026-11-16T10:00:00.000Z","nextAllowedAt":null,"quiet":false,
                   "queue":{"pending":0,"leased":0,"retrying":0}},
          "situation":{"revision":2,"asOf":"2026-11-16T09:55:00.000Z","updatedAt":"2026-11-16T10:00:00.000Z",
@@ -441,6 +441,7 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(status.slots.remaining, 9)
         XCTAssertEqual(status.situation.revision, 2)
         XCTAssertEqual(status.lastWake?.cachedTokens, 9000)
+        XCTAssertEqual(status.nextDueAt, "2026-11-16T10:30:00.000Z")
         XCTAssertEqual(status.logPending, 1)
 
         let changed = try await proactive.setBackgroundEnabled(false)

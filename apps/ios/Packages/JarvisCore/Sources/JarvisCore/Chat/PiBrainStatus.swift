@@ -74,6 +74,8 @@ public struct PiBrainStatus: Codable, Equatable, Sendable {
     public let month: Month
     public let today: Today
     public let lastWake: LastWake?
+    /// Next queued event or watch check reported by the brain.
+    public let nextDueAt: String?
     /// Decision-log entries that are not in the vault yet.
     public let logPending: Int
     public let slots: Slots

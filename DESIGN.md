@@ -37,6 +37,7 @@ Use the established Voice screen and controls; no provider selector, engine badg
 ## Proactive and notification opening
 
 - Show the single **Proactive suggestions** switch directly in the main iPhone Settings list. Save on change, preserve the last confirmed state while pending, and offer Retry. **Background suggestions** is detail, not another engine toggle. Keep source controls and guidance in their editor.
+- **Background suggestions** shows the check cadence, Copenhagen review times and the next queued check when one is due.
 - **A reply push opens existing Chat.** Show one useful preview, not an approval summary. In Chat open the exact committed message without animating away from the target; allow Jump to latest. Watch waits until an active turn, dictation or Voice is idle and keeps the pending target across refresh. Proactive items and approval actions have distinct routes. If the target cannot load, show Chat's retry state, not another message.
 
 ## Watch

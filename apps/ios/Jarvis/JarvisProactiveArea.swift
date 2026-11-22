@@ -841,6 +841,16 @@ struct JarvisProactiveArea: View {
                          : background.allowsProactiveWakes ? text(.proactiveBackgroundOn) : text(.proactiveBackgroundOff))
                         .font(.subheadline.weight(.medium))
                         .accessibilityIdentifier("proactive.background.enabled")
+                    if background.allowsProactiveWakes {
+                        Text(text(.proactiveCheckSchedule))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let due = background.nextDueAt.flatMap(JarvisInsightsDates.parse) {
+                            Text(JarvisInsightsLocalization.format(.proactiveQueuedCheck, language: language, dateTime(due)))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Text(
                         JarvisInsightsLocalization.format(
                             .proactiveTurnsToday,
