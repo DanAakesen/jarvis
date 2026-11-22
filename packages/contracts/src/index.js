@@ -10,8 +10,8 @@ export {
   chatBlockLimits,
 } from './chat-blocks.js';
 
-import { appleMapsQuerySchema, appleMapsResultSchema, isAppleMapsQuery, isAppleMapsResult } from './apple-maps.js';
-export { appleMapsQuerySchema, appleMapsResultSchema, isAppleMapsQuery, isAppleMapsResult };
+import { appleMapsQuerySchema, appleMapsViewSchema, isAppleMapsQuery, isAppleMapsView } from './apple-maps.js';
+export { appleMapsQuerySchema, appleMapsViewSchema, isAppleMapsQuery, isAppleMapsView };
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
   'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
@@ -383,7 +383,7 @@ export const webResearchResultSchema = Object.freeze(object({
 }));
 const cell = { anyOf: [string(2_000), { type: 'number' }, { type: 'boolean' }, { type: 'null' }] };
 const dataSchemas = {
-  map: appleMapsResultSchema,
+  map: appleMapsViewSchema,
   table: object({
     columns: array(string(80, 1), 20, 1),
     rows: array(array(cell, 20), rowLimit),
@@ -748,7 +748,7 @@ function validData(renderer, data, trustedBlobHost) {
           (item.action === undefined || (isObject(item.action) &&
             ['open-route', 'open-link'].includes(item.action.type) && validAction(item.action))));
     case 'map':
-      return isAppleMapsResult(data);
+      return isAppleMapsView(data);
     case 'detail':
       return Object.keys(data).every((key) => key === 'fields') && Array.isArray(data.fields) &&
         data.fields.length <= 100 && data.fields.every((field) => isObject(field) &&
@@ -1023,8 +1023,10 @@ export function isWorkspaceCommand(value, options = {}) {
   if (value.target !== undefined && !workspaceCommandTargets.includes(value.target)) return false;
   switch (value.operation) {
     case 'apple-maps': {
-      const { commandId, operation, target, ...query } = value;
-      return target === 'phone' && isAppleMapsQuery(query);
+      const keys = Object.keys(appleMapsQuerySchema.properties);
+      const query = Object.fromEntries(keys.filter(key => Object.hasOwn(value, key)).map(key => [key, value[key]]));
+      return hasOnly('speakResult', ...keys) && value.target === 'phone' &&
+        (value.speakResult === undefined || typeof value.speakResult === 'boolean') && isAppleMapsQuery(query);
     }
     case 'navigate':
       return hasOnly('page', 'section', 'taskId', 'issueNumber') && workspaceNavigationPages.includes(value.page) &&
@@ -1129,7 +1131,7 @@ const generatedSourceKeys = Object.freeze(['id', 'status', 'updatedAt', 'reason'
 const generatedViewExample =
   '{"version":1,"title":"...","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"..."}]}}';
 const generatedDataShapes = Object.freeze({
-  map: { example: 'Use apple_maps for a result from the iPhone.', keys: Object.keys(appleMapsResultSchema.properties), required: appleMapsResultSchema.required },
+  map: { example: 'Use apple_maps for a result from the iPhone.', keys: Object.keys(appleMapsViewSchema.properties), required: appleMapsViewSchema.required },
   table: { example: '{"columns":["A","B"],"rows":[["x","y"]]}', keys: ['columns', 'rows'], required: ['columns', 'rows'] },
   list: { example: '{"items":[{"title":"..."}]}', keys: ['items'], required: ['items'] },
   detail: { example: '{"fields":[{"label":"...","value":"..."}]}', keys: ['fields'], required: ['fields'] },
@@ -1384,7 +1386,7 @@ function generatedDataProblems(renderer, data, options, problems) {
       }
       break;
     case 'map':
-      if (!isAppleMapsResult(data)) addWorkspaceProblem(problems, path, 'must contain a valid Apple Maps result');
+      if (!isAppleMapsView(data)) addWorkspaceProblem(problems, path, 'must contain a valid Apple Maps result');
       break;
     case 'detail':
       if (collection('fields', 100, 'fields')) {
