@@ -59,7 +59,7 @@ When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal lef
 
 ### Proactive
 
-The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a product goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps are available as signals in code; they follow their source switches. Dan controls Background PI in **Proactive suggestions** on the main Settings page. It starts off; status must say whether it ran, skipped or failed. Explicit reminders and the legacy 07:00/18:00 checks are not the same thing as a brain wake.
+The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a product goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps are available as signals in code; they follow their source switches. Dan controls Background PI in **Proactive suggestions** on the main Settings page. Background PI defaults to off and Dan enabled it. It owns the 07:00 and 18:00 Copenhagen reviews. Status shows whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
 
 ### Memory vs Vault Knowledge
 
