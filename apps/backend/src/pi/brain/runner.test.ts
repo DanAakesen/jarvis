@@ -9,13 +9,24 @@ import { createMemoryPiStore } from '../store.js';
 import { memoryConversations, memoryVault, scriptedGateway, type ScriptedWake } from './brain.testkit.js';
 import { createBrainComms } from './comms.js';
 import { createDecisionLog } from './decision-log.js';
-import { MAX_WAKES_PER_DAY, MIN_WAKE_GAP_MS, createBrain } from './runner.js';
+import { MAX_WAKES_PER_DAY, MIN_WAKE_GAP_MS, createBrain, type BrainOptions } from './runner.js';
 
 const owner = '00000000-0000-4000-8000-000000000001';
 const signal = () => new AbortController().signal;
 
+/** What the brain tells its logger, with the event name it was logged under. */
+function captureLogs() {
+  const lines: { level: 'info' | 'warn'; message: string; data: Record<string, unknown> }[] = [];
+  const logger: NonNullable<BrainOptions['logger']> = {
+    info: (data, message) => { lines.push({ level: 'info', message, data }); },
+    warn: (data, message) => { lines.push({ level: 'warn', message, data }); },
+  };
+  return { lines, logger, named: (message: string) => lines.filter((line) => line.message === message) };
+}
+
 function setup(options: {
   start?: string; enabled?: boolean; decide?: Parameters<typeof scriptedGateway>[0]; failVault?: () => boolean; budgetDkk?: number; paused?: boolean;
+  logger?: BrainOptions['logger'];
 } = {}) {
   const clock = { t: new Date(options.start ?? '2026-11-16T10:00:00Z') };
   const now = () => clock.t;
@@ -31,6 +42,7 @@ function setup(options: {
   const gateway = scriptedGateway(options.decide ?? (async () => ({ text: 'Nothing needs Dan.' })));
   const brain = createBrain({
     queue, gateway, proactive, piStore, comms, decisionLog: createDecisionLog({ area: createPiArea({ vault }) }), owner, timeZone: 'Europe/Copenhagen', now,
+    ...(options.logger ? { logger: options.logger } : {}),
   });
   const ready = (async () => {
     await piStore.writeBrainSwitch(owner, options.enabled ?? true, now(), signal());
@@ -307,6 +319,140 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     await t.tick();
     expect(t.pushes).toEqual([]);
     expect(t.log()).toContain('Told Dan: nothing.');
+  });
+});
+
+describe('seeing the brain: what it logs and reports about itself', () => {
+  it('logs pi.brain_tick when the outcome changes and not on every pass, with the numbers Dan asks first', async () => {
+    const logs = captureLogs();
+    const t = setup({ logger: logs.logger });
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('done');
+    await t.enqueue(event(2));
+    expect((await t.tick()).outcome).toBe('spaced');
+    await t.enqueue(event(3));
+    expect((await t.tick()).outcome).toBe('spaced');
+    expect((await t.tick()).outcome).toBe('idle');
+    t.advance(MIN_WAKE_GAP_MS);
+    expect((await t.tick()).outcome).toBe('done');
+    await t.enqueue(event(4));
+    t.advance(MIN_WAKE_GAP_MS);
+    expect((await t.tick()).outcome).toBe('done');
+    expect(t.brain.lastTick).toEqual({ at: t.now(), outcome: 'done' });
+
+    expect(logs.named('pi.brain_tick').map((line) => line.data)).toEqual([
+      { outcome: 'done', queued: 0, wakesToday: 1, spendMonthDkk: expect.any(Number) },
+      { outcome: 'spaced', queued: 1, wakesToday: 1, spendMonthDkk: expect.any(Number), nextDueInSec: MIN_WAKE_GAP_MS / 1000 },
+      { outcome: 'done', queued: 0, wakesToday: 2, spendMonthDkk: expect.any(Number) },
+    ]);
+    expect(logs.named('pi.brain_tick')[0]!.data.spendMonthDkk).toBeGreaterThan(0);
+    expect(logs.named('pi.brain_tick').every((line) => line.level === 'info')).toBe(true);
+    // Event ids, summaries and anything else of a queued event never reach the line.
+    expect(JSON.stringify(logs.lines)).not.toContain('Workflow');
+  });
+
+  it('tells a switched-off brain from one that is on and idle, without a model call', async () => {
+    const logs = captureLogs();
+    const t = setup({ enabled: false, logger: logs.logger });
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('off');
+    await t.enqueue(event(2));
+    expect((await t.tick()).outcome).toBe('off');
+    expect(t.gateway.wakes).toEqual([]);
+    expect(logs.named('pi.brain_tick').map((line) => line.data)).toEqual([
+      { outcome: 'off', queued: 1, wakesToday: 0, spendMonthDkk: 0 },
+    ]);
+    // The line is one snapshot at the moment the outcome changed; the queue depth keeps counting in GET /pi/brain.
+    expect((await t.brain.status()).queue.pending).toBe(2);
+    expect(t.brain.lastTick?.outcome).toBe('off');
+    expect(t.brain.nextDueAt).toBeNull();
+
+    await t.piStore.writeBrainSwitch(owner, true, t.now(), signal());
+    t.brain.wake();
+    expect((await t.tick()).outcome).toBe('done');
+    expect(logs.named('pi.brain_tick').map((line) => line.data.outcome)).toEqual(['off', 'done']);
+  });
+
+  it('logs the outcome of the pass that failed or could not read the watches as a warning, and still without the events', async () => {
+    const logs = captureLogs();
+    const t = setup({ logger: logs.logger, decide: async () => ({ text: '', fail: true }) });
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('failed');
+    expect(logs.named('pi.brain_tick')).toMatchObject([{ level: 'warn', data: { outcome: 'failed', wakesToday: 1 } }]);
+    expect(logs.named('pi.brain')).toMatchObject([{ level: 'warn', data: { reason: 'pi_failed', events: 1, sent: 0 } }]);
+  });
+
+  it('still logs the outcome, without the numbers, when they cannot be read', async () => {
+    const logs = captureLogs();
+    const t = setup({ enabled: false, logger: logs.logger });
+    await t.ready;
+    t.proactive.spend.monthTotal = async () => { throw new Error('db down'); };
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('off');
+    expect(logs.named('pi.brain_tick').map((line) => line.data)).toEqual([{ outcome: 'off', queued: 1, wakesToday: 0 }]);
+  });
+
+  it('never lets a failing logger change a pass', async () => {
+    const t = setup({ logger: { info: () => { throw new Error('log sink down'); }, warn: () => { throw new Error('log sink down'); } } });
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('done');
+    await t.brain.start();
+  });
+
+  it('says once at startup whether the switch is on and the proactive page is paused', async () => {
+    const on = captureLogs();
+    const first = setup({ logger: on.logger });
+    await first.ready;
+    await first.brain.start();
+    expect(on.named('pi.brain_state')).toEqual([{ level: 'info', message: 'pi.brain_state', data: { enabled: true, paused: false } }]);
+
+    const off = captureLogs();
+    const second = setup({ enabled: false, paused: true, logger: off.logger });
+    await second.ready;
+    await second.brain.start();
+    expect(off.named('pi.brain_state')).toEqual([{ level: 'info', message: 'pi.brain_state', data: { enabled: false, paused: true } }]);
+  });
+
+  it('says so when the switch cannot be read at startup, and still picks up the work a restart left', async () => {
+    const logs = captureLogs();
+    const t = setup({ logger: logs.logger });
+    await t.ready;
+    await t.queue.enqueue(event(1), t.now());
+    const read = t.piStore.readBrainSwitch.bind(t.piStore);
+    t.piStore.readBrainSwitch = async () => { throw new Error('db down'); };
+    await t.brain.start();
+    expect(logs.named('pi.brain_state')).toEqual([{ level: 'warn', message: 'pi.brain_state', data: { reason: 'unreadable' } }]);
+    t.piStore.readBrainSwitch = read;
+    expect((await t.tick()).outcome).toBe('done');
+  });
+
+  it('leaves one line for every sweep that ends without a wake, saying why', async () => {
+    const logs = captureLogs();
+    const t = setup({ enabled: false, logger: logs.logger });
+    await t.ready;
+    const claim = async (slot: string, trigger: 'scheduled' | 'manual' = 'scheduled') =>
+      (await t.proactive.runs.claim({ trigger, slot: trigger === 'manual' ? null : slot, now: t.now() }))!;
+    await t.brain.runScheduled(await claim('2026-11-16T07:00'), signal());
+    expect((await t.proactive.runs.latest())).toMatchObject({ status: 'skipped', reason: 'background_off' });
+    expect(logs.named('pi.brain')).toEqual([{ level: 'info', message: 'pi.brain', data: { reason: 'background_off', trigger: 'scheduled' } }]);
+
+    await t.piStore.writeBrainSwitch(owner, true, t.now(), signal());
+    await t.proactive.settings.patch({ paused: true });
+    t.advance(60 * 60_000);
+    await t.brain.runScheduled(await claim('2026-11-16T18:00'), signal());
+    expect(logs.named('pi.brain').at(-1)!.data).toEqual({ reason: 'paused', trigger: 'scheduled' });
+  });
+
+  it('records a finished sweep once with its cost, and a ledger write that fails does not turn it into a failed run', async () => {
+    const logs = captureLogs();
+    const t = setup({ logger: logs.logger });
+    await t.ready;
+    t.proactive.spend.record = async () => { throw new Error('db down'); };
+    const claim = (await t.proactive.runs.claim({ trigger: 'manual', slot: null, now: t.now() }))!;
+    await t.brain.runScheduled(claim, signal());
+    expect(await t.proactive.runs.latest()).toMatchObject({ status: 'done', reason: null });
+    expect(logs.named('pi.brain').map((line) => line.data.reason)).toEqual(['spend_record_failed', 'scheduled_done']);
+    expect(logs.named('pi.brain').at(-1)!.data).toMatchObject({ trigger: 'manual', events: 0, sent: 0, tools: 0 });
   });
 });
 

@@ -43,6 +43,19 @@
 | Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
 | Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
 
+## See the brain — 21 November 2026 (Refs #1969)
+
+**Status: implemented; offline lint, build and the full backend suite pass (commands in the pull request). Not run: a live wake or a deploy. The first real `pi.brain_tick` and `pi.brain_run` lines after deploy are the live check. Turning the brain on stays the owner's `PUT /pi/brain`.**
+
+| Step | State |
+| --- | --- |
+| Log `pi.brain_tick` when the tick outcome changes and `pi.brain_state` at startup; register `pi.brain` and `pi.brain_run` (both were exported as `backend.event` without fields, so zero `pi.brain_run` lines proved nothing) | Done |
+| Extend `GET /pi/brain` with `lastTick`, `nextDueAt`, `today.wakes` and `today.costDkk` | Done |
+| Name the kind of every turn in `GET /pi/status` (`lastTurn.kind`, `turns.last24h`, `turns.recent`); label a wake that only a due watch caused `watch` | Done |
+| `proactive.failed` carries `stage` and `errorClass` on every path of the old engine, the scheduler and the manual check; every path reproduced in a test; the scheduler survives a failed startup write and retries a slot whose claim threw | Done |
+| Register the thirteen other `pi.*` and `proactive.*` events that were exported as bare `backend.event`, test that none can be added unregistered, and keep the error class, trigger and activation in `read_backend_logs` | Done |
+| Name the hourly call of about 4k tokens | Open: read `GET /pi/status` `turns.recent` on production |
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**

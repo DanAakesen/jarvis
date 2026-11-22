@@ -4,6 +4,8 @@ import { copenhagenDayStart, monthKey } from '../../proactive/time.js';
 import { brainTurnKinds, type PiStore } from '../store.js';
 import type { PiBackgroundSlotStatus } from '../activation-slots.js';
 import type { PiSituationService } from '../situation.js';
+import type { BrainTickOutcome } from './outcomes.js';
+import type { BrainTickRecord } from './runner.js';
 
 export interface BrainStatus {
   /** True when the brain is wired into this backend (PI configured, proactive path and queue present). */
@@ -14,8 +16,15 @@ export interface BrainStatus {
   readonly paused: boolean;
   readonly budget: { readonly limitDkk: number; readonly spentDkk: number; readonly state: BudgetState };
   readonly month: { readonly wakes: number; readonly costDkk: number };
-  readonly today: { readonly messages: number; readonly usedTurns: number; readonly allowedTurns: number };
+  /** Today in Copenhagen: `usedTurns` counts the daily allowance, `wakes` and `costDkk` come from the turn ledger. */
+  readonly today: { readonly messages: number; readonly usedTurns: number; readonly allowedTurns: number; readonly wakes: number; readonly costDkk: number };
   readonly lastWake: null | { readonly at: string; readonly totalMs: number; readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number; readonly costDkk: number; readonly outcome: string };
+  /**
+   * The last pass of the ticker that read the queue since this backend started, or null before the first one. `off` and `empty`
+   * tell a brain that is switched off from one that is on and has nothing to do; `nextDueAt` is when it looks again (null: nothing scheduled).
+   */
+  readonly lastTick: null | { readonly at: string; readonly outcome: BrainTickOutcome };
+  readonly nextDueAt: string | null;
   /** Decision-log entries not yet in the vault; retried on every tick. */
   readonly logPending: number;
   readonly slots: PiBackgroundSlotStatus;
@@ -54,19 +63,23 @@ export function createBrainControl(options: {
   readonly brain: () => {
     wake(): void;
     readonly pendingLogs: number;
+    readonly lastTick: BrainTickRecord | null;
+    readonly nextDueAt: Date | null;
     status(): Promise<PiBackgroundSlotStatus>;
   } | undefined;
 }): BrainControl {
   async function read(signal: AbortSignal): Promise<BrainStatus> {
     const now = options.now();
     const brain = options.brain();
-    const [state, settings, spent, month, last, today, situation, slots] = await Promise.all([
+    const dayStart = copenhagenDayStart(now);
+    const [state, settings, spent, month, ledgerToday, last, today, situation, slots] = await Promise.all([
       options.store.readBrainSwitch(options.owner, signal),
       options.proactive.settings.read(),
       options.proactive.spend.monthTotal(monthKey(now)),
       options.store.spendSince(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), brainTurnKinds, signal),
+      options.store.spendSince(dayStart, brainTurnKinds, signal),
       options.store.lastTurn(brainTurnKinds, signal),
-      options.store.messagesSince(copenhagenDayStart(now), signal, options.owner),
+      options.store.messagesSince(dayStart, signal, options.owner),
       options.situation.read(signal),
       brain ? brain.status() : Promise.resolve({
         used: 0, allowed: 12, remaining: 12, lastAt: null, lastActivationType: null,
@@ -82,11 +95,16 @@ export function createBrainControl(options: {
         state: budgetState(effectiveProactiveBudget(settings.monthlyBudgetDkk), spent),
       },
       month: { wakes: month.turns, costDkk: Number(month.costDkk.toFixed(4)) },
-      today: { messages: today.count, usedTurns: slots.used, allowedTurns: slots.allowed },
+      today: {
+        messages: today.count, usedTurns: slots.used, allowedTurns: slots.allowed,
+        wakes: ledgerToday.turns, costDkk: Number(ledgerToday.costDkk.toFixed(4)),
+      },
       lastWake: last ? {
         at: last.at.toISOString(), totalMs: last.totalMs, inputTokens: last.inputTokens, cachedTokens: last.cachedTokens,
         outputTokens: last.outputTokens, costDkk: last.costDkk, outcome: last.outcome,
       } : null,
+      lastTick: brain?.lastTick ? { at: brain.lastTick.at.toISOString(), outcome: brain.lastTick.outcome } : null,
+      nextDueAt: brain?.nextDueAt?.toISOString() ?? null,
       logPending: brain?.pendingLogs ?? 0,
       slots,
       situation: {
