@@ -2,6 +2,19 @@
 
 When a Chat or Voice turn does not finish, Dan reads (or hears) one short, plain, first-person sentence that says what happened and what he can do, never an internal name (PI, Foundry, gateway, harness, MCP, approval) or a status code. The technical code and detail stay in logs and diagnostics. "Failed" means a turn really failed: Dan's own Stop, a reply that was already saved, a history refresh that failed after a good reply, and a tool that did not work while the reply is fine are not failed turns. Where nothing ran the sentence says so ("nothing was done"); otherwise it says an action may already have happened and to check before trying again. The same holds for a tool call: when it may have been delivered before it failed (a timeout, a dropped connection, a stop), Jarvis says the outcome is unknown and to check before trying again, and says it was not done only for a call that cannot change anything or never left. Voice speaks the same sentence Chat shows, one short sentence per failure class. PI stays unrestricted: no guardrail, refusal or fallback is added to hide or avoid a real failure.
 
+## North star — what PI is for (Dan, 21 November 2026)
+
+Dan's goal for PI, recorded as GitHub issues [#2012](https://github.com/DanAakesen/jarvis/issues/2012) (P0, daily-core requests in Chat and Voice) and [#2011](https://github.com/DanAakesen/jarvis/issues/2011) (P1, proactive companion) and relayed to this session by the Dispatcher on 21 November 2026. Text inside quotation marks is his exact words. A paraphrase, an "as relayed" note and an "Inference" are outside quotation marks and labelled.
+
+> "the goal with PI was to get a dots / duet / muse / grok bot experience, that is always on, and know me and can be proactive, and know me super well when i manually reach out."
+
+- **Daily core, in his order (paraphrase, not his words):** 1. the Jarvis project; 2. notes; 3. tasks; 4. workouts; 5. nutrition, in the periods when he logs food (calories logged and left today, protein still needed); 6. banking, later, which will add scenarios. As relayed: ask him again before anything that moves money. His own words, from the north-star note relayed to me: "That is stuff i really need jarvis for when it works as expected."
+- **Proactive example:** "Weather is not something i will ask often, but something that is nice to get proactive if its relevant for driving or travel. Like heavy snow when my agenda says 2 hour transport."
+- **Priorities (as relayed):** P0 is that every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. P1 is proactive intelligence.
+- **Approvals (as relayed):** no approvals, confirmations or gates except DELETE actions.
+
+Inference: P0 and P1 are priority ranks, not the plan phases P0–P15 in `PLAN.md`. The approvals rule continues the direction of "Owner action policy — current, 9 November 2026" below (no second approval for the owner's clear request) and keeps one exception, delete actions, which that policy does not name. Older approval sections in this file describe earlier behaviour, and I did not audit the code for approvals that remain. #2021 reports that no non-delete confirmation is reachable by a Chat or Voice PI turn and that the phone-call approval is the one live non-delete gate, on the phone channel; I did not re-check that. Open question: how the relayed "ask him again before anything that moves money" fits that rule is not stated in what I received; banking is later work. For the snow example the building blocks exist (a weather source, a calendar-derived travel source and a coarse Location source, described below); #2018 (below) adds other signals to the queue and lists weather events as not built, and no end-to-end test of the example is recorded. Current work follows these priorities: `PLAN.md`, "Week summary 2026-11-21".
+
 ## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
 
 Jarvis pushes to Dan when something needs his attention, and his list for that is GitHub issue and release updates, reminders and the calendar. The proactive queue now hears, in addition to build and deploy results: a published release, an issue opened, closed or reopened, a comment on an issue or pull request, a pull request opened, merged or sent to him for review, a check that failed on a default branch, an explicit reminder whose push delivery ended without reaching a device after its retries, and two timed calendar entries that overlap. Whether Dan is told about any of them is the brain's decision; nothing before the queue filters or ranks them, and no new switch exists. Events follow the Proactive source switches they rest on: GitHub follows Factory, a calendar clash follows Calendar, and a failed reminder follows Todos, so with a source off its events are not queued.
@@ -1237,10 +1250,11 @@ existing budget alerts with USD 20/month authorized for Terra; no new spending
 guard or other role change is part of this work.
 
 Voice sessions use `jarvis-pi-live` as the native speech layer. GPT-Live never
-receives Jarvis's tool catalogue. The relay keeps transcript fragments together
-through pauses and uses native event/timeline identities to associate the client
-delegation. After that assignment it waits for 0.6-second quiet, bounded by
-three seconds, stores Dan's exact owner message, and only then starts the same
+receives Jarvis's tool catalogue. The relay keeps every word of Dan's open turn
+together through pauses. The delegation's `offset_ms` is not where the utterance
+ends, so it is logged and never cuts the request. When the delegation
+arrives, the relay waits until the turn has been quiet for 1.5 seconds (at most
+three), stores Dan's whole message once, and only then starts the same
 PI gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
 final speakable answer return through the matching delegation ID. This preserves
 `find_tools -> call_tool`, grants, receipts, monthly cap and single-flight.
@@ -1248,15 +1262,18 @@ Every commentary append is split at UTF-8 boundaries of at most 256 bytes, a
 conservative bound below the provider's 500-token append limit.
 GPT-Live has no transcript-done or output-audio-done event: the relay explicitly
 groups native deltas and emits bounded Jarvis readiness, caption, activity and
-playback events. New input cancels stale PI work; GPT-Live owns acoustic
-barge-in and continuous listening/speaking. Activity changes come from the
+playback events. Speech, including a backchannel such as "mm-hm", never cancels
+PI's running turn: only a new delegation (the newest request wins) or the end of
+the session does. GPT-Live owns acoustic barge-in and continuous
+listening/speaking. Activity changes come from the
 provider, transcript/delegation and playback evidence, so the UI reports
 Listening, Thinking, Speaking, Reconnecting and Ended instead of retaining a
 stale default. Each input/output delta carries an event identity, and each
 assistant group has a response identity. The phone, Watch and restored Chat
 history keep the original speaker and event order through overlap or reconnect.
-Direct conversational turns persist Dan's transcript before the first natural
-provider reply; delegated turns retain the existing quiet boundary before PI.
+Direct conversational turns persist Dan's transcript, after the same 1.5 seconds
+of quiet, before the reply that answers it, so history keeps Dan-before-Jarvis
+order; delegated turns wait for that quiet boundary before PI.
 Provider `usage.updated` and final closed usage are cumulative: the relay keeps
 the maximum deduplicated `usage.seconds` value and writes it as voice minutes
 instead of counting the wall-clock sitting time when real usage exists.
@@ -1264,8 +1281,9 @@ instead of counting the wall-clock sitting time when real usage exists.
 During voice sessions, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 
 English and Danish speech use the authenticated backend `/voice` WebSocket and
-the GPT-Live voice agent. Its immutable definition pins `gpt-live-1`, 24 kHz
-PCM, while Jarvis remains the sole tool and action authority.
+the GPT-Live voice agent. Deploy verifies its technical contract (`gpt-live-1`,
+24 kHz PCM, client delegation); Dan tunes its instructions, voice, greeting and
+`store` in Foundry. Jarvis remains the sole tool and action authority.
 Provider transcript deltas are normalised for the iPhone, web and Watch UI. A
 normal Deploy provisions the voice agent before deleting the two replaced 2.1
 model deployments; no runtime fallback is retained.
