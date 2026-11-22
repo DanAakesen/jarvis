@@ -87,11 +87,19 @@ export class ToolRefusal extends Error {
 
 /** A sanitized failure detail that is safe to show the user without provider internals. */
 export class ToolFailure extends Error {
-  constructor(reason: string) {
+  /**
+   * True when the text itself says what is and is not known: the call may or may not have done its work, or only part of it did
+   * ("created, but the handoff could not be confirmed"). It is then shown as written, without "Not done." in front, and a repeat
+   * of the call is not blindly run again. False means the tool claims nothing happened.
+   */
+  readonly outcomeUnknown: boolean;
+
+  constructor(reason: string, options: { readonly outcomeUnknown?: true } = {}) {
     const trimmed = typeof reason === 'string' ? reason.trim() : '';
     if (!trimmed || trimmed.length > 500) throw new TypeError('Invalid tool failure reason');
     super(trimmed);
     this.name = 'ToolFailure';
+    this.outcomeUnknown = options.outcomeUnknown === true;
   }
 }
 

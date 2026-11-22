@@ -27,6 +27,7 @@ import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusRespons
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
 import { withConfirmationTurn } from './owner-interactions.js';
+import { safeErrorFields } from '../logging.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 const smokeTools = new Set(['get_system_health', 'github_read', 'list_jobs', 'workspace_command']);
@@ -321,7 +322,7 @@ export const coreModule: BackendModule = {
             result = { refused: error.message };
           } else if (error instanceof ToolFailure && !controller.signal.aborted) {
             outcome = 'error';
-            result = { error: error.message };
+            result = { error: error.message, ...(error.outcomeUnknown ? { outcomeUnknown: true } : {}) };
           } else {
             const unexpected = unexpectedToolFailure(error, controller.signal.aborted, effectOf(tool, request.body));
             outcome = 'error';
@@ -346,8 +347,9 @@ export const coreModule: BackendModule = {
               outcome,
             });
           } catch (error) {
-            activity('failed');
-            throw error;
+            // The tool has already run. Failing the reply now would tell the caller that nothing happened and invite a retry of a
+            // write that went through, so the reply stays what the tool made it and the lost audit row is reported here.
+            request.log.error({ tool: tool.name, outcome, ...safeErrorFields(error) }, 'tool.audit_failed');
           }
           activity('tool-call-finished', outcome);
         }

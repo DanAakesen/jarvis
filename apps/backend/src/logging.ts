@@ -30,7 +30,7 @@ const failureEvents = new Set([
   'proactive.todo_writer',
   'daily.gym_log',
   'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
-  'daily.mcp_operation_failed', 'daily.mcp_audit_failed',
+  'daily.mcp_operation_failed', 'daily.mcp_audit_failed', 'tool.audit_failed',
   'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing', 'factory_worker.mailbox_failed',
   'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
   'project_policy.recheck_failed',
@@ -778,6 +778,14 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     for (const key of ['sawText', 'sawTool', 'sawOutput', 'previousCancelled']) {
       if (typeof input[key] === 'boolean') fields[key] = input[key];
     }
+    return fields;
+  }
+  if (input.msg === 'tool.audit_failed') {
+    // A tool ran and its audit row was lost: which tool and how it ended, and the kind of error, never the error's text.
+    const fields: Record<string, unknown> = {};
+    if (typeof input.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.tool)) fields.tool = input.tool;
+    if (['ok', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
     return fields;
   }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {
