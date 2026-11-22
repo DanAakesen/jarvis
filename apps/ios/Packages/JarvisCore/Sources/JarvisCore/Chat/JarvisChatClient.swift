@@ -47,33 +47,6 @@ public final class JarvisChatClient: Sendable {
         return availability
     }
 
-    /// Current Proactive PI state from the owner-only settings surface.
-    public func piBrainStatus() async throws -> PiBrainStatus {
-        let response = try await client.performAuthenticatedRequest(
-            method: .get, path: ["pi", "brain"], idempotent: true
-        )
-        guard response.statusCode == 200,
-              let status = try? JSONDecoder().decode(PiBrainStatus.self, from: response.body) else {
-            throw JarvisChatClientError.invalidResponse
-        }
-        return status
-    }
-
-    /// Turns Background PI on or off. Saved on the backend, so it applies to every device.
-    public func setPiBrain(enabled: Bool) async throws -> PiBrainStatus {
-        let response = try await client.performAuthenticatedRequest(
-            method: .put,
-            path: ["pi", "brain"],
-            body: try encode(PiBrainSwitchBody(enabled: enabled)),
-            idempotent: true
-        )
-        guard response.statusCode == 200,
-              let status = try? JSONDecoder().decode(PiBrainStatus.self, from: response.body) else {
-            throw JarvisChatClientError.invalidResponse
-        }
-        return status
-    }
-
     /// Primes the PI conversation. It costs money when it actually warms, so it is never retried.
     /// A 503 with a body throws `serverEvent` carrying the server's code and message.
     public func piWarm() async throws -> PiWarmResult {

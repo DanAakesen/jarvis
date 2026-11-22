@@ -20,12 +20,12 @@ struct JarvisNoteEditorSheet: View {
     let client: JarvisNotesClient
     let copy: JarvisNotesCopy
     let mode: Mode
-    let onSaved: (String, VaultNote?) -> Void
+    let onSaved: (VaultNote) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focus: Field?
     @State private var parts: JarvisNoteParts
-    @State private var newTitle = ""
+    @State private var draftTitle: String
     @State private var folder: String
     @State private var stagedFolders: [String]
     @State private var baseline: VaultNote?
@@ -36,7 +36,7 @@ struct JarvisNoteEditorSheet: View {
     @State private var discardPresented = false
     @State private var folderPickerPresented = false
 
-    init(client: JarvisNotesClient, copy: JarvisNotesCopy, mode: Mode, onSaved: @escaping (String, VaultNote?) -> Void) {
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, mode: Mode, onSaved: @escaping (VaultNote) -> Void) {
         self.client = client
         self.copy = copy
         self.mode = mode
@@ -44,11 +44,14 @@ struct JarvisNoteEditorSheet: View {
         switch mode {
         case let .create(folder, staged):
             _parts = State(initialValue: JarvisNoteParts(newTitle: "", body: ""))
+            _draftTitle = State(initialValue: "")
             _folder = State(initialValue: folder)
             _stagedFolders = State(initialValue: staged)
             _baseline = State(initialValue: nil)
         case let .edit(note):
-            _parts = State(initialValue: JarvisNoteParts(note.content))
+            let parts = JarvisNoteParts(note.content)
+            _parts = State(initialValue: parts)
+            _draftTitle = State(initialValue: parts.displayedTitle(path: note.path))
             _folder = State(initialValue: "")
             _stagedFolders = State(initialValue: [])
             _baseline = State(initialValue: note)
@@ -66,40 +69,40 @@ struct JarvisNoteEditorSheet: View {
 
     private var titleBinding: Binding<String> {
         Binding(
-            get: { isCreating ? newTitle : parts.title ?? "" },
+            get: { draftTitle },
             set: { value in
-                if value.contains("\n") { focus = .body }
-                let clean = value.replacingOccurrences(of: "\n", with: " ")
-                if isCreating { newTitle = clean } else { parts.title = clean }
+                if value.contains(where: \.isNewline) { focus = .body }
+                draftTitle = value.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
                 failure = nil
             }
         )
     }
 
     private var draftContent: String {
-        isCreating ? JarvisNoteParts(newTitle: newTitle, body: parts.body).content : parts.content
+        if let baseline { return parts.content(editedTitle: draftTitle, path: baseline.path) }
+        return JarvisNoteParts(newTitle: draftTitle, body: parts.body).content
     }
 
     private var isDirty: Bool {
         isCreating
-            ? !newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? !draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !parts.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             : draftContent != baseline?.content
     }
 
     private var notePath: String? {
         isCreating
-            ? JarvisNotesLogic.notePath(folder: folder, title: newTitle)
+            ? JarvisNotesLogic.notePath(folder: folder, title: draftTitle)
             : baseline?.path
     }
 
     private var blockedReason: String? {
         if isCreating {
             if notePath == nil { return copy[.saveNeedsTitle] }
+        } else if draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return copy[.saveNeedsTitle]
         } else if !isDirty {
             return copy[.saveNothingChanged]
-        } else if parts.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
-            return copy[.saveNeedsTitle]
         }
         return JarvisNotesLogic.validNoteText(draftContent) ? nil : copy.unavailable
     }
@@ -132,20 +135,14 @@ struct JarvisNoteEditorSheet: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("editor.location")
             }
-            if isCreating || parts.title != nil {
-                TextField(copy.titleField, text: titleBinding, axis: .vertical)
-                    .font(.title.weight(.bold))
-                    .lineLimit(1...3)
-                    .submitLabel(.next)
-                    .focused($focus, equals: .title)
-                    .onSubmit { focus = .body }
-                    .disabled(saving)
-                    .accessibilityIdentifier("editor.title")
-            } else {
-                Text(JarvisNoteTitle.fileTitle(path: baseline?.path ?? ""))
-                    .font(.title.weight(.bold))
-                    .accessibilityAddTraits(.isHeader)
-            }
+            TextField(copy.titleField, text: titleBinding, axis: .vertical)
+                .font(.title.weight(.bold))
+                .lineLimit(1...3)
+                .submitLabel(.next)
+                .focused($focus, equals: .title)
+                .onSubmit { focus = .body }
+                .disabled(saving)
+                .accessibilityIdentifier("editor.title")
             ZStack(alignment: .topLeading) {
                 TextEditor(text: bodyBinding, selection: $selection)
                     .scrollContentBackground(.hidden)
@@ -295,6 +292,7 @@ struct JarvisNoteEditorSheet: View {
 
     private func applyLatest(_ latest: VaultNote) {
         parts = JarvisNoteParts(latest.content)
+        draftTitle = parts.displayedTitle(path: latest.path)
         baseline = latest
         conflict = nil
         failure = nil
@@ -304,6 +302,7 @@ struct JarvisNoteEditorSheet: View {
     private func save() async {
         guard !saving, blockedReason == nil, let path = notePath else { return }
         saving = true
+        defer { saving = false }
         failure = nil
         focus = nil
         let submitted = draftContent
@@ -315,18 +314,23 @@ struct JarvisNoteEditorSheet: View {
             }
             await finish(path: path)
         } catch {
-            saving = false
             await handle(error, path: path, submitted: submitted)
         }
     }
 
     @MainActor
-    private func finish(path: String) async {
+    private func finish(path: String, confirmed: VaultNote? = nil) async {
+        // The write landed even if the follow-up read fails.
         await JarvisAppCache.invalidateAll(.notes)
         await JarvisAppCache.invalidateAll(.tasks)
-        let refreshed = try? await client.readNote(path: path)
-        saving = false
-        onSaved(path, refreshed)
+        let refreshed: VaultNote
+        do {
+            if let confirmed { refreshed = confirmed } else { refreshed = try await client.readNote(path: path) }
+        } catch {
+            failure = .unconfirmed
+            return
+        }
+        onSaved(refreshed)
         dismiss()
     }
 
@@ -355,7 +359,7 @@ struct JarvisNoteEditorSheet: View {
             let latest: VaultNote
             if let reported { latest = reported } else { latest = try await client.readNote(path: path) }
             if latest.content == submitted {
-                await finish(path: path)
+                await finish(path: path, confirmed: latest)
             } else {
                 conflict = latest
             }
@@ -374,14 +378,14 @@ struct JarvisNoteEditorSheet: View {
     private func retry() async {
         guard !saving, let path = notePath else { return }
         saving = true
+        defer { saving = false }
         failure = nil
         let submitted = draftContent
         do {
             if isCreating {
                 do {
                     let existing = try await client.readNote(path: path)
-                    saving = false
-                    if existing.content == submitted { await finish(path: path) } else { failure = .exists }
+                    if existing.content == submitted { await finish(path: path, confirmed: existing) } else { failure = .exists }
                     return
                 } catch JarvisNotesClientError.noteNotFound {
                     _ = try await client.createNote(path: path, content: submitted)
@@ -391,16 +395,14 @@ struct JarvisNoteEditorSheet: View {
             }
             let latest = try await client.readNote(path: path)
             switch JarvisNoteSaveRecovery.decide(draft: submitted, baselineSha: baseline?.sha ?? "", latest: latest) {
-            case .alreadySaved: await finish(path: path)
+            case .alreadySaved: await finish(path: path, confirmed: latest)
             case .writeAgain:
                 _ = try await client.saveNote(path: path, content: submitted, sha: latest.sha)
                 await finish(path: path)
             case .conflict:
-                saving = false
                 conflict = latest
             }
         } catch {
-            saving = false
             await handle(error, path: path, submitted: submitted)
         }
     }

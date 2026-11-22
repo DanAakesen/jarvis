@@ -453,6 +453,19 @@ Completion means the existing PI activation envelope and one background queue ow
 
 Completion means deterministic backend, web, contracts, script, migration/SQL and JarvisCore checks pass at the PR head, CI and review findings are addressed, and Dispatcher receives the exact SHA and TestFlight/live gaps. Merge, deployment and TestFlight remain Dispatcher-owned.
 
+## iPhone TestFlight corrections — 22 November 2026 (Refs #2005, #2007, #2008)
+
+Implemented in one iPhone PR: editable titles on old notes, one Proactive
+switch, and separate gestures for caption scrolling, Voice minimising and
+visual expansion. Backend routes, the web UI and the Watch UI are unchanged.
+Offline: 263 JarvisCore tests and 52 backend wake-switch/runner fixture tests
+passed. Apple CI caught stale Settings localisation references and a stale
+Today note-editor callback on the first revision. The follow-up fixes both
+and audits removed symbols across iOS. The updated iPhone build still needs
+Apple CI. Dan then checks the three flows on his iPhone, including a long
+caption scroll and paging through three expanded visuals. Do not run live
+or paid checks for this change.
+
 ## iPhone Voice carousel and captions (#1958, P15-210)
 
 **Status: implemented; all 212 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**

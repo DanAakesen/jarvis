@@ -79,6 +79,9 @@ public struct PiBrainStatus: Codable, Equatable, Sendable {
     public let slots: Slots
     public let situation: Situation
     public let cost: Cost
+
+    /// Other scheduling checks still apply (budget, sources, quiet hours).
+    public var allowsProactiveWakes: Bool { available && enabled && !paused }
 }
 
 struct PiBrainSwitchBody: Encodable {
