@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
+import { failureCopy } from '@jarvis/contracts';
 import { PiGatewayError } from './errors.js';
 import { noTurnAttribution, type PiGateway, type PiStatus } from './gateway.js';
 import { createPiMcpRoutes } from './mcp.js';
@@ -28,7 +29,7 @@ const isOwner = (app: FastifyInstance, objectId: string | undefined) => objectId
 
 const errorBody = (error: unknown) => error instanceof PiGatewayError
   ? { error: error.userMessage, code: error.code, ...(error.detail ? { detail: error.detail } : {}) }
-  : { error: 'PI could not be reached. No other engine was used.', code: 'pi_unavailable' };
+  : { error: failureCopy.unreachable.chat, code: 'pi_unavailable' };
 
 /** The PI surface: status/warm-up, Proactive enablement, the MCP door and manual deploy-only smoke. */
 export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
@@ -53,7 +54,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
       reply.header('Cache-Control', 'no-store');
       if (!isOwner(app, request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
       if (!options.gateway) {
-        return reply.code(503).send({ error: 'PI is not set up on this backend yet. No other engine was used.', code: 'pi_not_configured' });
+        return reply.code(503).send({ error: failureCopy.not_set_up.chat, code: 'pi_not_configured' });
       }
       const controller = new AbortController();
       request.raw.once('aborted', () => controller.abort());

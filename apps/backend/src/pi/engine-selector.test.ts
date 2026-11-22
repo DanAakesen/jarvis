@@ -4,6 +4,7 @@ import { createPiAuth, piMcpPath } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { createConversationModule } from '../core/conversation.js';
 import type { ConversationAgent } from '../core/chat-agent.js';
+import { failureCopy } from '@jarvis/contracts';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
@@ -196,23 +197,54 @@ describe('PI is the default engine on the chat turn', () => {
     const { turn, messages } = setup();
     const result = await turn({ text: 'hi' });
     expect(result.events.map((event) => event.name)).toEqual(['user', 'error']);
-    expect(result.events[1]!.data).toMatchObject({ code: 'pi_not_configured', error: expect.stringContaining('No other engine was used') });
+    expect(result.events[1]!.data).toMatchObject({ code: 'pi_not_configured', error: failureCopy.not_set_up.chat });
     expect(messages.filter((message) => message.role === 'jarvis')).toEqual([]);
   });
 
-  it('passes a PI budget stop to the app as a coded, readable error', async () => {
+  it('passes a PI budget stop to the app as a coded, plain error', async () => {
     const { turn } = setup({
       // eslint-disable-next-line require-yield
-      piAgent: { stream: async function* () { throw new PiGatewayError('pi_budget_exhausted', 'PI has used 250.00 of its 250 DKK monthly cap, so it stopped.'); } },
+      piAgent: { stream: async function* () { throw new PiGatewayError('pi_budget_exhausted', 'allowance_used', { detail: 'spent_250.00_of_250_dkk' }); } },
     });
     const result = await turn({ text: 'hi', engine: 'pi' });
-    expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: 'PI has used 250.00 of its 250 DKK monthly cap, so it stopped.', code: 'pi_budget_exhausted' } });
+    expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: failureCopy.allowance_used.chat, code: 'pi_budget_exhausted' } });
   });
 
   it('rejects Current and every engine other than PI', async () => {
     const { turn } = setup();
     expect((await turn({ text: 'hi', engine: 'copilot' })).status).toBe(400);
     expect((await turn({ text: 'hi', engine: 'current' })).status).toBe(400);
+  });
+
+  it('ends an unexpected failure with one plain sentence and no technical text or code', async () => {
+    const { turn, messages } = setup({
+      // eslint-disable-next-line require-yield
+      piAgent: { stream: async function* () { throw new Error('select * from secrets where token = abc'); } },
+    });
+    const result = await turn({ text: 'hi' });
+    expect(result.events.map((event) => event.name)).toEqual(['user', 'error']);
+    expect(result.events[1]!.data).toEqual({ error: failureCopy.cut_off.chat });
+    expect(messages.filter((message) => message.role === 'jarvis')).toEqual([]);
+  });
+
+  it('says plainly that no answer came back instead of a technical message', async () => {
+    const { turn, messages } = setup({ piAgent: { stream: async function* () { yield '   '; } } });
+    const result = await turn({ text: 'hi' });
+    expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: failureCopy.no_reply.chat } });
+    expect(messages.filter((message) => message.role === 'jarvis')).toEqual([]);
+  });
+
+  it('sends the plain sentence of every kind of PI failure with its stable code and nothing technical', async () => {
+    for (const [code, kind] of [
+      ['pi_unavailable', 'unreachable'], ['pi_timeout', 'took_too_long_clean'], ['pi_failed', 'cut_off'], ['pi_unsupported', 'cannot_see_frame'],
+    ] as const) {
+      const { turn } = setup({
+        // eslint-disable-next-line require-yield
+        piAgent: { stream: async function* () { throw new PiGatewayError(code, kind, { detail: 'http_503' }); } },
+      });
+      const result = await turn({ text: 'hi' });
+      expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: failureCopy[kind].chat, code } });
+    }
   });
 
   it('exposes the unconfigured agent as an error, not as a reply', async () => {

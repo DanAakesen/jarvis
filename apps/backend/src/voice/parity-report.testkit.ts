@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { failureCopy } from '@jarvis/contracts';
 import { voiceChannelNote } from '../pi/prompt.js';
 import { messageRefs } from './parity-memory-store.testkit.js';
 import type { ChatTurn, ParityWorld, VoiceCall } from './parity-world.testkit.js';
@@ -178,7 +179,7 @@ export function observeChat(world: ParityWorld, turns: readonly ChatTurn[], opti
     const error = turn.events.find(event => event.name === 'error');
     if (done) return { kind: 'reply', reply: collapse(String(done.data.text)), failure: null, failureCode: null, progress };
     const text = collapse(String(error?.data.error ?? ''));
-    const stopped = text.startsWith('Reply stopped');
+    const stopped = text === failureCopy.stopped.chat;
     return {
       kind: stopped ? 'stopped' : 'failure', reply: null, failure: text,
       failureCode: typeof error?.data.code === 'string' ? error.data.code : null, progress,

@@ -1,3 +1,5 @@
+import type { ToolEffect } from './tool-registry.js';
+
 export type ToolCallOutcome = 'ok' | 'refused' | 'error';
 
 export interface ToolCallRecord {
@@ -106,10 +108,85 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
   }
   if (outcome === 'refused') {
     const reason = (result as { refused?: unknown } | null)?.refused;
-    return `Not done: ${tool} was refused.${typeof reason === 'string' ? ` ${reason}` : ''}`;
+    return typeof reason === 'string' ? `Not done. ${reason}` : 'Not done. It was refused.';
   }
-  const failure = (result as { failure?: unknown; error?: unknown } | null)?.failure ??
-    (tool === 'image_generation' || tool.startsWith('mail_') ? (result as { error?: unknown } | null)?.error : undefined);
-  if (typeof failure === 'string') return `Not done: ${tool} failed. ${failure}`;
-  return `Not done: ${tool} failed.`;
+  // The cause is the tool's own plain sentence (a `ToolFailure` message) or the dispatcher's class sentence, never provider text.
+  // A failure marked `outcomeUnknown` already says the tool may have done its work, so it must not also say "Not done."
+  const failed = result as { failure?: unknown; error?: unknown; outcomeUnknown?: unknown } | null;
+  const failure = failed?.failure ?? failed?.error;
+  if (typeof failure !== 'string') return "Not done. It didn't work, and no reason came back.";
+  return failed?.outcomeUnknown === true ? failure : `Not done. ${failure}`;
+}
+
+export type ToolFailureClass = 'stopped' | 'timeout' | 'dropped' | 'not_sent' | 'unexpected';
+
+export interface UnexpectedToolFailure {
+  /** Stored and returned to the model. `outcomeUnknown` means the tool may have done its work, so "Not done." is not claimed. */
+  readonly result: { readonly error: string; readonly outcomeUnknown?: true };
+  /** Fixed-vocabulary fields for the `tool.execution_failed` log: error class tokens only, never error text. */
+  readonly log: {
+    readonly failureClass: ToolFailureClass;
+    readonly effect: ToolEffect;
+    readonly errorName?: string;
+    readonly errorCode?: string;
+    readonly causeName?: string;
+    readonly causeCode?: string;
+  };
+}
+
+// The connection was never made, so the request cannot have been delivered.
+const notSentCodes = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT']);
+// The request was, or may have been, delivered before the call ended, so the other side may have acted on it.
+const timeoutCodes = new Set(['ETIMEDOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT']);
+const droppedCodes = new Set(['ECONNRESET', 'ECONNABORTED', 'EPIPE', 'UND_ERR_SOCKET', 'UND_ERR_CLOSED', 'UND_ERR_ABORTED', 'UND_ERR_DESTROYED']);
+
+const causeSentences: Record<ToolFailureClass, string> = {
+  stopped: 'It was stopped before it finished',
+  timeout: 'It did not finish in time',
+  dropped: 'The connection dropped before it finished',
+  not_sent: 'It could not reach the service it needs',
+  unexpected: 'It hit an unexpected problem',
+};
+
+const nameToken = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(value) ? value : undefined;
+const codeToken = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/u.test(value) ? value : undefined;
+
+/**
+ * The plain result for a tool that threw something that is not a `ToolFailure`, chosen by error class (name and code only, so no
+ * provider text reaches Dan or the model). `effect` is what this call does (`effectOf`: the operation named, or the tool's default,
+ * and `unclassified` when the tool does not say). Only a call that reads can say plainly that nothing changed. Any other call that
+ * may have been delivered (a timeout, a dropped connection, a stop, an unknown error) says its outcome is unknown, and only a call
+ * that provably never left says so, because a retry of a write that already happened would do it twice.
+ */
+export function unexpectedToolFailure(error: unknown, aborted: boolean, effect: ToolEffect): UnexpectedToolFailure {
+  const read = (value: unknown) => {
+    const fields = value !== null && typeof value === 'object' ? value as { name?: unknown; code?: unknown } : {};
+    return { name: nameToken(fields.name), code: codeToken(fields.code) };
+  };
+  const outer = read(error);
+  const inner = read(error !== null && typeof error === 'object' ? (error as { cause?: unknown }).cause : undefined);
+  const codes = [outer.code, inner.code].filter((code): code is string => code !== undefined);
+  // Any sign the request left wins over a sign it did not.
+  const failureClass: ToolFailureClass = aborted ? 'stopped'
+    : outer.name === 'TimeoutError' || inner.name === 'TimeoutError' || codes.some((code) => timeoutCodes.has(code)) ? 'timeout'
+      : codes.some((code) => droppedCodes.has(code)) ? 'dropped'
+        : codes.some((code) => notSentCodes.has(code)) ? 'not_sent' : 'unexpected';
+  const what = causeSentences[failureClass];
+  const readOnly = effect === 'read';
+  const sentence = readOnly ? `${what}.` : failureClass === 'not_sent'
+    ? `${what}, so that request was not sent.`
+    : `${what}, so it may or may not have gone through. Check before trying again.`;
+  return {
+    result: readOnly ? { error: sentence } : { error: sentence, outcomeUnknown: true },
+    log: {
+      failureClass,
+      effect,
+      ...(outer.name ? { errorName: outer.name } : {}),
+      ...(outer.code ? { errorCode: outer.code } : {}),
+      ...(inner.name ? { causeName: inner.name } : {}),
+      ...(inner.code ? { causeCode: inner.code } : {}),
+    },
+  };
 }

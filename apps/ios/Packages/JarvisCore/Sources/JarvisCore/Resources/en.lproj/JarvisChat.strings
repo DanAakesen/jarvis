@@ -93,9 +93,9 @@
 "chat.activity.errInvalidUpload" = "This attachment type or size is not supported.";
 "chat.activity.errTooMany" = "You can attach up to five files.";
 "chat.activity.errTextLength" = "Enter a message before sending.";
-"chat.activity.errTurnNotFound" = "The active turn is no longer available.";
-"chat.activity.errReattach" = "Jarvis could not reconnect to the active turn.";
-"chat.activity.errTurn" = "Jarvis could not complete the turn.";
+"chat.activity.errTurnNotFound" = "I lost track of that reply. If you asked me to do something, it may already have happened, so check before you try again.";
+"chat.activity.errReattach" = "I couldn't reconnect to that reply. If you asked me to do something, it may already have happened, so check before you try again.";
+"chat.activity.errTurn" = "I couldn't finish that, and part of it may already be done, so check before trying again.";
 "chat.activity.errActivityGone" = "This activity is no longer available.";
 "chat.activity.errConfirmationGone" = "This confirmation is no longer available.";
 "chat.activity.errAwayMode" = "Away mode is on. This request wasn't approved.";
@@ -152,8 +152,8 @@
 "chat.turn.tools" = "Tool activity";
 "chat.turn.toolRunning" = "Running";
 "chat.turn.toolOK" = "Done";
-"chat.turn.toolRefused" = "Not allowed";
-"chat.turn.toolError" = "Failed";
+"chat.turn.toolRefused" = "Not done";
+"chat.turn.toolError" = "Didn't work";
 
 "chat.turn.workingFor" = "Working for";
 

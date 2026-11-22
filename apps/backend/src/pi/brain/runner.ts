@@ -157,8 +157,8 @@ export function createBrain(options: BrainOptions) {
     if (notified.has(key)) return;
     notified.add(key);
     const text = state === 'warn'
-      ? `PI has used ${spent.toFixed(0)} of its ${limit.toFixed(0)} DKK proactive budget this month. I will be more sparing.`
-      : `PI has used its ${limit.toFixed(0)} DKK proactive budget for this month, so it has stopped looking on its own. Chat still works. You can raise the budget in the proactive settings, or it starts again next month.`;
+      ? `I've used ${spent.toFixed(0)} of my ${limit.toFixed(0)} DKK proactive budget this month, so I'll be more sparing.`
+      : `I've used my ${limit.toFixed(0)} DKK proactive budget for this month, so I've stopped looking on my own. Chat still works. You can raise the budget in the proactive settings, or I'll start again next month.`;
     try { await options.comms.send({
       text,
       evidence: [{

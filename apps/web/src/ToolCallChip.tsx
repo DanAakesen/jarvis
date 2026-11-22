@@ -16,7 +16,8 @@ function ToolOutcomeMark({ state }: { state: Exclude<ToolState, 'running'> }) {
   );
 }
 
-const outcomeLabel: Record<ToolState, string> = { running: 'Running', ok: 'Done', refused: 'Refused', error: 'Failed' };
+/** A tool that did not work is not a failed turn: the reply can still be fine, so the words describe the call. */
+const outcomeLabel: Record<ToolState, string> = { running: 'Running', ok: 'Done', refused: 'Not done', error: "Didn't work" };
 
 /** Turns `create_task` into “Create task”; unknown shapes are shown as reported. */
 function toolLabel(tool: string) {

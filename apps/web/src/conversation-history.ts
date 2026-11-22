@@ -1,4 +1,5 @@
 import type { RuntimeTestAvailability, TestRuntime } from './RuntimeTestSelector';
+import { clientFailureCopy, failureCopy } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { backendFetch, awaitWithSignal as waitForChatSetup } from './backend-request';
 import type { ChatAttachment } from './chat-attachments';
@@ -211,18 +212,21 @@ const preacceptChatMessages: ReadonlySet<string> = new Set([
   'Chat is unavailable until the Jarvis agent is configured', 'Conversation storage unavailable',
   'The selected test runtime is unavailable. No other runtime was used.', 'Test conversation storage is unavailable.',
   'Active chat session not found', 'Session is not a chat session', 'Message text cannot be empty',
-  'A chat turn is already active', 'Too many recent replies. Try again shortly.',
+  failureCopy.still_answering.chat, 'Too many recent replies. Try again shortly.',
   'Conversation attachments are unavailable.', 'One or more attachments are unavailable.',
   'This visual turn has already been received', 'Runtime tests require a new chat conversation.',
 ]);
+// Every sentence the server may send for a failed turn is one of its own fixed words, so exactly these are shown.
 const stableChatMessages: ReadonlySet<string> = new Set([...preacceptChatMessages,
-  'Reply stopped. Check conversation and action status before trying again.',
-  'Reply stopped. An action may already have completed; check its status before trying again.',
-  'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+  ...Object.values(failureCopy).map(copy => copy.chat),
 ]);
 function stableChatMessage(value: unknown, fallback: string): string {
   return typeof value === 'string' && stableChatMessages.has(value) ? value : fallback;
 }
+
+// The server stops a reply's progress frames at 1 MiB but always sends `done`, which carries the saved reply (its text came through
+// those frames, plus at most 8 blocks of 64 KiB). Reading stops only well above both, so a saved reply is never failed for its size.
+const maxChatStreamBytes = 4 * 1024 * 1024;
 
 async function chatResponse(
   getAccessToken: () => Promise<string>,
@@ -257,12 +261,12 @@ async function chatResponse(
     });
   } catch {
     onDeliveryUncertain?.();
-    throw new Error('Connection interrupted. The message or a task action may already have completed; check conversation and task status before trying again.');
+    throw new Error(clientFailureCopy.lost_connection.chat);
   }
   if (response.status === 401) throw new ChatTurnError('Jarvis could not verify your Microsoft sign-in. Sign in again.', undefined, 'not_accepted');
   if (response.status === 403) throw new ChatTurnError("This Microsoft account isn't allowed to use Jarvis.", undefined, 'not_accepted');
   if (!response.ok) {
-    let message = `Jarvis could not send the message (HTTP ${response.status}).`;
+    let message: string = clientFailureCopy.not_sent.chat;
     let code: ChatTurnFailureCode | undefined;
     let delivery: ChatTurnError['delivery'] = 'unknown';
     try {
@@ -291,12 +295,12 @@ export async function createChatSession(
   }, 'application/json', undefined, signal);
   let value: unknown;
   try { value = await response.json(); } catch {
-    throw new Error('Jarvis returned an invalid chat session.');
+    throw new Error(clientFailureCopy.not_sent.chat);
   }
   if (!isRecord(value) || typeof value.id !== 'string' || !/^[1-9]\d{0,18}$/.test(value.id) ||
       value.channel !== 'chat' ||
       (value.runtimeTest !== runtimeTest)) {
-    throw new Error('Jarvis returned an invalid chat session.');
+    throw new Error(clientFailureCopy.not_sent.chat);
   }
   return { id: value.id, ...(runtimeTest ? { runtimeTest } : {}) };
 }
@@ -360,7 +364,7 @@ async function recoveredChatResponse(getAccessToken: () => Promise<string>, conf
     headers: { Authorization: `Bearer ${await accessToken(getAccessToken)}`, Accept: 'text/event-stream' },
     signal: AbortSignal.any([AbortSignal.timeout(240_000), ...(signal ? [signal] : [])]),
   });
-  if (!response.ok) throw new RecoveryUnavailable('This reply cannot be reattached. Check saved conversation and action status before trying again.');
+  if (!response.ok) throw new RecoveryUnavailable(clientFailureCopy.lost_track.chat);
   return response;
 }
 
@@ -404,7 +408,7 @@ export async function sendChatTurn(
     onDeliveryUncertain,
     signal,
   );
-  if (!response.body) throw new Error('Jarvis returned an empty chat stream.');
+  if (!response.body) throw new Error(clientFailureCopy.unreadable_reply.chat);
 
   let reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -420,30 +424,32 @@ export async function sendChatTurn(
     if (!event) return;
     let payload: unknown;
     try { payload = JSON.parse(event.data); } catch {
-      throw new Error('Jarvis returned an invalid chat stream.');
+      throw new Error(clientFailureCopy.unreadable_reply.chat);
     }
     if (event.event === 'error') {
+      // The reply is saved and was delivered: nothing after its `done` frame can turn the turn into a failure.
+      if (assistantMessage) return;
       const code = isRecord(payload) ? chatFailureCode(payload.code) : undefined;
-      const fallback = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
+      const fallback = failureCopy.cut_off.chat;
       const warning = stableChatMessage(isRecord(payload) ? payload.error : undefined, fallback);
       const message = code ? `${chatFailureMessage(code)}${blockedSessionCodes.has(code) || code === 'managed_policy_setup_failed' ? '' : ` ${warning}`}` : warning;
       throw new ChatTurnError(message, code, acceptedId ? 'accepted' : 'unknown',
         isRecord(payload) ? payload.providerCause : undefined);
     }
     if (event.event === 'user') {
-      if (!isChatMessage(payload, 'dan', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
+      if (!isChatMessage(payload, 'dan', session.id)) throw new Error(clientFailureCopy.unreadable_reply.chat);
       acceptedId = payload.id;
       userMessage = chatMessageResult(payload);
       onUserMessage(userMessage);
     } else if (event.event === 'delta') {
       if (!isRecord(payload) || typeof payload.text !== 'string' || payload.text.length === 0) {
-        throw new Error('Jarvis returned an invalid chat stream.');
+        throw new Error(clientFailureCopy.unreadable_reply.chat);
       }
       onDelta(payload.text);
     } else if (event.event === 'acknowledgment') {
       if (!isRecord(payload) || typeof payload.text !== 'string' ||
           !payload.text.trim() || Array.from(payload.text).length > 500) {
-        throw new Error('Jarvis returned an invalid chat stream.');
+        throw new Error(clientFailureCopy.unreadable_reply.chat);
       }
       onAcknowledgment?.(payload.text);
     } else if (event.event === 'food_invitation') {
@@ -452,16 +458,16 @@ export async function sendChatTurn(
         if (!isRecord(payload) || typeof payload.id !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(payload.id) ||
             typeof payload.summary !== 'string' || !payload.summary.trim() || payload.summary.length > 4000 ||
             typeof payload.expiresAt !== 'string' || !Number.isFinite(Date.parse(payload.expiresAt))) {
-          throw new Error('Jarvis returned an invalid chat stream.');
+          throw new Error(clientFailureCopy.unreadable_reply.chat);
         }
         onFoodInvitation?.(Date.parse(payload.expiresAt) > Date.now()
           ? { id: payload.id, summary: payload.summary, expiresAt: payload.expiresAt } : null);
       }
     } else if (event.event === 'interrupted') {
-      if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
+      if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error(clientFailureCopy.unreadable_reply.chat);
       onInterrupted?.(chatMessageResult(payload));
     } else if (event.event === 'done') {
-      if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
+      if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error(clientFailureCopy.unreadable_reply.chat);
       assistantMessage = chatMessageResult(payload);
     }
   };
@@ -482,7 +488,7 @@ export async function sendChatTurn(
       } catch {
         if (assistantMessage) break;
         if (signal?.aborted || !acceptedId || Date.now() >= recoveryDeadline) {
-          throw new Error('Connection interrupted. A food entry or another action may already have completed; check conversation and action status before trying again.');
+          throw new Error(clientFailureCopy.lost_connection.chat);
         }
         await reader.cancel().catch(() => {});
         await new Promise<void>(resolve => setTimeout(resolve, 2000));
@@ -496,7 +502,7 @@ export async function sendChatTurn(
             await new Promise<void>(resolve => setTimeout(resolve, 2000));
           }
         }
-        if (!response.body) throw new Error('Jarvis returned an empty chat stream.');
+        if (!response.body) throw new Error(clientFailureCopy.unreadable_reply.chat);
         reader = response.body.getReader();
         buffer = '';
         receivedBytes = 0;
@@ -508,7 +514,7 @@ export async function sendChatTurn(
       const { done, value } = chunk;
       if (done) break;
       receivedBytes += value.byteLength;
-      if (receivedBytes > 1024 * 1024) throw new Error('Jarvis returned a chat response that was too large.');
+      if (receivedBytes > maxChatStreamBytes) throw new Error(failureCopy.reply_too_long.chat);
       buffer += decoder.decode(value, { stream: true });
       const frames = buffer.split(/\r?\n\r?\n/u);
       buffer = frames.pop() ?? '';
@@ -524,9 +530,9 @@ export async function sendChatTurn(
     window.removeEventListener('online', reconnect);
     await reader.cancel().catch(() => {});
   }
-  if (!userMessage) throw new Error('Jarvis did not save the message. Try again.');
+  if (!userMessage) throw new Error(clientFailureCopy.not_saved.chat);
   if (!assistantMessage) {
-    throw new Error('The reply was interrupted. A task action may still have completed; check its status before trying again.');
+    throw new Error(clientFailureCopy.lost_track.chat);
   }
   return assistantMessage;
 }
@@ -549,10 +555,10 @@ export async function steerChatTurn(
   );
   let value: unknown;
   try { value = await response.json(); } catch {
-    throw new Error('Jarvis returned an invalid steering message.');
+    throw new Error(clientFailureCopy.not_sent.chat);
   }
   if (!isChatMessage(value, 'dan', session.id)) {
-    throw new Error('Jarvis returned an invalid steering message.');
+    throw new Error(clientFailureCopy.not_sent.chat);
   }
   return value;
 }

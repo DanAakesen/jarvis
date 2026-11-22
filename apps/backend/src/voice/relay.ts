@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
+import { failureCopy } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import type { VisionWatchService } from '../vision/watch.js';
@@ -640,7 +641,7 @@ function registerVoiceRoute(
           waitedMs: Math.round(performance.now() - waitStartedAt),
           language,
         }, 'voice.did_not_catch');
-        sendCommentary('I did not catch that. Please say it again.', delegationId);
+        sendCommentary(failureCopy.did_not_catch.voice, delegationId);
         // Words that still arrive are a new request, not a late part of this one.
         if (currentInput === group) currentInput = undefined;
         return;
@@ -1054,7 +1055,7 @@ function registerVoiceRoute(
     });
 
     request.announceResearchCompletion = (result) => {
-      if (result.status === 'failed') sendCommentary('The research failed. Check the research window for details.', null);
+      if (result.status === 'failed') sendCommentary(failureCopy.research_failed.voice, null);
       else if (typeof result.summary === 'string' && result.summary.trim()) {
         sendCommentary(result.summary.trim().slice(0, 1_800), null);
       }

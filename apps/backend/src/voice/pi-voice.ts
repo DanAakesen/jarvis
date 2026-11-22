@@ -1,12 +1,14 @@
-import type { ConversationAgent } from '../core/chat-agent.js';
-import { PiGatewayError, piTurnFailedMessage, piTurnTimeoutMessage } from '../pi/errors.js';
+import { failureCopy } from '@jarvis/contracts';
+import { PiGatewayError } from '../pi/errors.js';
+import type { PiGateway } from '../pi/gateway.js';
 
 /** A voice turn that has run this long is stopped and said so; the gateway's own deadline is longer than anyone waits on a call. */
 export const PI_VOICE_TURN_DEADLINE_MS = 90_000;
 const superseded = new DOMException('Voice turn superseded', 'AbortError');
 
 /** The PI agent as the voice relay uses it: a turn, and an optional warm-up that primes the shared conversation. */
-export interface PiVoiceAgent extends ConversationAgent {
+export interface PiVoiceAgent {
+  stream: PiGateway['stream'];
   warm?(signal: AbortSignal): Promise<unknown>;
 }
 
@@ -68,6 +70,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
     let outcome: PiVoiceTurnLog['outcome'];
     let firstTextMs: number | null = null;
     let acknowledged = false;
+    let timeoutSpoken = false;
     let reply: string | undefined;
     try {
       signal.throwIfAborted();
@@ -75,6 +78,11 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       for await (const chunk of options.agent.stream({
         messageId: turn.messageId, sessionId: turn.sessionId, text: turn.text, channel: 'voice',
         ...(turn.proactiveContext ? { proactiveContext: turn.proactiveContext } : {}),
+        onTurnDeadline(text) {
+          if (timeoutSpoken || options.signal.aborted || controller.signal.aborted) return;
+          timeoutSpoken = true;
+          options.speak(text, turn.delegationId);
+        },
       }, '', signal)) {
         signal.throwIfAborted();
         if (typeof chunk === 'string') {
@@ -101,12 +109,12 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       else {
         const gatewayFailure = error instanceof PiGatewayError ? error : undefined;
         outcome = deadline.aborted || gatewayFailure?.code === 'pi_timeout' ? 'timeout' : 'failed';
-        reply = gatewayFailure?.userMessage ?? (outcome === 'timeout' ? piTurnTimeoutMessage : piTurnFailedMessage);
+        reply = gatewayFailure?.spokenMessage ?? (outcome === 'timeout' ? failureCopy.took_too_long.voice : failureCopy.cut_off.voice);
       }
     }
-    if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = piTurnFailedMessage; }
+    if (outcome === 'ok' && !reply) { outcome = 'failed'; reply = failureCopy.no_reply.voice; }
     // A cancelled or superseded turn says nothing: the session ended, or Dan has already moved on.
-    if (reply && !options.signal.aborted && !controller.signal.aborted) options.speak(reply, turn.delegationId);
+    if (reply && !timeoutSpoken && !options.signal.aborted && !controller.signal.aborted) options.speak(reply, turn.delegationId);
     options.log({ outcome, transcriptToFirstTextMs: firstTextMs, transcriptToDoneMs: Math.round(now() - turn.startedAt), acknowledged });
   }
 

@@ -6,7 +6,7 @@ import {
 import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { answerClientTool, argumentKeyNames, type ClientToolOutcome } from './client-tools.js';
-import { PiGatewayError, piTurnTimeoutMessage } from './errors.js';
+import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
 import {
@@ -145,7 +145,13 @@ export interface PiBrainRunResult {
   readonly error?: PiGatewayError | undefined;
 }
 
+interface PiTurnInput extends ConversationAgentInput {
+  /** Deliver the timeout sentence at the deadline, before the stream finishes its cancellation. */
+  readonly onTurnDeadline?: (spokenMessage: string) => void;
+}
+
 export interface PiGateway extends ConversationAgent {
+  stream(input: PiTurnInput, authorization: string, signal: AbortSignal): AsyncIterable<ConversationAgentChunk>;
   /**
    * One brain wake in its own scratch conversation, never the owner's chat conversation. It opens like a new chat conversation
    * (the same trusted context and tool overview) and spends against the brain's budget, not the chat cap; the caller has already
@@ -223,6 +229,16 @@ function createSpendTracker() {
       };
     },
   };
+}
+/**
+ * A failure that Foundry itself reported before the model produced anything or reached a tool did nothing, and saying so tells Dan a
+ * retry is safe. A stream that merely stopped may still be running on Foundry's side, so it never gets this. `phase` is a single
+ * response, so the caller only asks about the first response of a turn.
+ */
+function untouched(error: unknown, phase: StreamPhase, grant: PiTurnGrant | undefined): unknown {
+  if (!(error instanceof PiGatewayError) || error.kind !== 'cut_off' || phase.failure !== 'foundry_response_failed' ||
+    phase.sawOutput || !grant || toolMayHaveRun(grant)) return error;
+  return new PiGatewayError(error.code, 'cut_off_clean', { cause: error, ...(error.detail ? { detail: error.detail } : {}) });
 }
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
@@ -383,18 +399,13 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function httpFailure(status: number, retryAfter: string | null): PiGatewayError {
-  if (status === 401 || status === 403) {
-    return new PiGatewayError('pi_unavailable', `PI could not sign in to Foundry (HTTP ${status}). Nothing was sent to the model.`);
-  }
-  if (status === 404) {
-    return new PiGatewayError('pi_unavailable', 'The PI agent is not provisioned in Foundry (HTTP 404). Run the Deploy workflow; no other engine was used.');
-  }
-  if (status === 429) {
-    const seconds = retryAfter !== null && /^\d{1,4}$/u.test(retryAfter) ? ` Try again in ${retryAfter} s.` : ' Try again shortly.';
-    return new PiGatewayError('pi_unavailable', `Foundry is rate limiting PI (HTTP 429).${seconds}`);
-  }
-  return new PiGatewayError('pi_unavailable', `Foundry could not run PI (HTTP ${status}). No other engine was used.`);
+/** An HTTP answer that is not a success. The status is kept as `detail` for the log; Dan reads only the plain copy. */
+function httpFailure(status: number): PiGatewayError {
+  const detail = `http_${status}`;
+  if (status === 401 || status === 403) return new PiGatewayError('pi_unavailable', 'sign_in_failed', { detail });
+  if (status === 404) return new PiGatewayError('pi_unavailable', 'agent_missing', { detail });
+  if (status === 429) return new PiGatewayError('pi_unavailable', 'service_busy', { detail });
+  return new PiGatewayError('pi_unavailable', 'service_problem', { detail });
 }
 
 /** The provider's own short code for a failed stream (for example `server_error`), or the event type; never its message. */
@@ -414,6 +425,7 @@ interface StreamPhase {
   /** Any event beyond the response lifecycle and a tool listing: text, reasoning, a tool call or anything unknown. */
   sawOutput: boolean;
   responseId: string | null;
+  requestSent: boolean;
   failure: string | null;
   failureFields: Record<string, string>;
   /** Distinct event and output item types seen so far, in order, for `pi.harness_item`. */
@@ -508,17 +520,18 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     });
   }
 
-  async function call(method: 'GET' | 'POST', path: string, body: unknown, signal: AbortSignal, stream = false): Promise<Response> {
+  async function call(method: 'GET' | 'POST', path: string, body: unknown, signal: AbortSignal, stream?: StreamPhase): Promise<Response> {
     signal.throwIfAborted();
     const token = await options.getToken(FOUNDRY_AGENT_SCOPE, signal).catch((error: unknown) => {
       if (signal.aborted) throw error;
-      throw new PiGatewayError('pi_unavailable', 'PI could not get a Foundry token. Nothing was sent to the model.', { cause: error });
+      throw new PiGatewayError('pi_unavailable', 'sign_in_failed', { cause: error, detail: 'token_unavailable' });
     });
     signal.throwIfAborted();
     const connecting = new AbortController();
     const deadline = setTimeout(() => connecting.abort(new DOMException('PI connection timed out', 'TimeoutError')), connectTimeoutMs);
     deadline.unref();
     try {
+      if (stream) stream.requestSent = true;
       const response = await fetcher(`${base}${path}${path.includes('?') ? '&' : '?'}api-version=v1`, {
         method, redirect: 'error', signal: AbortSignal.any([signal, connecting.signal]),
         headers: {
@@ -527,15 +540,19 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+      if (signal.aborted) {
+        void response.body?.cancel().catch(() => {});
+        signal.throwIfAborted();
+      }
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
-        throw httpFailure(response.status, response.headers.get('retry-after'));
+        throw httpFailure(response.status);
       }
       return response;
     } catch (error) {
       if (error instanceof PiGatewayError || signal.aborted) throw error;
-      if (connecting.signal.aborted) throw new PiGatewayError('pi_timeout', 'Foundry did not answer PI in time. No other engine was used.', { cause: error });
-      throw new PiGatewayError('pi_unavailable', 'PI could not reach Foundry. No other engine was used.', { cause: error });
+      if (connecting.signal.aborted) throw new PiGatewayError('pi_timeout', 'no_answer_in_time', { cause: error, detail: 'connect_timeout' });
+      throw new PiGatewayError('pi_unavailable', 'unreachable', { cause: error, detail: 'connect_failed' });
     } finally {
       clearTimeout(deadline);
     }
@@ -547,7 +564,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const id = isObject(payload) ? payload.id : undefined;
     if (typeof id !== 'string' || id.length === 0 || id.length > 512) {
       log('pi.stream_failed', { reason: 'no_conversation', previousCancelled: previousCancelled() });
-      throw new PiGatewayError('pi_failed', 'Foundry returned no conversation for PI.');
+      throw new PiGatewayError('pi_failed', 'no_conversation', { detail: 'no_conversation' });
     }
     return id;
   }
@@ -625,18 +642,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    */
   async function* respondOnce(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number,
-  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean }> {
-    const response = await call('POST', '/responses', {
-      conversation: conversationId, input, stream: true,
-    }, signal, true);
-    if (!response.body) {
-      logStreamFailure('no_stream', phase, attempt);
-      throw new PiGatewayError('pi_failed', 'Foundry sent PI no reply stream.');
-    }
-    const reader = response.body.getReader();
+  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly usage: PiUsage }> {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     const decoder = new TextDecoder();
     let buffer = '';
-    let completed = false;
+    let usage: PiUsage | undefined;
     const calls: HarnessCall[] = [];
     // Calls beyond the tracking limit are not tracked; they are only a problem when no output ever followed them.
     let overflowSeen = false;
@@ -685,12 +695,21 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
     const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
-      while (!completed) {
-        const chunk = await untilAborted(() => reader.read(), signal).catch((error: unknown) => {
+      const response = await untilAborted(() => call('POST', '/responses', {
+        conversation: conversationId, input, stream: true,
+      }, signal, phase), signal);
+      if (!response.body) {
+        logStreamFailure('no_stream', phase, attempt);
+        throw new PiGatewayError('pi_failed', 'no_reply_stream', { detail: 'no_stream' });
+      }
+      const source = response.body.getReader();
+      reader = source;
+      while (!usage) {
+        const chunk = await untilAborted(() => source.read(), signal).catch((error: unknown) => {
           if (signal.aborted) throw error;
           markUnreadTail();
           logStreamFailure('stream_broke', phase, attempt);
-          throw new PiGatewayError('pi_failed', 'The PI reply stream broke before it finished.', { cause: error });
+          throw new PiGatewayError('pi_failed', 'cut_off', { cause: error, detail: 'stream_broke' });
         });
         if (chunk.done) break;
         buffer += decoder.decode(chunk.value, { stream: true });
@@ -772,9 +791,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.mcp_list_tools.failed') {
             yield { kind: 'tools_listed', server: '', tools: 0, failed: true };
           } else if (type === 'response.completed' && isObject(payload.response)) {
-            const usage = isObject(payload.response.usage) ? payload.response.usage : {};
-            const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
-            completed = true;
+            const counts = isObject(payload.response.usage) ? payload.response.usage : {};
+            const details = isObject(counts.input_tokens_details) ? counts.input_tokens_details : {};
+            usage = { inputTokens: count(counts.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(counts.output_tokens) };
             if (Array.isArray(payload.response.output)) {
               // The completed output repeats what unnamed done events gave: it is the text of the first messages, so it is matched first.
               unplaced = unnamedDone + unplaced;
@@ -791,34 +810,33 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
                 }
               }
             }
-            yield {
-              kind: 'round_done',
-              usage: { inputTokens: count(usage.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(usage.output_tokens) },
-            };
             break;
           } else if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
             const detail = failureCode(payload, type);
             logStreamFailure('foundry_response_failed', phase, attempt, { event: type, code: detail });
-            throw new PiGatewayError('pi_failed', 'PI stopped before it finished the reply. Check saved conversation and action status before trying again.', { detail });
+            throw new PiGatewayError('pi_failed', 'cut_off', { detail });
           }
         }
       }
-      if (!completed) {
+      if (!usage) {
         markUnreadTail();
         logStreamFailure('stream_ended_without_completed', phase, attempt);
-        throw new PiGatewayError('pi_failed', 'The PI reply ended unexpectedly. Check saved conversation and action status before trying again.');
+        throw new PiGatewayError('pi_failed', 'cut_off', { detail: 'stream_ended_without_completed' });
       }
-      return { calls, overflow: overflowSeen && !overflowFollowed };
+      return { calls, overflow: overflowSeen && !overflowFollowed, usage };
     } finally {
-      void reader.cancel().catch(() => {});
+      void reader?.cancel().catch(() => {});
       // Give Foundry a chance to stop the old response before handing the conversation to the next turn.
-      if (!completed && signal.aborted && phase.responseId !== null) {
-        const path = `/responses/${encodeURIComponent(phase.responseId)}/cancel`;
-        const cancelDeadline = AbortSignal.timeout(5_000);
-        try {
-          const response = await untilAborted(() => call('POST', path, {}, cancelDeadline), cancelDeadline);
-          void response.body?.cancel().catch(() => {});
-        } catch { logStreamFailure('cancel_request_failed', phase, attempt); }
+      if (!usage && signal.aborted && phase.requestSent) {
+        if (phase.responseId === null) logStreamFailure('cancel_no_response_id', phase, attempt);
+        else {
+          const path = `/responses/${encodeURIComponent(phase.responseId)}/cancel`;
+          const cancelDeadline = AbortSignal.timeout(5_000);
+          try {
+            const response = await untilAborted(() => call('POST', path, {}, cancelDeadline), cancelDeadline);
+            void response.body?.cancel().catch(() => {});
+          } catch { logStreamFailure('cancel_request_failed', phase, attempt); }
+        }
       }
     }
   }
@@ -844,20 +862,25 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    */
   async function* respondRound(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, grant: PiTurnGrant | undefined, retryable: boolean,
-  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly phase: StreamPhase; readonly attempt: number }> {
+  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly usage: PiUsage; readonly phase: StreamPhase; readonly attempt: number }> {
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
         startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
-        responseId: null, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
+        responseId: null, requestSent: false, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
       try {
-        const { calls, overflow } = yield* respondOnce(conversationId, input, signal, phase, attempt);
-        return { calls, overflow, phase, attempt };
+        const result = yield* respondOnce(conversationId, input, signal, phase, attempt);
+        return { ...result, phase, attempt };
       } catch (error) {
+        if (signal.aborted) throw error;
         const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
           phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
-        if (!retryable || attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
-          !grant || toolMayHaveRun(grant)) throw error;
+        if (!retryable || attempt >= 2 || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
+          !grant || toolMayHaveRun(grant)) {
+          // `phase` is one response. Only the first response of a turn can say nothing happened: a later one exists because the
+          // first ended on a call, so the turn has already streamed text or reached a tool, which this phase cannot see.
+          throw retryable ? untouched(error, phase, grant) : error;
+        }
         if (phase.failure !== 'foundry_response_failed') {
           // A stream that merely stopped may still be running on Foundry's side. Without a confirmed stop, or with events whose
           // response is unknown, it may be running a tool: do not ask again.
@@ -885,18 +908,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const resolved = new Set<string>();
     const total = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
     for (let round = 1; ; round += 1) {
-      const rounds = respondRound(conversationId, next, signal, grant, round === 1);
-      let finished: Awaited<ReturnType<typeof rounds.next>>;
-      let roundDone: PiEvent | undefined;
-      while (!(finished = await rounds.next()).done) {
-        if (finished.value.kind === 'round_done') {
-          total.inputTokens += finished.value.usage.inputTokens;
-          total.cachedTokens += finished.value.usage.cachedTokens;
-          total.outputTokens += finished.value.usage.outputTokens;
-          roundDone = finished.value;
-        } else yield finished.value;
-      }
-      const { calls, overflow, phase, attempt } = finished.value;
+      // Delegation also closes the provider response if the consumer stops between chunks.
+      const { calls, overflow, usage, phase, attempt } = yield* respondRound(conversationId, next, signal, grant, round === 1);
+      total.inputTokens += usage.inputTokens;
+      total.cachedTokens += usage.cachedTokens;
+      total.outputTokens += usage.outputTokens;
       const owned: HarnessCall[] = [];
       let native = 0;
       for (const harnessCall of calls) {
@@ -912,18 +928,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         yield { kind: 'done', usage: { ...total }, responseId: phase.responseId, ...(round > 1 ? { rounds: round, answered } : {}) };
         return;
       }
-      if (roundDone) yield roundDone;
+      yield { kind: 'round_done', usage };
       const unanswerable = owned.find(entry => callKey(entry.item) === undefined);
       if (unanswerable || overflow || owned.length > maxClientItemsPerRound) {
         if (unanswerable) logHarnessItem('rejected_item', unanswerable.item, phase, attempt);
         logStreamFailure('approval_or_function_call_item', phase, attempt);
-        throw new PiGatewayError('pi_failed', unanswerable
-          ? 'PI asked for an approval or client tool without an id the gateway can answer.'
-          : 'PI asked for more client tools in one reply than the gateway answers.');
+        throw new PiGatewayError('pi_failed', 'cut_off', { detail: unanswerable ? 'client_call_without_id' : 'too_many_client_calls' });
       }
       if (round >= maxTurnRounds) {
         logStreamFailure('client_tool_round_limit', phase, attempt);
-        throw new PiGatewayError('pi_failed', 'PI kept asking for client tools and was stopped. Check saved conversation and action status before trying again.');
+        throw new PiGatewayError('pi_failed', 'cut_off', { detail: 'client_tool_round_limit' });
       }
       const replies: unknown[] = [];
       for (const { item } of owned) {
@@ -964,8 +978,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       return 'unreadable';
     }
     if (spent.costDkk >= options.monthlyCapDkk) {
-      throw new PiGatewayError('pi_budget_exhausted',
-        `PI has used ${spent.costDkk.toFixed(2)} of its ${options.monthlyCapDkk.toFixed(0)} DKK monthly cap, so it stopped. Nothing was sent. No other engine was used.`);
+      throw new PiGatewayError('pi_budget_exhausted', 'allowance_used',
+        { detail: `spent_${spent.costDkk.toFixed(2)}_of_${options.monthlyCapDkk.toFixed(0)}_dkk` });
     }
     return 'read';
   }
@@ -1046,7 +1060,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return { state: 'warm', alreadyWarm: false, ms: Math.round(performance.now() - started) };
   }
 
-  async function* stream(input: ConversationAgentInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
+  async function* stream(input: PiTurnInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
     const started = performance.now();
     const channel = input.channel ?? 'chat';
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
@@ -1054,7 +1068,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const notes: string[] = input.channel === 'voice' ? [voiceChannelNote] : [];
     if (input.visualContext !== undefined) {
       const description = input.visualContext.description;
-      if (!description) throw new PiGatewayError('pi_unsupported', 'PI chat does not handle live screen or camera frames yet, so nothing was sent.');
+      if (!description) throw new PiGatewayError('pi_unsupported', 'cannot_see_frame', { detail: 'no_visual_description' });
       notes.push(`[Shared ${input.visualContext.source} context, text only: ${JSON.stringify(description)}]`);
     }
     for (const attachment of input.attachments ?? []) {
@@ -1065,6 +1079,26 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (input.proactiveContext) notes.push(`[Jarvis recently told Dan this, and he may be replying to it]\n${input.proactiveContext}`);
     if (input.screenContext) notes.push(`[Shared screen context: ${JSON.stringify(input.screenContext)}]`);
 
+    let grant: PiTurnGrant | undefined;
+    let sawTool = false;
+    let rounds = 1;
+    let timeoutFailure: PiGatewayError | undefined;
+    const deadlineFailure = () => {
+      // A follow-up can only exist after a call, even if that call appeared only in the completed output.
+      const actionPossible = grant !== undefined && (sawTool || rounds > 1 || toolMayHaveRun(grant));
+      return timeoutFailure ??= new PiGatewayError('pi_timeout', actionPossible ? 'took_too_long' : 'took_too_long_clean', {
+        cause: deadline.reason, detail: 'turn_deadline',
+      });
+    };
+    const notifyDeadline = () => {
+      if (!timedOut()) return;
+      const error = deadlineFailure();
+      try { input.onTurnDeadline?.(error.spokenMessage); }
+      catch { logStreamFailure('deadline_notice_failed', null, 1); }
+    };
+    deadline.addEventListener('abort', notifyDeadline, { once: true });
+    const stopWatchingDeadline = () => deadline.removeEventListener('abort', notifyDeadline);
+
     let releaseTurn: (() => void) | undefined;
     let budget: Awaited<ReturnType<typeof assertBudget>>;
     try {
@@ -1072,11 +1106,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       deadline.throwIfAborted();
       budget = await assertBudget(deadline);
     } catch (error) {
+      stopWatchingDeadline();
       releaseTurn?.();
       if (deadline.aborted) {
         if (!timedOut()) throw error;
         reportRuntime(channel, 'timeout', 'turn', releaseTurn ? undefined : 'conversation_wait_timeout');
-        throw new PiGatewayError('pi_timeout', piTurnTimeoutMessage, { cause: error });
+        throw deadlineFailure();
       }
       reportRuntime(
         channel,
@@ -1087,13 +1122,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       );
       throw error;
     }
-    let grant: PiTurnGrant | undefined;
     let usage: PiUsage | undefined;
     let firstTextMs: number | null = null;
-    let outcome: PiTurnRecord['outcome'] = 'failed';
+    let outcome: PiTurnRecord['outcome'] | undefined;
     let sawText = false;
     const spend = createSpendTracker();
-    let rounds = 1;
     let clientItems = 0;
     let nativeCalls = 0;
     try {
@@ -1139,6 +1172,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             elapsedMs: Math.round(performance.now() - started),
           });
         } else if (event.kind === 'tool') {
+          sawTool = true;
           // Text before a tool call is a progress note; very long text stays in the answer.
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
@@ -1156,20 +1190,23 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           clientItems = event.answered ?? clientItems;
         }
       }
+      await untilAborted(() => options.store.markWarm(options.owner, activationHash, now(), deadline), deadline)
+        .catch(() => { if (!deadline.aborted) log('pi.mark_warm_failed', {}); });
       deadline.throwIfAborted();
+      stopWatchingDeadline();
       outcome = 'ok';
-      await options.store.markWarm(options.owner, activationHash, now(), deadline).catch(() => log('pi.mark_warm_failed', {}));
     } catch (error) {
+      stopWatchingDeadline();
       outcome = timedOut() ? 'timeout' : deadline.aborted ? 'cancelled' : 'failed';
-      if (error instanceof PiGatewayError && error.code === 'pi_unavailable' && /HTTP 404/u.test(error.userMessage) && !sawText) {
+      if (error instanceof PiGatewayError && error.code === 'pi_unavailable' && error.detail === 'http_404' && !sawText) {
         // The conversation itself may be gone; forget it so the next message starts a new one.
         await options.store.dropConversation(options.owner, AbortSignal.timeout(5_000)).catch(() => {});
       }
-      if (outcome === 'timeout') {
-        throw new PiGatewayError('pi_timeout', piTurnTimeoutMessage, { cause: error });
-      }
+      if (outcome === 'timeout') throw deadlineFailure();
       throw error;
     } finally {
+      stopWatchingDeadline();
+      outcome ??= timedOut() ? 'timeout' : deadline.aborted ? 'cancelled' : 'failed';
       lastTurnEnd = { outcome, at: performance.now() };
       if (grant) options.registry.close(grant.turn);
       releaseTurn();
@@ -1283,8 +1320,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     } catch (error) {
       outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
       failure = error instanceof PiGatewayError ? error
-        : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'The brain wake took too long and was stopped.', { cause: error })
-        : (logStreamFailure('brain_wake_failed', null, 1), new PiGatewayError('pi_failed', 'The brain wake failed.', { cause: error }));
+        : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'took_too_long', { cause: error, detail: 'brain_deadline' })
+        : (logStreamFailure('brain_wake_failed', null, 1), new PiGatewayError('pi_failed', 'cut_off', { cause: error, detail: 'brain_wake_failed' }));
     }
     const toolResults = grant ? [...grant.results] : [];
     if (outcome !== 'ok' && grant) {
@@ -1403,7 +1440,7 @@ export function createUnconfiguredPiAgent(): ConversationAgent {
   return {
     // eslint-disable-next-line require-yield
     async *stream() {
-      throw new PiGatewayError('pi_not_configured', 'PI is not set up on this backend yet (the Deploy workflow has not provisioned it). No other engine was used.');
+      throw new PiGatewayError('pi_not_configured', 'not_set_up');
     },
   };
 }

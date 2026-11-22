@@ -92,7 +92,7 @@ The orb steps back when content arrives and returns when it goes, with one eased
 [Compact tree](docs/ui/tool-activity/selected-compact-tree.png), implemented as in the handover: each row has a tool icon, the action label and, for a group, a chevron right after the label (right when closed, down when open). Icons come from the tool type: document, pencil, terminal, globe, gear, cloud, with the tools glyph as fallback, and stay the same in every state. No counts, Done or Queued text.
 
 - **Running:** white icon with a short bright arc travelling around its outline (about 1.4 s per loop) and a white shimmer across the action text only. No pulse, scale, glow, spinner, checkmark or empty circle. The label ends in an ellipsis, which also marks the state under Reduce Motion.
-- **Success:** the icon turns orange and is still. **Failure:** red icon with "Failed". **Refused:** grey icon with "Not allowed". Neither is ever orange.
+- **Success:** the icon turns orange and is still. **Failure:** red icon with "Didn't work". **Refused:** grey icon with "Not done". Neither is ever orange. These words describe the call, not the turn: "Failed" is kept for a turn that really failed, and "Not allowed" implied a rule that does not exist (21 November 2026).
 - **Groups** show the worst child state (running, then failed, then refused); children show their own. Header rows ("Working", "Tool activity") have no count.
 - **Accessibility:** each row reads "tool, status"; the group button also reads Expanded or Collapsed. Reduce Motion removes the trace and the shimmer.
 - **Not verified:** the motion at native size, the 1.4 s timing and VoiceOver on a device. A queued state is not drawn because the app receives no queued event.

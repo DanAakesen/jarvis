@@ -122,8 +122,11 @@ def main(argv: list[str] | None = None) -> int:
             except ValueError:
                 detail = {}
             message = detail.get("error", "no detail") if isinstance(detail, dict) else "no detail"
+            # Dan reads plain words; the deploy log also gets the stable code and the technical detail.
+            if isinstance(detail, dict) and isinstance(detail.get("code"), str):
+                message += f" [{detail['code']}]"
             if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
-                message += f" (provider code: {detail['detail']})"
+                message += f" (technical detail: {detail['detail']})"
             print(f"::error::The PI smoke ({part}) failed with HTTP {error.code}: {message}", file=sys.stderr)
             args.summary.write_text(f"### PI live smoke\n\nThe {part} part failed with HTTP {error.code}: {message}\n", encoding="utf-8")
             return 1

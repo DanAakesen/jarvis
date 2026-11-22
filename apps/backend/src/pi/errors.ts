@@ -1,17 +1,26 @@
+import { failureCopy, type FailureKind } from '@jarvis/contracts';
+
 export type PiErrorCode =
   | 'pi_not_configured' | 'pi_budget_exhausted' | 'pi_unavailable' | 'pi_timeout' | 'pi_failed' | 'pi_unsupported';
 
-/** A failure with a fixed, honest message for Dan. Provider text never reaches it. */
+/**
+ * A failure with fixed, plain words for Dan (`userMessage` in Chat, `spokenMessage` in Voice; the same words, from `failureCopy` in
+ * `@jarvis/contracts`, so a failure reads and sounds alike). Provider text never reaches them. The stable `code` and the sanitised
+ * `detail` stay on the error for the log, the smoke and diagnostics.
+ */
 export class PiGatewayError extends Error {
+  readonly userMessage: string;
+  readonly spokenMessage: string;
   readonly detail: string | undefined;
-  /** `detail` is the provider's own short error code (letters, digits and `_.:-` only), when it sent one. It names the failure for the log and the smoke. */
-  constructor(readonly code: PiErrorCode, readonly userMessage: string, options?: ErrorOptions & { readonly detail?: string | undefined }) {
-    super(`PI gateway failed (${code})`, options);
+  /**
+   * `detail` names the technical cause for the log and is never shown: the provider's own short error code, an HTTP answer as
+   * `http_<status>`, or one of the gateway's own stream reasons (letters, digits and `_.:-` only).
+   */
+  constructor(readonly code: PiErrorCode, readonly kind: FailureKind, options?: ErrorOptions & { readonly detail?: string | undefined }) {
+    super(`PI gateway failed (${code}${options?.detail ? `: ${options.detail}` : ''})`, options);
     this.name = 'PiGatewayError';
+    this.userMessage = failureCopy[kind].chat;
+    this.spokenMessage = failureCopy[kind].voice;
     this.detail = options?.detail;
   }
 }
-
-/** What Dan is told when a turn fails without a plain cause of its own. Chat shows it and Voice speaks it, so both say the same thing. */
-export const piTurnFailedMessage = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
-export const piTurnTimeoutMessage = 'That took too long, so I stopped, and part of it may already be done, so check before trying again.';

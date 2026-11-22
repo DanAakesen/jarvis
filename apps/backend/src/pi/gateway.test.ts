@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ConversationAgentChunk } from '../core/chat-agent.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
 import { defaultSettings } from '../core/settings.js';
-import { createPiVoiceTurns } from '../voice/pi-voice.js';
+import { createPiVoiceTurns, PI_VOICE_TURN_DEADLINE_MS } from '../voice/pi-voice.js';
 import { buildPiContext, buildPiEnvironment } from './context.js';
+import { failureCopy } from '@jarvis/contracts';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
 import { chatTurnKinds, createMemoryPiStore } from './store.js';
@@ -24,7 +25,7 @@ const tool = frame({ type: 'response.output_item.added', item: { type: 'mcp_call
 
 interface Call { url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
 
-function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
+function setup(replies: Array<(call: Call) => Response | Promise<Response>>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
   const store = createMemoryPiStore(() => new Date('2026-11-15T16:00:00Z'));
   const registry = createPiTurnRegistry();
   let activationSequence = 0;
@@ -231,7 +232,9 @@ describe('PI gateway', () => {
       onRuntimeTurn: (entry) => evidence.push({ ...entry }),
     });
     await store.recordTurn({ kind: 'chat', messageId: null, model: 'm', inputTokens: 0, cachedTokens: 0, outputTokens: 0, costDkk: 1.5, firstTextMs: 1, totalMs: 1, outcome: 'ok' }, new AbortController().signal);
-    await expect(run('hi')).rejects.toMatchObject({ code: 'pi_budget_exhausted' });
+    await expect(run('hi')).rejects.toMatchObject({
+      code: 'pi_budget_exhausted', kind: 'allowance_used', userMessage: failureCopy.allowance_used.chat, detail: 'spent_1.50_of_1_dkk',
+    });
     expect(calls).toEqual([]);
     expect(evidence).toEqual([{
       channel: 'chat', outcome: 'failed', source: 'turn',
@@ -314,9 +317,13 @@ describe('PI gateway', () => {
 
   it('reports honest errors for a missing agent, rate limiting and a broken stream, with no fallback', async () => {
     const missing = setup([() => new Response('{}', { status: 404 })]);
-    await expect(missing.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', userMessage: expect.stringContaining('not provisioned') });
+    await expect(missing.run('hi')).rejects.toMatchObject({
+      code: 'pi_unavailable', kind: 'agent_missing', detail: 'http_404', userMessage: failureCopy.agent_missing.chat,
+    });
     const limited = setup([() => new Response('{}', { status: 429, headers: { 'retry-after': '12' } })]);
-    await expect(limited.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', userMessage: expect.stringContaining('12 s') });
+    await expect(limited.run('hi')).rejects.toMatchObject({
+      code: 'pi_unavailable', kind: 'service_busy', detail: 'http_429', userMessage: failureCopy.service_busy.chat,
+    });
     const failed = setup([() => sse(delta('half'), frame({ type: 'response.failed', response: {} }))]);
     await expect(failed.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
     // The provider's own short error code is kept for the log and the smoke; its message never is.
@@ -332,9 +339,11 @@ describe('PI gateway', () => {
     expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
     const unfinished = setup([() => sse(delta('half'))]);
     await expect(unfinished.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
-    // An approval request without an id cannot be answered, so once it is complete it still fails the turn.
+    // An approval request without an id cannot be answered, so once it is complete it still fails the turn, in plain words.
     const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request', status: 'completed' } }), completed(1, 0, 1))]);
-    await expect(approval.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+    await expect(approval.run('hi')).rejects.toMatchObject({
+      code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat,
+    });
   });
 
   it('records a cancelled turn, releases its authority and keeps the conversation usable', async () => {
@@ -360,9 +369,24 @@ describe('PI gateway', () => {
     expect(next).toEqual(['ok']);
   });
 
-  it('times out with its own message when the model takes too long', async () => {
-    const { run } = setup([() => new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/event-stream' } })], { turnTimeoutMs: 30 });
-    await expect(run('slow')).rejects.toMatchObject({ code: 'pi_timeout' });
+  it('times out with its own message when the model takes too long, and says nothing was done when no tool was reached', async () => {
+    const stalled = () => new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/event-stream' } });
+    const { run } = setup([stalled], { turnTimeoutMs: 30 });
+    await expect(run('slow')).rejects.toMatchObject({
+      code: 'pi_timeout', kind: 'took_too_long_clean', detail: 'turn_deadline', userMessage: failureCopy.took_too_long_clean.chat,
+    });
+    // A tool call in flight, or one the server already saw, means something may have happened.
+    const afterTool = setup([() => new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode(tool)); },
+    }), { headers: { 'content-type': 'text/event-stream' } })], { turnTimeoutMs: 30 });
+    await expect(afterTool.run('slow')).rejects.toMatchObject({ code: 'pi_timeout', kind: 'took_too_long', userMessage: failureCopy.took_too_long.chat });
+  });
+
+  it('forgets a conversation Foundry no longer knows, so the next message starts a new one', async () => {
+    const { run, conversations } = setup([() => new Response('{}', { status: 404 }), () => sse(delta('Hello'), completed(1, 0, 1))]);
+    await expect(run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', detail: 'http_404' });
+    expect(await run('again')).toEqual(['Hello']);
+    expect(conversations()).toBe(2);
   });
 
   it('warms once, skips a fresh conversation, and wakes the cache again after it goes stale', async () => {
@@ -451,7 +475,7 @@ describe('PI gateway', () => {
 
   it('times out in the queue without sending that turn or taking the slot from the turn after it', async () => {
     const evidence: Array<Record<string, unknown>> = [];
-    const { gateway, calls, run } = setup([
+    const { gateway, calls, run, store } = setup([
       () => new Response(new ReadableStream({
         start(controller) { controller.enqueue(new TextEncoder().encode(delta('first'))); },
       }), { headers: { 'content-type': 'text/event-stream' } }),
@@ -466,7 +490,7 @@ describe('PI gateway', () => {
     const second = run('second', queued.signal);
     const third = run('third');
     queued.abort(new DOMException('test deadline', 'TimeoutError'));
-    await expect(second).rejects.toMatchObject({ code: 'pi_timeout' });
+    await expect(second).rejects.toMatchObject({ code: 'pi_timeout', userMessage: failureCopy.took_too_long_clean.chat });
     expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
     expect(evidence).toContainEqual(expect.objectContaining({
       channel: 'chat', outcome: 'timeout', source: 'turn', reason: 'conversation_wait_timeout',
@@ -475,9 +499,29 @@ describe('PI gateway', () => {
     active.abort();
     await expect(finishing).rejects.toMatchObject({ name: 'AbortError' });
     await expect(third).resolves.toEqual(['third']);
+    expect(store.turns.map(turn => turn.outcome)).toEqual(['cancelled', 'ok']);
   });
 
-  it('cancels the old response once and waits for the cancel before sending the next turn', async () => {
+  it('logs and hands off when stopped before Foundry returned a response ID', async () => {
+    const dispatched = Promise.withResolvers<void>();
+    const logs: Array<[string, Record<string, unknown>]> = [];
+    const { calls, run, registry } = setup([
+      () => { dispatched.resolve(); return new Promise<Response>(() => {}); },
+      () => sse(delta('second'), completed(1, 0, 1)),
+    ], { log: (event, fields) => logs.push([event, fields]) });
+    const active = new AbortController();
+    const first = run('first', active.signal);
+    await dispatched.promise;
+    const second = run('second');
+    active.abort();
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(second).resolves.toEqual(['second']);
+    expect(calls.filter(call => call.url.includes('/cancel'))).toEqual([]);
+    expect(logs).toContainEqual(['pi.stream_failed', expect.objectContaining({ reason: 'cancel_no_response_id', attempt: 1 })]);
+    expect(registry.size).toBe(0);
+  });
+
+  it.each(['reading', 'between chunks'] as const)('cancels once before handoff when stopped while %s', async (state) => {
     const { gateway, calls, registry, run, setCancel } = setup([
       () => new Response(new ReadableStream({
         start(controller) {
@@ -491,49 +535,83 @@ describe('PI gateway', () => {
     const cancelResponse = Promise.withResolvers<Response>();
     setCancel(() => { cancelStarted.resolve(); return cancelResponse.promise; });
     const active = new AbortController();
-    const first = gateway.stream({ messageId: '42', sessionId: '7', text: 'first', channel: 'voice' }, '', active.signal);
+    const first = gateway.stream({ messageId: '42', sessionId: '7', text: 'first', channel: 'voice' }, '', active.signal)[Symbol.asyncIterator]();
     expect((await first.next()).value).toBe('first');
-    const finishing = first.next();
+    const pendingRead = state === 'reading' ? expect(first.next()).rejects.toMatchObject({ name: 'AbortError' }) : null;
     active.abort();
+    const closed = state === 'between chunks' ? first.return?.() : null;
     const second = run('second');
     await cancelStarted.promise;
     expect(calls.filter(call => call.url.includes('/responses')).map(call => new URL(call.url).pathname.split('/openai')[1])).toEqual([
       '/responses', '/responses/resp_first/cancel',
     ]);
     cancelResponse.resolve(Response.json({ status: 'cancelled' }));
-    await expect(finishing).rejects.toMatchObject({ name: 'AbortError' });
+    if (pendingRead) await pendingRead;
+    else await expect(closed).resolves.toMatchObject({ done: true });
     await expect(second).resolves.toEqual(['second']);
     expect(calls.filter(call => call.url.includes('/cancel'))).toHaveLength(1);
     expect(registry.size).toBe(0);
   });
 
-  it('speaks one honest sentence at the voice deadline, cancels the stream, and lets Chat continue', async () => {
+  it.each([
+    [false, failureCopy.took_too_long_clean.voice],
+    [true, failureCopy.took_too_long.voice],
+  ] as const)('speaks once at the voice deadline before cancelling and handing off (tool seen: %s)', async (toolSeen, copy) => {
     const started = Promise.withResolvers<void>();
-    const { gateway, calls, registry, run, store } = setup([
+    const logs: Array<[string, Record<string, unknown>]> = [];
+    const { gateway, calls, registry, run, setCancel, store } = setup([
       () => new Response(new ReadableStream({
         start(controller) {
-          controller.enqueue(new TextEncoder().encode(frame({ type: 'response.created', response: { id: 'resp_timeout' } }) + delta('Unfinished')));
+          const created = frame({ type: 'response.created', response: { id: 'resp_timeout' } });
+          controller.enqueue(new TextEncoder().encode(created + (toolSeen ? tool : '') + delta('Unfinished')));
         },
         pull() { started.resolve(); },
-      }), { headers: { 'content-type': 'text/event-stream' } }),
+      }, { highWaterMark: 0 }), { headers: { 'content-type': 'text/event-stream' } }),
       () => sse(delta('Chat answer'), completed(1, 0, 1)),
-    ]);
+    ], { log: (event, fields) => logs.push([event, fields]) });
     const spoken: string[] = [];
+    const order: string[] = [];
+    const cancelStarted = Promise.withResolvers<void>();
+    const cancelResponse = Promise.withResolvers<Response>();
+    setCancel(() => { order.push('cancel'); cancelStarted.resolve(); return cancelResponse.promise; });
     const finished = Promise.withResolvers<string>();
     const voice = createPiVoiceTurns({
-      agent: gateway, signal: new AbortController().signal, deadlineMs: 150,
-      speak: text => spoken.push(text), busy: () => {},
+      agent: gateway, signal: new AbortController().signal,
+      speak: text => { order.push('spoke'); spoken.push(text); }, busy: () => {},
       log: turn => finished.resolve(turn.outcome),
     });
-    voice.start({ messageId: '42', sessionId: '7', text: 'voice', startedAt: performance.now() });
-    await started.promise;
-    const chat = run('chat');
-    await expect(finished.promise).resolves.toBe('timeout');
-    expect(spoken).toEqual(['That took too long, so I stopped, and part of it may already be done, so check before trying again.']);
-    expect(calls.filter(call => call.url.includes('/responses/resp_timeout/cancel'))).toHaveLength(1);
-    await expect(chat).resolves.toEqual(['Chat answer']);
-    expect(store.turns.map(turn => turn.outcome)).toEqual(['timeout', 'ok']);
-    expect(registry.size).toBe(0);
+    const voiceDeadline = new AbortController();
+    const cancelDeadline = new AbortController();
+    const realTimeout = AbortSignal.timeout;
+    const clock = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+      if (ms === PI_VOICE_TURN_DEADLINE_MS) return voiceDeadline.signal;
+      if (ms === 5_000) return cancelDeadline.signal;
+      return realTimeout(ms);
+    });
+    try {
+      voice.start({ messageId: '42', sessionId: '7', text: 'voice', startedAt: performance.now() });
+      // With a zero high-water mark, pull waits for the next read after the initial frames are processed.
+      await started.promise;
+      const chat = run('chat');
+      voiceDeadline.abort(new DOMException('test deadline', 'TimeoutError'));
+      await cancelStarted.promise;
+      expect(order).toEqual(['spoke', 'cancel']);
+      expect(spoken).toEqual([copy]);
+      expect(calls.filter(call => call.url.includes('/responses?'))).toHaveLength(1);
+      // Exercise both a responding and a stalled cancel request without waiting on wall time.
+      if (toolSeen) cancelDeadline.abort(new DOMException('cancel bound', 'TimeoutError'));
+      else cancelResponse.resolve(Response.json({ status: 'cancelled' }));
+      await expect(finished.promise).resolves.toBe('timeout');
+      await expect(chat).resolves.toEqual(['Chat answer']);
+      expect(spoken).toEqual([copy]);
+      expect(calls.filter(call => call.url.includes('/responses/resp_timeout/cancel'))).toHaveLength(1);
+      expect(logs.some(([event, fields]) => event === 'pi.stream_failed' && fields.reason === 'cancel_request_failed')).toBe(toolSeen);
+      expect(store.turns.map(turn => turn.outcome)).toEqual(['timeout', 'ok']);
+      expect(registry.size).toBe(0);
+    } finally {
+      cancelResponse.resolve(Response.json({ status: 'cancelled' }));
+      clock.mockRestore();
+    }
   });
 
   it('attributes every turn in the ledger by kind, so a call that repeats on a schedule can be recognised', async () => {
@@ -849,7 +927,9 @@ describe('PI gateway', () => {
     ])('still fails the same way with %s and logs no content', async (_name, item, expected) => {
       const { logs, log } = capture();
       const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), completed(1, 0, 1))], { log });
-      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+      await expect(run('hi')).rejects.toMatchObject({
+        code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat,
+      });
       expect(responsesOf(calls)).toHaveLength(1);
       expect(logs.filter(([event]) => event === 'pi.harness_item')).toEqual([['pi.harness_item', expect.objectContaining(expected)]]);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item', sawTool: true, sawOutput: true });
@@ -868,7 +948,9 @@ describe('PI gateway', () => {
     it('never retries a function call or approval request, and never an HTTP failure or a missing stream', async () => {
       const { logs, log } = capture();
       const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call', status: 'completed' } }), completed(1, 0, 1)), () => sse(delta('x'), completed(1, 0, 1))], { log });
-      await expect(call.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+      await expect(call.run('hi')).rejects.toMatchObject({
+        code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat,
+      });
       expect(responsesOf(call.calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item', sawTool: true, sawOutput: true });
       const http = setup([() => new Response('{}', { status: 500 }), () => sse(delta('x'), completed(1, 0, 1))]);
@@ -893,6 +975,23 @@ describe('PI gateway', () => {
       expect(store.turns).toHaveLength(1);
       expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 0, costDkk: 0 });
       expect(usage).toEqual([]);
+    });
+
+    it('says nothing was done only when Foundry itself ended the turn before any output or tool, and never after something may have run', async () => {
+      const clean = setup([() => sse(created, failedFrame('content_filter'))]);
+      await expect(clean.run('hi')).rejects.toMatchObject({
+        code: 'pi_failed', kind: 'cut_off_clean', detail: 'content_filter', userMessage: failureCopy.cut_off_clean.chat,
+      });
+      const retriedAndFailedAgain = setup([() => sse(created, failedFrame('server_error')), () => sse(created, failedFrame('server_error'))]);
+      await expect(retriedAndFailedAgain.run('hi')).rejects.toMatchObject({ kind: 'cut_off_clean', detail: 'server_error' });
+      expect(responsesOf(retriedAndFailedAgain.calls)).toHaveLength(2);
+      const afterOutput = setup([() => sse(created, tool, failedFrame('content_filter'))]);
+      await expect(afterOutput.run('hi')).rejects.toMatchObject({ kind: 'cut_off', userMessage: failureCopy.cut_off.chat });
+      const reached = setup([(call) => { reached.registry.resolve(turnOf(call))!.requests.count += 1; return sse(created, failedFrame('content_filter')); }]);
+      await expect(reached.run('hi')).rejects.toMatchObject({ kind: 'cut_off', userMessage: failureCopy.cut_off.chat });
+      // A stream that merely stopped may still be running on Foundry's side, so it never claims nothing happened.
+      const stopped = setup([() => sse(created), () => sse(created)]);
+      await expect(stopped.run('hi')).rejects.toMatchObject({ kind: 'cut_off', detail: 'stream_ended_without_completed' });
     });
 
     it('stops at once when the turn is cancelled during the retry or while waiting to retry', async () => {
@@ -937,7 +1036,9 @@ describe('PI gateway', () => {
       setTimeout(() => cancelled.abort(), 20);
       await expect(first).rejects.toBeDefined();
       await expect(run('two')).rejects.toMatchObject({ code: 'pi_failed' });
-      expect(logs.filter(([event]) => event === 'pi.stream_failed').map(([, fields]) => fields.previousCancelled)).toEqual([true, true]);
+      expect(logs.filter(([event]) => event === 'pi.stream_failed').map(([, fields]) => [fields.reason, fields.previousCancelled])).toEqual([
+        ['cancel_no_response_id', false], ['stream_ended_without_completed', true], ['stream_ended_without_completed', true],
+      ]);
     });
   });
 
@@ -1200,7 +1301,7 @@ describe('PI gateway', () => {
       const { run, calls, store, registry } = setup(
         Array.from({ length: 9 }, (_, index) => () => sse(created(`resp_${index}`), ...functionCall('lookup', `call_${index}`, '{}'), completed(100, 0, 10))), { log },
       );
-      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('client tools') });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'client_tool_round_limit', userMessage: failureCopy.cut_off.chat });
       expect(responsesOf(calls)).toHaveLength(8);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'client_tool_round_limit', attempt: 1 });
       expect(store.turns).toHaveLength(1);
@@ -1231,6 +1332,17 @@ describe('PI gateway', () => {
       expect(store.turns[0]).toMatchObject({ outcome: 'timeout' });
     });
 
+    it('says part of it may be done when the follow-up times out after a call that only the completed output listed', async () => {
+      // The call never streamed as an item, so no tool event was seen; the second response exists only because of it.
+      const listedOnlyAtTheEnd = frame({
+        type: 'response.completed',
+        response: { status: 'completed', output: [callItem('lookup', 'call_1', '{}', 'completed')], usage: { input_tokens: 1, output_tokens: 1 } },
+      });
+      const { run, calls } = setup([() => sse(created('resp_1'), listedOnlyAtTheEnd), stalled(created('resp_2'))], { turnTimeoutMs: 80 });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_timeout', kind: 'took_too_long', userMessage: failureCopy.took_too_long.chat });
+      expect(responsesOf(calls)).toHaveLength(2);
+    });
+
     it('never retries a stream that carried a call, nor a failed follow-up', async () => {
       const failed = frame({ type: 'response.failed', response: { error: { code: 'server_error' } } });
       const { logs, log } = capture();
@@ -1250,6 +1362,32 @@ describe('PI gateway', () => {
       expect(responsesOf(ended.calls)).toHaveLength(1);
     });
 
+    describe('a failure in a later response', () => {
+      const failed = frame({ type: 'response.failed', response: { error: { code: 'content_filter' } } });
+      /** A first response that ends on a client-owned call, which is the only reason a turn has a second response. */
+      const firstResponses: Array<[string, () => Response]> = [
+        ['it had already streamed text', () => sse(created('resp_1'), ...message('Let me check. '), ...functionCall('lookup', 'call_owned', '{}'), completed(1, 0, 1))],
+        ['a native call had already run in it', () => sse(
+          created('resp_1'), ...functionCall('task', 'call_native', '{}'), ...result('call_native'), ...message('Child is done. '),
+          ...functionCall('lookup', 'call_owned', '{}'), completed(1, 0, 1),
+        )],
+        ['its client-owned call had been answered', () => sse(created('resp_1'), ...functionCall('lookup', 'call_owned', '{}'), completed(1, 0, 1))],
+        ['its approval request had been approved', () => sse(created('resp_1'), ...approval('mcpr_1'), completed(1, 0, 1))],
+      ];
+
+      it.each(firstResponses)('says part of it may already be done, never that nothing was done, when it fails quietly after %s', async (_name, first) => {
+        const { run, calls } = setup([first, () => sse(created('resp_2'), failed)]);
+        await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', kind: 'cut_off', userMessage: failureCopy.cut_off.chat });
+        expect(responsesOf(calls)).toHaveLength(2);
+      });
+
+      it('still says nothing was done when the first response fails quietly before anything happened', async () => {
+        const { run, calls } = setup([() => sse(created('resp_1'), failed)]);
+        await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', kind: 'cut_off_clean', userMessage: failureCopy.cut_off_clean.chat });
+        expect(responsesOf(calls)).toHaveLength(1);
+      });
+    });
+
     it('answers up to 16 client-owned calls in one response and fails with the 17th, after reading the whole stream', async () => {
       const calls = (count: number) => Array.from({ length: count }, (_, index) => functionCall('lookup', `call_${index}`, '{}')).flat();
       const within = setup([
@@ -1260,7 +1398,7 @@ describe('PI gateway', () => {
       expect(responsesOf(within.calls)[1]!.body!.input).toHaveLength(16);
       const { logs, log } = capture();
       const flood = setup([() => sse(created('resp_1'), ...calls(17), completed(7_000, 0, 70))], { log });
-      await expect(flood.run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('more client tools') });
+      await expect(flood.run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'too_many_client_calls', userMessage: failureCopy.cut_off.chat });
       expect(responsesOf(flood.calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
       expect(flood.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 7_000, outputTokens: 70 });
@@ -1282,7 +1420,7 @@ describe('PI gateway', () => {
     it('fails only when calls beyond the tracking limit were never followed by any output', async () => {
       const bare = Array.from({ length: 600 }, (_, index) => functionCall('lookup', `call_${index}`, '{}')).flat();
       const { run, calls, store } = setup([() => sse(created('resp_1'), ...bare, completed(100, 0, 10))]);
-      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('more client tools') });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'too_many_client_calls', userMessage: failureCopy.cut_off.chat });
       expect(responsesOf(calls)).toHaveLength(1);
       expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 100 });
     });
@@ -1326,7 +1464,7 @@ describe('PI gateway', () => {
       const { logs, log } = capture();
       const first = frame({ type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', name: 'lookup', arguments: '{}', status: 'completed' } });
       const { run, calls, store } = setup([() => sse(created('resp_1'), first, completed(7_000, 0, 70))], { log });
-      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', userMessage: expect.stringContaining('approval') });
+      await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat });
       expect(responsesOf(calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
       expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 7_000, outputTokens: 70 });
