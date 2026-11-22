@@ -5,9 +5,9 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { ConversationAgentInput } from '../core/chat-agent.js';
+import { failureCopy } from '@jarvis/contracts';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { createLogger } from '../logging.js';
-import { piTurnFailedMessage } from '../pi/errors.js';
 import type { PiVoiceAgent } from './pi-voice.js';
 import { createVoiceRelayModule, VOICE_SUBPROTOCOL } from './relay.js';
 
@@ -711,7 +711,7 @@ describe('GPT-Live authoritative client events', () => {
     }));
     await until(() => relay.upstreamEvents.some(event =>
       event.type === 'session.commentary.append' &&
-      event.content === piTurnFailedMessage
+      event.content === failureCopy.cut_off.voice
     ), 'authoritative PI failure commentary');
 
     expect(relay.upstreamEvents.filter(event =>
@@ -719,7 +719,7 @@ describe('GPT-Live authoritative client events', () => {
     )).toEqual([
       expect.objectContaining({
         delegation_id: 'delegate-failure',
-        content: piTurnFailedMessage,
+        content: failureCopy.cut_off.voice,
       }),
     ]);
     expect(relay.received.some(event => event.type === 'jarvis.session.failed')).toBe(false);
@@ -1073,7 +1073,7 @@ describe('GPT-Live authoritative client events', () => {
       await until(() => commentary(relay).length === 1, 'did-not-catch fallback', 1_000);
       expect(commentary(relay)[0]).toEqual(expect.objectContaining({
         delegation_id: 'delegate-silent',
-        content: 'I did not catch that. Please say it again.',
+        content: failureCopy.did_not_catch.voice,
       }));
       expect(runs).toHaveLength(0);
     }, 20_000);

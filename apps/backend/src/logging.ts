@@ -133,7 +133,7 @@ const events = new Set([
   'voice.delegation_received', 'voice.owner_group_persisted', 'voice.did_not_catch', 'voice.pi_turn_started',
   'voice.activity_published',
   'credentials.codex_renewal', 'dispatcher.start_failed',
-  'tool.invalid_arguments', 'decision.provider_unavailable', 'approval.interpreted',
+  'tool.invalid_arguments', 'tool.execution_failed', 'decision.provider_unavailable', 'approval.interpreted',
   'factory.issue_create_outcome_uncertain',
   'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
   'system.smoke_check',
@@ -485,6 +485,24 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.instancePath === 'string' && input.instancePath.length <= 512 &&
         /^(?:\/(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|\d{1,10}))*$/u.test(input.instancePath)) {
       fields.instancePath = input.instancePath;
+    }
+    return fields;
+  }
+  if (input.msg === 'tool.execution_failed') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.tool)) fields.tool = input.tool;
+    if (['stopped', 'timeout', 'dropped', 'not_sent', 'unexpected'].includes(String(input.failureClass))) {
+      fields.failureClass = input.failureClass;
+    }
+    if (['read', 'action', 'unclassified'].includes(String(input.effect))) fields.effect = input.effect;
+    // The error's own class as short tokens (a name and a code); never its message.
+    for (const key of ['errorName', 'causeName']) {
+      const value = input[key];
+      if (typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(value)) fields[key] = value;
+    }
+    for (const key of ['errorCode', 'causeCode']) {
+      const value = input[key];
+      if (typeof value === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/u.test(value)) fields[key] = value;
     }
     return fields;
   }

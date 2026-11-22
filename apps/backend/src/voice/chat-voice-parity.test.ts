@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
+import { failureCopy } from '@jarvis/contracts';
 import { GoogleApiError } from '../google/api-client.js';
 import { answerClientTool } from '../pi/client-tools.js';
 import { VOICE_TURN_QUIET_MS } from './live-protocol.js';
@@ -389,7 +390,7 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
         const [first, second] = world.foundry.mcp.filter(entry => (entry.args as { name?: string }).name === 'parity_large_result');
         expect(first!.outcome.body).toMatchObject({ outcome: 'ok', truncated: true });
         expect((first!.outcome.body!.result.preview as string).length).toBe(200_000);
-        expect(second!.outcome.body).toMatchObject({ outcome: 'error', result: { error: 'Tool execution failed' } });
+        expect(second!.outcome.body).toMatchObject({ outcome: 'error', result: { error: 'It hit an unexpected problem.' } });
         expect(JSON.stringify(world.store.toolCalls[0]!.result).length).toBeGreaterThan(300_000);
       }
       expectParity(rows);
@@ -445,8 +446,8 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
     });
     const stopped = (where: string, noteIfAny: string) => ({
       'what Dan gets: kind': rule(`${noteIfAny}: a stopped chat turn shows a notice, a stopped voice turn says nothing`, ((chat: string[], voice: string[]) => chat[0] === 'stopped' && voice[0] === 'silence') as never),
-      'what Dan gets: failure text': rule(`${where}: the chat notice has no spoken counterpart`, ((chat: string[], voice: unknown[]) => String(chat[0]).startsWith('Reply stopped') && voice[0] === null) as never),
-      'reply text, flattened': rule(`${where}: the chat notice has no spoken counterpart`, ((chat: string[], voice: string[]) => chat[0]!.startsWith('Reply stopped') && voice[0] === '') as never),
+      'what Dan gets: failure text': rule(`${where}: the chat notice has no spoken counterpart`, ((chat: string[], voice: unknown[]) => chat[0] === failureCopy.stopped.chat && voice[0] === null) as never),
+      'reply text, flattened': rule(`${where}: the chat notice has no spoken counterpart`, ((chat: string[], voice: string[]) => chat[0] === failureCopy.stopped.chat && voice[0] === '') as never),
     });
 
     it.each(NOTE_LAGS_MS)('S12a stopping a turn: cancelled, billed at the same estimate, and the grant is closed (first note %i ms late)', async (lag) => {
@@ -738,7 +739,8 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
     }, 90_000);
 
     it('S16a the monthly cap stops a turn before anything is sent, with the same words', async () => {
-      const cap = 'PI has used 5.00 of its 1 DKK monthly cap, so it stopped. Nothing was sent. No other engine was used.';
+      const cap = failureCopy.allowance_used.chat;
+      expect(failureCopy.allowance_used.voice).toBe(cap);
       const { rows, chat, voice, chatWorld, voiceWorld } = await runBoth({
         title: 'S16a Budget: the cap is reached',
         world: { monthlyCapDkk: 1 },

@@ -971,6 +971,28 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it('exports a failed tool call as its error class only, never its message', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const fields = {
+      tool: 'calendar_create', failureClass: 'dropped', effect: 'action',
+      errorName: 'TypeError', causeName: 'SocketError', causeCode: 'UND_ERR_SOCKET',
+    };
+    logger.warn({ ...fields, message: 'private-message', arguments: { title: 'private-title' }, error: new Error('private-error') }, 'tool.execution_failed');
+    expect(JSON.parse(records[0]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'tool.execution_failed', ...fields });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'tool.execution_failed', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    logger.warn({
+      tool: 'private/tool', failureClass: 'private', effect: 'private', errorName: 'Bearer secret', errorCode: 'has spaces',
+      causeName: 'private-name', causeCode: 'private-code',
+    }, 'tool.execution_failed');
+    expect(JSON.parse(records[1]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'tool.execution_failed' });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it('exports only the family, verdict and path of an interpreted approval and never the words', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

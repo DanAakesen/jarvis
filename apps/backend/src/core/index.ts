@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import { isPiDispatch } from './pi-authority.js';
 import type { BackendModule } from '../modules.js';
-import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
-import { isCurrentAssistantTool, ToolFailure, ToolRefusal } from './tool-registry.js';
+import { confirmToolCall, unexpectedToolFailure, type ToolCallOutcome } from './tool-calls.js';
+import { effectOf, isCurrentAssistantTool, ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
@@ -316,8 +316,10 @@ export const coreModule: BackendModule = {
             outcome = 'error';
             result = { error: error.message };
           } else {
+            const unexpected = unexpectedToolFailure(error, controller.signal.aborted, effectOf(tool, request.body));
             outcome = 'error';
-            result = { error: 'Tool execution failed' };
+            result = unexpected.result;
+            request.log.warn({ tool: tool.name, ...unexpected.log }, 'tool.execution_failed');
           }
         } finally {
           if (outcome === 'error') app.systemHealthDiagnostics.record('failed');

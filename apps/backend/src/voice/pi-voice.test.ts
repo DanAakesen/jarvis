@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk, ConversationAgentInput } from '../core/chat-agent.js';
-import { PiGatewayError, piTurnFailedMessage } from '../pi/errors.js';
+import { failureCopy } from '@jarvis/contracts';
+import { PiGatewayError } from '../pi/errors.js';
 import { createPiVoiceTurns, type PiVoiceAgent, type PiVoiceTurnLog } from './pi-voice.js';
 
 const turn = { text: 'what is next', messageId: '42', sessionId: '7', startedAt: 0 };
@@ -79,13 +80,13 @@ describe('PI voice turns', () => {
     expect(spoken).toEqual(['One moment.', `${long}Done.`.trim()]);
   });
 
-  it('says a failure plainly and never runs another engine', async () => {
+  it('says a failure in one short plain sentence and never runs another engine', async () => {
     // eslint-disable-next-line require-yield
-    const agent: PiVoiceAgent = { async *stream() { throw new PiGatewayError('pi_unavailable', 'PI could not reach Foundry. No other engine was used.'); } };
+    const agent: PiVoiceAgent = { async *stream() { throw new PiGatewayError('pi_unavailable', 'unreachable', { detail: 'connect_failed' }); } };
     const { turns, spoken, logs, settled } = setup(agent);
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual(['PI could not reach Foundry. No other engine was used.']);
+    expect(spoken).toEqual([failureCopy.unreachable.voice]);
     expect(logs[0]).toMatchObject({ outcome: 'failed' });
   });
 
@@ -95,18 +96,18 @@ describe('PI voice turns', () => {
     const { turns, spoken, settled } = setup(agent);
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual([piTurnFailedMessage]);
+    expect(spoken).toEqual([failureCopy.cut_off.voice]);
   });
 
   it('treats an empty answer as a failure instead of speaking silence', async () => {
     const { turns, spoken, logs, settled } = setup(replying('  '));
     turns.start(turn);
     await settled();
-    expect(spoken).toEqual([piTurnFailedMessage]);
+    expect(spoken).toEqual([failureCopy.no_reply.voice]);
     expect(logs[0]).toMatchObject({ outcome: 'failed' });
   });
 
-  it('stops a turn at the deadline and says an action may have completed', async () => {
+  it('stops a turn at the deadline and says so in one sentence', async () => {
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {
         await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
@@ -116,7 +117,7 @@ describe('PI voice turns', () => {
     const { turns, spoken, logs, settled } = setup(agent, { deadlineMs: 5 });
     turns.start(turn);
     await settled();
-    expect(spoken[0]).toContain('An action may already have completed');
+    expect(spoken).toEqual([failureCopy.took_too_long.voice]);
     expect(logs[0]).toMatchObject({ outcome: 'timeout' });
   });
 

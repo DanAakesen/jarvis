@@ -65,7 +65,7 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | Dan's daily-core requests: Jarvis work and issue, notes, tasks, workouts, nutrition; one tool failure; non-delete write in one turn with no confirmation | Done (notes, tasks, gym, calendar run production tool code; Factory/GitHub and nutrition are contract fixtures) |
 | Native `task` call, client-owned call (one follow-up), very large result, Danish, stop/supersede, owner-message binding with a proactive message, replay/reconnect, blocks once per conversation, wake, cap, error mapping | Done |
 | Fix: voice warm-up delivered the persona twice; warm-up now sends and records what a turn sends | Done |
-| Fix: the same failure was told two ways; one `piTurnFailedMessage` in both channels | Done |
+| Fix: the same failure was told two ways; one `piTurnFailedMessage` in both channels (replaced by `failureCopy` in #1967: one plain sentence per failure class, the same in Chat and Voice) | Done |
 | Fix: a voice turn's tool activity was labelled `chat`; the MCP door sends the channel and the route labels it `voice` | Done |
 | Review: S12b raced the stub's speech (the first note could reach the relay after Dan's next words and join that reply). Steps now wait for what the relay has observed; S12a-c also run with the first note 1.8 s late, and a failing row prints both sides | Done |
 | List existing non-delete confirmation gates for Dan | Done (PR body); none is reachable from a Chat or Voice PI turn |
@@ -117,6 +117,26 @@ No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or
 | Parity test: the tools `find_tools` shows a wake equal Chat's plus the brain-only tools; a failure lists the differences | Done |
 | Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
 | Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
+
+## Plain failure messages and a truthful Failed — 21 November 2026 (Refs #1967)
+
+**Status: implemented and qualified offline (backend, web, contracts); Swift (JarvisCore tests and app build) runs in CI, and Dan checks the words on a device.**
+
+| Step | State |
+| --- | --- |
+| Inventory every failure string on the PI path (gateway codes, `conversation.reply_failed`, tool texts, voice, web, iPhone) | Done; old → new table in the pull request |
+| One table of plain words in `@jarvis/contracts`, used by backend and web, with a plainness test | Done |
+| Keep the six `pi_*` codes; technical detail in `detail` and the log; one plain sentence per class, shown in Chat and spoken in Voice in the same words (the parity suite of #2021 compares them) | Done |
+| Say "nothing was done" only when nothing ran; otherwise say an action may have happened | Done |
+| A saved reply is never followed by an error; Stop is not a failure; a failed refresh after a reply is not a failed turn; tool rows no longer say "Failed" | Done; the web, backend and contracts tests fail on the old code |
+| A saved reply is never failed for its size: the clients read up to 4 MiB (progress frames stop at 1 MiB, `done` carries the reply) | Done (review); the web test fails on the old 1 MiB ceiling, the Swift test `ChatStreamLimitTests` runs in CI |
+| Tool confirmations keep the plain cause; a tool that threw something unexpected is described by error class and declared effect | Done |
+| A write whose request may have been delivered says its outcome is unknown, never "Not done." (review); the error class is logged as `tool.execution_failed` | Done; a real local service that runs the side effect and drops the socket is the test, and it fails when the tool's effect is ignored |
+| "Nothing was done" is judged on the first response of a turn only; a quiet failure or a timeout in a later response says part of it may already be done, even when only the completed output listed the call (second review and its delta review) | Done; four gateway tests fail without the failure gate and one without the timeout rule |
+| The iPhone shows the server's sentence for every turn error, with or without a code, so it reads what the web reads (second review) | Done; the app target is compiled by the macOS CI job only |
+| List the messages that exist only because of non-delete approval gates (owner rule: none except deletes); remove none | Done in the pull request |
+| Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`, `ChatStreamLimitTests`) and the app build | Written; run in CI (Linux `swift test`, macOS app build), not in the dev container |
+| Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
 
 ## See the brain — 21 November 2026 (Refs #1969)
 

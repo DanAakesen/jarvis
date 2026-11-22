@@ -18,6 +18,9 @@ public final class JarvisChatClient: Sendable {
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ]
+    /// The server stops a reply's progress frames at 1 MiB but always sends `done`, which carries the saved reply (its text came
+    /// through those frames, plus at most 8 blocks of 64 KiB). Reading stops only well above both, so a saved reply is never failed for its size.
+    private static let maximumStreamBytes = 4 * 1024 * 1024
 
     private let client: JarvisClient
     private let reattachPolicy: ReattachPolicy
@@ -380,7 +383,7 @@ public final class JarvisChatClient: Sendable {
                             for try await chunk in response.body {
                                 try Task.checkCancellation()
                                 receivedBytes += chunk.count
-                                guard receivedBytes <= 1024 * 1024 else {
+                                guard receivedBytes <= Self.maximumStreamBytes else {
                                     throw JarvisChatClientError.responseTooLarge
                                 }
                                 for event in parser.append(chunk) {
