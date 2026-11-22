@@ -8896,6 +8896,8 @@ For #1769, the documented WatchContractTests filter matches no tests in this che
 - Run `swift build` and `swift test -j 2` in JarvisCore with `swift:6.2` and
   parse the changed app files on Linux. The macOS `watch` job type-checks the
   Watch app and phone bridge. No live provider, Foundry or `measure_pi` check.
+- The fallback fixture runs on Linux, but its `waitsForConnectivity` assertion
+  is Apple-only: Linux Foundation does not expose that property.
 - Dan: dictate five short clips in a row from the complication and five from
   Chat. Tap Stop each time; each transcript should append once to the draft
   without sending. Stop once without speaking, then tap Retry and check that

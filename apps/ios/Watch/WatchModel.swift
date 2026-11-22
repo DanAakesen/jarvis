@@ -55,7 +55,7 @@ final class WatchModel: ObservableObject {
     @Published private var voiceRecovery: Task<Void, Never>?
     private var audioRouteRecovery: Task<Void, Never>?
     private var audioRouteBudget = WatchVoiceRecovery.RouteBudget()
-    @Published private var repairingAudio = false
+    @Published private(set) var repairingAudio = false
     var voiceRecoveryStatus: String? {
         if voiceRecovery != nil { return "iPhone connection lost. Reconnecting…" }
         if repairingAudio { return "Audio changed. Reconnecting…" }
