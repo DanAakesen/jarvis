@@ -58,6 +58,22 @@ export function largestSchemas(rows: readonly ToolRow[], count = 15): readonly T
   return [...rows].sort((left, right) => right.schemaTokens - left.schemaTokens || left.name.localeCompare(right.name)).slice(0, count);
 }
 
+/** The same rows as aligned plain text, so a CI log shows the per-tool table without opening docs/tool-conformance.md. */
+export function renderTextTable(rows: readonly ToolRow[]): string {
+  const plain = (value: string) => value.replace(/\s+/gu, ' ').trim();
+  const header = ['tool', 'group', 'static', 'discoverable', 'callable', 'tokens', 'notes'];
+  const body = [...rows].sort((left, right) => left.name.localeCompare(right.name)).map((row) => {
+    const discoverable = row.visibility === 'legacy' ? 'n/a' : row.discover
+      ? `${row.discover.source === 'curated' ? row.discover.language : 'derived'} #${row.discover.rank} "${plain(clip(row.discover.phrase, 44))}"` : 'NOT FOUND';
+    const notes = [...row.notes, ...(row.callable && (row.callable.kind === 'refusal' || row.callable.kind === 'failure') ? [`"${row.callable.note}"`] : [])];
+    return [row.name, row.group, row.staticProblems.length === 0 ? 'ok' : plain(row.staticProblems.join('; ')), discoverable,
+      callableCell(row.callable), String(row.schemaTokens), plain(clip(plain(notes.join('; ')), 60))];
+  });
+  const widths = header.map((title, column) => Math.max(title.length, ...body.map((cells) => cells[column]!.length)));
+  const line = (cells: readonly string[]) => cells.map((value, column) => (column === 5 ? value.padStart(widths[column]!) : value.padEnd(widths[column]!))).join('  ').trimEnd();
+  return [line(header), line(widths.map((width) => '-'.repeat(width))), ...body.map(line)].join('\n');
+}
+
 /** The generated docs/tool-conformance.md. Deterministic: sorted by tool name, no times, no ids. */
 export function renderReport(rows: readonly ToolRow[], meta: { readonly ceiling: number; readonly oversize: Readonly<Record<string, { ceiling: number; reason: string }>> }): string {
   const sorted = [...rows].sort((left, right) => left.name.localeCompare(right.name));

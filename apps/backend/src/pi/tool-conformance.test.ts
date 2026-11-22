@@ -8,7 +8,7 @@ import { descriptionViolations, harnessManagedNames, nameViolations, schemaViola
 import type { ConformanceTurn } from './conformance/mcp-client.testkit.js';
 import { executeCase, exerciseTool, openTurn, turnKindFor, type CallableStatus } from './conformance/callable.testkit.js';
 import type { ConformanceGroup } from './conformance/types.testkit.js';
-import { largestSchemas, renderReport, summarize, type ToolRow } from './conformance/report.testkit.js';
+import { largestSchemas, renderReport, renderTextTable, summarize, type ToolRow } from './conformance/report.testkit.js';
 
 /**
  * Offline tool conformance: every tool the registry holds is checked against the harness contract (static), found by the
@@ -449,6 +449,7 @@ describe('report', () => {
       };
     });
     const summary = summarize(rows);
+    console.info(`Per-tool table (the same rows are committed in docs/tool-conformance.md):\n${renderTextTable(rows)}`);
     console.info(`Tool conformance summary: ${JSON.stringify(summary)}`);
     console.info(`Largest schemas (tokens = characters / 4):\n${largestSchemas(rows).map((row, index) => `${String(index + 1).padStart(2)}. ${row.name.padEnd(26)} schema ${String(row.schemaTokens).padStart(6)}  definition ${String(row.definitionTokens).padStart(6)}`).join('\n')}`);
     const markdown = renderReport(rows, { ceiling: defaultSchemaTokens, oversize: largeSchemas });
