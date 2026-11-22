@@ -86,11 +86,7 @@ struct PendingChatAttachment: Identifiable {
 @MainActor
 final class JarvisChatModel: ObservableObject {
     @Published var messages: [JarvisChatRow] = []
-    @Published var composerDraft = ComposerDraft()
-    var draft: String {
-        get { composerDraft.text }
-        set { composerDraft.replace(with: newValue) }
-    }
+    let composerDraft = ChatComposerDraft()
     @Published var pendingAttachments: [PendingChatAttachment] = []
     @Published var isLoading = true
     @Published private(set) var isReadyForHandoff = false
@@ -108,14 +104,18 @@ final class JarvisChatModel: ObservableObject {
     @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
+    @Published private(set) var turnNotice: String?
+    private var unconfirmedTurnID: String?
+    @Published private(set) var supersededMessageIDs = Set<String>()
     @Published private(set) var replyTargetMessageID: String?
-    /// The last turn that failed, as it was sent, so the error can offer Retry without touching the composer.
+    /// Retry keeps what was sent, including its attachments.
     @Published private(set) var failedTurn: FailedTurn?
 
     struct FailedTurn {
         let text: String
         let attachments: [PendingChatAttachment]
         let visualFrame: PendingVisualFrame?
+        var restoredDraftRevision: UUID?
     }
     @Published var statusLine: String?
     @Published var streamingText = ""
@@ -181,13 +181,12 @@ final class JarvisChatModel: ObservableObject {
         self.replyTarget = replyTarget
         if fixtureMode && JarvisChatPhotoFixture.isEnabled {
             pendingAttachments = JarvisChatPhotoFixture.pending
-            draft = "Synthetic photo draft"
+            composerDraft.value.replace(with: "Synthetic photo draft")
         }
     }
 
     var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            (!fixtureMode || JarvisChatFeedbackFixtureTransport.isEnabled || !fixtureTurnUsed)
+        composerDraft.hasMessage && !fixtureTurnUnavailable
     }
 
     var fixtureTurnUnavailable: Bool { fixtureMode && !JarvisChatFeedbackFixtureTransport.isEnabled && fixtureTurnUsed }
@@ -424,21 +423,27 @@ final class JarvisChatModel: ObservableObject {
             steer()
             return
         }
-        let text = composerDraft.consume()
-        startTurn(text: text, attachments: pendingAttachments, visualFrame: visualFrame, fromComposer: true)
+        let text = composerDraft.value.consume()
+        startTurn(text: text, attachments: pendingAttachments, visualFrame: visualFrame, draftRevision: composerDraft.value.revision)
     }
 
-    /// Sends the turn that failed again, as a new turn, with its own attachments; the composer keeps any draft.
+    /// Retry consumes the restored text, but leaves a different draft alone.
     func retryFailedTurn() {
         guard let turn = failedTurn, !isSending else { return }
-        startTurn(text: turn.text, attachments: turn.attachments, visualFrame: turn.visualFrame, fromComposer: false)
+        var draftRevision: UUID?
+        if let restoredDraftRevision = turn.restoredDraftRevision,
+           composerDraft.value.revision == restoredDraftRevision, composerDraft.value.text == turn.text {
+            _ = composerDraft.value.consume()
+            draftRevision = composerDraft.value.revision
+        }
+        startTurn(text: turn.text, attachments: turn.attachments, visualFrame: turn.visualFrame, draftRevision: draftRevision)
     }
 
     private func startTurn(
         text: String,
         attachments: [PendingChatAttachment],
         visualFrame: PendingVisualFrame?,
-        fromComposer: Bool
+        draftRevision: UUID?
     ) {
         replyTarget = nil
         replyTargetMessageID = nil
@@ -449,6 +454,7 @@ final class JarvisChatModel: ObservableObject {
         progressUpdates = []
         isCancelling = false
         actionError = nil
+        dismissTurnNotice()
         failedTurn = nil
         streamingText = ""
         acknowledgment = nil
@@ -471,7 +477,7 @@ final class JarvisChatModel: ObservableObject {
             at: ISO8601DateFormatter().string(from: Date())
         ))
         sendTask = Task {
-            await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame, fromComposer: fromComposer)
+            await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame, draftRevision: draftRevision)
         }
     }
 
@@ -481,7 +487,7 @@ final class JarvisChatModel: ObservableObject {
             actionError = JarvisChatLocalization.string(.followUpUnavailable, language: appLanguage)
             return
         }
-        let text = composerDraft.consume()
+        let text = composerDraft.value.consume()
         let followUpID = "local-\(UUID().uuidString)"
         addOrReplace(JarvisChatRow(
             id: followUpID, role: .dan, text: text, at: ISO8601DateFormatter().string(from: Date())
@@ -502,7 +508,7 @@ final class JarvisChatModel: ObservableObject {
             }
             steeringMessageIDs.removeAll { $0 == followUpID }
             messages.removeAll { $0.id == followUpID }
-            if draft.isEmpty { draft = text }
+            if composerDraft.value.text.isEmpty { composerDraft.value.replace(with: text) }
         }
     }
 
@@ -510,17 +516,19 @@ final class JarvisChatModel: ObservableObject {
         guard let client, let sessionID, let activeMessageID, !isCancelling else { return }
         isCancelling = true
         do {
-            let cancelled = try await client.cancelTurn(sessionId: sessionID, messageId: activeMessageID)
-            sendTask?.cancel()
-            isCancelling = false
-            if !cancelled {
-                actionError = "That reply had already finished."
-            }
-            await refreshHistory()
+            // A stop can race a saved reply. Only the stream decides which actually happened.
+            if try await client.cancelTurn(sessionId: sessionID, messageId: activeMessageID) { return }
         } catch {
-            isCancelling = false
-            actionError = message(for: error)
+            // Losing the stop request does not fail the reply.
         }
+        guard self.activeMessageID == activeMessageID else { return }
+        isCancelling = false
+        turnNotice = chatCopy(.turnStopUnconfirmed)
+    }
+
+    func dismissTurnNotice() {
+        unconfirmedTurnID = nil
+        turnNotice = nil
     }
 
     func refreshActivity() async {
@@ -750,12 +758,16 @@ final class JarvisChatModel: ObservableObject {
         text: String,
         attachments: [PendingChatAttachment],
         visualFrame: PendingVisualFrame?,
-        fromComposer: Bool = true
+        draftRevision: UUID?
     ) async {
-        defer { sentTurnAttachments = [] }
+        defer {
+            sentTurnAttachments = []
+            finishObservingTurn()
+        }
+        let retry = FailedTurn(text: text, attachments: attachments, visualFrame: visualFrame)
         guard let client else {
-            isSending = false
             discardOptimisticMessage()
+            await reportTurnEnding(JarvisClientError.serviceUnavailable, retry: retry, draftRevision: draftRevision)
             actionError = startupError ?? "Chat is unavailable."
             return
         }
@@ -796,38 +808,16 @@ final class JarvisChatModel: ObservableObject {
                 attachmentIds: attachmentIDs,
                 visualContext: visualContext
             )
-            if fromComposer {
-                pendingAttachments = []
-                uploadedAttachmentIDs = [:]
-            }
-            try await consume(events)
+            try await consume(events, submittedAttachments: draftRevision == nil ? [] : attachments)
             discardOptimisticMessage()
             discardSteeringPlaceholders()
             // The reply is already on screen from the stream, so a history refresh that fails now is not the turn failing.
             await refreshHistory(reportsFailure: false)
-            isSending = false
-        } catch is CancellationError {
-            isSending = false
-            activeMessageID = nil
-            statusLine = nil
-            streamingText = ""
-            discardOptimisticMessage()
         } catch {
-            isSending = false
-            activeMessageID = nil
-            statusLine = nil
             discardOptimisticMessage()
-            switch ChatTurnEnding.after(error: error, stoppedByUser: isCancelling, taskCancelled: Task.isCancelled) {
-            case .stopped:
-                // Dan stopped the reply (the server's "stopped" event can arrive before the stop request returns): nothing failed.
-                streamingText = ""
-            case .failed:
-                actionError = message(for: error)
-                failedTurn = FailedTurn(text: text, attachments: attachments, visualFrame: visualFrame)
-                // Keep any partial reply readable beside the failure; it is not a completed response.
-            }
+            discardSteeringPlaceholders()
+            await reportTurnEnding(error, retry: retry, draftRevision: draftRevision)
         }
-        sendTask = nil
     }
 
     /// Removes the local placeholder once the server's copy arrived or the turn failed.
@@ -846,23 +836,50 @@ final class JarvisChatModel: ObservableObject {
     }
 
     private func reattach(_ turn: ActiveChatTurn) async {
-        defer { sendTask = nil }
+        defer { finishObservingTurn() }
         guard let client else { return }
         do {
             try await consume(client.reattachTurn(sessionId: turn.sessionId, messageId: turn.messageId))
             await refreshHistory(reportsFailure: false)
-            isSending = false
-        } catch is CancellationError {
-            isSending = false
-            activeMessageID = nil
-            statusLine = nil
         } catch {
-            isSending = false
-            activeMessageID = nil
-            statusLine = nil
-            if ChatTurnEnding.after(error: error, stoppedByUser: isCancelling, taskCancelled: Task.isCancelled) == .failed {
-                actionError = message(for: error)
-            }
+            await reportTurnEnding(error)
+        }
+    }
+
+    private func finishObservingTurn() {
+        activeMessageID = nil
+        statusLine = nil
+        isSending = false
+        isCancelling = false
+        isReconnecting = false
+        sendTask = nil
+    }
+
+    private func reportTurnEnding(_ error: any Error, retry: FailedTurn? = nil, draftRevision: UUID? = nil) async {
+        let turnID = activeMessageID
+        let ending = ChatTurnEnding.after(error: error, taskCancelled: Task.isCancelled, accepted: turnID != nil)
+        activeMessageID = nil
+        acknowledgment = nil
+        progressUpdates = []
+        var failed = retry
+        if turnID == nil, let retry, let draftRevision,
+           composerDraft.value.restore(retry.text, revision: draftRevision) {
+            failed?.restoredDraftRevision = draftRevision
+        }
+        switch ending {
+        case .detached:
+            streamingText = ""
+        case .stopped:
+            turnNotice = (error as? JarvisChatClientError)?.serverFailure?.message ?? chatCopy(.turnStopped)
+        case .failed:
+            dismissTurnNotice()
+            actionError = message(for: error)
+            failedTurn = failed
+        case .unconfirmed:
+            unconfirmedTurnID = turnID
+            turnNotice = chatCopy(.turnUnconfirmed)
+            streamingText = ""
+            await refreshHistory(reportsFailure: false)
         }
     }
 
@@ -872,7 +889,6 @@ final class JarvisChatModel: ObservableObject {
             let activeTurns = try await client.listActiveTurns()
             guard activeMessageID == nil,
                   let turn = ActiveChatTurnSelection.select(turns: activeTurns, forSessionID: sessionID) else {
-                actionError = nil
                 return
             }
             sessionID = turn.sessionId
@@ -881,6 +897,7 @@ final class JarvisChatModel: ObservableObject {
             isSending = true
             turnStartedAt = nil
             progressUpdates = []
+            dismissTurnNotice()
             statusLine = JarvisChatLocalization.string(.thinkingReconnecting, language: appLanguage)
             sendTask = Task { await reattach(turn) }
             actionError = nil
@@ -909,7 +926,7 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
-    private func consume(_ events: AsyncThrowingStream<ChatEvent, any Error>) async throws {
+    private func consume(_ events: AsyncThrowingStream<ChatEvent, any Error>, submittedAttachments: [PendingChatAttachment] = []) async throws {
         for try await event in events {
             try Task.checkCancellation()
             switch event {
@@ -918,7 +935,14 @@ final class JarvisChatModel: ObservableObject {
             case .user(let message):
                 if turnStartedAt == nil { turnStartedAt = ChatWorkProgress.startDate(message.at) ?? Date() }
                 turnMessageIDs.insert(message.id)
-                if activeMessageID == nil { activeMessageID = message.id }
+                if activeMessageID == nil {
+                    activeMessageID = message.id
+                    if !submittedAttachments.isEmpty {
+                        let ids = Set(submittedAttachments.map(\.id))
+                        pendingAttachments.removeAll { ids.contains($0.id) }
+                        for id in ids { uploadedAttachmentIDs.removeValue(forKey: id) }
+                    }
+                }
                 sessionID = message.sessionId
                 discardOptimisticMessage()
                 let attachments = activeMessageID == message.id && !sentTurnAttachments.isEmpty
@@ -940,6 +964,9 @@ final class JarvisChatModel: ObservableObject {
                 streamingText = ""
                 // Preserve interim updates across steering within the same turn.
                 // An interrupted round can continue with a steering message on the same turn.
+            case .superseded(let messageID):
+                supersededMessageIDs.insert(messageID)
+                streamingText = ""
             case .done(let message):
                 addOrReplace(JarvisChatRow(message))
                 activeMessageID = nil
@@ -948,6 +975,8 @@ final class JarvisChatModel: ObservableObject {
                 acknowledgment = nil
                 progressUpdates = []
                 isReconnecting = false
+                dismissTurnNotice()
+                return
             case .toolActivity(let tool):
                 observePersonalMemoryWrite(tool)
                 recordToolActivity(tool)
@@ -955,11 +984,14 @@ final class JarvisChatModel: ObservableObject {
                 statusLine = JarvisChatLocalization.string(
                     progress.phase == .tools ? .turnWorking : .turnWriting, language: appLanguage
                 )
-            case .foodInvitation, .error, .unknown:
+            case .error(let failure):
+                throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
+            case .foodInvitation, .unknown:
                 break
             }
         }
         try Task.checkCancellation()
+        throw JarvisChatClientError.streamEnded
     }
 
     /// `reportsFailure` is false straight after a turn, when the reply is already on screen from the stream.
@@ -979,6 +1011,9 @@ final class JarvisChatModel: ObservableObject {
             .filter { $0.channel == .chat || $0.channel == .voice }
             .map(JarvisChatRow.init)
         messages = sorted(replacing ? incoming : messages + incoming)
+        if let unconfirmedTurnID, page.confirmsReply(toTurn: unconfirmedTurnID) {
+            dismissTurnNotice()
+        }
         // One visible conversation, with transport-specific session IDs kept
         // separate so a typed reply never targets an ended voice session.
         if let latest = messages.last(where: { $0.channel == .chat }) {
@@ -1016,9 +1051,7 @@ final class JarvisChatModel: ObservableObject {
         // A failed turn carries the server's own plain message (what failed, and that an action may have completed); show it instead of the
         // generic turn text. Every error the server sends for a turn is one fixed sentence from the shared table, with or without a code,
         // so the iPhone reads what the web reads.
-        if let error = error as? JarvisChatClientError,
-           case .serverEvent(_, let text) = error,
-           let text, !text.isEmpty {
+        if let text = (error as? JarvisChatClientError)?.serverFailure?.message {
             return text
         }
         return standardMessage(for: error)

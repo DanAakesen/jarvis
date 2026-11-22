@@ -88,6 +88,7 @@ public enum ChatEvent: Equatable, Sendable {
     case progress(ChatProgress)
     case foodInvitation(ChatFoodInvitation?)
     case interrupted(ChatMessage)
+    case superseded(messageID: String)
     case done(ChatMessage)
     case error(ChatTurnFailure)
     case unknown(name: String, data: String)
@@ -167,6 +168,7 @@ public struct ChatHistoryMessage: Codable, Equatable, Sendable {
     public let role: ConversationRole
     public let text: String
     public let model: String?
+    public let replyToTurnId: String?
     public let interrupted: Bool
     public let voiceMinutes: Double?
     public let at: String
@@ -175,7 +177,7 @@ public struct ChatHistoryMessage: Codable, Equatable, Sendable {
     public let blocks: [ChatBlock]
 
     private enum CodingKeys: String, CodingKey {
-        case id, sessionId, channel, language, role, text, model, interrupted, voiceMinutes, at, toolCalls, attachments, blocks
+        case id, sessionId, channel, language, role, text, model, replyToTurnId, interrupted, voiceMinutes, at, toolCalls, attachments, blocks
     }
 
     public init(from decoder: Decoder) throws {
@@ -187,6 +189,7 @@ public struct ChatHistoryMessage: Codable, Equatable, Sendable {
         role = try container.decode(ConversationRole.self, forKey: .role)
         text = try container.decode(String.self, forKey: .text)
         model = try container.decodeIfPresent(String.self, forKey: .model)
+        replyToTurnId = try container.decodeIfPresent(String.self, forKey: .replyToTurnId)
         interrupted = try container.decode(Bool.self, forKey: .interrupted)
         voiceMinutes = try container.decodeIfPresent(Double.self, forKey: .voiceMinutes)
         at = try container.decode(String.self, forKey: .at)
@@ -213,6 +216,21 @@ public enum ChatHistoryOrdering {
 public struct ChatHistoryPage: Codable, Equatable, Sendable {
     public let messages: [ChatHistoryMessage]
     public let nextCursor: String?
+
+    public func confirmsReply(toTurn messageID: String) -> Bool {
+        messages.contains {
+            $0.channel == .chat && $0.role == .jarvis && !$0.interrupted && $0.replyToTurnId == messageID
+        }
+    }
+
+    /// In an isolated test, the next Dan message bounds what could be this request's reply.
+    public func confirmsTestReply(to messageID: String, sessionID: String) -> Bool {
+        let rows = ChatHistoryOrdering.ordered(messages.filter { $0.sessionId == sessionID && $0.channel == .chat })
+        guard let request = rows.firstIndex(where: { $0.id == messageID && $0.role == .dan }) else { return false }
+        return rows.dropFirst(request + 1).prefix { $0.role != .dan }.contains {
+            !$0.interrupted && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 }
 
 public struct ChatAttachmentUpload: Sendable {
@@ -239,6 +257,11 @@ public enum JarvisChatClientError: Error, Equatable, Sendable {
     case reattachTimedOut
     case streamEnded
     case serverEvent(code: String?, message: String?)
+
+    public var serverFailure: ChatTurnFailure? {
+        guard case let .serverEvent(code, message) = self else { return nil }
+        return ChatTurnFailure(code: code, message: message?.isEmpty == false ? message : nil)
+    }
 }
 
 public struct ReattachPolicy: Sendable {

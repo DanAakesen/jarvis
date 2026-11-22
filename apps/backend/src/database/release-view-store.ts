@@ -40,9 +40,9 @@ export function createReleaseViewStore(pool: sql.ConnectionPool): ReleaseViewSto
     async read(projectId) {
       const requests = () => databaseReadRequest(pool).input('projectId', sql.BigInt, BigInt(projectId));
       const [releases, pullRequests, workflowRuns, deployments] = await Promise.all([
-        requests().query<ReleaseRow>(`SELECT TOP (50) CONVERT(varchar(19), id) AS id, version, sha, status,
+        requests().query<ReleaseRow>(`SELECT TOP (50) CONVERT(varchar(19), r.id) AS id, version, sha, status,
           created_at AS createdAt, released_at AS releasedAt
-          FROM dbo.releases WHERE project_id = @projectId ORDER BY created_at DESC, id DESC;`),
+          FROM dbo.releases AS r WHERE r.project_id = @projectId ORDER BY r.created_at DESC, r.id DESC;`),
         requests().query<PullRequestRow>(`SELECT TOP (100) CONVERT(varchar(19), pr.id) AS id, pr.number,
           pr.branch, pr.head_sha AS headSha, pr.state, pr.checks,
           CONVERT(varchar(19), pr.task_id) AS taskId

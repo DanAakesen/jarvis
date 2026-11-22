@@ -199,11 +199,10 @@ public final class JarvisChatClient: Sendable {
                 idempotent: false
             )
             guard response.statusCode == 200,
-                  let result = try? JSONDecoder().decode(CancelTurnResponse.self, from: response.body),
-                  result.cancelled else {
+                  let result = try? JSONDecoder().decode(CancelTurnResponse.self, from: response.body) else {
                 throw JarvisChatClientError.invalidResponse
             }
-            return true
+            return result.cancelled
         } catch let error as JarvisClientError {
             if case .httpStatus(404) = error { return false }
             throw error
@@ -500,6 +499,10 @@ public final class JarvisChatClient: Sendable {
             return .foodInvitation(invitation)
         case "interrupted":
             return .interrupted(try decodeMessage(data, expectedRole: .jarvis, sessionId: sessionId))
+        case "superseded":
+            let payload = try JSONDecoder().decode(SupersededPayload.self, from: data)
+            guard validID(payload.messageId) else { throw JarvisChatClientError.invalidResponse }
+            return .superseded(messageID: payload.messageId)
         case "done":
             return .done(try decodeMessage(data, expectedRole: .jarvis, sessionId: sessionId))
         case "error":
@@ -607,4 +610,8 @@ private struct CancelTurnResponse: Decodable {
 
 private struct TextPayload: Decodable {
     let text: String
+}
+
+private struct SupersededPayload: Decodable {
+    let messageId: String
 }

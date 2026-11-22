@@ -278,6 +278,11 @@ A history refresh must not imply that an uncertain managed turn is cleared or
 replayable. Preserve the existing return-to-normal action and explicit sending;
 no automatic resend, claim reset, new runtime controls or default change.
 
+On iPhone, **Test a reply** tries the earlier Jarvis setup or Copilot in an
+isolated conversation, not the model used by normal Chat. Report a received reply
+only when there is a completed answer; distinguish a confirmed stop, a known
+failure and a result the app could not confirm.
+
 ## PI-only normal chat and voice (#1887, #1910, #1966)
 
 PI is the only normal Chat and Voice route. The obsolete engine selector, saved device choice, Chat test badge and client `engine` parameters are removed. The server accepts an older client's explicit `pi` only; `current` and every other value are refused. Isolated runtime tests keep their own selected runtime. Watch and web follow the server's one normal route; PI web voice still does not support camera or screen sharing. A PI failure does not switch engines.
@@ -309,9 +314,9 @@ Replace the custom main chat loop through a controlled, switchable Foundry
 Copilot-harness migration after fixing the live baseline. Preserve native audio,
 Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate
 subscription-backed Factory workers. Automated comparisons use identical test
-scenarios. Dan can test Current or Copilot through Test agent runtime in the chat
-menu, opening a separate labelled conversation with no mid-conversation switch;
-normal chats stay unchanged. The local candidate implements this selector and
+scenarios. On iPhone, **Test a reply** in the Plus menu opens a separate conversation
+using **Previous Jarvis setup** or **Copilot**. It cannot switch setups mid-conversation,
+and normal chats stay unchanged. The local candidate implements this selector and
 session-scoped test view; Copilot stays unavailable until its live definition,
 settings, bindings and application policies are verified. The owner also approved
 retaining the Python bridge temporarily for voice fallback, using existing Jarvis
@@ -3038,7 +3043,7 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 
 Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
-Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. It falls back to the paired iPhone, then offers keyboard entry when neither path works; it never sends the draft automatically. Transcription is bounded and cancellable, with a clear failure and keyboard fallback if it cannot complete. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
+Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. If the direct connection is unavailable, try the paired iPhone without waiting for a direct route to return. Fall back on a service failure too, but never send the draft automatically. Transcription is bounded and cancellable. If it cannot complete or no words are recognised, show a clear message, Retry and keyboard entry. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Voice explains audio-route or connection loss, resumes the same call when it can, and offers Retry when it cannot. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
 
 ## Intelligent proactive notifications — 9 November 2026
 

@@ -170,6 +170,14 @@ No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or
 | Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`, `ChatStreamLimitTests`) and the app build | Written; run in CI (Linux `swift test`, macOS app build), not in the dev container |
 | Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
 
+## iPhone Chat typing and reply status — 22 November 2026 (Refs #2026, #2010)
+
+- Draft edits now update the composer without publishing a change to the transcript. The draft revision, keyboard, dictation, Home handoff and attachment controls stay in place; the neural background and screen sharing keep their existing behaviour.
+- A saved reply wins over Stop and notification trouble. A stopped reply gets the server's plain notice, a replaced attempt names the follow-up, and a lost connection is not proof of failure. Plus > **Test a reply** names the isolated choices and distinguishes a received reply from a failure or an unconfirmed result.
+- Review follow-up: preserve the draft and Retry if Chat never saw the message accepted. Clear an unconfirmed notice when that turn's saved reply appears in history. S14 checks the same four rows and replay behaviour with one spoken answer per turn, independent of how quickly Voice speaks its progress.
+- SQL review: Chat history sorts by numeric message ID. The paging fixture crosses a digit boundary and checks that both pages contain the right rows and the cursor points to the oldest row on the first page.
+- **Open, Dan on iPhone:** with Background motion on and Voice and sharing idle, type quickly in a conversation with 100+ messages and scroll while the keyboard is open. Try a successful reply, Stop, and a follow-up before the first reply finishes. Go offline before Send and check that the text is restored; reconnect and retry. Open **Test a reply**, choose an available setup, send a simple message and confirm it stays out of normal Chat.
+
 ## See the brain — 21 November 2026 (Refs #1969)
 
 **Status: implemented; offline lint, build and the full backend suite pass (commands in the pull request). Not run: a live wake or a deploy. The first real `pi.brain_tick` and `pi.brain_run` lines after deploy are the live check. Turning the brain on stays the owner's `PUT /pi/brain`.**
@@ -5825,6 +5833,22 @@ Implemented the owner-approved handover: one Chat row, bottom-right menu button,
 ## Watch build 113 follow-up — 18 November 2026 (P15-211 / #1943)
 
 Owner on build 113: dictation and live voice both report no sound, native Apple Dictation works, and the newest Chat message still sits behind the composer. The new silence check proved the Watch tap delivers exact digital silence (not a transport or Speech fault), so the capture path is the suspect, independent of permission and hardware. Done in code: dictation records in the plain session mode and live voice in voice-chat mode, each restarting once in the other mode when the first seconds are exact silence; several microphone channels are folded to mono explicitly; the tap's input peak, channels, rate, route and permission are logged (`WatchAudio`, `WatchVoice`). The newest message now clears the composer through real end content measured from the composer and safe area. Backend logs agree: voice sockets reached upstream and played audio but never heard speech, and no dictation reached the backend. Next: a paired-Watch run reading the `WatchAudio`/`WatchVoice` lines (they show the mode that works and whether the input or the conversion lost the signal), and the simulator `chat-ready.png` / `chat-reading.png` captures for the overlap.
+
+## Watch dictation and voice reliability — 22 November 2026 (Refs #2006)
+
+Implemented in source: recover the Watch audio graph without closing the phone
+voice session, keep playback completion after capture retries, confirm the same
+session after a short connection loss, and show Retry for failed dictation or
+voice. Transcription survives an audio interruption after Stop and never
+automatically sends the draft. An unavailable direct route falls through to
+the phone without waiting for connectivity. Once a route has settled, an
+active capture can rebuild its graph at most twice per ten seconds; further
+instability offers Retry. Native CI caught route-recovery callbacks reading
+Watch state outside the main actor. The corrected model type-checks
+against JarvisCore and Linux platform stubs. Next: macOS Watch rebuild, then
+Dan's paired-Watch checks in `docs/agent-context.md`. Build 120's dictation
+cause and hardware acceptance remain open. The no-buffer watchdog and tests
+that drive the Watch app's audio/companion wiring are follow-ups.
 
 ## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
 

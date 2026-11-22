@@ -704,7 +704,15 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       const side = { chat: { equal: false, unchanged: false }, voice: { unchanged: false } };
       const { rows, chatWorld, voiceWorld } = await runBoth({
         title: 'S14 Persistence: replay, duplicate delivery and reconnect',
-        script: world => [calendarTurn(world), { steps: [{ say: 'Nothing on the day after.' }] }],
+        // A progress note may occupy its own Voice row. Drive one spoken answer so the raw row count tests replay, not the speech quiet window.
+        script: world => [
+          { steps: [
+            find('calendar list events'),
+            call('calendar_list_events', { start: world.tomorrow, end: world.tomorrow }),
+            { say: 'You have two events tomorrow.' },
+          ] },
+          { steps: [{ say: 'Nothing on the day after.' }] },
+        ],
         async chat(world) {
           const first = await world.chat.turn('What is on my calendar tomorrow?');
           const owner = world.store.messages.find(message => message.role === 'dan')!;
@@ -749,6 +757,10 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       for (const world of [chatWorld, voiceWorld]) {
         const stored = world.store.messages;
         expect(stored.map(message => message.role)).toEqual(['dan', 'jarvis', 'dan', 'jarvis']);
+        expect(stored.map(message => message.text)).toEqual([
+          'What is on my calendar tomorrow?', 'You have two events tomorrow.',
+          'And the day after?', 'Nothing on the day after.',
+        ]);
         expect(stored.map(message => BigInt(message.id))).toEqual([...stored.map(message => BigInt(message.id))].sort((a, b) => Number(a - b)));
         expect(new Set(stored.map(message => message.id)).size).toBe(4);
         expect(world.foundry.conversations()).toBe(1);

@@ -99,12 +99,18 @@ function sessionFromRow(row: SessionRow): ConversationSession {
   };
 }
 
+function validReplyToTurnId(value: unknown): value is string {
+  return typeof value === 'string' && /^[1-9]\d{0,18}$/u.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n;
+}
+
 function messageFromRow(row: MessageRow): ConversationMessage {
   let visualContext;
+  let replyToTurnId: string | undefined;
   let blocks: ChatBlock[] = [];
   try {
-    const metadata = row.metadata ? JSON.parse(row.metadata) as { visualContext?: unknown; blocks?: unknown } : undefined;
+    const metadata = row.metadata ? JSON.parse(row.metadata) as { visualContext?: unknown; blocks?: unknown; replyToTurnId?: unknown } : undefined;
     visualContext = metadata?.visualContext === undefined ? undefined : normalizeVisualContext(metadata.visualContext, true);
+    if (row.role === 'jarvis' && validReplyToTurnId(metadata?.replyToTurnId)) replyToTurnId = metadata.replyToTurnId;
     if (row.role === 'jarvis' && Array.isArray(metadata?.blocks)) {
       const trustedBlobHost = trustedBlobHostFromEnvironment();
       blocks = metadata.blocks.filter((block): block is ChatBlock =>
@@ -118,6 +124,7 @@ function messageFromRow(row: MessageRow): ConversationMessage {
     text: row.text,
     model: row.model,
     at: row.at,
+    ...(replyToTurnId === undefined ? {} : { replyToTurnId }),
     ...(visualContext ? { metadata: { visualContext } } : {}),
     ...(blocks.length > 0 ? { blocks } : {}),
   };
@@ -192,6 +199,10 @@ async function addMessageWithAttachments(
 }
 
 function messageMetadata(input: Parameters<ConversationStore['addMessage']>[0]): string | null {
+  const { replyToTurnId } = input;
+  if (replyToTurnId !== undefined && (input.role !== 'jarvis' || input.interrupted || !validReplyToTurnId(replyToTurnId))) {
+    throw new TypeError('Invalid reply turn ID');
+  }
   if (input.blocks !== undefined) {
     const trustedBlobHost = trustedBlobHostFromEnvironment();
     const options = trustedBlobHost ? { trustedBlobHost } : {};
@@ -199,9 +210,9 @@ function messageMetadata(input: Parameters<ConversationStore['addMessage']>[0]):
         input.blocks.length > chatBlockLimits.blocksPerMessage || !input.blocks.every((block) => isChatBlock(block, options))) {
       throw new TypeError('Invalid message blocks');
     }
-    return JSON.stringify({ blocks: input.blocks });
+    return JSON.stringify({ blocks: input.blocks, replyToTurnId });
   }
-  if (input.visualContext === undefined) return null;
+  if (input.visualContext === undefined) return replyToTurnId === undefined ? null : JSON.stringify({ replyToTurnId });
   const visualContext = normalizeVisualContext(input.visualContext, true);
   if (input.role !== 'dan' || !visualContext) throw new TypeError('Invalid visual context');
   return JSON.stringify({ visualContext: persistedVisualContext(visualContext) });
@@ -707,10 +718,10 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     async getDanMessageIdBySourceItemId(sourceItemId) {
       const result = await databaseReadRequest(pool)
         .input('sourceItemId', sql.NVarChar(128), sourceItemId)
-        .query<{ id: string }>(`SELECT TOP (1) CONVERT(varchar(20), id) AS id
-          FROM dbo.messages
-          WHERE source_item_id = @sourceItemId AND role = N'dan'
-          ORDER BY id DESC;`);
+        .query<{ id: string }>(`SELECT TOP (1) CONVERT(varchar(20), m.id) AS id
+          FROM dbo.messages AS m
+          WHERE m.source_item_id = @sourceItemId AND m.role = N'dan'
+          ORDER BY m.id DESC;`);
       return result.recordset[0]?.id ?? null;
     },
 
@@ -793,11 +804,11 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
                 SELECT 1 FROM dbo.session_runtime_tests r WHERE r.jarvis_session_id = s.id))))
           ORDER BY m.id DESC;
 
-          SELECT CONVERT(varchar(20), id) AS id,
+          SELECT CONVERT(varchar(20), h.id) AS id,
             CONVERT(varchar(20), session_id) AS session_id, channel, language, role, text, model,
             interrupted, voice_minutes, metadata, at
-          FROM @history
-          ORDER BY id;
+          FROM @history AS h
+          ORDER BY h.id;
 
           SELECT CONVERT(varchar(20), tc.id) AS id,
             CONVERT(varchar(20), tc.message_id) AS message_id, tc.tool, tc.outcome,

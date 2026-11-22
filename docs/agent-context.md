@@ -147,6 +147,12 @@ events
 - Harness timing rule: a step waits for what the relay has observed (`voice.received`, stored messages, `voice.settle()`), never for a bare sleep; the one sleep left is the relay's own 1.5 s quiet window, counted from the relay's receipt of the aside (S12c). `speechLagMs` makes the GPT-Live stub speak late, in order; S12a-c run with the first note 1.8 s late, because a note that reaches the relay after Dan's next words joins that reply and the test must not hang on how quick the stub is.
 - Product rule for the scenarios: a non-delete write finishes in one turn with no confirmation; only a delete may ask. Do not add an approval step to a PI tool.
 
+## iPhone Chat composer and reply checks — 22 November 2026 (#2026, #2010)
+
+- Use the JarvisCore suite (`swift test --package-path apps/ios/Packages/JarvisCore` or the `swift:6.2` Linux container used by `ios-ci.yml`). The draft, reply outcome and SSE tests are offline. The watch-build job compiles the iPhone app with Xcode; Linux cannot qualify the SwiftUI layout or UIKit keyboard.
+- Run the full backend fixture suite (`npm test --workspace @jarvis/backend`) plus lint and build on the pinned Node version. The route and Chat/Voice parity tests use scripted replies. Run `npm run test:database --workspace @jarvis/backend` against the isolated loopback SQL Server from `database-ci.yml`. `conversation-blocks.integration.test.ts` checks the saved reply's turn ID with and without a reply notification, and paging across a message ID digit boundary. Do not run `measure_pi`, a deploy smoke or a Foundry probe.
+- On iPhone, enable Background motion, leave Voice and sharing idle and type rapidly in a 100+ message Chat. Verify each character, the keyboard and scrolling. Check a completed answer, Stop before completion and a follow-up while Jarvis is still answering. Open Plus > **Test a reply** and send a short prompt in an available setup; check the reply and return to the unchanged normal draft/history.
+
 ## See the brain — 21 November 2026 (Refs #1969)
 
 - Where to look (every field below is a number or a fixed word; Application Insights `traces`, `message` is the event name and the fields are in `customDimensions`, or the container's stdout JSON):
@@ -565,15 +571,16 @@ Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .githu
   independent of issuance. Shared-peer traffic can exhaust a one-second window;
   sustained attacks and distributed quotas remain outside this guarantee.
   The existing two-request concurrency and PCM/body limits are unchanged.
-  Watch transcription has a 20-second server deadline and a 30-second,
-  cancellable Watch transcribing state. With a reachable phone, direct attempts
-  are limited to 10 seconds so the phone fallback keeps the rest; otherwise they
-  keep 22 seconds. Failures offer keyboard entry (P15-160 / #1856).
+  Watch transcription has a 20-second server deadline. The Watch uses 30 seconds
+  plus clip length overall and, with a reachable phone, 10 seconds plus clip
+  length for direct transcription (maximum 22 seconds, #1950). Without the
+  phone the direct attempt gets 22 seconds. The Watch's wait is cancellable.
 - The Watch stores the credential in Keychain and uploads only to the configured
   HTTPS backend's `POST /voice/watch/transcribe`. Do not put credentials in
   snapshots, UserDefaults, fixtures, logs or diagnostic UI. Do not copy the
   owner's account token to Watch or widen this credential to chat/voice.
-- Direct failure falls back to companion transcription, then keyboard entry.
+- Direct transport failure falls back to companion transcription once.
+  If it fails or no words are recognised, offer Retry and keyboard entry.
   No draft is automatically sent and no uncertain chat/voice action is replayed.
 - Linux checks cannot establish WatchConnectivity wake/lock behavior or native
   Keychain/audio behavior. Validate on a paired Watch: cold start, locked phone,
@@ -8925,6 +8932,30 @@ Voice startup waits up to 15 seconds for the companion connection and keeps Conn
 
 For #1769, the documented WatchContractTests filter matches no tests in this checkout. Run the existing full JarvisCore suite and the native Watch build; verify persistence after first Watch unlock, locked complications, offline/partial refresh, age labels and sign-out on paired devices. Linux cannot verify Apple file protection or WidgetKit rendering.
 
+### Watch reliability — 22 November 2026 (Refs #2006)
+
+- Run `swift build` and `swift test -j 2` in JarvisCore with `swift:6.2` and
+  parse the changed app files on Linux. The macOS `watch` job type-checks the
+  Watch app and phone bridge. No live provider, Foundry or `measure_pi` check.
+- The fallback fixture runs on Linux, but its `waitsForConnectivity` assertion
+  is Apple-only: Linux Foundation does not expose that property.
+- Dan: dictate five short clips in a row from the complication and five from
+  Chat. Tap Stop each time; each transcript should append once to the draft
+  without sending. Stop once without speaking, then tap Retry and check that
+  the previous draft is still there.
+- Dan: if the Watch has no direct network path but can still reach the iPhone,
+  dictate again. It should try the phone without waiting out the direct
+  request deadline. Switching off Wi-Fi alone may leave another usable route.
+- Dan: have a two-minute back-and-forth. Switch between the Watch speaker and
+  Bluetooth once, and check that replies play and voice returns to Listening.
+  While actually using Wi-Fi to reach the iPhone, switch Watch Wi-Fi off and
+  back on within a few seconds: expect a reconnection message and the same call
+  to resume. Bluetooth may keep the link up, in which case there should be no
+  false warning. For a longer loss, reconnect and verify the explicit Retry.
+- If one of these fails, note the build, time, entry point and exact Watch
+  message. Match `WatchAudio` and `WatchVoice` route, format, buffer count and
+  peak with `watch_transcription.stage` to locate capture, upload or Speech.
+  Do not log audio, transcripts or credentials.
 
 ### 8 November: subscription access corrected
 

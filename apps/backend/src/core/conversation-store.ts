@@ -22,6 +22,8 @@ export interface ConversationMessage {
   readonly text: string;
   readonly model: string | null;
   readonly at: Date;
+  /** The accepted message that opened the typed turn, even if a follow-up steered its answer. */
+  readonly replyToTurnId?: string;
   readonly metadata?: { readonly visualContext: VisualContext };
   /** Structured content saved with an assistant reply; never changes after the reply is stored. */
   readonly blocks?: readonly ChatBlock[];
@@ -116,6 +118,7 @@ export interface ConversationStore {
     readonly attachmentRetentionDays?: number;
     readonly visualContext?: VisualContext;
     readonly blocks?: readonly ChatBlock[];
+    readonly replyToTurnId?: string;
     readonly replyNotification?: {
       readonly ownerObjectId: string;
       readonly turnMessageId?: string;

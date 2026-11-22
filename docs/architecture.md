@@ -1002,7 +1002,26 @@ managed-identity token cache is prewarmed at route registration, shares in-fligh
 requests and refreshes ahead of expiry. Proactive context has a 1.5-second
 diagnostic bound and falls back without gating the provider session.
 
-Watch voice shows Starting voice or Connecting to iPhone with a Cancel control while waiting up to 15 seconds for its paired iPhone, repeats a quick unavailable or busy start with the same request ID (the phone answers a repeated ID from its reply cache), and keeps a live session through a WatchConnectivity gap: it shows Reconnecting, waits up to 10 seconds after a 3-second debounce and confirms with a heartbeat, while the phone waits 15 seconds. The server request retains its existing 25-second transport deadline. Capture termination logs interruption, route change, cancellation, companion loss, sustained link stalls or unexpected stream completion, and user-facing errors describe the observed cause. Dictation retains its separate capture state and eight-second companion wait. Paired-device audio and production latency remain unverified.
+Watch voice shows Starting voice or Connecting to iPhone with Cancel while
+waiting up to 15 seconds for its paired iPhone. Quick unavailable or busy starts
+still use the same request ID and the phone's reply cache. The Watch prepares
+local capture and playback before requesting the phone session, so early replies
+can be played. For a WatchConnectivity gap in an active session (#2006), the
+Watch pauses outgoing audio and retries a heartbeat for the same session within
+10 seconds, including up to two seconds per reply. The phone's 15-second grace
+is unchanged. Lost audio is not replayed.
+
+On watchOS, a new capture uses a fresh graph and converts the actual tap
+format. After 250 ms for the route to settle, only a stopped graph or changed
+input/output ports trigger a rebuild on the same stream. A running graph
+does not restart just because the session reports a new rate or channel count.
+The Watch checks that the capture is current, restarts the graph and reports
+failures on the main actor. JarvisCore's budget allows two recoveries per
+capture in any ten-second window. A rebuild preserves the phone session ID
+and microphone packet sequence and stops playback queued on the old route
+rather than replaying it. A late callback from an earlier voice session cannot
+acknowledge playback on a new one. Watch Chat offers Retry if recovery fails
+or the route keeps changing past the limit. Paired-device audio remains unverified.
 
 ## Home brief and daily activity implementation — 9 November 2026
 
@@ -1193,6 +1212,39 @@ it never updates `JarvisChatModel`. Normal global history and active-turn discov
 already exclude runtime tests. `copilot_not_configured` means no managed verifier
 is wired; `copilot_not_verified` means configured metadata does not verify. No raw
 provider body is returned by availability.
+
+### iPhone draft and reply status (22 November 2026; #2026, #2010)
+
+`JarvisChatModel` keeps one `ChatComposerDraft` for typing, dictation, Home handoff
+and send. Only the composer observes it; editing text does not publish through
+the transcript's `ObservableObject`. Its existing editor revision still rejects a
+late UIKit edit after send.
+
+The stream stops at the saved `done` reply. An `error` with code `stopped` uses
+the existing `failureCopy` sentence without marking the turn failed. Stop leaves
+the stream open, so a reply saved in the race still wins. Steering retains any
+saved `interrupted` reply fragment; if there is none, `superseded` carries the
+request ID while the replacement continues. Replay loss leaves the result
+unconfirmed rather than failed if the stream acknowledged the message. Otherwise
+Chat keeps the sent text for Retry and restores it if the draft is still empty
+and on that send's revision. A reply notification failure cannot change the
+saved reply's result. A service shutdown cuts off the reply; only an explicit
+stop request produces a `stopped` result.
+
+A saved typed reply carries `replyToTurnId`, the accepted message ID that
+opened the stream, even if a follow-up steered it. The conversation store writes
+the link in the existing message metadata and exposes it in history. Chat
+dismisses an unconfirmed notice only on the linked saved reply, never on an
+unrelated message such as a proactive update in the same session. History sorts
+by the underlying `bigint` message ID before dropping the oldest lookahead row.
+The returned IDs and cursor are still strings.
+
+The iPhone **Test a reply** sheet still uses the existing isolated `current` and
+`copilot` sessions. It reports a reply from `done` or, after a disconnect, from a
+complete reply after the accepted request and before the next request in the
+same test session. A fragment or a later request's answer does not count. It does
+not rerun an accepted message. A server-reported failure requires a history
+review, and that read cannot release a managed claim.
 
 An explicit `refresh_managed_chat_definition` deployment input may create one new
 immutable version of the existing comparison agent when no current-manifest match
@@ -10501,6 +10553,16 @@ XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app.
 Companion requests wait briefly for an activated, reachable session and an installed companion before sending one acknowledged request. Subsequent voice audio and events still require live reachability. Watch dictation captures bounded PCM audio and first calls `POST /voice/watch/transcribe` directly over HTTPS. The signed-in phone provisions a separate 24-hour opaque credential through WatchConnectivity; Watch Keychain holds it, not the snapshot cache. Owner-only `POST /voice/watch/credential` rotates it and `DELETE` revokes it. SQL migration `0079_watch_credentials.sql` stores one hash and expiry per owner; verification reads that shared state and authorizes only the canonical transcription POST, never owner routes or the alias. The existing upload size and two-request concurrency limits remain in force; transcription has a 20-second server deadline. Recognition is English-only, with sanitized stage and duration logs (upload size, token, session, interim and provider-code stages, and the last stage reached at the deadline). The speech token comes from a process-local prewarmed, refresh-ahead cache. The Watch bounds and can cancel a 30-second transcribing state; the direct attempt gets 10 seconds when the phone is reachable and 22 otherwise, then falls back to companion transcription, then keyboard entry. The canonical Watch routes use `@fastify/rate-limit` with 30 attempts/second per transport peer before the root authentication hook, without trusting forwarded headers. Authenticated issuance is limited to six/minute per owner and Watch transcription to 30/minute per verified credential hash; unknown credentials never consume this longer budget. Revocation retains an independent short peer budget. Limits return 429 with Retry-After, use bounded per-replica caches, and do not extend the one-second peer window on excess traffic. They are not distributed quotas or protection against sustained shared-peer denial of service. The result only appends to the draft, without a voice response, tools or automatic send. The iPhone activates WCSession at launch, but its authenticated client is configured by the gate model, so a cold background launch may still need sign-in or initialization. A bounded readiness wait cannot force iOS background execution. Phone-after-reboot unlock, background wake, direct Wi-Fi/cellular uploads and live audio reliability require paired-device verification.
 
 Watch steps (15 November 2026, #1859): `WatchStepsMonitor` in the Watch app reads today's hourly steps from the Watch's own HealthKit (HKObserverQuery with hourly background delivery, the 15-minute `WKApplicationRefreshBackgroundTask`, and a 60-second loop while active) and passes a `WatchStepsReading` to `WatchConnection.applyStepsReading`. `WatchHealthSnapshot.applying` merges it into the shared health snapshot (steps never decrease within a day; a new day starts empty while keeping goals) and only the `jarvis.watch.health` timeline is reloaded. `stepsAt` records when steps were measured, so the complication shows "Saved … ago" once steps are older than 20 minutes, independent of the phone push. iPhone pushes keep their other fields but cannot roll steps back (`keepingHigherSteps`). A HealthKit result with no quantities is unavailable rather than zero, and readings only extend an existing pushed snapshot, so none is made after phone sign-out or by a query started before it. The Watch app holds `com.apple.developer.healthkit` and its background-delivery entitlement; the widget extension still only reads the app-group snapshot. Timeline policy stays `.after(15 minutes)` with extra entries at snapshot expiry.
+
+Watch dictation follow-up (#1950, #2006): recognition now detects Danish or
+English. The direct window grows with the clip to at most 22 seconds; the
+overall deadline grows from 30 seconds, measured after the capture is drained.
+The direct request does not wait for an unavailable network route; it can fall
+back to the iPhone once without using that transcription window. A completed
+result with no words does not fall back. Both entry points append just the
+successful text to the existing draft. After Stop, an audio interruption does
+not cancel transcription; Cancel, sign-out and the deadline still do. Retry
+starts a new recording.
 
 ### Notes recent-library projection
 
