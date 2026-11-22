@@ -7,6 +7,9 @@ struct VoiceScreenShareBridge {
         VoiceScreenShareContract.containerURL()
     }
 
+    @concurrent
+    func readHeartbeat() async -> Bool { isSharing }
+
     var isSharing: Bool {
         guard let containerURL else { return false }
         let activeURL = containerURL.appendingPathComponent(VoiceScreenShareContract.activeFileName)

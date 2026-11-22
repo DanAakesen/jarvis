@@ -51,5 +51,5 @@ Not built. Apple granted the Voice Based Conversation entitlement on 21 November
 | --- | --- |
 | Map and route card in Chat and Voice | Design brief only: [docs/ui/map-route-card/brief.md](docs/ui/map-route-card/brief.md). Dan chooses the layout, then it is built. |
 | Manual kcal entry on the Nutrition screen | Not built; waiting for [decision B](PLAN.md#open-decisions-af). |
-| Device acceptance of follow-latest, Voice state labels, Notes titles, Watch dictation and recovery | Merged, not accepted. Dan checks them on the next build, in the order in [PLAN.md](PLAN.md). |
+| Device acceptance of Chat typing, follow-latest, Voice state labels, Notes titles and Watch recovery | Build 124 testing is underway. [PLAN.md](PLAN.md) tracks the results of each check. |
 | CarPlay scenes | Not started. |
