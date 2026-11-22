@@ -41,6 +41,8 @@ function parse(raw: unknown, kind: Kind) {
   const values = operation === 'create' && kind === 'lifts' && record(raw.values) ? { sets: 1, ...raw.values } : raw.values;
   if (operation === 'create' || operation === 'update') {
     if (!record(values) || 'idempotencyKey' in values) throw new ToolRefusal('Supply the gym values; operation identity is managed by the server.');
+    const accepted = valueFields(kind, operation);
+    if (Object.keys(values).some(key => !accepted.includes(key))) throw new ToolRefusal(`${kind === 'lifts' ? 'Lift' : 'Session'} values for ${operation} take only ${accepted.join(', ')}.`);
     const checked = kind === 'lifts'
       ? operation === 'create' ? parseLiftCreate({ ...values, idempotencyKey: validationKey }) : parseLiftPatch(values)
       : operation === 'create' ? parseWorkoutCreate({ ...values, idempotencyKey: validationKey }) : parseWorkoutPatch(values);
@@ -78,6 +80,10 @@ const sessionFields = {
   sessionType: { type: 'string', enum: workoutSessionTypes }, title: nullableText(80), startedAt: text(64),
   durationMinutes: { type: ['integer', 'null'], minimum: 1, maximum: 1440 }, note: nullableText(500),
 };
+// Create takes every declared value; an edit cannot move a lift's time or workout link or a session's start.
+const editableFields = { lifts: ['exerciseName', 'weightKg', 'reps', 'sets'], sessions: ['sessionType', 'title', 'durationMinutes', 'note'] };
+const valueFields = (kind: Kind, operation: 'create' | 'update') =>
+  operation === 'create' ? Object.keys(kind === 'lifts' ? liftFields : sessionFields) : editableFields[kind];
 
 function gymTool(kind: Kind, access: GymAccess): JarvisTool {
   return {
@@ -94,6 +100,11 @@ function gymTool(kind: Kind, access: GymAccess): JarvisTool {
     execution: { defaultEffect: 'action', operation: { field: 'operation', effects: { list: 'read', create: 'action', update: 'action', delete: 'action' } } },
     sensitive: true, denyOnPhone: true,
     validateInput: raw => { try { parse(raw, kind); return true; } catch { return false; } },
+    // parse() refusals are static wording that names the invalid field; none echoes a supplied value.
+    explainInvalidInput: raw => {
+      try { parse(raw, kind); } catch (error) { return error instanceof ToolRefusal ? error.message : undefined; }
+      return undefined;
+    },
     execute: async (raw, request, signal) => {
       const owner = resolveHealthConversationOwner(request);
       const input = parse(raw, kind);

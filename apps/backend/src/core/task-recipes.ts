@@ -273,7 +273,7 @@ export async function createRecipeSession(
       try {
         await withAbort(runtime.store.save(draft, completionSignal), completionSignal);
       } catch {
-        throw new ToolFailure('The task completed, but its recipe could not be saved.');
+        throw new ToolFailure('The task completed, but its recipe could not be saved.', { outcomeUnknown: true });
       }
     },
   };

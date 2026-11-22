@@ -452,7 +452,7 @@ export async function executeReflexAction(
       result = { refused: error.message };
     } else if (error instanceof ToolFailure && !signal.aborted) {
       outcome = 'error';
-      result = { failure: error.message };
+      result = { failure: error.message, ...(error.outcomeUnknown ? { outcomeUnknown: true } : {}) };
     } else {
       const unexpected = unexpectedToolFailure(error, signal.aborted, effectOf(target.tool, target.arguments));
       outcome = 'error';

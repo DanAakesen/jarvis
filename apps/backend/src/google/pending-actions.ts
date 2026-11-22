@@ -6,13 +6,25 @@ import { approvalNotPending } from '../core/approval.js';
 import {
   fastApprovalDecider, type ApprovalDecider, type ApprovalVerdict,
 } from '../core/approval-interpreter.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { PendingAction as Confirmation } from '../core/pending-action.js';
+import { GoogleApiError } from './api-client.js';
 
 const ACTION_TTL_MS = 10 * 60_000;
 const MAX_PENDING_ACTIONS = 50;
 const COMPLETED_ACTION_REPLY_INSTRUCTION =
   'The action is done. Confirm it in one short sentence without reading the details aloud; they are on screen.';
+
+/** A write Google refused before changing anything. An uncertain write, or any unexpected error, may have happened. */
+const failedWithoutEffect = (error: unknown): boolean =>
+  error instanceof ToolFailure && error.cause instanceof GoogleApiError && error.cause.kind !== 'uncertain';
+
+/** A batch in which no event was created and none is unverified. */
+const batchChangedNothing = (result: unknown): boolean => {
+  const items = result !== null && typeof result === 'object' ? (result as { items?: unknown }).items : undefined;
+  return Array.isArray(items) && items.length > 0 && items.every((item) =>
+    item !== null && typeof item === 'object' && ['failed', 'not_attempted'].includes((item as { status?: string }).status ?? ''));
+};
 
 export type GoogleActionScope = 'calendar' | 'mail';
 
@@ -59,10 +71,16 @@ export class PendingGoogleActions {
     const key = JSON.stringify([input.sourceSessionId, input.sourceMessageId, input.scope, input.requestKey, input.summary, input.items]);
     const prior = this.requested.get(key);
     if (prior) return prior.result;
-    if (this.requested.size >= MAX_PENDING_ACTIONS) throw new ToolRefusal('Too many actions are currently being tracked.');
+    if (this.requested.size >= MAX_PENDING_ACTIONS) {
+      throw new ToolRefusal(`Too many calendar and mail changes were requested in the last ${ACTION_TTL_MS / 60_000} minutes (the limit is ${MAX_PENDING_ACTIONS}). Wait a few minutes and try again.`);
+    }
     const result = Promise.resolve().then(() => input.execute(input.signal));
-    // Retain uncertain failures too: a duplicate call must not send/create again.
-    this.requested.set(key, { expiresAt: this.now() + ACTION_TTL_MS, result });
+    // The receipt stops a duplicate call from sending or creating twice, so it stays after a success and after an uncertain
+    // failure. A call known to have changed nothing (rate limit, rejection, missing item) may be tried again.
+    const receipt = { expiresAt: this.now() + ACTION_TTL_MS, result };
+    this.requested.set(key, receipt);
+    const forget = () => { if (this.requested.get(key) === receipt) this.requested.delete(key); };
+    result.then((value) => { if (batchChangedNothing(value)) forget(); }, (error) => { if (failedWithoutEffect(error)) forget(); });
     return result;
   }
 

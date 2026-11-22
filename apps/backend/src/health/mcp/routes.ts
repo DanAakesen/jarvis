@@ -87,14 +87,14 @@ function response(value: Record<string, unknown>): CallToolResult {
 }
 function savedReceipt(row: Record<string, unknown>, operation: string, source: 'favorite' | 'plan'): CallToolResult {
   if (!row || typeof row.id !== 'string' || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
-    throw new ToolFailure('The saved-food write may have committed, but its receipt is unavailable. Retry the same operation and revision.');
+    throw new ToolFailure('The saved-food write may have committed, but its receipt is unavailable. Retry the same operation and revision.', { outcomeUnknown: true });
   }
   return response({ status: 'committed', operation, record: projectNutritionRecord(row, source) });
 }
 function receipt(row: Record<string, unknown>, operation: string): CallToolResult {
   const revision = String(row.revision ?? '');
   if (typeof row.id !== 'string' || typeof row.idempotency_key !== 'string' || !/^[1-9]\d*$/u.test(revision)) {
-    throw new ToolFailure('The write may have committed, but its receipt is unavailable. Retry the same operation ID; do not create another intake.');
+    throw new ToolFailure('The write may have committed, but its receipt is unavailable. Retry the same operation ID; do not create another intake.', { outcomeUnknown: true });
   }
   return response({
     status: 'committed', operation, id: row.id, idempotencyKey: row.idempotency_key, revision,
@@ -322,7 +322,7 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
                 reviewedFavorites: new Map([[change.favoriteId, favoriteFingerprint(favorite)]]),
               });
               if (!row || row.meal_key !== change.favoriteId || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
-                throw new ToolFailure('The preference may have committed, but its receipt is unavailable. Retry the same preference and revision.');
+                throw new ToolFailure('The preference may have committed, but its receipt is unavailable. Retry the same preference and revision.', { outcomeUnknown: true });
               }
               return response({ status: 'committed', operation: change.operation,
                 record: projectHealthRecord(row, ['meal_key', 'preference', 'revision', 'created_at', 'updated_at']) });

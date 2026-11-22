@@ -138,4 +138,26 @@ describe('the brain\'s chat message', () => {
     expect(conversations.messages).toHaveLength(1);
     expect(pushes).toEqual([]);
   });
+
+  it.each([
+    { number: 51002, says: 'The evidence behind this message changed just before delivery.' },
+    { number: 51001, says: 'Another message to Dan was still being delivered.' },
+  ])('turns the chat store\'s SQL error $number into a plain refusal and sends nothing', async ({ number, says }) => {
+    const { comms, conversations, pushes } = setup();
+    (conversations.store as { addProactiveMessage: unknown }).addProactiveMessage =
+      async () => { throw Object.assign(new Error('Proactive situation evidence generation changed before delivery'), { number }); };
+    const failure = await comms.send({ text: 'Mapped.' }, run(), signal).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(BrainCommsRefusal);
+    expect(failure).toMatchObject({ reason: 'other', message: expect.stringContaining(says) });
+    expect((failure as Error).message).not.toContain('Proactive situation');
+    expect(conversations.messages).toHaveLength(1);
+    expect(pushes).toEqual([]);
+  });
+
+  it('leaves every other chat store error, SQL or not, as it was thrown', async () => {
+    const { comms, conversations } = setup();
+    const deadlock = Object.assign(new Error('Transaction was deadlocked'), { number: 1205 });
+    (conversations.store as { addProactiveMessage: unknown }).addProactiveMessage = async () => { throw deadlock; };
+    await expect(comms.send({ text: 'Deadlocked.' }, run(), signal)).rejects.toBe(deadlock);
+  });
 });

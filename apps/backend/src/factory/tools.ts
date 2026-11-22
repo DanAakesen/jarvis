@@ -22,6 +22,7 @@ import {
   createJarvisIssue,
   createLinkedTaskFromPrompt,
   IssueCreationPartialError,
+  IssueDraftValidationError,
   IssueTaskCodeConflictError,
   IssueWriteUncertainError,
   LinkedIssueTaskCreationError,
@@ -99,17 +100,23 @@ const requestedIssues = new WeakMap<FastifyInstance, Map<string, {
   fingerprint: string; expiresAt: number; result: Promise<unknown>;
 }>>();
 
+interface InstructionReceiptOptions {
+  /** One instruction may make several different requests (the PI agent, a comment): only an identical repeat is answered from the first. */
+  readonly byDraft?: boolean;
+  /** The write has its own durable check, so a failed attempt is not remembered: a retry looks again and writes only if nothing landed. */
+  readonly forgetFailures?: boolean;
+}
+
 function oncePerIssueInstruction(
   server: FastifyInstance, source: ConversationMessage, draft: Record<string, unknown>,
-  work: () => Promise<unknown>, pi = false,
+  work: () => Promise<unknown>, options: InstructionReceiptOptions = {},
 ): Promise<unknown> {
   let requests = requestedIssues.get(server);
   if (!requests) { requests = new Map(); requestedIssues.set(server, requests); }
   const now = Date.now();
   for (const [key, entry] of requests) if (entry.expiresAt <= now) requests.delete(key);
   const fingerprint = issueRequestFingerprint(draft);
-  // The PI agent may make several different requests in one turn or wake; only an identical repeat is answered from the first.
-  const key = pi ? `${source.sessionId}:${source.id}:${fingerprint}` : `${source.sessionId}:${source.id}`;
+  const key = options.byDraft ? `${source.sessionId}:${source.id}:${fingerprint}` : `${source.sessionId}:${source.id}`;
   const existing = requests.get(key);
   if (existing) {
     if (existing.fingerprint !== fingerprint) throw new ToolRefusal('This instruction already has an issue request. Check its saved proposal or work status before changing the scope.');
@@ -117,12 +124,28 @@ function oncePerIssueInstruction(
   }
   if (requests.size >= 100) throw new ToolFailure('Too many recent issue requests; check work status before retrying.');
   const result = Promise.resolve().then(work).catch((error: unknown) => {
-    // Refusal before a write is correctable; uncertain write failures remain cached.
-    if (error instanceof ToolRefusal) requests.delete(key);
+    // Refusal before a write is correctable; uncertain write failures remain cached unless the write can be looked up again.
+    if (error instanceof ToolRefusal || options.forgetFailures) requests.delete(key);
     throw error;
   });
   requests.set(key, { fingerprint, expiresAt: now + issueCreationTtlMs, result });
   return result;
+}
+
+/** What a comment Jarvis posts for one instruction ends with: invisible on GitHub, and the receipt a repeat of that instruction finds. */
+function commentMarker(source: ConversationMessage, draft: Record<string, unknown>): string {
+  return `<!-- jarvis-comment:${source.sessionId}:${source.id}:${issueRequestFingerprint(draft).slice(0, 16)} -->`;
+}
+
+/** The issue itself is the receipt, so it survives a restart and a reply that never arrived. Not being able to look is not a reason to refuse. */
+async function commentAlreadyPosted(
+  client: NonNullable<FastifyInstance['githubIssueClient']>, repository: string, issueNumber: number, marker: string,
+): Promise<boolean> {
+  try {
+    return (await client.readComments(repository, issueNumber)).some(({ body }) => body.includes(marker));
+  } catch {
+    return false;
+  }
 }
 
 declare module 'fastify' {
@@ -775,7 +798,7 @@ async function confirmIssueCreation(
           }
           await request.server.githubIssueClient!.createComment(action.repository, created.number, image, signal);
         } catch {
-          throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`);
+          throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`, { outcomeUnknown: true });
         }
       }
       return created;
@@ -786,12 +809,12 @@ async function confirmIssueCreation(
       throw new ToolRefusal(`${action.taskCode} was taken before confirmation; nothing was created. Draft the issue again to review the next available code.`);
     }
     if (error instanceof IssueCreationPartialError) {
-      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but its ${error.executor} handoff could not be confirmed. Check the issue before retrying.`);
+      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but its ${error.executor} handoff could not be confirmed. Check the issue before retrying.`, { outcomeUnknown: true });
     }
     if (error instanceof IssueWriteUncertainError) {
-      throw new ToolFailure('Could not confirm whether the issue was created. Check the repository before retrying.');
+      throw new ToolFailure('Could not confirm whether the issue was created. Check the repository before retrying.', { outcomeUnknown: true });
     }
-    throw new ToolFailure('The GitHub write could not be confirmed. Check the issue and attachment branch before retrying.');
+    throw new ToolFailure('The GitHub write could not be confirmed. Check the issue and attachment branch before retrying.', { outcomeUnknown: true });
   }
 }
 
@@ -814,7 +837,7 @@ function taskListFilters(input: TaskListInput): TaskListFilters {
   if (input.projectId !== undefined) assertSqlBigInt(input.projectId);
   if (input.createdAfter && input.createdBefore &&
     Date.parse(input.createdAfter) >= Date.parse(input.createdBefore)) {
-    throw new Error('Invalid task filters');
+    throw new ToolRefusal('The created-after time must be earlier than the created-before time.');
   }
   return {
     ...(input.projectId ? { projectId: input.projectId } : {}),
@@ -828,12 +851,17 @@ function taskListFilters(input: TaskListInput): TaskListFilters {
   };
 }
 
+/** A task row leaves out the request: it is the whole task prompt, often over 10 KB, and get_task returns it. */
+function withoutRequest(task: TaskRecord): Omit<TaskRecord, 'request'> {
+  return Object.fromEntries(Object.entries(task).filter(([key]) => key !== 'request')) as Omit<TaskRecord, 'request'>;
+}
+
 async function controlTask(
   taskId: string,
   action: 'steer' | 'pause' | 'resume' | 'cancel',
   request: import('fastify').FastifyRequest,
   message?: string,
-): Promise<TaskRecord> {
+): Promise<Omit<TaskRecord, 'request'>> {
   assertSqlBigInt(taskId);
   if (action === 'steer' && !message?.trim()) throw new Error('Invalid steering message');
   const controller = requireStore(request.server.taskController, 'Task controls');
@@ -849,7 +877,7 @@ async function controlTask(
   if (result.kind === 'invalid-transition') throw new ToolRefusal(result.reason ?? 'Task state does not allow this action.');
   if (result.kind === 'unavailable') throw new ToolFailure(result.reason ?? 'Task runtime is unavailable');
   if (result.kind === 'failed') throw new ToolFailure(result.reason ?? 'Task control could not be completed');
-  return result.task;
+  return withoutRequest(result.task);
 }
 
 async function executeStartIssue(request: FastifyRequest, issue: number, project?: string) {
@@ -912,9 +940,10 @@ export const factoryTools: readonly JarvisTool[] = [
         return await oncePerIssueInstruction(request.server, source, { repository: targetRepository, ...draft }, async () => {
           const staged = await stageIssueCreation(request.server, draft, source, signal, selectedProject, isPiCall(request));
           return confirmIssueCreation(request, staged.confirmationCode, signal, true);
-        }, isPiCall(request));
+        }, { byDraft: isPiCall(request) });
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+        if (error instanceof IssueDraftValidationError) throw new ToolRefusal(error.message);
         throw new ToolFailure('The GitHub issue draft could not be prepared.');
       }
     },
@@ -943,6 +972,7 @@ export const factoryTools: readonly JarvisTool[] = [
           if (!isPiCall(request) && input.repository === undefined && input.project === undefined && requiresProjectSelector(source.text)) {
             throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
           }
+          if (!input.text.trim()) throw new ToolRefusal('The comment has no words to post. Nothing was posted.');
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
           const selectedProject = !input.repository && input.project
             ? await (isPiCall(request) ? resolveProject(input.project, request.server.projectStore ?? null)
@@ -953,31 +983,44 @@ export const factoryTools: readonly JarvisTool[] = [
           if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
             throw new ToolRefusal('That repository name is invalid.');
           }
-          const issuer = request.server.githubAppTokenIssuer;
-          if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
-          let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
-          try {
-            permissions = await issuer.readInstallationPermissions(repository);
-          } catch {
-            throw new ToolFailure('I couldn’t read my GitHub App permissions.');
-          }
-          if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
-            throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
-          }
-          if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
-          const issue = await request.server.githubIssueClient?.readIssue(repository, input.issueNumber);
-          if (!issue || issue.isPullRequest) throw new ToolRefusal('I couldn’t find that GitHub issue.');
-          try {
-            if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
-            await request.server.githubIssueClient!.createComment(repository, input.issueNumber, input.text, signal);
-          } catch (error) {
-            if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
-            if (typeof error === 'object' && error !== null && 'status' in error && error.status === 403) {
+          const draft = { repository, issueNumber: input.issueNumber, text: input.text };
+          const marker = commentMarker(source, draft);
+          // The same instruction asking for the same comment again (a retry, a replay, a restart) is answered from the first
+          // attempt: from this process while it remembers it, and from the marker on the issue after that.
+          return await oncePerIssueInstruction(request.server, source, draft, async () => {
+            const issuer = request.server.githubAppTokenIssuer;
+            if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
+            let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
+            try {
+              permissions = await issuer.readInstallationPermissions(repository);
+            } catch {
+              throw new ToolFailure('I couldn’t read my GitHub App permissions.');
+            }
+            if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
               throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
             }
-            throw new ToolFailure('I couldn’t post the GitHub issue comment.');
-          }
-          return { status: 'commented', number: input.issueNumber, url: issue.url };
+            if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
+            const issue = await request.server.githubIssueClient?.readIssue(repository, input.issueNumber);
+            if (!issue || issue.isPullRequest) throw new ToolRefusal('I couldn’t find that GitHub issue.');
+            if (await commentAlreadyPosted(request.server.githubIssueClient!, repository, input.issueNumber, marker)) {
+              return { status: 'commented', number: input.issueNumber, url: issue.url, alreadyPosted: true };
+            }
+            try {
+              if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
+              await request.server.githubIssueClient!.createComment(repository, input.issueNumber, input.text, signal, marker);
+            } catch (error) {
+              if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+              const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+              if (status === 403) throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
+              // A 4xx answer means nothing was posted. A 5xx, or no answer at all, can come after GitHub stored the comment; the next try looks first.
+              const refused = typeof status === 'number' && status < 500;
+              throw new ToolFailure(refused
+                ? 'I couldn’t post the GitHub issue comment.'
+                : 'I couldn’t confirm whether the GitHub issue comment was posted. Asking again checks the issue first, so it is not posted twice.',
+              refused ? {} : { outcomeUnknown: true });
+            }
+            return { status: 'commented', number: input.issueNumber, url: issue.url };
+          }, { byDraft: true, forgetFailures: true });
         }
         const source = await currentDanMessage(request, 'issue comment');
         return await oncePerIssueInstruction(request.server, source, input, async () => {
@@ -985,7 +1028,7 @@ export const factoryTools: readonly JarvisTool[] = [
             ...input, title: 'Issue comment', body: input.text,
           }, source, signal, undefined, isPiCall(request));
           return confirmIssueCreation(request, staged.confirmationCode, signal, true);
-        }, isPiCall(request));
+        }, { byDraft: isPiCall(request) });
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolRefusal('The issue comment is invalid, contains a secret, or could not be prepared.');
@@ -1033,7 +1076,7 @@ export const factoryTools: readonly JarvisTool[] = [
       additionalProperties: false,
     },
     execute: async (input, request, signal) => {
-      const message = await currentDanMessage(request);
+      const message = await currentDanMessage(request, 'issue start');
       const { project, issue } = input as StartIssueToolInput;
       const pi = isPiCall(request);
       if (!pi && project === undefined && requiresProjectSelector(message.text)) {
@@ -1045,6 +1088,8 @@ export const factoryTools: readonly JarvisTool[] = [
         : undefined;
       const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
       if (repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+        let staged: Awaited<ReturnType<typeof stageIssueCreation>>;
+        // Only the steps before any write are covered by "nothing was started"; confirming below can have written.
         try {
           const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
           if (!existing || existing.isPullRequest || existing.state !== 'open') {
@@ -1054,15 +1099,18 @@ export const factoryTools: readonly JarvisTool[] = [
           if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
             return await executeStartIssue(request, issue, ownProject.id);
           }
-          const staged = await stageIssueCreation(request.server, {
+          staged = await stageIssueCreation(request.server, {
             ...(selectedProject ? { project: selectedProject.id } : {}),
             issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
           }, message, signal, selectedProject, pi);
-          return await confirmIssueCreation(request, staged.confirmationCode, signal, true);
         } catch (error) {
-          if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          // The caller's own cancel is not an outage.
+          if (signal.aborted || error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          // A secret-like word or an empty or oversized text is a refusal with its reason, not an outage.
+          if (error instanceof IssueDraftValidationError) throw new ToolRefusal(error.message);
           throw new ToolFailure('I couldn’t start that issue because GitHub or the task store did not answer. Nothing was started; try again shortly.');
         }
+        return confirmIssueCreation(request, staged.confirmationCode, signal, true);
       }
       return executeStartIssue(request, issue, project);
     },
@@ -1143,7 +1191,8 @@ export const factoryTools: readonly JarvisTool[] = [
     execute: async (input, request) => {
       const store = requireStore(request.server.taskStore, 'Task service');
       const filters = taskListFilters(input as TaskListInput);
-      return { tasks: await store.list(filters), limit: filters.limit, offset: filters.offset };
+      const tasks = (await store.list(filters)).map(withoutRequest);
+      return { tasks, limit: filters.limit, offset: filters.offset };
     },
   },
   {
@@ -1310,13 +1359,13 @@ export const factoryTools: readonly JarvisTool[] = [
         ...(reasoning ? { reasoningOverride: reasoning } : {}),
       }).catch((error: unknown) => {
         if (error instanceof LinkedIssueTaskCreationError) {
-          throw new ToolFailure(`GitHub issue #${error.issue.number} was created, but its Factory task could not be queued.`);
+          throw new ToolFailure(`GitHub issue #${error.issue.number} was created, but its Factory task could not be queued.`, { outcomeUnknown: true });
         }
         throw new ToolFailure('The GitHub issue or linked Factory task could not be created.');
       });
       if (!linked) throw new ToolRefusal('Active project not found.');
       if ('kind' in linked) {
-        throw new ToolFailure(`GitHub issue #${linked.issue.number} was created, but its Factory task could not be queued.`);
+        throw new ToolFailure(`GitHub issue #${linked.issue.number} was created, but its Factory task could not be queued.`, { outcomeUnknown: true });
       }
       return {
         task: { id: linked.task.id, title: linked.task.title, state: linked.task.state, agent: linked.task.agent },

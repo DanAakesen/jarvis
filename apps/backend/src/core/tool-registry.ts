@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { isBrainOnlyTool } from '../pi/brain/policy.js';
 import { gmailAccessGuard } from './gmail-access-policy.js';
+import { writingTools } from './tool-effects.js';
 
 // Kept as HTTP compatibility endpoints for older clients, but no longer
 // advertised to the assistant as part of normal owner-request execution.
@@ -87,11 +88,19 @@ export class ToolRefusal extends Error {
 
 /** A sanitized failure detail that is safe to show the user without provider internals. */
 export class ToolFailure extends Error {
-  constructor(reason: string) {
+  /**
+   * True when the text itself says what is and is not known: the call may or may not have done its work, or only part of it did
+   * ("created, but the handoff could not be confirmed"). It is then shown as written, without "Not done." in front, and a repeat
+   * of the call is not blindly run again. False means the tool claims nothing happened.
+   */
+  readonly outcomeUnknown: boolean;
+
+  constructor(reason: string, options: { readonly outcomeUnknown?: true } = {}) {
     const trimmed = typeof reason === 'string' ? reason.trim() : '';
     if (!trimmed || trimmed.length > 500) throw new TypeError('Invalid tool failure reason');
     super(trimmed);
     this.name = 'ToolFailure';
+    this.outcomeUnknown = options.outcomeUnknown === true;
   }
 }
 
@@ -153,7 +162,8 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       }
       const inputSchema = structuredClone(tool.inputSchema);
       freezeSchema(inputSchema);
-      const execution = tool.execution === undefined ? undefined : structuredClone(tool.execution);
+      const declared = tool.execution ?? (Object.hasOwn(writingTools, tool.name) ? writingTools[tool.name] : undefined);
+      const execution = declared === undefined ? undefined : structuredClone(declared);
       if (execution) freezeSchema(execution);
       tools.set(tool.name, Object.freeze({
         ...tool, execute: guardGmailAccess(tool), inputSchema, ...(execution ? { execution } : {}),

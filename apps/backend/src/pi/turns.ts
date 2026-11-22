@@ -31,6 +31,8 @@ export interface PiToolAnswer {
   readonly text: string;
   readonly isError: boolean;
   readonly truncated: boolean;
+  /** An error whose own text says the call may or may not have done its work (or only part of it): see `ToolFailure.outcomeUnknown`. */
+  readonly outcomeUnknown?: boolean;
 }
 
 /** One action call of a turn that went to its tool: what it asked for, which request carried it, and how it went. */
@@ -39,10 +41,13 @@ export interface PiActionRun {
   readonly asked: string;
   /** The call id the harness gave the request that carried it (see mcp.ts), when it gave one. */
   readonly identity: string | undefined;
-  /** The first answer once the run succeeded; undefined when it did not (a refusal, or an error: an error is no proof that nothing ran). */
+  /** The first answer once the run succeeded or may have gone through; undefined when it did not (a refusal, or an error that says nothing happened). */
   readonly answer: Promise<PiToolAnswer | undefined>;
-  /** `running` until it settles. A failed run is never replayed and does not count as having executed. */
-  state: 'running' | 'ok' | 'failed';
+  /**
+   * `running` until it settles. `unknown` is an error that says the call may have done its work: it is kept like a success, so a
+   * replay is answered with it and the effect is not run a second time. A failed run is never replayed and does not count as having executed.
+   */
+  state: 'running' | 'ok' | 'unknown' | 'failed';
 }
 
 /**

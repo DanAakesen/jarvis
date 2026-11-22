@@ -296,7 +296,7 @@ export function createInboxModule(options: {
           if (error instanceof ToolRefusal || error instanceof InboxError) refusal(error);
           if (signal.aborted) throw error;
           request.log.warn({ msg: 'inbox.tool', tool: 'inbox_close', outcome: 'error' }, 'inbox.tool');
-          throw new ToolFailure('The inbox item could not be closed. Check the inbox before trying again.');
+          throw new ToolFailure('The inbox item could not be closed. Check the inbox before trying again.', { outcomeUnknown: true });
         }
       },
     },
