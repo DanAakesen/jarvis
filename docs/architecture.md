@@ -1,6 +1,6 @@
 ## System map — PI, tools, voice and who owns what (21 November 2026)
 
-This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `df84095f` (#2014, 21 November 2026, 23:23 UTC).
+This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `9e41b8e6` (#2013, 22 November 2026, 06:49 UTC). I read the code facts at `df84095f` (#2014); since then only the iPhone voice client changed (#2013), which this section does not cover.
 
 ### Legend
 
