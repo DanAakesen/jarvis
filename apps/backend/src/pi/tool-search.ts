@@ -37,9 +37,10 @@ interface IntentAlias {
 export const intentAliases: readonly IntentAlias[] = [
   // Nouns: what the request is about.
   { stems: ['vejr*', '*vejr', 'weather', 'forecast*', 'prognose*', 'temperatur*', 'regn*', 'rain*', 'snow*', 'sne', 'wind*', 'blæst*', 'storm*', 'solskin*', 'paraply*', 'varm*', 'kold*', 'kulde', 'udenfor', 'warm', 'cold', 'hot', 'outside'], terms: ['weather'] },
-  { stems: ['remember', 'memory', 'memories', 'hukommelse*', 'erindring*'], terms: ['memory'] },
-  { stems: ['husk'], terms: ['memory', 'remember'] },
-  { stems: ['husker', 'husket', 'recall'], phrases: ['what do you remember', 'do you remember', 'what you remember', 'can you remember'], terms: ['memory', 'search'] },
+  { stems: ['remember', 'memory', 'memories', 'hukommelse*', 'erindring*', 'huskeregel*', 'huskeseddel*', 'huskesedl*'], terms: ['memory'] },
+  // The forms of "husk" are listed, not `husk*`: that would also match huskeliste*, a to-do list (below).
+  { stems: ['husk', 'huske', 'huskede', 'huskes'], terms: ['memory', 'remember'] },
+  { stems: ['husker', 'husket', 'recall'], phrases: ['what do you remember', 'do you remember', 'what you remember', 'can you remember', 'huske hvad', 'huske hvem', 'huske hvor', 'huske om', 'huske noget'], terms: ['memory', 'search'] },
   { stems: [], phrases: ['know about me', 'ved du om mig', 'husker du om mig', 'remember about me'], terms: ['memory', 'search'] },
   { stems: ['forget', 'forgot', 'glem*'], terms: ['memory', 'forget'] },
   { stems: [], phrases: ['don’t forget', "don't forget", 'do not forget', 'dont forget', 'never forget', 'glem ikke', 'lad være med at glemme'], terms: ['memory', 'remember'] },

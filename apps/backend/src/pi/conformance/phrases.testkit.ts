@@ -19,6 +19,9 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'remember', en: 'do not forget that my sister’s birthday is on 3 March', da: 'glem ikke at min søsters fødselsdag er den 3. marts', tools: ['memory_remember'] },
   { intent: 'memory search', en: 'what do you remember about my sister', da: 'hvad husker du om min søster', tools: ['memory_search'] },
   { intent: 'memory search', en: 'search my memory for the bike', da: 'søg i min hukommelse efter cyklen', tools: ['memory_search'] },
+  { intent: 'remember', en: 'can you remember that I live in Aarhus', da: 'kan du huske at jeg bor i Aarhus', tools: ['memory_remember'] },
+  { intent: 'remember', en: 'you need to remember that I have a dog called Fido', da: 'du skal huske at jeg har en hund der hedder Fido', tools: ['memory_remember'] },
+  { intent: 'memory search', en: 'do you remember what I said about the bike', da: 'kan du huske hvad jeg sagde om cyklen', tools: ['memory_search'] },
   { intent: 'forget', en: 'forget that I like my coffee black', da: 'glem at jeg helst vil have sort kaffe', tools: ['memory_forget'] },
   // Reminders
   { intent: 'reminder', en: 'remind me in 20 minutes to call mum', da: 'påmind mig om 20 minutter om at ringe til mor', tools: ['owner_reminders'] },

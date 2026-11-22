@@ -48,6 +48,19 @@ describe('tool search wording', () => {
     expect(top('show issue 12 on github')[0]).toBe('gh_issue_read');
   });
 
+  it.each([
+    'huske', 'huskede', 'huskes', 'husk', 'kan du huske at jeg bor i Aarhus', 'du skal huske at jeg har en hund',
+    'jeg huskede ikke at sige det', 'det skal huskes', 'huskeregel',
+  ])('finds a memory tool for the Danish "%s"', (query) => {
+    expect(top(query).slice(0, 3).some((name) => name.startsWith('memory_'))).toBe(true);
+  });
+
+  it('puts a request to remember a fact first, and a huskeliste with the tasks', () => {
+    expect(top('kan du huske at jeg bor i Aarhus')[0]).toBe('memory_remember');
+    expect(top('du skal huske at jeg har en hund')[0]).toBe('memory_remember');
+    expect(top('min huskeliste').slice(0, 3)).not.toContain('memory_remember');
+  });
+
   it('ignores words that carry no meaning instead of letting them score long descriptions', () => {
     expect(top('hvad er det')).toEqual([]);
     expect(top('what is it')).toEqual([]);
