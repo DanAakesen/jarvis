@@ -26,6 +26,38 @@ final class JarvisNotesRedesignTests: XCTestCase {
         XCTAssertEqual(parts.content, "# Title\nBody")
     }
 
+    func testRenamingAHeadinglessNotePreservesItsFirstLineAndProperties() {
+        let path = "Personal/weekend-plan.md"
+        let properties = "---\r\ntags: [personal]\r\n---\r\n"
+        let body = "The first line belongs to the body.\r\n\r\n# A later section\r\n- [ ] Pack"
+        let parts = JarvisNoteParts(properties + body)
+        XCTAssertEqual(parts.displayedTitle(path: path), "Weekend plan")
+        XCTAssertEqual(parts.content(editedTitle: "Weekend plan", path: path), properties + body)
+
+        let renamed = parts.content(editedTitle: "  Packing list  ", path: path)
+        XCTAssertEqual(renamed, properties + "# Packing list\r\n\r\n" + body)
+        XCTAssertEqual(JarvisNoteTitle.title(content: renamed, path: path), "Packing list")
+        XCTAssertEqual(JarvisNoteParts(renamed).readableBody.trimmingCharacters(in: .newlines), body)
+    }
+
+    func testRenamingAnExistingHeadingChangesOnlyTheHeading() {
+        let path = "old-name.md"
+        let parts = JarvisNoteParts("\n# Original title\n\nBody")
+        XCTAssertEqual(parts.displayedTitle(path: path), "Original title")
+        XCTAssertEqual(parts.content(editedTitle: "New title", path: path), "\n# New title\n\nBody")
+        XCTAssertEqual(parts.content(editedTitle: " ", path: path), parts.content)
+    }
+
+    func testEditingOnlyTheBodyDoesNotPromoteTheFallbackTitle() {
+        var parts = JarvisNoteParts("Original body")
+        parts.body = "New body"
+        XCTAssertEqual(parts.content(editedTitle: "Old name", path: "old-name.md"), "New body")
+        XCTAssertEqual(
+            JarvisNoteParts("---\nflag: true\n---").content(editedTitle: "New title", path: "old-name.md"),
+            "---\nflag: true\n---\n# New title"
+        )
+    }
+
     func testNewNoteGetsARealTitleHeading() {
         XCTAssertEqual(JarvisNoteParts(newTitle: " Plan ", body: "Body").content, "# Plan\n\nBody")
     }

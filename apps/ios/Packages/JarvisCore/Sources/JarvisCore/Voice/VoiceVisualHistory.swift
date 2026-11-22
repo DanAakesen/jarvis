@@ -1,3 +1,5 @@
+import Foundation
+
 public struct PresentedWorkspaceView: Equatable, Identifiable, Sendable {
     public let viewId: String
     public let view: GeneratedView
@@ -36,5 +38,14 @@ public struct VoiceVisualHistory: Equatable, Sendable {
         if selectedID == id {
             selectedID = entries.isEmpty ? nil : entries[min(index, entries.count - 1)].id
         }
+    }
+}
+public enum VoiceVerticalSwipe: Equatable, Sendable {
+    case up, down
+
+    public init?(translation: CGSize, minimumDistance: CGFloat) {
+        let vertical = abs(translation.height)
+        guard vertical >= minimumDistance, vertical > abs(translation.width) else { return nil }
+        self = translation.height < 0 ? .up : .down
     }
 }

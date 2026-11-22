@@ -12,7 +12,8 @@ public struct JarvisNoteParts: Equatable, Sendable {
         let document = JarvisNoteDocument(content)
         let blocks = document.blocks
         let index = blocks.firstIndex { !$0.isCode && $0.headingLevel == 1 }
-        if let index, blocks[..<index].allSatisfy({ $0.prefix.isEmpty && $0.text.trimmingCharacters(in: .whitespaces).isEmpty }) {
+        if let index, !blocks[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           blocks[..<index].allSatisfy({ $0.prefix.isEmpty && $0.text.trimmingCharacters(in: .whitespaces).isEmpty }) {
             head = document.metadata + blocks[..<index].map(\.markdown).joined()
             title = blocks[index].text
             titleEnding = blocks[index].ending
@@ -39,6 +40,24 @@ public struct JarvisNoteParts: Equatable, Sendable {
         return head + (title.map { "# " + $0 + ending } ?? "") + body
     }
 
+    public func displayedTitle(path: String) -> String {
+        title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? JarvisNoteTitle.fileTitle(path: path)
+    }
+
+    public func content(editedTitle: String, path: String) -> String {
+        let edited = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !edited.isEmpty, edited != displayedTitle(path: path) else { return content }
+        var updated = self
+        if updated.title == nil {
+            let firstEnding = head.first(where: \.isNewline) ?? body.first(where: \.isNewline)
+            let newline = firstEnding == "\r\n" ? "\r\n" : "\n"
+            if !head.isEmpty, head.last?.isNewline == false { updated.head += newline }
+            updated.titleEnding = body.isEmpty ? "" : newline + newline
+        }
+        updated.title = edited
+        return updated.content
+    }
+
     /// The text the reader shows under the title and provenance: no properties and no repeated title.
     public var readableBody: String { body }
 }
@@ -53,8 +72,7 @@ public enum JarvisNoteTitle {
     }
 
     public static func title(content: String, path: String) -> String {
-        let title = JarvisNoteParts(content).title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.flatMap { $0.isEmpty ? nil : $0 } ?? fileTitle(path: path)
+        JarvisNoteParts(content).displayedTitle(path: path)
     }
 
     /// Compact provenance such as "Personal / Home"; empty for a note at the vault root.

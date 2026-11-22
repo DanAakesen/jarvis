@@ -369,7 +369,6 @@ public enum JarvisProactiveIssue: Equatable, Sendable {
 
 /// The values being edited. Budget and feeds stay as text while typing and are checked before they are saved.
 public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
-    public var paused: Bool
     public var budgetText: String
     public var backgroundTurnsPerDay: Int
     public var sources: [JarvisProactiveToggle<JarvisProactiveSourceID>]
@@ -380,7 +379,6 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
     public var preferences: [String]
 
     public init(_ settings: JarvisProactiveConfig) {
-        paused = settings.paused
         budgetText = String(settings.monthlyBudgetDkk)
         backgroundTurnsPerDay = settings.backgroundTurnsPerDay
         sources = settings.sources
@@ -429,7 +427,6 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
     public func patch(from settings: JarvisProactiveConfig) -> JarvisProactiveSettingsPatch? {
         guard isValid, let budget else { return nil }
         var patch = JarvisProactiveSettingsPatch(expectedRevision: settings.revision)
-        if paused != settings.paused { patch.paused = paused }
         if budget != settings.monthlyBudgetDkk { patch.monthlyBudgetDkk = budget }
         if backgroundTurnsPerDay != settings.backgroundTurnsPerDay {
             patch.backgroundTurnsPerDay = backgroundTurnsPerDay
@@ -527,7 +524,7 @@ public enum JarvisProactiveLogic {
 
     /// "Check now" is refused by the backend while paused or out of budget, so the button follows suit.
     public static func canCheckNow(_ status: JarvisProactiveStatus) -> Bool {
-        !status.paused && status.background?.available == true && status.background?.enabled == true
+        !status.paused && status.background?.allowsProactiveWakes == true
             && status.budget.state != .exhausted && status.lastRun?.status != .running
     }
 
@@ -694,13 +691,30 @@ public final class JarvisProactiveClient: Sendable {
     }
 
     public func setBackgroundEnabled(_ enabled: Bool) async throws -> PiBrainStatus {
+        if enabled {
+            let status = try await backgroundStatus()
+            guard status.available else { throw JarvisInsightsError.invalidResponse }
+            if status.paused {
+                // Resume an existing pause before enabling the wake switch. Only patch pause, at its current revision.
+                let current = try await settings()
+                if current.paused {
+                    var patch = JarvisProactiveSettingsPatch(expectedRevision: current.revision)
+                    patch.paused = false
+                    _ = try await updateSettings(patch)
+                }
+            }
+        }
         let response = try await client.performAuthenticatedRequest(
             method: .put,
             path: ["pi", "brain"],
             body: try JSONEncoder().encode(PiBrainSwitchBody(enabled: enabled)),
             idempotent: false
         )
-        return try decode(response)
+        let status: PiBrainStatus = try decode(response)
+        guard status.available, status.enabled == enabled, status.allowsProactiveWakes == enabled else {
+            throw JarvisInsightsError.invalidResponse
+        }
+        return status
     }
 
     public func settings() async throws -> JarvisProactiveConfig {

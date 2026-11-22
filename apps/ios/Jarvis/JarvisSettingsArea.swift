@@ -67,8 +67,7 @@ struct JarvisSettingsArea: View {
     @AppStorage(JarvisNeuralEffects.motionEnabledKey) private var backgroundMotion = true
 
     let client: JarvisSettingsClient?
-    /// Reads Background PI status and owns its explicit Proactive switch.
-    var piClient: JarvisChatClient?
+    var proactiveClient: JarvisProactiveClient?
     let onSignedOut: () -> Void
 
     @State private var search = ""
@@ -497,8 +496,7 @@ struct JarvisSettingsArea: View {
         switch detail {
         case .proactive:
             JarvisProactiveSettingsView(
-                client: client,
-                piClient: piClient,
+                client: proactiveClient,
                 language: language,
                 readOnly: readOnly,
                 onFailure: noteResourceFailure

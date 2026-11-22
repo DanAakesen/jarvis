@@ -7,213 +7,95 @@ private func settingsCacheDigest(_ value: String) -> String {
 }
 
 struct JarvisProactiveSettingsView: View {
-    let client: JarvisSettingsClient?
-    let piClient: JarvisChatClient?
+    let client: JarvisProactiveClient?
     let language: JarvisAppLanguage
     let readOnly: Bool
     let onFailure: (Error) -> Void
 
-    @State private var settings: JarvisProactiveSettings?
-    @State private var draftPaused = false
-    @State private var loadGeneration = 0
+    @State private var status: PiBrainStatus?
     @State private var loadFailed = false
     @State private var loading = true
     @State private var saving = false
-    @State private var error: String?
-    @State private var background: PiBrainStatus?
-    @State private var backgroundLoading = true
-    @State private var backgroundFailed = false
-    @State private var backgroundSaving = false
-    @State private var requestedBackgroundEnabled: Bool?
+    @State private var pendingChange: Bool?
 
     private func copy(_ key: JarvisSettingsLocalizationKey) -> String {
         JarvisSettingsLocalization.string(key, language: language)
     }
-    private func insightsText(_ key: JarvisInsightsLocalizationKey) -> String {
-        JarvisInsightsLocalization.string(key, language: language)
-    }
-
-    private var isDirty: Bool {
-        settings.map { $0.paused != draftPaused } ?? false
-    }
 
     var body: some View {
         JarvisForm {
-            if let error {
-                Text(error)
-                    .foregroundStyle(.red)
+            if let status, status.available {
+                JarvisSettingsSwitch(title: copy(.proactiveSuggestions), isOn: Binding(
+                    get: { self.status?.allowsProactiveWakes == true },
+                    set: { enabled in Task { await setEnabled(enabled) } }
+                ))
+                .disabled(loading || saving || loadFailed || readOnly)
+                .accessibilityIdentifier("settings.proactive.enabled")
             }
-            Toggle(copy(.proactiveSuggestions), isOn: Binding(
-                    get: { !draftPaused },
-                    set: { draftPaused = !$0; error = nil }
-            ))
-            .disabled(settings == nil || readOnly || saving)
-            .accessibilityHint(settings == nil ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
-            .accessibilityValue(settings == nil ? copy(loading ? .loading : .statusUnknown) : copy(draftPaused ? .paused : .running))
-            if settings != nil {
-                Text(copy(draftPaused ? .paused : .running))
-                    .foregroundStyle(.secondary)
-            } else if loading {
+            if loading {
                 JarvisLoadingView(title: copy(.loading))
-            }
-            if loadFailed {
-                JarvisLabelledButton(title: copy(.retry), isDisabled: loading || saving) { Task { await load(force: true) } }
-            }
-            Toggle(insightsText(.editorBackgroundEnable), isOn: Binding(
-                get: { background?.enabled ?? false },
-                set: { enabled in Task { await setBackground(enabled) } }
-            ))
-            .disabled(piClient == nil || background?.available != true || backgroundLoading || backgroundSaving || readOnly)
-            .accessibilityIdentifier("settings.proactive.backgroundPi")
-            if let background {
-                Text(background.enabled ? insightsText(.proactiveBackgroundOn) : insightsText(.proactiveBackgroundOff))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(
-                    JarvisInsightsLocalization.format(
-                        .proactiveTurnsToday,
-                        language: language,
-                        background.today.usedTurns,
-                        background.today.allowedTurns
-                    )
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                if !background.available {
-                    Text(insightsText(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
+            } else if saving {
+                JarvisLoadingView(title: copy(.saving))
+            } else if loadFailed || status?.available == false {
+                Text(copy(.unavailable)).foregroundStyle(.secondary)
+                JarvisLabelledButton(title: copy(.retry), isDisabled: client == nil) {
+                    Task { await load() }
                 }
-                if backgroundFailed, let requestedBackgroundEnabled {
-                    HStack(spacing: 10) {
-                        Text(insightsText(.proactiveUnavailable)).font(.caption).foregroundStyle(.red)
-                        Spacer(minLength: 0)
-                        JarvisIconButton(
-                            title: copy(.retry),
-                            systemImage: "arrow.clockwise",
-                            identifier: "settings.proactive.backgroundPi.saveRetry",
-                            isDisabled: backgroundSaving
-                        ) { Task { await setBackground(requestedBackgroundEnabled) } }
-                    }
+            } else if let pendingChange {
+                Text(copy(.proactiveSaveFailed)).foregroundStyle(.red)
+                JarvisLabelledButton(title: copy(.retry), isDisabled: readOnly) {
+                    Task { await setEnabled(pendingChange) }
                 }
-            } else if backgroundLoading {
-                JarvisLoadingView(title: copy(.loading))
-            } else if backgroundFailed {
-                Text(insightsText(.proactiveUnavailable))
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                JarvisLabelledButton(
-                    title: copy(.retry),
-                    isDisabled: piClient == nil || backgroundLoading || backgroundSaving
-                ) { Task { await loadBackground(force: true) } }
+            }
+            if readOnly {
+                Text(copy(.readOnly)).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(copy(.proactiveRow))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || settings == nil || saving || !isDirty) { Task { await save() } }
-                    .accessibilityHint(settings == nil ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
-        .task {
-            if settings == nil { await load() }
-            if background == nil && !backgroundFailed { await loadBackground() }
-        }
-        .onDisappear { loadGeneration += 1; loading = false }
-        .onChange(of: readOnly) { _, value in
-            if value { error = copy(.readOnly) }
-        }
+        .task { await load() }
     }
 
-    private func load(force: Bool = true) async {
-        loadGeneration += 1
-        let generation = loadGeneration
-        defer { if loadGeneration == generation { loading = false } }
+    private func load() async {
+        guard !saving else { return }
+        loading = true
+        defer { loading = false }
         guard let client else {
             loadFailed = true
-            error = copy(.unavailable)
-            loading = false
             return
         }
-        loading = true
-        let repository: JarvisRepository<JarvisProactiveSettings> = await JarvisAppCache.repository(.settings, scope: "proactive") { _ in
-            .modified(try await client.loadProactiveSettings(), validator: nil)
-        }
-        guard !Task.isCancelled, loadGeneration == generation else { return }
-        for await update in repository.updates(force: force) {
-            guard !Task.isCancelled, loadGeneration == generation else { return }
-            switch update {
-            case .cached(let fresh, _), .fresh(let fresh):
-                if !isDirty {
-                    settings = fresh
-                    draftPaused = fresh.paused
-                }
-                error = nil
-                loadFailed = false
-            case .refreshing: break
-            case .failed(let failure, _):
-                error = copy(.loadFailed)
-                loadFailed = true
-                onFailure(failure)
+        do {
+            let latest = try await client.backgroundStatus()
+            guard !Task.isCancelled else { return }
+            status = latest
+            loadFailed = false
+            if let pendingChange, latest.available, latest.enabled == pendingChange, latest.allowsProactiveWakes == pendingChange {
+                self.pendingChange = nil
             }
+        } catch {
+            guard !Task.isCancelled else { return }
+            loadFailed = true
+            onFailure(error)
         }
-        loading = false
     }
 
-    private func save() async {
-        guard let client, let settings, isDirty, !readOnly, !saving else { return }
-        loadGeneration += 1
-        loading = false
+    private func setEnabled(_ enabled: Bool) async {
+        guard let client, !readOnly, !loading, !saving, !loadFailed, status?.available == true else { return }
         saving = true
-        error = nil
+        defer { saving = false }
+        pendingChange = nil
         do {
-            let saved = try await client.saveProactivePaused(draftPaused, expectedRevision: settings.revision)
-            self.settings = saved
-            draftPaused = saved.paused
-            await JarvisAppCache.invalidate(.settings, scope: "proactive")
-            error = copy(.saved)
+            status = try await client.setBackgroundEnabled(enabled)
         } catch {
-            self.error = copy(.savePending)
+            guard !Task.isCancelled else { return }
             onFailure(error)
-        }
-        saving = false
-    }
-
-    private func loadBackground(force: Bool = true) async {
-        guard force || !backgroundLoading, !backgroundSaving else { return }
-        guard let piClient else {
-            background = nil
-            backgroundFailed = true
-            backgroundLoading = false
-            return
-        }
-        backgroundLoading = true
-        backgroundFailed = false
-        requestedBackgroundEnabled = nil
-        do {
-            background = try await piClient.piBrainStatus()
-        } catch {
-            if !Task.isCancelled { backgroundFailed = true }
-        }
-        backgroundLoading = false
-    }
-
-    private func setBackground(_ enabled: Bool) async {
-        guard let piClient, !backgroundSaving else { return }
-        backgroundSaving = true
-        backgroundFailed = false
-        do {
-            background = try await piClient.setPiBrain(enabled: enabled)
-            requestedBackgroundEnabled = nil
-            backgroundFailed = false
-        } catch {
-            if !Task.isCancelled {
-                backgroundFailed = true
-                requestedBackgroundEnabled = enabled
+            // A response can fail after the server saved. Read back before offering another write.
+            if let latest = try? await client.backgroundStatus() {
+                status = latest
+                if latest.available, latest.enabled == enabled, latest.allowsProactiveWakes == enabled { return }
             }
-            onFailure(error)
+            pendingChange = enabled
         }
-        backgroundSaving = false
     }
 }
 

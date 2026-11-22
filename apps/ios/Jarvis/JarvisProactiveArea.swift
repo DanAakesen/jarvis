@@ -839,7 +839,8 @@ struct JarvisProactiveArea: View {
         JarvisInsightsCard(title: text(.proactiveBackground)) {
             if let background = status?.background {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(background.enabled ? text(.proactiveBackgroundOn) : text(.proactiveBackgroundOff))
+                    Text(!background.available ? text(.proactiveUnavailable)
+                         : background.allowsProactiveWakes ? text(.proactiveBackgroundOn) : text(.proactiveBackgroundOff))
                         .font(.subheadline.weight(.medium))
                         .accessibilityIdentifier("proactive.background.enabled")
                     Text(

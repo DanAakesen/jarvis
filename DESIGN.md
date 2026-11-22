@@ -59,7 +59,17 @@ existing Chat layout, shared controls, Dynamic Type, VoiceOver and Reduce Motion
 behaviour. Apple compilation, rendered focus and physical notification-tap
 behaviour remain separate Mac/device evidence.
 
-## Background PI in Proactive — 19 November 2026
+## One Proactive switch on iPhone — 22 November 2026 (#2007)
+
+Settings > Proactive has one **Proactive suggestions** switch. It saves on
+change, shows the last confirmed state while saving, and offers Retry if a read
+or save fails. There is no second switch, duplicate state caption, daily turn
+count, or separate Save button on this page. The Proactive editor still edits
+sources, categories, scope, budget, daily turns, feeds and guidance. The
+read-only detail is called **Background suggestions**, with no engine name.
+This supersedes the iPhone layout below; the web UI is unchanged.
+
+## Background PI in Proactive — 19 November 2026 (historical)
 
 This is an extension of the existing Proactive settings and status surfaces, not a new screen. The iOS sheet keeps the existing page scaffold, shared rows, glass, toggle and slider language; the web page uses its existing Proactive blocks and shared primary/secondary controls.
 
@@ -77,9 +87,24 @@ Status uses one scan-friendly Background PI block before Open items. It states O
 
 No decorative metrics, chart, orb or extra card grid is added. At narrow widths, background cost rows stack to one column; the source grid remains two columns only when Dynamic Type permits it. All controls use the existing shared components and localization, with loading, disabled and explicit error copy retained. Native simulator rendering, motion and physical-device readability remain outside local Linux proof and are exact-head CI/owner acceptance items.
 
-## iPhone Voice carousel and captions (18 November 2026, #1958, P15-210; build 113)
+## iPhone Voice carousel and captions (18 November 2026, #1958, P15-210; updated 22 November, #2008)
 
-The compact panel stays between captions and call controls. A new visual takes focus immediately; earlier visuals remain to its left. Swipe or use the previous/next controls. Close and Expand float over the top left without a separate header; a supplied native heading scrolls with the content beside them, and HTML owns its heading. Full screen uses the same carousel; Collapse returns to the compact panel without ending the call. The existing eased orb retreat and return are unchanged. Captions have a taller viewport with a soft fade on each edge and enough bottom padding to keep the latest line readable. HTML gets theme-aware defaults and the actual phone viewport; native charts keep their renderer. iPhone rendering is not yet verified.
+The compact panel stays between captions and call controls. A new visual takes
+focus immediately; earlier visuals remain to its left. A shared top grabber
+expands the panel to its full-screen carousel on an upward swipe and restores
+the compact panel on a downward swipe. VoiceOver can activate the grabber
+directly. This replaces the top-left Close and Expand controls: only the close
+icon remains, at the top right. In both sizes, swipe horizontally or use the
+previous/next buttons. Their row has no backing surface; the individual shared
+glass buttons keep their contrast. The native heading scrolls with its content,
+and HTML owns its heading and vertical scrolling.
+
+The captions viewport is taller where space permits and keeps the soft fades
+and latest-line clearance. Only a downward drag over the orb/status region
+minimises Voice; a drag starting in captions or a visual cannot minimise it.
+The orb keeps the existing retreat and return, and Reduce Motion disables
+animation on expanding and shrinking. iPhone rendering and gestures still
+need device acceptance.
 
 ## Voice panel header and orb motion (17 November 2026, #1939, P15-205; from owner feedback on build 112)
 
@@ -155,7 +180,9 @@ switch while a query is present; clearing the query restores the previous folder
   accessibility actions, and deletion always asks first).
 - **Reader and editor.** The reader (title, compact folder provenance, rendered Markdown, properties hidden) has a lower Close / Edit
   row. One editor serves new and existing notes, so title and body are editable at once; formatting tools sit in the
-  accessory. Draft protection applies only after a real change. Task detail, Edit task, Date & time and Task options follow the
+  accessory. A note without a leading title heading shows its readable filename in the same title field (#2005);
+  changing that field adds a title heading without consuming the first line of the body. Draft protection applies only
+  after a real change. Task detail, Edit task, Date & time and Task options follow the
   same anatomy; the schedule and options sheets return to the same draft.
 - **Recovery.** A conflict keeps the draft and offers Keep editing or Review changes (a line comparison, then an
   explicit, confirmed choice). A failed or unconfirmed save keeps the draft and offers Retry, which first checks what the

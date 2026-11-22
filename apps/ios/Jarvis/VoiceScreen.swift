@@ -20,11 +20,9 @@ struct VoiceScreenView: View {
     @State private var showsCameraViewfinder = false
     @State private var screenSharePickerToken = 0
     @State private var screenShareProblem: String?
-    @State private var captionFrame: CGRect = .zero
     @State private var captionFollow = ChatFollowState()
     @State private var orbFrame: CGRect = .zero
     @State private var panelHeight: CGFloat = 0
-    @State private var panelFrame: CGRect = .zero
 
     var body: some View {
         GeometryReader { geometry in
@@ -60,6 +58,9 @@ struct VoiceScreenView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: max(0, geometry.size.height - voiceBottomReservation(in: geometry.size)))
+                // Only the orb/status region can minimize Voice. Captions, visuals and call controls are siblings.
+                .contentShape(Rectangle())
+                .gesture(minimizeGesture)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
 
@@ -83,8 +84,7 @@ struct VoiceScreenView: View {
                                 runtime: workspaceRuntime,
                                 language: language,
                                 maximumHeight: panelMaximumHeight(in: geometry.size),
-                                height: $panelHeight,
-                                frame: $panelFrame
+                                height: $panelHeight
                             )
                         }
                     }
@@ -113,12 +113,8 @@ struct VoiceScreenView: View {
                     cameraTile(camera, in: geometry.size)
                 }
             }
-            .coordinateSpace(name: "voiceScreen")
             // One eased, interruptible curve moves the orb back when content arrives and returns it when it goes.
             .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: panelHeight)
-            .onPreferenceChange(VoiceCaptionFrameKey.self) { captionFrame = $0 }
-            .contentShape(Rectangle())
-            .simultaneousGesture(minimizeGesture(in: geometry.size))
         }
         .toolbar(.hidden, for: .navigationBar)
         .task {
@@ -292,7 +288,7 @@ struct VoiceScreenView: View {
         let maximum = dynamicTypeSize.isAccessibilitySize
             ? JarvisDesignTokens.voiceAccessibilityCaptionMaximumHeight
             : JarvisDesignTokens.voiceCaptionMaximumHeight
-        let preferred = min(maximum, size.height * (dynamicTypeSize.isAccessibilitySize ? 0.36 : 0.25))
+        let preferred = min(maximum, size.height * (dynamicTypeSize.isAccessibilitySize ? 0.42 : 0.32))
         guard alongsidePanel else { return preferred }
         let minimumPanel = JarvisDesignTokens.controlMinimumHeight * 3
         let available = spaceForPanelAndCaptions(in: size) - minimumPanel - JarvisDesignTokens.voiceContentSpacing
@@ -383,11 +379,6 @@ struct VoiceScreenView: View {
                 Color.black
                 LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
                     .frame(height: JarvisDesignTokens.voiceCaptionFadeDepth)
-            }
-        }
-        .background {
-            GeometryReader { geometry in
-                Color.clear.preference(key: VoiceCaptionFrameKey.self, value: geometry.frame(in: .named("voiceScreen")))
             }
         }
         .onAppear { captionFollow = ChatFollowState() }
@@ -630,20 +621,13 @@ struct VoiceScreenView: View {
         return CGSize(width: x - origin.x, height: y - origin.y)
     }
 
-    private func minimizeGesture(in size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: JarvisDesignTokens.voiceMinimizeDragDistance)
+    private var minimizeGesture: some Gesture {
+        DragGesture(minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
             .onEnded { value in
-                guard value.translation.height > JarvisDesignTokens.voiceMinimizeDragDistance,
-                      abs(value.translation.width) < value.translation.height,
-                      model.isSessionActive, !model.showsConnectionRecovery else { return }
-                let bottomControlsHeight = JarvisDesignTokens.voiceControlDiameter
-                    + JarvisDesignTokens.voiceControlBottomInset
-                    + (model.isScreenSharing ? JarvisDesignTokens.voiceScreenShareBarHeight + JarvisDesignTokens.voiceContentSpacing : 0)
-                guard value.startLocation.y < size.height - bottomControlsHeight else { return }
-                if captionFrame.contains(value.startLocation) { return }
-                if panelFrame.contains(value.startLocation) { return }
-                if model.isCameraEnabled && cameraFrame(in: size).contains(value.startLocation) { return }
-                minimizeVoice()
+                let direction = VoiceVerticalSwipe(
+                    translation: value.translation, minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance
+                )
+                if direction == .down { minimizeVoice() }
             }
     }
 
@@ -662,27 +646,6 @@ struct VoiceScreenView: View {
             onMinimize()
         }
     }
-
-    private func cameraFrame(in size: CGSize) -> CGRect {
-        let width = JarvisDesignTokens.voiceCameraTileWidth
-        let height = JarvisDesignTokens.voiceCameraTileHeight
-        let center = CGPoint(
-            x: min(
-                max(size.width - JarvisDesignTokens.voiceCameraTileInset - width / 2 + cameraOffset.width, width / 2),
-                size.width - width / 2
-            ),
-            y: min(
-                max(size.height - JarvisDesignTokens.voiceCameraTileControlClearance - height / 2 + cameraOffset.height, height / 2),
-                size.height - height / 2
-            )
-        )
-        return CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
-    }
-}
-
-private struct VoiceCaptionFrameKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 private struct VoiceMinimizeAction: ViewModifier {
