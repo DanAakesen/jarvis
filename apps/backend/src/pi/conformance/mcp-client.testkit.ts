@@ -63,16 +63,21 @@ export function createMcpClient(options: {
   async function rpc(method: string, params: Json = {}, timeoutMs = 20_000): Promise<{ status: number; body: Json | undefined; raw: string; timedOut: boolean }> {
     counter += 1;
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    let timer: NodeJS.Timeout | undefined;
+    // inject() does not stop waiting for a handler that never answers, so the wait itself is raced against the timer.
+    const timedOut = new Promise<'timed-out'>((resolve) => { timer = setTimeout(() => { abort.abort(); resolve('timed-out'); }, timeoutMs); });
+    const request = app.inject({
+      method: 'POST', url: '/pi/mcp', remoteAddress: '10.0.0.9', signal: abort.signal,
+      headers: {
+        'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18',
+        authorization: bearer(`jp.${secret}`),
+      },
+      payload: { jsonrpc: '2.0', id: counter, method, params },
+    });
+    request.catch(() => undefined);
     try {
-      const response = await app.inject({
-        method: 'POST', url: '/pi/mcp', remoteAddress: '10.0.0.9', signal: abort.signal,
-        headers: {
-          'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18',
-          authorization: bearer(`jp.${secret}`),
-        },
-        payload: { jsonrpc: '2.0', id: counter, method, params },
-      });
+      const response = await Promise.race([request, timedOut]);
+      if (response === 'timed-out') return { status: 0, body: undefined, raw: '', timedOut: true };
       const data = response.body.includes('data:')
         ? response.body.split('\n').find((line) => line.startsWith('data:'))!.slice(5) : response.body;
       let body: Json | undefined;

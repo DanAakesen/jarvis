@@ -6,7 +6,7 @@ import { allGroups, buildConformanceWorld } from './conformance/world.testkit.js
 import { goldenIntents, phraseTable } from './conformance/phrases.testkit.js';
 import { descriptionViolations, harnessManagedNames, nameViolations, schemaViolations, tokensOf } from './conformance/schema.testkit.js';
 import type { ConformanceTurn } from './conformance/mcp-client.testkit.js';
-import { executeCase, exerciseTool, openTurn, turnKindFor, type CallableStatus } from './conformance/callable.testkit.js';
+import { executeCase, exerciseTool, openTurn, testTimeoutMs, turnKindFor, type CallableStatus } from './conformance/callable.testkit.js';
 import type { ConformanceGroup } from './conformance/types.testkit.js';
 import { largestSchemas, renderReport, renderTextTable, summarize, type ToolRow } from './conformance/report.testkit.js';
 
@@ -36,11 +36,11 @@ const largeSchemas: Readonly<Record<string, { readonly ceiling: number; readonly
 const defaultDefinitionTokens = 2_500;
 
 const reports = new Map<string, {
-  static: string[]; discover?: { phrase: string; language: string; rank: number; source: 'curated' | 'derived' } | undefined;
+  static?: string[]; discover?: { phrase: string; language: string; rank: number; source: 'curated' | 'derived' } | undefined;
 }>();
 const reportFor = (name: string) => {
   let entry = reports.get(name);
-  if (!entry) { entry = { static: [] }; reports.set(name, entry); }
+  if (!entry) { entry = {}; reports.set(name, entry); }
   return entry;
 };
 
@@ -83,7 +83,7 @@ describe('composition', () => {
     expect(factories.filter((factory) => !kit.includes(factory)), 'tool factories the pi conformance group does not compose').toEqual([]);
   });
 
-  it('keeps every tool of every module in the registry (about 141 are visible to chat and voice)', () => {
+  it('keeps every tool of every module in the registry, each with exactly one visibility (at least 130 reach chat and voice)', () => {
     const counts = { chat: 0, activation: 0, wake: 0, legacy: 0 };
     for (const tool of tools) counts[visibilityOf(tool.name)] += 1;
     expect(counts.chat).toBeGreaterThanOrEqual(130);
@@ -178,22 +178,27 @@ export function derivedQueries(tool: Pick<RegisteredTool, 'name' | 'description'
 const curated = phraseTable.flatMap((row) => [
   { ...row, language: 'en', phrase: row.en }, { ...row, language: 'da', phrase: row.da },
 ]);
-const curatedHits = new Map<string, { phrase: string; language: string; rank: number }>();
+/** The first phrase of the table (English before Danish) that puts the tool in the top 3. Searched here, so the report does not depend on test order. */
+async function curatedHitFor(name: string): Promise<{ phrase: string; language: string; rank: number } | undefined> {
+  for (const entry of curated) {
+    if (!entry.tools.includes(name)) continue;
+    const rank = (await topThree(entry.phrase)).indexOf(name) + 1;
+    if (rank > 0) return { phrase: entry.phrase, language: entry.language, rank };
+  }
+  return undefined;
+}
 
 describe('discoverable: Dan’s words find the right tool in the top 3 of the first search', () => {
   it.each(curated.map((entry) => [`${entry.intent} (${entry.language}): ${entry.phrase}`, entry] as const))('%s', async (_title, entry) => {
     const top = await topThree(entry.phrase);
     const rank = top.findIndex((name) => entry.tools.includes(name));
     expect(rank, `top 3 for "${entry.phrase}": ${top.join(', ')}; expected one of ${entry.tools.join(', ')}`).toBeGreaterThanOrEqual(0);
-    for (const name of entry.tools.filter((candidate) => top.includes(candidate))) {
-      if (!curatedHits.has(name)) curatedHits.set(name, { phrase: entry.phrase, language: entry.language, rank: top.indexOf(name) + 1 });
-    }
   });
 
   it.each(visibleIn('wake').map((tool) => tool.name))('every tool is found by a phrase of its own: %s', async (name) => {
     const tool = world.app.jarvisTools.get(name)!;
     const kind = visibilityOf(name) === 'wake' ? 'wake' : 'chat';
-    const curatedHit = curatedHits.get(name);
+    const curatedHit = await curatedHitFor(name);
     if (curatedHit) { reportFor(name).discover = { ...curatedHit, source: 'curated' }; return; }
     // The first derived query that puts the tool in the top 3 wins; failing that, the best listed rank (callable by exact name).
     const tried: string[] = [];
@@ -235,7 +240,7 @@ const onlyGroup = process.env.CONFORMANCE_GROUP;
 const callable = new Map<string, CallableStatus>();
 
 describe('callable: every tool runs through the real call_tool over stubbed stores and services', () => {
-  it.for(names)('%s', async (name, context) => {
+  it.for(names)('%s', { timeout: testTimeoutMs }, async (name, context) => {
     const group = groupOfTool(name);
     if (onlyGroup && group?.id !== onlyGroup) return context.skip();
     expect(group, `${name} belongs to a module no conformance group composes`).toBeDefined();
@@ -246,7 +251,7 @@ describe('callable: every tool runs through the real call_tool over stubbed stor
 // ---- Size limits ---------------------------------------------------------------------------------------------------------------
 
 describe('size: the door accepts what the tools accept', () => {
-  it('lets a 400 KB HTML app through (create_html_view allows 512 KB; the door used to refuse anything above 256 KB with HTTP 413)', async () => {
+  it('lets a 400 KB HTML app through (create_html_view allows 512 KB; the door used to refuse anything above 256 KB with HTTP 413)', { timeout: testTimeoutMs }, async () => {
     const tool = world.app.jarvisTools.get('create_html_view')!;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Large app</title></head><body><p>${'x'.repeat(400_000)}</p></body></html>`;
     const done = await executeCase(world, tool, 'chat', { label: 'large app', arguments: { title: 'Large app', html, sources: [] } });
@@ -397,7 +402,7 @@ describe('golden scenarios: one turn, no confirmation step, found on the first s
 
   for (const { scenario } of scenarios) {
     for (const language of ['en', 'da'] as const) {
-      it(`${scenario.title} (${language})`, async (context) => {
+      it(`${scenario.title} (${language})`, { timeout: testTimeoutMs }, async (context) => {
         if (onlyGroup && !world.groups.some((group) => group.id === onlyGroup && group.scenarios?.includes(scenario))) return context.skip();
         for (const step of scenario.steps) {
           const phrase = step.say[language];
@@ -411,7 +416,11 @@ describe('golden scenarios: one turn, no confirmation step, found on the first s
           const wanted = step.call.expect ?? 'ok';
           expect(done.outcome, `"${phrase}" -> ${step.tool} answered ${done.outcome} ("${done.message ?? ''}"), expected ${wanted}`).toBe(wanted);
           expect(JSON.stringify(done.result ?? null), `"${phrase}" -> ${step.tool} asked for a confirmation step`).not.toMatch(confirmationMarkers);
-          step.call.check?.(done.result);
+          try { step.call.check?.(done.result); }
+          catch (error) {
+            if (error instanceof Error) error.message = `"${phrase}" -> ${step.tool}: ${error.message}`;
+            throw error;
+          }
         }
       });
     }
@@ -426,9 +435,14 @@ void openTurn;
 
 describe('report', () => {
   it('prints one row per tool and keeps docs/tool-conformance.md in step with the registry', () => {
-    const complete = tools.every((tool) => reports.has(tool.name) && callable.has(tool.name));
+    // The report needs every phase's result for every tool: with a test filter, CONFORMANCE_GROUP, or a shuffled order that put this
+    // test before the others, some are missing and the comparison is skipped.
+    const complete = tools.every((tool) => {
+      const entry = reports.get(tool.name);
+      return entry?.static !== undefined && callable.has(tool.name) && (visibilityOf(tool.name) === 'legacy' || entry.discover !== undefined);
+    });
     if (!complete || onlyGroup) {
-      console.info('Partial run (a test filter or CONFORMANCE_GROUP is set): the report is not compared with docs/tool-conformance.md.');
+      console.info('Partial run (a test filter, CONFORMANCE_GROUP or the test order left results out): the report is not compared with docs/tool-conformance.md.');
       return;
     }
     const rows: ToolRow[] = tools.map((tool) => {
@@ -438,7 +452,7 @@ describe('report', () => {
       return {
         name: tool.name, group: group?.id ?? 'none', visibility: visibilityOf(tool.name),
         effect: tool.execution?.defaultEffect ?? 'unclassified',
-        staticProblems: entry.static, discover: entry.discover, callable: status,
+        staticProblems: entry.static ?? [], discover: entry.discover, callable: status,
         schemaTokens: tokensOf(tool.inputSchema), definitionTokens: tokensOf({ name: tool.name, description: tool.description, parameters: tool.inputSchema }),
         notes: [
           ...(largeSchemas[tool.name] ? [`large schema: ${largeSchemas[tool.name]!.reason}`] : []),

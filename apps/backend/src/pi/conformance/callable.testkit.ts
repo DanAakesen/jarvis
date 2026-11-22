@@ -18,6 +18,8 @@ export type CallableStatus =
 
 /** A call must come back within this, whatever the stub does. */
 export const callTimeoutMs = 10_000;
+/** A test's own timeout is longer than one call's, so a tool that hangs fails with its message and not with vitest's generic timeout. */
+export const testTimeoutMs = callTimeoutMs * 3;
 
 const genericFailure = 'Tool execution failed';
 const doorFailure = 'The tool could not run. Nothing is confirmed as done.';
@@ -177,7 +179,12 @@ export async function exerciseTool(world: ConformanceWorld, tool: RegisteredTool
       expect(typeof done.result === 'object' || typeof done.result === 'string' || typeof done.result === 'number' || typeof done.result === 'boolean', `${label}: an ok result must be a value`).toBe(true);
       if (isReadTool(tool)) expect(typeof done.result === 'object', `${label}: a read tool returns a structured result`).toBe(true);
     }
-    testCase.check?.(done.result);
+    try { testCase.check?.(done.result); }
+    catch (error) {
+      // Name the case: several cases of one tool share its message.
+      if (error instanceof Error) error.message = `${label}: ${error.message}`;
+      throw error;
+    }
   }
   // A tool is `ok` when at least one call ran to an ok result; every other call already matched what its case expected.
   const typed = outcomes.filter((entry) => entry.outcome !== 'ok');
