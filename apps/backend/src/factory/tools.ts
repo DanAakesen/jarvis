@@ -100,17 +100,23 @@ const requestedIssues = new WeakMap<FastifyInstance, Map<string, {
   fingerprint: string; expiresAt: number; result: Promise<unknown>;
 }>>();
 
+interface InstructionReceiptOptions {
+  /** One instruction may make several different requests (the PI agent, a comment): only an identical repeat is answered from the first. */
+  readonly byDraft?: boolean;
+  /** The write has its own durable check, so a failed attempt is not remembered: a retry looks again and writes only if nothing landed. */
+  readonly forgetFailures?: boolean;
+}
+
 function oncePerIssueInstruction(
   server: FastifyInstance, source: ConversationMessage, draft: Record<string, unknown>,
-  work: () => Promise<unknown>, pi = false,
+  work: () => Promise<unknown>, options: InstructionReceiptOptions = {},
 ): Promise<unknown> {
   let requests = requestedIssues.get(server);
   if (!requests) { requests = new Map(); requestedIssues.set(server, requests); }
   const now = Date.now();
   for (const [key, entry] of requests) if (entry.expiresAt <= now) requests.delete(key);
   const fingerprint = issueRequestFingerprint(draft);
-  // The PI agent may make several different requests in one turn or wake; only an identical repeat is answered from the first.
-  const key = pi ? `${source.sessionId}:${source.id}:${fingerprint}` : `${source.sessionId}:${source.id}`;
+  const key = options.byDraft ? `${source.sessionId}:${source.id}:${fingerprint}` : `${source.sessionId}:${source.id}`;
   const existing = requests.get(key);
   if (existing) {
     if (existing.fingerprint !== fingerprint) throw new ToolRefusal('This instruction already has an issue request. Check its saved proposal or work status before changing the scope.');
@@ -118,12 +124,28 @@ function oncePerIssueInstruction(
   }
   if (requests.size >= 100) throw new ToolFailure('Too many recent issue requests; check work status before retrying.');
   const result = Promise.resolve().then(work).catch((error: unknown) => {
-    // Refusal before a write is correctable; uncertain write failures remain cached.
-    if (error instanceof ToolRefusal) requests.delete(key);
+    // Refusal before a write is correctable; uncertain write failures remain cached unless the write can be looked up again.
+    if (error instanceof ToolRefusal || options.forgetFailures) requests.delete(key);
     throw error;
   });
   requests.set(key, { fingerprint, expiresAt: now + issueCreationTtlMs, result });
   return result;
+}
+
+/** What a comment Jarvis posts for one instruction ends with: invisible on GitHub, and the receipt a repeat of that instruction finds. */
+function commentMarker(source: ConversationMessage, draft: Record<string, unknown>): string {
+  return `<!-- jarvis-comment:${source.sessionId}:${source.id}:${issueRequestFingerprint(draft).slice(0, 16)} -->`;
+}
+
+/** The issue itself is the receipt, so it survives a restart and a reply that never arrived. Not being able to look is not a reason to refuse. */
+async function commentAlreadyPosted(
+  client: NonNullable<FastifyInstance['githubIssueClient']>, repository: string, issueNumber: number, marker: string,
+): Promise<boolean> {
+  try {
+    return (await client.readComments(repository, issueNumber)).some(({ body }) => body.includes(marker));
+  } catch {
+    return false;
+  }
 }
 
 declare module 'fastify' {
@@ -918,7 +940,7 @@ export const factoryTools: readonly JarvisTool[] = [
         return await oncePerIssueInstruction(request.server, source, { repository: targetRepository, ...draft }, async () => {
           const staged = await stageIssueCreation(request.server, draft, source, signal, selectedProject, isPiCall(request));
           return confirmIssueCreation(request, staged.confirmationCode, signal, true);
-        }, isPiCall(request));
+        }, { byDraft: isPiCall(request) });
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         if (error instanceof IssueDraftValidationError) throw new ToolRefusal(error.message);
@@ -960,31 +982,42 @@ export const factoryTools: readonly JarvisTool[] = [
           if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
             throw new ToolRefusal('That repository name is invalid.');
           }
-          const issuer = request.server.githubAppTokenIssuer;
-          if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
-          let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
-          try {
-            permissions = await issuer.readInstallationPermissions(repository);
-          } catch {
-            throw new ToolFailure('I couldn’t read my GitHub App permissions.');
-          }
-          if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
-            throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
-          }
-          if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
-          const issue = await request.server.githubIssueClient?.readIssue(repository, input.issueNumber);
-          if (!issue || issue.isPullRequest) throw new ToolRefusal('I couldn’t find that GitHub issue.');
-          try {
-            if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
-            await request.server.githubIssueClient!.createComment(repository, input.issueNumber, input.text, signal);
-          } catch (error) {
-            if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
-            if (typeof error === 'object' && error !== null && 'status' in error && error.status === 403) {
+          const draft = { repository, issueNumber: input.issueNumber, text: input.text };
+          const marker = commentMarker(source, draft);
+          // The same instruction asking for the same comment again (a retry, a replay, a restart) is answered from the first
+          // attempt: from this process while it remembers it, and from the marker on the issue after that.
+          return await oncePerIssueInstruction(request.server, source, draft, async () => {
+            const issuer = request.server.githubAppTokenIssuer;
+            if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
+            let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
+            try {
+              permissions = await issuer.readInstallationPermissions(repository);
+            } catch {
+              throw new ToolFailure('I couldn’t read my GitHub App permissions.');
+            }
+            if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
               throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
             }
-            throw new ToolFailure('I couldn’t post the GitHub issue comment.');
-          }
-          return { status: 'commented', number: input.issueNumber, url: issue.url };
+            if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
+            const issue = await request.server.githubIssueClient?.readIssue(repository, input.issueNumber);
+            if (!issue || issue.isPullRequest) throw new ToolRefusal('I couldn’t find that GitHub issue.');
+            if (await commentAlreadyPosted(request.server.githubIssueClient!, repository, input.issueNumber, marker)) {
+              return { status: 'commented', number: input.issueNumber, url: issue.url, alreadyPosted: true };
+            }
+            try {
+              if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
+              await request.server.githubIssueClient!.createComment(repository, input.issueNumber, `${input.text}\n\n${marker}`, signal);
+            } catch (error) {
+              if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+              const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+              if (status === 403) throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
+              // GitHub answered with an error: nothing was posted. With no answer it may have been; the next try looks first.
+              throw new ToolFailure(typeof status === 'number'
+                ? 'I couldn’t post the GitHub issue comment.'
+                : 'I couldn’t confirm whether the GitHub issue comment was posted. Asking again checks the issue first, so it is not posted twice.');
+            }
+            return { status: 'commented', number: input.issueNumber, url: issue.url };
+          }, { byDraft: true, forgetFailures: true });
         }
         const source = await currentDanMessage(request, 'issue comment');
         return await oncePerIssueInstruction(request.server, source, input, async () => {
@@ -992,7 +1025,7 @@ export const factoryTools: readonly JarvisTool[] = [
             ...input, title: 'Issue comment', body: input.text,
           }, source, signal, undefined, isPiCall(request));
           return confirmIssueCreation(request, staged.confirmationCode, signal, true);
-        }, isPiCall(request));
+        }, { byDraft: isPiCall(request) });
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolRefusal('The issue comment is invalid, contains a secret, or could not be prepared.');
