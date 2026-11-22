@@ -691,7 +691,7 @@ Next: finish exact-head offline qualification for #1966 and let Dispatcher own a
 
 ## PI voice measured, and the prompt grew — 16 November 2026 (#1887, P15-176)
 
-First `measure_pi` after voice (Deploy run 43831735508): the PI leg of a voice turn is 1.6 s to first text (plain) and 1.4 s (with a tool, after a spoken sentence from PI); the voice checks pass. Warm turns now carry about 17.7k input tokens (was about 7.5k), 99 percent cached, which is about 0.12 DKK per warm turn at list price (0.007 at the assumed cached rate). Details, what the repository says about the cause, the options (none implemented) and the new "fixed prompt" smoke row that separates the base prompt from conversation growth: `docs/harness-trial/spike-results.md`, "PI voice leg and prompt size".
+First `measure_pi` after voice (Deploy run 43831735508): the PI leg of a voice turn is 1.6 s to first text (plain) and 1.4 s (with a tool, after a spoken sentence from PI); the voice checks pass. Warm turns now carry about 17.7k input tokens (was about 7.5k), 99 percent cached, which is about [amount omitted] per warm turn at list price (0.007 at the assumed cached rate). Details, what the repository says about the cause, the options (none implemented) and the new "fixed prompt" smoke row that separates the base prompt from conversation growth: `docs/archive/harness-trial/spike-results.md`, "PI voice leg and prompt size".
 
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
 
@@ -719,7 +719,7 @@ Delivered as three stacked pull requests in the order of the issue. Owner rules 
 | --- | --- | --- |
 | 1 Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scales to zero), no read-only restriction, Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
 | 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy (since #1966 the switch is Settings > Proactive > "Background PI") |
-| 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in `docs/harness-trial/spike-results.md`); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
+| 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in `docs/archive/harness-trial/spike-results.md`); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
 
 **Brain, what was built and observed.** The brain reads the event queue, wakes the PI agent in a scratch conversation under exact guards (owner switch, pause, 10 minutes between wakes, 12 wakes a day, the 100 DKK proactive budget stop with notices at 80 percent and at the stop), lets it read, tell Dan (a chat message that always pushes; at most 8 a day, no repeats), keep notes under `PI/` and add inbox trail lines, and writes every decision to `PI/Log/<day>.md`. Replay of 38 real Actions results (15 to 16 November) through the real producers, queue, loop, tools and log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages (the 3 failed Deploys of main); backend suite and the SQL contract on SQL Server 2022 pass. **Not proven:** the model's judgement (the owner judges it behind the test switch), real cost per wake, the iOS rows (Apple CI only), and the push on a real device. Until the owner turns the switch on, nothing is claimed and nothing is spent.
 
@@ -799,7 +799,7 @@ selector; isolated runtime tests retain their own runtime with no automatic fall
 | 7 Cutover: PI is the only normal route | P15-172 (#1881) | Delivered; selector removal/release hardening in #1966 |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |
 
-Latency round 2 numbers are pending in `docs/harness-trial/spike-results.md`; the plan holds a placeholder.
+Latency round 2 numbers are pending in `docs/archive/harness-trial/spike-results.md`; the plan holds a placeholder.
 
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858, P15-161)
 
@@ -980,7 +980,7 @@ integration and deployment. No merge or deployment is part of this issue.
 
 ## Direct owner requests — 10 November 2026
 
-The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.
+The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/archive/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.
 
 ## Watch startup connection feedback — 9 November 2026
 
@@ -990,7 +990,7 @@ P15-108 updates foreground recovery, Watch Home links and body-fat content, and 
 
 ## Home brief and daily activity implementation — 9 November 2026
 
-Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
+Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/archive/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
 
 ## Direct owner actions — 9 November 2026
 
@@ -1015,7 +1015,7 @@ Native UI run 42650781412 completed with 72 passes and six failures: three earli
 Notes cases and three new push-to-chat checks. Two new checks incorrectly expect
 a disabled Send button when the empty composer shows Voice; the failure-recovery
 message check still needs investigation. Do not mark native acceptance passed.
-See [handoff](docs/push-chat-continuity.md).
+See [handoff](docs/archive/push-chat-continuity.md).
 
 ## Home brief and daily activity semantics — 9 November 2026
 
@@ -1026,7 +1026,7 @@ Home's Active time/kcal still sum recorded workouts; the earlier build-86 merge
 fix did not supply all-day activity. Health's Active time also uses workout
 duration. Daily HealthKit active energy/exercise minutes are already readable
 and synced, but Home does not use them. Secondary implementation is requested,
-not delivered. See [source findings and acceptance](docs/ios/design/home-brief-activity-handoff.md).
+not delivered. See [source findings and acceptance](docs/archive/ios/design/home-brief-activity-handoff.md).
 
 ## Current managed Factory delivery — 9 November 2026
 
@@ -1098,7 +1098,7 @@ are on hold following the owner's capacity decision.
 Factory runtime acceptance, cutover and VM retirement are queued in 42607263687
 after backend release 42606694858; they remain pending. The held
 retirement PR removes dedicated VM resources/config only after acceptance.
-See [qualification and evidence](docs/factory-concurrency-correction.md).
+See [qualification and evidence](docs/archive/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026
 
@@ -1121,7 +1121,7 @@ Sweden Central availability in the subscription catalogue and SandboxCores quota
 300 / usage 0 at discovery, sufficient CPU quota for 100 two-core workers. The
 sandbox group has since been provisioned; mounted 128 GiB storage, integration
 and concurrent execution remain unverified. See
-[scope, evidence and acceptance](docs/factory-concurrency-correction.md).
+[scope, evidence and acceptance](docs/archive/factory-concurrency-correction.md).
 
 Copilot harness migration and further comparison are parked. Keep the custom
 harness as the default and focus on its reliability/control. Existing Copilot
@@ -1185,7 +1185,7 @@ attempt counts and refused/error outcomes. 537 Core tests and three native check
 passed in 42518328386; #1656 merged. Included in the next signed app bundle.
 Current runtime completion is repaired separately in #1658.
 Exact rejected-write payload/reason and live per-call arguments are unavailable.
-See [the recorded comparison evidence](docs/runtime-comparison-owner-test.md).
+See [the recorded comparison evidence](docs/archive/runtime-comparison-owner-test.md).
 
 ## Home Today workout totals — 8 November 2026
 
@@ -1200,7 +1200,7 @@ periods, retained manual values/identities and distinct nearby workouts. CodeQL
 42515170223 and native Simulator compilation passed. #1654 merged as ef783da2 with
 the exact qualified iOS tree. TestFlight 86 uploaded successfully in 42515467682;
 Apple processing/device availability and owner acceptance remain pending.
-See [the release record](docs/ios/design/p15-build86-release.md).
+See [the release record](docs/archive/ios/design/p15-build86-release.md).
 
 ## Notes follow-up — 8 November 2026
 
@@ -1223,7 +1223,7 @@ Owner accepted build 84 header/footer transparency across pages. Preserve it.
 
 ### Owner status ledger
 
-The consolidated device checklist is [saved here](docs/ios/design/p15-owner-test-checklist.md).
+The consolidated device checklist is [saved here](docs/archive/ios/design/p15-owner-test-checklist.md).
 The owner reported a good quick Copilot smoke test on 8 November and now requests
 an implementation comparison before choosing the owner test. The saved guide now
 separates shared behavior from actual transport/state differences and proposes a
@@ -1244,7 +1244,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Factory detail and issue-only cards | TaskEventRecord history decoding repaired; live IDs remain strict. Issue-only cards open GitHub. Core/native checks passed | Owner check with a fresh task and an active issue after managed Factory readiness |
 | PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
 | Chat reply grouping and progress placement | #1646 merged: elapsed Working for header, public updates, tools beneath and tap-only timestamps. Full CI and all focused native checks passed, including selection | Backend acceptance passed and build 84 uploaded; owner check on device |
-| Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
+| Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/archive/ios/design/p15-build81-release.md |
 | One progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
@@ -1259,7 +1259,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | CarPlay | Owner submitted entitlement request to Apple; reply pending (8 November) | Apple decision; entitlement activation and device verification remain pending |
 | Consecutive tool activity | #1656 merged; consecutive tools grouped in ordinary and isolated test chat, retaining real counts and refused/failed outcomes. Three focused native interactions passed | Included in uploaded build 89; owner checks on both surfaces remain |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Latest TestFlight bundle | Build 89 uploaded successfully in 42635187842 with Watch, tool grouping and intelligent-notification finding navigation. Earlier 87/88 failures are corrected | Apple processing and installed-device testing; see docs/ios/design/p15-build89-release.md |
+| Latest TestFlight bundle | Build 89 uploaded successfully in 42635187842 with Watch, tool grouping and intelligent-notification finding navigation. Earlier 87/88 failures are corrected | Apple processing and installed-device testing; see docs/archive/ios/design/p15-build89-release.md |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
@@ -1281,7 +1281,7 @@ stop when the VM is deallocated; the data disk, OS disk and outbound IP remain
 allocated. The backend Container App remains separate with minReplicas=1.
 This delivers one worker; automatic fleet expansion is not implemented. Existing
 Task 23 recovery and a completed Factory task still require owner-authenticated
-end-to-end acceptance. See docs/factory-worker-delivery-2026-11-08.md.
+end-to-end acceptance. See docs/archive/factory-worker-delivery-2026-11-08.md.
 
 Follow-up measurements on 7 November: the tracked checkout is 279,635,450 bytes
 (about 267 MiB), including 256,401,556 bytes under docs. GitHub reports repository
@@ -1310,7 +1310,7 @@ CI 42398890076 and CodeQL passed. Three unchanged native cases passed in
 42396567474; the corrected Chat observation passed in 42398644148. The original
 failure and actual captures remain retained. Normal Deploy 42399723720 passed.
 TestFlight 42400008493 uploaded build 81 at 18:18:15 UTC / 19:18:15 Copenhagen. Apple processing/device availability are not independently confirmed.
-See [the release record](docs/ios/design/p15-build81-release.md).
+See [the release record](docs/archive/ios/design/p15-build81-release.md).
 
 Issue #1634 / task 23 committed scaffold 3ace0ad8 to jarvis/task-23 at 17:30:31 UTC,
 then reported disk_low at 17:32:28. Work began and is retained; completed validation
@@ -1328,8 +1328,8 @@ are qualified by six unchanged passes in 42390300501 plus the final Chat pass in
 42393878132 passed readiness and required live acceptance. TestFlight workflow
 42394179996 uploaded build 80 at 17:06:13 UTC / 18:06:13 Copenhagen. Apple
 processing and physical-device availability are not independently confirmed.
-See [the release record](docs/ios/design/p15-build80-release.md) and
-[all six owner reports](docs/ios/design/p15-build79-feedback.md).
+See [the release record](docs/archive/ios/design/p15-build80-release.md) and
+[all six owner reports](docs/archive/ios/design/p15-build79-feedback.md).
 
 Backend scaffold recovery shipped separately in #1632 / ce652a06. The owner was
 told to retry “Prepare the widget in Jarvis”, inspect the proposal and approve
@@ -1365,7 +1365,7 @@ with one skipped; Core passed 509. Own-code work still requires later approval.
 Merged full/iOS trees exactly match qualification. Duplicate main Simulator
 42378965945 was stopped before boot. Normal Deploy 42378966004 passed readiness and all 15 Current live checks.
 The single TestFlight run 42380495562 uploaded build 79 from exact main.
-See [the scoped evidence](docs/ios/design/p15-chat-settings-feedback.md) for all
+See [the scoped evidence](docs/archive/ios/design/p15-chat-settings-feedback.md) for all
 retained failed attempts and final artifact digests. No duplicate simulator run.
 Copilot remains blocked separately by previous-policy reuse on the second turn.
 
@@ -1387,8 +1387,8 @@ retains its initial instructions despite changed structured inputs. No compatibi
 receipt was stamped and Copilot remains disabled. Microsoft's harness guide also
 requires a new conversation after instruction changes. A supported faithful update
 path is unresolved; do not repeat activation, relax the canary, or demote policy.
-See [the recovery record](docs/copilot-runtime-recovery-2026-11-07.md) and
-[the owner's comparison guide](docs/runtime-comparison-owner-test.md).
+See [the recovery record](docs/archive/copilot-runtime-recovery-2026-11-07.md) and
+[the owner's comparison guide](docs/archive/runtime-comparison-owner-test.md).
 
 ## Previous release — Home/chrome/widget follow-up, build 78
 
@@ -1463,7 +1463,7 @@ rejected trusted-role response input, and failed stored-policy precedence/replac
 sentinels. No working comparison is claimed. The iOS Plus runtime-testing sheet and
 web availability/retry flow shipped in build 76; current user-only provider success
 does not qualify Jarvis operation. Normal Current is accepted and build 78 is uploaded.
-See [the delivery record](docs/ios/design/p15-device-feedback-2026-11-06.md) for exact
+See [the delivery record](docs/archive/ios/design/p15-device-feedback-2026-11-06.md) for exact
 runs, retained evidence, previous failures and acceptance boundaries.
 
 ## Completed owner workflow slice
@@ -1642,7 +1642,7 @@ claims, agent-only binding routes/client and shared application-policy transport
 are now implemented locally. Identical backend disconnect/reattach and steering
 fixtures execute for both choices. The owner declined extra transcript filtering
 from normal search/context/summaries; preserve those existing contracts. No target, identity grant or production
-default was created or changed. The [adapter checkpoint](docs/managed-chat-adapter.md)
+default was created or changed. The [adapter checkpoint](docs/archive/managed-chat-adapter.md)
 lists the missing policy and provisioning evidence.
 
 The last-mile source is assembled: lazy Python factory, pinned backend target
@@ -1665,7 +1665,7 @@ The settings correction is merged in #1353. Deploy 40852006540 passed every chat
 smoke scenario at 09:55 UTC; research remains down independently with
 `research_runner_failed`. This is passing chat smoke evidence, not ordinary-chat,
 research or two-runtime acceptance. Local test evidence and open boundaries are
-recorded in [migration notes](docs/main-chat-harness-migration.md).
+recorded in [migration notes](docs/archive/main-chat-harness-migration.md).
 
 ## Whole-Jarvis logging scope replaces backend-only (#1341; 29 October 2026)
 
@@ -1703,7 +1703,7 @@ effective-effort telemetry without adding fallback values. Local validation:
 pass. The owner approved including this correction with the finite diagnostics
 in #1353; exact-head qualification, independent review and live acceptance remain
 pending.
-See [local scope and remaining evidence](docs/smoke-settings-1350.md).
+See [local scope and remaining evidence](docs/archive/smoke-settings-1350.md).
 
 ## Live reasoning rejection and separate research evidence (#1350; 29 October 2026)
 
@@ -1717,7 +1717,7 @@ backend lint/build and 13 sanitizer tests. The full backend suite passes 6,902
 tests with one skip. The baseline is still unresolved.
 Preserve main `82fff9f5` and the original log task's scope. Next: reviewed normal
 release evidence before choosing a correction; managed path/UI work remains
-unreleased. See [migration evidence](docs/main-chat-harness-migration.md).
+unreleased. See [migration evidence](docs/archive/main-chat-harness-migration.md).
 
 ## Reconcile log diagnostics with current main (#1341; 29 October 2026)
 
@@ -1771,7 +1771,7 @@ candidate passes 944. Next: independent review/qualification, then actual releas
 evidence before selecting a fix. Later runtime/UI/comparison/cutover stages remain
 pending. Dan approved Test agent runtime in the chat menu, Current/Copilot selection
 and a separate labelled conversation with no mid-conversation switch. The
-[migration notes](docs/main-chat-harness-migration.md) include manual test questions
+[migration notes](docs/archive/main-chat-harness-migration.md) include manual test questions
 and outstanding model, grant and parity decisions. No production default changes.
 
 ## Fixed backend-identity authorization observations (#1341; 29 October 2026)
@@ -1877,7 +1877,7 @@ feedback and explicit Settings approval values. The owner's replacement for
 Settings is sticky mobile heading/Save, preserving desktop behavior; no draft
 guard/autosave/persistence. Optional audit findings and Azure log work are excluded.
 Local regression/aggregate checks and browser evidence are recorded in the PR
-and [validation report](docs/review-fixes-1343.md);
+and [validation report](docs/archive/review-fixes-1343.md);
 SQL Server CI and physical iPhone/live acceptance remain distinct release evidence.
 Workflow-owned status cells are not edited by this change.
 
@@ -3723,14 +3723,14 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   TestFlight build 76 at 12:14:34 UTC in run 42215302636 while separate Copilot
   activation continues. The owner confirmed build 76 is visible in TestFlight. The owner
   explicitly authorized this delivery. See
-  `docs/ios/design/p15-device-feedback-2026-11-06.md` for evidence and device limits.
+  `docs/archive/ios/design/p15-device-feedback-2026-11-06.md` for evidence and device limits.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
   acceptance. Final native verification passed 62/62 tests; 493 Core tests and
   CodeQL passed. Corrected native screenshots were inspected. TestFlight build
   75 uploaded at 02:54:03 UTC on 6 November. Chat and the
-  shared orb remain unchanged. See `docs/ios/design/p15-release-2026-11-06.md` for
+  shared orb remain unchanged. See `docs/archive/ios/design/p15-release-2026-11-06.md` for
   evidence, Apple processing status and physical-device limits. #1609 was never
   merged. Further UI ideas remain proposals.
 
@@ -4026,7 +4026,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 - **Accepted capability additions (4 October 2026; Personal Memory clarified 20 November):** P7-13–P7-16 cover long-term knowledge, source-linked web research, image generation, and editable personality; P8-19 supplies the Personality settings UI. On 6 October Dan made the GitHub vault the source of truth for Vault Knowledge; SQL supplies its searchable index/cache. #1968 restores the separate P7-13 SQL Personal Memory store rather than treating that store or every Vault note as one mixed bucket. Dan's 5 October decision moved image generation to the existing ChatGPT/Codex subscription and deferred video indefinitely.
 
-- **Jarvis UI (5 October 2026):** Dan agreed the shared shell/voice structure in [ui.md](ui.md). P8-09 presents actual runtime states accessibly, with reduced-motion support and an unknown-state fallback. P8-10 is complete offline and integrated with P8-21: voice immediately hides the shell/history/composer, grows the active orb from the composer's small orb, positions it around carried workspace windows, and restores typing and focus on natural/manual end or failure; Escape and End voice are implemented. The default-off minimise preference persists through P8-17 and is mirrored locally for immediate shell reads. P8-14/P8-15 are complete offline: typed declarative views render through fixed React elements, and authenticated session-scoped commands reach the active workspace and contextual panel in typing and voice modes; generated code never executes and view state is not persisted. P8-16 is complete offline: a strict ephemeral activity contract publishes observed chat/voice/tool states over authenticated `/now/events`; the top bar and orb consume it, and Jarvis-updated windows alone receive the tool-call shimmer. Live Entra/Foundry delivery and physical audio remain unverified. P8-06 supplies the temporary client-side workspace host with tiled/layered arrangements, pointer/keyboard movement and resizing, and narrow-screen reflow. P8-13 persists validated light/dark appearance through P1-11; custom/Jarvis-directed variable updates remain P8-17. The frontend breakdown is P8-04–P8-13 with coverage in [docs/ui-implementation-coverage.md](docs/ui-implementation-coverage.md); P8-03 owns enabling logic and contracts. P8-08 is complete on the client, while authenticated Jarvis command delivery is supplied by P8-15. P8-20 completes the shared Concept B dark / Concept C light visual and motion system offline; the orb follows observed activity and decoded playback PCM. The full UI is not complete.
+- **Jarvis UI (5 October 2026):** Dan agreed the shared shell/voice structure in [ui.md](ui.md). P8-09 presents actual runtime states accessibly, with reduced-motion support and an unknown-state fallback. P8-10 is complete offline and integrated with P8-21: voice immediately hides the shell/history/composer, grows the active orb from the composer's small orb, positions it around carried workspace windows, and restores typing and focus on natural/manual end or failure; Escape and End voice are implemented. The default-off minimise preference persists through P8-17 and is mirrored locally for immediate shell reads. P8-14/P8-15 are complete offline: typed declarative views render through fixed React elements, and authenticated session-scoped commands reach the active workspace and contextual panel in typing and voice modes; generated code never executes and view state is not persisted. P8-16 is complete offline: a strict ephemeral activity contract publishes observed chat/voice/tool states over authenticated `/now/events`; the top bar and orb consume it, and Jarvis-updated windows alone receive the tool-call shimmer. Live Entra/Foundry delivery and physical audio remain unverified. P8-06 supplies the temporary client-side workspace host with tiled/layered arrangements, pointer/keyboard movement and resizing, and narrow-screen reflow. P8-13 persists validated light/dark appearance through P1-11; custom/Jarvis-directed variable updates remain P8-17. The frontend breakdown is P8-04–P8-13 with coverage in [docs/archive/ui-implementation-coverage.md](docs/archive/ui-implementation-coverage.md); P8-03 owns enabling logic and contracts. P8-08 is complete on the client, while authenticated Jarvis command delivery is supplied by P8-15. P8-20 completes the shared Concept B dark / Concept C light visual and motion system offline; the orb follows observed activity and decoded playback PCM. The full UI is not complete.
 - **P8-04 (#235):** The shared shell is implemented with the existing Jarvis, Software Factory, Usage, and Settings routes. P7-08 enables the top-bar Camera toggle; screen sharing still uses its conversation controls. App tests (20/20), web lint, and web build pass. Chromium checks at 1280×900 and phone widths 390×844, 320×800, and 280×800 exercised every navigation/context-panel combination; the mobile rail spans through the footer in each state, active shell controls measure at least 44×44px, Settings stays right-aligned, and no horizontal overflow or page exceptions occur. The updated global top bar spans the window, matches the rail width in height, and keeps controls on one line; screenshots are attached to the PR. The browser used scratch auth/API fixtures, so live Azure, screen sharing, and camera hardware/model acceptance remain unverified.
 - **P7-13 (#263; restored by #1968):** The original SQL Personal Memory store, source attribution, history and embedding fallback remain authoritative for durable owner facts. P7-40 owns Vault Knowledge separately. The live tools and `/memory` API now restore that boundary without converting Vault notes into memories.
 - **P7-15 (#265):** Image generation only is implemented offline through the existing ChatGPT/Codex login on the hosted runner; validated images are saved as private workspace artifacts and displayed in chat and the workspace. Focused backend, contract and web tests cover lifecycle, cancellation, retries, ownership and artifact previews. A live ChatGPT generation and deployed Blob acceptance remain unverified; video is deferred separately and artifact retention remains unresolved.
@@ -4346,16 +4346,16 @@ P8-04–P8-13 are the initial frontend allocation, selected after checking `main
 | P8-01 | [#211](https://github.com/DanAakesen/jarvis/issues/211) | Design session with Dan: the coordinator prepares a feature inventory (on screen, voice only, or both) and layout sketches; the result goes into DESIGN.md and the build is split into P8 issues | Dan approves the design; P8 build issues created | None | Complete |
 | P8-02 | [#230](https://github.com/DanAakesen/jarvis/issues/230) | Copilot breaks ui.md into frontend implementation issues with full coverage and no duplicates | UI coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; design source is on main (#232); coordinate with companion planning issue | Complete |
 | P8-03 | [#231](https://github.com/DanAakesen/jarvis/issues/231) | Copilot breaks ui.md into enabling tools, contracts, runtime state, data access and business-logic issues | Logic coverage report; PLAN.md tasks and GitHub issues created with acceptance criteria and dependency links | None; design source is on main (#232); coordinate with companion planning issue | Complete |
-| P8-04 | [#235](https://github.com/DanAakesen/jarvis/issues/235) | Shared app shell: thin area rail, expandable area navigation, contextual bars/panels, Settings top-right, and confirmed screen-share/Camera control placement | Route the existing areas through the agreed shell; preserve keyboard access and visible focus; test narrow and desktop layouts and manually verify the shell against the structural wireframe. The Camera top-bar control becomes functional in P7-08; screen sharing remains in the conversation workflow. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P1-07, P1-11, P5-05 | Complete |
-| P8-05 | [#236](https://github.com/DanAakesen/jarvis/issues/236) | Conversation opening screen and input: keep typing as the default, show the conversation automatically, keep the composer bottom-centred, and start voice only from the small input orb | Cover empty/history, send/loading, failure and interrupted-reply states; keep the composer out of voice mode and restore it on exit; test keyboard/focus and manually verify desktop and phone layouts. Starting voice must never enable the microphone automatically. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-04, P4-06, P5-04, P5-05 | Complete |
-| P8-06 | [#237](https://github.com/DanAakesen/jarvis/issues/237) | Dynamic workspace composition: temporary data views, tiled or layered placement, focus/order, and user/Jarvis move and resize interactions | Keep generated views in the active workspace without saving them; support multiple views, fit/reflow them within the viewport, and exercise empty/loading/error/interrupted content plus keyboard-operable arrangement; manually inspect desktop and narrow layouts. Renderer/data and agent-control contracts belong to P8-03, not this task. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-03, P8-04 | Complete |
-| P8-07 | [#238](https://github.com/DanAakesen/jarvis/issues/238) | Workspace tabs and window lifecycle: minimise, restore, switch, and retain views in the active workspace | Minimising hides but does not close or persist a view; restore by tab and expose the Jarvis-request path through P8-03 contracts; verify repeated/interrupted minimise/restore and keyboard focus. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-03, P8-06 | Complete |
-| P8-08 | [#239](https://github.com/DanAakesen/jarvis/issues/239) | Contextual right panel: Jarvis or Dan can open, close, and change relevant content while preserving the main view | Test direct and app-internal agent-command toggles, changing context, narrow-screen behavior, focus return, and empty/loading/error states. Authenticated command delivery remains P8-15. Do not restrict it to alerts or selected-item details. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-03, P8-04 | Complete |
-| P8-09 | [#240](https://github.com/DanAakesen/jarvis/issues/240) | Runtime-state orb presentation: reflect listening, thinking, tool calls, and speaking from actual voice state | Map typed runtime events to accessible statuses with a text alternative and reduced-motion-safe behavior; test state changes, interruption, reconnect, failure and unknown status. Exact visual styling and animation are deferred. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-03, P5-04 | Complete |
-| P8-10 | [#241](https://github.com/DanAakesen/jarvis/issues/241) | Desktop fullscreen voice workspace and transitions: hide the default shell, place the orb centrally when alone and left of content windows otherwise, and carry/restore windows by default | Enter voice immediately; hide typing input/history; test no-window and multi-window layouts, natural voice end, interruption, and return to the prior typing layout. Keep End voice reachable on short desktop heights. Include the optional “Minimise all windows when starting voice” Settings toggle, default off; when enabled, start with the orb and return with windows tabbed. Implement the P8-12 Escape/End voice decision. P8-14 supplies the safe renderer; P8-15 supplies agent-delivered workspace commands; P8-16 supplies runtime activity; account preference persistence is supplied by P8-17. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-04, P8-05, P8-06, P8-07, P8-09, P8-12, P5-04 | Complete |
-| P8-11 | [#242](https://github.com/DanAakesen/jarvis/issues/242) | Phone workspace: one foreground content view, swipe/direct-request switching, and an active voice orb docked at the bottom | Do not show the large orb in phone typing mode; bring the small composer orb forward only as the explicit voice-start control. During voice, dock the active orb while content is foreground and return it to the main space when no content remains; manually verify narrow touch and keyboard/accessibility behavior. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P8-05, P8-09, P8-10 | Complete |
-| P8-12 | [#243](https://github.com/DanAakesen/jarvis/issues/243) | Decide the manual voice-end control’s form/placement and whether Escape ends voice (needs-decision) | Wait for Dan’s decision; record it in DESIGN.md before implementing the affordance. Preserve natural spoken ending and the rule that the small input orb starts, but does not end, voice. This decision does not select the orb’s final animation or overall visual styling. See [UI coverage](docs/ui-implementation-coverage.md#deferred-decisions). | None | Complete |
-| P8-13 | [#244](https://github.com/DanAakesen/jarvis/issues/244) | Theme controls and client behavior: light/dark appearance, dynamic theme variables, and persistence across visits | Persist and apply accepted light/dark mode through the existing P1-11 settings API and semantic CSS variables; test refresh/reopen, valid update, invalid/rejected update, recovery without losing the prior theme, contrast, accessibility and responsive behavior. Custom/Jarvis-directed token updates remain deferred to P8-17 using P8-18's recorded allowlist. Do not require five presets or autonomous theme changes. See [UI coverage](docs/ui-implementation-coverage.md#implementation-tasks). | P1-11, P8-03 | Complete |
+| P8-04 | [#235](https://github.com/DanAakesen/jarvis/issues/235) | Shared app shell: thin area rail, expandable area navigation, contextual bars/panels, Settings top-right, and confirmed screen-share/Camera control placement | Route the existing areas through the agreed shell; preserve keyboard access and visible focus; test narrow and desktop layouts and manually verify the shell against the structural wireframe. The Camera top-bar control becomes functional in P7-08; screen sharing remains in the conversation workflow. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P1-07, P1-11, P5-05 | Complete |
+| P8-05 | [#236](https://github.com/DanAakesen/jarvis/issues/236) | Conversation opening screen and input: keep typing as the default, show the conversation automatically, keep the composer bottom-centred, and start voice only from the small input orb | Cover empty/history, send/loading, failure and interrupted-reply states; keep the composer out of voice mode and restore it on exit; test keyboard/focus and manually verify desktop and phone layouts. Starting voice must never enable the microphone automatically. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-04, P4-06, P5-04, P5-05 | Complete |
+| P8-06 | [#237](https://github.com/DanAakesen/jarvis/issues/237) | Dynamic workspace composition: temporary data views, tiled or layered placement, focus/order, and user/Jarvis move and resize interactions | Keep generated views in the active workspace without saving them; support multiple views, fit/reflow them within the viewport, and exercise empty/loading/error/interrupted content plus keyboard-operable arrangement; manually inspect desktop and narrow layouts. Renderer/data and agent-control contracts belong to P8-03, not this task. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-03, P8-04 | Complete |
+| P8-07 | [#238](https://github.com/DanAakesen/jarvis/issues/238) | Workspace tabs and window lifecycle: minimise, restore, switch, and retain views in the active workspace | Minimising hides but does not close or persist a view; restore by tab and expose the Jarvis-request path through P8-03 contracts; verify repeated/interrupted minimise/restore and keyboard focus. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-03, P8-06 | Complete |
+| P8-08 | [#239](https://github.com/DanAakesen/jarvis/issues/239) | Contextual right panel: Jarvis or Dan can open, close, and change relevant content while preserving the main view | Test direct and app-internal agent-command toggles, changing context, narrow-screen behavior, focus return, and empty/loading/error states. Authenticated command delivery remains P8-15. Do not restrict it to alerts or selected-item details. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-03, P8-04 | Complete |
+| P8-09 | [#240](https://github.com/DanAakesen/jarvis/issues/240) | Runtime-state orb presentation: reflect listening, thinking, tool calls, and speaking from actual voice state | Map typed runtime events to accessible statuses with a text alternative and reduced-motion-safe behavior; test state changes, interruption, reconnect, failure and unknown status. Exact visual styling and animation are deferred. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-03, P5-04 | Complete |
+| P8-10 | [#241](https://github.com/DanAakesen/jarvis/issues/241) | Desktop fullscreen voice workspace and transitions: hide the default shell, place the orb centrally when alone and left of content windows otherwise, and carry/restore windows by default | Enter voice immediately; hide typing input/history; test no-window and multi-window layouts, natural voice end, interruption, and return to the prior typing layout. Keep End voice reachable on short desktop heights. Include the optional “Minimise all windows when starting voice” Settings toggle, default off; when enabled, start with the orb and return with windows tabbed. Implement the P8-12 Escape/End voice decision. P8-14 supplies the safe renderer; P8-15 supplies agent-delivered workspace commands; P8-16 supplies runtime activity; account preference persistence is supplied by P8-17. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-04, P8-05, P8-06, P8-07, P8-09, P8-12, P5-04 | Complete |
+| P8-11 | [#242](https://github.com/DanAakesen/jarvis/issues/242) | Phone workspace: one foreground content view, swipe/direct-request switching, and an active voice orb docked at the bottom | Do not show the large orb in phone typing mode; bring the small composer orb forward only as the explicit voice-start control. During voice, dock the active orb while content is foreground and return it to the main space when no content remains; manually verify narrow touch and keyboard/accessibility behavior. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P8-05, P8-09, P8-10 | Complete |
+| P8-12 | [#243](https://github.com/DanAakesen/jarvis/issues/243) | Decide the manual voice-end control’s form/placement and whether Escape ends voice (needs-decision) | Wait for Dan’s decision; record it in DESIGN.md before implementing the affordance. Preserve natural spoken ending and the rule that the small input orb starts, but does not end, voice. This decision does not select the orb’s final animation or overall visual styling. See [UI coverage](docs/archive/ui-implementation-coverage.md#deferred-choices-and-scope). | None | Complete |
+| P8-13 | [#244](https://github.com/DanAakesen/jarvis/issues/244) | Theme controls and client behavior: light/dark appearance, dynamic theme variables, and persistence across visits | Persist and apply accepted light/dark mode through the existing P1-11 settings API and semantic CSS variables; test refresh/reopen, valid update, invalid/rejected update, recovery without losing the prior theme, contrast, accessibility and responsive behavior. Custom/Jarvis-directed token updates remain deferred to P8-17 using P8-18's recorded allowlist. Do not require five presets or autonomous theme changes. See [UI coverage](docs/archive/ui-implementation-coverage.md#implementation-tasks). | P1-11, P8-03 | Complete |
 | P8-20 | [#282](https://github.com/DanAakesen/jarvis/issues/282) | Concept B dark / Concept C light visual and motion system across the current app | Canonical semantic tokens, responsive surfaces, CSS aurora, PCM- and status-driven labelled orb, truthful chat/voice working state, task feedback, reduced-motion and hidden-tab behavior; test switching and real local runtime signals, inspect desktop/phone in both appearances, and document screenshots/limitations. P8-15 and P8-16 supply the workspace and tool-call activity signals; live delivery remains unverified. | P8-04, P8-09, P8-13 | Complete |
 | P8-21 | [#293](https://github.com/DanAakesen/jarvis/issues/293) | Polish the main conversation and client workspace to match Concept B dark / Concept C light | Floating frameless composer with DA/EN switch and voice orb; divider-free messages, relative metadata, live caret and truthful running feedback; title drag/edge resize and keyboard Arrange; reduced-motion coverage; labelled 1440×900 and 390×844 empty/history/streaming screenshots and side-by-side concept comparisons. P8-16 supplies the typed runtime tool events; live chat/voice delivery remains unverified. | P8-05, P8-06, P8-08, P8-20 | Complete |
 | P8-22 | [#297](https://github.com/DanAakesen/jarvis/issues/297) | Shell finishing touches from the P8-21 review | Show the home breadcrumb once and deeper area/page breadcrumbs; put each window's keyboard Arrange controls behind an accessible overflow trigger; keep the fixture footer out of production; test and capture desktop/phone shell states in dark/light. Do not change phone voice layout, owned by P8-11. | P8-21 | Complete |
@@ -4999,7 +4999,7 @@ focus-order follow-up from the P14-03 review.
 
 19 October 2026, owner direct instruction to keep polishing: a whole-app visual
 QA pass over the real app (72 scenarios, 320 to 1440 px, light and dark,
-synthetic fixtures) found 50 defects, recorded in `docs/ui-audit.md`. P14-14 to
+synthetic fixtures) found 50 defects, recorded in `docs/archive/ui-audit.md`. P14-14 to
 P14-22 fix them in disjoint batches (Proactive and overlays, Settings and the
 task window, the top bar, state messages, further Settings fixes, chat, Tasks
 and Notes, the Factory board and the Factory projects and releases). They share
@@ -5544,7 +5544,7 @@ Owner requests a code review of approval friction, timeouts and other gates that
 prevent authorized actions from completing. Trace request intent through policy,
 execution limits, retries, progress and recovery. Fix confirmed unnecessary blocks
 with regression checks; retain authorization boundaries and no-replay protections.
-Source review is recorded in `docs/productivity-blocker-review.md`, with corrected
+Source review is recorded in `docs/archive/productivity-blocker-review.md`, with corrected
 deadlines/progress and eight remaining findings separated from live qualification
 gaps. Durable approval/receipt and interrupted-turn recovery are the highest-priority
 remaining work; the review does not claim these architectural changes are implemented.

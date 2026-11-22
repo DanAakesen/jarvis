@@ -6,9 +6,8 @@ digest. The code and the dated design records stay authoritative; section 9 list
 Evidence labels: **Token** = a value read from code, with its file. **Decision** = agreed in `DESIGN.md` or
 `docs/decisions.md`, no token. **Suggestion** = this guide's advice for a new platform, not yet agreed.
 
-Two pieces are in open pull requests and are not on `main` yet: the living neural background (#1893) and the
-Notes glass buttons (#1899). They are marked *(pending #1893)* and *(pending #1899)*. Check `main` before you rely
-on their file paths.
+The living neural background (#1893) and the Notes glass buttons (#1899) are in the source tree.
+See the [design direction](../../DESIGN.md) for current composition and device acceptance.
 
 ## 1. Principles
 
@@ -27,7 +26,7 @@ Dark is the primary look. Every role has a light twin. Source for web values: `a
 | Role | Dark | Light | Source |
 | --- | --- | --- | --- |
 | Page (web) | `#07090f` | `#f6f0e6` | `--page` |
-| Page under the neural network | `#02070f` | `#f6f0e6` | `neuralBackground`, `JarvisDesignSystem.swift` *(pending #1893)*; `openingBackground` is on `main` |
+| Page under the neural network | `#02070f` | `#f6f0e6` | `neuralBackground` and `openingBackground`, `JarvisDesignSystem.swift` |
 | Surface | `rgb(16 23 33 / 90%)` | `#fffaf1` | `--surface` |
 | Translucent surface (text over glass) | `rgb(9 16 23 / 90%)` | `rgb(240 245 247 / 92%)` | `--surface-translucent` |
 | Text | `#f3fff9` | `#17202a` | `--text` |
@@ -61,7 +60,7 @@ Semantic colours (**Token**, `styles.css`):
 
 ## 3. Glass and surfaces
 
-- **Decision (owner-approved, Notes direction, 15 Nov, *pending #1899*):** every action button is **neutral dark smoked
+- **Decision (owner-approved, Notes direction, 15 Nov):** every action button is **neutral dark smoked
   glass**. No yellow, orange or gold fill, no warm gradient. Primary labels (Save, Done, Retry) are **amber text**;
   secondary labels are neutral; disabled labels are muted. Orange survives only on task rings, with a label.
 - **Decision (31 Oct):** no solid orange fills anywhere; large orange areas are too harsh. In chat only the user bubble
@@ -92,7 +91,7 @@ Semantic colours (**Token**, `styles.css`):
 ## 5. The orb and the neural background
 
 This is the most reusable part. Neural background source: `apps/ios/Packages/JarvisCore/Sources/JarvisCore/Neural/`
-(`JarvisNeuralNetwork`, `JarvisNeuralScene`, `JarvisNeuralMotion`, `JarvisNeuralBackgroundView`) *(pending #1893)*.
+(`JarvisNeuralNetwork`, `JarvisNeuralScene`, `JarvisNeuralMotion`, `JarvisNeuralBackgroundView`).
 Orb motion model: `apps/web/src/jarvis-orb-motion.ts`, ported to `Orb/JarvisOrbModel.swift`. Orb painter:
 `apps/web/src/jarvis-lattice.ts` and `jarvis-lattice-painter.ts`. The scene is a pure function of (network, layout,
 frame), so any 2D or WebGL painter can draw it.
@@ -219,8 +218,9 @@ Reference images: [web canvas render](opening-final-2026-11-14/iteration-2026-11
 [iOS orb gallery](opening-final-2026-11-14/iteration-2026-11-15/ios-orb-gallery-3s.png),
 [approved lattice](opening-final-2026-11-14/approved-cognitive-lattice-reference.png),
 [opening screen](opening-final-2026-11-14/jarvis-opening-selected.png).
-Neural states *(pending #1893)*: `neural-background-2026-11-15/voice-states.png`, `chat-states.png`,
-`opening-and-gate.png`, `calm-and-light.png`.
+Neural states: [Voice](neural-background-2026-11-15/voice-states.png),
+[Chat](neural-background-2026-11-15/chat-states.png), [opening](neural-background-2026-11-15/opening-and-gate.png)
+and [calm/light](neural-background-2026-11-15/calm-and-light.png).
 
 ## 6. Motion
 
@@ -271,11 +271,11 @@ Neural states *(pending #1893)*: `neural-background-2026-11-15/voice-states.png`
 | iOS tokens, glass fill, neural page colour | `apps/ios/Jarvis/JarvisDesignSystem.swift` |
 | Shared controls and `jarvisGlassSurface` | `apps/ios/Jarvis/JarvisControls.swift`, `JarvisPageHeader.swift` |
 | Orb colours, motion model, lattice | `apps/web/src/jarvis-orb-appearance.ts`, `jarvis-orb-motion.ts`, `jarvis-lattice.ts`, `jarvis-lattice-painter.ts` |
-| Neural background *(pending #1893)* | `apps/ios/Packages/JarvisCore/Sources/JarvisCore/Neural/`, `DESIGN.md` "One living neural background" |
-| Dated design decisions | `DESIGN.md` (newest first; if two conflict, the newer wins), `docs/decisions.md` |
+| Neural background | `apps/ios/Packages/JarvisCore/Sources/JarvisCore/Neural/`, [design direction](../../DESIGN.md#one-living-neural-background) |
+| Current direction and history | [Design direction](../../DESIGN.md), [decisions](../decisions.md), and [dated design record](../archive/design-2026-10-03-to-2026-11-22.md) |
 | UI rules every builder follows | `.agents/skills/product-ui/SKILL.md`, `AGENTS.md` |
 | Approved images | [`opening-final-2026-11-14/`](opening-final-2026-11-14/README.md), [`cognitive-lattice-inventory.md`](cognitive-lattice-inventory.md), [`centred-stage/`](centred-stage/README.md) |
-| Notes glass direction *(pending #1899)* | `docs/ui/notes-subpages-2026-11-15/HANDOFF.md` |
+| Notes glass direction | [Notes subpage handoff](notes-subpages-2026-11-15/HANDOFF.md) |
 
 ## 10. Platform notes
 

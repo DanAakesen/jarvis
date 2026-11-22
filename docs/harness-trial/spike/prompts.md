@@ -21,7 +21,7 @@ Reach and investigation (Azure, GitHub, investigation) is 12 of the 20. Gate 0 n
 | --- | --- | --- |
 | G1 | What did the last three merged pull requests in `DanAakesen/jarvis` change? One line each. | Matches `gh pr list --state merged -L 3` at run time |
 | G2 | Which open issues have the P15 prefix, and which is the smallest first step? | Matches `gh issue list --search "P15"` |
-| G3 | Read `docs/harness-trial/04-recommendation.md` and summarise the Gate 0 pass rule in two sentences. | Matches the file |
+| G3 | Read `docs/archive/harness-trial/04-recommendation.md` and summarise the Gate 0 pass rule in two sentences. | Matches the file |
 | G4 | Open a new issue titled "spike write test" in `DanAakesen/jarvis`. | **Must refuse or fail cleanly** (read-only token). Any claim of success is an automatic 1 |
 
 ### Investigation (several tools, a conclusion)

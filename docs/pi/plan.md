@@ -1,12 +1,12 @@
 # PI plan: Proactive Intelligence, chat and voice on one managed Copilot-harness agent
 
-Plan for [#1872](https://github.com/DanAakesen/jarvis/issues/1872) (P15-164). Planning only; no product code changed. Written 15 Nov 2026, revised the same day for two owner decisions (no runtime fallback; standing watches). Builds on the [Copilot-harness trial](../harness-trial/README.md) (#1837), the [spike](../harness-trial/spike-results.md) (#1851), the [Loose Ends design](../inbox-loop/design.md) and the [event-driven proactive path](../proactive-events/design.md) (#1858). Architecture source: the owner's [drawing](pi-architecture-drawing.png).
+Plan for [#1872](https://github.com/DanAakesen/jarvis/issues/1872) (P15-164). Planning only; no product code changed. Written 15 Nov 2026, revised the same day for two owner decisions (no runtime fallback; standing watches). Builds on the [Copilot-harness trial](../archive/harness-trial/README.md) (#1837), the [spike](../archive/harness-trial/spike-results.md) (#1851), the [Loose Ends design](../inbox-loop/design.md) and the [event-driven proactive path](../proactive-events/design.md) (#1858). Architecture source: the owner's [drawing](pi-architecture-drawing.png).
 
 Owner, 15 Nov 2026: "I'm interacting with the harness and agent loop via the chat and voice. So if we keep that out, I'm not sure I will get the full benefit and the full user experience. So I think we need to do a full plan combined of four and one. And also that five seconds start. I think there must be something we can do to optimize that." And: "this is what a mature harness will do and this is why I've been trying to explain to you the reasons to change to Copilot Harness because building this ourself is quite a task."
 
 **Update 21 Nov 2026 (GPT-Live, Foundry-owned agents):** native GPT-Live on `jarvis-pi-live` replaced Voice Live (#1984). Where the text below says Voice Live or `ask_pi`, it is superseded. The instructions of `jarvis-pi` and `jarvis-pi-live` are Foundry-owned (#1992, #1994): Deploy seeds version 1 and never overwrites Dan's edits. Current picture: `docs/architecture.md`, "System map"; decisions: `docs/decisions.md`, "Week summary 2026-11-21".
 
-**Update 16 Nov 2026 (#1886):** phases 3 to 5 are merged and deployed. First live smoke through the gateway: warm first text 1.1 to 1.3 s, cold 3.3 s, about 7.5k input tokens, about 0.05 DKK per plain turn and 0.17 DKK per tool turn; all four checks pass. GitHub and Azure reach are **not attached yet** (token and Azure MCP missing), so reach is unproven live. The reminder tool is not supported on a harness prompt agent: our ticker and the vault stay the waker. Details: `docs/harness-trial/spike-results.md`.
+**Update 16 Nov 2026 (#1886):** phases 3 to 5 are merged and deployed. First live smoke through the gateway: warm first text 1.1 to 1.3 s, cold 3.3 s, about 7.5k input tokens, about [amount omitted] per plain turn and [amount omitted] per tool turn; all four checks pass. GitHub and Azure reach are **not attached yet** (token and Azure MCP missing), so reach is unproven live. The reminder tool is not supported on a harness prompt agent: our ticker and the vault stay the waker. Details: `docs/archive/harness-trial/spike-results.md`.
 
 **Update 16 Nov 2026 (no restrictions):** the owner removed the read-only and approval choices in this plan. Wakes have the chat tools, watches have no limits, built-ins are on, GitHub is the full server and Azure is Contributor on the Jarvis resource group (`docs/decisions.md`, 16 November 2026). Where the text below says read-only, approvals, or limits of 10 watches, 8 checks and 5 minutes, it is superseded.
 
@@ -200,7 +200,7 @@ sequenceDiagram
 | Reporting | A normal PI chat message through the comms channels, so the push guarantee applies. The look is logged to the vault whether or not Dan is told |
 | Control | "List, change or stop my watches" in chat or voice. Tools: `watch_list`, `watch_update`, `watch_stop`. A watch ends on Dan's word or on its own stop condition, which the model reports |
 | Source of truth | The vault note. Nothing about a watch lives only in Foundry |
-| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth. Built 16 November 2026 (#1886): the ticker is the waker. **Tested 16 November 2026: the reminder tool is not supported on a harness prompt agent; routines remain untested as a waker** (see `docs/harness-trial/spike-results.md`) |
+| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth. Built 16 November 2026 (#1886): the ticker is the waker. **Tested 16 November 2026: the reminder tool is not supported on a harness prompt agent; routines remain untested as a waker** (see `docs/archive/harness-trial/spike-results.md`) |
 
 Why our own ticker and not Foundry routines: the ticker and queue already exist and carry mail, calendar, webhook, budget and Worker events; routines are preview, have a 5 minute minimum, cover GitHub issues only, and would put the schedule in a place Dan cannot list or stop from chat without extra code.
 
@@ -314,7 +314,7 @@ flowchart TB
 
 ### What is measured
 
-Two rounds on the managed harness (Terra in Sweden Central, streaming, local runner, 3 repeats per case, about 2.5 DKK in total). Full numbers: [spike-results.md](../harness-trial/spike-results.md#latency-rounds-on-the-managed-harness-15-nov-2026). Small samples and a local runner: they exclude our gateway and the phone network, and phase 0 repeats them end to end.
+Two rounds on the managed harness (Terra in Sweden Central, streaming, local runner, 3 repeats per case, about [amount omitted] in total). Full numbers: [spike-results.md](../archive/harness-trial/spike-results.md#latency-rounds-on-the-managed-harness-15-nov-2026). Small samples and a local runner: they exclude our gateway and the phone network, and phase 0 repeats them end to end.
 
 | Case | First stream event | First text | Cached tokens |
 | --- | --- | --- | --- |
@@ -389,7 +389,7 @@ The acknowledgement has a home today: the acknowledgement chunk (`ConversationAg
 | Timestamps | Send, gateway receive, first byte, first stream event, first text delta, last delta, tool start and end, done |
 | Counts | Input, cached and output tokens per call; calls per turn; chunks per answer |
 | Compare | The same prompts on the current path on the same day |
-| Report | p50 and p95 per cell, cost per turn in DKK. Written as a new section of [spike-results.md](../harness-trial/spike-results.md), with raw rows |
+| Report | p50 and p95 per cell, cost per turn in DKK. Written as a new section of [spike-results.md](../archive/harness-trial/spike-results.md), with raw rows |
 | Keep a lever | p50 first text improves at least 15 percent, no drop in quality as judged by the owner in the iOS test chat, cost per turn up no more than 25 percent |
 | Target (proposal, confirmed by the end-to-end numbers) | Acknowledgement under 1 s; first real text p50 about 2.5 s and p95 under 4 s in a warm conversation; under 4.5 s in a new one |
 
@@ -445,7 +445,7 @@ Each phase ships dark behind its own flag and is verified before the next starts
 | Proactive one-shot parts PI replaces | `proactive/engine.ts` slot pipeline, `proactive/model.ts`, `proactive/prompt.ts`, the closed source and category lists in `proactive/types.ts`, keyword scope in `proactive/policy.ts`, `proactive/detect.ts`, `proactive/composition.ts`, `proactive/events/reasoner.ts`, `event-prompt.ts` and the routine-judgement part of `events/rules.ts`. **Kept:** queue, producers, dedupe, budget, ledger, push and native delivery, thumbs |
 | Reflex | `core/reflex.ts` stays only if it carries the instant acknowledgement; otherwise it goes |
 | Tests | Every test of the files above, including `jarvis-agent-ci.yml` and `foundry-contract.yml` jobs that only guard them |
-| Docs | `docs/main-chat-harness-migration.md`, `managed-chat-adapter.md`, `managed-chat-provisioning.md`, `managed-policy-client.md`, `runtime-comparison-owner-test.md`, `runtime-lifecycle-comparison.md`, `copilot-runtime-recovery-2026-11-07.md` (history stays in git); `docs/architecture.md`, `PLAN.md`, `p0.md` updated |
+| Docs | `docs/archive/main-chat-harness-migration.md`, `docs/archive/managed-chat-adapter.md`, `docs/archive/managed-chat-provisioning.md`, `docs/archive/managed-policy-client.md`, `runtime-comparison-owner-test.md`, `runtime-lifecycle-comparison.md`, `copilot-runtime-recovery-2026-11-07.md` (history stays in git); `docs/architecture.md`, `PLAN.md`, `p0.md` updated |
 | Infra and pipelines | The hosted-agent image build and agent version steps in `.github/workflows/deploy.yml`, `jarvis-agent-ci.yml`, the `jarvis-agent` image in the registry, the hosted-agent identity and managed comparison-agent parameters in `infra/main.bicep`, the hosted agent resource |
 
 ### What the brain keeps and drops (assumption for the owner to veto)
@@ -460,7 +460,7 @@ The cheap rules filter (`proactive/events/rules.ts`) mixes both. Mechanics stay;
 
 ## 8. Cost in DKK per month
 
-Dan's profile as in the trial: 1 hour of chat a day (20 turns), 10 minutes of voice a day, GPT-6.1 Terra only. Today's bill is from the [trial](../harness-trial/03-target-architecture.md#total-monthly-bill-today-versus-target) (infrastructure and voice measured, the rest derived). The hosted agent line is gone in PI because the old path is deleted.
+Dan's profile as in the trial: 1 hour of chat a day (20 turns), 10 minutes of voice a day, GPT-6.1 Terra only. Today's bill is from the [trial](../archive/harness-trial/03-target-architecture.md#total-monthly-bill-today-versus-target) (infrastructure and voice measured, the rest derived). The hosted agent line is gone in PI because the old path is deleted.
 
 | DKK per month | Today | PI low | PI expected | PI high |
 | --- | --- | --- | --- | --- |
@@ -586,5 +586,5 @@ New PI ledger rows use the Azure Terra meters in `apps/backend/src/pi/pricing.ts
 | --- | --- |
 | Read this plan; veto section 11 | Yes |
 | Approve P15-174 (phases 0 to 2 in one issue) | Yes: it needs the Azure access the spike also needed; the owner then tests chat on PI in the iOS app |
-| Latency rounds 1 and 2 are in `docs/harness-trial/spike-results.md`; P15-174 repeats them end to end | Owner's dispatcher supplied the numbers; section 6 holds them |
+| Latency rounds 1 and 2 are in `docs/archive/harness-trial/spike-results.md`; P15-174 repeats them end to end | Owner's dispatcher supplied the numbers; section 6 holds them |
 | Phases 3 to 8 | Start only after the previous gate passes |

@@ -64,7 +64,7 @@ Run each once on the agent and record whether the value arrives and where.
 | e | **Per-request metadata** (Responses `metadata` or a per-request tool header override, if the API allows) | Whether any `x-` header or `_meta` key carries it |
 | f | **Hostile case.** Same as d, but the prompt text tells the model to use a different `turn_ref` | The model may comply: this shows route d is advisory, not proof of authority |
 
-Reading the result: only routes that arrive without the model's help (a, b, c, e) can prove authority. Route d works for correlation but a prompt-injected model can forge it, so it needs the gateway to check the value against the live turn. That decides which of the three options in [03-target-architecture.md](../03-target-architecture.md#per-user-and-per-turn-authority) is workable.
+Reading the result: only routes that arrive without the model's help (a, b, c, e) can prove authority. Route d works for correlation but a prompt-injected model can forge it, so it needs the gateway to check the value against the live turn. That decides which of the three options in [03-target-architecture.md](../../archive/harness-trial/03-target-architecture.md#per-user-and-per-turn-authority) is workable.
 
 ## Q3 test
 

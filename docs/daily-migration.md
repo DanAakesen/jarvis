@@ -178,7 +178,7 @@ Verified source heartbeat accepts authenticated bodyless POST without Content-Ty
 
 The separate unregistered SQL lifecycle library retains protected random prepared handles, idempotent issue and terminal revocation. A transaction atomically revokes the old capability and reserves/issues one same-device, narrowed-scope replacement. Retain the same handle after response ambiguity; SQL atomicity does not make secret delivery exactly once. No real provisioning or protected custody/delivery channel is created.
 
-Maintained client/instance request-rate guards still run before credential/database work. Uploads are bounded to 8 MiB; an owner inbox retains at most 256 MiB and 10,000 rows before 503 backpressure, without automatic age deletion. Verified processing/retention/compaction, ingress identity, deployed quotas, actual phone retries and protected backup/rollback remain activation gates. The [old host/Blob/Queue proposal](daily-health-ingestion/legacy-host-proposal.md) is superseded and unused; its cost/recovery questions are withdrawn.
+Maintained client/instance request-rate guards still run before credential/database work. Uploads are bounded to 8 MiB; an owner inbox retains at most 256 MiB and 10,000 rows before 503 backpressure, without automatic age deletion. Verified processing/retention/compaction, ingress identity, deployed quotas, actual phone retries and protected backup/rollback remain activation gates. The [old host/Blob/Queue proposal](archive/daily-health-ingestion/legacy-host-proposal.md) is superseded and unused; its cost/recovery questions are withdrawn.
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
@@ -188,7 +188,7 @@ Keep Health Auto Export JSON uploads and heartbeat. Device credentials are owner
 
 ### [P12-05: Health processor & sync read models](https://github.com/DanAakesen/jarvis/issues/720)
 
-**Current inactive local slice:** the [coordinator release](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows reviewed/deployed #805's revised existing-backend/SQL design. `daily/health` supplies a pure source-shaped normalizer, explicit one-row transactional processor and authenticated owner read models; migration 0047 adds bounded retry/lease/quarantine evidence. No automatic processing or production route/tool composition. [Contract and acceptance limits](../apps/backend/src/daily/health/README.md); live/device/privacy gates remain open even when code dependencies are closed.
+**Current inactive local slice:** the [coordinator release](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows reviewed/deployed #805's revised existing-backend/SQL design. `daily/health` supplies a pure source-shaped normalizer, explicit one-row transactional processor and authenticated owner read models; migration 0047 adds bounded retry/lease/quarantine evidence. No automatic processing or production route/tool composition. [Contract and acceptance limits](../apps/backend/src/health/health/README.md); live/device/privacy gates remain open even when code dependencies are closed.
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
@@ -207,7 +207,7 @@ ingestion.
 
 ### [P12-07: Nutrition tools, Frida & meal planning](https://github.com/DanAakesen/jarvis/issues/722)
 
-Released after closed/deployed #718. Draft #743 implements inactive nutrition services/typed handlers from supplied legacy contracts, server-resolved plan snapshots and guarded 0042/0043 migrations. [Boundary and validation](../apps/backend/src/daily/nutrition/README.md) records read-only source/public format evidence. Preserve Frida 5.5/release 10 with DTU/DOI attribution, per-100-g units, nullable nutrients/unavailable provenance and separate incomplete subtotals. Bootstrap is verified empty-body plus public token header/cookie; no session values are borrowed. Cloud CONNECT is blocked with HTTP 403. No live provider success, historical replay, Apple Health queue or activation. P12-09 owns trusted evidence/confirmation/runtime registration. Final exact-head CI and independent review precede readiness/release; source-contract, replay/live-provider and phone acceptance remain separate.
+Released after closed/deployed #718. Draft #743 implements inactive nutrition services/typed handlers from supplied legacy contracts, server-resolved plan snapshots and guarded 0042/0043 migrations. [Boundary and validation](../apps/backend/src/health/nutrition/README.md) records read-only source/public format evidence. Preserve Frida 5.5/release 10 with DTU/DOI attribution, per-100-g units, nullable nutrients/unavailable provenance and separate incomplete subtotals. Bootstrap is verified empty-body plus public token header/cookie; no session values are borrowed. Cloud CONNECT is blocked with HTTP 403. No live provider success, historical replay, Apple Health queue or activation. P12-09 owns trusted evidence/confirmation/runtime registration. Final exact-head CI and independent review precede readiness/release; source-contract, replay/live-provider and phone acceptance remain separate.
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
@@ -258,7 +258,7 @@ Exact-head source qualification is required; account/device/private/cutover
 acceptance and #724 remain open.
 
 17 October source continuation: the existing JarvisPM session adds an optional
-[nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
+[nutrition-only hosted MCP adapter](../apps/backend/src/health/mcp/README.md).
 It reuses delivered reads and existing typed writers, a separate delegated
 Entra principal, exact route isolation and native signed proposal review.
 Existing audit storage gets constrained UUID correlation rather than fake
@@ -307,7 +307,7 @@ activation is released by this documentation change.
 
 After inactive #746 merged, scoped continuation draft #754 corrects caller calendar-range preflight, numberless delivery grouping and SENT-alias direction. No live acceptance or activation is implied. Exact-head synthetic/isolated SQL/full CI and independent review are required; only explicit coordinator release may mark this follow-up ready. Issue/native gates remain open.
 
-Released after closed/deployed #718 and merged #722. [Inactive feed services](../apps/backend/src/daily/feeds/README.md) use coordinator-verified pure consumer/public producer contracts for resumable bounded Gmail/calendar reads, exact selectors, mapped owner-local snapshots/suppressions and manual refresh. The existing protected chat identity/settings/catalogue/usage boundary supplies tool-free JSON extraction with strict local schema and source-timestamp checks; failures remain unavailable, never guessed. Per-source size checks preserve healthy-source success. Consent, deployed-model/live parity/private/phone gates remain open; no new resource/key, OAuth change or activation. Coordinator accepted 895b7c3/full CI 38310725882 for a reviewed inactive intermediate release through #746; final documentation/exact-head CI precede readiness. Refs #725 remains, with the issue open and native dependencies intact. Full acceptance still requires manual CalendarList owner consent, deployed identity/model and Google/provider parity, source-compatible Daily ingestion and physical-device evidence.
+Released after closed/deployed #718 and merged #722. [Inactive feed services](https://github.com/DanAakesen/jarvis/blob/21fc9c2a006ced772569c9e37e46c9ef7ac098d3/apps/backend/src/daily/feeds/README.md) use coordinator-verified pure consumer/public producer contracts for resumable bounded Gmail/calendar reads, exact selectors, mapped owner-local snapshots/suppressions and manual refresh. The existing protected chat identity/settings/catalogue/usage boundary supplies tool-free JSON extraction with strict local schema and source-timestamp checks; failures remain unavailable, never guessed. Per-source size checks preserve healthy-source success. Consent, deployed-model/live parity/private/phone gates remain open; no new resource/key, OAuth change or activation. Coordinator accepted 895b7c3/full CI 38310725882 for a reviewed inactive intermediate release through #746; final documentation/exact-head CI precede readiness. Refs #725 remains, with the issue open and native dependencies intact. Full acceptance still requires manual CalendarList owner consent, deployed identity/model and Google/provider parity, source-compatible Daily ingestion and physical-device evidence.
 
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
@@ -331,7 +331,7 @@ Keep a small read-only phone glance with owner-bound credentials and Jarvis link
 
 ### [P12-12: Apple Health nutrition export Shortcut](https://github.com/DanAakesen/jarvis/issues/727)
 
-Released inactive slice on `codex/p12-12-nutrition-export` / draft #758 after closed/deployed #722. Coordinator [verified pure source contract](https://github.com/DanAakesen/jarvis/issues/727#issuecomment-6134567097) supplies claim/complete DTOs and optional native-write guidance; no original records were read. Target replaces unsafe requeue/ACK behavior with scoped owner-bound device capability, exact-period trusted confirmation, revision/expiry uncertainty, no-instruction claim replay and identical receipt replay. Canonical SQL meals/ordinary logging remain independent; no native re-ingestion or automatic export. [Inactive boundary](../apps/backend/src/daily/nutrition-export/README.md) and [unverified phone guide](nutrition-export-shortcut.md) keep provisioning/activation/live/private/iPhone gates visible. Keep Refs #727, issue/native gates open and PR draft until explicit coordinator readiness release.
+Released inactive slice on `codex/p12-12-nutrition-export` / draft #758 after closed/deployed #722. Coordinator [verified pure source contract](https://github.com/DanAakesen/jarvis/issues/727#issuecomment-6134567097) supplies claim/complete DTOs and optional native-write guidance; no original records were read. Target replaces unsafe requeue/ACK behavior with scoped owner-bound device capability, exact-period trusted confirmation, revision/expiry uncertainty, no-instruction claim replay and identical receipt replay. Canonical SQL meals/ordinary logging remain independent; no native re-ingestion or automatic export. [Inactive boundary](../apps/backend/src/health/nutrition-export/README.md) and [unverified phone guide](nutrition-export-shortcut.md) keep provisioning/activation/live/private/iPhone gates visible. Keep Refs #727, issue/native gates open and PR draft until explicit coordinator readiness release.
 
 **NEW DAILY CAPABILITY — permanent** · Personal integrations & phone surfaces
 

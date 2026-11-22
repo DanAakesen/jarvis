@@ -1,6 +1,6 @@
 # Spike runbook: what is needed and the exact steps
 
-Spike #1851 (P15-158). Written because the spike session had **no Azure access**, so nothing below has been run. Commands are drafts built from the repository (`infra/main.bicep`, `docs/architecture.md`) and the Learn excerpts quoted in [03-target-architecture.md](../03-target-architecture.md). Learn pages cannot be fetched from the session, so every command is marked **verify** where a flag or name could differ.
+Spike #1851 (P15-158). Written because the spike session had **no Azure access**, so nothing below has been run. Commands are drafts built from the repository (`infra/main.bicep`, `docs/architecture.md`) and the Learn excerpts quoted in [03-target-architecture.md](../../archive/harness-trial/03-target-architecture.md). Learn pages cannot be fetched from the session, so every command is marked **verify** where a flag or name could differ.
 
 ## What blocked the session
 

@@ -2,7 +2,7 @@
 
 Captured on 28 October 2026 from the actual local frontend with synthetic
 authentication and backend fixtures. All final images were visually inspected.
-No live account data is included. See [implementation and validation](../../../review-fixes-1343.md).
+No live account data is included. See [implementation and validation](../../../archive/review-fixes-1343.md).
 
 | Capture | State checked |
 | --- | --- |

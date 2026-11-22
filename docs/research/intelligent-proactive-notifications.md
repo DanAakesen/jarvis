@@ -3,7 +3,7 @@
 The later owner-approved flow supersedes opening Proactive: normal insight pushes now
 prepare background finding context and open the existing Chat, without repeating the
 notification or changing its UI. This follow-up is implemented on a separate branch;
-qualification and handoff are in [push-chat continuity](../push-chat-continuity.md).
+qualification and handoff are in [push-chat continuity](../archive/push-chat-continuity.md).
 
 # Intelligent notifications across Jarvis
 
