@@ -65,7 +65,7 @@ export interface Observation {
 }
 
 const personaMarker = 'Trusted Jarvis context from the app.';
-const capabilityMarker = '[Tools: find_tools then call_tool.';
+const capabilityMarker = '[Tools: ';
 
 export function describeInput(text: string | undefined, kind: 'turn' | 'follow_up', conversation: string, blocks: { persona: string; situation: string }): PiInputFacts {
   const raw = text ?? '';

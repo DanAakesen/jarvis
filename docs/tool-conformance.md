@@ -76,7 +76,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `calendar_delete_event` | google | chat and voice | action | ok | "cancel the meeting tomorrow" (en, #1) | ok (2 calls, 1 typed refusals or failures proven) | 36 |  |
 | `calendar_find_free_slots` | google | chat and voice | unclassified | ok | "when am I free on Friday" (en, #1) | ok (3 calls, 1 typed refusals or failures proven) | 124 |  |
 | `calendar_get_pending_change` | google | HTTP only (legacy) | unclassified | ok | n/a | not advertised | 16 | kept for cached clients; the door refuses it |
-| `calendar_list_events` | google | chat and voice | unclassified | ok | "what is on my calendar next week" (en, #2) | ok (6 calls, 1 typed refusals or failures proven) | 165 |  |
+| `calendar_list_events` | google | chat and voice | read | ok | "what is on my calendar next week" (en, #2) | ok (6 calls, 1 typed refusals or failures proven) | 165 |  |
 | `calendar_move_event` | google | chat and voice | action | ok | "move my dentist appointment to Monday" (en, #1) | ok (2 calls, 1 typed refusals or failures proven) | 121 |  |
 | `calendar_next_event` | google | chat and voice | unclassified | ok | "when is my next meeting" (en, #1) | ok (3 calls) | 53 |  |
 | `calendar_today_agenda` | google | chat and voice | unclassified | ok | "what is on my calendar today" (en, #1) | ok | 16 |  |
@@ -169,7 +169,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `pr_get` | factory | chat and voice | unclassified | ok | "pull request summary and linked issues" (en, #2) | ok (2 calls) | 89 |  |
 | `pr_reviews` | factory | chat and voice | unclassified | ok | "Read bounded pull request review threads and comments, including reso…" (derived, #2) | ok | 89 |  |
 | `proactive_item_feedback` | notes | chat and voice | action | ok | "that finding was not useful" (en, #1) | ok (3 calls) | 106 |  |
-| `proactive_message_feedback` | pi | chat and voice | action | ok | "Record Dan’s useful or wrong feedback on one proactive PI chat message" (derived, #1) | ok | 52 |  |
+| `proactive_message_feedback` | pi | chat and voice | action | ok | "that message was useful" (en, #1) | ok | 52 |  |
 | `proactive_preferences` | notes | chat and voice | unclassified | ok | "Read current proactive preferences or capability-backed help, or chan…" (derived, #1) | ok (8 calls) | 152 |  |
 | `proactive_recent_items` | notes | chat and voice | read | ok | "that finding was not useful" (en, #3) | ok (2 calls) | 49 |  |
 | `read_backend_logs` | core | chat and voice | read | ok | "why did you fail yesterday" (en, #1) | ok (2 calls) | 85 |  |
@@ -217,7 +217,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `watch_look` | pi | background wake | action | ok | "Record one look at a watch in a background wake: result is what I fou…" (derived, #1) | ok | 112 |  |
 | `watch_stop` | pi | chat and voice | action | ok | "stop watching the flight price" (en, #1) | ok (2 calls) | 51 |  |
 | `watch_update` | pi | chat and voice | action | ok | "check the price less often" (en, #1) | ok (2 calls) | 109 |  |
-| `weather` | workspace | chat and voice | unclassified | ok | "what is the weather in Aarhus tomorrow" (en, #1) | ok (4 calls) | 61 |  |
+| `weather` | workspace | chat and voice | action | ok | "what is the weather in Aarhus tomorrow" (en, #1) | ok (4 calls) | 61 |  |
 | `web_research` | workspace | chat and voice | unclassified | ok | "research the best noise cancelling headphones" (en, #2) | ok | 35 |  |
 | `workspace_command` | core | chat and voice | unclassified | ok | "open the workspace" (en, #3) | ok (27 calls) | 12589 | large schema: the inline generated-view schema (every renderer) is part of the tool schema |
 | `workspaces_manage` | workspace | chat and voice | action | ok | "pin that report" (en, #2) | ok (4 calls) | 105 |  |

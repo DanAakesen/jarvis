@@ -87,6 +87,32 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 | Voice state looks wrong | `voice.activity_published` (`state`, `reason`, `sinceLastMs`, `outputActive`, `piBusy`, `delegationPending`) |
 | Provider error in Voice | `voice.upstream_event_error` (`errorType`, `errorCode`, `param`) |
 
+#### Compare PI tool searches and input tokens before and after the quick tools
+
+Use equal windows of normal traffic on either side of the rollout. `pi.mcp_tool` measures searches per turn that used the door, including zero-search turns with a direct call. `pi.turn` gives input tokens for Chat and Voice when usage is reported or estimated. Compare the two cohorts by time window and channel, not by individual turn: `pi.turn` does not carry `turnHash`. No smoke or extra model call is needed.
+
+```kusto
+let rollout = datetime(2026-11-22T00:00:00Z); // Replace with the actual rollout time.
+let events = materialize(ContainerAppConsoleLogs_CL
+| where ContainerAppName_s == 'ca-jarvis-backend-<suffix>'
+| where TimeGenerated >= rollout - 7d and TimeGenerated < rollout + 7d
+| extend r = parse_json(Log_s), period = iff(TimeGenerated < rollout, 'before', 'after')
+| extend channel = tostring(r.channel)
+| where channel in ('chat', 'voice')
+| project period, channel, event = tostring(r.msg), tool = tostring(r.tool),
+    turnHash = tostring(r.turnHash), inputTokens = tolong(r.inputTokens));
+let searches = events
+| where event == 'pi.mcp_tool' and isnotempty(turnHash)
+| summarize findCalls = countif(tool == 'find_tools') by period, channel, turnHash
+| summarize doorTurns = count(), findCallsPerDoorTurn = avg(findCalls) by period, channel;
+events
+| where event == 'pi.turn'
+| summarize piTurns = count(), turnsWithTokens = countif(isnotnull(inputTokens)),
+    medianInputTokens = percentile(inputTokens, 50), p95InputTokens = percentile(inputTokens, 95) by period, channel
+| join kind=leftouter searches on period, channel
+| project period, channel, piTurns, doorTurns, findCallsPerDoorTurn, turnsWithTokens, medianInputTokens, p95InputTokens
+```
+
 ### Rules
 
 1. **Foundry owns the agent text.** Edit the `jarvis-pi` and `jarvis-pi-live` instructions (and the voice agent's voice, greeting and `store`) in the Foundry portal, then set the new version Active. Dan reports that a saved version is not served until he does; the code reads the pin rule first, but this was not tested against the live portal. Editing `agents/pi/instructions.md` or `voice-instructions.md` changes nothing once version 1 exists, and in `voice-definition.json` only the output voice and `store` are seed-only (its contract fields are validated and verified on every Deploy). The portal saves `store: true`, which Deploy accepts since #1998. Roll back by setting the previous version Active.
@@ -323,6 +349,8 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 
 ## PI tool loading and discovery — 21 November 2026 (#1967)
 
+- The door lists `weather`, `calendar_list_events` and `owner_reminders` directly alongside `find_tools` and `call_tool`. They still take the current `turn` and run through the normal tool route. Check the five definitions, both call forms and replay behaviour with `cd apps/backend && npx vitest run src/pi/mcp.test.ts src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`. A `pi.mcp_tool` line with `truncated: true` means the door shortened a successful read, not that the tool failed or that its own paging flag was set. `resultBytes` is the encoded text sent to the model, including the envelope.
+- A shortened result puts the tool's paging details and warnings before the JSON preview. `sourceTruncated` is the tool's original top-level `truncated` flag; the new `truncated` flag is the door's. A continuation describes the full source page, not where the preview stopped. Narrow the original query to recover omitted rows before advancing if those rows matter. The unpageable `list_capabilities` catalogue is exempt; the conformance suite compares its complete tools and features with the route response.
 - `cd apps/backend && npx vitest run src/pi src/core/owner-message.test.ts src/core/conversation-progress.test.ts`, then backend build and lint. GitHub and Azure bridges start idle and load only when a `find_tools` query names them; do not add startup warm-ups. The Danish/English alias table is `intentAliases` in `pi/tool-search.ts`. No live model, Foundry, MCP or paid run is part of these checks; Dan owns physical acceptance.
 - Wake = Chat parity (`pi/gateway.test.ts`: "a brain wake opens like a new chat conversation"; `pi/mcp.test.ts`: "finds through find_tools what chat finds, plus exactly the tools only a wake has"): `cd apps/backend && npx vitest run src/pi/gateway.test.ts src/pi/mcp.test.ts`. A tool the brain factory (`createBrainTools`) registers must be listed in `brainOnlyTools` (`pi/brain/policy.ts`), or the discovery test fails with the tools that differ; a wake-only tool from another factory (like `watch_look`) is also named in that test. A wake gets Chat's tool overview through `overviewFor` in `pi/gateway.ts`; do not build a second copy. Offline only: no live wake, model call or `measure_pi`.
 - Door ledger, replayed requests and write outcomes: `cd apps/backend && npx vitest run src/pi/mcp.test.ts src/pi/turns.test.ts src/logging.test.ts src/core/write-outcome.test.ts src/core/tool-failure-flags.test.ts src/factory/issue-comment.test.ts`. An identical action under a different request always runs; only a replay (the same `_meta` call id, the same tool and arguments) is answered from the first result, after a success or an error that says the call may have run (`outcomeUnknown`), and only for a call that `effectOf` (`core/tool-registry.ts`) calls an action: a tool's own `execution` metadata, else the writers table in `core/tool-effects.ts`. A new tool that writes goes in that table (an operation map when one tool reads and writes; a tool that only reads or shows goes in `readOnlyTools`), and the conformance suite fails until it is in one of them. The same `effectOf` counts the turn's actions. A `ToolFailure` whose text says the work may have happened or that only part of it was done ("may not have happened", "could not be confirmed", "was saved, but ...") must be thrown with `{ outcomeUnknown: true }`, or Dan reads "Not done." in front of it and a replay runs the write again; one that says nothing was done is not flagged. `core/tool-failure-flags.test.ts` fails for a written-out text of that kind without the flag (it cannot see a text built from a variable, so read those by hand). A comment Jarvis posts to a GitHub issue carries its receipt as the `receipt` argument of `createComment`, outside the 4,000 characters of words. The JSON-RPC id is never an identity (the door is stateless, so a client with a connection per model round repeats ids 1, 2, 1, 2); a request with no call id is never recognised. Remote `gh_`/`az_` calls are never recognised or counted. Do not add a refusal, approval, argument-equality rule or JSON-RPC-id rule to this; it only returns the first result of a replayed request.
@@ -605,7 +633,7 @@ Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .githu
   only when the infra job runs with the mirror enabled. Runner deploy builds two images on
   `runner/**` changes.
 
-## Tool lookup for voice and chat — 12 November 2026
+## Legacy tool lookup for voice and chat — 12 November 2026
 
 - **No tool schemas are sent on each request.** The voice relay (`apps/backend/src/voice`) and
   the chat Responses loop (`agents/jarvis/model_client.py`, helpers in `tool_lookup.py`) send

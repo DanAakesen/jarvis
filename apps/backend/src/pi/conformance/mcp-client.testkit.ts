@@ -29,15 +29,16 @@ export interface CallResult {
   readonly timedOut: boolean;
 }
 
-/** A live PI turn: the MCP door only accepts `find_tools` and `call_tool` with its reference. */
+/** A live PI turn whose reference is required by the MCP door. */
 export interface ConformanceTurn { readonly grant: PiTurnGrant; close(): void }
 
 export interface McpClient {
   /** A chat or voice turn, or (`wake`) a background brain wake that also sees the wake-only tools. */
   openTurn(options?: { readonly wake?: boolean; readonly activation?: PiTurnGrant['activation'] }): ConformanceTurn;
   find(turn: ConformanceTurn, query: string): Promise<FindResult>;
-  call(turn: ConformanceTurn, name: string, args: Json, timeoutMs?: number): Promise<CallResult>;
-  /** The tools/list answer, which must stay exactly the two door tools. */
+  call(turn: ConformanceTurn, name: string, args: Json, timeoutMs?: number, callId?: string): Promise<CallResult>;
+  direct(turn: ConformanceTurn, name: string, args: Json, callId?: string): Promise<CallResult>;
+  /** The tools/list answer, without the rest of the catalogue. */
   listDoorTools(): Promise<readonly string[]>;
   /** The full tools/list definitions, as the harness reads them. */
   listDoorDefinitions(): Promise<readonly { readonly name: string; readonly description?: string; readonly inputSchema?: Json }[]>;
@@ -95,6 +96,22 @@ export function createMcpClient(options: {
     return result?.content?.[0]?.text;
   };
 
+  async function callTool(name: string, args: Json, timeoutMs = 20_000, callId?: string): Promise<CallResult> {
+    const started = performance.now();
+    const answer = await rpc('tools/call', { name, arguments: args, ...(callId ? { _meta: { tool_call_id: callId } } : {}) }, timeoutMs);
+    const durationMs = performance.now() - started;
+    const text = contentText(answer.body);
+    let envelope: { outcome?: string; result?: unknown } | undefined;
+    try { envelope = text ? JSON.parse(text) as typeof envelope : undefined; } catch { envelope = undefined; }
+    const outcome = envelope?.outcome === 'ok' || envelope?.outcome === 'refused' || envelope?.outcome === 'error' ? envelope.outcome : 'unknown';
+    const marker = envelope?.result as { truncated?: boolean; totalCharacters?: number; preview?: string } | undefined;
+    return {
+      status: answer.status, outcome, result: envelope?.result, isError: (answer.body?.result as { isError?: boolean } | undefined)?.isError === true,
+      truncated: marker?.truncated === true && typeof marker.totalCharacters === 'number' && typeof marker.preview === 'string',
+      raw: text ?? answer.raw, durationMs, timedOut: answer.timedOut,
+    };
+  }
+
   return {
     openTurn(turnOptions = {}) {
       const controller = new AbortController();
@@ -115,19 +132,8 @@ export function createMcpClient(options: {
         note: parsed.result?.note, raw: text ?? answer.raw,
       };
     },
-    async call(turn, name, args, timeoutMs = 20_000) {
-      const started = performance.now();
-      const answer = await rpc('tools/call', { name: 'call_tool', arguments: { turn: turn.grant.turn, name, arguments: args } }, timeoutMs);
-      const durationMs = performance.now() - started;
-      const text = contentText(answer.body);
-      let envelope: { outcome?: string; result?: unknown; truncated?: boolean } | undefined;
-      try { envelope = text ? JSON.parse(text) as typeof envelope : undefined; } catch { envelope = undefined; }
-      const outcome = envelope?.outcome === 'ok' || envelope?.outcome === 'refused' || envelope?.outcome === 'error' ? envelope.outcome : 'unknown';
-      return {
-        status: answer.status, outcome, result: envelope?.result, isError: (answer.body?.result as { isError?: boolean } | undefined)?.isError === true,
-        truncated: envelope?.truncated === true, raw: text ?? answer.raw, durationMs, timedOut: answer.timedOut,
-      };
-    },
+    call: (turn, name, args, timeoutMs, callId) => callTool('call_tool', { turn: turn.grant.turn, name, arguments: args }, timeoutMs, callId),
+    direct: (turn, name, args, callId) => callTool(name, { ...args, turn: turn.grant.turn }, undefined, callId),
     async listDoorDefinitions() {
       const answer = await rpc('tools/list');
       return ((answer.body?.result as { tools?: { name: string; description?: string; inputSchema?: Json }[] } | undefined)?.tools ?? []);

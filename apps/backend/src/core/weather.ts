@@ -7,7 +7,7 @@ import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { validateHtmlApp } from './html-artifact-validation.js';
 import { readSettings } from './settings.js';
-import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
 import { workspaceResultDelivery } from './jobs.js';
 
 const requestTimeoutMs = 8_000;
@@ -386,7 +386,7 @@ function logPhase(request: FastifyRequest, entry: PhaseLog): void {
 export function createWeatherModule(
   artifacts: Pick<WorkspaceHtmlArtifactStore, 'create'>,
   fetcher?: typeof fetch,
-  workspaceItems?: WorkspaceItemsStore,
+  workspaceItems?: Pick<WorkspaceItemsStore, 'record'>,
   timingOverrides: Partial<WeatherTiming> = {},
 ): BackendModule {
   const timing: WeatherTiming = {
@@ -492,10 +492,11 @@ export function createWeatherModule(
     return place;
   }
 
-  const weatherTool = {
+  const weatherTool: JarvisTool = {
     name: 'weather',
     description: 'Get current weather and a short forecast from Open-Meteo. Uses the saved home location unless a named place is provided. By default it opens a report in the workspace. Set report to false to get the values only, with nothing opened (the right choice in typed chat, where show_in_chat presents them). Set hourly to true to also get temperature (°C) and rain probability (%) for every hour of the forecast days, with null for a missing hour. Times are local to the place; days count from today.',
     inputSchema,
+    execution: { defaultEffect: 'action', operation: { field: 'report', effects: { false: 'read', '*': 'action' } } },
     sensitive: true,
     async execute(input: unknown, request: FastifyRequest, signal: AbortSignal) {
       if (!validInput(input)) throw new ToolRefusal('Provide a place name, a forecast length from 1 to 7 days, and optional hourly and report flags.');
@@ -536,6 +537,7 @@ export function createWeatherModule(
         viewId,
         view,
       });
+      let artifactSaved = false;
       try {
         const initialCommand = command('create', statusView(title, 'Getting current weather…'));
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
@@ -559,6 +561,7 @@ export function createWeatherModule(
           throw new ToolFailure('The weather report failed workspace validation.');
         }
         const artifact = await artifacts.create(ownerId, title, html, sources, jobSignal);
+        artifactSaved = true;
         if (!isHtmlArtifact(artifact)) throw new ToolFailure('The weather report failed artifact validation.');
         const workspaceItem = await workspaceItems.record(ownerId, {
           id: `html_app:${artifact.id}`,
@@ -617,8 +620,14 @@ export function createWeatherModule(
               ? 'Weather report was refused.'
               : 'Weather report could not be completed.');
           } catch {
+            if (artifactSaved) {
+              throw new ToolFailure('The weather report was saved, but its job status could not be updated.', { outcomeUnknown: true });
+            }
             throw new ToolFailure('Weather report failed and its job status could not be saved.');
           }
+        }
+        if (artifactSaved) {
+          throw new ToolFailure('The weather report was saved, but setting it up in the workspace did not finish.', { outcomeUnknown: true });
         }
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolFailure(controller.signal.aborted

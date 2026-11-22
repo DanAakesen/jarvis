@@ -117,10 +117,61 @@ describe('PI MCP server', () => {
     expect(elsewhere.statusCode).toBe(403);
   });
 
-  it('advertises find_tools and call_tool, not the catalogue', async () => {
+  it('advertises only the door methods when no quick tools are registered', async () => {
     const { rpc } = setup();
     const names = ((await rpc(`jp.${secret}`, 'tools/list')).json?.result?.tools as Array<{ name: string }>).map((tool) => tool.name).sort();
     expect(names).toEqual(['call_tool', 'find_tools']);
+  });
+
+  it('runs a direct tool with a live turn only, through the same route and ledger as call_tool', async () => {
+    const calendar: JarvisTool = { ...probe, name: 'calendar_list_events', execution: { defaultEffect: 'read' } };
+    const { registry, tool, recorded, ledger } = setup([], { tools: [calendar] });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(),
+      activation: {
+        id: '00000000-0000-4000-8000-000000000001', type: 'voice', source: 'voice', slotKey: null,
+        stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: [],
+      },
+    });
+    const args = { text: 'hej' };
+    const missing = await tool(calendar.name, args);
+    expect(missing.isError).toBe(true);
+    expect(recorded).toEqual([]);
+    const forged = await tool(calendar.name, { ...args, turn: `jt-${'a'.repeat(22)}` });
+    expect(forged.body).toMatchObject({ outcome: 'refused' });
+    // The generic call also works before a search or a direct invocation.
+    const generic = await tool('call_tool', { turn: grant.turn, name: calendar.name, arguments: args });
+    const direct = await tool(calendar.name, { ...args, turn: grant.turn });
+    expect(direct.body).toMatchObject({ tool: calendar.name, outcome: 'ok', result: { echoed: 'hej', messageId: '42', asAgent: true } });
+    expect(direct.body).toEqual(generic.body);
+    expect(grant.discovered.has(calendar.name)).toBe(true);
+    registry.close(grant.turn);
+    const closed = await tool(calendar.name, { ...args, turn: grant.turn });
+    expect(closed.body).toMatchObject({ outcome: 'refused' });
+    expect(recorded).toEqual(Array.from({ length: 2 }, () => ({ messageId: '42', tool: calendar.name })));
+    expect(ledger().map(({ tool, outcome, channel, provider }) => [tool, outcome, channel, provider])).toEqual([
+      [calendar.name, 'refused', undefined, 'local'],
+      [calendar.name, 'ok', 'voice', 'local'],
+      [calendar.name, 'ok', 'voice', 'local'],
+      [calendar.name, 'refused', undefined, 'local'],
+    ]);
+  });
+
+  it('applies the existing wake source policy to a direct tool', async () => {
+    const calendar: JarvisTool = { ...probe, name: 'calendar_list_events', execution: { defaultEffect: 'read' } };
+    const { registry, tool, recorded } = setup([], { tools: [calendar] });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', signal: live(),
+      brain: { runId: '00000000-0000-4000-8000-000000000002', sent: [], wrote: [], looked: [] },
+      activation: {
+        id: '00000000-0000-4000-8000-000000000002', type: 'event', source: 'timer', slotKey: null,
+        stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: ['calendar'],
+      },
+    });
+    const direct = await tool(calendar.name, { turn: grant.turn, text: 'hej' });
+    expect(direct.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
+    expect(grant.results).toEqual([{ tool: calendar.name, outcome: 'refused' }]);
+    expect(recorded).toEqual([]);
   });
 
   it('runs a looked-up tool through the normal route, attributed to the stored owner message and never to the model', async () => {
@@ -987,17 +1038,98 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     expect(ledger().map(({ channel }) => channel)).toEqual(['chat', 'voice', 'wake', 'smoke']);
   });
 
-  it('marks a result that was cut short, and counts the bytes the model was given', async () => {
-    const large = counting('probe_large', { defaultEffect: 'read' }, () => 'x'.repeat(250_000));
+  it('leaves a read at the cap unchanged and keeps the next result’s array preview valid', async () => {
+    const atCap = 'x'.repeat(23_998);
+    const rows = [{ text: '"'.repeat(5_000) }, { text: 'y'.repeat(15_000) }];
+    const large = counting('probe_large', { defaultEffect: 'read' }, (run) => run === 1 ? atCap : rows);
     const { registry, tool, ledger } = setup([], { tools: [large.tool] });
     const grant = open(registry);
     grant.discovered.add('probe_large');
+    const full = await tool('call_tool', call(grant.turn, 'probe_large', {}));
+    expect(full.body?.result).toBe(atCap);
     const cut = await tool('call_tool', call(grant.turn, 'probe_large', {}));
-    expect(cut.body).toMatchObject({ outcome: 'ok', truncated: true });
-    expect(ledger()).toEqual([expect.objectContaining({
+    const result = cut.body?.result;
+    expect(result).toMatchObject({
+      truncated: true, totalCharacters: JSON.stringify(rows).length,
+      note: 'Result shortened; narrow the query by limit, date range or path and call again.',
+    });
+    expect(JSON.parse(result.preview)).toEqual(rows.slice(0, 1));
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
+    expect(ledger().at(-1)).toMatchObject({
       tool: 'probe_large', outcome: 'ok', truncated: true, resultBytes: Buffer.byteLength(cut.text!),
-    })]);
-    expect(Buffer.byteLength(cut.text!)).toBeLessThan(250_000);
+    });
+  });
+
+  it('shortens a direct read without splitting emoji or cutting its receipt or confirmation', async () => {
+    const value = { rows: '😀"\n\\'.repeat(6_000), receipt: { id: 'receipt-42', status: 'delivered' }, confirmation: 'The read finished.' };
+    const read = counting('calendar_list_events', { defaultEffect: 'read' }, () => value);
+    const { registry, tool, ledger } = setup([], { tools: [read.tool] });
+    const grant = open(registry);
+    const direct = await tool('calendar_list_events', { turn: grant.turn });
+    const generic = await tool('call_tool', call(grant.turn, 'calendar_list_events', {}));
+    expect(direct.body).toEqual(generic.body);
+    expect(direct.body).toMatchObject({
+      outcome: 'ok', confirmation: 'Done: calendar_list_events succeeded. Result shortened.',
+      result: { truncated: true, totalCharacters: JSON.stringify(value).length, receipt: value.receipt, confirmation: value.confirmation },
+    });
+    const result = direct.body?.result;
+    const rows: string = JSON.parse(result.preview).rows;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(value.rows.length);
+    expect(rows).not.toMatch(/[\uD800-\uDFFF]/u);
+    expect(value.rows.startsWith(rows)).toBe(true);
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
+    expect(ledger().map(({ truncated }) => truncated)).toEqual([true, true]);
+  });
+
+  it('keeps a cursor and status fields at the tail of an oversized object result', async () => {
+    const rows = [{ text: 'a'.repeat(12_000) }, { text: 'b'.repeat(13_000) }];
+    const paging = {
+      next: { date: '2026-11-22', key: 'b' },
+      hasMore: true,
+      pageInfo: { endCursor: 'cursor-2', hasNextPage: true },
+      coverage: { continuation: { rows: 'cursor-2' } },
+      warning: 'These are retained records, not live data.',
+      status: 'available',
+    };
+    const value = { rows, ...paging, truncated: false };
+    const read = counting('probe_paged_read', { defaultEffect: 'read' }, () => value);
+    const { registry, tool } = setup([], { tools: [read.tool] });
+    const grant = open(registry);
+    grant.discovered.add(read.tool.name);
+    const cut = await tool('call_tool', call(grant.turn, read.tool.name, {}));
+    const result = cut.body?.result;
+    expect(result).toMatchObject({ ...paging, sourceTruncated: false, truncated: true, totalCharacters: JSON.stringify(value).length });
+    expect(JSON.parse(result.preview)).toEqual({ rows: rows.slice(0, 1) });
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
+  });
+
+  it('says when the first item is too large rather than returning an apparently empty array', async () => {
+    const value = [{ text: 'x'.repeat(25_000) }, { text: 'second row' }];
+    const read = counting('probe_large_item', { defaultEffect: 'read' }, () => value);
+    const { registry, tool } = setup([], { tools: [read.tool] });
+    const grant = open(registry);
+    grant.discovered.add(read.tool.name);
+    const cut = await tool('call_tool', call(grant.turn, read.tool.name, {}));
+    expect(cut.body?.result).toMatchObject({
+      preview: '', truncated: true, totalCharacters: JSON.stringify(value).length,
+      note: 'Result shortened; the first array item did not fit, so narrow the query.',
+    });
+  });
+
+  it('returns a large write and its receipt in full, including on replay', async () => {
+    const value = { rows: 'x'.repeat(30_000), receipt: { id: 'committed-42' }, confirmation: 'The write was saved.' };
+    const write = counting('probe_large_write', { defaultEffect: 'action' }, () => value);
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add(write.tool.name);
+    const args = call(grant.turn, write.tool.name, {});
+    const original = await tool('call_tool', args, as('call-1'));
+    const replay = await tool('call_tool', args, as('call-1'));
+    expect(original.body?.result).toEqual(value);
+    expect(replay.body).toEqual({ ...original.body, duplicate: true });
+    expect(write.runs.count).toBe(1);
+    expect(ledger().map(({ truncated }) => truncated)).toEqual([false, false]);
   });
 
   it('records the provider of a remote tool, still runs a remote repeat each time, and writes a line when the call throws', async () => {

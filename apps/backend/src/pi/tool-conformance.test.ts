@@ -2,10 +2,13 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
+import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, effectOf, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
 import { readOnlyTools, writingTools } from '../core/tool-effects.js';
 import { compactLargeSchema } from './compact-schema.js';
 import { allGroups, buildConformanceWorld } from './conformance/world.testkit.js';
+import { coreGroup } from './conformance/groups/core.testkit.js';
+import { hours } from './conformance/groups/notes-cases.testkit.js';
+import { notesGroup } from './conformance/groups/notes.testkit.js';
 import { goldenIntents, phraseTable } from './conformance/phrases.testkit.js';
 import { descriptionViolations, harnessManagedNames, nameViolations, schemaViolations, tokensOf } from './conformance/schema.testkit.js';
 import type { ConformanceTurn } from './conformance/mcp-client.testkit.js';
@@ -48,22 +51,41 @@ const reportFor = (name: string) => {
 };
 
 describe('composition', () => {
-  it('exposes exactly find_tools and call_tool to the harness, never the catalogue', async () => {
-    expect(await world.client.listDoorTools()).toEqual(['call_tool', 'find_tools']);
+  const quickNames = ['calendar_list_events', 'owner_reminders', 'weather'];
+  const expectedNames = ['call_tool', 'find_tools', ...quickNames].sort();
+  it('exposes exactly the two door methods and the three quick tools, not the whole catalogue', async () => {
+    expect(await world.client.listDoorTools()).toEqual(expectedNames);
   });
 
-  it('gives the harness two small, safely named tool definitions', async () => {
+  it('gives the harness five safely named definitions with the required turn and the real quick tool schemas', async () => {
     const definitions = await world.client.listDoorDefinitions();
-    expect(definitions.map((definition) => definition.name).sort()).toEqual(['call_tool', 'find_tools']);
-    for (const definition of definitions) {
-      expect(definition.name, 'a harness-safe name').toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
-      expect(definition.name.includes('___'), `${definition.name} must not contain ___`).toBe(false);
-      const schema = definition.inputSchema ?? {};
-      expect(schema.type, `${definition.name} needs an object schema`).toBe('object');
-      expect(JSON.stringify(schema), `${definition.name} must not set strict`).not.toMatch(/"strict"\s*:\s*true/u);
-      expect(tokensOf({ ...definition }), `${definition.name} is part of every turn: keep it small`).toBeLessThanOrEqual(500);
+    expect(definitions.map((definition) => definition.name).sort()).toEqual(expectedNames);
+    const turn = world.client.openTurn();
+    try {
+      for (const definition of definitions) {
+        const { name, description } = definition;
+        expect(name, 'a harness-safe name').toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
+        expect(name.includes('___'), `${name} must not contain ___`).toBe(false);
+        const schema = definition.inputSchema ?? {};
+        expect(schema.type, `${name} needs an object schema`).toBe('object');
+        expect(JSON.stringify(schema), `${name} must not set strict`).not.toMatch(/"strict"\s*:\s*true/u);
+        expect(schema.required).toContain('turn');
+        const quick = quickNames.includes(name);
+        expect(tokensOf({ ...definition }), `${name} is part of every turn: keep it small`).toBeLessThanOrEqual(quick ? 1_700 : 500);
+        if (name === 'find_tools') for (const quickName of quickNames) expect(description).toContain(quickName);
+        if (!quick) continue;
+        const found = (await world.client.find(turn, name)).tools.find((tool) => tool.name === name)!;
+        expect(description).toBe(found.description);
+        expect(schema).toEqual({
+          ...found.parameters,
+          properties: { ...(found.parameters.properties as Record<string, unknown>), turn: expect.objectContaining({ type: 'string' }) },
+          required: [...((found.parameters.required as string[] | undefined) ?? []), 'turn'],
+        });
+      }
+    } finally {
+      turn.close();
     }
-    console.info(`The two door tools cost ${tokensOf(definitions)} tokens per turn.`);
+    console.info(`Five MCP tool definitions cost about ${tokensOf(definitions)} tokens per turn (characters / 4).`);
   });
 
   it('composes every production module (a new key in production-modules.ts needs a conformance group)', () => {
@@ -110,6 +132,67 @@ describe('composition', () => {
     // merged value, so an identical second declaration passes: that is harmless, it repeats the row.
     expect(Object.entries(writingTools).filter(([name, effect]) => !isDeepStrictEqual(tools.find((tool) => tool.name === name)?.execution, effect)).map(([name]) => name),
       'a tool is in writingTools (core/tool-effects.ts) and its own execution metadata says something else: keep one of the two').toEqual([]);
+  });
+});
+
+describe('quick tools through the real MCP door', () => {
+  it('reads Google Calendar directly and returns the same result as the generic call, even on a short page', async () => {
+    const turn = world.client.openTurn();
+    try {
+      const args = { start: '2026-11-23', end: '2026-11-29', maxResults: 3 };
+      const direct = await world.client.direct(turn, 'calendar_list_events', args);
+      const generic = await world.client.call(turn, 'calendar_list_events', args);
+      expect(direct.outcome).toBe('ok');
+      expect(direct.result).toMatchObject({ events: expect.any(Array), truncated: true });
+      expect(direct.truncated).toBe(false); // The tool paged its result; the door did not shorten it.
+      expect(direct.raw).toBe(generic.raw);
+      expect(effectOf(world.app.jarvisTools.get('calendar_list_events')!, args)).toBe('read');
+      expect(turn.grant.actions.count).toBe(0);
+    } finally {
+      turn.close();
+    }
+  });
+
+  it('reads weather without a report and still creates a report by default', async () => {
+    const turn = world.client.openTurn();
+    try {
+      const args = { location: 'Aarhus', days: 2 };
+      const read = await world.client.direct(turn, 'weather', { ...args, report: false }, 'weather-read');
+      expect(read.outcome).toBe('ok');
+      expect(read.result).toMatchObject({ forecast: expect.any(Array) });
+      expect(read.result).not.toHaveProperty('artifactId');
+      expect(turn.grant.actions.count).toBe(0);
+      const report = await world.client.direct(turn, 'weather', args, 'weather-report');
+      expect(report.outcome).toBe('ok');
+      expect(report.result).toMatchObject({ artifactId: expect.any(String), jobId: expect.any(String) });
+      const replay = await world.client.call(turn, 'weather', args, undefined, 'weather-report');
+      expect(JSON.parse(replay.raw)).toEqual({ ...JSON.parse(report.raw), duplicate: true });
+      expect(turn.grant.actions.count).toBe(1);
+    } finally {
+      turn.close();
+    }
+  });
+
+  it('applies the reminder schema and replays a direct reminder write through call_tool without another dispatch', async () => {
+    const reminders = await buildConformanceWorld({ groups: [coreGroup, notesGroup] });
+    reminders.context.ownerMessage.text = 'Remind me in two hours to call the dentist';
+    const turn = reminders.client.openTurn();
+    try {
+      const invalid = await reminders.client.direct(turn, 'owner_reminders', { operation: 'read', task: 'Call the dentist' });
+      expect(invalid.outcome).toBe('refused');
+      expect(invalid.result).toMatchObject({ refused: expect.stringContaining('read accepts only operation') });
+      const args = { operation: 'create', task: 'Call the dentist', fireAt: hours(2) };
+      const direct = await reminders.client.direct(turn, 'owner_reminders', args, 'reminder-1');
+      const duplicate = await reminders.client.call(turn, 'owner_reminders', args, undefined, 'reminder-1');
+      expect(direct.outcome).toBe('ok');
+      expect(direct.result).toMatchObject({ operation: 'create', created: true, confirmation: expect.stringContaining('saved and scheduled') });
+      expect(JSON.parse(duplicate.raw)).toEqual({ ...JSON.parse(direct.raw), duplicate: true });
+      expect(turn.grant.actions.count).toBe(1);
+      expect(reminders.recorded.filter((entry) => entry.tool === 'owner_reminders')).toHaveLength(1);
+    } finally {
+      turn.close();
+      await reminders.close();
+    }
   });
 });
 
@@ -266,12 +349,37 @@ describe('callable: every tool runs through the real call_tool over stubbed stor
 
 // ---- Size limits ---------------------------------------------------------------------------------------------------------------
 
-describe('size: the door accepts what the tools accept', () => {
+describe('size: the door bounds what the model sees without changing what the tools accept or return', () => {
   it('lets a 400 KB HTML app through (create_html_view allows 512 KB; the door used to refuse anything above 256 KB with HTTP 413)', { timeout: testTimeoutMs }, async () => {
     const tool = world.app.jarvisTools.get('create_html_view')!;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Large app</title></head><body><p>${'x'.repeat(400_000)}</p></body></html>`;
     const done = await executeCase(world, tool, 'chat', { label: 'large app', arguments: { title: 'Large app', html, sources: [] } });
     expect(done.outcome, `create_html_view answered ${done.outcome} ("${done.message ?? ''}")`).toBe('ok');
+  });
+
+  it('returns the full capability list through the door even when it exceeds the read budget', async () => {
+    const turn = world.client.openTurn();
+    try {
+      const response = await world.app.inject({
+        method: 'POST', url: '/tools/list_capabilities', payload: {},
+        headers: {
+          authorization: `Bearer ${world.auth.dispatch.token}`, 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': turn.grant.messageId,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const full = response.json<{ outcome: string; result: { tools: unknown[]; features: unknown[] } }>();
+      expect(full.outcome).toBe('ok');
+      expect(full.result.tools.length).toBeGreaterThan(0);
+      expect(full.result.features.length).toBeGreaterThan(0);
+      expect(JSON.stringify(full.result).length).toBeGreaterThan(24_000);
+      await world.client.find(turn, 'list_capabilities');
+      const catalogue = await world.client.call(turn, 'list_capabilities', {});
+      expect(catalogue.outcome).toBe('ok');
+      expect(catalogue.truncated).toBe(false);
+      expect(catalogue.raw).toBe(response.body);
+    } finally {
+      turn.close();
+    }
   });
 });
 
@@ -378,18 +486,37 @@ describe('remote: the gh_ and az_ bridges behind the door', () => {
     expect(turn.grant.results.at(-1)).toEqual({ tool: 'gh_issue_read', outcome: 'error' });
   });
 
-  it('cuts a very large remote result to a preview that says so, instead of flooding the turn', async () => {
+  it('shortens a remote read at an array boundary and gives its original size', async () => {
     await using door = await remoteWorld();
     const { remote, turn, found } = door;
     await found('gh_search_code');
-    remote.remote.github.controls.largeTool = { name: 'search_code', characters: 450_000 };
+    const rows = [{ text: 'æ'.repeat(15_000) }, { text: 'ø'.repeat(15_000) }];
+    remote.remote.github.controls.toolResult = { name: 'search_code', value: rows };
     const big = await remote.client.call(turn, 'gh_search_code', { query: 'jarvis' });
     expect(big.outcome).toBe('ok');
     const result = big.result as { truncated: boolean; preview: string; note: string };
-    expect(result.truncated).toBe(true);
-    expect(result.preview).toHaveLength(200_000);
-    expect(result.note).toMatch(/too long; this is its start/u);
-    expect(big.raw.length).toBeLessThan(230_000);
+    expect(result).toMatchObject({
+      truncated: true, totalCharacters: JSON.stringify(rows).length,
+      note: 'Result shortened; narrow the query by limit, date range or path and call again.',
+    });
+    expect(JSON.parse(result.preview)).toEqual(rows.slice(0, 1));
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
+  });
+
+  it('leaves an under-cap remote read and an over-cap remote write unchanged', async () => {
+    await using door = await remoteWorld();
+    const { remote, turn, found } = door;
+    await found('gh_search_code');
+    const small = { rows: 'x'.repeat(1_000) };
+    remote.remote.github.controls.toolResult = { name: 'search_code', value: small };
+    const fullRead = await remote.client.call(turn, 'gh_search_code', { query: 'jarvis' });
+    expect(fullRead.result).toEqual(small);
+    await found('gh_issue_write');
+    const write = { rows: 'x'.repeat(40_000), receipt: { number: 123 }, confirmation: 'Issue created.' };
+    remote.remote.github.controls.toolResult = { name: 'issue_write', value: write };
+    const fullWrite = await remote.client.call(turn, 'gh_issue_write', { method: 'create', owner: 'o', repo: 'r', title: 'A fixture issue' });
+    expect(fullWrite.outcome).toBe('ok');
+    expect(fullWrite.result).toEqual(write);
   });
 
   it('answers cleanly when the remote server drops during a call', async () => {

@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import { createMcpHandler, McpServer, type CallToolResult, type ServerContext } from '@modelcontextprotocol/server';
+import { createMcpHandler, McpServer, type CallToolResult, type ServerContext, type StandardSchemaWithJSON } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
+import { readOnlyTools } from '../core/tool-effects.js';
 import {
   effectOf, isCurrentAssistantTool, isSituationActivationTool, isWakeTool,
   type RegisteredTool, type ToolRegistry,
@@ -19,7 +20,15 @@ import type { SourceId } from '../proactive/types.js';
 
 const maxFullResults = 3;
 const maxOtherResults = 5;
-const maxResultCharacters = 200_000;
+const maxResultCharacters = 24_000;
+const resultShortenedNote = 'Result shortened; narrow the query by limit, date range or path and call again.';
+const firstItemOmittedNote = 'Result shortened; the first array item did not fit, so narrow the query.';
+const resultMetadataKeys = new Set([
+  'confirmation', 'receipt', 'receipts', 'verifiedRef',
+  'next', 'nextCursor', 'nextPageToken', 'nextOffset', 'nextLink', 'hasMore', 'pageInfo', 'page', 'perPage', 'offset', 'limit',
+  'coverage', 'incompleteResults', 'partial', 'status', 'truncated', 'warning', 'warnings',
+]);
+const quickTools = new Set(['weather', 'calendar_list_events', 'owner_reminders']);
 /** The largest body a tool route accepts is 2 MiB (HTML apps); the door adds only a turn reference and a name around the arguments. */
 const maxDoorBodyBytes = 2 * 1024 * 1024 + 16 * 1024;
 const notFound = 'Unknown tool, or not looked up yet. Call find_tools first, then call_tool. Nothing was done.';
@@ -32,6 +41,7 @@ const callSchema = z.object({
   name: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/u),
   arguments: z.record(z.string(), z.unknown()),
 }).strict();
+const directTurnSchema = z.object({ turn }).passthrough();
 
 type Outcome = PiToolAnswer['outcome'];
 type Provider = 'local' | typeof githubToolPrefix | typeof azureToolPrefix;
@@ -67,6 +77,74 @@ function text(value: unknown, isError = false): CallToolResult {
 
 function say(body: { readonly outcome: Outcome } & Record<string, unknown>, isError = false, extra: Pick<Settled, 'provider' | 'truncated'> = {}): Settled {
   return { reply: text(body, isError), outcome: body.outcome, ...extra };
+}
+
+/** JSON carried in `preview` is itself escaped as a string. Its two outer quotes are already budgeted. */
+const previewCost = (json: string) => JSON.stringify(json).length - 2;
+
+function jsonPreview(value: unknown, budget: number, omitFirstItem: () => void): string | undefined {
+  if (Array.isArray(value)) {
+    const entries: string[] = [];
+    let remaining = budget - 2;
+    for (const entry of value) {
+      const item = JSON.stringify(entry) ?? 'null';
+      const cost = previewCost(item) + (entries.length > 0 ? 1 : 0);
+      if (cost > remaining) break;
+      entries.push(item);
+      remaining -= cost;
+    }
+    if (entries.length === 0 && value.length > 0) {
+      omitFirstItem();
+      return undefined;
+    }
+    return budget >= 2 ? `[${entries.join(',')}]` : undefined;
+  }
+  if (value !== null && typeof value === 'object') {
+    if (budget < 2) return undefined;
+    const fields: string[] = [];
+    let remaining = budget - 2;
+    for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+      const prefix = `${fields.length > 0 ? ',' : ''}${JSON.stringify(key)}:`;
+      const prefixCost = previewCost(prefix);
+      if (prefixCost >= remaining) continue;
+      const item = jsonPreview(field, remaining - prefixCost, omitFirstItem);
+      if (item === undefined) continue;
+      fields.push(prefix + item);
+      remaining -= prefixCost + previewCost(item);
+    }
+    return `{${fields.join('')}}`;
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined || previewCost(serialized) <= budget) return serialized;
+  if (typeof value === 'string') {
+    const quoteCost = previewCost('""');
+    let remaining = budget - quoteCost;
+    let end = 0;
+    for (const character of value) {
+      const cost = previewCost(JSON.stringify(character)) - quoteCost;
+      if (cost > remaining) break;
+      end += character.length;
+      remaining -= cost;
+    }
+    if (end > 0) return JSON.stringify(value.slice(0, end));
+  }
+  return undefined;
+}
+
+function shortenResult(result: unknown) {
+  const serialized = JSON.stringify(result);
+  if (serialized === undefined || serialized.length <= maxResultCharacters) return undefined;
+  const fields = result !== null && typeof result === 'object' && !Array.isArray(result)
+    ? Object.entries(result as Record<string, unknown>) : undefined;
+  const metadata = Object.fromEntries((fields ?? []).filter(([key]) => resultMetadataKeys.has(key))
+    .map(([key, value]) => [key === 'truncated' ? 'sourceTruncated' : key, value]));
+  const payload = fields ? Object.fromEntries(fields.filter(([key]) => !resultMetadataKeys.has(key))) : result;
+  const shortened = { ...metadata, truncated: true, totalCharacters: serialized.length, preview: '', note: resultShortenedNote };
+  // Keep paging, status and evidence whole, even when those fields alone exceed the budget.
+  const budget = maxResultCharacters - JSON.stringify(shortened).length -
+    Math.max(0, firstItemOmittedNote.length - resultShortenedNote.length);
+  shortened.preview = jsonPreview(payload, budget, () => { shortened.note = firstItemOmittedNote; }) ?? '';
+  return shortened;
 }
 
 const providerOf = (name: string): Provider =>
@@ -166,15 +244,39 @@ async function runAction(
 }
 
 /** Chat never shows the capability-discovery operation selector; every channel uses this catalogue shape. A very large schema is sent with its repeated parts written once (compact-schema.ts). */
-function shapeSchema(tool: RegisteredTool): unknown {
+function shapeSchema(tool: RegisteredTool): Readonly<Record<string, unknown>> {
   if (tool.name !== 'get_system_health') return compactLargeSchema(tool.inputSchema);
   const { properties, ...rest } = tool.inputSchema as { properties?: Record<string, unknown> };
   return { ...rest, properties: Object.fromEntries(Object.entries(properties ?? {}).filter(([name]) => name !== 'operation')) };
 }
 
+function directSchema(tool: RegisteredTool): StandardSchemaWithJSON<z.infer<typeof directTurnSchema>> {
+  const base = shapeSchema(tool);
+  const schema = {
+    ...base,
+    properties: {
+      ...(base.properties as Record<string, unknown>),
+      turn: { type: 'string', pattern: piTurnPattern.source, description: 'The turn reference from the current message.' },
+    },
+    required: [...((base.required as readonly string[] | undefined) ?? []), 'turn'],
+  };
+  // Publish the registry's JSON Schema, but only validate the door's field here. The normal tool route validates the arguments.
+  return {
+    '~standard': {
+      version: 1 as const,
+      vendor: 'jarvis',
+      jsonSchema: { input: () => schema, output: () => schema },
+      validate: (input: unknown) => {
+        const parsed = directTurnSchema.safeParse(input);
+        return parsed.success ? { value: parsed.data } : { issues: [{ message: 'Pass the turn reference from the current message.' }] };
+      },
+    },
+  };
+}
+
 /**
  * The Jarvis tools as an MCP server for the PI agent. It is a thin door, not a second tool system: find_tools ranks the
- * same catalogue chat and voice use, and call_tool runs the chosen tool through the normal `/tools/:name` route, so
+ * same catalogue chat and voice use. Direct tools and call_tool run through the normal `/tools/:name` route, so
  * argument validation, refusals, approvals, receipts and activity events are the ones every other caller gets.
  * Authority is the per-turn reference (see turns.ts): the owner message and session come from the server-side grant,
  * never from anything the model writes.
@@ -242,11 +344,8 @@ export function createPiMcpRoutes(options: {
     }
     const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
-    const body = JSON.stringify(done.result);
-    const truncated = body.length > maxResultCharacters;
-    const result = truncated
-      ? { truncated: true, preview: body.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' } : done.result;
-    return say({ tool: name, outcome: done.outcome, result }, done.outcome === 'error', { truncated });
+    const shortened = done.outcome === 'ok' && done.readOnly ? shortenResult(done.result) : undefined;
+    return say({ tool: name, outcome: done.outcome, result: shortened ?? done.result }, done.outcome === 'error', { truncated: shortened !== undefined });
   }
 
   function buildServer(app: FastifyInstance, signal: AbortSignal, log: FastifyBaseLogger): McpServer {
@@ -296,7 +395,7 @@ export function createPiMcpRoutes(options: {
     };
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Jarvis tools are not listed. Look one up by a few English or Danish keywords naming what the thing is (azure resource, github issue, calendar, kalender, note, vejr) to get its description and argument schema, then use call_tool. Exact tool names are ranked first, and the compact otherMatches entries can be called by exact name too. Local tools return at once; GitHub and Azure tools load only when the keywords name them (github, repo, issue, azure, resource) and may need a second search. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
+      description: 'Call weather, calendar_list_events and owner_reminders directly without searching. For other Jarvis tools, look up a few English or Danish keywords (azure resource, github issue, calendar, kalender, note, vejr) for the schema, then use call_tool. Exact names rank first, and compact otherMatches can be called by name too. Local tools return at once; GitHub and Azure tools load only when named (github, repo, issue, azure, resource) and may need a second search. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, ledgered<z.infer<typeof findSchema>>((input) => ({ tool: 'find_tools', question: { query: input.query } }), async (input, ctx, { grant }) => {
@@ -367,12 +466,7 @@ export function createPiMcpRoutes(options: {
         },
       }, false, { provider: providerOf(selected[0]?.prefix ?? '') });
     }));
-    server.registerTool('call_tool', {
-      title: 'Run a Jarvis tool',
-      description: 'Run a tool that find_tools returned (in tools or otherMatches), with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
-      inputSchema: callSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
-    }, ledgered<z.infer<typeof callSchema>>((input) => ({ tool: input.name, question: input.arguments }), async (input, ctx, door) => {
+    const runTool = ledgered<z.infer<typeof callSchema>>((input) => ({ tool: input.name, question: input.arguments }), async (input, ctx, door) => {
       const { grant } = door;
       if (!grant) return say({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
       grant.requests.count += 1;
@@ -404,6 +498,8 @@ export function createPiMcpRoutes(options: {
       const visible = tool && (grant.brain
         ? isWakeTool(tool.name)
         : isCurrentAssistantTool(tool.name) || isSituationActivationTool(tool.name));
+      // The connection already advertised these tools; either entry point can call one without a preliminary search.
+      if (tool && visible && quickTools.has(tool.name)) grant.discovered.add(tool.name);
       if (!tool || !visible || !grant.discovered.has(tool.name)) {
         if (azureRequested) grant.azure.undiscoveredRefusals += 1;
         return say({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
@@ -446,22 +542,20 @@ export function createPiMcpRoutes(options: {
           // A 4xx or the 503 for a missing store answers before the tool starts; any other status can come after it ran.
           if (response.statusCode !== 200) return failed(response.statusCode >= 500 && response.statusCode !== 503);
           const serialized = response.body;
-          const parsed = JSON.parse(serialized) as { outcome?: unknown; result?: unknown };
+          const parsed = JSON.parse(serialized) as { outcome?: unknown; result?: unknown; confirmation: string };
           const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
           const outcomeUnknown = outcome === 'error' && typeof parsed.result === 'object' && parsed.result !== null &&
             (parsed.result as { outcomeUnknown?: unknown }).outcomeUnknown === true;
           grant.results.push({ tool: tool.name, outcome });
           if (outcome === 'ok' && effect === 'action') grant.actions.count += 1;
-          if (serialized.length > maxResultCharacters) {
-            return {
-              outcome, isError: false, truncated: true,
-              text: JSON.stringify({
-                tool: tool.name, outcome, truncated: true,
-                result: { preview: serialized.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' },
-              }),
-            };
-          }
-          return { outcome, isError: parsed.outcome === 'error', truncated: false, text: serialized, ...(outcomeUnknown ? { outcomeUnknown } : {}) };
+          const readOnly = effect === 'read' || (tool.execution === undefined && readOnlyTools.has(tool.name));
+          // The capability catalogue has no page or range selector, so keep every tool and feature visible.
+          const shortened = outcome === 'ok' && readOnly && tool.name !== 'list_capabilities' ? shortenResult(parsed.result) : undefined;
+          return {
+            outcome, isError: parsed.outcome === 'error', truncated: shortened !== undefined,
+            text: shortened ? JSON.stringify({ ...parsed, result: shortened, confirmation: `${parsed.confirmation} Result shortened.` }) : serialized,
+            ...(outcomeUnknown ? { outcomeUnknown } : {}),
+          };
         } catch {
           return failed(true);
         }
@@ -474,7 +568,23 @@ export function createPiMcpRoutes(options: {
         reply: { ...(answer.isError ? { isError: true } : {}), content: [{ type: 'text', text: answer.text }] },
         outcome: answer.outcome, truncated: answer.truncated, duplicate, sameArgsRepeat: repeat,
       };
-    }));
+    });
+    server.registerTool('call_tool', {
+      title: 'Run a Jarvis tool',
+      description: 'Run a tool from find_tools (in tools or otherMatches) or one listed on this connection, using its exact name and schema. Pass the turn reference from the current message. Report what the result says, never more.',
+      inputSchema: callSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    }, runTool);
+    for (const name of quickTools) {
+      const tool = app.jarvisTools.get(name);
+      if (!tool) continue;
+      const readOnly = tool.execution?.defaultEffect === 'read' && tool.execution.operation === undefined;
+      server.registerTool(name, {
+        description: tool.description,
+        inputSchema: directSchema(tool),
+        annotations: { readOnlyHint: readOnly, ...(readOnly ? { destructiveHint: false } : {}), openWorldHint: true },
+      }, ({ turn, ...args }, ctx) => runTool({ turn, name, arguments: args }, ctx));
+    }
     return server;
   }
 

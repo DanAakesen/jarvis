@@ -221,6 +221,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: [], phrases: ['løse ender', 'løse tanker', 'loose ends'], terms: ['inbox', 'capture'] },
   { stems: ['proactive*', 'proaktiv*', 'finding*', 'fund', 'observation*'], terms: ['proactive'] },
   { stems: [], phrases: ['not useful', 'ikke nyttig', 'was wrong', 'var forkert', 'not helpful', 'ikke hjælpsom'], also: ['finding*', 'fund', 'observation*', 'proactive*', 'proaktiv*', 'suggestion*', 'forslag*', 'item*'], terms: ['proactive', 'item', 'feedback'] },
+  { stems: [], phrases: ['var nyttig', 'var forkert', 'til ingen nytte'], also: ['besked*', 'notifikation*', 'advarsel*'], terms: ['proactive', 'message', 'feedback'] },
   // Verbs: what is asked of it.
   { stems: ['søg*', 'soeg*', 'find*', 'finde', 'look', 'lookup', 'tjek*', 'check*'], light: true, terms: ['search'] },
   { stems: ['opret*', 'tilføj*', 'tilfoej*', 'add', 'create*', 'ny', 'nyt', 'new', 'make', 'lav', 'lave'], light: true, terms: ['create'] },
