@@ -34,6 +34,7 @@ export interface ToolCallStore {
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'get_work_status') return 'I got the work status.';
     if (tool === 'gym_lifts') {
       const saved = result as { entry?: unknown; replayed?: unknown } | null;
       if (saved && typeof saved === 'object' && 'entry' in saved) {

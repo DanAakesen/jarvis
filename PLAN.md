@@ -12,7 +12,7 @@ Brain pushes use the first sentence without cutting off common abbreviations or 
 
 Dan's goal for PI is a bot experience that is "always on", knows him, "can be proactive" and knows him "super well" when he reaches out himself (his words; `PRODUCT.md`, "North star"). It is recorded as issues [#2012](https://github.com/DanAakesen/jarvis/issues/2012) (P0) and [#2011](https://github.com/DanAakesen/jarvis/issues/2011) (P1). Priorities as relayed: **P0** every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. **P1** proactive intelligence. Most of the work in this section is P0; #2018 is a first P1 step (the signals Dan named); P1 otherwise ranks after P0. The offline evidence that Chat and Voice behave the same is #2021 (24 scenarios); the live check is open (Next steps). Inference: these are priority ranks, not the plan phases P0–P15.
 
-Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches Jarvis tools through one MCP door: three direct tools and `find_tools` / `call_tool` for the rest.
+Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches Jarvis tools through one MCP door: `find_tools` / `call_tool`.
 
 | Weight of the job | Layer | Examples |
 | --- | --- | --- |
@@ -29,7 +29,13 @@ Chat and Voice now queue on the shared conversation rather than returning `busy`
 
 ### P0 follow-up: smaller reads and direct quick tools
 
-After #2023, the MCP door shortens successful read results over 24,000 characters without cutting paging details, write results, confirmations or receipts. `list_capabilities` stays whole because its catalogue cannot be paged. Chat, Voice and wakes can call `weather`, `calendar_list_events` and `owner_reminders` directly through the same dispatcher and replay checks. Three Danish phrases now find #2025's `proactive_message_feedback` in the top three on the first search. Offline coverage and the generated conformance table are in place; changes in search count and input tokens are not measured live.
+After #2023, #2030 gave the MCP door a 24,000-character cap on successful reads without cutting paging details, write results, confirmations or receipts. `list_capabilities` stays whole because its catalogue cannot be paged. Three Danish phrases now find #2025's `proactive_message_feedback` in the top three on the first search. #2030 also exposed three direct MCP names; the build-122 follow-up below supersedes that part. The cap, aliases and replay checks stay.
+
+### P0 follow-up: build-122 tool access and rate-limited replies (#2012)
+
+The gateway backs off on safe first and follow-up requests without rerunning tools. An already accepted native response is not replayed; if it fails after a tool succeeded, Chat and Voice give the recorded outcome and say the reply could not be finished. Tool replays cover task completion, work status, finding and reading a note, a 429 on round two, and a lift saved only by iPhone Gym.
+
+After Test 9's weather denial, restore `find_tools` and `call_tool` for weather, calendar and reminders. The MCP door had no weather call to deny, and a stale harness policy is plausible but not confirmed. Dan can ask again in the same conversation once the backend change ships; no new conversation or agent version is required by Jarvis. Provider history likely dominates the reported 84–116K-token ordinary turns; no reset or compaction is part of this change. Live acceptance remains open.
 
 ### Completed 20–21 November
 
@@ -153,6 +159,9 @@ No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or
 ## Plain failure messages and a truthful Failed — 21 November 2026 (Refs #1967)
 
 **Status: implemented and qualified offline (backend, web, contracts); Swift (JarvisCore tests and app build) runs in CI, and Dan checks the words on a device.**
+
+The later #2012 rate-limit fix distinguishes recorded outcomes from uncertain work;
+the table records what #2017 originally verified.
 
 | Step | State |
 | --- | --- |

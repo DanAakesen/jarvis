@@ -238,7 +238,7 @@ export type HealthFoodLookup = (input: readonly LookupComponent[], request: Fast
 
 /** Explicit inactive composition: no timer, automatic provider request, route or production registration. */
 export interface HealthGymVault {
-  readonly vault: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write'>;
+  readonly vault: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write' | 'tree'>;
   readonly logger?: GymSyncLogger;
 }
 
@@ -289,6 +289,7 @@ export function createHealthData(pool: sql.ConnectionPool, owner: string, now: (
     gymTools: {
       lifts: (request: FastifyRequest) => { checkOwner(request); return LiftEntriesStore.forConversation(pool, request, changes, gymSync); },
       workouts: (request: FastifyRequest) => { checkOwner(request); return WorkoutEntriesStore.forConversation(pool, request, changes, gymSync); },
+      ...(gymVault ? { phoneNotes: gymVault.vault } : {}),
     },
     ...(gymSync ? { retryGymVault: (signal: AbortSignal) => gymSync.retryPending(signal) } : {}),
     health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
@@ -305,7 +306,7 @@ export interface HealthData {
   trainingTargets?: TrainingTargetsAccess;
   lifts?: LiftEntriesAccess;
   workouts?: WorkoutEntriesAccess;
-  gymTools?: { lifts: LiftEntriesAccess; workouts: WorkoutEntriesAccess };
+  gymTools?: { lifts: LiftEntriesAccess; workouts: WorkoutEntriesAccess; phoneNotes?: Pick<HealthGymVault['vault'], 'tree' | 'read'> };
   deviceSync?: DeviceSyncAccess;
   retryGymVault?: (signal: AbortSignal) => Promise<{ synced: number; pending: number }>;
   health?: (request: FastifyRequest) => Pick<HealthReadModel, 'history' | 'sync'>;

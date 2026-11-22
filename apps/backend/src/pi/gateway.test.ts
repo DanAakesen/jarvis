@@ -25,6 +25,7 @@ const delta = (text: string) => frame({ type: 'response.output_text.delta', delt
 const tool = frame({ type: 'response.output_item.added', item: { type: 'mcp_call' } });
 
 interface Call { method: string | undefined; url: string; body: Record<string, unknown> | undefined; headers: Record<string, string> }
+const turnOf = (call: Call) => /\[Turn (jt-[A-Za-z0-9_-]{22})/u.exec((call.body!.input as Array<{ content: string }>)[0]!.content)![1]!;
 
 function setup(replies: Array<(call: Call) => Response | Promise<Response>>, overrides: Partial<Parameters<typeof createPiGateway>[0]> = {}) {
   const store = createMemoryPiStore(() => new Date('2026-11-15T16:00:00Z'));
@@ -391,7 +392,7 @@ describe('PI gateway', () => {
     await expect(missing.run('hi')).rejects.toMatchObject({
       code: 'pi_unavailable', kind: 'agent_missing', detail: 'http_404', userMessage: failureCopy.agent_missing.chat,
     });
-    const limited = setup([() => new Response('{}', { status: 429, headers: { 'retry-after': '12' } })]);
+    const limited = setup([() => new Response('{}', { status: 429, headers: { 'retry-after': '360' } })]);
     await expect(limited.run('hi')).rejects.toMatchObject({
       code: 'pi_unavailable', kind: 'service_busy', detail: 'http_429', userMessage: failureCopy.service_busy.chat,
     });
@@ -404,7 +405,7 @@ describe('PI gateway', () => {
     await expect(odd.run('hi')).rejects.toMatchObject({ detail: 'response.failed' });
     // The model had started, so the turn is charged at an estimate and counts toward the cap.
     expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 18_000, outputTokens: 2, costDkk: 0.120667 });
-    const refused = setup([() => new Response('{}', { status: 429 })]);
+    const refused = setup(Array.from({ length: 3 }, () => () => new Response('{}', { status: 429 })));
     await expect(refused.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable' });
     expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
     const unfinished = setup([() => sse(delta('half'))]);
@@ -782,6 +783,80 @@ describe('PI gateway', () => {
       return { logs, log: (event: string, fields: Record<string, unknown>) => { logs.push([event, fields]); } };
     };
 
+    it('waits for HTTP and SSE retry hints, then stops after two retries', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+      try {
+        const seen: number[] = [];
+        const { logs, log } = capture();
+        const { run, calls, store } = setup([
+          () => {
+            seen.push(performance.now());
+            return Response.json({ error: { message: 'Token rate limit; Bearer private credential' } },
+              { status: 429, headers: { 'retry-after': '1', 'retry-after-ms': '1100' } });
+          },
+          () => {
+            seen.push(performance.now());
+            return sse(created, frame({ type: 'response.failed', response: { error: {
+              code: 'rate_limit_exceeded', message: 'Requests per minute. Try again in 1.9s. https://private.example',
+            } } }));
+          },
+          () => { seen.push(performance.now()); return new Response(null, { status: 429 }); },
+        ], { log, streamRetryDelayMs: 750 });
+        const ending = expect(run('hi')).rejects.toMatchObject({ kind: 'service_busy' });
+        await vi.advanceTimersByTimeAsync(1099);
+        expect(seen).toEqual([0]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(seen).toEqual([0, 1100]);
+        await vi.advanceTimersByTimeAsync(1899);
+        expect(seen).toEqual([0, 1100]);
+        await vi.advanceTimersByTimeAsync(1);
+        await ending;
+        expect(seen).toEqual([0, 1100, 3000]);
+        expect(responsesOf(calls).map(call => call.body)).toEqual(Array(3).fill(responsesOf(calls)[0]!.body));
+        expect(store.turns).toHaveLength(1);
+        expect(logs.filter(([event]) => event === 'pi.stream_failed').map(([, fields]) => fields)).toEqual([
+          expect.objectContaining({ reason: 'http_rate_limited', attempt: 1, providerMessage: 'Token rate limit reached.', retryAfterMs: 1100 }),
+          expect.objectContaining({ reason: 'foundry_response_failed', attempt: 2, providerMessage: 'Request rate limit reached.', retryAfterMs: 1900 }),
+          expect.objectContaining({ reason: 'http_rate_limited', attempt: 3 }),
+        ]);
+        expect(JSON.stringify(logs)).not.toMatch(/private|Bearer/u);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not retry when a rate limit wait would cross the voice deadline even though it fits the gateway deadline', async () => {
+      const { run, gateway, calls, registry } = setup([
+        () => new Response(null, { status: 429, headers: { 'retry-after': '95' } }),
+        () => sse(delta('Next turn'), completed(1, 0, 1)),
+      ]);
+      const input = { text: 'hi', messageId: '42', sessionId: '7', channel: 'voice' as const,
+        deadlineAt: performance.now() + PI_VOICE_TURN_DEADLINE_MS };
+      const iterator = gateway.stream(input, '', new AbortController().signal);
+      await expect(iterator.next()).rejects.toMatchObject({ kind: 'service_busy' });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(registry.size).toBe(0);
+      expect(await run('another turn')).toEqual(['Next turn']);
+    });
+
+    it.each([false, true])('retains uncertainty for an unverified write (another write confirmed: %s)', async confirmed => {
+      const { run, calls, registry } = setup([
+        call => {
+          const grant = registry.resolve(turnOf(call))!;
+          grant.requests.count += 1;
+          grant.results.push({ tool: 'vault_task_complete', outcome: 'error' });
+          grant.actionRuns.push({ asked: 'first', identity: undefined, state: 'unknown', answer: Promise.resolve(undefined) });
+          if (confirmed) grant.receipts.push({ confirmation: 'Completed task: Pay rent.', action: true });
+          return sse(created, failedFrame('rate_limit_exceeded'));
+        },
+      ]);
+      const receipt = confirmed ? `Completed task: Pay rent. ${failureCopy.cut_off.chat} ${failureCopy.reply_not_written.chat}` : undefined;
+      await expect(run('hi')).rejects.toMatchObject({
+        userMessage: failureCopy.cut_off.chat, spokenMessage: receipt ?? failureCopy.cut_off.voice, receipt,
+      });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
     it.each([
       ['response.failed', () => sse(created, listed, failedFrame()), 'foundry_response_failed', false],
       ['error', () => sse(frame({ type: 'error', code: 'server_error', message: 'private provider text' })), 'foundry_response_failed', false],
@@ -823,7 +898,6 @@ describe('PI gateway', () => {
       expect(reads).toBe(1);
     });
 
-    const turnOf = (call: Call) => /\[Turn (jt-[A-Za-z0-9_-]{22})/u.exec((call.body!.input as Array<{ content: string }>)[0]!.content)![1]!;
 
     it.each([
       ['an unparseable frame', () => sse(created, 'event: response.output_item.added\ndata: {"type":"response.output_item.added","item":{"type":"mcp_c\n\n', failedFrame())],
@@ -1285,6 +1359,31 @@ describe('PI gateway', () => {
       const handled = setup([() => sse(created('resp_1'), ...approval('mcpr_2'), ...message('Already approved'), completed(1, 0, 1))]);
       await handled.run('hi');
       expect(responsesOf(handled.calls)).toHaveLength(1);
+    });
+
+    it('does not resubmit an approval in a rate-limited follow-up', async () => {
+      const { run, calls } = setup([
+        () => sse(created('resp_1'), ...approval('mcpr_1'), completed(1, 0, 1)),
+        () => new Response(null, { status: 429 }),
+        () => sse(created('resp_2'), ...message('Unexpected retry'), completed(1, 0, 1)),
+      ]);
+      await expect(run('hi')).rejects.toMatchObject({ kind: 'service_busy' });
+      expect(responsesOf(calls)).toHaveLength(2);
+      expect(responsesOf(calls)[1]!.body?.input).toEqual([{ type: 'mcp_approval_response', approval_request_id: 'mcpr_1', approve: true }]);
+    });
+
+    it('does not treat a server error after submitting an approval as a rejected request', async () => {
+      const { run, registry, calls } = setup([
+        call => {
+          registry.resolve(turnOf(call))!.receipts.push({ confirmation: 'Completed task: Pay rent.', action: true });
+          return sse(created('resp_1'), ...approval('mcpr_1'), completed(1, 0, 1));
+        },
+        () => new Response(null, { status: 502 }),
+      ]);
+      await expect(run('hi')).rejects.toMatchObject({
+        receipt: `Completed task: Pay rent. ${failureCopy.cut_off.chat} ${failureCopy.reply_not_written.chat}`,
+      });
+      expect(responsesOf(calls)).toHaveLength(2);
     });
 
     it('answers every client-owned call of one response in one follow-up, in the order they came', async () => {

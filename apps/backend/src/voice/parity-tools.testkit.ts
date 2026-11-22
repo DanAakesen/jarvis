@@ -174,6 +174,7 @@ function fixtureTools(store: MemoryConversationStore): { tools: JarvisTool[]; fa
 }
 
 export interface DailyCore {
+  readonly indexVault: () => Promise<void>;
   readonly modules: BackendModule[];
   readonly vault: FakeVault;
   readonly gym: FakeGym;
@@ -195,7 +196,8 @@ export function createDailyCore(store: MemoryConversationStore, today: string): 
     } as never,
   });
   return {
-    modules: [vaultModule, { id: 'gym', tools: gymTools(access), registerRoutes: async () => {} }, { id: 'factory-fixture', tools, registerRoutes: async () => {} }],
+    modules: [vaultModule, { id: 'gym', tools: gymTools({ ...access, phoneNotes: client }), registerRoutes: async () => {} }, { id: 'factory-fixture', tools, registerRoutes: async () => {} }],
+    async indexVault() { await vaultModule.synchronize(new AbortController().signal); },
     vault, gym, factory, nutrition,
   };
 }

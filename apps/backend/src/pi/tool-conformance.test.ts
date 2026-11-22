@@ -51,41 +51,19 @@ const reportFor = (name: string) => {
 };
 
 describe('composition', () => {
-  const quickNames = ['calendar_list_events', 'owner_reminders', 'weather'];
-  const expectedNames = ['call_tool', 'find_tools', ...quickNames].sort();
-  it('exposes exactly the two door methods and the three quick tools, not the whole catalogue', async () => {
-    expect(await world.client.listDoorTools()).toEqual(expectedNames);
-  });
-
-  it('gives the harness five safely named definitions with the required turn and the real quick tool schemas', async () => {
+  it('exposes only the two names an existing Copilot session knows, with the required turn reference', async () => {
     const definitions = await world.client.listDoorDefinitions();
-    expect(definitions.map((definition) => definition.name).sort()).toEqual(expectedNames);
-    const turn = world.client.openTurn();
-    try {
-      for (const definition of definitions) {
-        const { name, description } = definition;
-        expect(name, 'a harness-safe name').toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
-        expect(name.includes('___'), `${name} must not contain ___`).toBe(false);
-        const schema = definition.inputSchema ?? {};
-        expect(schema.type, `${name} needs an object schema`).toBe('object');
-        expect(JSON.stringify(schema), `${name} must not set strict`).not.toMatch(/"strict"\s*:\s*true/u);
-        expect(schema.required).toContain('turn');
-        const quick = quickNames.includes(name);
-        expect(tokensOf({ ...definition }), `${name} is part of every turn: keep it small`).toBeLessThanOrEqual(quick ? 1_700 : 500);
-        if (name === 'find_tools') for (const quickName of quickNames) expect(description).toContain(quickName);
-        if (!quick) continue;
-        const found = (await world.client.find(turn, name)).tools.find((tool) => tool.name === name)!;
-        expect(description).toBe(found.description);
-        expect(schema).toEqual({
-          ...found.parameters,
-          properties: { ...(found.parameters.properties as Record<string, unknown>), turn: expect.objectContaining({ type: 'string' }) },
-          required: [...((found.parameters.required as string[] | undefined) ?? []), 'turn'],
-        });
+    expect(definitions.map((definition) => definition.name).sort()).toEqual(['call_tool', 'find_tools']);
+    for (const definition of definitions) {
+      const { name, description, inputSchema: schema = {} } = definition;
+      expect(schema.type, `${name} needs an object schema`).toBe('object');
+      expect(JSON.stringify(schema), `${name} must not set strict`).not.toMatch(/"strict"\s*:\s*true/u);
+      expect(schema.required).toContain('turn');
+      expect(tokensOf(definition), `${name} is part of every turn: keep it small`).toBeLessThanOrEqual(500);
+      if (name === 'find_tools') {
+        for (const tool of ['weather', 'calendar_list_events', 'owner_reminders']) expect(description).toContain(tool);
       }
-    } finally {
-      turn.close();
     }
-    console.info(`Five MCP tool definitions cost about ${tokensOf(definitions)} tokens per turn (characters / 4).`);
   });
 
   it('composes every production module (a new key in production-modules.ts needs a conformance group)', () => {
@@ -135,17 +113,16 @@ describe('composition', () => {
   });
 });
 
-describe('quick tools through the real MCP door', () => {
-  it('reads Google Calendar directly and returns the same result as the generic call, even on a short page', async () => {
+describe('daily reads and writes through the existing MCP door', () => {
+  it('discovers Google Calendar and preserves short pages', async () => {
     const turn = world.client.openTurn();
     try {
       const args = { start: '2026-11-23', end: '2026-11-29', maxResults: 3 };
-      const direct = await world.client.direct(turn, 'calendar_list_events', args);
-      const generic = await world.client.call(turn, 'calendar_list_events', args);
-      expect(direct.outcome).toBe('ok');
-      expect(direct.result).toMatchObject({ events: expect.any(Array), truncated: true });
-      expect(direct.truncated).toBe(false); // The tool paged its result; the door did not shorten it.
-      expect(direct.raw).toBe(generic.raw);
+      expect((await world.client.find(turn, 'calendar_list_events')).tools[0]?.name).toBe('calendar_list_events');
+      const answer = await world.client.call(turn, 'calendar_list_events', args);
+      expect(answer.outcome).toBe('ok');
+      expect(answer.result).toMatchObject({ events: expect.any(Array), truncated: true });
+      expect(answer.truncated).toBe(false); // The tool paged its result; the door did not shorten it.
       expect(effectOf(world.app.jarvisTools.get('calendar_list_events')!, args)).toBe('read');
       expect(turn.grant.actions.count).toBe(0);
     } finally {
@@ -153,16 +130,17 @@ describe('quick tools through the real MCP door', () => {
     }
   });
 
-  it('reads weather without a report and still creates a report by default', async () => {
+  it('finds weather on Dan’s first search and answers without advertising it as a third MCP tool', async () => {
     const turn = world.client.openTurn();
     try {
       const args = { location: 'Aarhus', days: 2 };
-      const read = await world.client.direct(turn, 'weather', { ...args, report: false }, 'weather-read');
+      expect((await world.client.find(turn, 'Can you check the weather?')).tools.map(tool => tool.name)).toContain('weather');
+      const read = await world.client.call(turn, 'weather', { ...args, report: false });
       expect(read.outcome).toBe('ok');
       expect(read.result).toMatchObject({ forecast: expect.any(Array) });
       expect(read.result).not.toHaveProperty('artifactId');
       expect(turn.grant.actions.count).toBe(0);
-      const report = await world.client.direct(turn, 'weather', args, 'weather-report');
+      const report = await world.client.call(turn, 'weather', args, undefined, 'weather-report');
       expect(report.outcome).toBe('ok');
       expect(report.result).toMatchObject({ artifactId: expect.any(String), jobId: expect.any(String) });
       const replay = await world.client.call(turn, 'weather', args, undefined, 'weather-report');
@@ -173,20 +151,21 @@ describe('quick tools through the real MCP door', () => {
     }
   });
 
-  it('applies the reminder schema and replays a direct reminder write through call_tool without another dispatch', async () => {
+  it('discovers reminders, validates the schema, and replays a write without another dispatch', async () => {
     const reminders = await buildConformanceWorld({ groups: [coreGroup, notesGroup] });
     reminders.context.ownerMessage.text = 'Remind me in two hours to call the dentist';
     const turn = reminders.client.openTurn();
     try {
-      const invalid = await reminders.client.direct(turn, 'owner_reminders', { operation: 'read', task: 'Call the dentist' });
+      expect((await reminders.client.find(turn, 'owner_reminders')).tools[0]?.name).toBe('owner_reminders');
+      const invalid = await reminders.client.call(turn, 'owner_reminders', { operation: 'read', task: 'Call the dentist' });
       expect(invalid.outcome).toBe('refused');
       expect(invalid.result).toMatchObject({ refused: expect.stringContaining('read accepts only operation') });
       const args = { operation: 'create', task: 'Call the dentist', fireAt: hours(2) };
-      const direct = await reminders.client.direct(turn, 'owner_reminders', args, 'reminder-1');
+      const first = await reminders.client.call(turn, 'owner_reminders', args, undefined, 'reminder-1');
       const duplicate = await reminders.client.call(turn, 'owner_reminders', args, undefined, 'reminder-1');
-      expect(direct.outcome).toBe('ok');
-      expect(direct.result).toMatchObject({ operation: 'create', created: true, confirmation: expect.stringContaining('saved and scheduled') });
-      expect(JSON.parse(duplicate.raw)).toEqual({ ...JSON.parse(direct.raw), duplicate: true });
+      expect(first.outcome).toBe('ok');
+      expect(first.result).toMatchObject({ operation: 'create', created: true, confirmation: expect.stringContaining('saved and scheduled') });
+      expect(JSON.parse(duplicate.raw)).toEqual({ ...JSON.parse(first.raw), duplicate: true });
       expect(turn.grant.actions.count).toBe(1);
       expect(reminders.recorded.filter((entry) => entry.tool === 'owner_reminders')).toHaveLength(1);
     } finally {

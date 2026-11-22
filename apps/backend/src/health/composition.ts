@@ -20,7 +20,7 @@ export interface HealthCompositionOptions {
   readonly pool: sql.ConnectionPool | undefined;
   /** The configured owner; every Health accessor also re-resolves the caller per request and fails closed. */
   readonly ownerObjectId: string;
-  /** The vault client for the Gym log copy. Without it saved entries stay pending and are never reported as copied. */
+  /** The vault client for Gym log copies and iPhone notes. Without it SQL saves still succeed with the copy pending. */
   readonly gymVault?: HealthGymVault;
   readonly liftCaptureModel?: ApprovalModelPort;
 }
