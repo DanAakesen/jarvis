@@ -2416,7 +2416,7 @@ read), and is listed as a gap. Values are never invented.
 This ruling does not by itself lift earlier scope exclusions (task, habit and
 countdown source, coaching and recomposition automation, separate Workouts and
 Nutrition pages); each needs its own owner ruling before it is built. The
-[audit](../ui/p14-41/audit.md) lists the components and gaps. The original source
+[audit](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/ui/p14-41/audit.md) lists the components and gaps. The original source
 code was not available, so the audit works from screenshots only.
 
 Refs #1116
@@ -3337,7 +3337,7 @@ each record-detail trigger's `aria-controls` continues to reference a labelled
 region while that region is closed. Keep record details nonmodal and preserve focus entry,
 Escape/close, and focus return without trapping the background. Add focused
 Testing Library and reduced-motion guards; record audit evidence and browser
-limitations in [`ui/p12-37/audit.md`](../ui/p12-37/audit.md). No new dependency,
+limitations in [`ui/p12-37/audit.md`](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/ui/p12-37/audit.md). No new dependency,
 API, route, token or data read is introduced.
 
 ## P14-12 — Shared colour tokens and contrast (18 October 2026)
@@ -7943,7 +7943,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | <a name="decision-log-9726"></a>2026-10-05 | P7-14 uses the existing Foundry hosted runner and Dan's ChatGPT/Codex subscription for live web research; do not use Bing grounding or a pay-per-call API. Add `codex-tool`/`web_research` with a configurable ChatGPT-supported model (`gpt-5.5` default), `web_search=live`, a temporary workspace with no repository, bounded calls/cancellation, and an explicit usage-limit refusal. Disable Codex's `shell_tool`; read-only sandboxing alone permits credential-file reads. Treat query/page text as untrusted, cite only returned HTTPS URLs, report empty/limited results, and return typed source metadata (backend receipt time). Count calls from existing `tool_calls` and show the daily UTC count in Usage; no new schema or provider resource. | Dan's 5 October decision supersedes the earlier Bing scope. The pinned Codex CLI supports `--disable shell_tool`, protecting the file-backed login from prompt-injected page text; fake tests cover the runner, backend, contract, timeout, partial results and cancellation. No query/result content is retained in the generic audit. The live Codex login, search and Azure invocation were not exercised. | Implemented offline; coordinator live acceptance pending |
 | <a name="decision-log-9727"></a>2026-10-04 | Add long-term knowledge, source-linked web research, image/video generation and editable personality to the plan | Dan explicitly selected these four capabilities from the supplied transcript. P7-14–P7-16 cover capabilities; P8-19 implements the Personality settings UI. P7-40 makes the GitHub Vault authoritative for Knowledge, while #1968 keeps/restores SQL Personal Memory as a separate domain. | Accepted scope; P7-40 owns Knowledge and #1968 owns Personal Memory |
 | <a name="decision-log-9728"></a>2026-10-04 | P7-03 phone notifications and approvals through a Dan-restricted Teams bot, with speech notes on F0 and fail-closed approvals | Personal-chat and confirmation state use P7-03's SQL migration; bounded audio is transient. Offline bot, persistence and project-policy tests pass; live bot registration and phone acceptance remain unverified. | Implemented offline; live verification pending |
-| <a name="decision-log-9729"></a>2026-10-04 | Shared typing shell and fullscreen voice workspace; temporary dynamic windows with tabs; persisted theme values; orb driven by runtime state; optional minimise-on-voice toggle defaults off | Dan confirmed these behaviours in the UI design conversation and reviewed the static wireframes. See [ui.md](../../ui.md) for details and unresolved styling/control choices. | Requirements confirmed; P8-04 shell, P8-10 desktop voice transitions, P8-11 phone view switching, and P8-13 theme controls implemented offline |
+| <a name="decision-log-9729"></a>2026-10-04 | Shared typing shell and fullscreen voice workspace; temporary dynamic windows with tabs; persisted theme values; orb driven by runtime state; optional minimise-on-voice toggle defaults off | Dan confirmed these behaviours in the UI design conversation and reviewed the static wireframes. See [ui.md](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/ui.md) for details and unresolved styling/control choices. | Requirements confirmed; P8-04 shell, P8-10 desktop voice transitions, P8-11 phone view switching, and P8-13 theme controls implemented offline |
 | <a name="decision-log-9730"></a>2026-10-05 | Implement P8-10 on the client without waiting for agent-delivered workspace commands or tool events: voice entry and exit use P5-04 runtime/workspace state; expose typed client workspace controls; consume P8-16's transient tool-call activity when available; persist the default-off minimise preference through P8-17 and mirror it locally for immediate shell reads | Coordinator decision on PR comment #5986233839. The original composer-orb shared transition was superseded by P8-29's persistent stage; P8-30 avoids a full-document snapshot and preserves immediate reduced-motion behavior. Voice shares the same mounted workspace controller used for signed-in agent commands. | Implemented offline; original visual transition superseded by P8-29/P8-30 |
 | <a name="decision-log-9731"></a>2026-10-04 | P8-06 starts with tiled desktop views, offers layered overlap, raises the active layered view, and reflows to a single column at 900px and below; view/order/geometry state is memory-only | Tiling gives new views a predictable reading order while overlap remains available; the narrow layout keeps each view inside the viewport. Component tests and Chromium checks cover arrangement, pointer/keyboard controls, recovery states, and desktop/phone bounds. P8-14/P8-15 provide typed temporary data and Jarvis-directed controls. | Implemented offline |
 | <a name="decision-log-9732"></a>2026-10-04 | P8-07 adds minimise/maximise/close title-bar actions, an animated active-workspace tab strip, and an in-memory `WorkspaceCommandContext`; arrangement controls stay behind Arrange disclosures | Minimising keeps view content mounted and does not persist or delete it. Tab restore returns focus to the view title; command dispatch is typed and idempotent for repeated minimise/restore. Nine component tests and Chromium checks at desktop/phone widths in both appearances cover lifecycle, focus, reduced motion, and bounds; screenshots use labelled local fixtures. P8-15 connects authenticated Jarvis delivery. | Implemented offline |
@@ -7953,10 +7953,10 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | <a name="decision-log-9736"></a>2026-10-04 | P3-08: fetch the project commit graph from GitHub on demand with a repository-scoped `contents:read` token; keep webhook records in SQL and display them if the graph read fails | Avoids duplicating Git history, keeps credentials server-side, bounds branch/commit work and preserves useful persisted state during GitHub outages. Focused backend/UI tests and Chromium checks at 390 and 1280 px pass with mocked GitHub/API data; live GitHub, Entra and Azure SQL behavior remains unverified. | Implemented offline |
 | <a name="decision-log-9737"></a>2026-10-04 | Away mode activates by voice/chat or ten continuous minutes of Teams Away/Offline; explicit return commands and active, visible browser use switch it off. Route new approvals to Teams while away and the authenticated Now panel while present; passive feed reads do not change presence. | Dan confirmed the trigger and return behavior in issue #200. Backend state and approval IDs use existing SQL tables; the browser queue is bounded and in-memory, each decision remains owner-authenticated, single-use and expiring. Offline backend/web tests cover both routes; Graph consent and live Teams delivery remain unverified. | Implemented offline |
 | <a name="decision-log-9738"></a>2026-10-04 | P8-17 stores approved appearance tokens and the default-off minimise-on-voice preference as validated global scalar settings; `set_theme` writes through the same settings store | Existing settings rows and transactional partial writes avoid a migration; optional tokens are included in the SQL read whitelist, and API/tool tests cover allowlists and truthful refusal/error outcomes. Generated views and window arrangement remain temporary. Database CI passed the SQL Server integration suite; P8-13's live application of tool results remains unverified. | Implemented offline and SQL Server CI-tested; client integration pending |
-| <a name="decision-log-9739"></a>2026-10-01 | Coding sandbox: Foundry Hosted Agents, one session per task; Container Apps Jobs as fallback behind the same runner contract | Proof of concept: all nine checks passed for Copilot and Codex ([report](../reference/coding-sandbox-prototype/REPORT.md)) | Proven |
+| <a name="decision-log-9739"></a>2026-10-01 | Coding sandbox: Foundry Hosted Agents, one session per task; Container Apps Jobs as fallback behind the same runner contract | Proof of concept: all nine checks passed for Copilot and Codex ([report](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/reference/coding-sandbox-prototype/REPORT.md)) | Proven |
 | <a name="decision-log-9740"></a>2026-10-01 | ACP for both agents: Copilot CLI `--acp`, Codex via `codex-acp`; Python adapter in the sandbox image | Steer, pause, and resume proven over ACP; Foundry hosted agents support only Python or C# | Proven |
 | <a name="decision-log-9741"></a>2026-10-02 | Codex uses a Jarvis-only ChatGPT Pro login, renewed by Jarvis; no API key | Renewal proven through Codex's own client; Dan's own login untouched (L6, L12) | Proven |
-| <a name="decision-log-9742"></a>2026-10-02 | Danish voice: Voice Live voice bridge with MAI Transcribe and `gpt-5.6-luna` | V1–V7 passed; Azure Speech `da-DK` misheard English names (L15) ([voice report](../reference/voice-prototype/REPORT.md)) | Proven; Dan's live test (V8) pending |
+| <a name="decision-log-9742"></a>2026-10-02 | Danish voice: Voice Live voice bridge with MAI Transcribe and `gpt-5.6-luna` | V1–V7 passed; Azure Speech `da-DK` misheard English names (L15) ([voice report](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/reference/voice-prototype/REPORT.md)) | Proven; Dan's live test (V8) pending |
 | <a name="decision-log-9743"></a>2026-10-02 | Voices: English Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`) with a British butler persona; Danish Harper (MAI-Voice-2, `da-DK`); language toggle in the UI | Chosen by Dan from samples; MAI-Voice-2 has no British or Danish voices, and its American male voices were rejected | Confirmed |
 | <a name="decision-log-9744"></a>2026-10-02 | English voice runs as `gpt-realtime-2.1` speech to speech; warm-up before the microphone opens and automatic reconnect | Faster first audio; warm-up and reconnect prevent the bridge drop (L21) | Decided |
 | <a name="decision-log-9745"></a>2026-10-03 | The backend owns the English realtime session: pin `gpt-realtime-2.1`, Ryan HD and the British butler instructions; expose registered tools to the model and execute calls only in the backend | Browser-supplied session overrides or tool outputs could bypass the chosen persona or falsely claim an action. Offline mock tests verify schema validation, backend execution and the P4-05 result/confirmation contract; P0-16 Azure setup and P5-04 browser audio remain unverified. Voice history is left to P4-03/P5-06. | Implemented offline; live verification pending |
@@ -8372,19 +8372,19 @@ Mistakes made so far and the rule that prevents each one.
 
 ## 5 October 2026 — Software Factory layout selected
 
-**Confirmed by Dan:** use image 2 (Task Lens) as the base, include image 3's compact release bar and keep the details pane on the right. Dan approved [the combined mockup](../ui/software-factory/task-lens-release-bar.png) and requested one implementation issue. P8-34 (#369) implements that composition using the existing task, release, workspace and conversation contracts; #364 supplies the shared glass styling. The reference uses illustrative data. Dark/light desktop and phone fixture checks are recorded in `docs/agent-context.md`; live integration and physical-device acceptance remain unverified. This decision does not authorize starting or assigning a worker.
+**Confirmed by Dan:** use image 2 (Task Lens) as the base, include image 3's compact release bar and keep the details pane on the right. Dan approved [the combined mockup](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/ui/software-factory/task-lens-release-bar.png) and requested one implementation issue. P8-34 (#369) implements that composition using the existing task, release, workspace and conversation contracts; #364 supplies the shared glass styling. The reference uses illustrative data. Dark/light desktop and phone fixture checks are recorded in `docs/agent-context.md`; live integration and physical-device acceptance remain unverified. This decision does not authorize starting or assigning a worker.
 
 ## 6 October 2026 — Luminous-glass conversation components selected
 
 **Confirmed by Dan:** select the last Luminous Glass component-family image for the compact voice bar, chat input and message window. Remove the line above messages and the small orb/Jarvis title from the top-left window header; keep top-right window controls and the input's voice-start orb. Language belongs inside More as an icon/text row with a Danish/English flyout. Existing capture capabilities and their placements remain.
 
-[Edited reference](../ui/chat-voice/README.md). [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) are implementation tasks and preserve existing steering/queue, voice and workspace behavior. They are unclaimed; publication does not start a worker. Three app-shell styling alternatives were requested separately and remain proposals until selected.
+[Edited reference](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/ui/chat-voice/README.md). [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) are implementation tasks and preserve existing steering/queue, voice and workspace behavior. They are unclaimed; publication does not start a worker. Three app-shell styling alternatives were requested separately and remain proposals until selected.
 
 ## 6 October 2026 — Architectural Glass shell selected; footer and message avatars removed
 
 **Confirmed by Dan:** choose the last/third displayed shell concept for its 3D material feel. Remove the separate bottom app-shell/status bar, leaving open the possibility of adding one later if needed. Keep the bottom-centred composer and compact voice-session controls. Preserve the current footer's truthful database-waking feedback in compact top-bar status treatment.
 
-Remove only the two message-avatar icons (human and Jarvis) from the selected chat window. Preserve accessible author roles and hierarchy, the large scene orb, small voice-start orb, window controls and all other selected elements. [The refined reference](../ui/shell-styling/README.md#refined-approved-reference) applies these removals to the exact selected result. New P8-39 (#401) covers shell/footer changes; existing P8-38 (#399) is amended for avatars, avoiding a duplicate message-window issue. These tasks are unclaimed; publishing the selection does not start a worker. This supersedes earlier bottom-bar requirements and message-avatar details in the original comparison image.
+Remove only the two message-avatar icons (human and Jarvis) from the selected chat window. Preserve accessible author roles and hierarchy, the large scene orb, small voice-start orb, window controls and all other selected elements. [The refined reference](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/docs/ui/shell-styling/README.md#refined-approved-reference) applies these removals to the exact selected result. New P8-39 (#401) covers shell/footer changes; existing P8-38 (#399) is amended for avatars, avoiding a duplicate message-window issue. These tasks are unclaimed; publishing the selection does not start a worker. This supersedes earlier bottom-bar requirements and message-avatar details in the original comparison image.
 
 ## 6 October 2026 — Consolidate input, messages and shell into #398
 
@@ -9490,7 +9490,7 @@ existing Jarvis backend, and native SwiftUI/iOS features and controls. The next
 step is an agreed version 1 design/prototype; Dan may work locally on his PC.
 Scope, layouts, retained branding, prototype tools and build/authentication setup
 remain unconfirmed. No implementation or setup is authorized. The discussion,
-proposals and dated references are recorded in [iOS app](../../iOS%20app.md).
+proposals and dated references are recorded in [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 Migration and logging work continues independently.
 
 ## 29 October 2026 — iOS usage context and design decisions
@@ -9510,7 +9510,7 @@ on the owner's Windows PC. The HTML concept board is local scratch and cannot
 establish native behaviour. Scope, sidebar contents, workspace presentation,
 assistive access to the sidebar, presence behaviour with workspaces and
 build/authentication setup remain unconfirmed. No implementation or setup is
-authorized. See [iOS app](../../iOS%20app.md).
+authorized. See [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 
 ## 29 October 2026 — iOS sidebar order, naming and removed control
 
@@ -9523,7 +9523,7 @@ and icons sit close to the right edge. The prototype lists the areas upward from
 the thumb end and still shows a row of pinned shortcuts, which is not decided.
 The final list of areas, the pinned shortcuts and assistive access to the
 swipe-only sidebar remain unconfirmed. No implementation or setup is authorized.
-See [iOS app](../../iOS%20app.md).
+See [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 
 ## 29 October 2026 — iOS version 1 answers
 
@@ -9549,7 +9549,7 @@ the foundation phase, so no implementation or setup is authorized. The
 safeguards proposed for the Face ID lock and Lock Screen approvals, and whether
 the owner's account has the role the API key needs, are not confirmed. CarPlay,
 the Apple Watch and Music are future intent only.
-See [iOS app](../../iOS%20app.md).
+See [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 
 ## 30 October 2026 — iOS App ID registered
 
@@ -9579,7 +9579,7 @@ the Account Holder role.
 Still open: the owner's role (Account Holder or Admin), who files the CarPlay
 request, and the owner's go for the foundation phase, which is still No. No
 implementation or setup is authorized.
-See [build plan](../ios/build-plan.md) and [iOS app](../../iOS%20app.md).
+See [build plan](../ios/build-plan.md) and [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 
 ## 30 October 2026 — iOS foundation phase go and Mac cost guard
 
@@ -9608,7 +9608,7 @@ keep pull requests in draft until the Linux checks pass and batch related
 changes. The owner should set a GitHub Actions budget in Billing as a safety net.
 The dispatcher reviews Actions billing usage at the end of each iOS phase. A
 local Linux Swift toolchain for the owner is optional and needs the owner's go.
-See [build plan](../ios/build-plan.md) and [iOS app](../../iOS%20app.md).
+See [build plan](../ios/build-plan.md) and [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 
 ## 30 October 2026 — iOS screen approval gate
 
@@ -9633,7 +9633,7 @@ also one Mac run. Uploads only happen when the owner starts them, which also
 lowers Mac minutes.
 
 Phase 1a, the empty shell with no real screens (#1370), is unaffected. See
-[build plan](../ios/build-plan.md) and [iOS app](../../iOS%20app.md).
+[build plan](../ios/build-plan.md) and [iOS app](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0be/iOS%20app.md).
 
 ## 30 October 2026 — iOS Phase 1a implementation boundary
 
