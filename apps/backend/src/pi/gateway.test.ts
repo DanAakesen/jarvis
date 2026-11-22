@@ -337,8 +337,8 @@ describe('PI gateway', () => {
     expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
     const unfinished = setup([() => sse(delta('half'))]);
     await expect(unfinished.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
-    // An approval request without an id cannot be answered, so it still fails the turn, in plain words.
-    const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request' } }), completed(1, 0, 1))]);
+    // An approval request without an id cannot be answered, so once it is complete it still fails the turn, in plain words.
+    const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request', status: 'completed' } }), completed(1, 0, 1))]);
     await expect(approval.run('hi')).rejects.toMatchObject({
       code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat,
     });
@@ -706,8 +706,8 @@ describe('PI gateway', () => {
     it.each([
       ['an mcp_approval_request without an id', { type: 'mcp_approval_request', server_label: 'jarvis', name: 'read_file', arguments: '{"path":"secret"}', status: 'completed' },
         { itemType: 'mcp_approval_request', name: 'read_file', serverLabel: 'jarvis', hasCallId: false, hasId: false, argumentsLength: 17, itemStatus: 'completed' }],
-      ['a function_call without a call_id', { type: 'function_call', id: 'fc_secret', name: 'shell', arguments: '{}' },
-        { itemType: 'function_call', name: 'shell', hasCallId: false, hasId: true, argumentsLength: 2 }],
+      ['a function_call without a call_id', { type: 'function_call', id: 'fc_secret', name: 'shell', arguments: '{}', status: 'completed' },
+        { itemType: 'function_call', name: 'shell', hasCallId: false, hasId: true, argumentsLength: 2, itemStatus: 'completed' }],
     ])('logs only the safe shape of %s and fails because it cannot be answered', async (_name, item, expected) => {
       const { logs, log } = capture();
       const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), completed(1, 0, 1))], { log });
@@ -759,10 +759,10 @@ describe('PI gateway', () => {
     });
 
     it.each([
-      ['a very long name', { type: 'function_call', name: 'n'.repeat(1_000_000), arguments: 'a'.repeat(1_000_000) }, { name: 'other', argumentsLength: 1_000_000 }],
-      ['object arguments', { type: 'function_call', arguments: { q: 'secret' } }, { argumentsLength: 14 }],
-      ['array arguments', { type: 'mcp_approval_request', arguments: ['secret'] }, { argumentsLength: 10 }],
-      ['a non-string type value', { type: 'function_call', name: 42, server_label: [] }, {}],
+      ['a very long name', { type: 'function_call', status: 'completed', name: 'n'.repeat(1_000_000), arguments: 'a'.repeat(1_000_000) }, { name: 'other', argumentsLength: 1_000_000 }],
+      ['object arguments', { type: 'function_call', status: 'completed', arguments: { q: 'secret' } }, { argumentsLength: 14 }],
+      ['array arguments', { type: 'mcp_approval_request', status: 'completed', arguments: ['secret'] }, { argumentsLength: 10 }],
+      ['a non-string type value', { type: 'function_call', status: 'completed', name: 42, server_label: [] }, {}],
     ])('still fails the same way with %s and logs no content', async (_name, item, expected) => {
       const { logs, log } = capture();
       const { run, calls } = setup([() => sse(created, frame({ type: 'response.output_item.added', item }), completed(1, 0, 1))], { log });
@@ -786,7 +786,7 @@ describe('PI gateway', () => {
 
     it('never retries a function call or approval request, and never an HTTP failure or a missing stream', async () => {
       const { logs, log } = capture();
-      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call' } }), completed(1, 0, 1)), () => sse(delta('x'), completed(1, 0, 1))], { log });
+      const call = setup([() => sse(created, frame({ type: 'response.output_item.added', item: { type: 'function_call', status: 'completed' } }), completed(1, 0, 1)), () => sse(delta('x'), completed(1, 0, 1))], { log });
       await expect(call.run('hi')).rejects.toMatchObject({
         code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat,
       });
@@ -1262,12 +1262,324 @@ describe('PI gateway', () => {
 
     it('fails a client-owned call it cannot answer but charges the real usage of the response that carried it', async () => {
       const { logs, log } = capture();
-      const first = frame({ type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', name: 'lookup', arguments: '{}' } });
+      const first = frame({ type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_1', name: 'lookup', arguments: '{}', status: 'completed' } });
       const { run, calls, store } = setup([() => sse(created('resp_1'), first, completed(7_000, 0, 70))], { log });
       await expect(run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'client_call_without_id', userMessage: failureCopy.cut_off.chat });
       expect(responsesOf(calls)).toHaveLength(1);
       expect(logs.find(([event]) => event === 'pi.stream_failed')![1]).toMatchObject({ reason: 'approval_or_function_call_item' });
       expect(store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 7_000, outputTokens: 70 });
+    });
+
+    describe('stream contract shapes, each fed as random-sized byte chunks over seeds 0 to 19', () => {
+      const seeds = Array.from({ length: 20 }, (_, seed) => seed);
+      // Non-ASCII text with a four-byte emoji, so chunk boundaries also fall inside UTF-8 sequences.
+      const first = 'Pr\u00F8ve 3 \u{1F327}\uFE0F. ';
+      const second = 'Nu med regn \u{1F327}\uFE0F.';
+      const cut = 'Pr\u00F8ve 3'.length;
+      /** The stream as one body that arrives in pieces of 1 to 67 bytes, cut by a seeded LCG, so frames and characters are split anywhere. */
+      const fragmented = (seed: number, frames: readonly string[]) => {
+        const bytes = new TextEncoder().encode(frames.join(''));
+        const pieces: Uint8Array[] = [];
+        let state = seed;
+        for (let at = 0; at < bytes.length;) {
+          state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+          const size = 1 + (state >>> 16) % 67;
+          pieces.push(bytes.slice(at, at + size));
+          at += size;
+        }
+        return new Response(new ReadableStream({ start(controller) { for (const piece of pieces) controller.enqueue(piece); controller.close(); } }), { headers: { 'content-type': 'text/event-stream' } });
+      };
+      /** One turn whose responses are these frame lists: everything the contract is about, in one comparable value. */
+      const play = async (rounds: ReadonlyArray<readonly string[]>, seed: number) => {
+        const { logs, log } = capture();
+        const { run, calls, store } = setup(rounds.map(frames => () => fragmented(seed, frames)), { log });
+        let reply = '';
+        let failed = false;
+        try { for (const chunk of await run('hi')) if (typeof chunk === 'string') reply += chunk; } catch { failed = true; }
+        const requests = responsesOf(calls);
+        const turn = store.turns[0];
+        return {
+          failed, reply, requests: requests.length,
+          billed: turn ? [turn.inputTokens, turn.cachedTokens, turn.outputTokens] : null,
+          envelopes: requests.map(request => ({ conversation: request.body!.conversation, stream: request.body!.stream, keys: Object.keys(request.body!).sort() })),
+          followUps: requests.slice(1).map(request => request.body!.input),
+          calls: harnessCalls(logs).map(fields => `${String(fields.classification)}:${String(fields.rule)}`),
+        };
+      };
+      const envelope = { conversation: 'conv_1', stream: true, keys: ['conversation', 'input', 'stream'] };
+      const answer = (callId: string, name = 'lookup') => [{ type: 'function_call_output', call_id: callId, output: unavailable(name) }];
+      /** The exact result of a turn that ended normally: one request, plus one per follow-up. */
+      const ok = (reply: string, billed: number[], followUps: unknown[] = [], calls: string[] = []) => ({
+        failed: false, reply, requests: followUps.length + 1, billed, envelopes: followUps.map(() => envelope).concat(envelope), followUps, calls,
+      });
+      const finished = (output: unknown[], input: number, cached: number, out: number) => frame({
+        type: 'response.completed',
+        response: { status: 'completed', output, usage: { input_tokens: input, input_tokens_details: { cached_tokens: cached }, output_tokens: out } },
+      });
+      const finalMessage = (text: string, id = 'msg_1', ...more: string[]) => ({
+        type: 'message', id, role: 'assistant', status: 'completed', content: [text, ...more].map(part => ({ type: 'output_text', text: part, annotations: [] })),
+      });
+      const anonymousMessage = (text: string) => ({ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
+      const textDelta = (text: string, id = 'msg_1', index = 0, part = 0) => frame({ type: 'response.output_text.delta', item_id: id, output_index: index, content_index: part, delta: text });
+      const textDone = (text: string, id = 'msg_1', index = 0, part = 0) => frame({ type: 'response.output_text.done', item_id: id, output_index: index, content_index: part, text });
+      /** A done event that names neither its item nor its output index, like `delta()` does for the deltas. */
+      const unnamedDone = (text: string) => frame({ type: 'response.output_text.done', content_index: 0, text });
+      const statusless = { type: 'function_call', id: 'fc_call_1', call_id: 'call_1', name: 'lookup', arguments: '{}' };
+      const added = (item: unknown, index?: number) => frame({ type: 'response.output_item.added', ...(index === undefined ? {} : { output_index: index }), item });
+      const finishedItem = (item: unknown, index?: number) => frame({ type: 'response.output_item.done', ...(index === undefined ? {} : { output_index: index }), item });
+      const mcpCall = { type: 'mcp_call', id: 'mcp_1', server_label: 'jarvis', name: 'find_tools' };
+      const listedTools = { type: 'mcp_list_tools', id: 'mcpl_1', server_label: 'jarvis', tools: [] };
+      /** The item that is opened before a call and closed after it, named by its id, its output index or both. */
+      const earlierMessage = (by: 'id' | 'index' | 'both') => {
+        const item = { type: 'message', ...(by === 'index' ? {} : { id: 'msg_1' }) };
+        const index = by === 'id' ? undefined : 0;
+        return { opened: added(item, index), closed: finishedItem(item, index) };
+      };
+
+      type Shape = [string, ReadonlyArray<readonly string[]>, ReturnType<typeof ok>];
+      const gaps: Shape[] = [
+        ['1. a statusless call that was only added: no done event, nothing after it', [
+          [created('resp_1'), delta(first), added(statusless), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])],
+        ['1. a statusless approval request that was only added: no done event, nothing after it', [
+          [created('resp_1'), delta(first), added({ type: 'mcp_approval_request', id: 'mcpr_1', server_label: 'jarvis', name: 'read_file', arguments: '{"path":"/x"}' }), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])],
+        ['2. reply text only in the terminal event, with no text deltas', [
+          [created('resp_1'), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['3. reply text only in response.output_text.done, with no text deltas', [
+          [created('resp_1'), textDone(first), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['3. reply text only in response.output_text.done, named by its item id alone', [
+          [created('resp_1'), frame({ type: 'response.output_text.done', item_id: 'msg_1', content_index: 0, text: first }), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['3. reply text only in response.output_text.done, named by its output index alone', [
+          [created('resp_1'), frame({ type: 'response.output_text.done', output_index: 0, content_index: 0, text: first }), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['4. an mcp_call that was only added after a completed call', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), added(mcpCall), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['native:later_output'])],
+        ...(['id', 'index', 'both'] as const).map((by): Shape => [`5. the message opened before the call is closed after it, named by ${by}`, [
+          [created('resp_1'), earlierMessage(by).opened, delta(first), ...functionCall('lookup', 'call_1', '{}'), earlierMessage(by).closed, completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])]),
+        ['5. the mcp_call opened before the call is closed after it', [
+          [created('resp_1'), delta(first), added(mcpCall, 0), ...functionCall('lookup', 'call_1', '{}'), finishedItem(mcpCall, 0), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['5. the text of the message opened before the call is closed after it too', [
+          [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), textDelta(first), ...functionCall('lookup', 'call_1', '{}'),
+            textDone(first), finishedItem({ type: 'message', id: 'msg_1' }, 0), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+      ];
+
+      const kept: Shape[] = [
+        ['a statusless call with a done event is complete, so it is answered once', [
+          [created('resp_1'), delta(first), added(statusless), finishedItem(statusless), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['a statusless call in the completed response output is complete, so it is answered once', [
+          [created('resp_1'), delta(first), added(statusless), finished([statusless], 10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['a statusless approval request with a done event is complete, so it is approved once', [
+          [created('resp_1'), delta(first), ...approval('mcpr_1'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [[{ type: 'mcp_approval_response', approval_request_id: 'mcpr_1', approve: true }]], ['client_owned:last_item_unanswered'])],
+        ['native: text follows the call', [
+          [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), ...message(second), completed(11, 2, 7)],
+        ], ok(first + second, [11, 2, 7], [], ['native:later_output'])],
+        ['native: a result item follows the call', [
+          [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), ...result('call_1'), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['native:result_item'])],
+        ['native: an item first seen after the call is closed', [
+          [created('resp_1'), delta(first), ...functionCall('task', 'call_1', '{}'), finishedItem({ type: 'message', id: 'msg_9' }, 3), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['native:later_output'])],
+        ['client-owned: nothing follows the call', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['client-owned replay within one response: the same call id repeated is answered once', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['client-owned replay: the same call id again is answered once', [
+          [created('resp_1'), delta(first), ...functionCall('lookup', 'call_1', '{}'), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), ...functionCall('lookup', 'call_1', '{}'), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered', 'unknown:replayed'])],
+        ...(['failed', 'incomplete', 'cancelled', 'in_progress'] as const).map((status): Shape => [`unknown: the call item finished with the status ${status}`, [
+          [created('resp_1'), delta(first), added(callItem('lookup', 'call_1', '', 'in_progress')), finishedItem(callItem('lookup', 'call_1', '{}', status)), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7], [], ['unknown:incomplete_item'])]),
+        ['a null item is ignored', [
+          [created('resp_1'), delta(first), added(null), completed(11, 2, 7)],
+        ], ok(first, [11, 2, 7])],
+        ['shell_call and shell_call_output items are unknown and left alone', [
+          [created('resp_1'), delta(first), added({ type: 'shell_call', id: 'sh_1', call_id: 'sh_call_1', status: 'in_progress' }),
+            finishedItem({ type: 'shell_call', id: 'sh_1', call_id: 'sh_call_1', status: 'completed' }),
+            added({ type: 'shell_call_output', call_id: 'sh_call_1', output: 'done' }), finishedItem({ type: 'shell_call_output', call_id: 'sh_call_1', output: 'done' }),
+            delta(second), completed(11, 2, 7)],
+        ], ok(first + second, [11, 2, 7])],
+      ];
+
+      // How a done event and the completed output add to the streamed text: only what is missing, and never when they disagree.
+      const texts: Shape[] = [
+        ['a terminal-only reply still lets the client-owned call after it be answered', [
+          [created('resp_1'), finished([finalMessage(first), { ...statusless, status: 'completed' }], 10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['text in the done event and again in the completed output arrives once', [
+          [created('resp_1'), textDone(first), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas followed by the same text in the completed output arrive once', [
+          [created('resp_1'), textDelta(first.slice(0, cut)), textDelta(first.slice(cut)), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas that name no item, followed by the same text in the completed output, arrive once', [
+          [created('resp_1'), delta(first.slice(0, cut)), delta(first.slice(cut)), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas that name no item, followed by the same text in the done event and the completed output, arrive once', [
+          [created('resp_1'), delta(first), textDone(first), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['only the missing end of the completed output text is added to the streamed start', [
+          [created('resp_1'), textDelta(first.slice(0, cut)), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['only the missing end of the done event text is added to the streamed start', [
+          [created('resp_1'), textDelta(first.slice(0, cut)), textDone(first), completed(9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a final text that does not start with the streamed text adds nothing', [
+          [created('resp_1'), textDelta(first), textDone('Something else entirely'), finished([finalMessage('Another text')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a final text shorter than the streamed text adds nothing', [
+          [created('resp_1'), textDelta(first), finished([finalMessage(first.slice(0, cut))], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a terminal-only reply that follows a call: the call is native and the text arrives once', [
+          [created('resp_1'), finished([{ ...statusless, status: 'completed' }, finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4], [], ['native:final_output'])],
+        ['the text parts of one message are reconciled by content index', [
+          [created('resp_1'), textDelta(first), finished([finalMessage(first, 'msg_1', second)], 9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+        ['a message without an id is reconciled by its output index', [
+          [created('resp_1'), frame({ type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: first }), finished([anonymousMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['each message of the completed output is reconciled on its own', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_1'), finalMessage(second, 'msg_2')], 9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+        ['the text parts of one message streamed as deltas are reconciled by content index', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0, 0), textDelta(second, 'msg_1', 0, 1), finished([finalMessage(first, 'msg_1', second)], 9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+        ['the text parts of one message closed by done events are reconciled by content index', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0, 0), textDone(first, 'msg_1', 0, 0), textDone(second, 'msg_1', 0, 1), completed(9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+        ['an empty done text records nothing: the completed output still matches the unnamed deltas', [
+          [created('resp_1'), delta(first), textDone(''), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['only the output_text parts of a message are reply text: other items and other parts are not', [
+          [created('resp_1'), finished([
+            { type: 'reasoning', id: 'rs_1', content: [{ type: 'output_text', text: 'private thoughts' }] },
+            { type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'refusal', refusal: 'No.' }, { type: 'summary_text', text: 'ignored' }, { type: 'output_text', text: first }] },
+          ], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['text that only a done event brings, for an item first seen after a call, is output after the call', [
+          [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), textDone(second, 'msg_9', 3), completed(11, 2, 7)],
+        ], ok(second, [11, 2, 7], [], ['native:later_output'])],
+        ['an mcp_list_tools that opened before the call and closes after it is not output after the call', [
+          [created('resp_1'), added(listedTools, 0), ...functionCall('lookup', 'call_1', '{}'), finishedItem(listedTools, 0), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+      ];
+
+      // A text event that names no item can only be matched, in order, with the other text events that name none.
+      const unnamed: Shape[] = [true, false].flatMap((withId): Shape[] => {
+        const how = withId ? 'completed messages with an id' : 'completed messages without an id';
+        const entry = (text: string, id: string) => (withId ? finalMessage(text, id) : anonymousMessage(text));
+        return [
+          [`deltas, an unnamed done and the same text in the completed output arrive once, ${how}`, [
+            [created('resp_1'), delta(first), unnamedDone(first), finished([entry(first, 'msg_1')], 9, 3, 4)],
+          ], ok(first, [9, 3, 4])],
+          [`the start as deltas, an unnamed done with the whole text and the completed output arrive once, ${how}`, [
+            [created('resp_1'), delta(first.slice(0, cut)), unnamedDone(first), finished([entry(first, 'msg_1')], 9, 3, 4)],
+          ], ok(first, [9, 3, 4])],
+          [`two unnamed done-only texts that the completed output repeats arrive once each, ${how}`, [
+            [created('resp_1'), unnamedDone(first), unnamedDone(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`unnamed deltas of two messages, their unnamed dones and the completed output arrive once each, ${how}`, [
+            [created('resp_1'), delta(first), delta(second), unnamedDone(first), unnamedDone(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`unnamed deltas of one message and a second message that only the completed output has arrive once each, ${how}`, [
+            [created('resp_1'), delta(first), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`an unnamed done-only text and the unnamed deltas of the next message arrive once each, ${how}`, [
+            [created('resp_1'), unnamedDone(first), delta(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`an unnamed done-only text, the start of the next message as unnamed deltas and the completed output add the missing end once, ${how}`, [
+            [created('resp_1'), unnamedDone(first), delta(second.slice(0, cut)), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+        ];
+      });
+
+      // An unnamed done event is output after a call only when it brings text: closing text that streamed before the call is not.
+      const unnamedAfterCalls: Shape[] = [
+        ['an unnamed done that only closes text streamed before the call is not output after it', [
+          [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), delta(first), ...functionCall('lookup', 'call_1', '{}'), unnamedDone(first), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['an unnamed done that brings text after the call is output after it, so the call is native', [
+          [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), unnamedDone(second), completed(11, 2, 7)],
+        ], ok(second, [11, 2, 7], [], ['native:later_output'])],
+      ];
+
+      // A name an event lacks is taken from the other: an item is found by its id, else by its output index, and each event gives the item every name it has.
+      const naming: Shape[] = [
+        ['the completed output has another id than the deltas at the same position: it is the same message', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_9')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['the completed output has another id at the same position and another text: nothing is added', [
+          [created('resp_1'), textDelta(first, 'msg_0', 0), finished([finalMessage(second, 'msg_9')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas that name the message by id only, after it was opened with both, and a completed entry without an id: the same message', [
+          [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), frame({ type: 'response.output_text.delta', item_id: 'msg_1', content_index: 0, delta: first }), finished([anonymousMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a done event that names the message by position only and a completed entry by id: the same message', [
+          [created('resp_1'), frame({ type: 'response.output_text.done', output_index: 0, content_index: 0, text: first }), finished([finalMessage(first, 'msg_1')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['an item that the completed output omits moves the positions after it: the id still finds the message', [
+          [created('resp_1'), added(mcpCall, 0), added({ type: 'message', id: 'msg_1' }, 1), textDelta(first, 'msg_1', 1), finishedItem(mcpCall, 0), finished([finalMessage(first, 'msg_1')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+      ];
+
+      it.each([...gaps, ...texts, ...unnamed, ...unnamedAfterCalls, ...naming, ...kept])('%s', async (_name, rounds, expected) => {
+        for (const seed of seeds) expect(await play(rounds, seed), `seed ${seed}`).toEqual(expected);
+      });
+
+      it('reconciles the first 2048 items of a response and no more: past that the reply is what streamed, so no text repeats', async () => {
+        const items = Array.from({ length: 2_100 }, (_, index) => ({ id: `msg_${index}`, streamed: `t${index}`, text: `t${index}.` }));
+        // Each message streams all but its last character; its done event and the completed output carry the whole text.
+        const frames = items.flatMap(({ id, streamed, text }, index) => [added({ type: 'message', id }, index), textDelta(streamed, id, index), textDone(text, id, index)]);
+        const { run, calls } = setup([() => sse(created('resp_1'), ...frames, finished(items.map(({ id, text }) => finalMessage(text, id)), 5, 0, 5))]);
+        expect((await run('hi')).filter(chunk => typeof chunk === 'string').join('')).toBe(items.map((item, index) => (index < 2_048 ? item.text : item.streamed)).join(''));
+        expect(responsesOf(calls)).toHaveLength(1);
+      });
+
+      it.each([
+        ['the completed output', [created('resp_1'), finished([finalMessage(first), { ...statusless, status: 'completed' }], 10, 2, 5)], 'client_owned'],
+        ['a done event', [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), textDone(first, 'msg_9', 3), completed(10, 2, 5)], 'native'],
+      ])('counts reply text that only %s carried as text in the log of the call', async (_name, frames, classification) => {
+        const { logs, log } = capture();
+        const { run } = setup([() => sse(...frames), () => sse(created('resp_2'), delta(second), completed(12, 4, 6))], { log });
+        await run('hi');
+        expect(harnessCalls(logs)).toEqual([expect.objectContaining({ classification, sawText: true })]);
+      });
+
+      it.each([
+        ['a failed response', [created('resp_1'), delta(first), frame({ type: 'response.failed', response: { error: { code: 'server_error' } } })]],
+        ['an incomplete response', [created('resp_1'), delta(first), frame({ type: 'response.incomplete', response: { status: 'incomplete', error: { code: 'server_error' } } })]],
+        ['a truncated frame', [created('resp_1'), delta(first), 'event: response.completed\ndata: {"type":"response.completed","response":{"status":"comp']],
+      ])('ends the turn as an error, with one request and no follow-up, on %s', async (_name, frames) => {
+        for (const seed of seeds) {
+          expect(await play([frames, [created('resp_2'), delta(second), completed(1, 0, 1)]], seed), `seed ${seed}`)
+            .toMatchObject({ failed: true, requests: 1, followUps: [], calls: [] });
+        }
+      });
     });
   });
 

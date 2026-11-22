@@ -71,6 +71,7 @@
 | Classify each call native / client-owned / unknown by call id and stream order; log the rule | Done |
 | Answer only client-owned calls (one follow-up, same conversation, at most 8 responses); no `task` stub; a call id settles once per turn | Done |
 | `pi.harness_item` `harness_call` events and `rounds` / `clientItems` / `nativeCalls` on `pi.turn` | Done |
+| Harden the stream handling against five offline contract gaps: a statusless call that was only added, reply text only in the terminal event or in `response.output_text.done`, an `mcp_call` that was only added, and an item closed after the call (pinned by byte-fragmented shapes over seeds 0-19) | Done offline; no live trace |
 | Confirm the native signals and the client-owned shape in a real trace | Open; needs a live turn |
 
 ## Explicit reminder delivery evidence — 20 November 2026 (#1990)
