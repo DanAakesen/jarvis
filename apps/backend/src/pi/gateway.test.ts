@@ -1430,6 +1430,9 @@ describe('PI gateway', () => {
           [`an unnamed done-only text and the unnamed deltas of the next message arrive once each, ${how}`, [
             [created('resp_1'), unnamedDone(first), delta(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
           ], ok(first + second, [9, 3, 4])],
+          [`an unnamed done-only text, the start of the next message as unnamed deltas and the completed output add the missing end once, ${how}`, [
+            [created('resp_1'), unnamedDone(first), delta(second.slice(0, cut)), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
         ];
       });
 

@@ -210,8 +210,8 @@ const maxClientItemsPerRound = 16;
  * Calls beyond it are not tracked but the stream is still read to its end: they count as native when output follows them.
  */
 const maxTrackedCalls = 512;
-/** Names of output items tracked per response (each item has up to two: its id and its output index), far above what a response carries. Past it the reply is whatever streamed: nothing is reconciled, so nothing can repeat. */
-const maxTrackedItems = 4096;
+/** Output items tracked per response, by id and by output index. Past it the reply is whatever streamed: nothing is reconciled, so nothing can repeat. */
+const maxTrackedItems = 2048;
 const callItemTypes: ReadonlySet<string> = new Set(['function_call', 'mcp_approval_request']);
 
 /**
@@ -232,12 +232,11 @@ interface HarnessCall {
 }
 
 /**
- * An output item the response opened, named by its id and by its position in the response's output. `calls` is how many calls
- * were tracked when it did and `overflow` whether calls beyond the tracking limit had been seen, so closing it later is not
- * output that follows those calls. `text` is what the reply holds of the item, by content index.
+ * An output item the response opened. `calls` is how many calls were tracked when it did and `overflow` whether calls beyond
+ * the tracking limit had been seen, so closing it later is not output that follows those calls. `text` is what the reply
+ * holds of the item, by content index.
  */
 interface OutputSlot {
-  id: string | undefined;
   readonly calls: number;
   readonly overflow: boolean;
   readonly text: Map<number, string>;
@@ -583,28 +582,29 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     // Calls beyond the tracking limit are not tracked; they are only a problem when no output ever followed them.
     let overflowSeen = false;
     let overflowFollowed = false;
-    // The items the response opened, by id and by output index: when each opened among the calls, and the text it streamed.
+    // The items the response opened. An item is found by its id, else by its output index, and each event gives it every name it has.
     const slots = new Map<string, OutputSlot>();
+    let tracked = 0;
     // Past the tracking limit nothing is reconciled any more: the reply is what streamed, so nothing can repeat.
     let reconciling = true;
     const slotFor = (id: unknown, index: unknown): OutputSlot | undefined => {
       const itemId = plainId(id);
       const position = indexOf(index);
-      if (itemId === undefined && position === undefined) return undefined;
-      const atPosition = position === undefined ? undefined : slots.get(`index:${position}`);
-      // The same position under another id is another item: a list that omits earlier items does not line up with the events.
-      const sameItem = atPosition && (itemId === undefined || atPosition.id === undefined || atPosition.id === itemId) ? atPosition : undefined;
-      let slot = (itemId === undefined ? undefined : slots.get(`id:${itemId}`)) ?? sameItem;
+      const names = [...(itemId === undefined ? [] : [`id:${itemId}`]), ...(position === undefined ? [] : [`index:${position}`])];
+      if (names.length === 0) return undefined;
+      let slot = names.map(name => slots.get(name)).find(found => found !== undefined);
       if (!slot) {
-        if (slots.size >= maxTrackedItems) { reconciling = false; return undefined; }
-        slot = { id: itemId, calls: calls.length, overflow: overflowSeen, text: new Map() };
+        if (tracked >= maxTrackedItems) { reconciling = false; return undefined; }
+        tracked += 1;
+        slot = { calls: calls.length, overflow: overflowSeen, text: new Map() };
       }
-      if (itemId !== undefined) { slot.id ??= itemId; slots.set(`id:${itemId}`, slot); }
-      if (position !== undefined && (atPosition === undefined || atPosition === slot)) slots.set(`index:${position}`, slot);
+      for (const name of names) if (!slots.has(name)) slots.set(name, slot);
       return slot;
     };
     // Text that arrived as deltas naming no item is matched, in order, against the text a done event or the completed output gives.
     let unplaced = '';
+    // What done events that name no item gave. The completed output repeats it, so it is matched first, ahead of the deltas not yet matched.
+    let unnamedDone = '';
     // What of a part's authoritative text the reply does not hold yet. Nothing when the two disagree: the reply is never corrupted.
     const unstreamed = (slot: OutputSlot | undefined, part: number, text: string): string => {
       if (!reconciling || text.length === 0) return '';
@@ -615,7 +615,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         else return '';
       }
       if (!text.startsWith(streamed)) return '';
-      slot?.text.set(part, text);
+      if (slot) slot.text.set(part, text); else unnamedDone += text;
       return text.slice(streamed.length);
     };
     // Output that began after the calls seen so far. Closing an item that opened before a call is not output that follows it.
@@ -658,7 +658,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.output_text.done' && typeof payload.text === 'string') {
             const slot = slotFor(payload.item_id, payload.output_index);
             const missing = unstreamed(slot, indexOf(payload.content_index) ?? 0, payload.text);
-            laterOutput(slot);
+            // A done event that names no item is output after a call only when it brings text: closing what streamed before the call is not.
+            if (slot || missing.length > 0) laterOutput(slot);
             if (missing.length > 0) { phase.sawText = true; yield { kind: 'delta', text: missing }; }
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
@@ -716,6 +717,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
             completed = true;
             if (Array.isArray(payload.response.output)) {
+              // The completed output repeats what unnamed done events gave: it is the text of the first messages, so it is matched first.
+              unplaced = unnamedDone + unplaced;
+              unnamedDone = '';
               applyFinalOutput(calls, payload.response.output);
               if (payload.response.output.some(entry => isObject(entry) && typeof entry.type === 'string' && !callItemTypes.has(entry.type))) overflowFollowed = overflowSeen;
               for (const [position, entry] of payload.response.output.entries()) {
