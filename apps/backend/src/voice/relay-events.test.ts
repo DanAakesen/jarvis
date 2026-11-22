@@ -7,6 +7,7 @@ import { loadConfig } from '../config.js';
 import type { ConversationAgentInput } from '../core/chat-agent.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import { createLogger } from '../logging.js';
+import { piTurnFailedMessage } from '../pi/errors.js';
 import type { PiVoiceAgent } from './pi-voice.js';
 import { createVoiceRelayModule, VOICE_SUBPROTOCOL } from './relay.js';
 
@@ -710,7 +711,7 @@ describe('GPT-Live authoritative client events', () => {
     }));
     await until(() => relay.upstreamEvents.some(event =>
       event.type === 'session.commentary.append' &&
-      event.content === 'PI could not answer that. No other engine was used.'
+      event.content === piTurnFailedMessage
     ), 'authoritative PI failure commentary');
 
     expect(relay.upstreamEvents.filter(event =>
@@ -718,7 +719,7 @@ describe('GPT-Live authoritative client events', () => {
     )).toEqual([
       expect.objectContaining({
         delegation_id: 'delegate-failure',
-        content: 'PI could not answer that. No other engine was used.',
+        content: piTurnFailedMessage,
       }),
     ]);
     expect(relay.received.some(event => event.type === 'jarvis.session.failed')).toBe(false);
