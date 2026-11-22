@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { MAX_CATALOGUE_BYTES, MAX_TOOL_DESCRIPTION_CHARACTERS, isCurrentAssistantTool, isSituationActivationTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
 import { readOnlyTools, writingTools } from '../core/tool-effects.js';
+import { compactLargeSchema } from './compact-schema.js';
 import { allGroups, buildConformanceWorld } from './conformance/world.testkit.js';
 import { goldenIntents, phraseTable } from './conformance/phrases.testkit.js';
 import { descriptionViolations, harnessManagedNames, nameViolations, schemaViolations, tokensOf } from './conformance/schema.testkit.js';
@@ -467,7 +468,8 @@ describe('report', () => {
         name: tool.name, group: group?.id ?? 'none', visibility: visibilityOf(tool.name),
         effect: tool.execution?.defaultEffect ?? 'unclassified',
         staticProblems: entry.static ?? [], discover: entry.discover, callable: status,
-        schemaTokens: tokensOf(tool.inputSchema), definitionTokens: tokensOf({ name: tool.name, description: tool.description, parameters: tool.inputSchema }),
+        schemaTokens: tokensOf(tool.inputSchema), sentTokens: tokensOf(compactLargeSchema(tool.inputSchema)),
+        definitionTokens: tokensOf({ name: tool.name, description: tool.description, parameters: tool.inputSchema }),
         notes: [
           ...(largeSchemas[tool.name] ? [`large schema: ${largeSchemas[tool.name]!.reason}`] : []),
           ...(status?.kind === 'requiresExternal' ? [`needs outside help: ${status.reason}`] : []),
@@ -479,7 +481,7 @@ describe('report', () => {
     const summary = summarize(rows);
     console.info(`Per-tool table (the same rows are committed in docs/tool-conformance.md):\n${renderTextTable(rows)}`);
     console.info(`Tool conformance summary: ${JSON.stringify(summary)}`);
-    console.info(`Largest schemas (tokens = characters / 4):\n${largestSchemas(rows).map((row, index) => `${String(index + 1).padStart(2)}. ${row.name.padEnd(26)} schema ${String(row.schemaTokens).padStart(6)}  definition ${String(row.definitionTokens).padStart(6)}`).join('\n')}`);
+    console.info(`Largest schemas (tokens = characters / 4):\n${largestSchemas(rows).map((row, index) => `${String(index + 1).padStart(2)}. ${row.name.padEnd(26)} schema ${String(row.schemaTokens).padStart(6)}  sent ${String(row.sentTokens).padStart(6)}  definition ${String(row.definitionTokens).padStart(6)}`).join('\n')}`);
     const markdown = renderReport(rows, { ceiling: defaultSchemaTokens, oversize: largeSchemas });
     const file = resolve(import.meta.dirname, '../../../../docs/tool-conformance.md');
     if (process.env.UPDATE_TOOL_CONFORMANCE === '1') {

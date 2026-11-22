@@ -85,7 +85,7 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | `metaKeys`: the names of the request's `_meta` keys, so the harness's real call-id key can be read from live lines | Done |
 | `sameArgsRepeat` observation of identical actions that ran anyway (never changes execution) | Done |
 | Remote `gh_` / `az_` calls | Out of scope; never recognised |
-| Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
+| Classify the writers that carry no `execution` metadata so they are covered | Done in #2012 (`core/tool-effects.ts`, with a conformance test that fails for an unclassified tool); remote `gh_` / `az_` still out of scope |
 | Measure in production (Log Analytics; `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): the `replayCheck` mix, which `_meta` keys Foundry sends, whether `duplicate` ever appears, what `sameArgsRepeat` shows (plan in `docs/decisions.md`) | Open; needs live turns |
 
 ## Offline tool conformance suite — 21 November 2026 (#1967, #2012)
@@ -105,6 +105,23 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | Live Chat and Voice retest of the five scenarios on the deployed agent | **Open**; needs a live turn |
 
 No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or provider call belongs to this task.
+
+## Write safety and first-search fixes after #2022 — 22 November 2026 (#2012, #1967)
+
+**Status: implemented and checked offline on top of main after #2017 and #2022 (backend, contracts and web suites green); no live Chat or Voice turn has run.** Reworked from #2023 so that it holds only what main lacked.
+
+| Step | State |
+| --- | --- |
+| (a) A retried plain issue comment posts once: once per instruction and draft, plus a hidden marker and a comment read before posting | Done; mutation-checked |
+| (b) A write whose audit row cannot be stored is not reported as failed (`tool.audit_failed`); an uncertain write is not written twice on replay | Done; mutation-checked |
+| (c) and (g) `ToolFailure` can say its outcome is unknown (`outcomeUnknown`); route and reflex executor pass it on; the confirmation drops "Not done." for it; PC bridge texts, create_issue handoff and the other "may have" writes are flagged | Done; mutation-checked |
+| (d) The door counts actions by `effectOf`; writers classified in `core/tool-effects.ts` with a conformance guard | Done; mutation-checked |
+| (e) Reminder key hashes the instant | Did not reproduce on main (`fireAt` is already normalised to UTC); a test pins it |
+| (f) The model-facing `workspace_command` schema and the reflex list no longer name `language` or da/en | Done; contract and backend tests |
+| 50 more first-search phrase pairs (English and Danish) and 49 alias rows; `also` guard on a row | Done; 78 of the 100 phrases missed before |
+| Ported from #2023: html-view, brain refusal wording, Danish memory key, vault search while syncing, Google free slots and refused-write receipt, theme, usage, backend-log limit, compact schema for the two largest tools, PC `codex_prompt` and Chrome-keys, browser_do texts and `browser_do_shared` from PI, health and gym texts, Factory list/controls and issue-start texts | Done |
+| Live Chat and Voice retest of the daily-core scenarios and of the comment marker on a real issue | **Open**; needs a live turn |
+| Dan decides: `health_query` lifts redirect (kept as main has it), remote `gh_`/`az_` counting, the list of existing non-delete gates in the PR | **Open** |
 
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
