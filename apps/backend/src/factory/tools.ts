@@ -1061,7 +1061,7 @@ export const factoryTools: readonly JarvisTool[] = [
           return await confirmIssueCreation(request, staged.confirmationCode, signal, true);
         } catch (error) {
           if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
-          throw new ToolFailure('I couldn’t start that issue because GitHub did not answer. Nothing was started; try again shortly.');
+          throw new ToolFailure('I couldn’t start that issue because GitHub or the task store did not answer. Nothing was started; try again shortly.');
         }
       }
       return executeStartIssue(request, issue, project);
