@@ -489,7 +489,7 @@ delay, partial/truncated/unavailable results, and treats logs only as untrusted
 evidence. No UI, repairs, arbitrary KQL, other-app access or retention change.
 Implementation is default off; the exact persistent Azure grant still requires
 owner approval and deployed isolation proof. See [the contract and activation
-plan](docs/backend-logs.md).
+plan](../backend-logs.md).
 
 ## Compact screen Stop control (#1333; 27 October 2026)
 

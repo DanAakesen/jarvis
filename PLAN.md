@@ -10,20 +10,20 @@
 | **P1** | Proactive intelligence: Jarvis reaches out when a signal needs attention, with the context that makes it relevant. See [#2011](https://github.com/DanAakesen/jarvis/issues/2011). |
 | **P2** | Polish and everything else. |
 
-These are priority ranks, not the historical phase IDs. Dan's daily core, in order: **1. Jarvis project** (issues, PRs, workers, releases), **2. Notes**, **3. Tasks**, **4. Workouts**, **5. Nutrition** when logging food (kcal logged and left today, protein still needed), **6. Banking** later (ask Dan before anything that moves money; see F).
+These are priority ranks, not the historical phase IDs. Dan's daily core, in order: **1. Jarvis project** (issues, PRs, workers, releases), **2. Notes**, **3. Tasks**, **4. Workouts**, **5. Nutrition** when logging food (kcal logged and left today, protein still needed), **6. Banking** later (see F).
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **122** | Latest shipped build. The [upload](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) succeeded from `cd066648`. Later backend fixes can reach this client via Deploy; iOS changes need a new build. |
+| TestFlight **122** | Latest shipped build. The [upload](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) succeeded from `cd066648` and contains #2027, #2028, #2029 and #2030. |
 | **Notes [#2031](https://github.com/DanAakesen/jarvis/pull/2031)** | In review. Fixes missing new notes, wrong list/pin titles and duplicate headlines. Includes inventory migration `0103`. The PR reports offline regressions covered; exact-head macOS qualification and device acceptance are separate. |
-| TestFlight **123** | Next expected build, not shipped. Wait for #2031 to merge on qualified CI and for its backend Deploy before uploading. The candidate includes the #2027–#2034 release batch; see the merged and in-flight split below. |
-| Backend | Deploy [succeeded](https://github.com/DanAakesen/jarvis/actions/runs/45064871117) at `0ff1d1650` (#2034), after #2033. GitHub Actions receipts establish pipeline outcomes, not live provider behavior. |
+| TestFlight **123** | Next expected build, not shipped. New iOS changes are the Notes fixes in #2031 and live Voice follow, state labels and responsiveness in #2034. Wait for the Notes merge and its backend Deploy. |
+| Backend | #2032 (Terra 600K capacity) and #2033 (tool access, rate-limit recovery and iPhone Gym reads) are already deployed and apply to build 122. [Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45064871117) succeeded at `0ff1d1650` (#2034); that receipt does not prove live provider behavior. |
 | Background PI | Off by default in code; off per the 22 November handoff, not independently read back. Dan controls it in **Settings → Proactive**. The existing 07:00/18:00 engine stays until decision A. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. **Land Notes, then ship.** The coordinator verifies the exact head is current with `main`, required CI is green (including macOS), review has no unresolved threads or High findings, and the merge tree equals the qualified tree. Follow [the release procedure](docs/agent-context.md). No live probes as part of this handoff.
+1. **Land Notes, then ship.** The coordinator is the dispatcher session that reviews and merges PRs. It checks that the exact head is current with `main`, required CI is green (including macOS), no unresolved threads or High findings remain, and the merge tree equals the qualified tree. Follow [Merge and release procedure](docs/agent-context.md#merge-and-release-procedure) and [TestFlight build](docs/agent-context.md#testflight-build). No live probes as part of this handoff.
 2. **After build 123 lands**, give Dan the build number and test in daily-core order. Ask the same things in Chat and Voice: project status and a GitHub issue; find, read and save a note (including a title-only note; check first-page visibility, pin title and a single reader headline); complete a task and verify its receipt; find a lift saved from iPhone Gym; read the nutrition totals on a logged day. Ask for weather via the existing conversation. Check iPhone typing, live Voice state/auto-scroll, then Watch dictation/voice and the single Proactive switch. Do not request a retest of a fix still in flight.
 3. **P1 after P0.** Dan decides when to enable Background PI. Verify the intended GitHub App event subscriptions (including `Release`) and observe one real wake with its signal, decision, and exact-message delivery before considering legacy deletion. The queue has GitHub, failed-reminder and calendar-clash signals. The heavy-snow/travel example is an acceptance goal, not a shipped end-to-end scenario.
 
@@ -73,6 +73,8 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |
 
 ## Recently completed phase tasks
+
+Next available P15 task ID: `P15-212`. Check the plan, archive and GitHub issues before assigning it.
 
 These completed phase tasks have existing GitHub issues and merged PRs from the last eight days. `Complete` means task delivery, not physical acceptance. Add new numbered tasks with the same columns; priority issues such as `P0: …` stay in the backlog above, not as invented task IDs.
 

@@ -7,32 +7,34 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 | Date and source | Rule |
 | --- | --- |
 | 2026-11-21 — Dan, recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012) | Do not add PI approvals, confirmations or guardrails except for DELETE actions. Prefer model judgement; use deterministic logic for exact results. Keep banking outside that ruling until Dan decides its policy. |
-| 2026-11-16 — Dan's PI migration direction, [cutover checklist](pi/cutover.md); reaffirmed in the 2026-11-22 owner handoff | Build the replacement, test it and delete the old path in an explicit final phase. No fallback, dual path or compatibility shim. A deliberate short break is acceptable if called out. A cleanup proposal is not permission to delete. |
+| 2026-11-16 — Dan's PI migration direction, [cutover checklist](pi/cutover.md); reaffirmed in the 2026-11-22 owner handoff | Build and test the replacement, then delete the old path in an explicit final phase. No fallback, dual path or shim. A deliberate short break is acceptable if called out. |
 | 2026-11-22 — Dan's owner handoff; [engineering rules](agent-context.md#development-workflow) | No paid or live tests, including `measure_pi`, provider/model smoke, Foundry probes and benchmarks, without approval of the exact command. Ask before adding cost. |
 | 2026-11-22 — Dan's owner handoff; [merge workflow](agent-context.md#development-workflow) and [CI](../.github/workflows/ci.yml) | Keep related work in fewer, larger issues and PRs. Open only review-ready PRs, not placeholders. An agent never merges its own PR. Require independent exact-head review and green exact-head CI. High findings block; Mediums become fixes or tracked follow-ups. |
 | 2026-11-22 — Dan's owner handoff | Work locally. Cloud sandboxes are billed; do not open one unless Dan approves. Workers use `gpt-6.2-sol` at the highest reasoning effort. |
-| 2026-11-22 — Dan's owner handoff | Consult Astra, the frontier advisor, on real decisions. Keep `CopilotAndCodex.md` local and untracked. |
+| 2026-11-22 — Dan's owner handoff | Consult Astra on real decisions. `CopilotAndCodex.md`, Astra's advice file, exists only on Dan's machine. Never commit it. |
 | 2026-11-22 — Dan's owner handoff | Do not ask Dan to test before the build lands or retest a fix in flight. Once shipped, name the build and give exact checks in daily-core order. |
 | 2026-11-22 — Dan's owner handoff | Answer first, keep replies very short and put a legend on diagrams. |
 
 ## Decisions of the last 14 days
 
+Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep this page under 20 KB.
+
 ### 22 November 2026 — Keep the established PI tool names and never replay an uncertain effect ([#2033](https://github.com/DanAakesen/jarvis/pull/2033), [#2032](https://github.com/DanAakesen/jarvis/pull/2032), [#2030](https://github.com/DanAakesen/jarvis/pull/2030))
 
-- **Decision:** Use `find_tools`/`call_tool` for weather, calendar and reminders. Keep #2030's read bound of 24,000 characters, paging, receipts, effect metadata and Danish aliases; remove its three direct names rather than keep a second path. `list_capabilities` remains whole because its catalogue is not paged.
-- **Why:** Build 122 reported a weather session-policy denial before any weather call reached the door. A stale Foundry catalogue is plausible, not proven. The backend reuses the provider conversation and sends the corrected tool overview. No explicit reset, rebind or compaction.
-- **Decision:** Retry safe rate-limited requests within the turn deadline using the same request and already-built results. Never replay an accepted native response with tool/output evidence. Give the dispatcher's recorded completed-tool receipt if the final reply fails. Include recent iPhone Gym notes on the first `gym_lifts list` page; do not move or duplicate the entries.
-- **Evidence:** [Gateway fixtures](../apps/backend/src/pi/gateway.test.ts) cover safe first/follow-up retry and the accepted-stream boundary; [Chat/Voice replay](../apps/backend/src/voice/chat-voice-parity.test.ts) covers note read, recorded task completion and the iPhone workout store. [Infrastructure](../infra/main.parameters.json) provisions Terra at 600K tokens/min; #2032 reports the capacity applied. The live provider's explanatory rate-limit message, exact cause and re-use of an existing conversation are unverified. The PI monthly cap is the previously documented configuration fact: `JARVIS_PI_MONTHLY_CAP_DKK=300` (code default `100` if unset); this doc did not read the deployment setting.
+- **Decision:** Use `find_tools`/`call_tool` for weather, calendar and reminders. Drop #2030's three direct names; keep paging, the 24,000-character read cap, receipts, effect metadata and Danish aliases. Keep `list_capabilities` whole (not paged).
+- **Why:** Build 122 reported a weather session-policy denial before any tool call reached the door. A stale Foundry catalogue is plausible, not proven. Send the corrected tool overview to the existing conversation without reset, rebind or compaction.
+- **Decision:** Retry rate-limited requests only when safe and within the turn deadline, using the same request and results. Never replay accepted native work with tool/output evidence. Return the completed-tool receipt if the reply fails. Include iPhone Gym notes on the first `gym_lifts list` page without moving or duplicating them.
+- **Evidence:** [Gateway fixtures](../apps/backend/src/pi/gateway.test.ts) cover safe retry and the accepted-stream boundary; [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) covers Notes, Tasks and iPhone Gym. [Infrastructure](../infra/main.parameters.json) sets Terra to 600K tokens/min. #2032 and #2033 deployed after the 122 upload and apply to that build. Live rate-limit wording, cause and tool access in an existing conversation remain unverified. The owner raised the PI monthly cap above the default, per the handoff. Its value lives in the deployment env `JARVIS_PI_MONTHLY_CAP_DKK` (default `100`), not read back here.
 
 ### 22 November 2026 — Show iPhone Voice and Chat state from what actually happened ([#2034](https://github.com/DanAakesen/jarvis/pull/2034), [#2027](https://github.com/DanAakesen/jarvis/pull/2027), [#2028](https://github.com/DanAakesen/jarvis/pull/2028))
 
 - **Decision:** Keep draft edits local, cancel only obsolete follow work, follow the live Voice exchange unless Dan scrolls back, and show the active Voice state in Chat. Thinking persists during tool work; audio completion does not wait for transcript writes. One Proactive settings panel, editable Notes titles, and Voice caption scroll that does not close Voice.
-- **Why/evidence:** Build-122 feedback included typing lag, false Failed and stuck Speaking. The [iOS follow modifier](../apps/ios/Jarvis/JarvisChatFollowLatest.swift) and [relay fixtures](../apps/backend/src/voice/relay-events.test.ts) show the implemented state transition. #2034 reports 37 offline parity scenarios. Native scrolling, state labels, audio interruptions and gestures still need device acceptance.
+- **Why/evidence:** Typing and status fixes #2027 and Notes, Proactive and gesture fixes #2028 shipped in 122. Voice follow and state fixes #2034 are planned for 123 with Notes #2031. The [iOS follow modifier](../apps/ios/Jarvis/JarvisChatFollowLatest.swift) and [relay fixtures](../apps/backend/src/voice/relay-events.test.ts) cover state transitions. #2034 reports 37 offline parity scenarios; scrolling, labels, interruptions and gestures need device acceptance.
 
 ### 22 November 2026 — Recover Watch capture and show an honest reconnect ([#2029](https://github.com/DanAakesen/jarvis/pull/2029), [#2013](https://github.com/DanAakesen/jarvis/pull/2013))
 
 - **Decision/why:** Recover broken dictation/Voice routes instead of presenting a stale connected state. For stopped playback, report every response it silenced; a missing completion receipt can leave Voice stuck on Speaking.
-- **Evidence:** [Watch recovery](../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Watch/WatchVoiceRecovery.swift) and the [playback ledger tests](../apps/ios/Packages/JarvisCore/Tests/JarvisCoreTests/VoicePlaybackLedgerTests.swift). TestFlight 121 carried #2013; first-press capture, route changes and call recovery still need Watch/iPhone acceptance.
+- **Evidence:** [Watch recovery](../apps/ios/Packages/JarvisCore/Sources/JarvisCore/Watch/WatchVoiceRecovery.swift) and [playback ledger tests](../apps/ios/Packages/JarvisCore/Tests/JarvisCoreTests/VoicePlaybackLedgerTests.swift). TestFlight 121 carried #2013; 122 carried #2029. First-press capture, route changes and call recovery still need device acceptance.
 
 ### 22 November 2026 — Keep write effects and receipts explicit ([#2023](https://github.com/DanAakesen/jarvis/pull/2023), [#2016](https://github.com/DanAakesen/jarvis/pull/2016))
 
@@ -73,7 +75,7 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 ### 21 November 2026 — Start from tools people can actually find ([#1996](https://github.com/DanAakesen/jarvis/pull/1996), [#1999](https://github.com/DanAakesen/jarvis/pull/1999), [#2002](https://github.com/DanAakesen/jarvis/pull/2002), [#2003](https://github.com/DanAakesen/jarvis/pull/2003))
 
 - **Decision:** Search local tools first, resolve exact names and aliases, bind activity to the owner message, and show progress without ending the turn. Diagnose harness item shape, dead streams and weather phases. Do not add a completion classifier, answer buffer, GPT-Live output gate, fresh-conversation replay or read-only default.
-- **Why/evidence:** The approved baseline addressed observable failures without a second runtime or extra gates. Build [117](https://github.com/DanAakesen/jarvis/actions/runs/44920585768) contains #1996; [118](https://github.com/DanAakesen/jarvis/actions/runs/44933285803), [119](https://github.com/DanAakesen/jarvis/actions/runs/44945898531) and [120](https://github.com/DanAakesen/jarvis/actions/runs/44954608415) show the spoken-turn and stream follow-ups at their respective SHAs. Build [121](https://github.com/DanAakesen/jarvis/actions/runs/44996709049) includes #2013 and [122](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) includes #2030. These are upload receipts, not physical acceptance.
+- **Why/evidence:** Build uploads: [117](https://github.com/DanAakesen/jarvis/actions/runs/44920585768) (#1996); [118](https://github.com/DanAakesen/jarvis/actions/runs/44933285803), [119](https://github.com/DanAakesen/jarvis/actions/runs/44945898531) and [120](https://github.com/DanAakesen/jarvis/actions/runs/44954608415) (spoken-turn and stream follow-ups); [121](https://github.com/DanAakesen/jarvis/actions/runs/44996709049) (#2013); [122](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) (#2027, #2028, #2029 and #2030). Uploads are not device acceptance.
 
 ### 20 November 2026 — Keep Memory separate and use one PI voice action path ([#1983](https://github.com/DanAakesen/jarvis/pull/1983), [#1984](https://github.com/DanAakesen/jarvis/pull/1984))
 
@@ -106,15 +108,17 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 ## Index of older decisions
 
-There is one line per historical decision, with date, title, outcome and an archive anchor. The full indexes are separate so this page stays short. The November index also links to detailed evidence for the summarized recent entries. Proposals and open questions are marked separately inside each index.
+Each index lists the dates, outcomes and archive links, with proposals separate. The November index also links to the full evidence for recent summaries.
 
 - [October 2026 index](archive/decisions-index-2026-10.md) · [October full text](archive/decisions-2026-10.md).
 - [November 2026 index](archive/decisions-index-2026-11.md) · [November full text](archive/decisions-2026-11.md).
-- [Numbered learnings through L137](archive/decisions-2026-10.md#learnings). The original IDs are searchable and unchanged; use the next unused number for a new learning.
+- Code pointers [L1–L78](archive/decisions-2026-10.md#l1) and [L79–L137](archive/decisions-2026-10.md#l79) resolve in the [October Learnings table](archive/decisions-2026-10.md#learnings). Search by ID or use its anchor (`#l78`); L33 and L34 remain reserved.
 
 ### P7-23 latency evidence
 
 [Archived P7-23 table](archive/decisions-2026-10.md#p7-23-latency-evidence).
+
+<a name="catalogue-count-is-not-a-global-limit-22-october-2026-1204"></a>
 
 ### Catalogue count is not a global limit
 

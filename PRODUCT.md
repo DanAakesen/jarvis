@@ -19,7 +19,7 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 3. **Tasks** — find, create, complete and follow up on tasks.
 4. **Workouts** — read sessions and gym history, and log workouts and lifts.
 5. **Nutrition** when logging food — kcal logged and left today, and protein still needed.
-6. **Banking**, later — ask Dan again before anything that moves money.
+6. **Banking** — later; ask Dan before anything that moves money.
 
 ## Page requirements
 
@@ -78,27 +78,33 @@ Start dictation and Voice on the first press, recover the route when it drops, a
 
 ## Success criteria
 
-- Dan's daily core succeeds in order on both Chat and Voice, with matching tool outcomes, no duplicate effects and no extra approval on a non-DELETE PI action. A complete reply or a truthful partial-result receipt reaches him once.
+- The current daily core succeeds in order in Chat and Voice, with matching tool outcomes, no duplicate effects and no extra approval on a non-DELETE PI action. A complete reply or a truthful partial-result receipt reaches Dan once.
 - A saved note is findable right away; task and workout changes are readable on the other surface; nutrition totals reflect actual logged data. Memory and Vault writes go to the intended stores.
 - A useful proactive alert explains its signal, opens the right message and supports “do that” against the same evidence. A dismissed, paused or disabled source does not disturb the owner by accident.
 - Offline replay proves declared contracts, not a working phone or a live provider. Use the recorded TestFlight build and explicit device checks in [PLAN.md](PLAN.md) before marking them accepted.
 
 ## Out of scope
 
-- Banking integrations or money movement, multi-user/team administration, and a new standalone Windows or CarPlay rollout in the current P0 work.
+- Multi-user or team administration.
 - A second Chat/Voice runtime, an automatic switch back to the old harness, or an unapproved legacy deletion. No silent default read-only mode or extra PI approval.
 - Manual kcal entry or Foundry admin writes before Dan settles their scope. No unapproved paid provider checks or cost increases.
 
 ## Standing rules
 
-- **Model first.** Leave choices to PI unless an exact result is needed. Do not add approvals, confirmations or guardrails except for DELETE actions. Banking is a separate unresolved product decision.
+- **Model first.** Leave choices to PI unless an exact result is needed. Do not add PI approvals, confirmations or guardrails except for DELETE actions.
 - **One path.** Build the new path, test it, then delete the old path as an explicit last phase. No fallback, parallel compatibility path or shim. A short deliberate break during cutover is acceptable only when called out.
 - **No unapproved cost.** Work locally; no new cloud sandboxes without approval. No live or paid tests (`measure_pi`, model/provider smoke, Foundry probes or paid benchmarks) without Dan approving the exact command. Do not add cost without his approval. Workers use `gpt-6.2-sol` at the highest reasoning effort.
 - **Few, substantial issues and PRs.** Open a PR only when ready for review. Agents never merge their own PR. Independent exact-head review and green exact-head CI are required; High findings block, Mediums become fixes or follow-ups.
-- **Use Astra for real decisions.** The frontier advisor's `CopilotAndCodex.md` is local and untracked; never commit it.
+- **Use Astra for real decisions.** Astra's advice file, `CopilotAndCodex.md`, exists only on Dan's machine. Never commit it.
 - **Ask for a device test after delivery.** State the build and exactly what to test in daily-core order. Do not ask for a retest during an in-flight fix. Lead with the answer and keep replies short; put a legend on diagrams.
 
-[Dated rule sources](docs/decisions.md#standing-rules) · [Architecture](docs/architecture.md) · [Design](DESIGN.md) · [Full product history](docs/archive/product-2026-10-to-11.md).
+[Dated rule sources](docs/decisions.md#standing-rules) · [Architecture](docs/architecture.md) · [Design](DESIGN.md).
+
+## History
+
+[Full product history](docs/archive/product-2026-10-to-11.md).
+
+<a name="health-migration-approved-p12"></a>
 
 ### Daily
 
