@@ -42,7 +42,7 @@ Keep [AGENTS.md](../AGENTS.md) as the entry point and read only the project cont
 
 1. Locate the GitHub issue and read its dependencies, acceptance criteria and current PR. Claim it with the appropriate worker label (`Codex`, `Copilot`, `Dan` or `Jarvis` for the existing board automation). If another worker owns it, stop and coordinate. Do not assign Copilot unless the owner explicitly wants a cloud agent. Do not claim unrelated work or create an issue to duplicate an existing one.
 2. Check the latest `main` and the current [plan](../PLAN.md). If `main` has a failed required check or Deploy, prioritise repairing it; a queued Deploy is not a failure. Choose a local branch/worktree on current `origin/main`, and check for overlapping work.
-3. Trace the affected code and checks. Plan the smallest coherent change, include negative cases and a recovery path, and use offline fixtures. For a substantial design decision ask Astra if available and approved; `CopilotAndCodex.md` is local advice, never a tracked dependency or something to commit.
+3. Trace the affected code and checks. Plan the smallest coherent change, include negative cases and a recovery path, and use offline fixtures. For a substantial design decision ask Astra if available and approved. Astra's `CopilotAndCodex.md` exists only on Dan's machine. Never commit it or require it on another machine.
 
 ### Finish a task
 
@@ -53,6 +53,8 @@ Keep [AGENTS.md](../AGENTS.md) as the entry point and read only the project cont
 | Visual or interaction contract | [DESIGN.md](../DESIGN.md); use the [style guide](ui/style-guide.md) and shared controls. |
 | Runtime, data flow, identity, deployment or schema | [Architecture](architecture.md), and [data model](data-model.md) for database changes. |
 | Approved decision, setup or check | [Decisions](decisions.md) for rationale and evidence; this manual for commands and operations. |
+
+In [Decisions](decisions.md), add confirmed decisions and learnings newest first under **Decisions of the last 14 days**. Use the next unused decision (`#`) or learning (`L#`) number, checking the log and archive; do not renumber old entries. Move entries older than 14 days to the archive and leave links in the index. Keep proposals separate from confirmed decisions.
 
 Run the focused offline checks, inspect the diff, and open **one ready PR** when it can be reviewed. Use `<task ID>: ...`, `fix-main: ...` or `docs: ...` as the [title workflow](../.github/workflows/pr-title.yml) requires. Give concrete tests, exact results and unverified behaviour. Use `Refs #N` for partial work or device acceptance; use an explicit closing reference only if the issue's acceptance is complete. Check native closing links as well as the PR body.
 
@@ -71,14 +73,25 @@ GitHub issues are the live backlog. [Plan status](../.github/scripts/plan_status
 The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it skips sync and warns when the secret is absent. Do not print the value. If sync disagrees with reality, compare the issue's labels, dependencies and actual linked PR to the script's rules.
 
 <a name="merge"></a>
+<a name="merge-and-release"></a>
 
-### Merge and release
+## Merge and release procedure
+
+The dispatcher/coordinator uses local merge scripts that are not in the repository. This is the procedure in words; another machine does not need those scripts to understand the checks.
 
 1. The coordinator or owner verifies independent review of the **exact head**, no unresolved threads or High findings, and exact-head required checks green. Fix Medium findings or record explicit follow-ups. Agents never merge their own PR. Do not push to `main` or bypass checks.
-2. Bring the branch up to `origin/main`, resolving documentation conflicts additively rather than choosing one side wholesale. Re-run/review the updated head. The merged tree must equal the tree tested in CI; a green run for a previous head or a merely similar diff does not qualify. The coordinator's guarded merge tooling is local; the checked-in enforcement is the [CI receipt](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
-3. Refresh and requalify other affected PRs after each merge. Bringing an open iOS PR up to date triggers `synchronize` and restarts/replaces its macOS check; a push to `main` itself is not the macOS workflow trigger. Batch coordinated merges instead of repeatedly updating native PRs.
-4. Wait for the matching [Deploy](../.github/workflows/deploy.yml) and readiness evidence. Only then does the release owner dispatch [iOS TestFlight](../.github/workflows/ios-testflight.yml) on `main`, with branch input `main`. The Apple build number is the workflow run number, not a PR number. A code merge, a green compile and an upload are three different milestones.
-5. When the signed build is available, name that build and the exact device checks in [the plan's](../PLAN.md) daily-core order. Do not ask the owner to test an unshipped build or to retest a fix that is still in flight. Reopen an acceptance issue if linking a PR closed it prematurely.
+2. Bring the branch up to `origin/main`, resolving documentation conflicts additively rather than choosing one side wholesale. Re-run checks and review the updated head. The merged tree must equal the tree tested in CI; a green run for a previous head or a merely similar diff does not qualify. The checked-in enforcement is the [CI receipt](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
+3. After each merge to `main`, refresh and requalify other affected PRs. Updating another open iOS PR triggers `synchronize` and restarts its macOS checks. The update, not the push to `main` on its own, is the trigger. Batch coordinated merges instead of repeatedly updating native PRs.
+
+### TestFlight build
+
+When the approved release work is merged and nothing is pending, the release owner cuts the next build. After a backend or PI merge, wait for the matching normal [Deploy](../.github/workflows/deploy.yml) and its readiness evidence before dispatching [iOS TestFlight](../.github/workflows/ios-testflight.yml). Only the authorised release owner runs this command; it is not an offline check.
+
+```sh
+gh workflow run ios-testflight.yml --ref main -f branch=main
+```
+
+The Apple build number is the workflow run number. Check that the exact build has finished processing in App Store Connect and is available in TestFlight; a successful upload alone does not prove either. Name the available build and exact device checks in [the plan's](../PLAN.md) daily-core order. Do not ask the owner to test an unshipped build or a fix still in flight. Reopen an acceptance issue if linking a PR closed it prematurely.
 
 ## Cost and safety
 
