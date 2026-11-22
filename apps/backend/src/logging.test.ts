@@ -404,11 +404,12 @@ describe('structured log export', () => {
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     const fields = {
       tool: 'calendar_create_event', outcome: 'ok', elapsedMs: 8012, resultBytes: 1234, truncated: false, duplicate: true,
-      sameArgsRepeat: true, replayCheck: 'id_reused', turnHash: '0a1b2c3d', channel: 'voice', provider: 'az_',
+      sameArgsRepeat: true, replayCheck: 'id_reused', metaKeys: ['progressToken', 'x-ms/call-id.v2:a'], turnHash: '0a1b2c3d',
+      channel: 'voice', provider: 'az_',
     };
     logger.info({
       ...fields, arguments: { title: 'private' }, result: 'private result', text: 'private text', turn: 'jt-AAAAAAAAAAAAAAAAAAAAAA', reqId: 'private',
-      requestId: 17, callId: 'private-call',
+      requestId: 17, callId: 'private-call', meta: { call_id: 'private-call' },
     }, 'pi.mcp_tool');
     expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool', ...fields });
     expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'pi.mcp_tool', properties: { service: 'jarvis-backend', ...fields } }));
@@ -419,12 +420,23 @@ describe('structured log export', () => {
     const before = records.length;
     logger.info({
       tool: 'bad/tool', outcome: 'private outcome', elapsedMs: -1, resultBytes: 1.5, truncated: 'yes', duplicate: 1, sameArgsRepeat: 'true',
-      replayCheck: 'private check', turnHash: 'jt-AAAAAAAAAAAAAAAAAAAAAA', channel: 'private channel', provider: 'private provider',
+      replayCheck: 'private check', metaKeys: 'private', turnHash: 'jt-AAAAAAAAAAAAAAAAAAAAAA', channel: 'private channel', provider: 'private provider',
     }, 'pi.mcp_tool');
-    logger.info({ tool: 'x'.repeat(65), turnHash: '0A1B2C3D', elapsedMs: Infinity, resultBytes: 2 ** 40, provider: 'github', replayCheck: 'off' }, 'pi.mcp_tool');
+    logger.info({
+      tool: 'x'.repeat(65), turnHash: '0A1B2C3D', elapsedMs: Infinity, resultBytes: 2 ** 40, provider: 'github', replayCheck: 'off',
+      metaKeys: ['has space', 'private value!', 'k'.repeat(65), '', 7, null, { a: 1 }],
+    }, 'pi.mcp_tool');
     for (const record of records.slice(before)) {
       expect(JSON.parse(record)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool' });
     }
+    // Only well-formed key names stay, and at most twelve of them.
+    logger.info({
+      metaKeys: ['ok-key', 'has space', ...Array.from({ length: 20 }, (_, index) => `k${index}`)],
+    }, 'pi.mcp_tool');
+    expect(JSON.parse(records.at(-1)!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool',
+      metaKeys: ['ok-key', ...Array.from({ length: 11 }, (_, index) => `k${index}`)],
+    });
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toMatch(/private|jt-/u);
   });
 

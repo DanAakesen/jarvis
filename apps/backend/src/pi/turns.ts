@@ -37,17 +37,18 @@ export interface PiToolAnswer {
 export interface PiActionRun {
   /** SHA-256 of the tool name and its canonical JSON arguments. */
   readonly asked: string;
-  /** What the transport called the request that carried it (see mcp.ts), when it said. */
+  /** The call id the harness gave the request that carried it (see mcp.ts), when it gave one. */
   readonly identity: string | undefined;
-  /** The first answer once the run succeeded; undefined when it did not. A call that failed or was refused did nothing. */
+  /** The first answer once the run succeeded; undefined when it did not (a refusal, or an error: an error is no proof that nothing ran). */
   readonly answer: Promise<PiToolAnswer | undefined>;
   /** `running` until it settles. A failed run is never replayed and does not count as having executed. */
   state: 'running' | 'ok' | 'failed';
 }
 
 /**
- * Whether a repeated request identity can be taken for a replay in this turn: not when the transport gave no identity (`no_id`),
- * nor once an identity has asked for something else (`id_reused`), because an identity that is not unique to a request proves nothing.
+ * Whether a repeated call id can be taken for a replay in this turn: not when the request carried no call id (`no_id`; the JSON-RPC
+ * id does not count, see mcp.ts), nor once a call id has asked for something else (`id_reused`). A call id that asks for something
+ * else is not unique to a request, so it proves nothing. A call id reused for the *same* thing cannot be told from a replay.
  */
 export type PiReplayCheck = 'on' | 'no_id' | 'id_reused';
 
@@ -89,8 +90,8 @@ export interface PiTurnGrant {
   /** The action calls of this turn that went to their tool, in order. mcp.ts tells a replayed request from a repeated action with them. */
   readonly actionRuns: PiActionRun[];
   /**
-   * What each door request of this turn asked for (SHA-256 of the tool name and canonical arguments), by the identity the transport
-   * gave it. An identity that ever asks for something else does not identify requests: `reused` is set and from then on no request
+   * What each door request of this turn asked for (SHA-256 of the tool name and canonical arguments), by the call id the harness
+   * gave it. A call id that ever asks for something else does not identify requests: `reused` is set and from then on no request
    * of this turn is taken for a replay.
    */
   readonly identities: { readonly asked: Map<string, string>; reused: boolean };
@@ -114,9 +115,10 @@ export const piTurnPattern = /^jt-[A-Za-z0-9_-]{22}$/u;
 const maxOpenTurns = 8;
 
 /**
- * Notes what a door request asks for under the identity the transport gave it, and says whether a repeat of that identity can be
- * taken for a replay in this turn. It cannot without an identity, and it cannot once an identity has asked for something else:
- * then the transport does not identify requests, and the safe answer is to run every request.
+ * Notes what a door request asks for under the call id the harness gave it, and says whether a repeat of that call id can be taken
+ * for a replay in this turn. It cannot without a call id, and it cannot once a call id has asked for something else: then call ids do
+ * not identify requests, and the safe answer is to run every request. This only catches a call id reused for different requests;
+ * one reused for identical requests looks exactly like a replay, so recognition rests on the harness's call ids being unique.
  */
 export function noteRequest(grant: PiTurnGrant, identity: string | undefined, asked: string): PiReplayCheck {
   if (identity === undefined) return 'no_id';

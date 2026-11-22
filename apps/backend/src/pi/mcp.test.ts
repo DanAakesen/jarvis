@@ -503,16 +503,18 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
   const open = (registry: ReturnType<typeof createPiTurnRegistry>, extra: Partial<Parameters<ReturnType<typeof createPiTurnRegistry>['open']>[0]> = {}) =>
     registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(), ...extra });
   const call = (turn: string, name: string, args: Record<string, unknown>) => ({ turn, name, arguments: args });
+  /** A request that carries the harness's own call id in its `_meta`, as a replay of that request would carry it again. */
+  const as = (callId: string) => ({ meta: { tool_call_id: callId } });
 
-  it('runs identical actions under different request ids every time, and says on the ledger that they repeat', async () => {
+  it('runs identical actions under different call ids every time, and says on the ledger that they repeat', async () => {
     const write = counting('probe_write', { defaultEffect: 'action' });
     const { registry, tool, recorded, ledger } = setup([], { tools: [write.tool] });
     const grant = open(registry);
     grant.discovered.add('probe_write');
-    // Three sets of the same lift: the same arguments, three requests, and key order does not matter.
+    // Three sets of the same lift: the same arguments, three requests with three call ids, and key order does not matter.
     const sets = [];
-    for (const args of [{ text: 'a', note: 'b' }, { note: 'b', text: 'a' }, { text: 'a', note: 'b' }]) {
-      sets.push(await tool('call_tool', call(grant.turn, 'probe_write', args)));
+    for (const [index, args] of [{ text: 'a', note: 'b' }, { note: 'b', text: 'a' }, { text: 'a', note: 'b' }].entries()) {
+      sets.push(await tool('call_tool', call(grant.turn, 'probe_write', args), as(`call-${index + 1}`)));
     }
     expect(sets.map(({ body }) => body?.result.run)).toEqual([1, 2, 3]);
     for (const { body } of sets) expect(body).not.toHaveProperty('duplicate');
@@ -520,13 +522,15 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     expect(recorded).toHaveLength(3);
     expect(grant.results).toHaveLength(3);
     expect(grant.actions.count).toBe(3);
-    expect(ledger().map(({ duplicate, sameArgsRepeat }) => [duplicate, sameArgsRepeat])).toEqual([[false, false], [false, true], [false, true]]);
+    expect(ledger().map(({ duplicate, sameArgsRepeat, replayCheck }) => [duplicate, sameArgsRepeat, replayCheck])).toEqual([
+      [false, false, 'on'], [false, true, 'on'], [false, true, 'on'],
+    ]);
 
     // Other arguments are another call, not a repeat; neither is the same call in another turn.
-    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'c' }));
+    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'c' }), as('call-4'));
     const later = open(registry);
     later.discovered.add('probe_write');
-    await tool('call_tool', call(later.turn, 'probe_write', { text: 'a', note: 'b' }));
+    await tool('call_tool', call(later.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-5'));
     expect(ledger().slice(3).map(({ sameArgsRepeat }) => sameArgsRepeat)).toEqual([false, false]);
     expect(write.runs.count).toBe(5);
   });
@@ -536,9 +540,9 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const { registry, tool, recorded, ledger } = setup([], { tools: [write.tool] });
     const grant = open(registry);
     grant.discovered.add('probe_write');
-    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), { id: 9001 });
-    // The same JSON-RPC id asking for the same thing, with the keys in another order, is the same request delivered again.
-    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { note: 'b', text: 'a' }), { id: 9001 });
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-1'));
+    // The same call id asking for the same thing, with the keys in another order, is the same request delivered again.
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { note: 'b', text: 'a' }), as('call-1'));
     expect(first.body).toMatchObject({ tool: 'probe_write', outcome: 'ok', result: { run: 1 } });
     expect(first.body).not.toHaveProperty('duplicate');
     expect(replay.isError).toBe(false);
@@ -552,28 +556,28 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
       [false, false, 'on'], [true, false, 'on'],
     ]);
 
-    // A new request id with the same arguments is another request: it runs, and the ledger says it repeats.
-    const again = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), { id: 9002 });
+    // A new call id with the same arguments is another request: it runs, and the ledger says it repeats.
+    const again = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-2'));
     expect(again.body).toMatchObject({ outcome: 'ok', result: { run: 2 } });
     expect(again.body).not.toHaveProperty('duplicate');
     expect(ledger().at(-1)).toMatchObject({ duplicate: false, sameArgsRepeat: true });
-    // The first request id stays the first's; the new one answers its own replay.
-    expect((await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), { id: 9002 })).body).toEqual({ ...again.body, duplicate: true });
+    // The first call id stays the first's; the new one answers its own replay.
+    expect((await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-2'))).body).toEqual({ ...again.body, duplicate: true });
     expect(write.runs.count).toBe(2);
   });
 
-  it('never keeps a read, a tool with no classification or an operation classified as a read, whatever the request id', async () => {
+  it('never keeps a read, a tool with no classification or an operation classified as a read, whatever the call id', async () => {
     const read = counting('probe_read', { defaultEffect: 'read' });
     const unclassified = counting('probe_plain', undefined);
     const operations = counting('probe_ops', { defaultEffect: 'action', operation: { field: 'operation', effects: { list: 'read', create: 'action' } } });
     const { registry, tool, ledger } = setup([], { tools: [read.tool, unclassified.tool, operations.tool] });
     const grant = open(registry);
     for (const name of ['probe_read', 'probe_plain', 'probe_ops']) grant.discovered.add(name);
-    let requestId = 9000;
+    let callId = 0;
     const sameId = async (name: string, args: Record<string, unknown>) => {
-      requestId += 1;
-      await tool('call_tool', call(grant.turn, name, args), { id: requestId });
-      return tool('call_tool', call(grant.turn, name, args), { id: requestId });
+      callId += 1;
+      await tool('call_tool', call(grant.turn, name, args), as(`call-${callId}`));
+      return tool('call_tool', call(grant.turn, name, args), as(`call-${callId}`));
     };
     for (const name of ['probe_read', 'probe_plain']) expect((await sameId(name, { text: 'same' })).body).not.toHaveProperty('duplicate');
     expect([read.runs.count, unclassified.runs.count]).toEqual([2, 2]);
@@ -601,13 +605,13 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const grant = open(registry);
     grant.discovered.add('probe_write');
     const answers = [];
-    for (let index = 0; index < 4; index += 1) answers.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001 }));
+    for (let index = 0; index < 4; index += 1) answers.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1')));
     expect(answers.map(({ body }) => body?.outcome)).toEqual(['error', 'refused', 'ok', 'ok']);
     expect(answers.map(({ body }) => body?.duplicate === true)).toEqual([false, false, false, true]);
     expect(write.runs.count).toBe(3);
     expect(grant.results.map(({ outcome }) => outcome)).toEqual(['error', 'refused', 'ok']);
     expect(grant.actions.count).toBe(1);
-    // A call that failed or was refused did nothing, so running it again is no repeat.
+    // A refusal declined the action and an error reported no success, so running either again is no repeat.
     expect(ledger().map(({ sameArgsRepeat }) => sameArgsRepeat)).toEqual([false, false, false, false]);
   });
 
@@ -623,9 +627,9 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const { registry, tool } = setup([], { tools: [write.tool] });
     const grant = open(registry);
     grant.discovered.add('probe_write');
-    const first = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001 });
+    const first = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
     await started;
-    const replay = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001 });
+    const replay = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
     await vi.waitFor(() => expect(grant.requests.count).toBe(2));
     release();
     const [one, two] = await Promise.all([first, replay]);
@@ -636,7 +640,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     expect(grant.results).toHaveLength(1);
   });
 
-  it('runs a request that arrives under another id while the first is still running, and calls it a repeat', async () => {
+  it('runs a request that arrives under another call id while the first is still running, and calls it a repeat', async () => {
     const releases: Array<() => void> = [];
     const write = counting('probe_write', { defaultEffect: 'action' }, async () => {
       await new Promise<void>((resolve) => { releases.push(resolve); });
@@ -646,7 +650,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const grant = open(registry);
     grant.discovered.add('probe_write');
     // The model emits the same call twice, in parallel, on purpose.
-    const both = [9001, 9002].map((id) => tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id }));
+    const both = ['call-1', 'call-2'].map((callId) => tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as(callId)));
     await vi.waitFor(() => expect(releases).toHaveLength(2));
     for (const release of releases) release();
     const answers = await Promise.all(both);
@@ -670,9 +674,9 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const { registry, tool, ledger } = setup([], { tools: [write.tool] });
     const grant = open(registry);
     grant.discovered.add('probe_write');
-    const first = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001 });
+    const first = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
     await started;
-    const replay = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001 });
+    const replay = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
     await vi.waitFor(() => expect(grant.requests.count).toBe(2));
     release();
     const [one, two] = await Promise.all([first, replay]);
@@ -683,14 +687,14 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     expect(ledger().map(({ duplicate, sameArgsRepeat }) => [duplicate, sameArgsRepeat])).toEqual([[false, false], [false, false]]);
   });
 
-  it('recognises no replay in a turn whose transport has used one request id for different requests', async () => {
+  it('recognises no replay in a turn where one call id has asked for different things', async () => {
     const write = counting('probe_write', { defaultEffect: 'action' });
     const { registry, tool, ledger } = setup([], { tools: [write.tool] });
     const grant = open(registry);
-    // A client that numbers every request 7 asks for a search, then for the same action three times.
-    await tool('find_tools', { turn: grant.turn, query: 'probewrite' }, { id: 7 });
+    // A harness that gives every request the same call id asks for a search, then for the same action three times.
+    await tool('find_tools', { turn: grant.turn, query: 'probewrite' }, as('call-7'));
     const sets = [];
-    for (let index = 0; index < 3; index += 1) sets.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 7 }));
+    for (let index = 0; index < 3; index += 1) sets.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-7')));
     expect(sets.map(({ body }) => body?.result.run)).toEqual([1, 2, 3]);
     for (const { body } of sets) expect(body).not.toHaveProperty('duplicate');
     expect(write.runs.count).toBe(3);
@@ -698,37 +702,62 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     expect(ledger().map(({ replayCheck, duplicate, sameArgsRepeat }) => [replayCheck, duplicate, sameArgsRepeat])).toEqual([
       ['on', false, false], ['id_reused', false, false], ['id_reused', false, true], ['id_reused', false, true],
     ]);
-    // Another turn starts trusting its own ids again.
+    // Another turn judges its own call ids again.
     const next = open(registry);
     next.discovered.add('probe_write');
-    await tool('call_tool', call(next.turn, 'probe_write', { text: 'a' }), { id: 9001 });
-    await tool('call_tool', call(next.turn, 'probe_write', { text: 'a' }), { id: 9001 });
+    await tool('call_tool', call(next.turn, 'probe_write', { text: 'a' }), as('call-9'));
+    await tool('call_tool', call(next.turn, 'probe_write', { text: 'a' }), as('call-9'));
     expect(ledger().slice(4).map(({ replayCheck, duplicate }) => [replayCheck, duplicate])).toEqual([['on', false], ['on', true]]);
     expect(write.runs.count).toBe(4);
   });
 
-  it('recognises a replay by a call id in the request meta, whatever its JSON-RPC id, and keeps different call ids apart', async () => {
+  it('runs a deliberate repeat when each model round opens a new connection and so numbers its requests 1 and 2 again', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    // The door is stateless, so a client that opens a connection per round starts again at id 1 every time. An identical search and an
+    // identical action are then byte-identical to a retried POST; only a call id in the meta could tell them apart, and there is none.
+    const rounds = [];
+    for (let round = 0; round < 3; round += 1) {
+      await tool('find_tools', { turn: grant.turn, query: 'probewrite' }, { id: 1 });
+      rounds.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 2 }));
+    }
+    expect(rounds.map(({ body }) => body?.result.run)).toEqual([1, 2, 3]);
+    for (const { body } of rounds) expect(body).not.toHaveProperty('duplicate');
+    expect(write.runs.count).toBe(3);
+    expect(grant.results).toHaveLength(3);
+    expect(grant.identities.asked.size).toBe(0);
+    expect(ledger().every(({ replayCheck, duplicate }) => replayCheck === 'no_id' && duplicate === false)).toBe(true);
+    expect(ledger().filter(({ tool: name }) => name === 'probe_write').map(({ sameArgsRepeat }) => sameArgsRepeat)).toEqual([false, true, true]);
+  });
+
+  it('recognises a replay by a call id in the request meta and ignores the JSON-RPC id, whatever it is', async () => {
     const write = counting('probe_write', { defaultEffect: 'action' });
     const { registry, tool } = setup([], { tools: [write.tool] });
     const grant = open(registry);
     grant.discovered.add('probe_write');
-    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001, meta: { tool_call_id: 'call-1' } });
-    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9002, meta: { tool_call_id: 'call-1' } });
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001, ...as('call-1') });
+    // Another JSON-RPC id, the same call id: the same request delivered again.
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9002, ...as('call-1') });
     expect(replay.body).toEqual({ ...first.body, duplicate: true });
-    const other = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001, meta: { tool_call_id: 'call-2' } });
+    // The first JSON-RPC id again, another call id: another request.
+    const other = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001, ...as('call-2') });
     expect(other.body).toMatchObject({ outcome: 'ok', result: { run: 2 } });
     expect(other.body).not.toHaveProperty('duplicate');
     expect(write.runs.count).toBe(2);
   });
 
-  it('finds the identity of a request: a call id in its meta, else its JSON-RPC id, else none', () => {
-    expect(requestIdentity({ mcpReq: { id: 3 } })).toBe('rpc::number:3');
-    expect(requestIdentity({ mcpReq: { id: '3' } })).toBe('rpc::string:3');
-    expect(requestIdentity({ sessionId: 's1', mcpReq: { id: 3 } })).toBe('rpc:s1:number:3');
-    expect(requestIdentity({ mcpReq: { id: 3, _meta: { progressToken: 'p', toolCallId: 'abc-1' } } })).toBe('call:abc-1');
-    expect(requestIdentity({ mcpReq: { id: 3, _meta: { call_id: 'not a call id!', progressToken: 'p' } } })).toBe('rpc::number:3');
-    expect(requestIdentity({ mcpReq: { _meta: { progressToken: 'p' } } })).toBeUndefined();
-    expect(requestIdentity({ mcpReq: { id: null } })).toBeUndefined();
+  it('finds the identity of a request in its meta only: a string call id under a key ending in call_id or callId', () => {
+    expect(requestIdentity({ progressToken: 'p', toolCallId: 'abc-1' })).toBe('call:abc-1');
+    expect(requestIdentity({ call_id: 'c.2:x-3' })).toBe('call:c.2:x-3');
+    expect(requestIdentity({ 'x-ms-call-id': 'c4' })).toBe('call:c4');
+    // A value that is not a short token, a key that is not a call id and a missing meta give no identity. The JSON-RPC id is never one.
+    expect(requestIdentity({ call_id: 'not a call id!', progressToken: 'p' })).toBeUndefined();
+    expect(requestIdentity({ call_id: 7 })).toBeUndefined();
+    expect(requestIdentity({ callIdentifier: 'x', session: 'y' })).toBeUndefined();
+    expect(requestIdentity({ progressToken: 'p' })).toBeUndefined();
+    expect(requestIdentity(undefined)).toBeUndefined();
+    expect(requestIdentity(null)).toBeUndefined();
   });
 
   it('writes one ledger line per call with its name, outcome, size, channel, provider, replay state and a hash of the turn, and no argument, result or reference', async () => {
@@ -736,26 +765,28 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const { registry, tool, ledger, logged } = setup([], { tools: [write.tool] });
     const grant = open(registry);
     const found = await tool('find_tools', { turn: grant.turn, query: 'probewrite' });
-    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), { id: 9001 });
-    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), { id: 9001 });
-    const repeat = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), { id: 9002 });
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), as('call-1'));
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), as('call-1'));
+    const repeat = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), as('call-2'));
     const missing = await tool('call_tool', call(grant.turn, 'probe_missing', { text: 'argument-secret-7f3a' }));
     const hash = createHash('sha256').update(grant.turn).digest('hex').slice(0, 8);
     const line = (name: string, reply: { text?: string | undefined }, fields: Record<string, unknown>) => ({
       level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool', tool: name, elapsedMs: expect.any(Number),
-      resultBytes: Buffer.byteLength(reply.text!), truncated: false, duplicate: false, sameArgsRepeat: false, replayCheck: 'on',
+      resultBytes: Buffer.byteLength(reply.text!), truncated: false, duplicate: false, sameArgsRepeat: false, replayCheck: 'no_id',
       turnHash: hash, channel: 'chat', provider: 'local', ...fields,
     });
+    // A request without a call id has nothing to be recognised by; the ones that carry one list their meta key names.
+    const withCallId = { replayCheck: 'on', metaKeys: ['tool_call_id'] };
     expect(ledger()).toEqual([
       line('find_tools', found, { outcome: 'ok' }),
-      line('probe_write', first, { outcome: 'ok' }),
-      line('probe_write', replay, { outcome: 'ok', duplicate: true }),
-      line('probe_write', repeat, { outcome: 'ok', sameArgsRepeat: true }),
+      line('probe_write', first, { outcome: 'ok', ...withCallId }),
+      line('probe_write', replay, { outcome: 'ok', duplicate: true, ...withCallId }),
+      line('probe_write', repeat, { outcome: 'ok', sameArgsRepeat: true, ...withCallId }),
       line('probe_missing', missing, { outcome: 'refused' }),
     ]);
     expect(ledger().every(({ elapsedMs }) => elapsedMs >= 0)).toBe(true);
     const everything = logged();
-    for (const private_ of ['argument-secret-7f3a', 'result-secret-91bc', grant.turn]) expect(everything).not.toContain(private_);
+    for (const private_ of ['argument-secret-7f3a', 'result-secret-91bc', grant.turn, 'call-1', 'call-2']) expect(everything).not.toContain(private_);
     expect(hash).toMatch(/^[0-9a-f]{8}$/u);
   });
 
@@ -765,12 +796,31 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const grant = open(registry);
     grant.discovered.add('probe_write');
     await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }));
-    const [line] = ledger();
+    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), { meta: { tool_call_id: 'call-secret-3c', progressToken: 'p-secret-5d' } });
+    const [plain, withMeta] = ledger();
     const base = ['level', 'time', 'pid', 'hostname', 'reqId', 'msg'];
-    expect(Object.keys(line!).filter((key) => !base.includes(key)).sort()).toEqual([
-      'channel', 'duplicate', 'elapsedMs', 'outcome', 'provider', 'replayCheck', 'resultBytes', 'sameArgsRepeat', 'tool', 'truncated', 'turnHash',
-    ]);
-    for (const private_ of ['argument-secret-7f3a', 'result-secret-91bc', grant.turn]) expect(logged()).not.toContain(private_);
+    const fieldsOf = (line: Json | undefined) => Object.keys(line!).filter((key) => !base.includes(key)).sort();
+    const ledgerFields = ['channel', 'duplicate', 'elapsedMs', 'outcome', 'provider', 'replayCheck', 'resultBytes', 'sameArgsRepeat', 'tool', 'truncated', 'turnHash'];
+    expect(fieldsOf(plain)).toEqual(ledgerFields);
+    // The meta key names are the only thing the door takes from the meta; the values never reach the logger.
+    expect(fieldsOf(withMeta)).toEqual([...ledgerFields, 'metaKeys'].sort());
+    expect(withMeta!.metaKeys).toEqual(['progressToken', 'tool_call_id']);
+    for (const private_ of ['argument-secret-7f3a', 'result-secret-91bc', grant.turn, 'call-secret-3c', 'p-secret-5d']) expect(logged()).not.toContain(private_);
+  });
+
+  it('lists the names of the request meta keys on the ledger line, bounded and never their values, so the harness\'s real call-id key can be read from live lines', async () => {
+    const { registry, tool, ledger, logged } = setup();
+    const grant = open(registry);
+    const keys = Array.from({ length: 20 }, (_, index) => `x-key-${String(index).padStart(2, '0')}`);
+    await tool('find_tools', { turn: grant.turn, query: 'probe' }, { meta: { 'x-ms-call-id': 'call-secret-3c', 'bad key!': 'v-secret-1', progressToken: 'p-secret-5d' } });
+    await tool('find_tools', { turn: grant.turn, query: 'probe' }, { meta: Object.fromEntries(keys.map((key) => [key, 'v-secret-2'])) });
+    await tool('find_tools', { turn: grant.turn, query: 'probe' });
+    const [named, many, none] = ledger();
+    // Sorted; a key with a space or a symbol is dropped by the allow-list.
+    expect(named!.metaKeys).toEqual(['progressToken', 'x-ms-call-id']);
+    expect(many!.metaKeys).toEqual(keys.slice(0, 12));
+    expect(none).not.toHaveProperty('metaKeys');
+    for (const private_ of ['call-secret-3c', 'v-secret-1', 'v-secret-2', 'p-secret-5d']) expect(logged()).not.toContain(private_);
   });
 
   it('writes a ledger line for a forged or closed turn reference without a channel, and still refuses it as before', async () => {

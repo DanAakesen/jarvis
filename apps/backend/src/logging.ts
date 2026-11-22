@@ -610,14 +610,20 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (input.msg === 'pi.mcp_tool') {
     // One finished MCP door call: the tool's name, how it ended, how long it took, how big the answer was, the channel and
-    // provider, an 8-hex hash of the turn reference, and whether the request was a replay or an identical action repeated.
-    // Never arguments, result text or the reference itself.
+    // provider, an 8-hex hash of the turn reference, whether the request was a replay or an identical action repeated, whether
+    // replays could be recognised, and the names (never the values) of the request's `_meta` keys.
+    // Never arguments, result text, `_meta` values or the reference itself.
     const fields: Record<string, unknown> = {};
     if (typeof input.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.tool)) fields.tool = input.tool;
     if (typeof input.outcome === 'string' && piMcpOutcomes.has(input.outcome)) fields.outcome = input.outcome;
     if (typeof input.channel === 'string' && piMcpChannels.has(input.channel)) fields.channel = input.channel;
     if (typeof input.provider === 'string' && piMcpProviders.has(input.provider)) fields.provider = input.provider;
     if (typeof input.replayCheck === 'string' && piMcpReplayChecks.has(input.replayCheck)) fields.replayCheck = input.replayCheck;
+    if (Array.isArray(input.metaKeys)) {
+      const metaKeys = input.metaKeys
+        .filter((key): key is string => typeof key === 'string' && /^[A-Za-z0-9_.:/-]{1,64}$/u.test(key)).slice(0, 12);
+      if (metaKeys.length > 0) fields.metaKeys = metaKeys;
+    }
     if (typeof input.turnHash === 'string' && /^[0-9a-f]{8}$/u.test(input.turnHash)) fields.turnHash = input.turnHash;
     if (typeof input.elapsedMs === 'number' && Number.isFinite(input.elapsedMs) && input.elapsedMs >= 0 && input.elapsedMs <= 600_000) {
       fields.elapsedMs = input.elapsedMs;

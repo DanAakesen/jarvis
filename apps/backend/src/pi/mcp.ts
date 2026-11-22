@@ -40,9 +40,9 @@ interface Settled {
   /** Set by a search that waited on a remote catalogue; otherwise the provider is read from the tool name. */
   readonly provider?: Provider;
   readonly truncated?: boolean;
-  /** The request was a replay of an earlier one and was answered with that one's result, without running. */
+  /** The request was a replay of an earlier one (the same call id) and was answered with that one's result, without running. */
   readonly duplicate?: boolean;
-  /** An action ran that an earlier request of the turn had already run, or was running, with the same arguments. */
+  /** An earlier action of the turn with the same tool and arguments had run, or was running; this one ran anyway. */
   readonly sameArgsRepeat?: boolean;
 }
 
@@ -51,9 +51,9 @@ interface Door {
   readonly grant: PiTurnGrant | undefined;
   /** SHA-256 of what the request asks for: the tool and its canonical arguments. */
   readonly asked: string;
-  /** What the transport called the request, when it said. */
+  /** The call id the harness gave the request in its `_meta`, when it gave one. */
   readonly identity: string | undefined;
-  /** Whether a repeat of that identity can be taken for a replay in this turn; absent when the turn reference matched no live turn. */
+  /** Whether a repeat of that call id can be taken for a replay in this turn; absent when the turn reference matched no live turn. */
   readonly replayCheck: PiReplayCheck | undefined;
 }
 
@@ -96,32 +96,38 @@ const askedOf = (tool: string, question: unknown) => sha256(tool + canonicalJson
 const callIdKey = /call[_-]?id$/iu;
 
 /**
- * What the transport calls a request, so that the same request delivered again can be told from a new one: a call id in the
- * request's `_meta` if the harness sends one, else the JSON-RPC id (within the session, when there is one). Undefined when the
- * transport gives neither, and then no request of the turn is ever taken for a replay.
+ * What the harness calls a request, so that the same request delivered again can be told from a new one: a call id in the
+ * request's `_meta`, if it sends one. Nothing else qualifies. The JSON-RPC id does not: the door is stateless (there is no MCP
+ * session), so a client that opens a connection for each model round numbers its requests 1, 2, 1, 2 ..., and a deliberate repeat
+ * of a search and an action is then byte-identical to a retried POST. Without a call id no request of the turn is ever taken for a
+ * replay (`replayCheck: no_id`).
  */
-export function requestIdentity(ctx: {
-  readonly sessionId?: string | undefined;
-  readonly mcpReq: { readonly id?: unknown; readonly _meta?: unknown };
-}): string | undefined {
-  const meta = ctx.mcpReq._meta;
-  if (meta !== null && typeof meta === 'object') {
-    for (const [key, value] of Object.entries(meta)) {
-      if (callIdKey.test(key) && typeof value === 'string' && /^[\w.:-]{1,128}$/u.test(value)) return `call:${value}`;
-    }
+export function requestIdentity(meta: unknown): string | undefined {
+  if (meta === null || typeof meta !== 'object') return undefined;
+  for (const [key, value] of Object.entries(meta)) {
+    if (callIdKey.test(key) && typeof value === 'string' && /^[\w.:-]{1,128}$/u.test(value)) return `call:${value}`;
   }
-  const id = ctx.mcpReq.id;
-  return typeof id === 'string' || typeof id === 'number' ? `rpc:${ctx.sessionId ?? ''}:${typeof id}:${id}` : undefined;
+  return undefined;
 }
+
+/**
+ * The names of the request's `_meta` keys, never their values, for the ledger line: so what the harness really sends, and under
+ * which key a call id travels if it does, can be read from live lines. The log allow-list bounds them again.
+ */
+const metaKeysOf = (meta: unknown): string[] =>
+  meta !== null && typeof meta === 'object' ? Object.keys(meta).sort().slice(0, 32) : [];
 
 /**
  * Runs an action call and tells how it relates to the earlier ones of the turn.
  *
- * A replay is the same request delivered again: the same identity asking for the same thing, while the transport's identities can
- * be trusted (see PiReplayCheck). It is answered with the first result and `duplicate: true` and does not run again, also while the
- * first is still running. Everything else runs, even an identical action under another request, because the model may mean it
- * (three sets of the same lift); `repeat` says that such an action was already running or had succeeded, and changes nothing.
- * Only a success is kept: a call that failed or was refused did nothing, so asking again runs it again.
+ * A replay is the same request delivered again: the same call id asking for the same thing, while call ids can be trusted (see
+ * PiReplayCheck). It is answered with the first result and `duplicate: true` and does not run again, also while the first is still
+ * running. Everything else runs, even an identical action under another request, because the model may mean it (three sets of the
+ * same lift); `repeat` says that an earlier action of the turn with the same tool and arguments had run, or was running, and changes
+ * nothing.
+ * Only a success is kept. A refusal declined the action and an error reported no success, so a replay of either runs again. That is a
+ * choice, not proof that an error did nothing: the route reports an error after the tool ran too (an invalid or unserialisable or
+ * over-size result, a failed audit record) and a tool can fail or be aborted part-way, so a replay of such a call can run its effect twice.
  * This is recognition of a replay, not a gate: nothing is refused.
  */
 async function runAction(
@@ -137,7 +143,7 @@ async function runAction(
     const first = await replayed.answer;
     if (first) return { answer: { ...first, text: JSON.stringify({ ...JSON.parse(first.text), duplicate: true }) }, duplicate: true, repeat: false };
   }
-  // A replay of a run that is not failed has returned above, so what is left here is another request's run, or an untrusted identity's.
+  // A replay of a run that is not failed has returned above, so what is left here is another request's run, or one with no call id.
   const repeat = grant.actionRuns.some((earlier) => earlier.asked === asked && earlier.state !== 'failed');
   const running = run();
   // The state is set before the answer settles, so a replay that waited on a run which failed finds it failed and runs the call itself.
@@ -241,9 +247,10 @@ export function createPiMcpRoutes(options: {
     /**
      * The ledger: one `pi.mcp_tool` line when a door call finishes, however it ends (a refusal, a failure, or an exception on
      * its way out): the tool's name, outcome, time, size of the answer, channel, provider and a hash of the turn reference,
-     * and whether the request was a replay (`duplicate`), whether an identical action had already run (`sameArgsRepeat`) and
-     * whether replays could be recognised at all (`replayCheck`). Never arguments, results or the reference.
-     * It resolves the turn reference once, and notes the request's identity and what it asks on the turn, for the call to use.
+     * whether the request was a replay (`duplicate`), whether an identical action had already run (`sameArgsRepeat`), whether
+     * replays could be recognised at all (`replayCheck`) and the names of the request's `_meta` keys (`metaKeys`).
+     * Never arguments, results, `_meta` values or the reference.
+     * It resolves the turn reference once, and notes the request's call id and what it asks on the turn, for the call to use.
      */
     const ledgered = <Input extends { readonly turn: string }>(
       asks: (input: Input) => { readonly tool: string; readonly question: unknown },
@@ -252,11 +259,12 @@ export function createPiMcpRoutes(options: {
       const started = performance.now();
       const { tool, question } = asks(input);
       const grant = registry.resolve(input.turn);
+      const metaKeys = metaKeysOf(ctx.mcpReq._meta);
       let door: Door | undefined;
       let settled: Settled | undefined;
       try {
         const asked = askedOf(tool, question);
-        const identity = requestIdentity(ctx);
+        const identity = requestIdentity(ctx.mcpReq._meta);
         door = { grant, asked, identity, replayCheck: grant ? noteRequest(grant, identity, asked) : undefined };
         settled = await run(input, ctx, door);
         return settled.reply;
@@ -271,6 +279,7 @@ export function createPiMcpRoutes(options: {
             duplicate: settled?.duplicate === true,
             sameArgsRepeat: settled?.sameArgsRepeat === true,
             ...(door?.replayCheck ? { replayCheck: door.replayCheck } : {}),
+            ...(metaKeys.length > 0 ? { metaKeys } : {}),
             turnHash: turnHash(input.turn),
             ...(grant ? { channel: channelOf(grant) } : {}),
             provider: settled?.provider ?? providerOf(tool),
