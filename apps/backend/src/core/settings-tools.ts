@@ -5,11 +5,12 @@ import {
   validateSettingsPatch, type SettingsPatch,
 } from './settings.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { readDeviceLocation } from '../proactive/sources/location.js';
 
 const getSettingsSchema = {
   type: 'object',
   properties: {
-    area: { type: 'string', enum: ['identity', 'roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality', 'decisions', 'homeBrief'] },
+    area: { type: 'string', enum: ['identity', 'roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality', 'decisions', 'homeBrief', 'location'] },
   },
   additionalProperties: false,
 } as const;
@@ -72,17 +73,18 @@ export async function applySettingsPatch(
 
 export const getSettingsTool: JarvisTool = {
   name: 'get_settings',
-  description: 'Read non-secret settings and valid options/constraints before updates. Optionally select an area. Secrets are never available.',
+  description: 'Read non-secret settings and valid options before updates. For "where am I?" use area location to get the last observed approximate iPhone location and time, or the reason it is unavailable.',
   inputSchema: getSettingsSchema,
   sensitive: true,
-  async execute(input, request) {
+  async execute(input, request, signal) {
     const store = request.server.settingsStore;
+    const area = isObject(input) ? input.area : undefined;
+    if (area === 'location') return readDeviceLocation(store ?? undefined, new Date(), signal);
     if (!store) throw new ToolRefusal('Settings are unavailable.');
     const catalogue = await request.server.modelCatalogue.read();
     const settings = await readSettings(store, catalogue);
     const options = settingsOptionsForCatalogue(catalogue);
     const fields = settingsFieldsForCatalogue(catalogue, settings);
-    const area = isObject(input) ? input.area : undefined;
     const optionKeys = {
       roles: ['roles', 'reasoningEfforts', 'jarvisModels', 'codexModels', 'codexReasoningEfforts', 'copilotModels', 'copilotReasoningEfforts'],
       voice: [],

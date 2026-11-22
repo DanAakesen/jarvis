@@ -100,7 +100,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `get_job` | core | chat and voice | unclassified | ok | "annullér researchjobbet" (da, #2) | ok (2 calls) | 50 |  |
 | `get_pending_issue` | factory | HTTP only (legacy) | unclassified | ok | n/a | not advertised | 16 | kept for cached clients; the door refuses it |
 | `get_release` | factory | chat and voice | unclassified | ok | "what is the deployment status" (en, #2) | ok | 41 |  |
-| `get_settings` | core | chat and voice | unclassified | ok | "gå til indstillinger" (da, #3) | ok (4 calls) | 51 |  |
+| `get_settings` | core | chat and voice | unclassified | ok | "where am I" (en, #1) | ok (5 calls) | 54 |  |
 | `get_status_summary` | core | chat and voice | unclassified | ok | "is everything working" (en, #2) | ok | 16 |  |
 | `get_system_health` | core | chat and voice | unclassified | ok | "is everything working" (en, #3) | ok | 35 |  |
 | `get_task` | factory | chat and voice | read | ok | "how is the worker doing on task 5" (en, #3) | ok (2 calls) | 69 |  |

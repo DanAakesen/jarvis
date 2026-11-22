@@ -1,6 +1,6 @@
 # Loose Ends: switch-on and acceptance
 
-Status: **built, off by default, not accepted on device.** Switching on needs the owner's decision and a deployment. Capture writes a Vault note under `Inbox/`; closing moves it to `Inbox/Closed/` and records a trail entry. SQL holds the rebuildable index and nudge state, not the note body.
+Status: **built, switched off by default.** Dan approved capture and automatic follow-ups. Both production flags were verified off on 22 November. Production activation, real vault/model use and device acceptance are unverified.
 
 ## What each switch turns on
 

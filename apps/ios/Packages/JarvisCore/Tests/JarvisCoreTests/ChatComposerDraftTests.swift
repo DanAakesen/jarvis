@@ -1,7 +1,25 @@
 import JarvisCore
+import Observation
 import XCTest
 
 final class ChatComposerDraftTests: XCTestCase {
+    @MainActor
+    func testTypingWithinASendableDraftDoesNotInvalidateSendControls() async {
+        let draft = ChatComposerDraft()
+        draft.value.replace(with: "H")
+        withObservationTracking {
+            XCTAssertTrue(draft.hasMessage)
+        } onChange: {
+            XCTFail("Typing within a sendable draft invalidated the composer controls")
+        }
+
+        let revision = draft.value.revision
+        for text in ["He", "Hej", "Hej 👋", "Hej 👋\nverden"] {
+            draft.value.edit(text, revision: revision)
+            XCTAssertEqual(draft.value.text, text)
+        }
+    }
+
     @MainActor
     func testEditorAndSendUseTheSameDraftAndRejectLateEdits() async {
         let draft = ChatComposerDraft()

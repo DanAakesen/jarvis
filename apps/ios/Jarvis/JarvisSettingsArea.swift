@@ -27,7 +27,6 @@ enum JarvisSettingsDetail: String, Hashable {
     case instructions
     case voice
     case research
-    case proactive
     case routines
     case memory
     case jarvisModel
@@ -214,7 +213,10 @@ struct JarvisSettingsArea: View {
                         Section {
                             ForEach(rows) { row in
                                 Group {
-                                    if let detail = row.detail {
+                                    if row.id == "proactive" {
+                                        JarvisProactiveSettingsRow(client: proactiveClient, language: language,
+                                            readOnly: readOnly, onFailure: noteResourceFailure)
+                                    } else if let detail = row.detail {
                                         NavigationLink(value: detail) { rowContent(row) }
                                             .disabled(needsSettings(detail) && response == nil)
                                             .accessibilityHint(needsSettings(detail) && response == nil
@@ -330,7 +332,7 @@ struct JarvisSettingsArea: View {
 
     private func needsSettings(_ detail: JarvisSettingsDetail) -> Bool {
         switch detail {
-        case .proactive, .routines, .memory, .deployments, .newDeployment,
+        case .routines, .memory, .deployments, .newDeployment,
              .trainingTargets, .nutritionTargets, .healthGoals, .healthCredential, .owner:
             false
         default:
@@ -370,7 +372,7 @@ struct JarvisSettingsArea: View {
                 row("instructions", .instructionsRow, .instructions),
                 row("voice", .voiceRow, .voice),
                 row("research", .researchRow, .research, setting: "research", key: "depth"),
-                row("proactive", .proactiveRow, .proactive),
+                row("proactive", .proactiveSuggestions, nil),
                 row(
                     "notifications", .notificationsRow, nil,
                     value: copy(.unavailable), disabledHint: .notificationsUnavailable
@@ -494,13 +496,6 @@ struct JarvisSettingsArea: View {
     @ViewBuilder
     private func detailView(for detail: JarvisSettingsDetail) -> some View {
         switch detail {
-        case .proactive:
-            JarvisProactiveSettingsView(
-                client: proactiveClient,
-                language: language,
-                readOnly: readOnly,
-                onFailure: noteResourceFailure
-            )
         case .routines:
             JarvisRoutinesSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .memory:

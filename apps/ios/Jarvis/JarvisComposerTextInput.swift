@@ -1,6 +1,9 @@
 import JarvisCore
+import os
 import SwiftUI
 import UIKit
+
+private let composerSignposter = OSSignposter(subsystem: "dk.jarvis.app", category: "composer")
 
 /// One native editor survives submission so clearing a draft does not dismiss the keyboard.
 /// Return submits; a Return that confirms marked text remains an input-method operation.
@@ -34,13 +37,11 @@ struct JarvisComposerTextInput: UIViewRepresentable {
 
         let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: view.traitCollection)
         if view.font != font { view.font = font }
-        view.textColor = .label
-        view.tintColor = UIColor(JarvisDesignTokens.primaryAccent)
-        view.placeholderLabel.text = placeholder
-        view.placeholderLabel.font = view.font
-        view.accessibilityLabel = placeholder
-        view.accessibilityIdentifier = identifier
-        view.accessibilityHint = hint
+        if view.placeholderLabel.font != font { view.placeholderLabel.font = font }
+        if view.placeholderLabel.text != placeholder { view.placeholderLabel.text = placeholder }
+        if view.accessibilityLabel != placeholder { view.accessibilityLabel = placeholder }
+        if view.accessibilityIdentifier != identifier { view.accessibilityIdentifier = identifier }
+        if view.accessibilityHint != hint { view.accessibilityHint = hint }
         if view.isEditable == isDisabled { view.isEditable = !isDisabled }
         if view.isSelectable == isDisabled { view.isSelectable = !isDisabled }
         coordinator.reconcileText(in: view)
@@ -76,10 +77,7 @@ struct JarvisComposerTextInput: UIViewRepresentable {
         func reconcileText(in view: JarvisComposerTextView) {
             let current = parent.draft
             let submitted = editorRevision != current.revision
-            guard submitted || (view.text != current.text && view.markedTextRange == nil) else {
-                view.refreshPlaceholderAndSize()
-                return
-            }
+            guard submitted || (view.text != current.text && view.markedTextRange == nil) else { return }
 
             isReconcilingText = true
             defer { isReconcilingText = false }
@@ -130,6 +128,7 @@ struct JarvisComposerTextInput: UIViewRepresentable {
                 reconcileText(in: view)
                 return
             }
+            composerSignposter.emitEvent("Native draft edit")
             parent.draft.edit(view.text, revision: editorRevision)
             view.refreshPlaceholderAndSize()
         }
@@ -146,6 +145,9 @@ struct JarvisComposerTextInput: UIViewRepresentable {
 
         func scheduleFocusUpdate(for view: JarvisComposerTextView) {
             focusRequest &+= 1
+            let wantsFocus = parent.isFocused.wrappedValue
+            guard (parent.isDisabled && wantsFocus) ||
+                    ((wantsFocus && !parent.isDisabled) != view.isFirstResponder) else { return }
             let request = focusRequest
             // UIKit delegate callbacks must not write SwiftUI focus state during updateUIView.
             DispatchQueue.main.async { [weak self, weak view] in
@@ -170,10 +172,13 @@ final class JarvisComposerTextView: UITextView {
     let placeholderLabel = UILabel()
     var onWindowReady: ((JarvisComposerTextView) -> Void)?
     private(set) var isPasting = false
+    private var measured: (width: CGFloat, font: UIFont?, height: CGFloat)?
 
     init() {
         super.init(frame: .zero, textContainer: nil)
         backgroundColor = .clear
+        textColor = .label
+        tintColor = UIColor(JarvisDesignTokens.primaryAccent)
         isScrollEnabled = false
         showsVerticalScrollIndicator = false
         textContainerInset = .zero
@@ -214,13 +219,22 @@ final class JarvisComposerTextView: UITextView {
 
     func refreshPlaceholderAndSize() {
         placeholderLabel.isHidden = !text.isEmpty
+        let previous = measured
+        measured = nil
+        if let previous, bounds.width > 0, previous.width == bounds.width, previous.font == font {
+            let height = naturalHeight(for: bounds.width)
+            if (height > maximumHeight) != isScrollEnabled { setNeedsLayout() }
+            if editorHeight(for: previous.height) == editorHeight(for: height) { return }
+        }
         invalidateIntrinsicContentSize()
         setNeedsLayout()
     }
 
     func composerSize(for width: CGFloat) -> CGSize {
-        CGSize(width: width, height: min(maximumHeight, max(minimumHeight, naturalHeight(for: width))))
+        CGSize(width: width, height: editorHeight(for: naturalHeight(for: width)))
     }
+
+    private func editorHeight(for height: CGFloat) -> CGFloat { min(maximumHeight, max(minimumHeight, height)) }
 
     private var minimumHeight: CGFloat { ceil((font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight) }
     private var maximumHeight: CGFloat {
@@ -228,6 +242,11 @@ final class JarvisComposerTextView: UITextView {
     }
 
     private func naturalHeight(for width: CGFloat) -> CGFloat {
-        ceil(super.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        if let measured, measured.width == width, measured.font == font { return measured.height }
+        let interval = composerSignposter.beginInterval("Measure composer text", id: composerSignposter.makeSignpostID())
+        defer { composerSignposter.endInterval("Measure composer text", interval) }
+        let height = ceil(super.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        measured = (width, font, height)
+        return height
     }
 }

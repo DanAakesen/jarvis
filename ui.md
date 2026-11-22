@@ -19,8 +19,8 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
 | **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
 | **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
-| **Proactive** | Proactive items and the single **Proactive suggestions** switch with its settings sheet. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
-| **Settings** | Saved values, editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
+| **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
+| **Settings** | The **Proactive suggestions** switch, saved values, editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
 | **Banking** | Listed in the sidebar but not navigable. Out of scope until Dan sets its approval rules ([PLAN decision F](PLAN.md#open-decisions-af)). | `JarvisDestination.banking` |
 
 Around the destinations: the opening screen (`JarvisOpeningView`, startup only), the lock and sign-in gate (`JarvisGateRootView`), the activity sheet, approval notifications and the shared task row (`JarvisTaskListRow`, used in Notes and Home).
@@ -50,6 +50,6 @@ Not built. Apple granted the Voice Based Conversation entitlement on 21 November
 | Item | State |
 | --- | --- |
 | Map and route card in Chat and Voice | Design brief only: [docs/ui/map-route-card/brief.md](docs/ui/map-route-card/brief.md). Dan chooses the layout, then it is built. |
-| Manual kcal entry on the Nutrition screen | Not built; waiting for [decision B](PLAN.md#open-decisions-af). |
-| Follow-latest, Voice state labels, Notes titles, Watch dictation and recovery | Not accepted on device. See [PLAN.md](PLAN.md) for the current build and checks. |
+| Manual kcal entry on the Nutrition screen | Approved. Device acceptance is pending. |
+| Device acceptance of Chat typing, follow-latest, Voice state labels, Notes titles and Watch recovery | Build 124 testing is underway. [PLAN.md](PLAN.md) tracks the results of each check. |
 | CarPlay scenes | Not started. |

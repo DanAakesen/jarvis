@@ -6,7 +6,7 @@ private func settingsCacheDigest(_ value: String) -> String {
     SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
 }
 
-struct JarvisProactiveSettingsView: View {
+struct JarvisProactiveSettingsRow: View {
     let client: JarvisProactiveClient?
     let language: JarvisAppLanguage
     let readOnly: Bool
@@ -23,7 +23,7 @@ struct JarvisProactiveSettingsView: View {
     }
 
     var body: some View {
-        JarvisForm {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
             if let status, status.available {
                 JarvisSettingsSwitch(title: copy(.proactiveSuggestions), isOn: Binding(
                     get: { self.status?.allowsProactiveWakes == true },
@@ -31,6 +31,8 @@ struct JarvisProactiveSettingsView: View {
                 ))
                 .disabled(loading || saving || loadFailed || readOnly)
                 .accessibilityIdentifier("settings.proactive.enabled")
+            } else {
+                Text(copy(.proactiveSuggestions))
             }
             if loading {
                 JarvisLoadingView(title: copy(.loading))
@@ -51,8 +53,6 @@ struct JarvisProactiveSettingsView: View {
                 Text(copy(.readOnly)).foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(copy(.proactiveRow))
-        .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
 

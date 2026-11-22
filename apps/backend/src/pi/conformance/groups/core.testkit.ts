@@ -81,6 +81,9 @@ export const coreGroup: GroupFactory = (context) => {
       { label: 'reset the colour overrides', arguments: { tokens: { reset: true } } },
     ],
     get_settings: [
+      { label: 'last observed iPhone location', arguments: { area: 'location' }, check: (result) => {
+        if (!isObject(result) || result.state !== 'ok' || !JSON.stringify(result.facts).includes('Aarhus') || !result.observedAt) throw new Error('expected a timestamped device observation');
+      } },
       { label: 'every area', arguments: {}, check: (result) => { if (!isObject(result) || !isObject(result.settings) || !isObject(result.options)) throw new Error('expected settings and options'); } },
       { label: 'roles', arguments: { area: 'roles' } },
       { label: 'appearance', arguments: { area: 'appearance' } },
