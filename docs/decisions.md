@@ -14193,3 +14193,10 @@ The later build-122 decision supersedes direct MCP registration only.
 - If weather saves a report but cannot finish setting it up, mark the failure as partial so replaying the same call does not create another report.
 - Three Danish phrases for #2025's `proactive_message_feedback` missed on the first search. Add noun-scoped aliases and English/Danish fixture pairs without changing the ranking algorithm.
 - **Trade-off:** every turn can see three more schemas, but common calls need no search. The before/after query in `docs/agent-context.md` measures search count and input tokens from normal use. Only offline fixture results are verified; the savings and harness selection are not measured live.
+
+## 22 November 2026 — Raise the Terra deployment from 150K to 600K tokens per minute (Refs #2012)
+
+- Dan's build-122 test: tasks, project status, nutrition and Voice turns that used a tool showed a failure although the tool had succeeded (a task was marked done, then the turn said "part of it may already be done"). The production log shows `pi.stream_failed ... code rate_limit_exceeded` on the model round after the tool result, 38–63 seconds into the turn, at 17:13, 17:43, 17:58, 17:59 and 18:05 UTC.
+- Cause (observed, log plus `az cognitiveservices account deployment show`): the `gpt-6.1-terra` deployment had a token limit of 150,000 per 60 seconds. A PI request carries 84K–116K input tokens, so a turn with a tool makes two or more requests and goes over. Turns without a tool make one request and passed.
+- Decision (Dan approved "apply live now and merge the Bicep change"): raise `terraChatCapacity` to 600 (600K TPM, 600 requests per minute) in `infra/main.parameters.json` and, the same day, on the live deployment with the same model, version and SKU. GlobalStandard is pay-per-token with no reserved purchase, so a higher limit adds no standing cost; the PI monthly cap still stops spend. Region quota is 4,000.
+- Not changed here: the gateway still gives up on a rate limit without retrying, and the 100K-token context per request. Both are separate work (gateway retry with a truthful outcome; conversation compaction needs Dan's decision).

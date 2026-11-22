@@ -95,11 +95,19 @@ The workflow takes the IDs from `bootstrap.output.json` and deploys as
 ### Terra main-chat rollout (#1337)
 
 `terraChatCapacity` is a required positive integer. The committed parameters now
-request 150, matching the repository's established chat allocation. This is a
-requested throughput limit, not a claim of available live quota. Capacity 1 was
-too small for a Jarvis turn; 50K TPM also throttled the recorded 57K–66K/minute
-acceptance workload (#1232/L91). Matching 150 is the practical starting request,
-not a proof of the mathematical minimum for every workload.
+request 600 (600K TPM and 600 requests per minute). It was 150, matching the
+repository's earlier chat allocation. That limit began to fail on 22 November
+2026: each PI request now carries 84K–116K input tokens (cached tokens count
+against the limit), so one turn that calls a tool makes two or more requests
+and exceeded 150K tokens in the same minute. The model answered
+`rate_limit_exceeded` after the tool had already run. The live deployment was
+raised to 600 on 22 November with Dan's approval and this file now matches it.
+The region quota for GlobalStandard `gpt-6.1-terra` is 4,000, so 600 leaves
+room. This is a requested throughput limit, not a claim of available live
+quota. Capacity 1 was too small for a Jarvis turn; 50K TPM also throttled the
+recorded 57K–66K/minute acceptance workload (#1232/L91). Lower the number
+again only after the per-request context has shrunk (see the log line
+`pi.turn` `inputTokens`).
 
 Microsoft's [deployment automation guide](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/automate-quota-deployments)
 defines one capacity unit as 1,000 TPM. A Terra-specific live minimum/maximum or
