@@ -204,7 +204,7 @@ No external push/provider test is part of this change.
 | Empty delegated turn waits for its transcript up to 3 s before the "did not catch that" reply | Done |
 | No "listening" from transcript deltas while output plays, PI works or a delegation settles | Done |
 | Id/length-only log events for delegation, owner persist, did-not-catch and PI start | Done |
-| Stuck "Speaking" on iPhone (`VoiceAudioEngine.stopPlayback()` skips the finished handler) | Open; found by reading only, not changed |
+| Stuck "Speaking" on iPhone (`VoiceAudioEngine.stopPlayback()` skips the finished handler) | Done: the engine reports every response a stop silences (`VoicePlaybackLedger`); proven by a test that fails without the fix; Dan's device retest pending |
 | Whole spoken turn goes to PI; `offset_ms` no longer cuts it; direct turn closes after 1.5 s quiet; upstream error and activity-publish logs | Done in the PR for #1988 and #1967; offline tests only, build 119 on a device still to confirm |
 
 ## PI finds and calls its tools reliably — 21 November 2026 (#1967)

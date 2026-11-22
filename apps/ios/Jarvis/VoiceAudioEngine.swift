@@ -17,7 +17,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var captureContinuation: AsyncStream<Data>.Continuation?
     private var captureDropped = false
     private var captureDropCount = 0
-    private var playbackProgress: [String: PlaybackProgress] = [:]
+    private var playbackLedger = VoicePlaybackLedger()
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
     private var hasCaptureTap = false
     private var hasPlaybackGraph = false
@@ -228,10 +228,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         }
         if let responseID {
             lock.lock()
-            var progress = playbackProgress[responseID, default: PlaybackProgress()]
-            progress.pending += 1
-            progress.scheduled = true
-            playbackProgress[responseID] = progress
+            playbackLedger.bufferScheduled(responseID: responseID)
             lock.unlock()
         }
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
@@ -243,25 +240,22 @@ final class VoiceAudioEngine: @unchecked Sendable {
 
     func finishPlayback(responseID: String?) {
         guard let responseID else { return }
-        var handler: (@Sendable (String, Bool) -> Void)?
         lock.lock()
-        var progress = playbackProgress[responseID, default: PlaybackProgress()]
-        progress.finished = true
-        if progress.pending == 0 {
-            playbackProgress.removeValue(forKey: responseID)
-            handler = playbackFinished
-        } else {
-            playbackProgress[responseID] = progress
-        }
+        let receipt = playbackLedger.responseFinished(responseID: responseID)
+        let handler = playbackFinished
         lock.unlock()
-        handler?(responseID, progress.scheduled)
+        if let receipt { handler?(receipt.responseID, receipt.audible) }
     }
 
+    /// Silences everything queued. Each response it held is reported as over, so a response that had finished
+    /// but was still draining does not keep the session on Speaking.
     func stopPlayback() {
         player.stop()
         lock.lock()
-        playbackProgress.removeAll()
+        let receipts = playbackLedger.playbackStopped()
+        let handler = playbackFinished
         lock.unlock()
+        for receipt in receipts { handler?(receipt.responseID, receipt.audible) }
     }
 
     func stop() {
@@ -277,7 +271,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         lock.lock()
         captureContinuation?.finish()
         captureContinuation = nil
-        playbackProgress.removeAll()
+        playbackLedger = VoicePlaybackLedger()
         playbackFinished = nil
         converter = nil
         lock.unlock()
@@ -368,27 +362,11 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     private func bufferPlayed(_ responseID: String) {
-        var handler: (@Sendable (String, Bool) -> Void)?
         lock.lock()
-        guard var progress = playbackProgress[responseID] else {
-            lock.unlock()
-            return
-        }
-        progress.pending = max(0, progress.pending - 1)
-        if progress.finished && progress.pending == 0 {
-            playbackProgress.removeValue(forKey: responseID)
-            handler = playbackFinished
-        } else {
-            playbackProgress[responseID] = progress
-        }
+        let receipt = playbackLedger.bufferPlayed(responseID: responseID)
+        let handler = playbackFinished
         lock.unlock()
-        handler?(responseID, progress.scheduled)
-    }
-
-    private struct PlaybackProgress {
-        var pending = 0
-        var finished = false
-        var scheduled = false
+        if let receipt { handler?(receipt.responseID, receipt.audible) }
     }
 }
 
