@@ -68,8 +68,13 @@ function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** One hidden HTML-comment line on a single line, short and unable to close early: the only thing a comment may carry beyond its 4,000 characters. */
-const receiptLine = /^<!-- [\w:.-]{1,160} -->$/u;
+/** The only thing a comment may carry beyond its 4,000 characters: one hidden HTML-comment line, short, on one line and unable to close early. */
+function validReceipt(receipt: string): boolean {
+  const open = '<!-- ';
+  const close = ' -->';
+  return receipt.startsWith(open) && receipt.endsWith(close) &&
+    /^[\w:.-]{1,160}$/u.test(receipt.slice(open.length, receipt.length - close.length));
+}
 
 function repositoryPath(repository: string): string {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
@@ -372,7 +377,7 @@ export function createGitHubIssueClient(
     async createComment(repository, issue, body, signal, receipt) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
-        !body.trim() || body.length > 4_000 || (receipt !== undefined && !receiptLine.test(receipt))) throw new Error('Invalid issue comment');
+        !body.trim() || body.length > 4_000 || (receipt !== undefined && !validReceipt(receipt))) throw new Error('Invalid issue comment');
       const token = await issueToken(repository, 'write');
       await request(fetchImpl, token, `/repos/${path}/issues/${issue}/comments`, 'POST',
         { body: receipt === undefined ? body : `${body}\n\n${receipt}` }, signal);

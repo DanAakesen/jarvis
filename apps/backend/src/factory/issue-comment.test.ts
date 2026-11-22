@@ -161,3 +161,17 @@ describe('issue_comment at the 4,000-character limit', () => {
     expect(github.state.attempts).toBe(0);
   });
 });
+
+describe('the receipt a comment can carry on top of its words', () => {
+  it.each([
+    ['text after it closes', '<!-- jarvis-comment:a --> <b>hi</b>'],
+    ['a second comment inside it', '<!-- jarvis-comment:a --> <!-- b -->'],
+    ['a line break', '<!-- jarvis-comment:a\nb -->'],
+    ['not a hidden comment', 'jarvis-comment:a'],
+    ['too long', `<!-- ${'a'.repeat(161)} -->`],
+  ])('is refused when it is %s, and nothing is sent', async (_label, receipt) => {
+    const github = githubWith();
+    await expect(github.client.createComment('DanAakesen/jarvis', 12, 'The search is slow.', undefined, receipt)).rejects.toThrow('Invalid issue comment');
+    expect(github.state.attempts).toBe(0);
+  });
+});
