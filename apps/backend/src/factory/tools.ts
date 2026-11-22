@@ -22,6 +22,7 @@ import {
   createJarvisIssue,
   createLinkedTaskFromPrompt,
   IssueCreationPartialError,
+  IssueDraftValidationError,
   IssueTaskCodeConflictError,
   IssueWriteUncertainError,
   LinkedIssueTaskCreationError,
@@ -814,7 +815,7 @@ function taskListFilters(input: TaskListInput): TaskListFilters {
   if (input.projectId !== undefined) assertSqlBigInt(input.projectId);
   if (input.createdAfter && input.createdBefore &&
     Date.parse(input.createdAfter) >= Date.parse(input.createdBefore)) {
-    throw new Error('Invalid task filters');
+    throw new ToolRefusal('The created-after time must be earlier than the created-before time.');
   }
   return {
     ...(input.projectId ? { projectId: input.projectId } : {}),
@@ -828,12 +829,17 @@ function taskListFilters(input: TaskListInput): TaskListFilters {
   };
 }
 
+/** A task row leaves out the request: it is the whole task prompt, often over 10 KB, and get_task returns it. */
+function withoutRequest(task: TaskRecord): Omit<TaskRecord, 'request'> {
+  return Object.fromEntries(Object.entries(task).filter(([key]) => key !== 'request')) as Omit<TaskRecord, 'request'>;
+}
+
 async function controlTask(
   taskId: string,
   action: 'steer' | 'pause' | 'resume' | 'cancel',
   request: import('fastify').FastifyRequest,
   message?: string,
-): Promise<TaskRecord> {
+): Promise<Omit<TaskRecord, 'request'>> {
   assertSqlBigInt(taskId);
   if (action === 'steer' && !message?.trim()) throw new Error('Invalid steering message');
   const controller = requireStore(request.server.taskController, 'Task controls');
@@ -849,7 +855,7 @@ async function controlTask(
   if (result.kind === 'invalid-transition') throw new ToolRefusal(result.reason ?? 'Task state does not allow this action.');
   if (result.kind === 'unavailable') throw new ToolFailure(result.reason ?? 'Task runtime is unavailable');
   if (result.kind === 'failed') throw new ToolFailure(result.reason ?? 'Task control could not be completed');
-  return result.task;
+  return withoutRequest(result.task);
 }
 
 async function executeStartIssue(request: FastifyRequest, issue: number, project?: string) {
@@ -915,6 +921,7 @@ export const factoryTools: readonly JarvisTool[] = [
         }, isPiCall(request));
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+        if (error instanceof IssueDraftValidationError) throw new ToolRefusal(error.message);
         throw new ToolFailure('The GitHub issue draft could not be prepared.');
       }
     },
@@ -1033,7 +1040,7 @@ export const factoryTools: readonly JarvisTool[] = [
       additionalProperties: false,
     },
     execute: async (input, request, signal) => {
-      const message = await currentDanMessage(request);
+      const message = await currentDanMessage(request, 'issue start');
       const { project, issue } = input as StartIssueToolInput;
       const pi = isPiCall(request);
       if (!pi && project === undefined && requiresProjectSelector(message.text)) {
@@ -1045,6 +1052,8 @@ export const factoryTools: readonly JarvisTool[] = [
         : undefined;
       const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
       if (repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+        let staged: Awaited<ReturnType<typeof stageIssueCreation>>;
+        // Only the steps before any write are covered by "nothing was started"; confirming below can have written.
         try {
           const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
           if (!existing || existing.isPullRequest || existing.state !== 'open') {
@@ -1054,15 +1063,18 @@ export const factoryTools: readonly JarvisTool[] = [
           if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
             return await executeStartIssue(request, issue, ownProject.id);
           }
-          const staged = await stageIssueCreation(request.server, {
+          staged = await stageIssueCreation(request.server, {
             ...(selectedProject ? { project: selectedProject.id } : {}),
             issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
           }, message, signal, selectedProject, pi);
-          return await confirmIssueCreation(request, staged.confirmationCode, signal, true);
         } catch (error) {
-          if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          // The caller's own cancel is not an outage.
+          if (signal.aborted || error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          // A secret-like word or an empty or oversized text is a refusal with its reason, not an outage.
+          if (error instanceof IssueDraftValidationError) throw new ToolRefusal(error.message);
           throw new ToolFailure('I couldn’t start that issue because GitHub or the task store did not answer. Nothing was started; try again shortly.');
         }
+        return confirmIssueCreation(request, staged.confirmationCode, signal, true);
       }
       return executeStartIssue(request, issue, project);
     },
@@ -1143,7 +1155,8 @@ export const factoryTools: readonly JarvisTool[] = [
     execute: async (input, request) => {
       const store = requireStore(request.server.taskStore, 'Task service');
       const filters = taskListFilters(input as TaskListInput);
-      return { tasks: await store.list(filters), limit: filters.limit, offset: filters.offset };
+      const tasks = (await store.list(filters)).map(withoutRequest);
+      return { tasks, limit: filters.limit, offset: filters.offset };
     },
   },
   {

@@ -467,6 +467,7 @@ export const pullRequestTools: readonly JarvisTool[] = [
           number: input.number,
           title: truncateUtf8(pull.title, 500),
           state: truncateUtf8(pull.state, 32),
+          merged: pull.merged === true,
           draft: pull.draft,
           mergeable: pull.mergeable,
           head: { ref: truncateUtf8(headRef, 255), sha: truncateUtf8(headSha, 40) },
