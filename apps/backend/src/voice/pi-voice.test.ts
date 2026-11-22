@@ -2,7 +2,7 @@ import { failureCopy } from '@jarvis/contracts';
 import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk, ConversationAgentInput } from '../core/chat-agent.js';
 import { PiGatewayError } from '../pi/errors.js';
-import { createPiVoiceTurns, type PiVoiceAgent, type PiVoiceTurnLog } from './pi-voice.js';
+import { createPiVoiceTurns, PI_VOICE_TURN_DEADLINE_MS, type PiVoiceAgent, type PiVoiceTurnLog } from './pi-voice.js';
 
 const turn = { text: 'what is next', messageId: '42', sessionId: '7', startedAt: 0 };
 
@@ -28,12 +28,16 @@ describe('PI voice turns', () => {
     const inputs: ConversationAgentInput[] = [];
     const agent: PiVoiceAgent = { async *stream(input) { inputs.push(input); yield 'Two meetings today.'; } };
     const { turns, spoken, logs, busy, settled } = setup(agent);
+    const before = performance.now();
     turns.start({ ...turn, proactiveContext: 'Jarvis told Dan about a build.' });
+    const after = performance.now();
     await settled();
     expect(inputs).toEqual([{
       messageId: '42', sessionId: '7', text: 'what is next', channel: 'voice',
-      proactiveContext: 'Jarvis told Dan about a build.', onTurnDeadline: expect.any(Function),
+      proactiveContext: 'Jarvis told Dan about a build.', onTurnDeadline: expect.any(Function), deadlineAt: expect.any(Number),
     }]);
+    expect(inputs[0]!.deadlineAt).toBeGreaterThanOrEqual(before + PI_VOICE_TURN_DEADLINE_MS);
+    expect(inputs[0]!.deadlineAt).toBeLessThanOrEqual(after + PI_VOICE_TURN_DEADLINE_MS);
     expect(spoken).toEqual(['Two meetings today.']);
     expect(logs).toEqual([{ outcome: 'ok', transcriptToFirstTextMs: 100, transcriptToDoneMs: 100, acknowledged: false }]);
     expect(busy).toEqual([true, false]);

@@ -43,6 +43,7 @@ export interface ScriptedResponse<World> {
   readonly retryAfter?: string;
   /** End the stream with `response.failed` and this code instead of `response.completed`. */
   readonly failWith?: string;
+  readonly errorMessage?: string;
 }
 
 export interface FoundryRequest {
@@ -156,7 +157,7 @@ export function createScriptedFoundry<World>(options: {
       }
     }
     if (response.failWith) {
-      send({ type: 'response.failed', response: { id, status: 'failed', error: { code: response.failWith } } });
+      send({ type: 'response.failed', response: { id, status: 'failed', error: { code: response.failWith, message: response.errorMessage } } });
       return;
     }
     const usage = response.usage ?? defaultUsage;

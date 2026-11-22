@@ -67,10 +67,14 @@ export interface PiTurnGrant {
   readonly smoke?: boolean;
   /** A brain wake: there is no owner message. It has the chat tools plus the brain's own (message to Dan, notes, trail, looks). */
   readonly brain?: PiBrainRun;
-  /** Tools already advertised by the door, through find_tools or as direct tools on the connection. */
+  /** Tools already returned by find_tools in this turn. */
   readonly discovered: Set<string>;
   /** What each tool this turn actually ran returned, recorded by the MCP server itself, never taken from model text. */
   readonly results: { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
+  /** Owner-facing confirmations from the dispatcher, once per actual call, for a reply the model could not finish. */
+  readonly receipts: { readonly confirmation: string; readonly action: boolean }[];
+  /** Bridge calls which might have changed something but did not return a trusted, local confirmation. */
+  readonly remote: { unverified: number };
   /** Content-free diagnostics from the latest completed discovery and from authenticated Azure call attempts. */
   readonly azure: {
     catalogue: RemoteMcpStatus['state'] | 'empty' | 'not_configured' | 'not_searched';
@@ -107,7 +111,7 @@ export interface PiTurnGrant {
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'azure' | 'actions' | 'actionRuns' | 'identities' | 'pushes' | 'requests'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results' | 'receipts' | 'remote' | 'azure' | 'actions' | 'actionRuns' | 'identities' | 'pushes' | 'requests'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   resolveActivation(id: unknown): PiTurnGrant | undefined;
   /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
@@ -141,7 +145,7 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       if (grants.size >= maxOpenTurns) throw new Error('Too many open PI turns');
       const turn = `jt-${randomBytes(16).toString('base64url')}`;
       const grant: PiTurnGrant = {
-        ...input, turn, discovered: new Set(), results: [],
+        ...input, turn, discovered: new Set(), results: [], receipts: [], remote: { unverified: 0 },
         azure: { catalogue: 'not_searched', attempts: 0, undiscoveredRefusals: 0 },
         actions: { count: 0 }, actionRuns: [], identities: { asked: new Map(), reused: false },
         pushes: { count: 0 }, requests: { count: 0 },

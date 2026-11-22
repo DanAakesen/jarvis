@@ -54,7 +54,7 @@ and when this file no longer matches the registry.
 | 12 | `pc_browser_act` | 281 | 281 | 392 |
 | 13 | `update_project` | 270 | 270 | 311 |
 | 14 | `health_summary` | 268 | 268 | 460 |
-| 15 | `gym_lifts` | 233 | 233 | 707 |
+| 15 | `gym_lifts` | 233 | 233 | 789 |
 
 Schemas above the ceiling, each with a ratchet (they may not grow):
 
@@ -165,7 +165,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `pi_note` | pi | background wake | action | ok | "Keep a free-text note in PI's own corner of the vault (PI/Notes), for…" (derived, #2) | ok (3 calls) | 63 |  |
 | `pin_restore` | workspace | chat and voice | unclassified | ok | "bring back my pinned spending window" (en, #2) | ok (2 calls) | 54 |  |
 | `pins_list` | workspace | chat and voice | unclassified | ok | "what do I have pinned" (en, #2) | ok | 16 |  |
-| `pr_diff` | factory | chat and voice | unclassified | ok | "patches optionally build file path" (derived, #1) | ok (2 calls) | 103 |  |
+| `pr_diff` | factory | chat and voice | unclassified | ok | "patches optionally build file review" (derived, #3) | ok (2 calls) | 103 |  |
 | `pr_get` | factory | chat and voice | unclassified | ok | "pull request summary and linked issues" (en, #2) | ok (2 calls) | 89 |  |
 | `pr_reviews` | factory | chat and voice | unclassified | ok | "Read bounded pull request review threads and comments, including reso…" (derived, #2) | ok | 89 |  |
 | `proactive_item_feedback` | notes | chat and voice | action | ok | "that finding was not useful" (en, #1) | ok (3 calls) | 106 |  |

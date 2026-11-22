@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { failureCopy } from '@jarvis/contracts';
 import {
   FOUNDRY_AGENT_SCOPE, parseEvents,
   type ConversationAgent, type ConversationAgentChunk, type ConversationAgentInput,
@@ -8,6 +9,7 @@ import { answerClientTool, argumentKeyNames, type ClientToolOutcome } from './cl
 import { PiGatewayError } from './errors.js';
 import { ESTIMATED_PROMPT_TOKENS, piCostDkk, type PiUsage } from './pricing.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
+import { rateLimitCodes, rateLimitDetails } from './rate-limit.js';
 import { azureToolPrefix } from './remote-mcp.js';
 import {
   allTurnKinds, chatTurnKinds, type PiProactiveEvidence, type PiStore, type PiStoredTurn, type PiTurnKind, type PiTurnRecord,
@@ -117,7 +119,7 @@ export interface PiGatewayOptions {
   readonly turnTimeoutMs?: number;
   readonly connectTimeoutMs?: number;
   readonly warmFreshMs?: number;
-  /** The pause before the one retry of a reply stream that died before the model produced anything. */
+  /** Base delay for retrying a response that was rejected or failed before producing anything. */
   readonly streamRetryDelayMs?: number;
   readonly brainTimeoutMs?: number;
   /** Bounded runtime evidence for status pages; status consumers must not inspect turn text. */
@@ -146,6 +148,8 @@ export interface PiBrainRunResult {
 interface PiTurnInput extends ConversationAgentInput {
   /** Deliver the timeout sentence at the deadline, before the stream finishes its cancellation. */
   readonly onTurnDeadline?: (spokenMessage: string) => void;
+  /** Monotonic deadline when the channel has a shorter wait than the gateway. */
+  readonly deadlineAt?: number;
 }
 
 export interface PiGateway extends ConversationAgent {
@@ -191,11 +195,12 @@ const scratchCleanupMs = 5_000;
 const retryableStreamFailures: ReadonlySet<string> = new Set(['stream_ended_without_completed', 'stream_broke']);
 /** A Foundry `response.failed` or `error` is retried only with one of these codes; `incomplete`, content filters, tool errors and unknown codes never are. */
 const transientFoundryCodes: ReadonlySet<string> = new Set([
-  'server_error', 'rate_limit', 'rate_limit_exceeded', 'too_many_requests', 'temporarily_unavailable', 'timeout',
+  'server_error', 'temporarily_unavailable', 'timeout',
 ]);
-/** What the retry decision needs from a turn's grant: any trace that the model reached a tool. */
-const toolMayHaveRun = (grant: PiTurnGrant): boolean =>
-  grant.requests.count > 0 || grant.results.length > 0 || grant.actions.count > 0 || grant.pushes.count > 0;
+const maxResponseRetries = 2;
+/** Monotone: take a baseline for each round, since a follow-up already has tool evidence from earlier rounds. */
+const toolProgress = (grant: PiTurnGrant): number =>
+  grant.requests.count + grant.results.length + grant.actions.count + grant.pushes.count;
 /**
  * What a turn that fails part-way has spent: the usage of every response that completed, plus the conservative estimate for
  * the one in flight when it had produced text or a tool call. A turn that completes bills the summed usage of `done` instead.
@@ -234,7 +239,7 @@ function createSpendTracker() {
  */
 function untouched(error: unknown, phase: StreamPhase, grant: PiTurnGrant | undefined): unknown {
   if (!(error instanceof PiGatewayError) || error.kind !== 'cut_off' || phase.failure !== 'foundry_response_failed' ||
-    phase.sawOutput || !grant || toolMayHaveRun(grant)) return error;
+    phase.sawOutput || !grant || toolProgress(grant) > 0) return error;
   return new PiGatewayError(error.code, 'cut_off_clean', { cause: error, ...(error.detail ? { detail: error.detail } : {}) });
 }
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -251,7 +256,7 @@ const harnessListLimit = 25;
 const unknownItemLogLimit = 5;
 /** Output item types the gateway expects; anything else is logged once per stream as `pi.harness_item`. */
 const knownItemTypes = new Set(['message', 'reasoning', 'mcp_call', 'mcp_list_tools']);
-/** Responses one turn may take: the first request plus at most seven follow-ups that answer the harness's client-side items. */
+/** Logical rounds per turn, excluding retries: the first request plus at most seven follow-ups answering client-side items. */
 const maxTurnRounds = 8;
 /** Client-owned items one follow-up may answer; more than this is not a tool loop but a runaway stream. */
 const maxClientItemsPerRound = 16;
@@ -405,16 +410,19 @@ function httpFailure(status: number): PiGatewayError {
   return new PiGatewayError('pi_unavailable', 'service_problem', { detail });
 }
 
-/** The provider's own short code for a failed stream (for example `server_error`), or the event type; never its message. */
-function failureCode(payload: Record<string, unknown>, type: string): string {
+function streamError(payload: Record<string, unknown>, type: string) {
   const response = isObject(payload.response) ? payload.response : {};
   const error = isObject(response.error) ? response.error : isObject(payload.error) ? payload.error : payload;
   const code = typeof error.code === 'string' ? error.code : typeof response.status === 'string' ? response.status : type;
-  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) ? code : type;
+  return { code: /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) ? code : type, error, output: response.output };
 }
+
+type StreamFailureFields = { event?: string; code?: string; status?: number; providerMessage?: string; retryAfterMs?: number };
 
 /** What one attempt at a reply stream has seen so far: it explains a failure and decides whether a retry could repeat anything. */
 interface StreamPhase {
+  readonly round: number;
+  readonly attempt: number;
   readonly startedAt: number;
   firstEventMs: number | null;
   sawText: boolean;
@@ -423,12 +431,84 @@ interface StreamPhase {
   sawOutput: boolean;
   responseId: string | null;
   requestSent: boolean;
+  /** The HTTP request was rejected, as opposed to a timeout or failure after it could have been accepted. */
+  rejected: boolean;
+  readonly sendsApproval: boolean;
+  unverifiedWork: boolean;
+  sawHarnessCall: boolean;
+  readonly pendingDoorCalls: Set<string>;
   failure: string | null;
-  failureFields: Record<string, string>;
+  failureFields: StreamFailureFields;
   /** Distinct event and output item types seen so far, in order, for `pi.harness_item`. */
   eventTypes: string[];
   itemTypes: string[];
   unknownItemTypes: Set<string>;
+}
+
+interface ResponseTurn {
+  readonly grant: PiTurnGrant;
+  readonly deadlineAt: number;
+  retriesLeft: number;
+  unverifiedWork: boolean;
+  phase?: StreamPhase | undefined;
+}
+
+const responseTurn = (grant: PiTurnGrant, deadlineAt: number): ResponseTurn =>
+  ({ grant, deadlineAt, retriesLeft: maxResponseRetries, unverifiedWork: false });
+
+function actionUnverified(turn: ResponseTurn): boolean {
+  const { grant, phase } = turn;
+  return turn.unverifiedWork || grant.remote.unverified > 0 ||
+    grant.actionRuns.some(run => run.state === 'running' || run.state === 'unknown') ||
+    (phase !== undefined && (phase.unverifiedWork || phase.sawHarnessCall || phase.pendingDoorCalls.size > 0 ||
+      (phase.sendsApproval && phase.requestSent && !phase.rejected)));
+}
+
+/** Keep the dispatcher's confirmations, not a partial model answer or a guess at what ran. */
+function withRecordedOutcome(error: PiGatewayError, turn: ResponseTurn | undefined): PiGatewayError {
+  if (!turn) return error;
+  const uncertain = actionUnverified(turn);
+  const actions = turn.grant.receipts.filter(receipt => receipt.action);
+  // For a read-only turn, the final read is the useful receipt, not the searches that led to it.
+  const receipts = actions.length > 0 ? actions : turn.grant.receipts.slice(-1);
+  const kind = uncertain
+    ? error.code === 'pi_timeout' ? 'took_too_long' : 'cut_off'
+    : receipts.length > 0 ? 'reply_not_written'
+    : error.kind === 'cut_off' && turn.grant.results.length > 0 ? 'cut_off_clean'
+    : error.kind;
+  if (receipts.length === 0 && kind === error.kind) return error;
+  const confirmations = receipts.slice(0, 5).map(receipt => receipt.confirmation.trim()).filter(Boolean);
+  if (receipts.length > 5) confirmations.push(`${receipts.length - 5} more tool results were recorded.`);
+  if (confirmations.length > 0) {
+    if (uncertain) confirmations.push(failureCopy[kind].chat);
+    confirmations.push(failureCopy.reply_not_written.chat);
+  }
+  return new PiGatewayError(error.code, kind, {
+    cause: error, detail: error.detail, ...(confirmations.length ? { receipt: confirmations.join(' ') } : {}),
+  });
+}
+
+/** Inspect only a small error body; a slow error server must not spend the turn's retry budget sending diagnostics. */
+async function readRateLimitError(response: Response, signal: AbortSignal): Promise<unknown> {
+  const reader = response.body?.getReader();
+  if (!reader) return undefined;
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(1000)]);
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = '';
+  try {
+    while (size <= 8192) {
+      const chunk = await untilAborted(() => reader.read(), deadline);
+      if (chunk.done) {
+        const value: unknown = JSON.parse(text + decoder.decode());
+        return isObject(value) ? value.error ?? value : undefined;
+      }
+      size += chunk.value.length;
+      if (size <= 8192) text += decoder.decode(chunk.value, { stream: true });
+    }
+  } catch { /* Error diagnostics are optional; headers still carry the retry hint. */ }
+  finally { void reader.cancel().catch(() => {}); }
+  return undefined;
 }
 
 function remember(list: string[], value: string | undefined): void {
@@ -527,10 +607,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const connecting = new AbortController();
     const deadline = setTimeout(() => connecting.abort(new DOMException('PI connection timed out', 'TimeoutError')), connectTimeoutMs);
     deadline.unref();
+    const requestSignal = AbortSignal.any([signal, connecting.signal]);
     try {
       if (stream) stream.requestSent = true;
       const response = await fetcher(`${base}${path}${path.includes('?') ? '&' : '?'}api-version=v1`, {
-        method, redirect: 'error', signal: AbortSignal.any([signal, connecting.signal]),
+        method, redirect: 'error', signal: requestSignal,
         headers: {
           Authorization: `Bearer ${token}`, 'Foundry-Features': PI_PREVIEW_HEADER,
           'Content-Type': 'application/json', ...(stream ? { Accept: 'text/event-stream' } : {}),
@@ -542,7 +623,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal.throwIfAborted();
       }
       if (!response.ok) {
-        await response.body?.cancel().catch(() => {});
+        if (stream) stream.rejected = response.status >= 400 && response.status < 500 && response.status !== 408;
+        if (stream && response.status === 429) {
+          const error = await readRateLimitError(response, requestSignal);
+          logStreamFailure('http_rate_limited', stream, { status: 429, code: 'http_429', ...rateLimitDetails(error, now(), response.headers) });
+        } else void response.body?.cancel().catch(() => {});
         throw httpFailure(response.status);
       }
       return response;
@@ -601,10 +686,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     lastTurnEnd?.outcome === 'cancelled' && performance.now() - lastTurnEnd.at < previousCancelledWindowMs;
 
   /** One line for each way a PI turn fails, with a distinct reason and how far the attempt had got. Never text, arguments or tokens. */
-  function logStreamFailure(reason: string, phase: StreamPhase | null, attempt: number, extra: Record<string, string> = {}): void {
+  function logStreamFailure(reason: string, phase: StreamPhase | null, extra: StreamFailureFields = {}): void {
     if (phase) { phase.failure = reason; phase.failureFields = extra; }
     log('pi.stream_failed', {
-      reason, ...extra, ...(phase ? { attempt, ...phaseFields(phase) } : { previousCancelled: previousCancelled() }),
+      reason, ...extra, ...(phase ? { round: phase.round, attempt: phase.attempt, ...phaseFields(phase) } : { previousCancelled: previousCancelled() }),
     });
   }
 
@@ -649,8 +734,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   /**
-   * One request to the model. A stream that fails before any text, reasoning or tool call is tried once more (see `respond`),
-   * and every failure here logs why with `pi.stream_failed`. The harness's calls (`function_call`, `mcp_approval_request`) are
+   * One request to the model. Early failures can be retried by `respondRound`. The harness's calls (`function_call`, `mcp_approval_request`) are
    * collected while the response streams and never end it: the stream is read to its terminal event, so the harness can finish
    * what it runs itself. They are returned once the response completed, for `respond` to classify. Reply text is forwarded as it
    * streams; text that only a `response.output_text.done` event or the completed `output` carries is added once, as its missing end.
@@ -708,13 +792,24 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       if (overflowSeen && (slot?.overflow ?? true)) overflowFollowed = true;
     };
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
-    const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
+    const markUnverifiedOutput = () => { phase.sawOutput = true; phase.unverifiedWork = true; };
+    const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) markUnverifiedOutput(); };
+    const noteMcp = (item: Record<string, unknown>, done: boolean) => {
+      if (label(item.server_label) !== PI_MCP_SERVER_LABEL) phase.unverifiedWork = true;
+      else {
+        const id = plainId(item.id);
+        if (id === undefined) phase.unverifiedWork = true;
+        else if (done) phase.pendingDoorCalls.delete(id);
+        else if (phase.pendingDoorCalls.size >= maxTrackedItems) phase.unverifiedWork = true;
+        else phase.pendingDoorCalls.add(id);
+      }
+    };
     try {
       const response = await untilAborted(() => call('POST', '/responses', {
         conversation: conversationId, input, stream: true,
       }, signal, phase), signal);
       if (!response.body) {
-        logStreamFailure('no_stream', phase, attempt);
+        logStreamFailure('no_stream', phase);
         throw new PiGatewayError('pi_failed', 'no_reply_stream', { detail: 'no_stream' });
       }
       const source = response.body.getReader();
@@ -723,7 +818,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         const chunk = await untilAborted(() => source.read(), signal).catch((error: unknown) => {
           if (signal.aborted) throw error;
           markUnreadTail();
-          logStreamFailure('stream_broke', phase, attempt);
+          logStreamFailure('stream_broke', phase);
           throw new PiGatewayError('pi_failed', 'cut_off', { cause: error, detail: 'stream_broke' });
         });
         if (chunk.done) break;
@@ -733,8 +828,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         for (const frame of parsed.events) {
           let payload: unknown;
           // A frame that cannot be read could have been anything, a tool event included.
-          try { payload = JSON.parse(frame.data); } catch { phase.sawOutput = true; continue; }
-          if (!isObject(payload)) { phase.sawOutput = true; continue; }
+          try { payload = JSON.parse(frame.data); } catch { markUnverifiedOutput(); continue; }
+          if (!isObject(payload)) { markUnverifiedOutput(); continue; }
           const type = typeof payload.type === 'string' ? payload.type : frame.event;
           phase.firstEventMs ??= Math.round(performance.now() - phase.startedAt);
           remember(phase.eventTypes, harnessLabel(type));
@@ -758,6 +853,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             const itemType = payload.item.type;
             remember(phase.itemTypes, harnessLabel(itemType));
             if (typeof itemType === 'string' && !knownItemTypes.has(itemType) && itemType !== 'mcp_approval_request' && itemType !== 'function_call') {
+              if (itemType !== 'function_call_output' && itemType !== 'mcp_approval_response') phase.unverifiedWork = true;
               // Deduplicated on the sanitised label, so every non-token type counts once as `other`.
               const unknown = harnessLabel(itemType)!;
               if (!phase.unknownItemTypes.has(unknown) && phase.unknownItemTypes.size < unknownItemLogLimit) {
@@ -766,11 +862,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
               }
             }
             if (itemType === 'mcp_call') {
+              noteMcp(payload.item, false);
               phase.sawTool = true;
               slotFor(payload.item.id, payload.output_index);
               laterOutput();
               yield { kind: 'tool', server: label(payload.item.server_label) };
             } else if (typeof itemType === 'string' && callItemTypes.has(itemType)) {
+              phase.sawHarnessCall = true;
               phase.sawTool = true;
               const tracked = trackCall(calls, payload.item, false);
               if (!tracked) overflowSeen = true;
@@ -787,10 +885,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.output_item.done' && isObject(payload.item)) {
             const item = payload.item;
             if (typeof item.type === 'string' && callItemTypes.has(item.type)) {
+              phase.sawHarnessCall = true;
               const tracked = trackCall(calls, item, true);
               if (!tracked) overflowSeen = true;
               else if (tracked.created) yield { kind: 'tool', server: '' };
             } else if (item.type === 'mcp_call') {
+              noteMcp(item, true);
               laterOutput(slotFor(item.id, payload.output_index));
               yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null, ...itemFailure(item) };
             } else if (item.type === 'mcp_list_tools') {
@@ -816,6 +916,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
               applyFinalOutput(calls, payload.response.output);
               if (payload.response.output.some(entry => isObject(entry) && typeof entry.type === 'string' && !callItemTypes.has(entry.type))) overflowFollowed = overflowSeen;
               for (const [position, entry] of payload.response.output.entries()) {
+                if (isObject(entry) && entry.type === 'mcp_call') noteMcp(entry, entry.status === 'completed' || entry.output != null);
                 if (!isObject(entry) || entry.type !== 'message' || !Array.isArray(entry.content)) continue;
                 const slot = slotFor(entry.id, position);
                 for (const [part, content] of entry.content.entries()) {
@@ -827,30 +928,42 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             }
             break;
           } else if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
-            const detail = failureCode(payload, type);
-            logStreamFailure('foundry_response_failed', phase, attempt, { event: type, code: detail });
-            throw new PiGatewayError('pi_failed', 'cut_off', { detail });
+            const { code, error, output } = streamError(payload, type);
+            // Some failures include partial output only on the terminal frame.
+            if (Array.isArray(output)) for (const item of output) {
+              if (isObject(item) && item.type === 'mcp_list_tools') continue;
+              phase.sawOutput = true;
+              if (isObject(item) && item.type === 'mcp_call') {
+                noteMcp(item, item.status === 'completed' || item.output != null);
+              } else if (!isObject(item) || (item.type !== 'message' && item.type !== 'reasoning')) {
+                phase.unverifiedWork = true;
+              }
+            }
+            logStreamFailure('foundry_response_failed', phase, {
+              event: type, code, ...(rateLimitCodes.has(code) ? rateLimitDetails(error, now(), response.headers) : {}),
+            });
+            throw new PiGatewayError('pi_failed', 'cut_off', { detail: code });
           }
         }
       }
       if (!usage) {
         markUnreadTail();
-        logStreamFailure('stream_ended_without_completed', phase, attempt);
+        logStreamFailure('stream_ended_without_completed', phase);
         throw new PiGatewayError('pi_failed', 'cut_off', { detail: 'stream_ended_without_completed' });
       }
       return { calls, overflow: overflowSeen && !overflowFollowed, usage };
     } finally {
       void reader?.cancel().catch(() => {});
       // Give Foundry a chance to stop the old response before handing the conversation to the next turn.
-      if (!usage && signal.aborted && phase.requestSent) {
-        if (phase.responseId === null) logStreamFailure('cancel_no_response_id', phase, attempt);
+      if (!usage && signal.aborted && phase.requestSent && !phase.rejected) {
+        if (phase.responseId === null) logStreamFailure('cancel_no_response_id', phase);
         else {
           const path = `/responses/${encodeURIComponent(phase.responseId)}/cancel`;
           const cancelDeadline = AbortSignal.timeout(5_000);
           try {
             const response = await untilAborted(() => call('POST', path, {}, cancelDeadline), cancelDeadline);
             void response.body?.cancel().catch(() => {});
-          } catch { logStreamFailure('cancel_request_failed', phase, attempt); }
+          } catch { logStreamFailure('cancel_request_failed', phase); }
         }
       }
     }
@@ -867,43 +980,47 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   /**
-   * One response of a turn. A stream that dies before anything observable happened is tried once more on
-   * the same conversation with the same input, so the retry can never repeat work. That needs all of: the turn's grant
-   * (a call without one never retries), no byte of output or unreadable frame, no MCP request, tool result, action or push
-   * on the grant (checked again after the pause), a stream-level failure (ended or broke) or a Foundry `response.failed` or
-   * `error` with a code in `transientFoundryCodes`, and, for a stream that merely stopped, a confirmed cancel of the old
-   * response. Cancel and the turn deadline end it as before. Only the first response of a turn may be retried: a follow-up
-   * answers client-side items, and asking again could repeat what a handler did.
+   * Rate limits can retry the current POST, not the work that produced its input. Never replay an approval, a stream
+   * that produced output, or an attempt that reached a tool. Other transient failures keep the one first-round retry.
    */
   async function* respondRound(
-    conversationId: string, input: readonly unknown[], signal: AbortSignal, grant: PiTurnGrant | undefined, retryable: boolean,
+    conversationId: string, input: readonly unknown[], signal: AbortSignal, round: number, turn: ResponseTurn | undefined,
   ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly usage: PiUsage; readonly phase: StreamPhase; readonly attempt: number }> {
+    const grant = turn?.grant;
+    const baseline = grant ? toolProgress(grant) : 0;
+    const sendsApproval = input.some(item => isObject(item) && item.type === 'mcp_approval_response');
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
-        startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
-        responseId: null, requestSent: false, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
+        round, attempt, startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
+        responseId: null, requestSent: false, rejected: false, sendsApproval, unverifiedWork: false, sawHarnessCall: false,
+        pendingDoorCalls: new Set(), failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
+      if (turn) turn.phase = phase;
       try {
         const result = yield* respondOnce(conversationId, input, signal, phase, attempt);
         return { ...result, phase, attempt };
       } catch (error) {
         if (signal.aborted) throw error;
-        const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
-          phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
-        if (!retryable || attempt >= 2 || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
-          !grant || toolMayHaveRun(grant)) {
-          // `phase` is one response. Only the first response of a turn can say nothing happened: a later one exists because the
-          // first ended on a call, so the turn has already streamed text or reached a tool, which this phase cannot see.
-          throw retryable ? untouched(error, phase, grant) : error;
-        }
-        if (phase.failure !== 'foundry_response_failed') {
+        const terminal = phase.failure === 'foundry_response_failed' && phase.failureFields.event !== 'response.incomplete';
+        const code = phase.failureFields.code ?? '';
+        const limited = phase.failure === 'http_rate_limited' || (terminal && rateLimitCodes.has(code));
+        const broken = phase.failure !== null && retryableStreamFailures.has(phase.failure);
+        const eligible = limited || (round === 1 && attempt === 1 && (broken || (terminal && transientFoundryCodes.has(code))));
+        const failure = () => round === 1 ? untouched(error, phase, grant) : error;
+        if (!turn || !grant || turn.retriesLeft === 0 || sendsApproval || !(error instanceof PiGatewayError) ||
+          phase.sawOutput || !eligible || toolProgress(grant) !== baseline) throw failure();
+        if (broken) {
           // A stream that merely stopped may still be running on Foundry's side. Without a confirmed stop, or with events whose
           // response is unknown, it may be running a tool: do not ask again.
           if (phase.responseId !== null ? !await cancelConfirmed(phase.responseId, signal) : phase.firstEventMs !== null) throw error;
         }
-        await pause(streamRetryDelayMs, signal);
-        if (toolMayHaveRun(grant)) throw error;
-        log('pi.stream_retry', { reason: phase.failure, ...phase.failureFields, attempt, ...phaseFields(phase) });
+        const delayMs = Math.max(streamRetryDelayMs * 2 ** (attempt - 1), phase.failureFields.retryAfterMs ?? 0);
+        if (limited && delayMs >= turn.deadlineAt - performance.now()) throw failure();
+        await pause(delayMs, signal);
+        signal.throwIfAborted();
+        if (toolProgress(grant) !== baseline || performance.now() >= turn.deadlineAt) throw failure();
+        turn.retriesLeft -= 1;
+        log('pi.stream_retry', { reason: phase.failure, ...phase.failureFields, round, attempt, delayMs, ...phaseFields(phase) });
       }
     }
   }
@@ -913,18 +1030,18 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    * tools): they stream, finish and are never answered here. Only a call its response ends with, unanswered, is client-owned
    * (see `classifyHarnessCall`). Those are answered and the same turn goes on: one follow-up request on the same conversation
    * carries a `function_call_output` per function call and an `mcp_approval_response` per approval request, for at most
-   * `maxTurnRounds` responses in all. A call id is settled once per turn, so a replayed call is never run or answered twice.
+   * `maxTurnRounds` rounds. A call id is settled once per turn, so a replayed call is never run or answered twice.
    * Callers see one stream and one `done` with the summed usage, so the turn is billed once; `round_done` reports each
    * response's own usage for a turn that fails part-way.
    */
-  async function* respond(conversationId: string, input: string, signal: AbortSignal, grant?: PiTurnGrant): AsyncGenerator<PiEvent> {
+  async function* respond(conversationId: string, input: string, signal: AbortSignal, turn?: ResponseTurn): AsyncGenerator<PiEvent> {
     let next: readonly unknown[] = [{ role: 'user', content: input }];
     let answered = 0;
     const resolved = new Set<string>();
     const total = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
     for (let round = 1; ; round += 1) {
       // Delegation also closes the provider response if the consumer stops between chunks.
-      const { calls, overflow, usage, phase, attempt } = yield* respondRound(conversationId, next, signal, grant, round === 1);
+      const { calls, overflow, usage, phase, attempt } = yield* respondRound(conversationId, next, signal, round, turn);
       total.inputTokens += usage.inputTokens;
       total.cachedTokens += usage.cachedTokens;
       total.outputTokens += usage.outputTokens;
@@ -935,7 +1052,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         const key = callKey(harnessCall.item);
         if (classification === 'client_owned') { owned.push(harnessCall); continue; }
         if (classification === 'native') { native += 1; if (key) resolved.add(key); }
+        if (turn && rule !== 'replayed') turn.unverifiedWork = true;
         logHarnessItem('harness_call', harnessCall.item, phase, attempt, { round, classification, rule, argumentKeys: argumentKeyNames(argumentsOf(harnessCall.item)) });
+      }
+      if (turn) {
+        turn.unverifiedWork ||= phase.unverifiedWork || phase.pendingDoorCalls.size > 0 || phase.sendsApproval || overflow;
+        turn.phase = undefined;
       }
       if (native > 0) yield { kind: 'round_calls', native };
       if (owned.length === 0 && !overflow) {
@@ -947,11 +1069,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       const unanswerable = owned.find(entry => callKey(entry.item) === undefined);
       if (unanswerable || overflow || owned.length > maxClientItemsPerRound) {
         if (unanswerable) logHarnessItem('rejected_item', unanswerable.item, phase, attempt);
-        logStreamFailure('approval_or_function_call_item', phase, attempt);
+        logStreamFailure('approval_or_function_call_item', phase);
         throw new PiGatewayError('pi_failed', 'cut_off', { detail: unanswerable ? 'client_call_without_id' : 'too_many_client_calls' });
       }
       if (round >= maxTurnRounds) {
-        logStreamFailure('client_tool_round_limit', phase, attempt);
+        logStreamFailure('client_tool_round_limit', phase);
         throw new PiGatewayError('pi_failed', 'cut_off', { detail: 'client_tool_round_limit' });
       }
       const replies: unknown[] = [];
@@ -1074,6 +1196,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const started = performance.now();
     const channel = input.channel ?? 'chat';
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
+    const deadlineAt = Math.min(started + turnTimeoutMs, input.deadlineAt ?? Infinity);
     const timedOut = () => deadline.reason instanceof DOMException && deadline.reason.name === 'TimeoutError';
     const notes: string[] = input.channel === 'voice' ? [voiceChannelNote] : [];
     if (input.visualContext !== undefined) {
@@ -1090,21 +1213,22 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (input.screenContext) notes.push(`[Shared screen context: ${JSON.stringify(input.screenContext)}]`);
 
     let grant: PiTurnGrant | undefined;
+    let turn: ResponseTurn | undefined;
     let sawTool = false;
     let rounds = 1;
     let timeoutFailure: PiGatewayError | undefined;
     const deadlineFailure = () => {
-      // A follow-up can only exist after a call, even if that call appeared only in the completed output.
-      const actionPossible = grant !== undefined && (sawTool || rounds > 1 || toolMayHaveRun(grant));
-      return timeoutFailure ??= new PiGatewayError('pi_timeout', actionPossible ? 'took_too_long' : 'took_too_long_clean', {
+      const actionPossible = turn !== undefined && (actionUnverified(turn) ||
+        (turn.grant.receipts.length === 0 && (sawTool || rounds > 1 || toolProgress(turn.grant) > 0)));
+      return timeoutFailure ??= withRecordedOutcome(new PiGatewayError('pi_timeout', actionPossible ? 'took_too_long' : 'took_too_long_clean', {
         cause: deadline.reason, detail: 'turn_deadline',
-      });
+      }), turn);
     };
     const notifyDeadline = () => {
       if (!timedOut()) return;
       const error = deadlineFailure();
       try { input.onTurnDeadline?.(error.spokenMessage); }
-      catch { logStreamFailure('deadline_notice_failed', null, 1); }
+      catch { logStreamFailure('deadline_notice_failed', null); }
     };
     deadline.addEventListener('abort', notifyDeadline, { once: true });
     const stopWatchingDeadline = () => deadline.removeEventListener('abort', notifyDeadline);
@@ -1152,6 +1276,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal: deadline,
       });
       grant = activation.grant;
+      turn = responseTurn(grant, deadlineAt);
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
       const overview = overviewFor(conversationId);
@@ -1162,7 +1287,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
-      for await (const event of respond(conversationId, text, deadline, grant)) {
+      for await (const event of respond(conversationId, text, deadline, turn)) {
         spend.note(event);
         // The model has the message once the provider answers, so the overview is not sent again on the next turn.
         if (overviewSent) { noteSent = overviewSent; overviewSent = undefined; }
@@ -1213,7 +1338,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         await options.store.dropConversation(options.owner, AbortSignal.timeout(5_000)).catch(() => {});
       }
       if (outcome === 'timeout') throw deadlineFailure();
-      throw error;
+      throw outcome === 'failed' && error instanceof PiGatewayError ? withRecordedOutcome(error, turn) : error;
     } finally {
       stopWatchingDeadline();
       outcome ??= timedOut() ? 'timeout' : deadline.aborted ? 'cancelled' : 'failed';
@@ -1283,7 +1408,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     readonly evidence?: readonly PiProactiveEvidence[] | undefined;
   }, signal: AbortSignal): Promise<PiBrainRunResult> {
     const started = performance.now();
-    const deadline = AbortSignal.any([signal, AbortSignal.timeout(options.brainTimeoutMs ?? 240_000)]);
+    const timeoutMs = options.brainTimeoutMs ?? 240_000;
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
     const run: PiBrainRun = {
       runId: input.runId,
       sent: [],
@@ -1321,7 +1447,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
         ...(overview ? { notes: [overview.text] } : {}),
       });
-      for await (const event of respond(conversationId, message, deadline, grant)) {
+      for await (const event of respond(conversationId, message, deadline, responseTurn(grant, started + timeoutMs))) {
         spend.note(event);
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
@@ -1333,7 +1459,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
       failure = error instanceof PiGatewayError ? error
         : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'took_too_long', { cause: error, detail: 'brain_deadline' })
-        : (logStreamFailure('brain_wake_failed', null, 1), new PiGatewayError('pi_failed', 'cut_off', { cause: error, detail: 'brain_wake_failed' }));
+        : (logStreamFailure('brain_wake_failed', null), new PiGatewayError('pi_failed', 'cut_off', { cause: error, detail: 'brain_wake_failed' }));
     } finally {
       totalMs = Math.round(performance.now() - started);
       if (grant) options.registry.close(grant.turn);

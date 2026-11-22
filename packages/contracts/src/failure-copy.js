@@ -24,6 +24,7 @@ export const failureCopy = Object.freeze({
   no_reply_stream: said('The AI service sent nothing back, so please try again.'),
   cut_off: said(`I couldn't finish that, ${mayBeDone}.`),
   cut_off_clean: said("I couldn't finish that, but nothing was done, so please try again."),
+  reply_not_written: said("I couldn't finish writing the reply."),
   took_too_long: said(`That took too long, so I stopped, ${mayBeDone}.`),
   took_too_long_clean: said('That took too long and I stopped, but nothing was done, so please try again.'),
   still_answering: said("I'm still answering your last message, so please wait a moment."),
