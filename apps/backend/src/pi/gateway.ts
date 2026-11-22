@@ -584,7 +584,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let overflowFollowed = false;
     // The items the response opened. An item is found by its id, else by its output index, and each event gives it every name it has.
     const slots = new Map<string, OutputSlot>();
-    let tracked = 0;
+    let itemsTracked = 0;
     // Past the tracking limit nothing is reconciled any more: the reply is what streamed, so nothing can repeat.
     let reconciling = true;
     const slotFor = (id: unknown, index: unknown): OutputSlot | undefined => {
@@ -594,8 +594,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       if (names.length === 0) return undefined;
       let slot = names.map(name => slots.get(name)).find(found => found !== undefined);
       if (!slot) {
-        if (tracked >= maxTrackedItems) { reconciling = false; return undefined; }
-        tracked += 1;
+        if (itemsTracked >= maxTrackedItems) { reconciling = false; return undefined; }
+        itemsTracked += 1;
         slot = { calls: calls.length, overflow: overflowSeen, text: new Map() };
       }
       for (const name of names) if (!slots.has(name)) slots.set(name, slot);
