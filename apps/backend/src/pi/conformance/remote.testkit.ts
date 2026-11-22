@@ -8,6 +8,7 @@ export interface StubRemoteTool {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Record<string, unknown>;
+  readonly annotations?: { readonly readOnlyHint: boolean };
 }
 
 const repoProps = {
@@ -16,8 +17,9 @@ const repoProps = {
 } as const;
 const paging = { page: { type: 'number' }, perPage: { type: 'number' } } as const;
 
-const tool = (name: string, description: string, properties: Record<string, unknown>, required: string[]): StubRemoteTool => ({
+const tool = (name: string, description: string, properties: Record<string, unknown>, required: string[], readOnlyHint?: boolean): StubRemoteTool => ({
   name, description, inputSchema: { type: 'object', properties, required },
+  ...(readOnlyHint === undefined ? {} : { annotations: { readOnlyHint } }),
 });
 
 export const stubGithubTools: readonly StubRemoteTool[] = [
@@ -26,7 +28,7 @@ export const stubGithubTools: readonly StubRemoteTool[] = [
     ['method', 'owner', 'repo', 'issue_number']),
   tool('issue_write', 'Create a new or update an existing issue in a GitHub repository.',
     { method: { type: 'string', enum: ['create', 'update'] }, ...repoProps, title: { type: 'string' }, body: { type: 'string' } },
-    ['method', 'owner', 'repo']),
+    ['method', 'owner', 'repo'], false),
   tool('list_issues', 'List issues in a GitHub repository. For pagination, use the endCursor from the previous response.',
     { ...repoProps, state: { type: 'string', enum: ['OPEN', 'CLOSED'] }, ...paging }, ['owner', 'repo']),
   tool('search_issues', 'Search for issues in GitHub repositories using issues search syntax already scoped to is:issue.',
@@ -51,7 +53,7 @@ export const stubGithubTools: readonly StubRemoteTool[] = [
   tool('get_file_contents', 'Get the contents of a file or directory from a GitHub repository.',
     { ...repoProps, path: { type: 'string' }, ref: { type: 'string' } }, ['owner', 'repo']),
   tool('search_code', 'Fast and precise code search across ALL GitHub repositories using GitHub’s native search engine.',
-    { query: { type: 'string' }, ...paging }, ['query']),
+    { query: { type: 'string' }, ...paging }, ['query'], true),
   tool('search_repositories', 'Find GitHub repositories by name, description, readme, topics, or other metadata.',
     { query: { type: 'string' }, ...paging }, ['query']),
   tool('actions_list', 'Tools for listing GitHub Actions resources: workflows, workflow runs, jobs and artifacts.',
@@ -75,8 +77,8 @@ export interface StubServerControls {
   listFailure?: number | 'network' | undefined;
   /** Name of the tool whose call returns `isError`, and the text it carries. */
   erroringTool?: { readonly name: string; readonly text: string } | undefined;
-  /** `tools/call` of this name returns a text result of this many characters. */
-  largeTool?: { readonly name: string; readonly characters: number } | undefined;
+  /** `tools/call` of this name returns this fixture value. */
+  toolResult?: { readonly name: string; readonly value: unknown } | undefined;
   /** Names of tools to hide from the list (an upstream catalogue change). */
   hidden?: ReadonlySet<string> | undefined;
 }
@@ -107,7 +109,7 @@ export function createStubMcpServer(tools: readonly StubRemoteTool[], options: {
     else if (body.method === 'tools/call') {
       const name = body.params?.name ?? '';
       if (controls.erroringTool?.name === name) result = { isError: true, content: [{ type: 'text', text: controls.erroringTool.text }] };
-      else if (controls.largeTool?.name === name) result = { content: [{ type: 'text', text: 'x'.repeat(controls.largeTool.characters) }] };
+      else if (controls.toolResult?.name === name) result = { content: [{ type: 'text', text: JSON.stringify(controls.toolResult.value) }] };
       else result = { content: [{ type: 'text', text: JSON.stringify({ ok: true, tool: name, echo: body.params?.arguments ?? {} }) }] };
     } else result = {};
     const message = JSON.stringify({ jsonrpc: '2.0', id: body.id, result });

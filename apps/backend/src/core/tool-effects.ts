@@ -55,9 +55,6 @@ export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Obj
   mail_update_draft: action,
   manage_model_deployment: action,
   manage_repository: action,
-  owner_reminders: operations('operation', {
-    read: 'read', create: 'action', update: 'action', snooze: 'action', cancel: 'action',
-  }),
   pause_task: action,
   pc_act: action,
   pc_browser_act: action,
@@ -97,12 +94,12 @@ export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Obj
 
 /** Tools that only read, search or show (opening a window is showing). They stay `unclassified` for the door and the legacy agent. */
 export const readOnlyTools: ReadonlySet<string> = new Set([
-  'attachment_list', 'attachment_read', 'calendar_find_free_slots', 'calendar_get_pending_change', 'calendar_list_events',
+  'attachment_list', 'attachment_read', 'calendar_find_free_slots', 'calendar_get_pending_change',
   'calendar_next_event', 'calendar_today_agenda', 'checks_list', 'ci_log', 'conversation_search', 'folio_open', 'folio_search',
   'get_deployment_status', 'get_job', 'get_pending_issue', 'get_release', 'get_settings', 'get_status_summary', 'get_usage',
   'get_work_status', 'github_capabilities', 'github_read', 'health_nutrition_suggest', 'health_query', 'health_show',
   'health_summary', 'list_capabilities', 'list_jobs', 'list_projects', 'list_releases', 'list_tasks', 'mail_list_drafts',
   'mail_search', 'pc_active_window', 'pc_browser_snapshot', 'pc_browser_tabs', 'pc_clipboard_read', 'pin_restore', 'pins_list',
   'pr_diff', 'pr_get', 'pr_reviews', 'read_html_view', 'read_window', 'repo_issues', 'repo_list', 'repo_overview', 'repo_read',
-  'repo_search', 'show_knowledge', 'vault_read', 'vault_search', 'weather', 'web_research', 'workspaces_open', 'workspaces_search',
+  'repo_search', 'show_knowledge', 'vault_read', 'vault_search', 'web_research', 'workspaces_open', 'workspaces_search',
 ]);

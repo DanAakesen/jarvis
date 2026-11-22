@@ -379,7 +379,7 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
         script: [
           { steps: [
             { say: 'Pulling the report.' }, find('large result'), call('parity_large_result', { characters: 300_000 }),
-            { say: tools => `The report was too long to read in full: ${body(tools).truncated ? 'I only have its start' : 'I have all of it'}.` },
+            { say: tools => `The report was too long to read in full: ${result(tools).truncated ? 'I only have its start' : 'I have all of it'}.` },
           ] },
           { steps: [
             { say: 'Pulling the archive.' }, find('large result'), call('parity_large_result', { characters: 1_200_000 }),
@@ -390,8 +390,10 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       expect(chat.turns.map(turn => turn.kind)).toEqual(['reply', 'reply']);
       for (const world of [chatWorld, voiceWorld]) {
         const [first, second] = world.foundry.mcp.filter(entry => (entry.args as { name?: string }).name === 'parity_large_result');
-        expect(first!.outcome.body).toMatchObject({ outcome: 'ok', truncated: true });
-        expect((first!.outcome.body!.result.preview as string).length).toBe(200_000);
+        expect(first!.outcome.body).toMatchObject({
+          outcome: 'ok', result: { truncated: true, totalCharacters: 300_011, note: expect.stringContaining('Result shortened') },
+        });
+        expect(JSON.stringify(first!.outcome.body!.result).length).toBeLessThanOrEqual(24_000);
         expect(second!.outcome.body).toMatchObject({ outcome: 'error', result: { error: 'It hit an unexpected problem.' } });
         expect(JSON.stringify(world.store.toolCalls[0]!.result).length).toBeGreaterThan(300_000);
       }

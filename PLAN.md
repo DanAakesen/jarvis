@@ -12,7 +12,7 @@ Brain pushes use the first sentence without cutting off common abbreviations or 
 
 Dan's goal for PI is a bot experience that is "always on", knows him, "can be proactive" and knows him "super well" when he reaches out himself (his words; `PRODUCT.md`, "North star"). It is recorded as issues [#2012](https://github.com/DanAakesen/jarvis/issues/2012) (P0) and [#2011](https://github.com/DanAakesen/jarvis/issues/2011) (P1). Priorities as relayed: **P0** every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. **P1** proactive intelligence. Most of the work in this section is P0; #2018 is a first P1 step (the signals Dan named); P1 otherwise ranks after P0. The offline evidence that Chat and Voice behave the same is #2021 (24 scenarios); the live check is open (Next steps). Inference: these are priority ranks, not the plan phases P0–P15.
 
-Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches the Jarvis tools through one door (`find_tools`, `call_tool`).
+Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches Jarvis tools through one MCP door: three direct tools and `find_tools` / `call_tool` for the rest.
 
 | Weight of the job | Layer | Examples |
 | --- | --- | --- |
@@ -25,7 +25,11 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 
 ### P0 follow-up: shared turn lifetimes
 
-Chat and Voice now queue on the shared conversation rather than returning `busy`. The offline replays cover both arrival orders, one stored typed message and one reply after a voice turn, voice supersession and session end, and audio startup while proactive context stalls. At its deadline Voice uses the same `failureCopy` sentence as Chat (#2017) and speaks it before provider cancellation, while the next turn still waits. Device and live verification remain with Dan. The next change is to bound MCP result size after #2023 lands, then expose the three quick tools directly on the same MCP connection.
+Chat and Voice now queue on the shared conversation rather than returning `busy`. The offline replays cover both arrival orders, one stored typed message and one reply after a voice turn, voice supersession and session end, and audio startup while proactive context stalls. At its deadline Voice uses the same `failureCopy` sentence as Chat (#2017) and speaks it before provider cancellation, while the next turn still waits. Device and live verification remain with Dan.
+
+### P0 follow-up: smaller reads and direct quick tools
+
+After #2023, the MCP door shortens successful read results over 24,000 characters without cutting write results, confirmations or receipts. Chat, Voice and wakes can call `weather`, `calendar_list_events` and `owner_reminders` directly through the same dispatcher and replay checks. Three Danish phrases now find #2025's `proactive_message_feedback` in the top three on the first search. Offline coverage and the generated conformance table are in place; changes in search count and input tokens are not measured live.
 
 ### Completed 20–21 November
 

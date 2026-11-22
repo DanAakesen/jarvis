@@ -7,7 +7,7 @@ import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { validateHtmlApp } from './html-artifact-validation.js';
 import { readSettings } from './settings.js';
-import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
 import { workspaceResultDelivery } from './jobs.js';
 
 const requestTimeoutMs = 8_000;
@@ -492,10 +492,11 @@ export function createWeatherModule(
     return place;
   }
 
-  const weatherTool = {
+  const weatherTool: JarvisTool = {
     name: 'weather',
     description: 'Get current weather and a short forecast from Open-Meteo. Uses the saved home location unless a named place is provided. By default it opens a report in the workspace. Set report to false to get the values only, with nothing opened (the right choice in typed chat, where show_in_chat presents them). Set hourly to true to also get temperature (°C) and rain probability (%) for every hour of the forecast days, with null for a missing hour. Times are local to the place; days count from today.',
     inputSchema,
+    execution: { defaultEffect: 'action', operation: { field: 'report', effects: { false: 'read', '*': 'action' } } },
     sensitive: true,
     async execute(input: unknown, request: FastifyRequest, signal: AbortSignal) {
       if (!validInput(input)) throw new ToolRefusal('Provide a place name, a forecast length from 1 to 7 days, and optional hourly and report flags.');

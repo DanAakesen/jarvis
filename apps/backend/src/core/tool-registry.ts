@@ -61,8 +61,8 @@ export interface ToolExecutionMetadata {
 }
 
 /**
- * What one call of a tool does. A tool that classifies its operations is judged by the operation the arguments name (one it
- * does not classify is `unclassified`, as in the older agent's `effect_for`); any other tool by its default effect.
+ * What one call of a tool does. An operation can be named by a string or a boolean flag. An unmatched operation is
+ * `unclassified` unless the declaration sets an explicit `*` effect; a tool without operations uses its default effect.
  */
 export function effectOf(tool: Pick<JarvisTool, 'execution'>, input: unknown): ToolEffect {
   const execution = tool.execution;
@@ -70,7 +70,9 @@ export function effectOf(tool: Pick<JarvisTool, 'execution'>, input: unknown): T
   const { operation } = execution;
   if (!operation) return execution.defaultEffect;
   const named = input !== null && typeof input === 'object' ? (input as Record<string, unknown>)[operation.field] : undefined;
-  return typeof named === 'string' && Object.hasOwn(operation.effects, named) ? operation.effects[named]! : 'unclassified';
+  const key = typeof named === 'boolean' ? String(named) : named;
+  return typeof key === 'string' && Object.hasOwn(operation.effects, key)
+    ? operation.effects[key]! : operation.effects['*'] ?? 'unclassified';
 }
 
 /**
@@ -136,7 +138,7 @@ function validExecutionMetadata(value: unknown): value is ToolExecutionMetadata 
       !operation.effects || typeof operation.effects !== 'object' || Array.isArray(operation.effects)) return false;
   const effects = Object.entries(operation.effects);
   return effects.length > 0 && effects.every(([name, effect]) =>
-    /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(name) && (effect === 'read' || effect === 'action'));
+    (name === '*' || /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(name)) && (effect === 'read' || effect === 'action'));
 }
 
 /** agents/jarvis/limits.json is the single source; a test fails if these limits drift from it. */

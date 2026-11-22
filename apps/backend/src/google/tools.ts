@@ -609,6 +609,7 @@ export function createGoogleModule(
     {
       name: 'calendar_list_events',
       description: 'Read Dan’s Google Calendar events in a date or date-time range. Resolve relative requests such as “this week”, “next Monday”, or “in October” to ISO dates in Dan’s configured time zone; date endpoints include both dates, while date-times use an exclusive end. Use query for event text such as “dentist”. Results are paged and capped at 100. Read-only and safe for a quick reflex answer.',
+      execution: { defaultEffect: 'read' },
       inputSchema: {
         type: 'object',
         properties: {

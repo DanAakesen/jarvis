@@ -405,9 +405,12 @@ class ToolExecutionMetadata:
         if not isinstance(payload, dict):
             return self.default_effect
         operation = payload.get(self.operation_field)
+        if isinstance(operation, bool):
+            operation = str(operation).lower()
+        unmatched = self.operation_effects.get("*", "unclassified")
         if isinstance(operation, str):
-            return self.operation_effects.get(operation, "unclassified")
-        return "unclassified"
+            return self.operation_effects.get(operation, unmatched)
+        return unmatched
 
 
 def _execution_metadata(value: Any) -> ToolExecutionMetadata:
@@ -434,7 +437,7 @@ def _execution_metadata(value: Any) -> ToolExecutionMetadata:
         or not effects
         or any(
             not isinstance(name, str)
-            or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name)
+            or (name != "*" and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name))
             or not isinstance(effect, str)
             or effect not in {"read", "action"}
             for name, effect in effects.items()

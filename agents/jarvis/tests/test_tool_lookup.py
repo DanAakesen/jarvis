@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from jarvis_tools import BackendTool, ToolExecutionMetadata
+from jarvis_tools import BackendTool, ToolExecutionMetadata, _execution_metadata
 from model_client import chat_model_tools
 from tool_lookup import LOOKUP_TOOLS, resolve_lookup_calls
 
@@ -12,6 +12,16 @@ def _tool(name: str, description: str) -> BackendTool:
 
 def _call(name: str, arguments: str) -> SimpleNamespace:
     return SimpleNamespace(name=name, call_id=f"call_{name}", id="", arguments=arguments)
+
+
+def test_weather_effect_is_read_only_when_the_report_is_disabled() -> None:
+    metadata = _execution_metadata({
+        "defaultEffect": "action",
+        "operation": {"field": "report", "effects": {"false": "read", "*": "action"}},
+    })
+    assert metadata.effect_for('{"report":false}') == "read"
+    assert metadata.effect_for('{"report":true}') == "action"
+    assert metadata.effect_for("{}") == "action"
 
 
 def test_lookup_offers_two_small_tools_and_refuses_a_tool_not_looked_up() -> None:
