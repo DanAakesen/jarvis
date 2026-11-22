@@ -970,11 +970,13 @@ describe('GPT-Live authoritative client events', () => {
         releaseWrite();
         runs[0]!.reply('Your calendar is clear.');
       }
-      await until(() => activity(relay).at(-1) === 'listening', 'delegated work finished');
+      await until(() => commentary(relay).some(event => event.content === 'Your calendar is clear.'),
+        'answer handed to GPT-Live but not yet spoken');
+      expect(activity(relay).at(-1)).toBe('thinking');
       speak(relay, 'activity-answer', 'Your calendar is clear.');
       await until(() => relay.received.filter(event => event.type === 'jarvis.voice.response.completed').length === 2,
         'answer completed');
-      expect(activity(relay).slice(-4)).toEqual(['listening', 'thinking', 'speaking', 'listening']);
+      expect(activity(relay)).toEqual(['listening', 'thinking', 'speaking', 'thinking', 'speaking', 'listening']);
       await until(() => writes.length === 3, 'acknowledgement and answer persisted');
     }, 20_000);
 

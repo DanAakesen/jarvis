@@ -352,19 +352,15 @@ struct VoiceScreenView: View {
             }
             .defaultScrollAnchor(.bottom, for: .initialOffset)
             .defaultScrollAnchor(captionFollow.shouldFollow ? .bottom : nil, for: .sizeChanges)
-            .onScrollPhaseChange { old, new, context in
-                switch new {
-                case .tracking, .interacting, .decelerating:
-                    captionFollow.interactionBegan()
-                case .idle:
-                    if old != .animating {
-                        let geometry = context.geometry
-                        let distance = geometry.contentSize.height + geometry.contentInsets.bottom
-                            - geometry.containerSize.height - geometry.contentOffset.y
-                        captionFollow.interactionEnded(distanceFromBottom: old == .tracking ? nil : Double(distance))
-                    }
-                default: break
+            .onScrollPhaseChange { _, new in
+                if captionFollow.scrollPhaseChanged(.init(new)) {
+                    proxy.scrollTo("caption.latest", anchor: .bottom)
                 }
+            }
+            .onScrollGeometryChange(for: ChatFollowState.Viewport.self) { .init($0) } action: { old, new in
+                var updated = captionFollow
+                _ = updated.viewportChanged(from: old, to: new)
+                if updated != captionFollow { captionFollow = updated }
             }
             .onChange(of: model.captionEntries) { _, _ in
                 if captionFollow.shouldFollow { proxy.scrollTo("caption.latest", anchor: .bottom) }
@@ -720,13 +716,20 @@ private struct VoicePhotoViewfinder: View {
 }
 
 struct VoiceMiniBar: View {
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.scenePhase) private var scenePhase
     let model: VoiceScreenModel
+    var announcesStatus = false
     let onRestore: () -> Void
 
     @ViewBuilder
     var body: some View {
         if model.isMinimized {
             controls
+                .onChange(of: model.statusText) { _, status in
+                    guard announcesStatus, voiceOverEnabled, scenePhase == .active else { return }
+                    AccessibilityNotification.Announcement(status).post()
+                }
         }
     }
 

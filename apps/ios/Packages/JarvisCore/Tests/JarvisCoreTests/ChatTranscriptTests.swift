@@ -33,4 +33,11 @@ final class ChatTranscriptTests: XCTestCase {
         let older = try XCTUnwrap(ChatTranscript.merging([Row("599"), Row("598")], into: [Row("600")], by: \.order))
         XCTAssertEqual(older.map(\.id), ["598", "599", "600"])
     }
+
+    func testOnlyNormalHistoryRefreshCanShowAHistoryFailureNotice() {
+        let notice = "Could not load the conversation."
+        XCTAssertNil(ChatTranscript.Refresh.liveUpdate.failureNotice(notice))
+        XCTAssertNil(ChatTranscript.Refresh.afterTurn.failureNotice(notice))
+        XCTAssertEqual(ChatTranscript.Refresh.normal.failureNotice(notice), notice)
+    }
 }

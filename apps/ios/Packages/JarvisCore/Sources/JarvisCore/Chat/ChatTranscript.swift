@@ -1,6 +1,15 @@
 import Foundation
 
 public enum ChatTranscript {
+    public enum Refresh: Equatable, Sendable {
+        case normal, afterTurn, liveUpdate
+
+        /// A background history read isn't the result of a typed turn.
+        public func failureNotice(_ message: @autoclosure () -> String) -> String? {
+            self == .normal ? message() : nil
+        }
+    }
+
     public struct Order: Comparable, Sendable {
         private let id: String
         private let storedID: UInt64?

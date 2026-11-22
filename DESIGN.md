@@ -3429,9 +3429,11 @@ system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
 With Voice minimised into Chat, put the existing Voice mini-bar in the pinned
-composer stack, above any background Now bar. Use its shared waveform, status
-text, microphone and End controls. The status remains readable without colour,
-and opening Voice restores the same session. Do not add a second floating bar.
+composer stack, above any background Now bar. Reuse the labelled restore button
+with the waveform symbol and the shared microphone and End buttons. The mic
+button shows mute separately from the Thinking or Speaking label. VoiceOver
+announces a changed status while the bar is visible in Chat. Opening Voice
+restores the same session. Do not add a second floating bar.
 
 The composer Chat/Voice switch navigates to the native Voice screen. The plus
 button opens a native popover above its own hit target with Camera, Attach,
@@ -4103,9 +4105,10 @@ The composer/Now dock must contain no active-turn progress copy.
 Keep the newest sent message and reply visible above the composer, including
 immediately on Send and throughout thinking, progress, tool updates, streaming
 and reply notices. Follow newly saved Voice rows and edits to a growing Voice
-reply without animating the scroll. Anchor to the bottom edge as the transcript
-or composer changes size. Manual scrolling up or selecting text pauses
-following. If the conversation changes while paused, show the shared down-arrow
+reply without animating the scroll. Follow the real bottom edge after layout
+changes; do not mistake a programmatic scroll or a growing reply for a swipe
+away. Manual scrolling up or selecting text pauses following. If the
+conversation changes while paused, show the shared down-arrow
 icon button with a localized **Jump to latest** label. Loading older pages or
 changing the Voice badge alone does not show it. Jump, Send, opening the keyboard
 or manually returning to the bottom resumes following.

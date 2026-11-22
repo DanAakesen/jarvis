@@ -696,7 +696,9 @@ struct JarvisChatScreen: View {
                 .accessibilityElement(children: .contain)
             }
             if let voiceModel {
-                VoiceMiniBar(model: voiceModel) { onNavigate(.voice) }
+                VoiceMiniBar(model: voiceModel, announcesStatus: presentedSheet == nil && !navigation.isSidebarOpen) {
+                    onNavigate(.voice)
+                }
             }
             if model.shouldShowNowBar {
                 nowBar

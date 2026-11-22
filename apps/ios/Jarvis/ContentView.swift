@@ -7,7 +7,7 @@ struct ContentView: View {
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @EnvironmentObject private var navigation: JarvisNavigationModel
     @StateObject private var workspaceRuntime: WorkspaceRuntime
-    @State private var voiceModel: VoiceScreenModel
+    @StateObject private var voiceModel: VoiceScreenModel
     @StateObject private var todayModel: JarvisTodayModel
     @StateObject private var healthSyncModel = JarvisHealthSyncModel()
     @Namespace private var carryOver
@@ -82,8 +82,8 @@ struct ContentView: View {
         self.navigationFixtureMode = navigationFixtureMode
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
-        _voiceModel = State(
-            initialValue: VoiceScreenModel(screenshotConnectionLost: voiceConnectionScreenshot)
+        _voiceModel = StateObject(
+            wrappedValue: VoiceScreenModel(screenshotConnectionLost: voiceConnectionScreenshot)
         )
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?

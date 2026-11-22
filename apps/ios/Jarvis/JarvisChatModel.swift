@@ -621,6 +621,8 @@ final class JarvisChatModel: ObservableObject {
     func watchActivity() async {
         guard !fixtureMode || JarvisChatFeedbackFixtureTransport.isEnabled else { return }
         guard let updatesClient else { return }
+        let (refreshes, refresh) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        async let reload: Void = watchLiveRefreshes(refreshes)
         do {
             for try await event in updatesClient.events() {
                 try Task.checkCancellation()
@@ -629,17 +631,10 @@ final class JarvisChatModel: ObservableObject {
                     observePersonalMemoryWrite(tool)
                     guard isSending, tool.source == "chat" else { continue }
                     recordToolActivity(tool)
-                case .pendingConfirmationsChanged:
-                    await refreshActivity()
-                    if !isSending { await refreshHistory() }
-                case .activityChanged:
-                    await refreshHistory(fromLiveUpdate: true)
-                    await refreshActivity()
-                case .factoryBoardChanged:
-                    await refreshActivity()
+                case .pendingConfirmationsChanged, .activityChanged, .factoryBoardChanged:
+                    refresh.yield(())
                 case .workspaceReady:
-                    await refreshHistory(fromLiveUpdate: true)
-                    await refreshActivity()
+                    refresh.yield(())
                     await reattachActiveTurnIfNeeded()
                 default:
                     break
@@ -647,9 +642,22 @@ final class JarvisChatModel: ObservableObject {
             }
         } catch is CancellationError {
         } catch {
-            if nowFeed == nil {
+            if !Task.isCancelled && nowFeed == nil {
                 activityError = message(for: error)
             }
+        }
+        refresh.finish()
+        await reload
+    }
+
+    private func watchLiveRefreshes(_ refreshes: AsyncStream<Void>) async {
+        for await _ in refreshes {
+            guard !Task.isCancelled else { return }
+            // One read per batch; keep a trailing invalidation if anything changed during it.
+            async let history: Void = refreshHistory(.liveUpdate)
+            await refreshActivity()
+            await history
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
         }
     }
 
@@ -826,7 +834,7 @@ final class JarvisChatModel: ObservableObject {
             discardOptimisticMessage()
             discardSteeringPlaceholders()
             // The reply is already on screen from the stream, so a history refresh that fails now is not the turn failing.
-            await refreshHistory(reportsFailure: false)
+            await refreshHistory(.afterTurn)
         } catch {
             discardOptimisticMessage()
             discardSteeringPlaceholders()
@@ -854,7 +862,7 @@ final class JarvisChatModel: ObservableObject {
         guard let client else { return }
         do {
             try await consume(client.reattachTurn(sessionId: turn.sessionId, messageId: turn.messageId))
-            await refreshHistory(reportsFailure: false)
+            await refreshHistory(.afterTurn)
         } catch {
             await reportTurnEnding(error)
         }
@@ -893,7 +901,7 @@ final class JarvisChatModel: ObservableObject {
             unconfirmedTurnID = turnID
             turnNotice = chatCopy(.turnUnconfirmed)
             streamingText = ""
-            await refreshHistory(reportsFailure: false)
+            await refreshHistory(.afterTurn)
         }
     }
 
@@ -1008,20 +1016,19 @@ final class JarvisChatModel: ObservableObject {
         throw JarvisChatClientError.streamEnded
     }
 
-    /// `reportsFailure` is false straight after a turn, when the reply is already on screen from the stream.
-    private func refreshHistory(reportsFailure: Bool = true, fromLiveUpdate: Bool = false) async {
+    private func refreshHistory(_ refresh: ChatTranscript.Refresh = .normal) async {
         guard let client else { return }
         let session = historySessionID
         do {
             let page = try await client.history(sessionId: session)
             guard !Task.isCancelled, historySessionID == session else { return }
             // The typed stream owns its optimistic rows until it finishes. Voice can still add new rows.
-            apply(page, replacing: false, voiceOnly: fromLiveUpdate && isSending)
+            apply(page, replacing: false, voiceOnly: refresh == .liveUpdate && isSending)
             historyPaging.refreshLatestPage(nextCursor: page.nextCursor)
         } catch {
-            if reportsFailure && !Task.isCancelled && historySessionID == session {
-                actionError = message(for: error)
-            }
+            guard !Task.isCancelled, historySessionID == session,
+                  let notice = refresh.failureNotice(message(for: error)) else { return }
+            actionError = notice
         }
     }
 

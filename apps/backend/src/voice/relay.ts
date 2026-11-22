@@ -27,6 +27,7 @@ const OUTPUT_QUIET_MS = VOICE_INPUT_QUIET_MS;
 const OUTPUT_PERSIST_BOUND_MS = VOICE_TRANSCRIPT_MAX_WAIT_MS;
 const EMPTY_TRANSCRIPT_POLL_MS = 50;
 const TOKEN_TIMEOUT_MS = 10_000;
+const COMMENTARY_AUDIO_WAIT_MS = 10_000;
 const CLEAN_END_TIMEOUT_MS = 5_000;
 const VALID_ITEM_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 const MAX_PROVIDER_EVENT_IDS = 4_096;
@@ -35,7 +36,7 @@ const ADOPTABLE_TURN_MAX_AGE_MS = 10_000;
 
 type ActivityReason =
   | 'response_started' | 'response_completed' | 'pi_started' | 'pi_finished' | 'delegation_received'
-  | 'delegation_settled' | 'output_audio' | 'microphone_active'
+  | 'delegation_settled' | 'commentary_sent' | 'commentary_audio_timeout' | 'output_audio' | 'microphone_active'
   | 'session_ended' | 'session_failed' | 'session_reconnecting';
 
 interface InputGroup {
@@ -216,6 +217,7 @@ function registerVoiceRoute(
     let pendingDelegation: AbortController | undefined;
     let pendingDelegationGroup: InputGroup | undefined;
     let lastCommentaryDelegation: string | null = null;
+    let commentaryAudioTimer: ReturnType<typeof setTimeout> | undefined;
     let endTimer: ReturnType<typeof setTimeout> | undefined;
     let persistenceQueue = Promise.resolve();
     const delegationTasks = new Set<Promise<void>>();
@@ -282,7 +284,7 @@ function registerVoiceRoute(
     const refreshActivity = (reason: ActivityReason) => {
       if (!providerReady || !termination.isActive || controller.signal.aborted) return;
       if (activeOutput?.hasAudio) publishActivity('speaking', reason);
-      else if (activeOutput || piBusy || pendingDelegation) publishActivity('thinking', reason);
+      else if (activeOutput || piBusy || pendingDelegation || commentaryAudioTimer) publishActivity('thinking', reason);
       else if (microphoneActive || activityState !== null) publishActivity('listening', reason);
     };
 
@@ -453,6 +455,11 @@ function registerVoiceRoute(
       return group;
     };
 
+    const clearCommentaryAudioWait = () => {
+      clearTimeout(commentaryAudioTimer);
+      commentaryAudioTimer = undefined;
+    };
+
     const sendCommentary = (text: string, delegationId: string | null) => {
       if (!providerReady || controller.signal.aborted || !termination.isActive) return;
       const parts = commentaryParts(text);
@@ -464,6 +471,16 @@ function registerVoiceRoute(
           delegation_id: delegationId,
           content,
         })) return;
+      }
+      if (delegationId !== null) {
+        // PI has handed off its words, but GPT-Live hasn't started voicing them yet.
+        clearCommentaryAudioWait();
+        commentaryAudioTimer = setTimeout(() => {
+          commentaryAudioTimer = undefined;
+          refreshActivity('commentary_audio_timeout');
+        }, COMMENTARY_AUDIO_WAIT_MS);
+        commentaryAudioTimer.unref();
+        refreshActivity('commentary_sent');
       }
     };
 
@@ -713,6 +730,7 @@ function registerVoiceRoute(
       pendingDelegation?.abort();
       pendingDelegation = pending;
       pendingDelegationGroup = group;
+      clearCommentaryAudioWait();
       refreshActivity('delegation_received');
       const work = persistDelegatedTurn(group, value.id, AbortSignal.any([controller.signal, pending.signal]))
         .catch((error: unknown) => {
@@ -906,6 +924,8 @@ function registerVoiceRoute(
           ...(typeof event.end_ms === 'number' ? { endMs: event.end_ms } : {}),
         };
         sendClient(audio);
+        // GPT-Live sends one output audio stream, without a commentary ID on each delta.
+        clearCommentaryAudioWait();
         if (!group.hasAudio) {
           group.hasAudio = true;
           refreshActivity('output_audio');
@@ -948,6 +968,7 @@ function registerVoiceRoute(
       terminalTeardownStarted = true;
       clearTimeout(endTimer);
       endTimer = undefined;
+      clearCommentaryAudioWait();
       pendingDelegation?.abort();
       piTurns.cancel();
       statusAnnouncer?.close();

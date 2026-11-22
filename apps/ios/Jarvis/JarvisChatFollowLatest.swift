@@ -23,7 +23,30 @@ struct JarvisChatFollowContent: Equatable {
     let errors: [String?]
 }
 
-/// Observe content updates and layout: tools and the dock resize independently.
+extension ChatFollowState.Phase {
+    init(_ phase: ScrollPhase) {
+        switch phase {
+        case .tracking: self = .tracking
+        case .interacting: self = .dragging
+        case .decelerating: self = .coasting
+        case .animating: self = .programmatic
+        case .idle: self = .idle
+        @unknown default: self = .programmatic
+        }
+    }
+}
+
+extension ChatFollowState.Viewport {
+    init(_ geometry: ScrollGeometry) {
+        self.init(
+            offset: Double(geometry.contentOffset.y),
+            top: -Double(geometry.contentInsets.top),
+            bottom: Double(geometry.contentSize.height + geometry.contentInsets.bottom - geometry.containerSize.height)
+        )
+    }
+}
+
+/// Keep the transcript at the bottom after content or layout changes, except while the owner is reading history.
 struct JarvisChatFollowLatest: ViewModifier {
     let proxy: ScrollViewProxy
     let contentState: JarvisChatFollowContent
@@ -44,28 +67,21 @@ struct JarvisChatFollowLatest: ViewModifier {
                 if !selected { followBottom() }
             }
             .scrollPosition($position)
-            .defaultScrollAnchor(isEnabled ? .bottom : nil, for: .initialOffset)
-            .defaultScrollAnchor(isEnabled && follow.shouldFollow ? .bottom : nil, for: .sizeChanges)
-            .onScrollPhaseChange { old, new, context in
-                switch new {
-                case .tracking, .interacting, .decelerating:
-                    follow.interactionBegan()
-                case .idle:
-                    let geometry = context.geometry
-                    let distance = geometry.contentSize.height + geometry.contentInsets.bottom
-                        - geometry.containerSize.height - geometry.contentOffset.y
-                    if follow.interactionEnded(distanceFromBottom: old == .tracking ? nil : Double(distance)) {
-                        followBottom()
-                    }
-                default: break
-                }
+            .defaultScrollAnchor(isEnabled && focusMessageID == nil ? .bottom : nil, for: .initialOffset)
+            .onScrollPhaseChange { _, new in
+                if follow.scrollPhaseChanged(.init(new)) { followBottom() }
+            }
+            .onScrollGeometryChange(for: ChatFollowState.Viewport.self) { .init($0) } action: { old, new in
+                var updated = follow
+                let needsScroll = updated.viewportChanged(from: old, to: new)
+                if updated != follow { follow = updated }
+                if needsScroll { followBottom() }
             }
             .onChange(of: scenePhase) { _, _ in
                 followBottom()
             }
             .onChange(of: contentState) { _, _ in
-                follow.messageArrived()
-                followBottom()
+                if follow.messageArrived() { followBottom() }
             }
             .onChange(of: sendRevision) { _, _ in
                 follow.messageSent()

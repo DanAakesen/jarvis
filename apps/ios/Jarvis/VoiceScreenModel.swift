@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import JarvisCore
 import Observation
@@ -5,7 +6,8 @@ import UIKit
 
 @MainActor
 @Observable
-final class VoiceScreenModel: VoiceLiveActivityControlling {
+final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
+    // StateObject owns the lifetime; views observe individual fields, not objectWillChange.
     private(set) var voiceState: VoiceSessionState = .idle
     private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
     private(set) var microphoneDenied = false
@@ -33,7 +35,7 @@ final class VoiceScreenModel: VoiceLiveActivityControlling {
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
     private let liveActivity = VoiceLiveActivityController()
-    private(set) var liveActivitySessionID: UUID? {
+    @ObservationIgnored private(set) var liveActivitySessionID: UUID? {
         didSet {
             if liveActivitySessionID == nil, VoiceLiveActivityActions.session === self {
                 VoiceLiveActivityActions.session = nil
@@ -143,15 +145,14 @@ final class VoiceScreenModel: VoiceLiveActivityControlling {
     var statusText: String {
         if case .reconnecting = voiceState { return JarvisVoiceLocalization.string(.reconnecting) }
         if voiceState == .failed || microphoneDenied { return JarvisVoiceLocalization.string(.offline) }
-        if isMuted { return JarvisVoiceLocalization.string(.muted) }
-        if !isAudioReady && voiceState == .listening { return JarvisVoiceLocalization.string(.connecting) }
         switch voiceState {
         case .idle, .connecting:
             return JarvisVoiceLocalization.string(.connecting)
         case .thinking:
             return JarvisVoiceLocalization.string(.thinking)
         case .listening:
-            return JarvisVoiceLocalization.string(.listening)
+            if isMuted { return JarvisVoiceLocalization.string(.muted) }
+            return JarvisVoiceLocalization.string(isAudioReady ? .listening : .connecting)
         case .speaking:
             return JarvisVoiceLocalization.string(.speaking)
         case .reconnecting:

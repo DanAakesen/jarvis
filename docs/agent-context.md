@@ -157,6 +157,7 @@ events
 
 - `src/voice/relay-events.test.ts` replays GPT-Live transcript, delegation and audio shapes on loopback. Its acknowledgement test holds both tool work and the transcript write; Voice must leave Speaking before the write is released. Keep the Chat/Voice parity suite's stored row counts and ordering. The web client's playback fixture checks that relay Thinking waits to display until audio drains.
 - `PiRuntimeTests`, `ChatFollowStateTests` and `ChatTranscriptTests` cover response overlap and playback receipts, manual pause and jump, and repeated or edited pages in long history. Linux can build and test JarvisCore and parse SwiftUI source; Xcode CI type-checks the iPhone target. The actual scroll and keyboard check is Dan's on the phone with the updated app and relay, as listed in `PLAN.md`. Do not run a live provider or model check to validate this change.
+- For #2034's follow-up, replay delayed final audio after a spoken acknowledgement, a layout change under a held touch, programmatic scrolling, and a failed background history refresh. With VoiceOver on in Chat, check that status changes are announced and a muted mic does not hide Thinking or Speaking.
 
 ## See the brain — 21 November 2026 (Refs #1969)
 

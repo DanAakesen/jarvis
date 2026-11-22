@@ -45,8 +45,10 @@ Draft for the native iPhone app, derived from reading the current backend and we
   send Realtime `speech_started` / `speech_stopped` or `response.done`.
 - A response completion marks the end of its audio stream, not a saved reply.
   The client's Speaking status lasts until the matching local playback drains
-  (or is cancelled); then it reflects relay Thinking or Listening. Chat refreshes
-  stored rows on the existing Now `refresh` event.
+  (or is cancelled); then it reflects relay Thinking or Listening. After
+  delegated work hands a reply to GPT-Live for speech, the relay remains at
+  Thinking until audio starts or the wait expires. Chat refreshes stored rows
+  on the existing `now` SSE message.
 - Reconnect: exponential backoff, up to 8 attempts, at most 10 seconds apart.
 - Camera: post a JPEG to `POST /screen/frames` with `sessionId`, `frame`, `question`, `turnId`, and `mode: "handle"`; use its `frameId` and `capturedAt` in a `jarvis.screen.context` message with `source: "camera"` and the same `itemId`.
 - Screen sharing: inspect the latest JPEG through the same authenticated `POST /screen/frames` route without `mode`; send its `description` and `capturedAt` in `jarvis.screen.context` with `source: "screen"`. Report capture failures with `jarvis.screen.context.unavailable`.
