@@ -7,28 +7,20 @@ import type { SettingsStore } from '../core/settings.js';
 import type { ModelCatalogueReader } from '../core/model-catalog.js';
 import type { UsageStore } from '../core/usage.js';
 import type { TaskStore } from '../factory/task-store.js';
-import type { BackgroundJobRegistry } from '../core/jobs.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import type { PushStore } from '../database/push-store.js';
 import { ConfigurationError } from '../configuration-error.js';
 import { createProactiveStore } from '../database/proactive-store.js';
 import { createProactiveAlertStore } from '../database/proactive-alert-store.js';
-import { createProactiveTodoReceiptStore } from '../database/proactive-todo-store.js';
 import { createProactiveReminderStore } from '../database/proactive-reminder-store.js';
 import type { OwnerReminderStore } from './owner-reminder-store.js';
 import { createMemoryProactiveStore } from './store.js';
 import type { ProactiveStore } from './store.js';
-import { createProactiveTodoWriter } from './todo-writer.js';
 import { createMemoryAlertLedgerStore, type AlertLedgerStore } from './alert-ledger.js';
 import { createMemoryProactiveReminderStore, type ProactiveReminderStore } from './reminder-store.js';
 import { buildSourceRegistry } from './sources/registry.js';
 import { registerProactiveRoutes } from './routes.js';
-import { createProactiveEngine, type ProactiveEngineOptions } from './engine.js';
-import { createFoundryProactiveModel, MAX_PROACTIVE_COMPLETION_TOKENS, MAX_PROACTIVE_REQUEST_BYTES, type ProactiveModel } from './model.js';
 import { createProactiveScheduler } from './scheduler.js';
-import { estimateCost } from './budget.js';
-import { createProactiveAlertHook } from './alerts.js';
-import { createTodoReminderPlanner } from './reminders.js';
 import { createReminderTicker } from './reminder-ticker.js';
 import { createVaultPushReminderPass } from './vault-push-reminders.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
@@ -56,8 +48,6 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   foundryProjectEndpoint?: string;
   usageStore?: UsageStore;
   taskStore?: TaskStore;
-  backgroundJobs?: BackgroundJobRegistry;
-  onFindingsStored?: NonNullable<ProactiveEngineOptions['onFindingsStored']>;
   registerVaultPushHandler?: (handler: () => void) => void;
   pushStore?: PushStore;
   alertLedgerStore?: AlertLedgerStore;
@@ -71,8 +61,7 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   hasNativeRecipients?: () => Promise<boolean>;
   now?: () => Date;
   logger?: FastifyBaseLogger;
-  vaultMirrorStatusReader?: NonNullable<ProactiveEngineOptions['vaultMirrorStatusReader']>;
-  /** The event-driven path (#1858). Off until the owner turns it on; the 07:00 and 18:00 checks run either way. */
+  /** The old one-shot event pipeline (#1858), switched off in production. It cannot run together with the PI brain. */
   eventsEnabled?: boolean;
   /** The PI brain as the reader of the event queue, built once the queue exists. Cannot be combined with `eventsEnabled`. */
   brain?: (queue: EventQueueStore) => EventConsumer;
@@ -97,35 +86,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     ? createProactiveStore(options.pool, options.ownerObjectId)
     : createMemoryProactiveStore(options.ownerObjectId));
   const now = options.now ?? (() => new Date());
-  let model: ProactiveModel = {
-    async worstCaseDkk() {
-      return estimateCost('unknown', MAX_PROACTIVE_REQUEST_BYTES, MAX_PROACTIVE_COMPLETION_TOKENS).estimatedDkk;
-    },
-    async summarize() { return { reason: 'model_unavailable', findings: [] }; },
-  };
-  if (options.settingsStore && options.modelCatalogue && options.getCredentialToken && options.foundryProjectEndpoint) {
-    const getToken = options.getCredentialToken;
-    model = createFoundryProactiveModel({
-      ...(options.logger ? { logger: options.logger } : {}),
-      settingsStore: options.settingsStore,
-      modelCatalogue: options.modelCatalogue,
-      foundryProjectEndpoint: options.foundryProjectEndpoint,
-      getCredentialToken: async (scope, signal) => {
-        const token = await getToken(scope, signal);
-        if (!token) throw new Error('Model unavailable');
-        return token;
-      },
-    });
-  }
-  const todoWriter = options.todoWritesEnabled === true && options.vaultClient && options.pool
-    ? createProactiveTodoWriter({
-      vault: options.vaultClient,
-      store,
-      receipts: createProactiveTodoReceiptStore(options.pool, options.ownerObjectId),
-      now,
-      ...(options.logger ? { logger: options.logger } : {}),
-    })
-    : undefined;
   const alertsReady = options.alertsEnabled === true && options.pushEnabled === true &&
     options.pushStore !== undefined && options.systemPushSender !== undefined;
   const reminderReady = alertsReady && options.vaultClient !== undefined;
@@ -135,18 +95,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     ? options.alertLedgerStore ?? (options.pool
       ? createProactiveAlertStore(options.pool, options.ownerObjectId)
       : createMemoryAlertLedgerStore(now))
-    : undefined;
-  const alertHook = alertsReady && alertLedger
-    ? createProactiveAlertHook({
-      store,
-      pushStore: options.pushStore!,
-      ownerObjectId: options.ownerObjectId,
-      ledger: alertLedger,
-      ...(options.hasNativeRecipients ? { hasNativeRecipients: options.hasNativeRecipients } : {}),
-      send: options.systemPushSender!,
-      now,
-      ...(options.logger ? { logger: options.logger } : {}),
-    })
     : undefined;
   const reminderStore = reminderReady
     ? options.reminderStore ?? (options.pool
@@ -170,16 +118,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     })
     : undefined;
   options.registerReminderWakeHandler?.(reminderTicker?.considerFireAt ?? (() => {}));
-  const reminderPlanner = reminderTicker && reminderStore && alertLedger
-    ? createTodoReminderPlanner({
-      store,
-      reminders: reminderStore,
-      now,
-      onPlanned: reminderTicker.considerFireAt,
-      ...(options.logger ? { logger: options.logger } : {}),
-    })
-    : undefined;
-  const vaultPushReminderPass = reminderPlanner && reminderTicker && reminderStore
+  const vaultPushReminderPass = reminderTicker && reminderStore && alertLedger
     ? createVaultPushReminderPass({
       store,
       reminders: reminderStore,
@@ -196,20 +135,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       }, 'proactive.reminder_plan');
     } catch { /* Logging cannot change webhook handling. */ }
   }));
-  // Hooks run in order: the time-critical alert goes first, then the database-only reminder planner, so a slow vault write never delays either.
-  const run = createProactiveEngine({
-    ...options,
-    store,
-    sources,
-    model,
-    now,
-    onFindingsStored: [
-      ...(options.onFindingsStored ?? []),
-      ...(alertHook ? [alertHook] : []),
-      ...(reminderPlanner ? [reminderPlanner] : []),
-      ...(todoWriter ? [todoWriter] : []),
-    ],
-  });
   const events = createEventPath({
     enabled: options.eventsEnabled === true,
     brain: options.brain,
@@ -228,20 +153,21 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     logger: options.logger,
   });
   if (events) options.registerEventSink?.(events.sink);
-  const scheduledRun = events?.runScheduled ?? run;
-  const scheduler = createProactiveScheduler({
-    store, now, run: scheduledRun, ...(options.logger ? { logger: options.logger } : {}),
-    ...(events ? { onTick: events.tick } : {}),
-  });
+  // The 07:00 and 18:00 sweeps, Check now and the event tick are the PI brain's. Without it there is nothing to claim a slot for.
+  const scheduler = events
+    ? createProactiveScheduler({
+      store, now, run: events.runScheduled, onTick: events.tick, ...(options.logger ? { logger: options.logger } : {}),
+    })
+    : undefined;
   app.addHook('onReady', async () => {
     await events?.start();
-    await scheduler.start();
+    await scheduler?.start();
     await reminderTicker?.start();
   });
   app.addHook('onClose', async () => {
     await vaultPushReminderPass?.stop();
     await reminderTicker?.stop();
-    await scheduler.stop();
+    await scheduler?.stop();
     await events?.stop();
   });
   registerProactiveRoutes(app, {
@@ -253,10 +179,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     databaseAvailable: options.pool !== undefined,
     registerItemDetail: options.pushEnabled !== true,
     now,
-    run: scheduledRun,
-    worstCaseDkk: () => events?.runScheduled
-      ? 0.79
-      : model.worstCaseDkk(),
+    ...(events?.runScheduled ? { run: events.runScheduled, worstCaseDkk: () => 0.79 } : {}),
     ...(events?.outreach ? { outreach: events.outreach } : {}),
     ...(options.background ? { background: options.background } : {}),
     ...(options.settingsStore ? {

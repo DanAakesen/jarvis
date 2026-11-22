@@ -5,8 +5,6 @@ flowchart LR
     TK["30 s scheduler<br/>proactive/scheduler.ts"] -->|"every tick"| BT["brain.tick<br/>queue, watches, timer"]
     TK -->|"07:00 / 18:00 slot"| BS["brain.runScheduled"]
     MR["POST /proactive/runs<br/>Check now"] --> BS
-    TK -.->|"slot, PI not configured"| EN["old slot engine<br/>proactive/engine.ts"]
-    MR -.->|"PI not configured"| EN
     BT -->|"outcome changed"| L1["pi.brain_tick"]
     BT -->|"wake ended"| L2["pi.brain"]
     BS -->|"skipped or done"| L2
@@ -16,17 +14,17 @@ flowchart LR
     ST["brain.start()"] --> L4["pi.brain_state"]
     TK -.->|"a throw, with stage and class"| L5["proactive.failed"]
     MR -.->|"a throw, with stage and class"| L5
-    EN -.->|"a throw, with stage and class"| L5
     G --> LED[("pi_turn ledger<br/>chat · warm · smoke · brain")]
     LED --> PS["GET /pi/status<br/>last24h by kind, newest 20"]
     BT --> BC["GET /pi/brain<br/>lastTick, nextDueAt, queue, today, month"]
 ```
 
-- **Who runs a slot:** `proactive/composition.ts` gives the scheduler `events?.runScheduled ?? run`: the brain's sweep when PI is configured (since #1964), the old slot engine when it is not.
+- **One scheduled path.** `proactive/composition.ts` builds the scheduler only when an event consumer exists, and its `run` is the consumer's `runScheduled`, which only the PI brain has. The 07:00/18:00 slot engine (`proactive/engine.ts`) is deleted; without a brain nothing claims a slot, and the manual check route answers `not_available`. The scheduler's `run` is optional, so the event tick alone can still run.
 - **Brain events** (`logging.ts` allowlist, vocabulary in `pi/brain/outcomes.ts`): `pi.brain_tick` is logged by `createBrain` when a pass that read the queue returns a different outcome than the pass before (`queued`, `wakesToday`, `spendMonthDkk`, `nextDueInSec`); `pi.brain_state` once from `start()`; `pi.brain` for wake results, scheduled-sweep skips and what a wake needed but could not do; `pi.brain_run` from the gateway for every wake. A pass that returns `idle` or `active_activation` never read the queue and is not an outcome. Snapshot reads are bounded to 5 s and never change a tick. Before this change `pi.brain` and `pi.brain_run` were not in the `events` set, so the boundary exported them as `backend.event` with no fields.
 - **Every `pi.*` and `proactive.*` event is registered.** An event name that is not in the `events` set of `logging.ts` is exported as a bare `backend.event`; `logging.test.ts` reads the backend source for these two families and fails on a name that is not registered. `safeHistoricalLogFields` (behind `read_backend_logs`) keeps the error class, trigger, alert classes and the activation's type, source and id of a record; other identifiers stay out.
-- **Scheduler and engine failures:** `proactive.failed` carries a `reason` (`internal_error`, or `hook_failed` / `job_update_failed` from the engine), a `stage` and an `errorClass` (a class name, never a message). The engine now logs a run that threw (`run`) and a heartbeat that failed (`heartbeat`), which left no line before. `tick()` no longer rejects: a failing slot check is logged and the event tick still runs. A failed startup write is logged and the scheduler still starts. A slot is marked handled only after its settings read and claim were answered, so a thrown claim is retried on the next tick (a claim that returns no row, because the slot already has one, still settles it).
+- **Scheduler failures:** `proactive.failed` carries `reason: internal_error`, a `stage` and an `errorClass` (a class name, never a message). `tick()` no longer rejects: a failing slot check is logged and the event tick still runs. A failed startup write is logged and the scheduler still starts. A slot is marked handled only after its settings read and claim were answered, so a thrown claim is retried on the next tick (a claim that returns no row, because the slot already has one, still settles it).
 - **Status:** `GET /pi/brain` reads `lastTick` and `nextDueAt` from the running brain (memory, null before the first pass) and `today.wakes` / `today.costDkk` from `pi_turn`; `GET /pi/status` reads `recentTurns` over every kind and `spendSince` per kind for 24 hours. Both are database reads; neither starts a model.
+- **No longer triggered:** the alert hook, todo writer, reminder planner and inbox nudge hook ran only from the old engine's `onFindingsStored`. They stay in the tree, unwired, until the owner decides (decision A in `docs/pi/cutover.md`, which lists everything that lost its trigger).
 
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 

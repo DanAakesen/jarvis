@@ -2,7 +2,7 @@ import type { FoundryModelUsage } from '../core/usage.js';
 import {
   budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
 } from '../proactive/budget.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
 import type { ProactiveStore } from '../proactive/store.js';
 import { dayKey, monthKey } from '../proactive/time.js';
 import { highestFoundryTokenCosts } from '../core/usage-pricing.js';

@@ -135,15 +135,10 @@ import { createWatches } from './pi/watch/store.js';
 import { createWatchTools } from './pi/watch/tools.js';
 import { defaultAwayModeState } from './core/away-mode.js';
 import { createInboxStatusRoute } from './inbox/status.js';
-import { createMissedCaptureAudit } from './inbox/audit.js';
-import { NUDGE_STYLE_KEY } from './inbox/ops.js';
 import { createInboxOpsStore } from './database/inbox-ops-store.js';
 import { estimateCost } from './proactive/budget.js';
 import { dayKey } from './proactive/time.js';
 import { createInboxCapture } from './inbox/capture.js';
-import type { FoundryModelUsage } from './core/usage.js';
-import { createInboxNudgePass } from './inbox/nudge.js';
-import { createInboxNudgeHook, createProactiveNudgeDelivery, createProactiveReactions } from './inbox/proactive-hook.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
 import { createInboxStore } from './inbox/store.js';
 import { createInboxIndex } from './inbox/item-index.js';
@@ -1679,64 +1674,12 @@ try {
       logger,
     })
     : undefined;
-  const inboxUsage: FoundryModelUsage[] = [];
-  const inboxNudgeHook = config.inboxNudgesEnabled && config.proactiveEnabled && inboxStore && inboxIndex && proactiveStore &&
-      approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage
-    ? (() => {
-      const review = createFoundryJsonCompletion({
-        endpoint: approvalEndpoint, scope: FOUNDRY_SCOPE, maxContentBytes: 16 * 1024,
-        getToken: async (scope, signal) => {
-          const token = await credential.getToken(scope, { abortSignal: signal });
-          if (!token) throw new Error('Inbox review identity unavailable');
-          return token.token;
-        },
-        selectModel: async () => {
-          const catalogue = await modelCatalogue.read();
-          const selected = chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
-          return selected ? { ...selected, maxCompletionTokens: 4096 } : undefined;
-        },
-        recordUsage: async (usage) => { inboxUsage.push(usage); await usageStore.recordFoundryUsage!(usage); },
-      });
-      const audit = conversationStore?.readDanMessagesSince
-        ? createMissedCaptureAudit({
-          store: inboxStore,
-          index: inboxIndex,
-          model: review,
-          messages: (since, limit) => conversationStore.readDanMessagesSince!(since, limit),
-          log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
-        })
-        : undefined;
-      return createInboxNudgeHook({
-        store: proactiveStore,
-        ops: inboxOps,
-        audit,
-        takeUsage: () => inboxUsage.splice(0),
-        now: () => new Date(),
-        log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
-        pass: (context) => createInboxNudgePass({
-          store: inboxStore,
-          index: inboxIndex,
-          model: review,
-          delivery: createProactiveNudgeDelivery(proactiveStore, context, () => new Date()),
-          reactions: createProactiveReactions(proactiveStore),
-          guidance: async () => (await proactiveStore.settings.read()).guidance,
-          ...(inboxOps ? {
-            nudgeStyle: async () => (await inboxOps.getState(NUDGE_STYLE_KEY, AbortSignal.timeout(5_000))) ?? '',
-            saveNudgeStyle: (style: string, signal: AbortSignal) => inboxOps.setState(NUDGE_STYLE_KEY, style, signal),
-          } : {}),
-          log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
-        }),
-      });
-    })()
-    : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
     ...(piSituationService ? { situation: piSituationService } : {}),
     ...(brainControl ? { background: brainControl } : {}),
-    ...(inboxNudgeHook ? { onFindingsStored: [inboxNudgeHook] } : {}),
     healthEnabled: config.healthEnabled === true,
     ...(nativeProactive ? { hasNativeRecipients: nativeProactive.hasRecipients } : {}),
     ...(memoryStore ? { memoryStore } : {}),
-    vaultMirrorStatusReader,
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
     ...(proactiveStore ? { store: proactiveStore } : {}),
@@ -1754,7 +1697,6 @@ try {
     ...(config.foundryProjectEndpoint ? { foundryProjectEndpoint: config.foundryProjectEndpoint } : {}),
     ...(usageStore ? { usageStore } : {}),
     ...(taskStore ? { taskStore } : {}),
-    backgroundJobs: app.backgroundJobs,
     ...(conversationStore ? { conversationStore } : {}),
     registerVaultPushHandler: (handler: () => void) => { vaultPushReminderHandler = handler; },
     eventsEnabled: config.proactiveEventsEnabled,

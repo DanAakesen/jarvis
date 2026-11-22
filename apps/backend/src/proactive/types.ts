@@ -97,3 +97,32 @@ export interface ProactiveSource {
   label: string;
   read(context: SourceContext): Promise<SourceResult>;
 }
+
+/**
+ * What a finished proactive check hands the modules that act on its findings (alerts, todo writes, reminder planning, the inbox
+ * nudge pass). The old slot engine produced it; nothing produces it now, see `docs/pi/cutover.md`, decision A.
+ */
+export interface FindingsStoredContext {
+  runId: string;
+  trigger: RunSummary['trigger'];
+  now: Date;
+  signal: AbortSignal;
+  findings: {
+    modelGenerated?: boolean;
+    itemId: string;
+    dedupeKey: string;
+    evidenceRefs: string[];
+    category: NonNullable<Item['category']>;
+    suggestionScope: Item['suggestionScope'];
+    relatedCategories?: Item['relatedCategories'];
+    urgency: Item['urgency'];
+    dueAt: string | null;
+    dueHasTime: boolean;
+    highPriority: boolean;
+    suggestedTodo?: string;
+  }[];
+  facts: Pick<SourceFact & { source: SourceId },
+    'ref' | 'identity' | 'taskScope' | 'projectRelated' | 'source' | 'kind' | 'text' |
+    'dueAt' | 'dueHasTime' | 'remindAtDue' | 'highPriority' | 'startsAt' | 'endsAt' | 'allDay'>[];
+  sources: { id: SourceId; state: 'ok' | 'unavailable'; reason?: string }[];
+}

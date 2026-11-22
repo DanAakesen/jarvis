@@ -52,8 +52,10 @@
 | Log `pi.brain_tick` when the tick outcome changes and `pi.brain_state` at startup; register `pi.brain` and `pi.brain_run` (both were exported as `backend.event` without fields, so zero `pi.brain_run` lines proved nothing) | Done |
 | Extend `GET /pi/brain` with `lastTick`, `nextDueAt`, `today.wakes` and `today.costDkk` | Done |
 | Name the kind of every turn in `GET /pi/status` (`lastTurn.kind`, `turns.last24h`, `turns.recent`); label a wake that only a due watch caused `watch` | Done |
-| `proactive.failed` carries `stage` and `errorClass` on every path of the old engine, the scheduler and the manual check; every path reproduced in a test; the scheduler survives a failed startup write and retries a slot whose claim threw | Done |
+| `proactive.failed` carries `stage` and `errorClass` on the scheduler and the manual check; every path reproduced in a test; the scheduler survives a failed startup write and retries a slot whose claim threw | Done |
 | Register the thirteen other `pi.*` and `proactive.*` events that were exported as bare `backend.event`, test that none can be added unregistered, and keep the error class, trigger and activation in `read_backend_logs` | Done |
+| Delete the old 07:00/18:00 slot engine and what only it used (its own commit, so the rest can merge without it) | Done; the alert hook, todo writer, reminder planner and inbox nudge hook it triggered are left unwired; what loses its trigger is in `docs/pi/cutover.md`, decision A |
+| Decide what replaces the engine's hooks (decision A, `docs/pi/cutover.md`) | Open, owner |
 | Name the hourly call of about 4k tokens | Open: read `GET /pi/status` `turns.recent` on production |
 
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)

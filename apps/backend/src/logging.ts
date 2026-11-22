@@ -26,7 +26,7 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
-  'proactive.failed', 'proactive.model_failed', 'image_generation.failed',
+  'proactive.failed', 'image_generation.failed',
   'proactive.todo_writer',
   'daily.gym_log',
   'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
@@ -236,9 +236,9 @@ const piClientToolOutcomes = new Set(['answered_default', 'answered_task_client_
 /** The brain's own words for what a pass decided and why a sweep or wake ended: the only vocabularies `pi.brain_tick` and `pi.brain` may carry. */
 const piBrainTickOutcomes = new Set<string>(brainTickOutcomes);
 const piBrainReasons = new Set<string>(brainLogReasons);
-/** Where a proactive scheduler, engine run or manual check failed: the only vocabulary `proactive.failed` may carry as a stage. */
+/** Where a proactive scheduler or manual check failed: the only vocabulary `proactive.failed` may carry as a stage. */
 const proactiveFailureStages = new Set([
-  'startup', 'slot', 'run', 'run_finish', 'heartbeat', 'event_tick', 'manual_run', 'manual_run_finish',
+  'startup', 'slot', 'run', 'run_finish', 'event_tick', 'manual_run', 'manual_run_finish',
 ]);
 /** The kinds of turn the PI ledger records: the only vocabulary `pi.turn_record_failed` and `pi.usage_record_failed` may carry. */
 const piTurnKinds = new Set<string>(allTurnKinds);
@@ -488,17 +488,11 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     return fields;
   }
-  if (input.msg === 'proactive.model_failed' || input.msg === 'image_generation.failed') {
+  if (input.msg === 'image_generation.failed') {
     const fields: Record<string, unknown> = {};
-    const reasons = input.msg === 'proactive.model_failed'
-      ? ['response_size_or_json', 'response_envelope', 'completion_incomplete', 'invalid_json', 'invalid_findings', 'model_unavailable']
-      : ['credential_unavailable', 'credential_missing', 'transport_failed', 'provider_http_error', 'empty_response', 'invalid_image_response', 'artifact_storage_failed'];
+    const reasons = ['credential_unavailable', 'credential_missing', 'transport_failed', 'provider_http_error', 'empty_response', 'invalid_image_response', 'artifact_storage_failed'];
     if (typeof input.reason === 'string' && reasons.includes(input.reason)) fields.reason = input.reason;
-    if (input.msg === 'proactive.model_failed' && typeof input.outputTokens === 'number' &&
-        Number.isSafeInteger(input.outputTokens) && input.outputTokens >= 0 && input.outputTokens <= 1_000_000) {
-      fields.outputTokens = input.outputTokens;
-    }
-    if (input.msg === 'image_generation.failed' && typeof input.status === 'number' &&
+    if (typeof input.status === 'number' &&
         Number.isInteger(input.status) && input.status >= 100 && input.status <= 599) fields.status = input.status;
     return fields;
   }
@@ -507,8 +501,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.runId === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(input.runId)) {
       fields.runId = input.runId;
     }
-    if (typeof input.reason === 'string' &&
-        ['internal_error', 'hook_failed', 'job_update_failed'].includes(input.reason)) fields.reason = input.reason;
+    if (input.reason === 'internal_error') fields.reason = input.reason;
     // Where it failed, and the class of what was thrown (a code identifier such as `RequestError`), never its message.
     if (typeof input.stage === 'string' && proactiveFailureStages.has(input.stage)) fields.stage = input.stage;
     if (typeof input.errorClass === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(input.errorClass)) {

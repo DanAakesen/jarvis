@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FoundryModelUsage } from '../core/usage.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
 import type { FindingInput } from '../proactive/store.js';
 import { VaultWriteConflictError, type VaultFile, type VaultTreeFile } from '../vault/github-client.js';
 import { createInboxIndex, type InboxIndexRow, type InboxIndexStore } from './item-index.js';

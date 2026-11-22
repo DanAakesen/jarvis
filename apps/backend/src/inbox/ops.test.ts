@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { FoundryModelUsage } from '../core/usage.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
 import { VaultWriteConflictError, type VaultFile, type VaultTreeFile } from '../vault/github-client.js';
 import { createMissedCaptureAudit, parseAudit, quotedWords } from './audit.js';
 import { createInboxIndex, type InboxIndexRow, type InboxIndexStore } from './item-index.js';

@@ -1,6 +1,6 @@
 # Event-driven proactive Jarvis (P15-161, #1858)
 
-Status: **implemented, off by default** (`JARVIS_PROACTIVE_EVENTS_ENABLED`, Bicep `proactiveEventsEnabled`). The 07:00 and 18:00 checks are unchanged and keep running either way. No phone call is built.
+Status: **implemented, off by default** (`JARVIS_PROACTIVE_EVENTS_ENABLED`, Bicep `proactiveEventsEnabled`), and superseded by the PI brain, which reads the same queue and cannot run together with it. The 07:00 and 18:00 slot engine that this page once called unchanged is deleted (#1969): with the brain those sweeps are the brain's, and with this pipeline alone no 07:00 or 18:00 check runs. No phone call is built.
 
 Owner direction, 15 November 2026: "for the model we should do gpt 6.1, that is very very cheap. so that should be very little. GO ahead and build this but without the calling to begin with." Tiers: "low, medium, and high is push and call".
 
@@ -80,7 +80,7 @@ Green exists today, purple is new, orange is model judgement, grey is not built,
 ## 4. Interrupt policy
 
 - **low**: a card in the Now feed (an `alert`-group activity row) that opens the finding on the Proactive page, where the thumbs are.
-- **medium** and **high**: a push through the existing sender, native iPhone first and Web Push as fallback. Tapping it opens chat with the finding as context (existing continuity). Quiet hours do not apply: the owner's phone is on Do Not Disturb at night. The 07:00 and 18:00 path and reminders keep their own quiet-hour rules.
+- **medium** and **high**: a push through the existing sender, native iPhone first and Web Push as fallback. Tapping it opens chat with the finding as context (existing continuity). Quiet hours do not apply: the owner's phone is on Do Not Disturb at night. Reminders keep their own quiet-hour rules (and the 07:00 and 18:00 sweeps, now the brain's, keep theirs).
 - The model chooses the tier. Only the tier names, the daily push cap and the budget are exact.
 - **Extension point for the call**: implement `OutreachChannel` (`proactive/events/types.ts`) with `tiers: ['high']` and add it to the channel list in `proactive/events/wiring.ts`. The policy, the ledger and the feedback need no change.
 - The model can only write words. Nothing in this path can send mail, change a calendar or write a file. A draft or suggestion appears as text in the notification.
@@ -96,14 +96,14 @@ Computed from the code and its tests, not from live traffic (there is none yet):
 | Worst-case batch (the gate before each call) | about 0.38 DKK |
 | Batches a day | at most 12, counting failed or invalid calls too (`proactive_event_batches`, written before each call); a timer review that changes nothing costs no model call |
 | Typical ceiling | 12 x 0.06 = 0.7 DKK a day, about 21 DKK a month |
-| Hard stop | The monthly limit in Proactive settings (default 100 DKK) is checked against the shared ledger before every call, by the old checks and the new path alike |
+| Hard stop | The monthly limit in Proactive settings (default 100 DKK) is checked against the shared ledger before every call, by this pipeline and the brain's wakes alike |
 
 Before this change Terra was unlisted and was priced at the highest listed rate, which was the Luna rate, about five times too low. The meter under-counted Terra spend by that factor.
 
 ## 6. Turning it on
 
 1. Apply migration `0080_proactive_events.sql` (the normal backend start applies it).
-2. Set `proactiveEventsEnabled` to `true` in `infra/main.parameters.json` and Deploy. It needs `JARVIS_PROACTIVE_ENABLED`; pushes also need `JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED`, both already on.
+2. Set `proactiveEventsEnabled` to `true` in `infra/main.parameters.json` and Deploy. The backend refuses to start with both this and the PI brain, and with this pipeline alone no 07:00 or 18:00 check runs. It needs `JARVIS_PROACTIVE_ENABLED`; pushes also need `JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED`, both already on.
 3. Watch `GET /proactive/outreach` and the `proactive.events` log lines for a few days before relying on it.
 
 ## 7. Not built, and open

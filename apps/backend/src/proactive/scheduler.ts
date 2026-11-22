@@ -9,7 +9,8 @@ type FailureStage = 'startup' | 'slot' | 'run' | 'run_finish' | 'event_tick';
 export interface ProactiveSchedulerOptions {
   store: ProactiveStore;
   now: () => Date;
-  run: (claim: { run: RunSummary; generation: number }, signal?: AbortSignal) => Promise<void>;
+  /** What a 07:00 or 18:00 slot starts. Without it only the event tick runs, so no slot is ever claimed. */
+  run?: ((claim: { run: RunSummary; generation: number }, signal?: AbortSignal) => Promise<void>) | undefined;
   logger?: { warn: (fields: object, message: string) => void } | undefined;
   /** Runs on every tick after the slot check, also at night. The event pipeline reads its queue here. */
   onTick?: ((signal: AbortSignal) => Promise<unknown>) | undefined;
@@ -32,7 +33,7 @@ export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
   }
 
   async function evaluate() {
-    if (stopped) return;
+    if (stopped || !options.run) return;
     const now = options.now();
     if (isQuietHour(now)) {
       active?.controller.abort('quiet_hours');
@@ -70,7 +71,7 @@ export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
         if (controller.signal.aborted) {
           await options.store.runs.finish(claim.run.id, claim.generation, 'cancelled',
             controller.signal.reason === 'quiet_hours' ? 'quiet_hours' : 'interrupted_by_restart', 0, options.now());
-        } else await options.run(claim, controller.signal);
+        } else await options.run!(claim, controller.signal);
       } catch (error) {
         const aborted = controller.signal.aborted;
         if (!aborted) warn('run', error);

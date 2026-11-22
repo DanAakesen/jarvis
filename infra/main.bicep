@@ -40,7 +40,7 @@ param nativePushEnabled bool = false
 @description('Loose Ends inbox tools, capture endpoint and MCP server. Owner switch-on; apply migrations 0081 to 0085 first (docs/inbox-loop/acceptance.md).')
 param inboxEnabled bool = false
 
-@description('Loose Ends follow-up nudges, daily missed-capture audit and weekly review inside the proactive slots. Needs inboxEnabled and proactive checks.')
+@description('Loose Ends follow-up nudges, daily missed-capture audit and weekly review. Currently triggers nothing: they ran only inside the removed 07:00 and 18:00 proactive slot engine (docs/pi/cutover.md, decision A). Needs inboxEnabled.')
 param inboxNudgesEnabled bool = false
 
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
@@ -84,7 +84,7 @@ param vaultMirrorMaxDeletes int = 3
 @description('A ChatGPT-supported model for Codex hosted-runner tools.')
 param codexToolModel string = 'gpt-5.5'
 
-@description('Turns on the event-driven proactive path (#1858): queue, rules, GPT-6.1 Terra reasoning and three interrupt tiers. Off by default; the 07:00 and 18:00 checks run either way.')
+@description('Turns on the old event-driven proactive pipeline (#1858): queue, rules, GPT-6.1 Terra reasoning and three interrupt tiers. Off by default and superseded by the PI brain, which cannot run together with it. No 07:00 or 18:00 check runs with this pipeline alone.')
 param proactiveEventsEnabled bool = false
 
 @description('Requested GlobalStandard throughput allocation for GPT-6.1 Terra main chat. Azure validates model/SKU limits and subscription quota during normal deployment; this is not a reserved PTU purchase.')

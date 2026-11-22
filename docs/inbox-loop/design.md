@@ -1,6 +1,8 @@
 # Inbox loop: design (P15-145, #1836)
 
 Status: **approved by the owner; all eight build steps of #1855 (P15-159) are built and dark; step 2 is a pull request in the vault repo.** Switch-on and acceptance: [acceptance.md](acceptance.md). Build notes: [shortcut.md](shortcut.md), [mcp.md](mcp.md). Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
+
+**Update 21 November 2026 (#1969):** the 07:00 and 18:00 slot engine that the sections below name as the hook point (`proactive/engine.ts`) is deleted, so the nudge, audit and weekly review hook has no trigger until the owner decides (decision A in [cutover.md](../pi/cutover.md)).
 The owner decisions in [decisions.md](../decisions.md)
 and [p0.md](../../p0.md) are fixed inputs; everything marked *proposal* awaits owner review.
 

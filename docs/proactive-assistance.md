@@ -2,6 +2,8 @@
 
 Status: **Decided; web push, read-only checks, routed suggested todos, alerts and reminders are on in production** (17 October 2026; updated 21 October 2026).
 
+**Update 21 November 2026 (#1969):** the in-process 07:00 and 18:00 slot engine that this page describes is deleted. With PI configured those slots and Check now belong to the PI brain, and `docs/pi/cutover.md` (decision A) lists what lost its trigger. Read the rest as the original design.
+
 The decisions below define the intended behaviour. Each feature stays off until
 its own enabling change follows acceptance of the previous deployment. A push
 provider accepting a notification is not proof that an iPhone displayed it.
