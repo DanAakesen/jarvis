@@ -1,7 +1,7 @@
 import { createFoundryAgentAdmin } from './foundry-agents.js';
 
 /** Stateful emulator for the Foundry project REST endpoints used by agent administration. */
-export function foundryProjectFixture(status: string | null = 'active') {
+export function foundryProjectFixture(status: string | null = 'active', dropResponse?: (method: string, path: string) => boolean) {
   const instructions = 'Hello\nKEEP THIS BLOCK: backend tool contract (start)\ncontract\nKEEP THIS BLOCK: backend tool contract (end)';
   const versions = new Map([['1', { definition: { kind: 'prompt', instructions, model: 'model-a', tools: [{ type: 'function', name: 'lookup' }] },
     description: 'Fixture', metadata: { tag: 'fixture' } }]]);
@@ -19,10 +19,12 @@ export function foundryProjectFixture(status: string | null = 'active') {
       const path = url.pathname.slice('/api/projects/project'.length);
       const method = init?.method;
       calls.push(method + ' ' + path);
+      if (method === 'GET' && dropResponse?.(method, path)) throw new TypeError('Connection closed');
       if (method === 'GET' && path === '/agents') return Response.json({ data: [details()], has_more: false });
       if (method === 'GET' && path === '/agents/' + agent) return Response.json(details());
       if (method === 'PATCH' && path === '/agents/' + agent) {
         pinned = JSON.parse(String(init?.body)).agent_endpoint.version_selector.version_selection_rules[0].agent_version;
+        if (dropResponse?.('PATCH', path)) throw new TypeError('Connection closed');
         return Response.json(details());
       }
       const base = '/agents/' + agent + '/versions';

@@ -7,6 +7,21 @@ import { foundryProjectFixture } from './foundry-agents.testkit.js';
 
 const signal = new AbortController().signal;
 
+it('retains a version receipt when the verification read breaks', async () => {
+  const { admin, versions, agent } = foundryProjectFixture('active', (method, path) =>
+    method === 'GET' && path.endsWith('/versions/2'));
+  await expect(admin({ operation: 'create_version', agent, expectedServingVersion: '1', expectedLatestVersion: '1', model: 'model-b' }, signal))
+    .rejects.toMatchObject({ outcomeUnknown: true, message: expect.stringContaining('accepted version 2') });
+  expect(versions.size).toBe(2);
+});
+
+it('reports an uncertain activation when the pin was applied and the response was lost', async () => {
+  const { admin, agent } = foundryProjectFixture('active', method => method === 'PATCH');
+  await expect(admin({ operation: 'activate', agent, expectedServingVersion: '1', version: '1' }, signal))
+    .rejects.toMatchObject({ outcomeUnknown: true, message: expect.stringContaining('serving pin') });
+  expect(await admin({ operation: 'read', agent }, signal)).toMatchObject({ servingVersion: '1', pinned: true });
+});
+
 it('pins an immutable v1 version without a lifecycle field and refuses a creating preview version', async () => {
   const production = foundryProjectFixture(null);
   const input = { operation: 'activate' as const, agent: production.agent, version: '1', expectedServingVersion: '1' };

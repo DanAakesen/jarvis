@@ -101,10 +101,14 @@ export function createFoundryAgentAdmin(options: {
       }
       return entry;
     };
-    async function request(path: string, method = 'GET', body?: Fields, query?: URLSearchParams) {
+    let pendingChange: string | undefined;
+    async function request(path: string, method = 'GET', body?: Fields, query?: URLSearchParams, change?: string) {
       const url = new URL(endpoint + path);
       url.search = (query ?? new URLSearchParams()).toString();
       url.searchParams.set('api-version', 'v1');
+      signal.throwIfAborted();
+      const previous = pendingChange;
+      if (change) pendingChange = change;
       const response = await fetcher(url, {
         method, signal, redirect: 'error',
         headers: {
@@ -115,6 +119,7 @@ export function createFoundryAgentAdmin(options: {
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       if (!response.ok) {
+        if (change && response.status >= 400 && response.status < 500 && response.status !== 408) pendingChange = previous;
         await response.body?.cancel().catch(() => {});
         throw new ToolFailure('Foundry returned HTTP ' + response.status + '. Read the current state before retrying a write.');
       }
@@ -123,7 +128,7 @@ export function createFoundryAgentAdmin(options: {
     async function pin(key: string) {
       await request(base, 'PATCH', { agent_endpoint: { version_selector: {
         version_selection_rules: [{ type: 'FixedRatio', agent_version: key, traffic_percentage: 100 }],
-      } } });
+      } } }, undefined, 'The serving pin may have changed to version ' + key + '.');
       const state = selection(await request(base));
       if (!state.pinned || state.servingVersion !== key) throw new ToolFailure('Foundry did not verify the requested version pin.');
       return state;
@@ -191,15 +196,19 @@ export function createFoundryAgentAdmin(options: {
       const created = await request(versions, 'POST', {
         definition: next, ...(source.metadata ? { metadata: source.metadata } : {}),
         ...(typeof source.description === 'string' ? { description: source.description } : {}),
-      });
+      }, undefined, 'A new version may have been created.');
       const createdId = versionId(created.version);
       if (!createdId) throw new ToolFailure('Foundry accepted the write without a readable version. List versions before retrying.');
+      pendingChange = 'Foundry accepted version ' + createdId + '.';
       const item = await readVersion(createdId);
       const final = selection(await request(base));
       if (!isDeepStrictEqual(item.definition, next) || final.servingVersion !== state.servingVersion || !final.pinned) {
         throw new ToolFailure('Version ' + createdId + ' was created. Its definition or serving pin could not be verified.');
       }
       return { agent, version: createdId, status: item.status, ...final, ...ownership };
+    } catch (error) {
+      if (pendingChange) throw new ToolFailure(pendingChange + ' Read ' + agent + ' and list its versions before retrying.', { outcomeUnknown: true });
+      throw error;
     } finally { if (write) busy.delete(agent!); }
   };
 }
