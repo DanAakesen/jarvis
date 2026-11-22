@@ -1,7 +1,10 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { ownerSessionAuditReasons } from './auth/session/audit.js';
-import { createLogger, createTelemetry, safeErrorFields } from './logging.js';
+import {
+  createLogger, createTelemetry, errorClassName, isRegisteredLogEvent, safeErrorFields, safeHistoricalLogFields,
+} from './logging.js';
 
 const sdk = vi.hoisted(() => ({
   config: { enableUseDiskRetryCaching: true }, initialize: vi.fn(),
@@ -452,6 +455,151 @@ describe('structured log export', () => {
     });
     expect(JSON.parse(records[1]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.turn', channel: 'chat', outcome: 'ok' });
     expect(records.join('')).not.toContain('private');
+  });
+
+  it('exports where a proactive check failed and the class of what was thrown, and never the message', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const fields = { runId, reason: 'internal_error', stage: 'run_finish', errorClass: 'RequestError' };
+    logger.warn({ ...fields, message: 'private message', stack: 'private stack', err: new Error('private error') }, 'proactive.failed');
+    expect(JSON.parse(records[0]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.failed', ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'proactive.failed', properties: { service: 'jarvis-backend', ...fields } }));
+    logger.warn({ reason: 'internal_error', stage: 'private stage', errorClass: 'Private message with spaces' }, 'proactive.failed');
+    logger.warn({ reason: 'internal_error', stage: 'event_tick', errorClass: `${'A'.repeat(65)}` }, 'proactive.failed');
+    expect(JSON.parse(records[1]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.failed', reason: 'internal_error' });
+    expect(JSON.parse(records[2]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'proactive.failed', reason: 'internal_error', stage: 'event_tick' });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it('names a thrown value by its class and nothing else', () => {
+    class RequestError extends Error {}
+    class Odd extends Error { constructor() { super('private'); this.name = 'Private message'; } }
+    expect(errorClassName(new RequestError('private text'))).toBe('RequestError');
+    expect(errorClassName(new TypeError('private'))).toBe('TypeError');
+    expect(errorClassName(new DOMException('private', 'AbortError'))).toBe('DOMException');
+    expect(errorClassName(new Odd())).toBe('Odd');
+    expect(errorClassName(new (class { })() as never)).toBe('Object');
+    expect(errorClassName('private string')).toBe('string');
+    expect(errorClassName(undefined)).toBe('undefined');
+    expect(errorClassName(null)).toBe('null');
+    expect(errorClassName(Object.assign(new Error('x'), { constructor: { name: 'not an identifier!' } }))).toBe('Error');
+  });
+
+  it.each([
+    ['pi.brain_tick', { outcome: 'daily_cap', queued: 7, wakesToday: 12, nextDueInSec: 129_600, spendMonthDkk: 14.2 }],
+    ['pi.brain_state', { enabled: false, paused: true }],
+    ['pi.brain_state', { reason: 'unreadable' }],
+    ['pi.brain', { reason: 'scheduled_done', trigger: 'manual', events: 0, sent: 1, tools: 4, pending: 2, costDkk: 0.1234 }],
+    ['pi.brain', { reason: 'background_off', trigger: 'scheduled' }],
+    ['pi.brain_run', {
+      outcome: 'ok', firstTextMs: 900, totalMs: 4000, inputTokens: 12_000, cachedTokens: 9_000, outputTokens: 300, estimated: false, costDkk: 0.12,
+      tools: 3, activationId: '11111111-1111-4111-8111-111111111111', activationType: 'event', activationSource: 'watch', stateRevision: 7,
+      staleSourceCount: 0, actionCount: 1, pushCount: 1,
+    }],
+  ])('exports only the fixed words and numbers of %s and strips everything else', (event, fields) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      ...fields, summary: 'private summary', title: 'private title', text: 'private message to Dan', error: 'private error', arguments: { q: 'private' },
+    }, event);
+    expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: event, ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: event, properties: { service: 'jarvis-backend', ...fields } }));
+    logger.info({
+      outcome: 'private outcome', reason: 'private reason', trigger: 'private', enabled: 'yes', paused: 1, queued: -1, wakesToday: 1.5,
+      nextDueInSec: Infinity, spendMonthDkk: Number.NaN, events: -1, sent: 1.5, tools: 'many', pending: -2, costDkk: Infinity,
+      firstTextMs: -1, totalMs: Number.NaN, inputTokens: 1.5, cachedTokens: -1, outputTokens: 'x', estimated: 'no', activationId: 'private id',
+      activationType: 'private', activationSource: 'Private Source!', stateRevision: -1, staleSourceCount: 1e9, actionCount: 1.5, pushCount: -1,
+    }, event);
+    expect(JSON.parse(records[1]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: event });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it.each([
+    ['pi.turn_record_failed', { kind: 'brain' }],
+    ['pi.usage_record_failed', { kind: 'warm' }],
+    ['pi.situation_stale_failed', { activationId: '11111111-1111-4111-8111-111111111111' }],
+    ['pi.mark_warm_failed', {}],
+    ['pi.smoke_failed', { code: 'pi_timeout' }],
+    ['pi.watches', { reason: 'watch_index_refresh_failed' }],
+    ['proactive.reminder_tick', { reason: 'provider_unavailable', count: 3, durationMs: 840 }],
+    ['proactive.reminder_tick', { reason: 'delivery_failed_event_unavailable', durationMs: 12 }],
+    ['proactive.alert', {
+      runId: '11111111-1111-4111-8111-111111111111', reason: 'daily_cap', count: 2, classes: 'calendar_clash,deadline_24h', durationMs: 12,
+    }],
+    ['proactive.events', { reason: 'delivery_failed', events: 3, outreach: 0, dropped: 1 }],
+    ['proactive.events', { reason: 'event_enqueue_failed', source: 'alert' }],
+    ['proactive.events_disabled', { reason: 'model_not_configured' }],
+    ['proactive.event_model_failed', { reason: 'invalid_json', outputTokens: 120 }],
+    ['proactive.event_producer', { reason: 'source_poll_failed', source: 'weather' }],
+    ['proactive.event_source', { reason: 'timeout', source: 'mail' }],
+  ])('exports only the own words and numbers of %s and strips everything else', (event, fields) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({
+      ...fields, prompt: 'private prompt', text: 'private reply', title: 'private title', endpoint: 'private endpoint',
+      message: 'private message', error: 'private error',
+    }, event);
+    expect(JSON.parse(records[0]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event, ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: event, properties: { service: 'jarvis-backend', ...fields } }));
+    logger.warn({
+      kind: 'private kind', activationId: 'private id', code: 'private code', reason: 'private reason', source: 'Private Source',
+      classes: 'private,deadline_24h', runId: 'private run', count: -1, events: 1.5, outreach: Infinity, dropped: Number.NaN,
+      outputTokens: 'x', durationMs: -5,
+    }, event);
+    expect(JSON.parse(records[1]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it('keeps the error class, trigger, alert classes and activation of a log read back, and still drops other identifiers and text', () => {
+    const activationId = '22222222-2222-4222-8222-222222222222';
+    const runId = '11111111-1111-4111-8111-111111111111';
+    expect(safeHistoricalLogFields({
+      msg: 'proactive.failed', runId, reason: 'internal_error', stage: 'run_finish', errorClass: 'RequestError', message: 'private',
+    })).toEqual({ reason: 'internal_error', stage: 'run_finish', errorClass: 'RequestError' });
+    expect(safeHistoricalLogFields({
+      msg: 'pi.brain', reason: 'scheduled_done', trigger: 'manual', events: 2, costDkk: 0.2, text: 'private',
+    })).toEqual({ reason: 'scheduled_done', trigger: 'manual', events: 2, costDkk: 0.2 });
+    expect(safeHistoricalLogFields({
+      msg: 'pi.brain_run', outcome: 'ok', totalMs: 900, activationId, activationType: 'event', activationSource: 'watch', text: 'private',
+    })).toEqual({ outcome: 'ok', totalMs: 900, activationId, activationType: 'event', activationSource: 'watch' });
+    expect(safeHistoricalLogFields({
+      msg: 'pi.situation_stale_failed', activationId,
+    })).toEqual({ activationId });
+    expect(safeHistoricalLogFields({
+      msg: 'proactive.alert', runId, reason: 'daily_cap', classes: 'calendar_clash,deadline_24h', count: 2, durationMs: 12,
+    })).toEqual({ reason: 'daily_cap', classes: 'calendar_clash,deadline_24h', count: 2, durationMs: 12 });
+  });
+
+  it.each(['github', 'reminder', 'calendar', 'alert', 'worker', 'mail', 'timer', 'manual', 'watch', 'mixed'])(
+    'keeps %s as the activation source of a wake, in the export and in a log read back', (source) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const logger = createLogger({ logLevel: 'info' }, undefined, output);
+      const fields = { outcome: 'ok', activationType: 'event', activationSource: source };
+      logger.info(fields, 'pi.brain_run');
+      expect(JSON.parse(records[0]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.brain_run', ...fields });
+      expect(safeHistoricalLogFields({ msg: 'pi.brain_run', ...fields })).toEqual(fields);
+    },
+  );
+
+  it('registers every pi.* and proactive.* event the backend emits, so none is exported as a bare backend.event', () => {
+    const root = new URL('.', import.meta.url);
+    const literal = /['"`]((?:pi|proactive)\.[a-z][a-z0-9_]*)['"`]/gu;
+    const unregistered = new Set<string>();
+    for (const file of readdirSync(root, { recursive: true }) as string[]) {
+      if (!file.endsWith('.ts') || /\.(?:test|testkit)\.ts$/u.test(file)) continue;
+      for (const [, event] of readFileSync(new URL(file, root), 'utf8').matchAll(literal)) {
+        if (!isRegisteredLogEvent(event!)) unregistered.add(event!);
+      }
+    }
+    expect([...unregistered]).toEqual([]);
   });
 
   it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import { failureCopy } from '@jarvis/contracts';
 import { PiGatewayError } from './errors.js';
-import type { PiGateway, PiStatus } from './gateway.js';
+import { noTurnAttribution, type PiGateway, type PiStatus } from './gateway.js';
 import { createPiMcpRoutes } from './mcp.js';
 import type { RemoteMcpBridge } from './remote-mcp.js';
 import { piSmokeParts, runPiSmoke, type PiSmokePart } from './smoke.js';
@@ -41,6 +41,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
         const unconfigured: PiStatus = {
           enabled: false, reason: 'not_configured', agent: { name: null, model: PI_MODEL, effort: PI_REASONING_EFFORT },
           month: { spentDkk: 0, capDkk: options.monthlyCapDkk, remainingDkk: options.monthlyCapDkk, turns: 0 }, warm: { state: 'cold', warmedAt: null }, lastTurn: null,
+          turns: noTurnAttribution,
         };
         return unconfigured;
       }

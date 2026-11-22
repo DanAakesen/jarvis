@@ -53,7 +53,7 @@ function messageId(request: FastifyRequest): string | undefined {
 
 export const createProjectTool: JarvisTool = {
   name: 'create_project',
-  description: 'Create and scaffold a new managed project from its name and description.',
+  description: 'Create and scaffold a new managed project from its name and description. Use when Dan asks to start a new project.',
   inputSchema,
   async execute(input, request, signal) {
     const { projectRepositoryCreator, projectStore, settingsStore, taskStore } = request.server;

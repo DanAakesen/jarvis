@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { readSettings } from '../core/settings.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { sseHeaders } from '../core/now.js';
@@ -105,8 +105,11 @@ export const factoryModule: BackendModule = {
           };
         }
         if (error instanceof RepositoryNotAvailableError) throw new ToolRefusal('That repository is not available in the GitHub App installation.');
-        if (error instanceof GitHubRepositoryUnavailableError) throw error;
-        throw error;
+        if (error instanceof GitHubRepositoryUnavailableError) {
+          throw new ToolFailure('I couldn’t reach GitHub to check that repository, so nothing was added. Try again shortly.');
+        }
+        if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+        throw new ToolFailure('Adding a repository is unavailable right now, so nothing was added.');
       }
     },
   }],

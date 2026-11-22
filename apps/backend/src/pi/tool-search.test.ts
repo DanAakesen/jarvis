@@ -5,7 +5,8 @@ import { providersNamedBy, searchJarvisTools } from './tool-search.js';
 const names = [
   'weather', 'memory_remember', 'memory_search', 'owner_reminders', 'calendar_today_agenda', 'mail_search',
   'vault_task_create', 'vault_search', 'vault_read', 'health_query', 'inbox_capture', 'get_usage',
-  'gh_issue_read', 'gh_list_pull_requests', 'az_group_list', 'az_group_resource_list',
+  'gh_issue_read', 'gh_list_pull_requests', 'gh_create_pull_request', 'create_issue', 'az_group_list', 'az_group_resource_list',
+  'pc_open', 'pc_close', 'pc_media', 'health_nutrition_suggest', 'calendar_next_event', 'vault_write', 'memory_forget',
 ];
 const registry: ToolRegistry = {
   list: () => names.map((name) => ({ name, description: `Tool ${name}.`, inputSchema: { type: 'object' } }) as RegisteredTool),
@@ -31,8 +32,44 @@ describe('tool search wording', () => {
     ['open pull request', 'gh_list_pull_requests'],
     ['github issue', 'gh_issue_read'],
     ['ressourcer i azure', 'az_group_resource_list'],
+    ['luk Spotify på min computer', 'pc_close'],
+    ['hvornår er mit næste møde', 'calendar_next_event'],
+    ['don’t forget that my sister has a birthday', 'memory_remember'],
+    ['hvor meget protein mangler jeg i dag', 'health_nutrition_suggest'],
+    ['gem en note om havplanen', 'vault_write'],
+    ['pause the music on my computer', 'pc_media'],
   ])('finds the right tool for "%s"', (query, expected) => {
     expect(top(query).slice(0, 3)).toContain(expected);
+  });
+
+  it('keeps an issue request away from the pull request tools', () => {
+    expect(top('create an issue for the login bug in Jarvis')[0]).toBe('create_issue');
+    expect(top('opret et issue om login-fejlen')[0]).toBe('create_issue');
+    expect(top('show issue 12 on github')[0]).toBe('gh_issue_read');
+  });
+
+  it.each([
+    'huske', 'huskede', 'huskes', 'husk', 'kan du huske at jeg bor i Aarhus', 'du skal huske at jeg har en hund',
+    'jeg huskede ikke at sige det', 'det skal huskes', 'huskeregel',
+  ])('finds a memory tool for the Danish "%s"', (query) => {
+    expect(top(query).slice(0, 3).some((name) => name.startsWith('memory_'))).toBe(true);
+  });
+
+  it('puts a request to remember a fact first, and a huskeliste with the tasks', () => {
+    expect(top('kan du huske at jeg bor i Aarhus')[0]).toBe('memory_remember');
+    expect(top('du skal huske at jeg har en hund')[0]).toBe('memory_remember');
+    expect(top('min huskeliste').slice(0, 3)).not.toContain('memory_remember');
+  });
+
+  it('does not wait for the Azure bridge for a request that only says group', () => {
+    for (const query of ['send til gruppen', 'create a group chat', 'gruppe', 'group']) expect([...providersNamedBy(query)]).toEqual([]);
+    for (const query of ['mine ressourcegrupper', 'list the resource group', 'azure group']) expect([...providersNamedBy(query)]).toEqual(['az_']);
+  });
+
+  it('ignores words that carry no meaning instead of letting them score long descriptions', () => {
+    expect(top('hvad er det')).toEqual([]);
+    expect(top('what is it')).toEqual([]);
+    expect(top('12')).toEqual([]);
   });
 
   it('ranks a tool named exactly in the query first', () => {

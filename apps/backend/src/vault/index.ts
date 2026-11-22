@@ -987,6 +987,11 @@ export function createVaultModule(options: {
       const unchanged = previous?.blobSha === file.sha;
       const backfill = unchanged && previous?.embeddingMissing === true;
       if (unchanged && (!backfill || !embedder)) continue;
+      // A note above the size limit stays out of the index, like one that reads as too large; reading it would fail every synchronization.
+      if (file.size !== undefined && file.size > MAX_VAULT_FILE_BYTES) {
+        remove.push(file.path);
+        continue;
+      }
       let note: VaultFile | null;
       try {
         note = await options.client.read(file.path, signal);
@@ -1518,7 +1523,7 @@ export function createVaultModule(options: {
     },
     {
       name: 'show_knowledge',
-      description: 'Search Dan’s vault and open or focus the knowledge graph on matching notes.',
+      description: 'Search Dan’s vault and open or focus the knowledge graph on matching notes. Use when Dan asks to see his notes as a graph or map.',
       inputSchema: {
         type: 'object',
         properties: { query: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' } },
@@ -1578,6 +1583,9 @@ export function createVaultModule(options: {
         } catch (error) {
           if (error instanceof VaultAppNotInstalledError) {
             throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+          }
+          if (error instanceof VaultFileTooLargeError) {
+            throw new ToolFailure('That note is larger than 256 KB, so it cannot be read here.');
           }
           throw new ToolFailure('Vault read is temporarily unavailable.');
         }
@@ -1658,6 +1666,10 @@ export function createVaultModule(options: {
             logWrite('error');
             throw new ToolFailure('The note changed or its read version is missing. Reread with vault_read, reapply the intended changes, and supply expectedSha. Nothing was committed by this attempt.');
           }
+          if (error instanceof VaultFileTooLargeError) {
+            logWrite('error');
+            throw new ToolFailure('That note is larger than 256 KB, so it cannot be changed here. Nothing was written.');
+          }
           logWrite('error');
           throw new ToolFailure('Vault write could not be confirmed. Reread the note before reapplying; do not blindly repeat an append or creation.');
         }
@@ -1702,6 +1714,9 @@ export function createVaultModule(options: {
           } catch (error) {
             if (error instanceof VaultAppNotInstalledError) {
               throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+            }
+            if (error instanceof VaultFileTooLargeError) {
+              throw new ToolFailure('That note is larger than 256 KB, so it cannot be deleted here. Nothing was deleted.');
             }
             throw new ToolFailure('Vault deletion is temporarily unavailable.');
           }

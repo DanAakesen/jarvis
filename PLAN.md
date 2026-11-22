@@ -53,6 +53,7 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 9. Dan decides the five choices the #2021 decision entry leaves open (chat-only rewrite of a meal estimate to the server's nutrition list, the chat-only reflex path that can run read tools before PI answers, voice sessions always stored as `en`, no `pi.turn` record for a turn refused before it starts, and a spoken failure stored as a transcript while a chat failure is not; the #2021 PLAN.md row names the first four). One live Chat and one live Voice trace of the same request is the live check of #2021's parity claim; it needs a live turn.
 10. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
 11. P1, proactive intelligence, ranks after P0 and is tracked in [#2011](https://github.com/DanAakesen/jarvis/issues/2011); the P0 acceptance list (daily-core requests in Chat and Voice) is [#2012](https://github.com/DanAakesen/jarvis/issues/2012). #2018 added the first signals Dan named to the proactive queue (GitHub releases, issues, comments, pull requests and failed default-branch checks, failed reminder deliveries, calendar clashes); the brain decides whether he is told, and #2018 lists weather, health and location events as not built. Dan ticks `Release` in the live GitHub App's settings (and confirms Issue comment, Issues, Pull request and Check run are ticked) and watches how the brain handles the new events behind the PI switch. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence"). [#2011](https://github.com/DanAakesen/jarvis/issues/2011) reports that no wake ran in 30 days of logs and lists releases, issue and PR events and reminder failures as not yet signals (#2018 has since added them); I did not re-check either.
+12. Making the brain visible is #2019 (open until merged). The "no wake in 30 days" reading above cannot be trusted: `pi.brain_run` and `pi.brain` were not registered log events, so any wake was exported as a bare `backend.event` with no fields. Once #2019 is deployed, read `pi.brain_state` (is the switch on?), `pi.brain_tick` (why a pass did not wake it), `GET /pi/brain` (`lastTick`, `nextDueAt`, `today`) and `GET /pi/status` `turns.recent` (who makes the hourly call of about 4k tokens; lead, unverified: `POST /pi/warm` on every app foreground). The old 07:00/18:00 slot engine stays until the brain's first proven wake; its deletion is parked on `danaakesen-shiny-carnival-engine-deletion`, and decision A (`docs/pi/cutover.md`) is Dan's.
 
 ## Chat and Voice parity replay — 21 November 2026 (#1967, #1988)
 
@@ -87,6 +88,24 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
 | Measure in production (Log Analytics; `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): the `replayCheck` mix, which `_meta` keys Foundry sends, whether `duplicate` ever appears, what `sameArgsRepeat` shows (plan in `docs/decisions.md`) | Open; needs live turns |
 
+## Offline tool conformance suite — 21 November 2026 (#1967, #2012)
+
+**Status: suite, search fixes, tool fixes and generated table done and green offline; exact-head CI and a live Chat/Voice retest of the daily-core scenarios are pending. Dan decides the open items listed in the PR.**
+
+| Step | State |
+| --- | --- |
+| Enumerate the real registry; static harness checks (name, `___`, schema, description, size) and the 15 largest schemas in tokens | Done |
+| Discoverable: curated English and Danish phrases in the top 3 of the first `find_tools`; every other tool found from its own description; fixes as data in `pi/tool-search.ts` | Done |
+| Callable: every tool through the real `call_tool` path over in-memory stores and stubbed services; `requiresExternal` for hardware and live OAuth, still failing cleanly | Done |
+| Remote: stub GitHub and Azure MCP servers (idle, starting, ready, named-provider wait, stale, unreachable, erroring call, very large result) | Done |
+| Daily-core golden scenarios (project, notes, tasks, workouts, nutrition) in English and Danish, one turn, no confirmation | Done |
+| Generated table `docs/tool-conformance.md`, checked on every run | Done |
+| Approvals inventory (non-delete gates, listed in the PR, none removed) | Done; Dan decides what to relax |
+| Independent review of the first head: Danish `huske` forms, Azure group trigger, order-independent cases (24 shuffled orders pass), a reachable hang message, approvals inventory re-verified line by line (nothing asks in Chat or Voice, deletes included) | Done |
+| Live Chat and Voice retest of the five scenarios on the deployed agent | **Open**; needs a live turn |
+
+No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or provider call belongs to this task.
+
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
 **Status: merged as #2014 on 21 November (23:23 UTC); implemented and offline-tested. No wake has run in production, so how a real wake uses the overview is unobserved.**
@@ -113,11 +132,26 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | A saved reply is never failed for its size: the clients read up to 4 MiB (progress frames stop at 1 MiB, `done` carries the reply) | Done (review); the web test fails on the old 1 MiB ceiling, the Swift test `ChatStreamLimitTests` runs in CI |
 | Tool confirmations keep the plain cause; a tool that threw something unexpected is described by error class and declared effect | Done |
 | A write whose request may have been delivered says its outcome is unknown, never "Not done." (review); the error class is logged as `tool.execution_failed` | Done; a real local service that runs the side effect and drops the socket is the test, and it fails when the tool's effect is ignored |
-| "Nothing was done" is judged on the first response of a turn only; a quiet failure in a later response says part of it may already be done (second review) | Done; four gateway tests fail without the gate |
+| "Nothing was done" is judged on the first response of a turn only; a quiet failure or a timeout in a later response says part of it may already be done, even when only the completed output listed the call (second review and its delta review) | Done; four gateway tests fail without the failure gate and one without the timeout rule |
 | The iPhone shows the server's sentence for every turn error, with or without a code, so it reads what the web reads (second review) | Done; the app target is compiled by the macOS CI job only |
 | List the messages that exist only because of non-delete approval gates (owner rule: none except deletes); remove none | Done in the pull request |
 | Swift unit tests (`ChatTurnEndingTests`, `ChatFailureWordsTests`, `ChatStreamLimitTests`) and the app build | Written; run in CI (Linux `swift test`, macOS app build), not in the dev container |
 | Dan reads the new words on a device (Chat failure, Stop, Voice failure, tool row) | **Open** |
+
+## See the brain — 21 November 2026 (Refs #1969)
+
+**Status: implemented; offline lint, build and the full backend suite pass (commands in the pull request). Not run: a live wake or a deploy. The first real `pi.brain_tick` and `pi.brain_run` lines after deploy are the live check. Turning the brain on stays the owner's `PUT /pi/brain`.**
+
+| Step | State |
+| --- | --- |
+| Log `pi.brain_tick` when the tick outcome changes and `pi.brain_state` at startup; register `pi.brain` and `pi.brain_run` (both were exported as `backend.event` without fields, so zero `pi.brain_run` lines proved nothing) | Done |
+| Extend `GET /pi/brain` with `lastTick`, `nextDueAt`, `today.wakes` and `today.costDkk` | Done |
+| Name the kind of every turn in `GET /pi/status` (`lastTurn.kind`, `turns.last24h`, `turns.recent`); label a wake that only a due watch caused `watch` | Done |
+| `proactive.failed` carries `stage` and `errorClass` on every path of the old engine, the scheduler and the manual check; every path reproduced in a test; the scheduler survives a failed startup write and retries a slot whose claim threw | Done |
+| Register the thirteen other `pi.*` and `proactive.*` events that were exported as bare `backend.event`, test that none can be added unregistered, and keep the error class, trigger and activation in `read_backend_logs` | Done |
+| Name the hourly call of about 4k tokens | Open: read `GET /pi/status` `turns.recent` on production |
+| Delete the old 07:00/18:00 slot engine (the brain's sweep has superseded it since #1964) | Prepared and tested on the parked branch `danaakesen-shiny-carnival-engine-deletion` (commit `1d912cda`, no pull request); meant to land only after the brain's first proven wake. Open |
+| Decide what the engine's hooks become (decision A, `docs/pi/cutover.md`, which now lists what each feature does without the engine) | Open, owner |
 
 ## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
 

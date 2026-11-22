@@ -4,6 +4,7 @@ import type {
 } from 'fastify';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
+import { errorClassName } from '../logging.js';
 import {
   budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
 } from './budget.js';
@@ -298,10 +299,11 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
         }
         void reply.code(202).send({ run: claim.run });
         const controller = new AbortController();
-        const task = Promise.resolve().then(() => options.run!(claim, controller.signal)).catch(async () => {
+        const task = Promise.resolve().then(() => options.run!(claim, controller.signal)).catch(async (error) => {
+          app.log.warn({ reason: 'internal_error', stage: 'manual_run', errorClass: errorClassName(error) }, 'proactive.failed');
           await options.store.runs.finish(claim.run.id, claim.generation, 'failed', 'internal_error', 0, options.now());
-        }).catch(() => {
-          app.log.warn({ reason: 'internal_error' }, 'proactive.failed');
+        }).catch((error) => {
+          app.log.warn({ reason: 'internal_error', stage: 'manual_run_finish', errorClass: errorClassName(error) }, 'proactive.failed');
         }).finally(() => { pendingRuns.delete(task); });
         pendingRuns.set(task, controller);
         return reply;

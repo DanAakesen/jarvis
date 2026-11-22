@@ -155,7 +155,7 @@ function workspaceItemTools(
   const tools: JarvisTool[] = [
     {
       name: 'workspaces_search',
-      description: 'Search saved research reports, HTML apps, generated images, and knowledge graph views in Workspaces.',
+      description: 'Search saved research reports, HTML apps, generated images, and knowledge graph views in Workspaces. Use when Dan asks to find or list something he saved earlier.',
       inputSchema: workspaceItemsSearchToolSchema,
       sensitive: true,
       async execute(input, request, signal) {
@@ -167,15 +167,21 @@ function workspaceItemTools(
     },
     {
       name: 'workspaces_open',
-      description: 'Reopen a saved Workspaces item by id or a unique search phrase, such as “Ignite research”.',
+      description: 'Reopen a saved Workspaces item by id or a unique search phrase, such as “Ignite research”. Use when Dan asks to open or pull up a saved item again.',
       inputSchema: workspaceItemOpenToolSchema,
       sensitive: true,
       async execute(input, request, signal) {
         authorizeTool(request);
         if (!isObject(input)) throw new ToolRefusal('Choose a Workspaces item to open.');
         const id = await resolveId(input, request, signal);
-        const item = await openItem(store, htmlArtifacts, imageArtifacts, request, id, signal);
-        return { id: item.id, title: item.title, kind: item.kind, opened: true };
+        try {
+          const item = await openItem(store, htmlArtifacts, imageArtifacts, request, id, signal);
+          return { id: item.id, title: item.title, kind: item.kind, opened: true };
+        } catch (error) {
+          if (error instanceof WorkspaceItemNotFound || error instanceof WorkspaceHtmlArtifactNotFound ||
+              error instanceof WorkspaceArtifactNotFound) throw new ToolRefusal('That Workspaces item was not found.');
+          throw error;
+        }
       },
     },
     {

@@ -19,7 +19,7 @@ import {
   proactiveEvidenceSourcesAllowed,
 } from '../../proactive/policy.js';
 import type { ProactiveStore } from '../../proactive/store.js';
-import type { PiSituationService } from '../situation.js';
+import { PiSituationError, type PiSituationService } from '../situation.js';
 import type { PiProactiveEvidence } from '../store.js';
 import { shouldRedact } from '../../vault/index.js';
 
@@ -42,6 +42,12 @@ function wake(registry: PiTurnRegistry, request: FastifyRequest): PiTurnGrant {
 function translate(error: unknown): never {
   if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
   if (error instanceof BrainCommsRefusal) throw new ToolRefusal(error.message);
+  // Only message_dan reads the situation, before anything is sent.
+  if (error instanceof PiSituationError) {
+    const message = `${error.message} Nothing was sent.`;
+    if (error.code === 'unavailable') throw new ToolFailure(message);
+    throw new ToolRefusal(message);
+  }
   if (error instanceof PiAreaError) {
     if (error.code === 'unavailable') throw new ToolFailure(error.message);
     throw new ToolRefusal(error.message);

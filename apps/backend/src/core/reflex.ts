@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { WorkspaceSnapshot } from '@jarvis/contracts';
 import { confirmToolCall, unexpectedToolFailure, type ToolCallOutcome } from './tool-calls.js';
-import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
+import { effectOf, ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
 import { isWorkspaceReflexOperation } from './workspace-commands.js';
 import { startWorkPresentation } from './work-presentation.js';
 import {
@@ -454,7 +454,7 @@ export async function executeReflexAction(
       outcome = 'error';
       result = { failure: error.message };
     } else {
-      const unexpected = unexpectedToolFailure(error, signal.aborted, target.tool.execution?.defaultEffect);
+      const unexpected = unexpectedToolFailure(error, signal.aborted, effectOf(target.tool, target.arguments));
       outcome = 'error';
       result = unexpected.result;
       request.log.warn({ tool: target.tool.name, ...unexpected.log }, 'tool.execution_failed');

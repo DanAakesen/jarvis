@@ -8,7 +8,7 @@ const routineIdSchema = { type: 'string', pattern: '^[a-f0-9]{64}$' };
 function createManagementTool(name: string, legacy: boolean, store: RecipeStore | undefined): JarvisTool {
   return {
     name,
-    description: `${legacy ? 'Legacy alias. ' : ''}List, rename, or delete saved PC/browser routines. Routines contain no entered text; deleting one prevents future reuse.`,
+    description: `${legacy ? 'Legacy alias. ' : ''}List, rename, or delete saved PC/browser routines. Routines contain no entered text; deleting one prevents future reuse. Use when Dan asks to see, rename or delete a saved routine.`,
     sensitive: true,
     inputSchema: {
       type: 'object', additionalProperties: false, required: ['action'],

@@ -451,7 +451,7 @@ export const listJobsTool: JarvisTool = {
 
 export const getJobTool: JarvisTool = {
   name: 'get_job',
-  description: 'Get a background job by jobId, including its bounded step history, failure reason, result window, and retry availability.',
+  description: 'Get a background job by jobId, including its bounded step history, failure reason, result window, and retry availability. Use when Dan asks how one background job went or why it failed.',
   inputSchema: {
     type: 'object',
     properties: { jobId: jobIdSchema },

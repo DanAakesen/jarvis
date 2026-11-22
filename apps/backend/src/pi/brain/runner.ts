@@ -17,6 +17,7 @@ import type { PiGateway } from '../gateway.js';
 import type { PiProactiveEvidence, PiStore } from '../store.js';
 import { BrainCommsRefusal, type BrainComms } from './comms.js';
 import type { DecisionLog, DecisionRecord } from './decision-log.js';
+import type { BrainLogReason, BrainTickOutcome } from './outcomes.js';
 import { MAX_WAKE_EVENTS, formatWake } from './wake.js';
 import {
   DEFAULT_BACKGROUND_TURNS_PER_DAY,
@@ -37,6 +38,20 @@ const defaultMaxAgeMs = 24 * HOUR_MS;
 const worstCaseInputTokens = 90_000;
 const worstCaseOutputTokens = 6_000;
 const maxPendingLogs = 24;
+/** A diagnostic read must never hold up a tick, a wake or startup. */
+const diagnosticReadMs = 5_000;
+
+async function bounded<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([work, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('Diagnostic read timed out')), ms);
+      timer.unref();
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+type LogFields = Record<string, string | number | boolean>;
 
 export interface BrainOptions {
   readonly queue: EventQueueStore;
@@ -49,7 +64,7 @@ export interface BrainOptions {
   readonly timeZone: string;
   readonly now: () => Date;
   readonly newRunId?: () => string;
-  readonly logger?: { info?: (data: Record<string, string | number>, message: string) => void; warn?: (data: Record<string, string | number>, message: string) => void } | undefined;
+  readonly logger?: { info?: (data: LogFields, message: string) => void; warn?: (data: LogFields, message: string) => void } | undefined;
   /** Sections a wake carries besides events, such as open watches that are due. */
   readonly extras?: {
     /** When something besides the queue is due, so the wake is not missed. */
@@ -62,11 +77,22 @@ export interface BrainOptions {
 }
 
 export interface BrainTick {
-  /** Why nothing ran, or `done` / `failed` after a wake. */
-  readonly outcome: string;
+  /** Why nothing ran, or `done` / `failed` after a wake. `idle` and `active_activation` returned before the queue was read. */
+  readonly outcome: BrainTickOutcome | 'idle' | 'active_activation';
   readonly claimed: number;
   readonly runId?: string | undefined;
 }
+
+/** The last pass that read the queue since this backend started. */
+export interface BrainTickRecord {
+  readonly at: Date;
+  readonly outcome: BrainTickOutcome;
+}
+
+type RanTick = BrainTick & { readonly outcome: BrainTickOutcome };
+
+/** A claimed run of the 07:00 or 18:00 sweep, or of an owner's Check now. */
+type SweepClaim = { run: { id: string; slot: string | null; trigger: 'scheduled' | 'catchup' | 'manual' }; generation: number };
 
 /**
  * The brain loop on the PI agent: trigger (the 30 s ticker finds events in the queue, a timer review or a due watch),
@@ -77,11 +103,13 @@ export interface BrainTick {
  */
 export function createBrain(options: BrainOptions) {
   const { queue, proactive, now } = options;
-  const log = (level: 'info' | 'warn', data: Record<string, string | number>) => {
-    try { options.logger?.[level]?.(data, 'pi.brain'); } catch { /* Logging cannot change a wake. */ }
+  const emit = (level: 'info' | 'warn', message: 'pi.brain' | 'pi.brain_tick' | 'pi.brain_state', data: LogFields) => {
+    try { options.logger?.[level]?.(data, message); } catch { /* Logging cannot change a wake. */ }
   };
+  const log = (level: 'info' | 'warn', data: LogFields & { reason: BrainLogReason }) => emit(level, 'pi.brain', data);
   let nextWorkAt: Date | null = null;
   let lastWakeAt = 0;
+  let lastTick: BrainTickRecord | null = null;
   let running: Promise<BrainTick> | undefined;
   let scheduledActive = false;
   const slots = options.slots ?? createPiBackgroundSlotService({ queue, proactive: options.proactive, now });
@@ -150,9 +178,48 @@ export function createBrain(options: BrainOptions) {
     }
   }
 
-  async function runTick(signal: AbortSignal): Promise<BrainTick> {
+  /** What Dan asks first about a tick: how many events wait, how many wakes today, what the month has cost. */
+  async function tickSnapshot(): Promise<LogFields> {
+    const [slotStatus, spent] = await bounded(Promise.allSettled([
+      slots.status(), proactive.spend.monthTotal(monthKey(now())),
+    ]), diagnosticReadMs);
+    return {
+      ...(slotStatus.status === 'fulfilled' ? { queued: slotStatus.value.queue.pending, wakesToday: slotStatus.value.used } : {}),
+      ...(spent.status === 'fulfilled' ? { spendMonthDkk: Number(spent.value.toFixed(4)) } : {}),
+    };
+  }
+
+  /** One `pi.brain_tick` when the outcome differs from the pass before (the first pass after startup counts), never one per 30 s. */
+  async function recordTick(outcome: BrainTickOutcome): Promise<void> {
+    try {
+      const changed = lastTick?.outcome !== outcome;
+      lastTick = { at: now(), outcome };
+      if (!changed) return;
+      let snapshot: LogFields = {};
+      try { snapshot = await tickSnapshot(); } catch { /* The outcome is worth a line without the numbers. */ }
+      const dueInMs = nextWorkAt === null ? undefined : nextWorkAt.getTime() - now().getTime();
+      emit(outcome === 'failed' || outcome === 'watches_unavailable' ? 'warn' : 'info', 'pi.brain_tick', {
+        outcome, ...snapshot, ...(dueInMs === undefined ? {} : { nextDueInSec: Math.max(0, Math.round(dueInMs / 1000)) }),
+      });
+    } catch { /* Logging cannot change a tick. */ }
+  }
+
+  /** Said once at startup, so "off" can be told from "on and idle" without waiting for an event. */
+  async function logState(): Promise<void> {
+    try {
+      const signal = AbortSignal.timeout(diagnosticReadMs);
+      const [state, settings] = await bounded(Promise.all([
+        options.piStore.readBrainSwitch(options.owner, signal), options.proactive.settings.read(),
+      ]), diagnosticReadMs);
+      emit('info', 'pi.brain_state', { enabled: state.enabled, paused: settings.paused });
+    } catch {
+      emit('warn', 'pi.brain_state', { reason: 'unreadable' });
+    }
+  }
+
+  async function runTick(signal: AbortSignal): Promise<RanTick> {
     const current = now();
-    const result = (outcome: string, claimed = 0, runId?: string): BrainTick => ({ outcome, claimed, runId });
+    const result = (outcome: BrainTickOutcome, claimed = 0, runId?: string): RanTick => ({ outcome, claimed, runId });
     await flushLogs(signal);
     const state = await options.piStore.readBrainSwitch(options.owner, signal);
     if (!state.enabled) return result('off');
@@ -248,7 +315,10 @@ export function createBrain(options: BrainOptions) {
     const activationType = sourceNames.length > 0 && sourceNames.every((source) => source === 'timer')
       ? 'scheduled' as const
       : 'event' as const;
-    const activationSource = sourceNames.length === 1 ? sourceNames[0]! : 'mixed';
+    const activationSource = sourceNames.length === 1
+      ? sourceNames[0]!
+      // Woken by nothing but a due watch: the ledger says so, since a watch look is not a ledger kind of its own.
+      : sourceNames.length === 0 && extra.due.length > 0 ? 'watch' : 'mixed';
     const slotKey = activationType === 'event' ? nextSlotAfter(current).key : null;
     // Counted before the call, so a failing or crashing wake still uses up the combined daily allowance.
     const reservation = await slots.reserve({
@@ -302,40 +372,40 @@ export function createBrain(options: BrainOptions) {
     };
     if (pendingLogs.length < maxPendingLogs) pendingLogs.push(record);
     await flushLogs(signal);
+    const failedReason: BrainLogReason = outcome.error?.code ?? (outcome.outcome === 'ok' ? 'failed' : outcome.outcome);
     log(outcome.ok ? 'info' : 'warn', {
-      reason: outcome.ok ? 'done' : (outcome.error?.code ?? outcome.outcome), events: survivors.length, sent: outcome.run.sent.length,
+      reason: outcome.ok ? 'done' : failedReason, events: survivors.length, sent: outcome.run.sent.length,
       tools: outcome.toolResults.length, costDkk: Number(outcome.costDkk.toFixed(4)),
     });
     return result(outcome.ok ? 'done' : 'failed', claimed.length, runId);
   }
 
-  async function runScheduledOnce(
-    claim: { run: { id: string; slot: string | null; trigger: 'scheduled' | 'catchup' | 'manual' }; generation: number },
-    signal: AbortSignal = new AbortController().signal,
-  ): Promise<void> {
-    const finish = async (
-      status: 'done' | 'failed' | 'skipped' | 'cancelled',
-      reason: string | null,
-    ) => options.proactive.runs.finish(claim.run.id, claim.generation, status, reason, 0, now());
+  /** A sweep that ends without a wake: the run row says why, and so does one log line. */
+  async function finishWithoutWake(claim: SweepClaim, status: 'failed' | 'skipped', reason: BrainLogReason): Promise<void> {
+    await proactive.runs.finish(claim.run.id, claim.generation, status, reason, 0, now());
+    log(status === 'failed' ? 'warn' : 'info', { reason, trigger: claim.run.trigger });
+  }
+
+  async function runScheduledOnce(claim: SweepClaim, signal: AbortSignal = new AbortController().signal): Promise<void> {
     const state = await options.piStore.readBrainSwitch(options.owner, signal);
-    if (!state.enabled) { await finish('skipped', 'background_off'); return; }
+    if (!state.enabled) { await finishWithoutWake(claim, 'skipped', 'background_off'); return; }
     const settings = await options.proactive.settings.read();
-    if (settings.paused) { await finish('skipped', 'paused'); return; }
-    if (!Object.values(settings.sources).some(Boolean)) { await finish('skipped', 'no_sources'); return; }
+    if (settings.paused) { await finishWithoutWake(claim, 'skipped', 'paused'); return; }
+    if (!Object.values(settings.sources).some(Boolean)) { await finishWithoutWake(claim, 'skipped', 'no_sources'); return; }
     const current = now();
     const slot = await slots.status();
-    if (slot.used >= slot.allowed) { await finish('skipped', 'daily_cap'); return; }
+    if (slot.used >= slot.allowed) { await finishWithoutWake(claim, 'skipped', 'daily_cap'); return; }
     if (claim.run.slot && slot.lastAt && slot.lastActivationType === 'event') {
       const currentSlotAt = localSlotInstant(claim.run.slot);
       const previousSlotAt = latestSlotAtOrBefore(new Date(currentSlotAt.getTime() - 1)).at;
       if (slot.lastSatisfiedSlot === claim.run.slot &&
           Date.parse(slot.lastAt) > previousSlotAt.getTime()) {
-        await finish('skipped', 'satisfied_by_event');
+        await finishWithoutWake(claim, 'skipped', 'satisfied_by_event');
         return;
       }
     }
     if (slot.lastAt && current.getTime() - Date.parse(slot.lastAt) < MIN_WAKE_GAP_MS) {
-      await finish('skipped', 'satisfied_by_recent_activation');
+      await finishWithoutWake(claim, 'skipped', 'satisfied_by_recent_activation');
       return;
     }
     const spent = await options.proactive.spend.monthTotal(monthKey(current));
@@ -343,7 +413,7 @@ export function createBrain(options: BrainOptions) {
     const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
     if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
       await notifyBudget('exhausted', spent, budgetLimit, signal);
-      await finish('skipped', 'budget_exhausted');
+      await finishWithoutWake(claim, 'skipped', 'budget_exhausted');
       return;
     }
     const budgetNote = budgetState(budgetLimit, spent) === 'warn'
@@ -355,7 +425,7 @@ export function createBrain(options: BrainOptions) {
     if (options.extras) {
       try { extra = await options.extras.sections(current, signal); }
       catch {
-        await finish('failed', 'situation_sources_unavailable');
+        await finishWithoutWake(claim, 'failed', 'situation_sources_unavailable');
         return;
       }
     }
@@ -369,7 +439,7 @@ export function createBrain(options: BrainOptions) {
       worstCaseDkk: worstCase,
     });
     if (!reservation.allowed) {
-      await finish('skipped', reservation.reason === 'spaced'
+      await finishWithoutWake(claim, 'skipped', reservation.reason === 'spaced'
         ? 'satisfied_by_recent_activation'
         : reservation.reason);
       return;
@@ -392,6 +462,7 @@ export function createBrain(options: BrainOptions) {
       }),
     }, signal);
     const at = now();
+    // As on the tick path: a ledger write that fails is logged, it does not turn a wake that happened into a failed run.
     await options.proactive.spend.record({
       runId: claim.run.id,
       month: monthKey(at),
@@ -399,7 +470,7 @@ export function createBrain(options: BrainOptions) {
       outputTokens: outcome.usage.outputTokens,
       estimatedDkk: outcome.costDkk,
       createdAt: at,
-    });
+    }).catch(() => log('warn', { reason: 'spend_record_failed' }));
     await options.extras?.afterRun({
       runId: claim.run.id, costDkk: outcome.costDkk, events: 0, run: outcome.run, due: extra.due,
     }, signal).catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));
@@ -414,9 +485,11 @@ export function createBrain(options: BrainOptions) {
       });
     }
     await flushLogs(signal);
-    await finish(outcome.ok ? 'done' : 'failed', outcome.ok ? null : outcome.error?.code ?? outcome.outcome);
+    const failedReason: BrainLogReason = outcome.error?.code ?? (outcome.outcome === 'ok' ? 'failed' : outcome.outcome);
+    await proactive.runs.finish(claim.run.id, claim.generation, outcome.ok ? 'done' : 'failed', outcome.ok ? null : failedReason, 0, now());
     log(outcome.ok ? 'info' : 'warn', {
-      reason: outcome.ok ? 'scheduled_done' : outcome.error?.code ?? outcome.outcome,
+      reason: outcome.ok ? 'scheduled_done' : failedReason,
+      trigger: claim.run.trigger,
       events: 0,
       sent: outcome.run.sent.length,
       tools: outcome.toolResults.length,
@@ -424,14 +497,9 @@ export function createBrain(options: BrainOptions) {
     });
   }
 
-  async function runScheduled(
-    claim: Parameters<typeof runScheduledOnce>[0],
-    signal: AbortSignal = new AbortController().signal,
-  ): Promise<void> {
+  async function runScheduled(claim: SweepClaim, signal: AbortSignal = new AbortController().signal): Promise<void> {
     if (running || scheduledActive) {
-      await options.proactive.runs.finish(
-        claim.run.id, claim.generation, 'skipped', 'satisfied_by_active_activation', 0, now(),
-      );
+      await finishWithoutWake(claim, 'skipped', 'satisfied_by_active_activation');
       return;
     }
     scheduledActive = true;
@@ -452,8 +520,9 @@ export function createBrain(options: BrainOptions) {
       return state.enabled && !settings.paused;
     },
     async status() { return slots.status(); },
-    /** Reads the queue once at startup, so work left by a restart is picked up. */
+    /** Reads the queue once at startup, so work left by a restart is picked up, and says whether the owner's switch is on. */
     async start(): Promise<void> {
+      await logState();
       const due = await queue.nextDueAt();
       if (due) wake(due);
       const extraDue = options.extras ? await options.extras.nextDueAt(AbortSignal.timeout(15_000)).catch(() => 'retry' as const) : null;
@@ -466,7 +535,7 @@ export function createBrain(options: BrainOptions) {
       if (running) return running;
       if (nextWorkAt === null || nextWorkAt > now()) return Promise.resolve({ outcome: 'idle', claimed: 0 });
       nextWorkAt = null;
-      running = runTick(signal).then(async (tick) => {
+      running = runTick(signal).then(async (tick): Promise<BrainTick> => {
         // Another wake may have replaced a later deadline; read the queue again so no event is lost. Blocked outcomes keep their own deadline.
         if (!['off', 'paused', 'budget_exhausted', 'daily_cap', 'spaced'].includes(tick.outcome)) {
           const due = await queue.nextDueAt().catch(() => null);
@@ -475,6 +544,7 @@ export function createBrain(options: BrainOptions) {
           if (extraDue === 'retry') wake(new Date(now().getTime() + RETRY_MS));
           else if (extraDue) wake(new Date(Math.max(extraDue.getTime(), lastWakeAt + MIN_WAKE_GAP_MS)));
         }
+        await recordTick(tick.outcome);
         return tick;
       }, (error: unknown) => {
         // An interrupted pass leaves its claims leased; look again once the lease has lapsed.
@@ -484,6 +554,10 @@ export function createBrain(options: BrainOptions) {
       return running;
     },
     get pendingLogs() { return pendingLogs.length; },
+    /** The last pass that read the queue since this backend started, or null. */
+    get lastTick(): BrainTickRecord | null { return lastTick; },
+    /** When the brain looks again, or null when nothing is scheduled. */
+    get nextDueAt(): Date | null { return nextWorkAt; },
   };
 }
 

@@ -43,7 +43,7 @@ describe('the result given for a tool that threw something unexpected', () => {
   const neverSent = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT'] as const;
 
   it.each(afterSend)('says a write may or may not have gone through after %s, and never "Not done."', (_name, error, cause) => {
-    for (const effect of ['action', 'unclassified', undefined] as const) {
+    for (const effect of ['action', 'unclassified'] as const) {
       const { result } = unexpectedToolFailure(error, false, effect);
       expect(result).toEqual({ error: `${cause}, ${unknownOutcome}`, outcomeUnknown: true });
       expect(confirmToolCall('some_tool', 'error', result)).toBe(`${cause}, ${unknownOutcome}`);
@@ -78,7 +78,7 @@ describe('the result given for a tool that threw something unexpected', () => {
 
   it('never repeats the error text or code in the result', () => {
     for (const [, error] of afterSend) {
-      for (const effect of ['read', 'action', undefined] as const) {
+      for (const effect of ['read', 'action', 'unclassified'] as const) {
         expect(unexpectedToolFailure(error, false, effect).result.error).not.toMatch(/secret|10\.0\.0\.5|ECONN|UND_ERR|ETIMEDOUT|EPIPE|aborted|select/u);
       }
     }
@@ -91,7 +91,7 @@ describe('the result given for a tool that threw something unexpected', () => {
     const { log } = unexpectedToolFailure(socketError('UND_ERR_SOCKET'), false, 'action');
     expect(log).toEqual({ failureClass: 'dropped', effect: 'action', errorName: 'TypeError', causeName: 'Error', causeCode: 'UND_ERR_SOCKET' });
     expect(JSON.stringify(log)).not.toMatch(/10\.0\.0\.5|fetch failed|secret/u);
-    expect(unexpectedToolFailure('not an error', false, undefined).log).toEqual({ failureClass: 'unexpected', effect: 'none' });
+    expect(unexpectedToolFailure('not an error', false, 'unclassified').log).toEqual({ failureClass: 'unexpected', effect: 'unclassified' });
     // A name or code that is not a plain token is dropped rather than logged.
     const odd = Object.assign(new Error('x'), { name: 'Bearer secret value', code: 'has spaces' });
     expect(unexpectedToolFailure(odd, false, 'read').log).toEqual({ failureClass: 'unexpected', effect: 'read' });

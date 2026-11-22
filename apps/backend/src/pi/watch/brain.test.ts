@@ -55,6 +55,8 @@ describe('standing watches inside the brain loop', () => {
     expect(t.gateway.wakes).toHaveLength(1);
     const body = t.gateway.wakes[0]!.body;
     expect(body).toContain('Why: the periodic timer or a watch coming due.');
+    // The ledger has no turn kind for a watch, so a wake that only a watch caused says so in its activation source.
+    expect(body).toContain('Activation: type=event source=watch.');
     expect(body).toContain('Open watches (1');
     expect(body).toContain('Deploy of main [DUE NOW]');
     expect(body).toContain('Watch due now: Deploy of main');

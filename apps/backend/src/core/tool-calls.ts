@@ -126,7 +126,7 @@ export interface UnexpectedToolFailure {
   /** Fixed-vocabulary fields for the `tool.execution_failed` log: error class tokens only, never error text. */
   readonly log: {
     readonly failureClass: ToolFailureClass;
-    readonly effect: ToolEffect | 'none';
+    readonly effect: ToolEffect;
     readonly errorName?: string;
     readonly errorCode?: string;
     readonly causeName?: string;
@@ -155,11 +155,12 @@ const codeToken = (value: unknown): string | undefined =>
 
 /**
  * The plain result for a tool that threw something that is not a `ToolFailure`, chosen by error class (name and code only, so no
- * provider text reaches Dan or the model). Only a tool declared read-only can say plainly that nothing changed. For any other tool
- * a call that may have been delivered (a timeout, a dropped connection, a stop, an unknown error) says its outcome is unknown, and
- * only a call that provably never left says so, because a retry of a write that already happened would do it twice.
+ * provider text reaches Dan or the model). `effect` is what this call does (`effectOf`: the operation named, or the tool's default,
+ * and `unclassified` when the tool does not say). Only a call that reads can say plainly that nothing changed. Any other call that
+ * may have been delivered (a timeout, a dropped connection, a stop, an unknown error) says its outcome is unknown, and only a call
+ * that provably never left says so, because a retry of a write that already happened would do it twice.
  */
-export function unexpectedToolFailure(error: unknown, aborted: boolean, effect: ToolEffect | undefined): UnexpectedToolFailure {
+export function unexpectedToolFailure(error: unknown, aborted: boolean, effect: ToolEffect): UnexpectedToolFailure {
   const read = (value: unknown) => {
     const fields = value !== null && typeof value === 'object' ? value as { name?: unknown; code?: unknown } : {};
     return { name: nameToken(fields.name), code: codeToken(fields.code) };
@@ -181,7 +182,7 @@ export function unexpectedToolFailure(error: unknown, aborted: boolean, effect: 
     result: readOnly ? { error: sentence } : { error: sentence, outcomeUnknown: true },
     log: {
       failureClass,
-      effect: effect ?? 'none',
+      effect,
       ...(outer.name ? { errorName: outer.name } : {}),
       ...(outer.code ? { errorCode: outer.code } : {}),
       ...(inner.name ? { causeName: inner.name } : {}),

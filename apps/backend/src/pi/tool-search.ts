@@ -18,36 +18,183 @@ export function shortenToolDescription(text: string): string {
 }
 
 /**
- * English and Danish wording for the common intents, as a plain table. A query word that equals a stem (or starts with it when
- * the stem ends in `*`: "kalender*"; words are split on hyphens too, so "github-issues" is "github" and "issues") adds the row's `terms` to the search, so "vejr" finds `weather`. A row with a `provider`
- * also names that remote provider (`gh_` GitHub, `az_` Azure): only then is its catalogue loaded for the search.
+ * English and Danish wording for the common intents, as a plain table. A query word that equals a stem adds the row's `terms`
+ * to the search, so "vejr" finds `weather`. A stem can end in `*` ("kalender*": starts with), begin with `*` ("*kalender":
+ * ends with, for Danish compounds such as "mødekalender"), or both ("*opgave*": contains). Words are split on hyphens too,
+ * so "github-issues" is "github" and "issues". A `phrase` is matched as written inside the whole query ("don't forget"), for
+ * wording no single word carries. A `light` row is a verb: it breaks ties between the tools of one subject. A row with a
+ * `provider` also names that remote provider (`gh_` GitHub, `az_` Azure): only then is its catalogue loaded for the search.
  */
 interface IntentAlias {
   readonly stems: readonly string[];
   readonly terms: readonly string[];
+  readonly phrases?: readonly string[];
+  /** A verb row ("show", "create"): its terms count half, so they pick between the tools of one noun instead of outranking it. */
+  readonly light?: true;
   readonly provider?: 'gh_' | 'az_';
 }
 
 export const intentAliases: readonly IntentAlias[] = [
-  { stems: ['vejr*', 'weather', 'forecast', 'temperatur*'], terms: ['weather'] },
-  { stems: ['remember', 'memory', 'husk*', 'hukommelse*', 'erindring*'], terms: ['memory'] },
-  { stems: ['remind*', 'paaminde*', 'paamindelse*', 'påmind*'], terms: ['reminders'] },
-  { stems: ['calendar*', 'kalender*', 'aftale*', 'meeting*', 'møde*', 'moede*'], terms: ['calendar'] },
-  { stems: ['mail', 'mails', 'email*', 'gmail'], terms: ['mail'] },
-  { stems: ['task', 'tasks', 'todo*', 'opgave*'], terms: ['task'] },
-  { stems: ['note', 'notes', 'noter*', 'vault'], terms: ['vault', 'notes'] },
-  { stems: ['health*', 'sundhed*', 'sleep', 'søvn', 'soevn'], terms: ['health'] },
-  { stems: ['github*', 'git', 'gh', 'issue*', 'pull', 'pullrequest*', 'pullanmodning*', 'pr', 'prs', 'commit*', 'branch*',
-    'repo', 'repos', 'repositor*', 'workflow*', 'arbejdsgang*'],
-    terms: ['github', 'issue', 'pull'], provider: 'gh_' },
+  // Nouns: what the request is about.
+  { stems: ['vejr*', '*vejr', 'weather', 'forecast*', 'prognose*', 'temperatur*', 'regn*', 'rain*', 'snow*', 'sne', 'wind*', 'blæst*', 'storm*', 'solskin*', 'paraply*', 'varm*', 'kold*', 'kulde', 'udenfor', 'warm', 'cold', 'hot', 'outside'], terms: ['weather'] },
+  { stems: ['remember', 'memory', 'memories', 'hukommelse*', 'erindring*', 'huskeregel*', 'huskeseddel*', 'huskesedl*'], terms: ['memory'] },
+  // The forms of "husk" are listed, not `husk*`: that would also match huskeliste*, a to-do list (below).
+  { stems: ['husk', 'huske', 'huskede', 'huskes'], terms: ['memory', 'remember'] },
+  { stems: ['husker', 'husket', 'recall'], phrases: ['what do you remember', 'do you remember', 'what you remember', 'can you remember', 'huske hvad', 'huske hvem', 'huske hvor', 'huske om', 'huske noget'], terms: ['memory', 'search'] },
+  { stems: [], phrases: ['know about me', 'ved du om mig', 'husker du om mig', 'remember about me'], terms: ['memory', 'search'] },
+  { stems: ['forget', 'forgot', 'glem*'], terms: ['memory', 'forget'] },
+  { stems: [], phrases: ['don’t forget', "don't forget", 'do not forget', 'dont forget', 'never forget', 'glem ikke', 'lad være med at glemme'], terms: ['memory', 'remember'] },
+  { stems: ['remind*', 'paaminde*', 'paamindelse*', 'påmind*', 'mind', 'snooze', 'udskyd*'], terms: ['reminders'] },
+  { stems: ['calendar*', 'kalender*', '*kalender', 'aftale*', '*aftale', 'appointment*', 'meeting*', 'møde*', 'møder', 'moede*', '*tid', 'tidspunkt*'], terms: ['calendar'] },
+  { stems: ['schedule*', 'agenda*', 'skema*', 'dagsorden'], terms: ['calendar', 'agenda'] },
+  { stems: [], phrases: ['rename the event', 'rename the meeting', 'omdøb aftalen', 'omdøb mødet', 'change the location', 'add anna to', 'add to the meeting', 'ændre aftalen', 'rediger aftalen', 'opdater aftalen'], terms: ['calendar', 'update'] },
+  { stems: [], phrases: ['udskyd aftalen', 'udskyd mødet', 'postpone the meeting', 'reschedule the meeting', 'flyt aftalen', 'flyt mødet'], terms: ['calendar', 'move'] },
+  { stems: ['dagens'], terms: ['today'] },
+  { stems: ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], light: true, terms: ['list', 'events'] },
+  { stems: [], phrases: ['hvad har jeg på', 'what do i have on'], terms: ['calendar', 'list', 'events'] },
+  { stems: ['tid', 'ledig*', 'free', 'available', 'tilgængelig*'], terms: ['calendar', 'free', 'slots'] },
+  { stems: ['næste', 'next'], terms: ['next'] },
+  { stems: ['dag', 'idag', 'today'], terms: ['today'] },
+  { stems: ['uge', 'ugen', 'uger', 'week*', 'tomorrow', 'morgen', 'imorgen'], light: true, terms: ['list', 'events'] },
+  { stems: ['*mail*'], terms: ['mail'] },
+  { stems: ['*mail*'], light: true, terms: ['search'] },
+  { stems: ['unread', 'ulæst*'], phrases: ['nye mails', 'nye emails', 'new mail', 'new email'], terms: ['mail', 'search'] },
+  { stems: ['draft*', 'udkast*', '*udkast', 'kladde*', 'kladder'], terms: ['mail', 'draft'] },
+  { stems: [], phrases: ['change my draft', 'edit my draft', 'ret mit udkast', 'rediger udkastet', 'rediger min kladde'], terms: ['mail', 'draft', 'update'] },
+  { stems: [], phrases: ['as read', 'som læst', 'tag this mail', 'tag the mail', 'tag this email', 'mærk mailen', 'mærk denne mail'], terms: ['mail', 'label'] },
+  { stems: ['svar*', 'reply', 'replying', 'besvar*'], terms: ['reply'] },
+  { stems: ['task', 'tasks', '*opgave*', 'grocer*', '*liste', '*listen'], phrases: ['shopping list', 'grocery list'], terms: ['task'] },
+  { stems: ['todo*', 'dos', 'huskeliste*', 'checklist*'], phrases: ['to-do', 'to do'], terms: ['task', 'vault', 'search'] },
+  { stems: ['due', 'overdue', 'deadline*', 'forfald*'],
+    phrases: ['skal jeg have lavet', 'skal jeg lave', 'skal jeg nå', 'have to do', 'need to do', 'on my list', 'på min liste'], terms: ['vault', 'search'] },
+  { stems: ['running', 'kører', 'igangværende'], light: true, terms: ['list', 'status'] },
+  { stems: ['note', 'notes', 'noter*', '*note', '*noter', 'vault', 'notat*'], terms: ['vault', 'notes'] },
+  { stems: ['note', 'notes', 'noter*', '*note', '*noter', 'notat*'], light: true, terms: ['search'] },
+  { stems: [], phrases: ['new note', 'a note', 'make a note', 'create a note', 'write a note', 'add a note', 'ny note', 'en note', 'opret en note', 'skriv en note', 'tilføj en note', 'gem en note', 'noten'], terms: ['vault', 'write'] },
+  { stems: ['knowledge', 'viden*', 'vidensgraf*'], phrases: ['notes as a graph', 'noter som en graf', 'notes graph', 'noter som graf'], terms: ['knowledge'] },
+  { stems: ['idé*', 'ide', 'ideer*', 'idea*', 'inbox', 'indbakke*', 'loose', 'thought*', 'tanke*'], terms: ['inbox'] },
+  { stems: ['health*', 'sundhed*'], terms: ['health'] },
+  { stems: ['sleep', 'søvn', 'soevn', 'sov', 'sovet', 'sover', 'skridt', 'steps', 'puls*', 'hvilepuls*', 'pulse', 'heart*', 'hjerte*', 'weight', 'vægt', 'blodtryk'], terms: ['health', 'query'] },
+  { stems: ['gym', 'lift*', 'løft*', 'bænk*', 'bench', 'benchpress', 'curl', 'curls', 'squat*', 'deadlift*', 'styrketræning*', 'strength', 'rep', 'reps', 'gentagelse*', 'kilos'], terms: ['gym', 'lifts'] },
+  { stems: ['workout*', 'træn*', 'train', 'trained', 'training', 'session*', 'løbetur*', 'løb*', 'running', 'ran', 'jog*', 'cardio', 'cykeltur*', 'yoga', 'svømning*'], terms: ['gym', 'sessions'] },
+  { stems: [], phrases: ['my run', 'last run', 'min løbetur', 'min sidste løbetur'], terms: ['gym', 'sessions'] },
+  { stems: ['recover*', 'recovered', 'restitution*', 'sick', 'syg', 'sygdom*', 'ill'], terms: ['health', 'coach', 'status'] },
+  { stems: ['overview', 'oversigt*', 'summary', 'sammendrag'], light: true, terms: ['summary'] },
+  { stems: [], phrases: ['step goal', 'step target', 'daily step', 'skridtmål', 'steps target'], terms: ['health', 'coach', 'status'] },
+  { stems: ['calorie*', 'kalori*', 'protein*', 'kcal', 'macro*', 'fedt', 'carb*', 'kulhydrat*', 'nutrition*', 'ernæring*', 'kost', 'diet', 'måltid*', 'meal*', 'morgenmad*', 'frokost*', 'aftensmad*', 'breakfast', 'lunch', 'dinner', 'snack*', 'mad', 'food*', 'spis*', 'spist', 'eat*', 'ate'], terms: ['nutrition', 'food'] },
+  { stems: ['left', 'remaining', 'tilbage', 'resterende', 'mangler', 'need', 'needed'], light: true, terms: ['suggest'] },
+  { stems: ['spist', 'spiste', 'eaten', 'eat', 'ate', 'logged'], light: true, terms: ['history', 'query'] },
+  { stems: [], phrases: ['i ate', 'i drank', 'jeg har spist', 'jeg spiste', 'jeg drak', 'for breakfast', 'til morgenmad', 'for lunch', 'til frokost', 'for dinner', 'til aftensmad'], terms: ['nutrition', 'food'] },
+  { stems: ['favourite*', 'favorite*', 'favorit*'], phrases: ['saved food', 'saved meal', 'gemt mad', 'gemte måltid'], terms: ['saved', 'food'] },
+  { stems: [], phrases: ['saved report', 'saved research', 'saved html', 'gemte research', 'gemt research', 'gemte rapport', 'gemt rapport'], terms: ['workspaces', 'folio'] },
+  { stems: ['target*', 'goal*', '*mål', 'mål'], terms: ['targets'] },
+  { stems: ['github*', 'git', 'gh', 'repo', 'repos', 'repoet', 'repoer', 'repoerne', 'repositor*'], terms: ['github'], provider: 'gh_' },
+  { stems: ['issue*'], terms: ['github', 'issue'], provider: 'gh_' },
+  { stems: ['pull', 'pullrequest*', 'pullanmodning*', 'pr', 'prs'], terms: ['github', 'pull'], provider: 'gh_' },
+  { stems: ['commit*'], terms: ['github', 'commit'], provider: 'gh_' },
+  { stems: ['branch*'], terms: ['github', 'branch'], provider: 'gh_' },
+  { stems: ['workflow*', 'arbejdsgang*'], terms: ['github', 'workflow', 'actions'], provider: 'gh_' },
+  { stems: ['repo', 'repos', 'repoet', 'repoer', 'repoerne', 'repositor*'], terms: ['repo'] },
+  { stems: ['changed', 'changes', 'ændret', 'ændringer'], light: true, terms: ['commits'] },
+  { stems: ['pr', 'prs', 'pull', 'pullrequest*', 'pullanmodning*', 'request*'], phrases: ['pull request'], terms: ['pr'] },
   { stems: ['azure*', 'az', 'ressource*', 'resource*', 'subscription*', 'abonnement*', 'container*'],
     terms: ['azure', 'resource'], provider: 'az_' },
+  { stems: ['ressourcegrupp*'], phrases: ['resource group'], terms: ['group'], provider: 'az_' },
+  { stems: ['workspace*', 'arbejdsområde*', 'arbejdsomraade*', 'folio'], terms: ['workspace', 'workspaces', 'folio'] },
+  { stems: ['pin', 'pins', 'pinned', 'pinnede', 'unpin', 'fastgør*', 'fastgjort*', 'fastgjorte'], terms: ['pins'] },
+  { stems: ['pin', 'unpin', 'fastgør*'], terms: ['workspaces', 'manage', 'folio'] },
+  { stems: ['gendan*', 'restore'], terms: ['restore'] },
+  { stems: ['report*', 'rapport*', 'reports', 'rapporter'], light: true, terms: ['workspaces', 'folio'] },
+  { stems: ['genåbn*', 'reopen'], phrases: ['bring up'], terms: ['open', 'workspaces', 'folio'] },
+  { stems: ['diagram*', 'chart*', 'graf*', 'graph*', 'plot*', 'visualis*', 'figur*'], terms: ['chart'] },
+  { stems: ['setting*', 'indstilling*', 'konfigur*', 'config*', 'præference*', 'preference*'], terms: ['settings'] },
+  { stems: ['tema*', 'theme', 'farve*', 'colour*', 'color*', 'mørk*', 'dark', 'animation*', 'motion'], terms: ['theme'] },
+  { stems: ['væk*', 'away', 'tilstand*', 'presence'],
+    phrases: ['leaving the house', 'i am leaving', 'heading out', 'on the move', 'kører bil', 'på farten', 'hjemme igen', 'back home', 'jeg er tilbage'],
+    terms: ['presence', 'away', 'mode'] },
+  { stems: ['model*', 'modeller', 'reasoning', 'tænkning*'], terms: ['model', 'settings'] },
+  { stems: ['personality', 'personlighed*', 'tone', 'tonen'], phrases: ['home city', 'home location', 'hjemby'], terms: ['settings'] },
+  { stems: ['pc', 'pcen', 'computer*', 'windows', 'laptop'], terms: ['pc'] },
+  { stems: ['vindue*', 'window*'], terms: ['window'] },
+  { stems: ['clipboard', 'udklipsholder*', 'udklip*'], terms: ['clipboard', 'pc'] },
+  { stems: ['chrome'], terms: ['browser', 'pc'] },
+  { stems: ['fane', 'faner', 'fanen', 'tab', 'tabs'], terms: ['browser', 'tabs'] },
+  { stems: ['klik*', 'click*', 'tryk*'], light: true, terms: ['act', 'click'] },
+  { stems: [], phrases: ['.dk', '.com', '.org', '.net', 'http'], terms: ['pc', 'open'] },
+  { stems: [], phrases: ['go to', 'gå til', 'søg på google', 'fill in', 'udfyld', 'fill out'], terms: ['browser', 'do'] },
+  { stems: [], phrases: ['jeg deler', 'i am sharing', 'i\u2019m sharing', 'shared screen', 'delte skærm', 'siden jeg deler', 'this page', 'denne side'], terms: ['browser', 'shared'] },
+  { stems: ['musik*', 'music', 'sang*', 'song*', 'spotify', 'afspil*', 'play*', 'lyd*', 'volume*', 'volumen', 'mute'], terms: ['media', 'pc'] },
+  { stems: ['research*', 'undersøg*', 'undersoeg*', 'udforsk*', 'investigat*'], terms: ['research'] },
+  { stems: ['web*', 'nettet', 'internet*', 'online'], terms: ['web'] },
+  { stems: ['google'], light: true, terms: ['web'] },
+  { stems: ['retry'], phrases: ['try again', 'prøv igen', 'prøv research igen'], terms: ['retry', 'job'] },
+  { stems: ['usage', 'brugt*', 'forbrug*', 'spend', 'spent', 'spending', 'budget*', 'penge', 'money', 'dkk'], terms: ['usage'] },
+  { stems: ['cost*', 'koster', 'koste*', 'pris*', 'udgift*'], terms: ['usage', 'cost'] },
+  { stems: ['working', 'virker', 'fungerer', 'status', 'operational'], terms: ['status', 'system'] },
+  { stems: ['backend', 'system*', 'server*', 'services', 'tjenester', 'healthy', 'broken', 'ødelagt'],
+    phrases: ['something wrong', 'noget galt', 'virker ikke', 'er noget'], terms: ['system', 'status'] },
+  { stems: ['fejlede', 'fejl'], phrases: ['why did you fail', 'why did it fail', 'what went wrong', 'hvad gik galt', 'your errors', 'dine fejl', 'backend logs'], terms: ['backend', 'logs'] },
+  { stems: [], phrases: ['tidy up', 'ryd op', 'arrange windows', 'close all windows', 'side by side', 'minimise', 'minimize', 'luk alle vinduer', 'ordne vinduer'], terms: ['workspace', 'command'] },
+  { stems: [], phrases: ['research going', 'how is the research', 'går det med research', 'research job', 'status of the research'], terms: ['jobs', 'job'] },
+  { stems: [], phrases: ['stop research', 'cancel research', 'stop den research', 'afbryd research', 'stop the research'], terms: ['cancel', 'job'] },
+  { stems: ['rutine*', 'routine*', 'recipe*'], terms: ['routines'] },
+  { stems: [], phrases: ['what can you do', 'what can you', 'hvad kan du', 'what are you able', 'your capabilities', 'dine funktioner', 'hvilke værktøjer', 'which tools'], terms: ['capabilities'] },
+  { stems: ['sprog', 'language'], phrases: ['the voice', 'stemmen', 'turn off voice', 'end voice'], terms: ['workspace', 'command'] },
+  { stems: ['job*', 'baggrund*', 'background'], terms: ['jobs'] },
+  { stems: ['conversation*', 'samtale*', 'talk*', 'snakke*', 'snakket', 'sagde', 'said', 'chatten'],
+    phrases: ['hvad lavede vi', 'what did we', 'last time we', 'sidste gang vi', 'did i say', 'earlier today', 'tidligere i dag'], terms: ['conversation'] },
+  { stems: ['billede*', 'image*', 'foto*', 'picture*', 'generate*', 'generer*', 'tegn*'], terms: ['image', 'generation'] },
+  { stems: ['overvåg*', 'watch*'], terms: ['watch'] },
+  { stems: ['kamera*', 'camera*'], terms: ['watch', 'for'] },
+  { stems: [], phrases: ['at the door', 'ved døren', 'hele tiden', 'what you see', 'hvad du ser'], terms: ['watch', 'for'] },
+  { stems: [], phrases: ['stoppe med at kigge', 'stop looking', 'stop kigge', 'ikke kigge mere', 'stop watching the camera'], terms: ['stop', 'watching', 'for'] },
+  { stems: [], phrases: ['keep me updated', 'keep me posted', 'hold mig opdateret', 'let me know when', 'tell me when', 'sig til når', 'giv mig besked når', 'hold øje med'], terms: ['watch', 'create'] },
+  { stems: [], phrases: ['watching for me', 'you watching', 'holder du øje med', 'my watches', 'mine watches'], terms: ['watch', 'list'] },
+  { stems: [], phrases: ['hold op med', 'stop following', 'stop watching', 'stop med at følge', 'stop tracking'], terms: ['watch', 'stop'] },
+  { stems: ['project*', 'projekt*'], terms: ['projects'] },
+  { stems: ['worker*', 'workers', 'arbejder*'], terms: ['task', 'work', 'status'] },
+  { stems: [], phrases: ['status på mit arbejde', 'status of my work', 'my work', 'mit arbejde', 'arbejdsstatus', 'work status'], terms: ['work', 'status'] },
+  { stems: ['release*', 'deploy*', 'udgivelse*'], terms: ['release', 'deployment'] },
+  // Verbs: what is asked of it.
+  { stems: ['søg*', 'soeg*', 'find*', 'finde', 'look', 'lookup', 'tjek*', 'check*'], light: true, terms: ['search'] },
+  { stems: ['opret*', 'tilføj*', 'tilfoej*', 'add', 'create*', 'ny', 'nyt', 'new', 'make', 'lav', 'lave'], light: true, terms: ['create'] },
+  { stems: ['arkiv*', 'archive*'], light: true, terms: ['archive'] },
+  { stems: ['slet*', 'fjern*', 'delete*', 'remove*'], light: true, terms: ['delete'] },
+  { stems: ['gem*', 'save*', 'skriv*', 'write'], light: true, terms: ['write'] },
+  { stems: ['ret', 'rette*', 'ændr*', 'aendr*', 'rediger*', 'opdater*', 'update*', 'edit*', 'modify'], light: true, terms: ['edit', 'update'] },
+  { stems: ['titel*', 'title*', 'overskrift*', 'heading*', 'omdøb*', 'rename*'], light: true, terms: ['write', 'title'] },
+  { stems: ['afslut*', 'færdig*', 'done', 'complete*', 'finish*', 'udført', 'marker*', 'mark'], light: true, terms: ['complete'] },
+  { stems: ['flyt*', 'move', 'moving', 'postpone', 'reschedule'], light: true, terms: ['move', 'edit'] },
+  { stems: ['læs*', 'laes*', 'read'], light: true, terms: ['read'] },
+  { stems: ['åbn*', 'aabn*', 'open', 'åbne', 'åben'], light: true, terms: ['open', 'read'] },
+  { stems: ['luk*', 'close', 'quit'], light: true, terms: ['close'] },
+  { stems: ['vis*', 'show', 'display', 'fremvis*'], light: true, terms: ['show', 'list', 'read'] },
+  { stems: ['liste*', 'list', 'oversigt*', 'overview', 'hvilke'], light: true, terms: ['list'] },
+  { stems: ['start*', 'begynd*', 'påbegynd*'], light: true, terms: ['start'] },
+  { stems: ['pause*'], light: true, terms: ['pause'] },
+  { stems: ['stop*', 'afbryd*', 'cancel*', 'annuller*', 'aflys*'], light: true, terms: ['cancel', 'stop', 'delete'] },
+  { stems: ['send*', 'sende*'], light: true, terms: ['send'] },
+  { stems: ['log', 'logg*', 'registrer*'], light: true, terms: ['health'] },
 ];
 
-const stemMatches = (token: string, stem: string): boolean => stem.endsWith('*') ? token.startsWith(stem.slice(0, -1)) : token === stem;
+const normalizePhrase = (value: string): string => value.toLowerCase().replace(/[’']/gu, '');
+const tokensOf = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+function stemMatches(token: string, stem: string): boolean {
+  const leading = stem.startsWith('*');
+  const trailing = stem.endsWith('*');
+  const core = stem.slice(leading ? 1 : 0, trailing ? -1 : undefined);
+  if (core.length === 0) return false;
+  if (leading && trailing) return token.includes(core);
+  if (leading) return token.endsWith(core);
+  return trailing ? token.startsWith(core) : token === core;
+}
+
 const aliasesFor = (query: string): IntentAlias[] => {
-  const found = query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  return intentAliases.filter((alias) => alias.stems.some((stem) => found.some((token) => stemMatches(token, stem))));
+  const found = tokensOf(query);
+  const whole = normalizePhrase(query);
+  return intentAliases.filter((alias) => alias.stems.some((stem) => found.some((token) => stemMatches(token, stem)))
+    || (alias.phrases ?? []).some((phrase) => whole.includes(normalizePhrase(phrase))));
 };
 
 /** The remote providers a query names, by alias word or by a tool name such as `gh_issue_read`. */
@@ -60,29 +207,70 @@ export function providersNamedBy(query: string): ReadonlySet<'gh_' | 'az_'> {
   return named;
 }
 
+/**
+ * Words that carry no tool meaning in either language. They are dropped from the query before it is matched against names and
+ * descriptions (an English description contains "en" and "min" inside other words, so a Danish stop word would otherwise score
+ * every long description). Alias stems still see the whole query.
+ */
+const stopWords: ReadonlySet<string> = new Set([
+  'a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'on', 'at', 'for', 'from', 'by', 'with', 'about', 'is', 'are', 'was', 'were', 'be',
+  'been', 'am', 'do', 'does', 'did', 'have', 'has', 'had', 'me', 'my', 'mine', 'you', 'your', 'he', 'she', 'it', 'we', 'us', 'our',
+  'they', 'them', 'this', 'that', 'these', 'those', 'what', 'which', 'who', 'when', 'where', 'why', 'how', 'can', 'could', 'would',
+  'should', 'will', 'shall', 'may', 'might', 'must', 'please', 'just', 'also', 'so', 'if', 'then', 'than', 'there', 'here', 'not',
+  'no', 'yes', 'as', 'into', 'out', 'up', 'down', 'over', 'under', 'again', 'more', 'some', 'any', 'all', 'each', 'every', 'other',
+  'such', 'only', 'own', 'same', 'too', 'very', 'now', 'much', 'many', 'still', 'last', 'tell', 'give', 'get', 'let', 'its',
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'en', 'to', 'tre', 'fire', 'fem',
+  'og', 'i', 'jeg', 'det', 'at', 'en', 'den', 'til', 'er', 'som', 'på', 'de', 'med', 'han', 'af', 'ikke', 'der', 'var', 'mig', 'sig',
+  'men', 'et', 'har', 'om', 'vi', 'min', 'havde', 'ham', 'hun', 'nu', 'da', 'fra', 'du', 'ud', 'sin', 'dem', 'os', 'op', 'man',
+  'hans', 'hvor', 'eller', 'hvad', 'skal', 'selv', 'her', 'alle', 'vil', 'blev', 'kunne', 'ind', 'når', 'være', 'dog', 'noget',
+  'ville', 'jo', 'deres', 'efter', 'ned', 'skulle', 'denne', 'end', 'dette', 'mit', 'også', 'have', 'dig', 'anden', 'hvem', 'mine',
+  'hende', 'mange', 'hvis', 'vores', 'hvordan', 'hvilken', 'hvornår', 'hvorfor', 'kan', 'lige', 'nogen', 'fik', 'gør', 'får', 'tak',
+  'venligst', 'bare', 'dine', 'jeres', 'der', 'ha', 'kom', 'komme', 'sidste', 'gerne', 'helst', 'lidt', 'meget', 'stadig',
+]);
+
+/** Stems for comparing a query word with a description word: "reminders" and "reminder", "creating" and "creates" meet. */
+function stem(word: string): string {
+  let result = word;
+  if (result.length > 5) result = result.replace(/(?:ing|ed|es)$/u, '');
+  if (result.length > 3) result = result.replace(/s$/u, '');
+  if (result.length > 3) result = result.replace(/e$/u, '');
+  return result;
+}
+
 export function searchJarvisTools(
   tools: ToolRegistry,
   query: string,
   visible: (name: string) => boolean = isCurrentAssistantTool,
 ): RegisteredTool[] {
   const queryWords = [...new Set(
-    query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word.length >= 2),
+    tokensOf(query).filter((word) => word.length >= 2 && !stopWords.has(word) && !/^\d+$/u.test(word)),
   )].slice(0, 8);
-  const words = [...new Set([...queryWords, ...aliasesFor(query).flatMap((alias) => alias.terms)])];
-  if (words.length === 0) return [];
+  // "tasks" and the alias term "task" are one signal, not two; the strongest weight wins.
+  const weighted = new Map<string, { word: string; weight: number }>();
+  const addWord = (word: string, weight: number) => {
+    const key = stem(word);
+    const known = weighted.get(key);
+    if (!known || known.weight < weight) weighted.set(key, { word: known?.word ?? word, weight });
+  };
+  for (const word of queryWords) addWord(word, 1);
+  for (const alias of aliasesFor(query)) for (const term of alias.terms) addWord(term, alias.light ? 0.5 : 1);
+  if (weighted.size === 0) return [];
   // A query that contains a tool's exact name ranks that tool first.
   const exactNames = new Set(query.toLowerCase().split(/[^a-z0-9_-]+/u).filter(Boolean));
+  const wordStems = [...weighted.entries()].map(([wordStem, { word, weight }]) => ({ word, stem: wordStem, weight }));
   return tools.list()
     .filter((tool) => visible(tool.name))
     .map((tool) => {
       const name = tool.name.toLowerCase();
       const segments = name.split('_');
+      const segmentStems = new Set(segments.map(stem));
       const description = tool.description.toLowerCase();
+      const descriptionStems = new Set(tokensOf(description).map(stem));
       let score = exactNames.has(name) ? 1_000 : 0;
-      for (const word of words) {
-        if (segments.includes(word)) score += 4;
-        else if (name.includes(word)) score += 2;
-        if (description.includes(word)) score += 1;
+      for (const { word, stem: wordStem, weight } of wordStems) {
+        if (segments.includes(word) || segmentStems.has(wordStem)) score += 4 * weight;
+        else if (word.length >= 3 && name.includes(word)) score += 2 * weight;
+        if (descriptionStems.has(wordStem) || (word.length >= 6 && description.includes(word))) score += 1 * weight;
       }
       return { tool, score };
     })
