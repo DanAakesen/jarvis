@@ -1,3 +1,4 @@
+import { setImmediate } from 'node:timers/promises';
 import { isDeepStrictEqual } from 'node:util';
 import { afterAll, describe, expect, it } from 'vitest';
 import { failureCopy } from '@jarvis/contracts';
@@ -786,6 +787,56 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       for (const run of Object.values(runs)) expect(run.deliveries).toEqual({ persona: 1, situation: 1, capability: 1 });
       expectParity(rows);
     }, 90_000);
+
+    it.each(['voice', 'chat'] as const)('a %s reply in flight lets the other channel queue without losing either request', async (firstChannel) => {
+      const otherEntered = Promise.withResolvers<void>();
+      const world = await createParityWorld({
+        onGatewayTurn(channel) { if (channel !== firstChannel) otherEntered.resolve(); },
+      });
+      const voiceText = firstChannel === 'voice' ? 'Book the dentist tomorrow at nine for half an hour.' : 'First voice question.';
+      const chatText = 'First chat question.';
+      const [firstText, secondText] = firstChannel === 'voice' ? [voiceText, chatText] : [chatText, voiceText];
+      const [firstReply, secondReply] = firstChannel === 'voice' ? ['Voice answer.', 'Chat answer.'] : ['Chat answer.', 'Voice answer.'];
+      const providerOrder: string[] = [];
+      const firstEffects = firstChannel === 'voice' ? [
+        find('calendar create event'),
+        call('calendar_create_event', {
+          subject: 'Dentist', startDateTime: `${world.tomorrow}T09:00:00+01:00`, endDateTime: `${world.tomorrow}T09:30:00+01:00`,
+        }),
+      ] : [];
+      try {
+        const voice = await world.openVoice();
+        world.foundry.enqueue(
+          { steps: [...firstEffects, { hold: 'first-channel' }, { say: firstReply }, { run() { providerOrder.push('first finished'); } }] },
+          { steps: [{ run() { providerOrder.push('second started'); } }, { say: secondReply }] },
+        );
+        if (firstChannel === 'voice') voice.say(voiceText);
+        const chat = firstChannel === 'chat' ? await world.chat.start(chatText) : undefined;
+        await world.foundry.reached('first-channel');
+        if (firstChannel === 'chat') voice.say(voiceText);
+        const chatTurn = chat ?? await world.chat.start(chatText);
+        await otherEntered.promise;
+        // Let the in-memory gateway dependencies settle before releasing the held provider response.
+        await setImmediate();
+        const requests = () => world.foundry.requests.filter(request => request.kind === 'turn');
+        world.foundry.release('first-channel');
+        const typed = await chatTurn.ended;
+        expect(typed.status).toBe(200);
+        expect(typed.events.filter(event => event.name === 'done').map(event => event.data.text)).toEqual(['Chat answer.']);
+        expect(typed.events.filter(event => event.name === 'error')).toEqual([]);
+        expect(world.store.messages.filter(message => message.sessionId === chatTurn.sessionId).map(message => [message.role, message.text])).toEqual([
+          ['dan', chatText], ['jarvis', 'Chat answer.'],
+        ]);
+        await voiceTurn(world, voice, 1);
+        expect(voice.commentary().map(part => part.content)).toEqual(['Voice answer.']);
+        expect(world.store.messages.filter(message => message.role === 'dan').map(message => message.text)).toEqual([firstText, secondText]);
+        expect(requests().map(request => request.text?.split('\n').at(-1))).toEqual([firstText, secondText]);
+        expect(providerOrder).toEqual(['first finished', 'second started']);
+        expect(world.googleCalls.filter(entry => entry.method === 'POST')).toHaveLength(firstEffects.length ? 1 : 0);
+        expect(new Set(requests().map(request => request.conversation)).size).toBe(1);
+        expect(world.foundry.cancels).toEqual([]);
+      } finally { await world.close(); }
+    }, 30_000);
 
     it('S16a the monthly cap stops a turn before anything is sent, with the same words', async () => {
       const cap = failureCopy.allowance_used.chat;

@@ -56,6 +56,7 @@ export interface WorldOptions {
   readonly spendUnreadable?: boolean;
   /** How long GPT-Live takes to speak a commentary once the relay has sent it (default none); the stub echoes it as the output transcript that much later. */
   readonly speechLagMs?: (text: string) => number;
+  readonly onGatewayTurn?: (channel: 'chat' | 'voice') => void;
 }
 
 export interface ChatTurn {
@@ -277,6 +278,7 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
     async *stream(input, authorization, signal) {
       const tap = { messageId: input.messageId, channel: input.channel ?? 'chat', chunks: [] as ConversationAgentChunk[] };
       taps.push(tap);
+      options.onGatewayTurn?.(tap.channel);
       for await (const chunk of gateway.stream(input, authorization, signal)) { tap.chunks.push(chunk); yield chunk; }
     },
   };
