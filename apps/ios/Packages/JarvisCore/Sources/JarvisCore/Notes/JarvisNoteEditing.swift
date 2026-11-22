@@ -75,7 +75,13 @@ public enum JarvisNoteTitle {
     }
 
     public static func title(content: String, path: String) -> String {
-        JarvisNoteParts(content).displayedTitle(path: path)
+        let title = JarvisNoteParts(content).displayedTitle(path: path)
+        // Match the metadata API's 200 UTF-16-unit display limit without cutting a surrogate pair.
+        let units = title.utf16.prefix(200)
+        if let last = units.last, (0xD800...0xDBFF).contains(last) {
+            return String(decoding: units.dropLast(), as: UTF16.self)
+        }
+        return String(decoding: units, as: UTF16.self)
     }
 
     /// Compact provenance such as "Personal / Home"; empty for a note at the vault root.
@@ -136,7 +142,7 @@ public enum JarvisNoteLinks {
     }
 
     /// Rewrites internal links on one line to a private scheme the reader can intercept; external links are untouched.
-    public static func rewriteInternalLinks(_ line: String) -> String {
+    public static func rewriteInternalLinks(_ line: String, titleForTarget: (String) -> String? = { _ in nil }) -> String {
         var result = line
         if let wiki = try? NSRegularExpression(pattern: #"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]"#) {
             let range = NSRange(result.startIndex..., in: result)
@@ -144,7 +150,13 @@ public enum JarvisNoteLinks {
             for match in matches {
                 guard let whole = Range(match.range, in: result), let targetRange = Range(match.range(at: 1), in: result) else { continue }
                 let target = String(result[targetRange])
-                let label = Range(match.range(at: 2), in: result).map { String(result[$0]) } ?? target
+                let label = Range(match.range(at: 2), in: result).map { String(result[$0]) }
+                    ?? titleForTarget(target).map { title in
+                        title.reduce(into: "") { label, character in
+                            if ##"!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"##.contains(character) { label.append("\\") }
+                            label.append(character)
+                        }
+                    } ?? target
                 result.replaceSubrange(whole, with: "[\(label)](\(url(for: target)))")
             }
         }

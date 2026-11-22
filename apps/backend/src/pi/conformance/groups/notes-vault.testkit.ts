@@ -86,6 +86,7 @@ export function createMemoryVault(): MemoryVault {
 
 interface IndexedNote {
   blobSha: string;
+  title: string | null;
   chunks: readonly VaultIndexedChunk[];
   links: readonly string[];
   indexedAt: Date;
@@ -126,10 +127,12 @@ export function createVaultIndexFake(): VaultIndexStore {
       signal.throwIfAborted();
       return [...notes].sort(([left], [right]) => left.localeCompare(right)).map(([path, note]) => ({
         path, blobSha: note.blobSha,
-        embeddingMissing: embeddingModel === null || note.chunks.some((chunk) => chunk.embedding === null || chunk.embeddingModel !== embeddingModel),
+        titleMissing: note.title === null,
+        embeddingMissing: embeddingModel !== null &&
+          note.chunks.some((chunk) => chunk.embedding === null || chunk.embeddingModel !== embeddingModel),
       }));
     },
-    async replaceFile(path, sha, chunks, links, signal) {
+    async replaceFile(path, sha, title, chunks, links, signal) {
       signal.throwIfAborted();
       if (!/^[\da-f]{40}$/u.test(sha) || chunks.length > 512 || links.length > 512) throw new TypeError('Vault index entry is invalid');
       for (const { embedding, embeddingModel } of chunks) {
@@ -138,17 +141,25 @@ export function createVaultIndexFake(): VaultIndexStore {
           : embedding.length === MEMORY_EMBEDDING_DIMENSIONS && embedding.every(Number.isFinite) && typeof embeddingModel === 'string';
         if (!valid) throw new TypeError('Vault index embedding is invalid');
       }
-      notes.set(path, { blobSha: sha, chunks: [...chunks], links: [...links], indexedAt: new Date() });
+      const previous = notes.get(path);
+      const indexedAt = previous?.blobSha === sha ? previous.indexedAt : new Date();
+      notes.set(path, { blobSha: sha, title, chunks: [...chunks], links: [...links], indexedAt });
+    },
+    async backfillFileTitle(path, sha, title, signal) {
+      signal.throwIfAborted();
+      const note = notes.get(path);
+      if (note?.blobSha === sha && note.title === null) note.title = title;
     },
     async deleteFiles(paths, signal) {
       signal.throwIfAborted();
       for (const path of paths) notes.delete(path);
     },
-    async graphFiles(signal): Promise<VaultGraphFile[]> {
+    async graphFiles(signal, paths): Promise<VaultGraphFile[]> {
       signal.throwIfAborted();
-      return [...notes].sort(([left], [right]) => left.localeCompare(right)).map(([path, note]) => ({
-        path, title: note.chunks.find((chunk) => chunk.heading !== 'Introduction')?.heading ?? '', updatedAt: note.indexedAt,
-      }));
+      const wanted = paths && new Set(paths);
+      return [...notes].filter(([path]) => !wanted || wanted.has(path))
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([path, note]) => ({ path, title: note.title, updatedAt: note.indexedAt }));
     },
     async graphData(paths, embeddingModel, signal): Promise<VaultGraphData> {
       signal.throwIfAborted();

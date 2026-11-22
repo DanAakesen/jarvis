@@ -185,6 +185,9 @@ switch while a query is present; clearing the query restores the previous folder
   changing that field adds a title heading without consuming the first line of the body. Draft protection applies only
   after a real change. Task detail, Edit task, Date & time and Task options follow the
   same anatomy; the schedule and options sheets return to the same draft.
+- **Note labels.** Pinned, list, reader and generated link labels use the same note title;
+  explicit link aliases stay as written. Reopening Notes shows the last available rows
+  during refresh. A pin that cannot yet be resolved does not show a guessed filename.
 - **Recovery.** A conflict keeps the draft and offers Keep editing or Review changes (a line comparison, then an
   explicit, confirmed choice). A failed or unconfirmed save keeps the draft and offers Retry, which first checks what the
   vault holds. Nothing is overwritten without an explicit choice.

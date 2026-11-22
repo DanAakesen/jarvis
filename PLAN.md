@@ -470,6 +470,17 @@ Apple CI. Dan then checks the three flows on his iPhone, including a long
 caption scroll and paging through three expanded visuals. Do not run live
 or paid checks for this change.
 
+### Notes follow-up for TestFlight 122 (Refs #2005, #2012)
+
+- Confirmed in code: summary titles came from search-chunk headings, pins could fall back to the filename,
+  and the phone could reopen a folder from a five-minute cache. A title-only note produced no SQL chunks
+  and therefore no list row. An older path-sorted page could also hide a new note.
+- The vault index now stores a display title and inventory row per file. The phone rechecks Notes on open,
+  looks pins up by path, and asks for newest-first folder pages. Paths and folder scope are unchanged.
+- Offline: 284 JarvisCore, 1,035 backend fixture and 42 SQL contract tests passed. The
+  warm-folder regression fails under the old cache policy. Apple compilation and Dan's device check remain
+  separate. The exact path, contents, and index or mirror timing of Dan's missing note were not verified.
+
 ## iPhone Voice carousel and captions (#1958, P15-210)
 
 **Status: implemented; all 212 JarvisCore tests pass, and the changed app sources pass Swift syntax parsing. Apple compilation, iPhone simulator rendering and physical-device acceptance remain open.**

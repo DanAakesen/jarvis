@@ -316,6 +316,60 @@ final class JarvisClientTransportTests: XCTestCase {
         XCTAssertEqual(requests.first?.method, .delete)
     }
 
+    func testReopeningWarmPersonalFolderShowsAnOutsideWriteWithoutPullToRefresh() async throws {
+        let item = ["path": "Personal/Test 2.md", "title": "Test 2", "folder": "Personal",
+                    "directory": "Personal", "updatedAt": "2026-11-22T10:00:00.000Z"]
+        func page(_ items: [[String: String]]) -> HTTPResponse {
+            jsonResponse(status: 200, body: ["notes": items, "limit": 50, "offset": 0, "hasMore": false])
+        }
+        let transport = FakeHTTPTransport([.response(page([])), .response(page([item]))])
+        let notes = JarvisNotesClient(client: try makeClient(transport: transport))
+        let now = Date(timeIntervalSince1970: 1_795_344_000)
+        let cache = JarvisCache(storage: JarvisInMemoryCacheStorage(), now: { now })
+        await cache.bind(account: "fixture-owner")
+        let folder = JarvisRepository(cache: cache, kind: .notes, scope: "dir:Personal") {
+            try await notes.fetchNotes(directory: "Personal", recentFirst: true, validator: $0)
+        }
+        let before = await folder.resolve()
+        XCTAssertEqual(before.value?.notes, [])
+        var showedCache = false
+        var freshTitles: [String]?
+        // The two opens share the same clock and warm cache; the only change was in the vault.
+        for await update in folder.updates() {
+            switch update {
+            case .cached(let page, _): showedCache = page.notes.isEmpty
+            case .fresh(let page): freshTitles = page.notes.map(\.title)
+            default: break
+            }
+        }
+        XCTAssertTrue(showedCache)
+        XCTAssertEqual(freshTitles, ["Test 2"])
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertTrue(requests.allSatisfy { $0.url.query?.contains("sort=updated") == true })
+    }
+
+    func testPinSummariesResolveByExactPathWithoutUsingGraphOrFolderPages() async throws {
+        let path = "Work/Events/old-title.md"
+        let item = ["path": path, "title": "New > schedule", "folder": "Work",
+                    "directory": "Work/Events", "updatedAt": "2026-11-22T10:00:00.000Z"]
+        let other = ["path": "Personal/other.md", "title": "Other", "folder": "Personal",
+                     "directory": "Personal", "updatedAt": "2026-11-22T10:00:00.000Z"]
+        let transport = FakeHTTPTransport([.response(jsonResponse(status: 200, body: ["notes": [other, item]]))])
+        let notes = JarvisNotesClient(client: try makeClient(transport: transport))
+        let missing = "Work/Events/missing.md"
+        let summaries = try await notes.noteSummaries(paths: [path, missing, path])
+        XCTAssertEqual(summaries.map(\.path), [path])
+        XCTAssertEqual(summaries.map(\.title), ["New > schedule"])
+        let requests = await transport.recordedRequests()
+        let request = try XCTUnwrap(requests.first)
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(request.method, .post)
+        XCTAssertEqual(request.url.path, "/api/notes/summaries")
+        let body = try JSONDecoder().decode([String: [String]].self, from: XCTUnwrap(request.body))
+        XCTAssertEqual(body["paths"], [path, missing])
+    }
+
     private var sessionJSON: [String: String] {
         [
             "sessionId": "session-fixture",

@@ -141,3 +141,9 @@ and immutable native registration reference. It also adds retry/diagnostic
 summary fields, recipient-state terminalization to the shared registration
 delete trigger and a stable no-duplicate uniqueness key. The matching down batch
 refuses to discard delivery evidence or newer schedule state.
+
+`0103_vault_note_metadata.sql` keeps one listing row per indexed note, even if
+it has no searchable body. It seeds existing paths, blob SHAs and dates from
+the chunk index; vault sync fills missing titles from the original notes.
+The down batch drops only the derived metadata, not the vault or search chunks.
+Roll back the dependent backend before running it.

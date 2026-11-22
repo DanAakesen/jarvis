@@ -319,9 +319,10 @@ public final class JarvisNotesClient: Sendable {
         directory: String? = nil,
         query: String? = nil,
         folder: String? = nil,
-        offset: Int = 0
+        offset: Int = 0,
+        recentFirst: Bool = false
     ) async throws -> VaultNotePage {
-        let items = try Self.noteQuery(directory: directory, query: query, folder: folder, offset: offset)
+        let items = try Self.noteQuery(directory: directory, query: query, folder: folder, offset: offset, recentFirst: recentFirst)
         let response = try await request(
             method: .get, path: ["notes"], query: items, idempotent: true
         )
@@ -332,16 +333,17 @@ public final class JarvisNotesClient: Sendable {
     public func fetchNotes(
         directory: String? = nil,
         folder: String? = nil,
+        recentFirst: Bool = false,
         validator: String?
     ) async throws -> JarvisFetchResult<VaultNotePage> {
-        let items = try Self.noteQuery(directory: directory, query: nil, folder: folder, offset: 0)
+        let items = try Self.noteQuery(directory: directory, query: nil, folder: folder, offset: 0, recentFirst: recentFirst)
         return try await client.conditionalGet(path: ["notes"], queryItems: items, validator: validator) {
             try Self.parseNotePage($0.body, directory: directory, offset: 0)
         }
     }
 
     private static func noteQuery(
-        directory: String?, query: String?, folder: String?, offset: Int
+        directory: String?, query: String?, folder: String?, offset: Int, recentFirst: Bool
     ) throws -> [URLQueryItem] {
         guard (directory.map(JarvisNotesLogic.validFolder) ?? true),
               (folder.map(JarvisNotesLogic.validFolder) ?? true),
@@ -352,6 +354,7 @@ public final class JarvisNotesClient: Sendable {
         var items = [URLQueryItem(name: "limit", value: "50"), URLQueryItem(name: "offset", value: String(offset))]
         if let directory { items.append(URLQueryItem(name: "directory", value: directory)) }
         if let folder { items.append(URLQueryItem(name: "folder", value: folder)) }
+        if recentFirst { items.append(URLQueryItem(name: "sort", value: "updated")) }
         if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             items.append(URLQueryItem(name: "query", value: query))
         }
@@ -366,18 +369,43 @@ public final class JarvisNotesClient: Sendable {
         }
         // The Notes page used to fail as a whole when a single note had an unusable path or date. The remaining
         // notes are still valid, so skip the odd ones and keep the page.
+        let valid = validSummaries(decoded.notes)
+        return VaultNotePage(
+            notes: directory.map { expected in valid.filter { $0.directory == expected } } ?? valid,
+            limit: decoded.limit, offset: decoded.offset, hasMore: decoded.hasMore
+        )
+    }
+
+    /// Resolves pins by exact path, independently of the folder pages and the bounded graph.
+    public func noteSummaries(paths: [String]) async throws -> [VaultNoteSummary] {
+        struct Summaries: Decodable { let notes: [VaultNoteSummary] }
+        guard paths.allSatisfy(JarvisNotesLogic.validNotePath) else { throw JarvisNotesClientError.invalidRequest }
         var seen = Set<String>()
-        let valid = decoded.notes.filter {
+        let unique = paths.filter { seen.insert($0).inserted }
+        var summaries: [VaultNoteSummary] = []
+        for start in stride(from: 0, to: unique.count, by: 50) {
+            try Task.checkCancellation()
+            let batch = Array(unique.dropFirst(start).prefix(50))
+            let response = try await request(
+                method: .post, path: ["notes", "summaries"], body: JSONEncoder().encode(["paths": batch]), idempotent: true
+            )
+            guard response.body.count <= 1024 * 1024,
+                  let decoded = try? JSONDecoder().decode(Summaries.self, from: response.body),
+                  decoded.notes.count <= batch.count else { throw JarvisNotesClientError.invalidResponse }
+            let paths = Set(batch)
+            summaries += Self.validSummaries(decoded.notes).filter { paths.contains($0.path) }
+        }
+        return summaries
+    }
+
+    private static func validSummaries(_ notes: [VaultNoteSummary]) -> [VaultNoteSummary] {
+        var seen = Set<String>()
+        return notes.filter {
             JarvisNotesLogic.validNotePath($0.path) && !$0.title.isEmpty &&
                 $0.title.utf16.count <= 200 && $0.folder == Self.topFolder($0.path) &&
                 $0.directory == Self.directory($0.path) && JarvisNotesLogic.isISODateTime($0.updatedAt) &&
                 seen.insert($0.path).inserted
         }
-        let page = VaultNotePage(
-            notes: directory.map { expected in valid.filter { $0.directory == expected } } ?? valid,
-            limit: decoded.limit, offset: decoded.offset, hasMore: decoded.hasMore
-        )
-        return page
     }
 
     public func readNote(path: String) async throws -> VaultNote {

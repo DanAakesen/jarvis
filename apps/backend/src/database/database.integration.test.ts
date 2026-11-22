@@ -13,7 +13,7 @@ import { createPiSituationStore } from './pi-situation-store.js';
 import { parsePiSituationState } from '../pi/situation.js';
 import { sourceIds } from '../proactive/types.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
-import { createMemoryStore } from './memory-store.js';
+import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createMemoryProactiveStore } from '../proactive/store.js';
 import { createPiActivationService } from '../pi/activation.js';
 import { createPiSituationService, piSituationHash } from '../pi/situation.js';
@@ -62,6 +62,46 @@ describe('real SQL Server migration contract', () => {
       expect(rows.recordset).toEqual([{ id: 1, value: 'original' }]);
       expect((await pool.request().query('SELECT name FROM dbo.schema_migrations')).recordset).toEqual([{ name: first.name }]);
     } finally { await other.close(); }
+  });
+
+  it('migrates existing vault summaries and lists notes with no search chunks', async () => {
+    const migrationFiles = ['0021_vault_memory_index.sql', '0027_vault_knowledge_graph.sql', '0103_vault_note_metadata.sql'];
+    const [chunks, links, notes] = await Promise.all(migrationFiles.map((name) =>
+      readFile(new URL(`../../../../db/migrations/${name}`, import.meta.url), 'utf8')));
+    await pool.request().batch(chunks!);
+    await pool.request().batch(links!);
+    const legacyPath = 'Work/Events/old-name.md';
+    const titleOnlyPath = 'Personal/Test 2.md';
+    const sha = 'a'.repeat(40);
+    const signal = AbortSignal.timeout(10_000);
+    try {
+      await pool.request()
+        .input('hash', sql.Binary(32), createHash('sha256').update(legacyPath).digest())
+        .input('path', sql.NVarChar(180), legacyPath)
+        .input('sha', sql.Char(40), sha)
+        .query(`INSERT INTO dbo.vault_chunks (path_hash, path, blob_sha, chunk_index, heading, content)
+          VALUES (@hash, @path, @sha, 0, N'Wrong section', N'Original searchable content')`);
+      await pool.request().batch(notes!);
+      const store = createVaultIndexStore(pool);
+      await store.initialize();
+      expect(await store.files(null, signal)).toMatchObject([{ path: legacyPath, titleMissing: true, blobSha: sha }]);
+      const previous = (await store.graphFiles(signal))[0]!;
+      await store.backfillFileTitle(legacyPath, 'b'.repeat(40), 'Wrong blob', signal);
+      expect(await store.graphFiles(signal)).toEqual([previous]);
+      await store.backfillFileTitle(legacyPath, sha, 'Edited > title', signal);
+      expect(await store.graphFiles(signal, [legacyPath])).toEqual([{ ...previous, title: 'Edited > title' }]);
+      expect(await store.files(null, signal)).toMatchObject([{ path: legacyPath, titleMissing: false }]);
+
+      await store.replaceFile(titleOnlyPath, sha, 'Test 2', [], [], signal);
+      expect(await store.graphFiles(signal, [titleOnlyPath, 'Missing.md'])).toMatchObject([{ path: titleOnlyPath, title: 'Test 2' }]);
+      expect(await store.summary(null, signal)).toMatchObject({ notes: 2, chunks: 1 });
+      expect(await store.searchByTerms(['Original'], 5, signal)).toMatchObject([{ path: legacyPath }]);
+      await store.deleteFiles([titleOnlyPath], signal);
+      expect(await store.graphFiles(signal, [titleOnlyPath])).toEqual([]);
+      expect(await store.summary(null, signal)).toMatchObject({ notes: 1, chunks: 1 });
+    } finally {
+      await pool.request().batch('DROP TABLE IF EXISTS dbo.vault_notes, dbo.vault_links, dbo.vault_chunks;');
+    }
   });
 
   it('stores Settings corrections and deletion audits as Settings actions, never as the capture message', async () => {

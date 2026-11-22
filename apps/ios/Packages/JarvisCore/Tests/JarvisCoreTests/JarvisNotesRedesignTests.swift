@@ -147,6 +147,27 @@ final class JarvisNotesRedesignTests: XCTestCase {
         XCTAssertEqual(JarvisNoteLinks.target(of: try XCTUnwrap(URL(string: "jarvis-note:///Moving%20plan"))), "Moving plan")
     }
 
+    func testGeneratedWikiLabelFollowsRenamedHeadingButAuthoredLinkLabelsStay() {
+        let path = "Work/Events/old-title.md"
+        let note = "---\r\ntags: [work]\r\n...\r\n\r\n# New > schedule\r\n# Later heading\r\nBody."
+        let title = JarvisNoteTitle.title(content: note, path: path)
+        XCTAssertEqual(title, "New > schedule")
+        let line = JarvisNoteLinks.rewriteInternalLinks("[[old-title]] [[old-title|Agenda]] [Read more](old-title.md)") {
+            JarvisNoteLinks.resolve($0, from: "Work/Events/index.md", paths: [path]).map { _ in title }
+        }
+        XCTAssertTrue(line.contains(#"[New \> schedule](jarvis-note:///old-title)"#))
+        XCTAssertTrue(line.contains("[Agenda](jarvis-note:///old-title)"))
+        XCTAssertTrue(line.contains("[Read more](jarvis-note:///old-title.md)"))
+    }
+
+    func testReaderUsesSameDisplayLimitAsSummariesWithoutCuttingUnicodePair() {
+        let prefix = String(repeating: "a", count: 199)
+        let title = prefix + "\u{1F4D3}"
+        let document = "# " + title
+        XCTAssertEqual(JarvisNoteTitle.title(content: document, path: "example.md"), prefix)
+        XCTAssertEqual(JarvisNoteParts(document).displayedTitle(path: "example.md"), title)
+    }
+
     func testLineDiffMarksOnlyRealDifferences() throws {
         let rows = try XCTUnwrap(JarvisLineDiff.rows(latest: "a\nb\nc", draft: "a\nx\nc"))
         XCTAssertEqual(rows.map(\.kind), [.same, .removed, .added, .same])

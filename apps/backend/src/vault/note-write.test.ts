@@ -1,62 +1,61 @@
-import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
-import type { VaultIndexStore, VaultIndexedChunk } from '../database/memory-store.js';
-import type { createGitHubVaultClient } from './github-client.js';
+import { createMemoryVault, createVaultIndexFake } from '../pi/conformance/groups/notes-vault.testkit.js';
 import { createVaultModule } from './index.js';
 
 const signal = new AbortController().signal;
-const gitSha = (content: string) => createHash('sha1').update(`blob ${Buffer.byteLength(content)}\0`).update(content).digest('hex');
+const config = { ...loadConfig({}), logLevel: 'silent' as const };
+const headers = { authorization: ['Bearer', 'header.owner.signature'].join(' ') };
 const gardenPlan = '# Garden plan\n\nRaised beds along the south fence.';
 const pergola = {
   path: 'Personal/Pergola.md', content: '# Pergola\n\nBuild a pergola over the terrace.', reason: 'Dan asked for a note', automaticCapture: false,
 };
 
-/** A vault whose first listing is the start-up index and whose later ones (the re-index a write starts) wait for `releaseReindex`. */
-async function fixture() {
-  const files = new Map([['Personal/Garden plan.md', gardenPlan]]);
-  const indexed = new Map<string, { sha: string; chunks: readonly VaultIndexedChunk[] }>();
-  let listings = 0;
+/** Hold the first tree read after a write so the test can browse before the background sync finishes. */
+async function fixture(seed?: (vault: ReturnType<typeof createMemoryVault>) => void) {
+  const vault = createMemoryVault();
+  vault.seed('Personal/Garden plan.md', gardenPlan);
+  seed?.(vault);
+  let holdNextTree = false;
   let releaseReindex!: () => void;
   const reindexGate = new Promise<void>((resolve) => { releaseReindex = resolve; });
-  const client = {
-    tree: vi.fn(async () => {
-      if (listings++ > 0) await reindexGate;
-      return [...files].map(([path, content]) => ({ path, sha: gitSha(content) }));
-    }),
-    read: vi.fn(async (path: string) => {
-      const content = files.get(path);
-      return content === undefined ? null : { path, sha: gitSha(content), content };
-    }),
-    write: vi.fn(async (path: string, content: string) => { files.set(path, content); return 'c'.repeat(40); }),
-  };
-  const index = {
-    supportsVectorSearch: () => false,
-    files: vi.fn(async () => [...indexed].map(([path, entry]) => ({ path, blobSha: entry.sha, embeddingMissing: false }))),
-    replaceFile: vi.fn(async (path: string, sha: string, chunks: readonly VaultIndexedChunk[]) => { indexed.set(path, { sha, chunks }); }),
-    deleteFiles: vi.fn(async () => {}),
-    searchByTerms: vi.fn(async (terms: readonly string[], limit: number) => [...indexed].flatMap(([path, entry]) => entry.chunks
-      .filter((chunk) => terms.some((term) => `${chunk.heading} ${chunk.content}`.toLowerCase().includes(term)))
-      .map((chunk) => ({ path, heading: chunk.heading, content: chunk.content }))).slice(0, limit)),
-  };
+  const tree = vault.tree;
+  vi.spyOn(vault, 'tree').mockImplementation(async (signal) => {
+    if (holdNextTree) {
+      holdNextTree = false;
+      await reindexGate;
+    }
+    return tree(signal);
+  });
+  const writeToVault = vault.write;
+  const write = vi.spyOn(vault, 'write').mockImplementation(async (...args) => {
+    const commit = await writeToVault(...args);
+    holdNextTree = true;
+    return commit;
+  });
+  const index = createVaultIndexFake();
+  const replaceFile = vi.spyOn(index, 'replaceFile');
   const module = createVaultModule({
-    client: client as unknown as ReturnType<typeof createGitHubVaultClient>,
-    indexStore: index as unknown as VaultIndexStore,
+    client: vault, indexStore: index,
     memoryStore: { getSourceMessage: async (messageId) => ({ messageId, text: 'Save a note about the pergola.' }) },
   });
   await module.synchronize(signal);
   const request = { principal: { objectId: 'owner' }, headers: { 'x-jarvis-message-id': '42' } } as unknown as FastifyRequest;
   const call = (name: string, args: Record<string, unknown>) =>
     module.tools.find((tool) => tool.name === name)!.execute(args, request, signal) as Promise<Record<string, unknown>>;
-  return { index, client, module, call, releaseReindex };
+  const ownerApp = () => buildApp(config, undefined, {
+    modules: [module],
+    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Fixture owner' }),
+  });
+  return { index, replaceFile, vault, write, module, call, releaseReindex, ownerApp };
 }
 
 describe('vault_search straight after vault_write', () => {
   it('finds the note Jarvis just saved while the re-index it started is still running', async () => {
-    const { index, module, call, releaseReindex } = await fixture();
+    const { replaceFile, module, call, releaseReindex } = await fixture();
 
     await call('vault_write', pergola);
     const found = await call('vault_search', { query: 'pergola terrace' });
@@ -68,12 +67,12 @@ describe('vault_search straight after vault_write', () => {
     releaseReindex();
     await module.synchronize(signal);
     // The re-index found the note already indexed with Git's own sha, so it did not index it a second time.
-    expect(index.replaceFile.mock.calls.filter(([path]) => path === pergola.path)).toHaveLength(1);
+    expect(replaceFile.mock.calls.filter(([path]) => path === pergola.path)).toHaveLength(1);
   });
 
   it('still saves the note when indexing it straight away fails, and the re-index finds it later', async () => {
-    const { index, module, call, releaseReindex } = await fixture();
-    index.replaceFile.mockRejectedValueOnce(new Error('index database unavailable'));
+    const { replaceFile, module, call, releaseReindex, ownerApp } = await fixture();
+    replaceFile.mockRejectedValueOnce(new Error('index database unavailable'));
 
     const saved = await call('vault_write', pergola);
 
@@ -81,12 +80,83 @@ describe('vault_search straight after vault_write', () => {
     releaseReindex();
     await module.synchronize(signal);
     expect((await call('vault_search', { query: 'pergola terrace' })).count).toBe(1);
+    const app = ownerApp();
+    try {
+      const page = await app.inject({ url: '/notes?directory=Personal', headers });
+      expect(page.json().notes).toEqual(expect.arrayContaining([expect.objectContaining({ path: pergola.path })]));
+    } finally { await app.close(); }
+  });
+});
+
+describe('browsing committed vault notes', () => {
+  it('lists a freshly saved title-only note before resync, on the first page of its exact directory', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T10:00:00Z'));
+    const nested = 'Personal/Home/Family.md';
+    const { call, ownerApp, releaseReindex, module, replaceFile } = await fixture((vault) => {
+      vault.seed(nested, '# Family');
+    });
+    const app = ownerApp();
+    try {
+      vi.setSystemTime(new Date('2026-11-22T10:01:00Z'));
+      const path = 'Personal/Test 2.md'; // Sorts after Garden plan by path.
+      const saved = await call('vault_write', { ...pergola, path, content: '# Test 2' });
+      expect(saved.confirmation).toContain('Saved to vault');
+      const first = await app.inject({ url: '/notes?directory=Personal&sort=updated&limit=1', headers });
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({ hasMore: true, notes: [{ path, title: 'Test 2', directory: 'Personal' }] });
+      const second = await app.inject({ url: '/notes?directory=Personal&sort=updated&limit=1&offset=1', headers });
+      expect(second.json()).toMatchObject({ hasMore: false, notes: [{ path: 'Personal/Garden plan.md' }] });
+      expect(replaceFile.mock.calls.find(([savedPath]) => savedPath === path)?.[3]).toEqual([]);
+    } finally {
+      releaseReindex();
+      await module.synchronize(signal);
+      await app.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses the edited H1 across list, pins and the linked graph node without changing the path', async () => {
+    const path = 'Work/Events/old-title.md';
+    const source = 'Work/events-index.md';
+    const title = 'New > schedule';
+    const { vault, module, ownerApp, releaseReindex } = await fixture((vault) => {
+      vault.seed(path, '# Old title\n\nOld notes.');
+      vault.seed(source, `Body\n[[${path}]]`);
+      vault.seed('Work/Events/venue_map.md', 'Preamble.\n\n## Details\n\nVenue information.');
+    });
+    const app = ownerApp();
+    try {
+      await app.inject({ url: '/knowledge/graph', headers }); // Warm the graph with the original title.
+      const content = `---\r\ntags: [work]\r\n...\r\n\r\n# ${title}\r\n# Later heading\r\nThe body is under this heading.`;
+      const edited = await app.inject({ method: 'PUT', url: '/notes/note', headers, payload: {
+        path, sha: vault.shaOf(path), content,
+      } });
+      expect(edited.statusCode).toBe(200);
+      const folder = await app.inject({ url: '/notes?directory=Work%2FEvents', headers });
+      expect(folder.json().notes).toMatchObject([{ path, title }, { title: 'Venue map' }]);
+      const pins = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths: [path, 'Work/missing.md'] } });
+      expect(pins.statusCode).toBe(200);
+      expect(pins.json().notes).toMatchObject([{ path, title }]);
+      const graph = (await app.inject({ url: '/knowledge/graph', headers })).json();
+      const linkedNode = graph.nodes.find((node: { path: string }) => node.path === path);
+      expect(linkedNode).toMatchObject({ title });
+      expect(graph.edges).toContainEqual(expect.objectContaining({ target: linkedNode.id, type: 'link' }));
+      const read = await app.inject({ url: `/notes/note?path=${encodeURIComponent(path)}`, headers });
+      expect(read.json()).toMatchObject({ path, content });
+      const invalid = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths: ['../bad.md'] } });
+      expect(invalid.statusCode).toBe(400);
+      const anonymous = await app.inject({ method: 'POST', url: '/notes/summaries', payload: { paths: [path] } });
+      expect(anonymous.statusCode).toBe(401);
+    } finally {
+      releaseReindex();
+      await module.synchronize(signal);
+      await app.close();
+    }
   });
 });
 
 describe('a vault write whose commit cannot be confirmed', () => {
-  const config = { ...loadConfig({}), logLevel: 'silent' as const };
-
   /** One tool call through the real tool route, as Jarvis makes it; `confirmation` is what Dan reads. */
   async function viaRoute(module: ReturnType<typeof createVaultModule>, name: string, payload: Record<string, unknown>) {
     const app = buildApp(config, undefined, {
@@ -106,8 +176,8 @@ describe('a vault write whose commit cannot be confirmed', () => {
   }
 
   it('is told as it is: the append may have gone through, so it does not say "Not done."', async () => {
-    const { client, module } = await fixture();
-    client.write.mockRejectedValueOnce(new Error('socket hang up'));
+    const { write, module } = await fixture();
+    write.mockRejectedValueOnce(new Error('socket hang up'));
 
     const answer = await viaRoute(module, 'vault_write', { path: pergola.path, append: 'Build the pergola.', reason: pergola.reason, automaticCapture: false });
 
@@ -126,8 +196,8 @@ describe('a vault write whose commit cannot be confirmed', () => {
   });
 
   it('is told as it is for a task too: "the task save outcome is unknown" is not "Not done."', async () => {
-    const { client, module } = await fixture();
-    client.write.mockRejectedValueOnce(new Error('socket hang up'));
+    const { write, module } = await fixture();
+    write.mockRejectedValueOnce(new Error('socket hang up'));
 
     const answer = await viaRoute(module, 'vault_task_create', { text: 'Order the pergola kit' });
 

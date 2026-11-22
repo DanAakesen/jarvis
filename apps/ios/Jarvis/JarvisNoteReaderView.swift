@@ -6,10 +6,11 @@ import SwiftUI
 /// clickable internal links. Properties (frontmatter) never reach this view.
 struct JarvisNoteBodyView: View {
     let document: JarvisNoteDocument
+    let titleForTarget: (String) -> String?
     let onOpenTarget: (String) -> Void
 
     private func inline(_ text: String) -> AttributedString {
-        let linked = JarvisNoteLinks.rewriteInternalLinks(text)
+        let linked = JarvisNoteLinks.rewriteInternalLinks(text, titleForTarget: titleForTarget)
         return (try? AttributedString(
             markdown: linked,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
@@ -138,6 +139,8 @@ struct JarvisNoteReaderView: View {
     }
 
     var body: some View {
+        let titles = Dictionary((graph?.nodes ?? []).map { ($0.path, $0.title) }, uniquingKeysWith: { first, _ in first })
+        let paths = Set(titles.keys)
         ScrollView {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
                 Text(title)
@@ -152,8 +155,14 @@ struct JarvisNoteReaderView: View {
                 if let message {
                     Text(message).font(.footnote).foregroundStyle(.red).accessibilityIdentifier("reader.message")
                 }
-                JarvisNoteBodyView(document: JarvisNoteDocument(parts.readableBody), onOpenTarget: openTarget)
-                    .padding(.top, 4)
+                JarvisNoteBodyView(
+                    document: JarvisNoteDocument(parts.readableBody),
+                    titleForTarget: { target in
+                        JarvisNoteLinks.resolve(target, from: note.path, paths: paths).flatMap { titles[$0] }
+                    },
+                    onOpenTarget: openTarget
+                )
+                .padding(.top, 4)
                 JarvisRowGroup {
                     JarvisDetailRow(
                         title: copy[.linkedNotes], identifier: "reader.linked",

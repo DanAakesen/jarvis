@@ -10324,12 +10324,28 @@ JarvisNoteDocument projects Markdown into editable lines without normalizing
 frontmatter, unknown syntax, whitespace or line endings. The formatted and raw
 editors share the same draft and existing SHA-checked write/reload conflict flow.
 The local account-bound cache stores pinned paths separately from note response
-cache invalidation. No vault schema changes or synthetic live content are added.
+cache invalidation.
 On iPhone (#2005), `JarvisNoteParts` projects the leading H1 or filename into
 the same editable title field. The editor saves Markdown to the same path and
 invalidates Notes and Tasks caches before reading the saved note back for the
-reader. The list can show that confirmed title before the asynchronous vault
-index returns it.
+reader.
+
+For the build 122 follow-up, `dbo.vault_notes` stores the indexed path, blob SHA,
+display title and content-update time independently of `dbo.vault_chunks`.
+Migration `0103` copies existing paths and dates; normal sync fills missing
+titles from the matching Markdown blob without replacing its search chunks
+solely for a title. Title-only notes have a file row and no search chunks.
+After a note commit, the REST writer stores metadata and lexical chunks
+without waiting for embeddings. Chat and Voice share `vault_write`, which
+still tries bounded immediate vector indexing and can fall back to lexical
+chunks and the title. A failed index update does not undo the Git commit;
+background sync remains the repair path.
+
+The owner-only `/notes`, `/notes/summaries` (bounded batches of exact paths)
+and `/knowledge/graph` use the metadata title. The phone revalidates its
+account-bound Notes snapshots on open and requests newest-first directory
+pages; pins are not limited to the current page or graph. Folder scope is
+still direct-child, and Graph retains its existing node and link bounds.
 JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.
 

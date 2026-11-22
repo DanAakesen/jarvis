@@ -136,7 +136,9 @@ field and a separate + (New note, New task, New folder). Notes open in a reader 
 notes with explicit Save and Cancel, never loses a draft and never overwrites a newer version without a confirmed choice. Tasks
 show one orange completion circle, the source note, date, priority and scope; they can be completed, edited, rescheduled, pinned
 and deleted (only that task line). Short left swipe pins, long left swipe deletes, and every swipe has a menu or accessibility alternative.
-Rename, Move to folder, bulk selection and Undo are not offered because the vault cannot do them safely yet.
+A note's title follows its leading heading or readable filename in Pinned, the list, the reader and generated links.
+Editing the title does not rename or move its file. A saved note can be listed even if it has no body. File rename,
+Move to folder, bulk selection and Undo are not offered because the vault cannot do them safely yet.
 
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858)
 

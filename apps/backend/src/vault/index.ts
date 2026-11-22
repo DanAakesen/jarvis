@@ -11,6 +11,7 @@ import {
   VectorSearchUnavailableError,
   type MemoryStore,
   type VaultGraphData,
+  type VaultGraphFile,
   type VaultIndexStore,
   type VaultIndexedChunk,
   type VaultSearchHit,
@@ -69,6 +70,7 @@ const maxThrottledEmbeddingAttempts = 4;
 const maxThrottleDelayMs = 15_000;
 const maxNotesApiResults = 100;
 const maxNotesApiOffset = 10_000;
+const maxNoteSummaryPaths = 50;
 const maxVaultTaskResults = 500;
 const maxVaultTaskToolResults = 40;
 const maxDirectoryEntries = 10_000;
@@ -359,11 +361,33 @@ function commitUrl(sha: string): string {
   return `https://github.com/${VAULT_REPOSITORY}/commit/${sha}`;
 }
 
-function vaultNoteTitle(path: string, heading: string): string {
-  const title = heading.replace(taskMetadataComment, '').trim();
-  return (title && title !== 'Introduction'
-    ? title.split(' > ', 1)[0]!
-    : posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ')).slice(0, 200);
+const firstCharacter = new Intl.Segmenter();
+
+function fileTitle(path: string): string {
+  const name = posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ');
+  const first = firstCharacter.segment(name).containing(0)?.segment ?? '';
+  return first.toUpperCase() + name.slice(first.length);
+}
+
+/** Same leading H1, frontmatter and filename rule as the iPhone note reader. */
+function noteTitle(path: string, content: string): string {
+  const lines = content.split(/\r?\n/u);
+  const frontmatterEnd = lines[0] === '---'
+    ? lines.findIndex((line, index) => index > 0 && (line === '---' || line === '...'))
+    : -1;
+  const first = lines.find((line, index) => index > frontmatterEnd && line.trim() !== '');
+  const title = first?.startsWith('# ') ? first.slice(2).trim() : '';
+  return (title || fileTitle(path)).slice(0, 200).replace(/[\uD800-\uDBFF]$/u, '');
+}
+
+function noteSummary(file: VaultGraphFile) {
+  return {
+    path: file.path,
+    title: file.title ?? fileTitle(file.path),
+    folder: safeFolder(file.path),
+    directory: noteDirectory(file.path),
+    updatedAt: file.updatedAt.toISOString(),
+  };
 }
 
 export function shouldRedact(value: string): boolean {
@@ -917,13 +941,11 @@ export function createVaultModule(options: {
   }
 
   async function makeChunks(
-    file: VaultFile,
+    sections: ReturnType<typeof chunkMarkdown>,
     signal: AbortSignal,
     embedder: MemoryEmbedder | undefined,
     embeddingModel: string,
   ): Promise<VaultIndexedChunk[]> {
-    const sections = chunkMarkdown(file.content);
-    if (sections.length > maxVaultChunks) throw new Error('Vault note has too many index chunks');
     const chunks: VaultIndexedChunk[] = [];
     for (const [index, section] of sections.entries()) {
       let embedding: readonly number[] | null = null;
@@ -968,12 +990,13 @@ export function createVaultModule(options: {
   async function performSynchronization(signal: AbortSignal) {
     const embedder = await activeEmbedder();
     const embeddingModel = await activeEmbeddingModel(embedder);
+    // Snapshot the index first so an old tree cannot retire a note newly indexed by a concurrent write.
+    const indexed = await options.indexStore.files(embedder ? embeddingModel : null, signal);
+    if (indexed.length > maxMarkdownFiles) throw new Error('Vault index exceeds the supported size');
     const tree = await options.client.tree(signal);
     const markdown = tree.filter(({ path }) => eligibleMarkdown(path));
     if (markdown.length > maxMarkdownFiles) throw new Error('Vault has too many Markdown notes to index');
     const nextDirectoryTree = indexedDirectoryTree(tree.map(({ path }) => path), markdown.map(({ path }) => path));
-    const indexed = await options.indexStore.files(embedder ? embeddingModel : null, signal);
-    if (indexed.length > maxMarkdownFiles) throw new Error('Vault index exceeds the supported size');
     const oldByPath = new Map(indexed.map((file) => [file.path, file]));
     const newPaths = new Set(markdown.map(({ path }) => path));
     const remove = indexed.filter(({ path }) => !newPaths.has(path)).map(({ path }) => path);
@@ -985,8 +1008,7 @@ export function createVaultModule(options: {
     for (const file of markdown) {
       const previous = oldByPath.get(file.path);
       const unchanged = previous?.blobSha === file.sha;
-      const backfill = unchanged && previous?.embeddingMissing === true;
-      if (unchanged && (!backfill || !embedder)) continue;
+      if (unchanged && !previous.titleMissing && !(embedder && previous.embeddingMissing)) continue;
       // A note above the size limit stays out of the index, like one that reads as too large; reading it would fail every synchronization.
       if (file.size !== undefined && file.size > MAX_VAULT_FILE_BYTES) {
         remove.push(file.path);
@@ -996,9 +1018,9 @@ export function createVaultModule(options: {
       try {
         note = await options.client.read(file.path, signal);
       } catch (error) {
-        if (error instanceof Error &&
+        if (error instanceof VaultFileTooLargeError || (error instanceof Error &&
             (error.message === 'GitHub file content is not a bounded text note' ||
-             error.message === 'GitHub file content is not valid UTF-8')) {
+             error.message === 'GitHub file content is not valid UTF-8'))) {
           remove.push(file.path);
           continue;
         }
@@ -1008,11 +1030,17 @@ export function createVaultModule(options: {
         remove.push(file.path);
         continue;
       }
-      const sectionCount = chunkMarkdown(note.content).length;
-      if (backfill && sectionCount > remainingBackfillEmbeddings) continue;
-      if (backfill) remainingBackfillEmbeddings -= sectionCount;
-      const chunks = await makeChunks(note, signal, embedder, embeddingModel);
-      await options.indexStore.replaceFile(note.path, note.sha, chunks, extractLinkTargets(note.content), signal);
+      const title = noteTitle(note.path, note.content);
+      const sameContent = previous?.blobSha === note.sha;
+      if (sameContent && previous.titleMissing) {
+        await options.indexStore.backfillFileTitle(note.path, note.sha, title, signal);
+      }
+      if (sameContent && !(embedder && previous.embeddingMissing)) continue;
+      const sections = chunkMarkdown(note.content);
+      if (sameContent && sections.length > remainingBackfillEmbeddings) continue;
+      if (sameContent) remainingBackfillEmbeddings -= sections.length;
+      const chunks = await makeChunks(sections, signal, embedder, embeddingModel);
+      await options.indexStore.replaceFile(note.path, note.sha, title, chunks, extractLinkTargets(note.content), signal);
       if (oldByPath.has(note.path)) changed += 1;
       else added += 1;
       touchedFolders.add(safeFolder(note.path));
@@ -1111,21 +1139,9 @@ export function createVaultModule(options: {
     const pathSet = new Set(paths);
     const graphData = await options.indexStore.graphData(paths, embeddingModel, signal, similarityThreshold);
     const ids = new Map(paths.map((path) => [path, graphNodeId(path)]));
-    const nodes: KnowledgeGraphNode[] = files.flatMap((file) => {
-      const folder = safeFolder(file.path);
-      const filename = posix.basename(file.path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ');
-      const heading = file.title.trim();
-      const title = heading && heading !== 'Introduction' ? heading.split(' > ', 1)[0]! : filename;
-      return [{
-        id: ids.get(file.path)!,
-        path: file.path,
-        title: title.slice(0, 200),
-        folder,
-        directory: noteDirectory(file.path),
-        updatedAt: file.updatedAt.toISOString(),
-        degree: 0,
-      }];
-    });
+    const nodes: KnowledgeGraphNode[] = files.map((file) => ({
+      ...noteSummary(file), id: ids.get(file.path)!, degree: 0,
+    }));
     const links: KnowledgeGraphEdge[] = [];
     const seenLinks = new Set<string>();
     const contentLinks = (graphData.contents ?? []).flatMap(({ path, content }) =>
@@ -1215,7 +1231,7 @@ export function createVaultModule(options: {
     const settings = await memorySettings();
     const key = `${settings.similarityThreshold}:${settings.graphTextSimilarityThreshold}`;
     if (graphCache?.key === key) return graphCache.value;
-    if (synchronization) await synchronization;
+    if (indexStatus !== 'ready' && synchronization) await synchronization;
     if (indexStatus !== 'ready') {
       throw new ToolFailure(appMissing
         ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
@@ -1340,7 +1356,7 @@ export function createVaultModule(options: {
           current?.sha,
           signal,
         );
-        await indexWrittenNote(path, next, signal);
+        await indexWrittenNote(path, next, signal, true);
         return { path, commit: sha };
       } catch (error) {
         if (!(error instanceof VaultWriteConflictError) || value.content !== undefined || attempt === 1) throw error;
@@ -1382,17 +1398,36 @@ export function createVaultModule(options: {
     return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
   }
 
-  /** Indexes a note Jarvis just wrote, so a search straight after the write finds it; the sync that follows then sees it unchanged. */
-  async function indexWrittenNote(path: string, content: string, signal: AbortSignal): Promise<void> {
-    // Bounded, so a throttled embedding service cannot hold up a saved note.
-    const bounded = AbortSignal.any([signal, AbortSignal.timeout(5_000)]);
+  /** A committed note is browseable before the background sync. Tool writes also try to make it searchable by vector. */
+  async function indexWrittenNote(path: string, content: string, signal: AbortSignal, embed = false): Promise<void> {
     try {
-      const embedder = await activeEmbedder();
-      const note = { path, sha: gitBlobSha(content), content };
-      const chunks = await makeChunks(note, bounded, embedder, await activeEmbeddingModel(embedder));
-      await options.indexStore.replaceFile(path, note.sha, chunks, extractLinkTargets(content), bounded);
+      const sections = chunkMarkdown(content);
+      let chunks: VaultIndexedChunk[] | undefined;
+      if (embed && sections.length > 0) {
+        const bounded = AbortSignal.any([signal, AbortSignal.timeout(5_000)]);
+        const startedAt = performance.now();
+        try {
+          const embedder = await activeEmbedder();
+          chunks = await makeChunks(sections, bounded, embedder, await activeEmbeddingModel(embedder));
+        } catch (error) {
+          // makeChunks already logs cancellation; configuration failures need their own record.
+          if (!bounded.aborted) {
+            options.logEmbedding?.({
+              outcome: 'fallback',
+              durationMs: Math.max(0, performance.now() - startedAt),
+              ...embeddingFailureStatus(error),
+            });
+          }
+        }
+      }
+      chunks ??= sections.map((section, index) => ({ index, ...section, embedding: null, embeddingModel: null }));
+      await options.indexStore.replaceFile(
+        path, gitBlobSha(content), noteTitle(path, content), chunks, extractLinkTargets(content),
+        AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
+      );
     } catch {
       // The note is saved either way, and the background sync indexes it if this did not finish.
+      log('vault.index', { outcome: 'error', added: 0, changed: 0, removed: 0 });
     }
   }
 
@@ -1858,6 +1893,7 @@ export function createVaultModule(options: {
           query: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' },
           folder: { type: 'string', maxLength: maxPathLength },
           directory: { type: 'string', maxLength: maxPathLength },
+          sort: { type: 'string', enum: ['updated'] },
           limit: { type: 'integer', minimum: 1, maximum: maxNotesApiResults },
           offset: { type: 'integer', minimum: 0, maximum: maxNotesApiOffset },
         },
@@ -2004,7 +2040,7 @@ export function createVaultModule(options: {
       };
 
       app.get<{
-        Querystring: { query?: string; folder?: string; directory?: string; limit?: number; offset?: number };
+        Querystring: { query?: string; folder?: string; directory?: string; sort?: 'updated'; limit?: number; offset?: number };
       }>('/notes', {
         schema: {
           querystring: notesQuerySchema,
@@ -2039,32 +2075,56 @@ export function createVaultModule(options: {
             )).map(({ path }) => path));
           const normalizedQuery = query?.toLowerCase();
           const candidates = files.flatMap((file) => {
-            let path: string;
-            try {
-              path = validatePath(file.path);
-            } catch {
-              return [];
-            }
-            if (!isIndexedNotePath(path)) return [];
-            const noteFolder = safeFolder(path);
-            if ((folder !== undefined && noteFolder !== folder) ||
-                (directory !== undefined && noteDirectory(path) !== directory)) return [];
-            if (matchingPaths && !matchingPaths.has(path) &&
-                !`${path} ${file.title}`.toLowerCase().includes(normalizedQuery!)) return [];
-            return [{
-              path,
-              title: vaultNoteTitle(path, file.title),
-              folder: noteFolder,
-              directory: noteDirectory(path),
-              updatedAt: file.updatedAt.toISOString(),
-            }];
-          }).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+            if (!isIndexedNotePath(file.path)) return [];
+            const note = noteSummary(file);
+            if ((folder !== undefined && note.folder !== folder) ||
+                (directory !== undefined && note.directory !== directory)) return [];
+            if (matchingPaths && !matchingPaths.has(note.path) &&
+                !`${note.path} ${note.title}`.toLowerCase().includes(normalizedQuery!)) return [];
+            return [note];
+          }).sort((left, right) =>
+            (request.query.sort === 'updated' ? right.updatedAt.localeCompare(left.updatedAt) : 0) ||
+            (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
           return {
             notes: candidates.slice(offset, offset + limit),
             limit,
             offset,
             hasMore: candidates.length > offset + limit,
           };
+        } catch {
+          return reply.code(503).send({ error: 'Vault notes are temporarily unavailable' });
+        }
+      });
+
+      app.post<{ Body: { paths: string[] } }>('/notes/summaries', {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              paths: {
+                type: 'array', minItems: 1, maxItems: maxNoteSummaryPaths,
+                items: { type: 'string', minLength: 1, maxLength: maxPathLength },
+              },
+            },
+            required: ['paths'],
+            additionalProperties: false,
+          },
+          response: {
+            200: {
+              type: 'object',
+              properties: { notes: { type: 'array', maxItems: maxNoteSummaryPaths, items: noteListItemSchema } },
+              required: ['notes'], additionalProperties: false,
+            },
+            400: apiError, 403: apiError, 503: noteWriteErrorSchema,
+          },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
+        if (!request.body.paths.every(isIndexedNotePath)) return reply.code(400).send({ error: 'Invalid note path' });
+        try {
+          const files = await options.indexStore.graphFiles(AbortSignal.timeout(30_000), request.body.paths);
+          return { notes: files.map(noteSummary) };
         } catch {
           return reply.code(503).send({ error: 'Vault notes are temporarily unavailable' });
         }
@@ -2433,6 +2493,7 @@ export function createVaultModule(options: {
               content: latest?.content ?? null,
             });
           }
+          await indexWrittenNote(note.path, note.content, signal);
           indexAfterNoteWrite();
           logWrite('ok');
           return { path: note.path, commit, url: commitUrl(commit) };
@@ -2498,6 +2559,7 @@ export function createVaultModule(options: {
               content: latest?.content ?? null,
             });
           }
+          await indexWrittenNote(note.path, note.content, signal);
           indexAfterNoteWrite();
           logWrite('ok');
           return { path: note.path, commit, url: commitUrl(commit) };

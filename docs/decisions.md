@@ -471,6 +471,21 @@ The managed instructions read the tool reference from the first line. The normal
 - **Verification:** native compilation belongs to Apple CI; Dan owns
   acceptance on an iPhone. No live model, provider or paid check is needed.
 
+### TestFlight 122 follow-up: Notes labels come from the note (Refs #2005, #2012)
+
+- Use the same leading H1 (after frontmatter) or readable filename in the
+  reader, list, Pinned and generated connection labels. The path and SHA-checked
+  editing stay unchanged; explicit wiki aliases and authored Markdown link labels
+  stay as written. Remove the phone's saved-title override.
+- Keep note inventory and title separate from search chunks. Migration `0103`
+  seeds existing paths and dates; sync reads unchanged legacy Markdown once to
+  fill titles without re-embedding solely for the backfill. Do not invent a
+  search chunk for a title-only note.
+- Keep the last Notes snapshot visible while rechecking on open. Read pins by
+  exact path, not through the capped graph. Load newest folder entries before
+  paging on iPhone; other sort choices still reorder the rows already loaded.
+  `Personal` still lists only its direct children.
+
 ## 18 November 2026 — iPhone Voice keeps visuals for the current call (#1958, P15-210)
 
 Use the existing phone workspace events to populate a local Voice carousel, without changing the backend window contract. A new ID appends and takes focus; an update to an existing ID replaces that page. Close clears the carousel, Collapse returns from full screen, and minimising the call keeps its visual history. Use the existing glass controls over the page and let the HTML document own its heading and authored colours; WebKit gets the active appearance, Jarvis theme variables and readable defaults. Apple compilation, rendering and live call acceptance remain unverified.

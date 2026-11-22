@@ -103,6 +103,7 @@ export interface MemoryStore {
 export interface VaultIndexedFile {
   readonly path: string;
   readonly blobSha: string;
+  readonly titleMissing: boolean;
   readonly embeddingMissing: boolean;
 }
 
@@ -123,7 +124,7 @@ export interface VaultSearchHit {
 
 export interface VaultGraphFile {
   readonly path: string;
-  readonly title: string;
+  readonly title: string | null;
   readonly updatedAt: Date;
 }
 
@@ -157,12 +158,14 @@ export interface VaultIndexStore {
   replaceFile(
     path: string,
     blobSha: string,
+    title: string,
     chunks: readonly VaultIndexedChunk[],
     links: readonly string[],
     signal: AbortSignal,
   ): Promise<void>;
+  backfillFileTitle(path: string, blobSha: string, title: string, signal: AbortSignal): Promise<void>;
   deleteFiles(paths: readonly string[], signal: AbortSignal): Promise<void>;
-  graphFiles(signal: AbortSignal): Promise<VaultGraphFile[]>;
+  graphFiles(signal: AbortSignal, paths?: readonly string[]): Promise<VaultGraphFile[]>;
   graphData(
     paths: readonly string[],
     embeddingModel: string,
@@ -924,9 +927,12 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         chunks: number;
         embedded_chunks: number;
         latest_indexed_at: Date | null;
-      }>(`SELECT COUNT(DISTINCT path) AS notes, COUNT(*) AS chunks,
-          ${embeddedChunks} AS embedded_chunks, MAX(indexed_at) AS latest_indexed_at
-        FROM dbo.vault_chunks;`));
+      }>(`SELECT notes.total AS notes, chunks.total AS chunks, chunks.embedded_chunks,
+          CASE WHEN chunks.latest IS NULL OR notes.latest > chunks.latest
+            THEN notes.latest ELSE chunks.latest END AS latest_indexed_at
+        FROM (SELECT COUNT(*) AS total, MAX(updated_at) AS latest FROM dbo.vault_notes) AS notes
+        CROSS JOIN (SELECT COUNT(*) AS total, MAX(indexed_at) AS latest,
+          ${embeddedChunks} AS embedded_chunks FROM dbo.vault_chunks) AS chunks;`));
       const row = result.recordset[0];
       return {
         notes: Number(row?.notes ?? 0),
@@ -942,27 +948,30 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         .input('take', sql.Int, 10_001)
         .input('embeddingModel', sql.NVarChar(128), embeddingModel);
       const embeddingColumn = vectorSearchAvailable ? 'embedding' : jsonEmbeddingAvailable ? 'embedding_json' : undefined;
-      const missingEmbeddings = embeddingColumn
-        ? `CONVERT(bit, CASE WHEN @embeddingModel IS NULL OR
-            COUNT(CASE WHEN ${embeddingColumn} IS NOT NULL AND embedding_model = @embeddingModel THEN 1 END) < COUNT(*)
-            THEN 1 ELSE 0 END) AS embedding_missing`
-        : 'CONVERT(bit, 0) AS embedding_missing';
+      const missingEmbeddings = embeddingColumn && embeddingModel !== null
+        ? `CASE WHEN EXISTS (SELECT 1 FROM dbo.vault_chunks AS chunk
+            WHERE chunk.path_hash = note.path_hash AND chunk.blob_sha = note.blob_sha
+              AND (chunk.${embeddingColumn} IS NULL OR chunk.embedding_model IS NULL OR chunk.embedding_model <> @embeddingModel))
+            THEN 1 ELSE 0 END`
+        : '0';
       const result = await execute(request, signal, () => request.query<{
         path: string;
         blob_sha: string;
+        title_missing: boolean;
         embedding_missing: boolean;
       }>(
-        `SELECT TOP (@take) path, MAX(blob_sha) AS blob_sha, ${missingEmbeddings}
-          FROM dbo.vault_chunks GROUP BY path ORDER BY path;`,
+        `SELECT TOP (@take) path, blob_sha, CONVERT(bit, CASE WHEN title IS NULL THEN 1 ELSE 0 END) AS title_missing,
+            CONVERT(bit, ${missingEmbeddings}) AS embedding_missing
+          FROM dbo.vault_notes AS note ORDER BY path;`,
       ));
-      return result.recordset.map(({ path, blob_sha, embedding_missing }) => ({
-        path, blobSha: blob_sha.trim(), embeddingMissing: embedding_missing,
+      return result.recordset.map(({ path, blob_sha, title_missing, embedding_missing }) => ({
+        path, blobSha: blob_sha.trim(), titleMissing: title_missing, embeddingMissing: embedding_missing,
       }));
     },
 
-    async replaceFile(path, blobSha, chunks, links, signal) {
+    async replaceFile(path, blobSha, title, chunks, links, signal) {
       ensureInitialized();
-      if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512 || links.length > 512) {
+      if (!/^[\da-f]{40}$/u.test(blobSha) || !title || title.length > 200 || chunks.length > 512 || links.length > 512) {
         throw new TypeError('Vault index entry is invalid');
       }
       if (chunks.some(({ embedding, embeddingModel }) =>
@@ -980,13 +989,21 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           .input('pathHash', sql.VarBinary(32), hash)
           .input('path', sql.NVarChar(1024), path)
           .input('blobSha', sql.Char(40), blobSha)
+          .input('title', sql.NVarChar(200), title)
           .input('chunks', sql.NVarChar(sql.MAX), JSON.stringify(chunks))
           .input('links', sql.NVarChar(sql.MAX), JSON.stringify(links));
         const embeddingColumn = vectorSearchAvailable ? ', embedding' : jsonEmbeddingAvailable ? ', embedding_json' : '';
         const embeddingValue = vectorSearchAvailable
           ? ', CASE WHEN chunk.embedding IS NULL THEN NULL ELSE CAST(chunk.embedding AS vector(1536)) END'
           : jsonEmbeddingAvailable ? ', chunk.embedding' : '';
-        const statement = `DELETE FROM dbo.vault_chunks WHERE path_hash = @pathHash;
+        const statement = `UPDATE dbo.vault_notes SET title = @title,
+            updated_at = CASE WHEN blob_sha <> @blobSha THEN SYSUTCDATETIME() ELSE updated_at END,
+            blob_sha = @blobSha
+          WHERE path_hash = @pathHash;
+          IF @@ROWCOUNT = 0
+            INSERT INTO dbo.vault_notes (path_hash, path, blob_sha, title)
+            VALUES (@pathHash, @path, @blobSha, @title);
+          DELETE FROM dbo.vault_chunks WHERE path_hash = @pathHash;
           ${chunks.length === 0 ? '' : `INSERT INTO dbo.vault_chunks
             (path_hash, path, blob_sha, chunk_index, heading, content, embedding_model${embeddingColumn})
             SELECT @pathHash, @path, @blobSha, chunk.chunk_index, chunk.heading, chunk.content, chunk.embedding_model${embeddingValue}
@@ -1010,6 +1027,16 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       }
     },
 
+    async backfillFileTitle(path, blobSha, title, signal) {
+      ensureInitialized();
+      const request = pool.request()
+        .input('pathHash', sql.VarBinary(32), pathHash(path))
+        .input('blobSha', sql.Char(40), blobSha)
+        .input('title', sql.NVarChar(200), title);
+      await execute(request, signal, () => request.query(`UPDATE dbo.vault_notes SET title = @title
+        WHERE path_hash = @pathHash AND blob_sha = @blobSha AND title IS NULL;`));
+    },
+
     async deleteFiles(paths, signal) {
       ensureInitialized();
       if (paths.length === 0) return;
@@ -1019,7 +1046,9 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       let committed = false;
       try {
         const request = new sql.Request(transaction).input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes));
-        await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_chunks
+        await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_notes
+          WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));
+          DELETE FROM dbo.vault_chunks
           WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));
           DELETE FROM dbo.vault_links
           WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
@@ -1031,29 +1060,22 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       }
     },
 
-    async graphFiles(signal) {
+    async graphFiles(signal, paths) {
       ensureInitialized();
+      if (paths?.length === 0) return [];
       const request = databaseReadRequest(pool).input('take', sql.Int, 10_000);
+      if (paths) request.input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(paths.map((path) => pathHash(path).toString('hex'))));
       const result = await execute(request, signal, () => request.query<{
         path: string;
         title: string | null;
         updated_at: Date;
-      }>(`SELECT TOP (@take) notes.path, title.heading AS title, notes.updated_at
-        FROM (
-          SELECT path, MAX(indexed_at) AS updated_at
-          FROM dbo.vault_chunks
-          GROUP BY path
-        ) AS notes
-        OUTER APPLY (
-          SELECT TOP (1) heading
-          FROM dbo.vault_chunks AS chunk
-          WHERE chunk.path = notes.path AND chunk.heading <> N'Introduction'
-          ORDER BY chunk.chunk_index
-        ) AS title
-        ORDER BY notes.path;`));
+      }>(`SELECT TOP (@take) path, title, updated_at
+        FROM dbo.vault_notes
+        ${paths ? 'WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes))' : ''}
+        ORDER BY path;`));
       return result.recordset.map(({ path, title, updated_at }) => ({
         path,
-        title: title ?? '',
+        title,
         updatedAt: updated_at,
       }));
     },
