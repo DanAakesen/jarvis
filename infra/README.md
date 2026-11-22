@@ -267,7 +267,7 @@ The same owner-side check is:
 
 ```sh
 python .github/scripts/vault_mirror_probe.py \
-  --subscription 0ac7d719-89bc-4100-be87-a79d33e953a7 \
+  --subscription <subscription-id> \
   --resource-group rg-jarvis \
   --write-back on \
   --max-changed 25 \

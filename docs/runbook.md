@@ -1,6 +1,6 @@
 # Operations runbook
 
-Draft for Dan's review (P6-06). Production operations are for Dan or an
+Production operations are for Dan or an
 authorized operator; cloud coding agents have no Azure access. Never put secret
 values in commands, logs, notes, or this file. Use resource names and endpoints
 from the `jarvis-infra` deployment outputs instead of guessing them.
@@ -122,100 +122,6 @@ voice-minutes usage row.
 The physical/provider acceptance is intentionally open. Dan must make the real
 voice attempt on a device after a future Deploy; this coding session did not
 connect to Foundry, open a voice session, invoke a model or run a paid smoke.
-
-## Historical pre-GPT-Live diagnosis (superseded; do not use as runtime guidance)
-
-After deployment, the owner should make one voice attempt, end it, and find its
-`voice.session_summary` by `reqId`. `voice.session_stage` records each stage with
-milliseconds since `request.started`: session creation, credential, settings,
-away mode, project context, upstream connecting/open, update sent and readiness.
-`session_update_sent` means the socket send completed, not that Azure accepted
-the configuration. The single bilingual Voice Live route waits for
-`session.updated`.
-
-Voice Live uses the bounded tool-budget attempts below for connecting and
-readiness. A readiness failure closes the browser with **4010**, “Voice
-service did not become ready”; the client shows a plain retry message and keeps
-its existing backoff.
-Settings plus model-catalogue, away-mode and project-context reads each have a
-five-second fallback deadline. Session creation has a ten-second deadline and
-ends with `voice.connection_failed` rather than falling back.
-
-The exactly-once summary records language, first closer (`browser`, `upstream`,
-`relay` or `shutdown`), close code, duration, reached stages/timings, allowlisted
-upstream event types, and the latest startup `session.update` tool count/UTF-8 bytes plus
-the five largest tool definitions (server-owned names and UTF-8 bytes).
-It survives browser-first closure and cancellation. No transcripts, instructions,
-tool arguments, payloads or close-reason text belong in these new diagnostics.
-
-Voice Live capability startup applies to both browser languages. Each attempt
-uses a fresh socket and waits up to six seconds for `session.updated`:
-
-- **R1** advertises direct schemas for the full configured registry.
-- **R2** advertises the bounded discovery/execution protocol backed by that same
-  registry. Discovery pages up to eight schemas, with a 1 MiB result limit.
-  Jarvis must discover a capability before execution; an unregistered or
-  undiscovered capability is refused. If a single schema cannot fit, discovery
-  reports an explicit error rather than silently omitting it.
-
-A pre-readiness timeout, provider error or close abandons that socket and tries
-the next representation. Only an acknowledged `session.updated` selects and
-remembers a representation for reconnect; the active session is not promoted
-later. Cancellation stops retries. If both attempts fail,
-`voice.tool_budget_exhausted` is logged and the browser receives close 4010 with
-its normal retry behavior.
-
-`voice.tool_budget_attempt` records language, `rung` (R1/R2), tool and frame
-counts/sizes, outcome (`ready`, `timeout`, `error` or `closed`) and elapsed
-milliseconds. `voice.tool_budget_selected` records the acknowledged rung, and
-the session summary carries `toolBudgetRung` and `toolBudgetAttempts`. These
-diagnostics contain no conversation content, tool arguments or health records.
-there is no background probe setting or probe sequence.
-
-Neither local readiness tests nor the earlier 21 October R0/R1 timings establish
-a provider schema/context limit or live responsiveness. For production
-acceptance, an owner must make a real browser voice attempt after deployment.
-Do not perform live health writes or extra provider canaries without separate
-approval.
-
-In the Voice Live resource's Azure Monitor metrics, compare `TotalCalls` split
-by operation for the same UTC window: `onHandshake` confirms accepted sockets;
-`VoiceLive_SessionDone` and `VoiceLive_ResponseDone` help distinguish accepted
-connections from completed sessions/responses. Handshakes without SessionDone
-are not proof that `session.update` was accepted. Use summary stages to locate
-the stall; do not infer a schema limit or service degradation from counts alone.
-Microsoft's [session-update contract](https://learn.microsoft.com/en-us/python/api/azure-ai-voicelive/azure.ai.voicelive.models.clienteventsessionupdate?view=azure-python)
-expects `session.updated`. No applicable numeric tool/schema/instruction or
-combined-context limit was verified for the deployed API version in this change.
-The harmless `connection.upgrade_failed` duplicate-registration noise is tracked
-separately and is not a voice-stage failure.
-
-## Historical parallel-transcription diagnosis (removed with the 2.1 path)
-
-For the separately authorized live acceptance, speak once with the microphone
-active, end the session, and inspect that session's `voice.partials_unavailable`
-and `voice.reflex_metrics` records. Do not record transcript content or tokens.
-
-`voice.partials_unavailable` means the optional Azure Speech recognizer could not
-start or reported a cancellation; inspect its sanitized `failure` and `language`
-fields. It does not mean the Voice Live session failed: completed Voice Live
-transcripts continue through the final-reflex path.
-
-`voice.reflex_metrics.speechRecognitionHypotheses` counts nonblank Azure Speech
-`recognizing` events delivered to the relay. With the microphone active during
-speech, a value above zero confirms hypotheses reached the relay; zero means
-none reached it in that session. It does not by itself distinguish an SDK,
-provider, microphone, or audio-delivery problem. The metric contains a count,
-not speech text. `partialTranscriptionDeltas` is the separate Voice Live delta
-count; neither it nor a green build proves live Speech acceptance.
-
-The existing partial-action guards are unchanged: the relay classifies only
-stable clauses, and execution still requires an addressed, high-confidence
-(at least 0.9), complete action without a confirmation requirement, a
-partial-safe target, the authenticated owner and available audit storage.
-Duplicate actions are suppressed. The Voice Live final remains authoritative
-and reconciles or attempts supported undo for an earlier partial action. A
-successful local SDK/event test is not live microphone/provider acceptance.
 
 ## Enable Health Gmail attention and calendar reads
 
