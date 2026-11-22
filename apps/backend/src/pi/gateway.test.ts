@@ -1248,12 +1248,15 @@ describe('PI gateway', () => {
         type: 'message', id, role: 'assistant', status: 'completed', content: [text, ...more].map(part => ({ type: 'output_text', text: part, annotations: [] })),
       });
       const anonymousMessage = (text: string) => ({ type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
-      const textDelta = (text: string, id = 'msg_1', index = 0) => frame({ type: 'response.output_text.delta', item_id: id, output_index: index, content_index: 0, delta: text });
-      const textDone = (text: string, id = 'msg_1', index = 0) => frame({ type: 'response.output_text.done', item_id: id, output_index: index, content_index: 0, text });
+      const textDelta = (text: string, id = 'msg_1', index = 0, part = 0) => frame({ type: 'response.output_text.delta', item_id: id, output_index: index, content_index: part, delta: text });
+      const textDone = (text: string, id = 'msg_1', index = 0, part = 0) => frame({ type: 'response.output_text.done', item_id: id, output_index: index, content_index: part, text });
+      /** A done event that names neither its item nor its output index, like `delta()` does for the deltas. */
+      const unnamedDone = (text: string) => frame({ type: 'response.output_text.done', content_index: 0, text });
       const statusless = { type: 'function_call', id: 'fc_call_1', call_id: 'call_1', name: 'lookup', arguments: '{}' };
       const added = (item: unknown, index?: number) => frame({ type: 'response.output_item.added', ...(index === undefined ? {} : { output_index: index }), item });
       const finishedItem = (item: unknown, index?: number) => frame({ type: 'response.output_item.done', ...(index === undefined ? {} : { output_index: index }), item });
       const mcpCall = { type: 'mcp_call', id: 'mcp_1', server_label: 'jarvis', name: 'find_tools' };
+      const listedTools = { type: 'mcp_list_tools', id: 'mcpl_1', server_label: 'jarvis', tools: [] };
       /** The item that is opened before a call and closed after it, named by its id, its output index or both. */
       const earlierMessage = (by: 'id' | 'index' | 'both') => {
         const item = { type: 'message', ...(by === 'index' ? {} : { id: 'msg_1' }) };
@@ -1389,22 +1392,87 @@ describe('PI gateway', () => {
         ['each message of the completed output is reconciled on its own', [
           [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_1'), finalMessage(second, 'msg_2')], 9, 3, 4)],
         ], ok(first + second, [9, 3, 4])],
-        ['a message of the completed output under another id than the one streamed at its position is its own item', [
-          [created('resp_1'), textDelta(first, 'msg_0', 0), finished([finalMessage(second, 'msg_9')], 9, 3, 4)],
+        ['the text parts of one message streamed as deltas are reconciled by content index', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0, 0), textDelta(second, 'msg_1', 0, 1), finished([finalMessage(first, 'msg_1', second)], 9, 3, 4)],
         ], ok(first + second, [9, 3, 4])],
+        ['the text parts of one message closed by done events are reconciled by content index', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0, 0), textDone(first, 'msg_1', 0, 0), textDone(second, 'msg_1', 0, 1), completed(9, 3, 4)],
+        ], ok(first + second, [9, 3, 4])],
+        ['text that only a done event brings, for an item first seen after a call, is output after the call', [
+          [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), textDone(second, 'msg_9', 3), completed(11, 2, 7)],
+        ], ok(second, [11, 2, 7], [], ['native:later_output'])],
+        ['an mcp_list_tools that opened before the call and closes after it is not output after the call', [
+          [created('resp_1'), added(listedTools, 0), ...functionCall('lookup', 'call_1', '{}'), finishedItem(listedTools, 0), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
       ];
 
-      it.each([...gaps, ...texts, ...kept])('%s', async (_name, rounds, expected) => {
+      // A text event that names no item can only be matched, in order, with the other text events that name none.
+      const unnamed: Shape[] = [true, false].flatMap((withId): Shape[] => {
+        const how = withId ? 'completed messages with an id' : 'completed messages without an id';
+        const entry = (text: string, id: string) => (withId ? finalMessage(text, id) : anonymousMessage(text));
+        return [
+          [`deltas, an unnamed done and the same text in the completed output arrive once, ${how}`, [
+            [created('resp_1'), delta(first), unnamedDone(first), finished([entry(first, 'msg_1')], 9, 3, 4)],
+          ], ok(first, [9, 3, 4])],
+          [`the start as deltas, an unnamed done with the whole text and the completed output arrive once, ${how}`, [
+            [created('resp_1'), delta(first.slice(0, cut)), unnamedDone(first), finished([entry(first, 'msg_1')], 9, 3, 4)],
+          ], ok(first, [9, 3, 4])],
+          [`two unnamed done-only texts that the completed output repeats arrive once each, ${how}`, [
+            [created('resp_1'), unnamedDone(first), unnamedDone(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`unnamed deltas of two messages, their unnamed dones and the completed output arrive once each, ${how}`, [
+            [created('resp_1'), delta(first), delta(second), unnamedDone(first), unnamedDone(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`unnamed deltas of one message and a second message that only the completed output has arrive once each, ${how}`, [
+            [created('resp_1'), delta(first), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+          [`an unnamed done-only text and the unnamed deltas of the next message arrive once each, ${how}`, [
+            [created('resp_1'), unnamedDone(first), delta(second), finished([entry(first, 'msg_1'), entry(second, 'msg_2')], 9, 3, 4)],
+          ], ok(first + second, [9, 3, 4])],
+        ];
+      });
+
+      // An unnamed done event is output after a call only when it brings text: closing text that streamed before the call is not.
+      const unnamedAfterCalls: Shape[] = [
+        ['an unnamed done that only closes text streamed before the call is not output after it', [
+          [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), delta(first), ...functionCall('lookup', 'call_1', '{}'), unnamedDone(first), completed(10, 2, 5)],
+          [created('resp_2'), delta(second), completed(12, 4, 6)],
+        ], ok(first + second, [22, 6, 11], [answer('call_1')], ['client_owned:last_item_unanswered'])],
+        ['an unnamed done that brings text after the call is output after it, so the call is native', [
+          [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), unnamedDone(second), completed(11, 2, 7)],
+        ], ok(second, [11, 2, 7], [], ['native:later_output'])],
+      ];
+
+      // A name an event lacks is taken from the other: an item is found by its id, else by its output index, and each event gives the item every name it has.
+      const naming: Shape[] = [
+        ['the completed output has another id than the deltas at the same position: it is the same message', [
+          [created('resp_1'), textDelta(first, 'msg_1', 0), finished([finalMessage(first, 'msg_9')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['the completed output has another id at the same position and another text: nothing is added', [
+          [created('resp_1'), textDelta(first, 'msg_0', 0), finished([finalMessage(second, 'msg_9')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['deltas that name the message by id only, after it was opened with both, and a completed entry without an id: the same message', [
+          [created('resp_1'), added({ type: 'message', id: 'msg_1' }, 0), frame({ type: 'response.output_text.delta', item_id: 'msg_1', content_index: 0, delta: first }), finished([anonymousMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['a done event that names the message by position only and a completed entry by id: the same message', [
+          [created('resp_1'), frame({ type: 'response.output_text.done', output_index: 0, content_index: 0, text: first }), finished([finalMessage(first, 'msg_1')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['an item that the completed output omits moves the positions after it: the id still finds the message', [
+          [created('resp_1'), added(mcpCall, 0), added({ type: 'message', id: 'msg_1' }, 1), textDelta(first, 'msg_1', 1), finishedItem(mcpCall, 0), finished([finalMessage(first, 'msg_1')], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+      ];
+
+      it.each([...gaps, ...texts, ...unnamed, ...unnamedAfterCalls, ...naming, ...kept])('%s', async (_name, rounds, expected) => {
         for (const seed of seeds) expect(await play(rounds, seed), `seed ${seed}`).toEqual(expected);
       });
 
-      it('adds nothing from done events or the completed output past the item tracking limit, so no text repeats', async () => {
-        const items = Array.from({ length: 2_100 }, (_, index) => ({ id: `msg_${index}`, text: `t${index} ` }));
-        const frames = items.flatMap(({ id, text }, index) => [
-          added({ type: 'message', id }, index), textDelta(text, id, index), textDone(text, id, index), finishedItem({ type: 'message', id }, index),
-        ]);
+      it('reconciles the first 2048 items of a response and no more: past that the reply is what streamed, so no text repeats', async () => {
+        const items = Array.from({ length: 2_100 }, (_, index) => ({ id: `msg_${index}`, streamed: `t${index}`, text: `t${index}.` }));
+        // Each message streams all but its last character; its done event and the completed output carry the whole text.
+        const frames = items.flatMap(({ id, streamed, text }, index) => [added({ type: 'message', id }, index), textDelta(streamed, id, index), textDone(text, id, index)]);
         const { run, calls } = setup([() => sse(created('resp_1'), ...frames, finished(items.map(({ id, text }) => finalMessage(text, id)), 5, 0, 5))]);
-        expect((await run('hi')).filter(chunk => typeof chunk === 'string').join('')).toBe(items.map(item => item.text).join(''));
+        expect((await run('hi')).filter(chunk => typeof chunk === 'string').join('')).toBe(items.map((item, index) => (index < 2_048 ? item.text : item.streamed)).join(''));
         expect(responsesOf(calls)).toHaveLength(1);
       });
 
