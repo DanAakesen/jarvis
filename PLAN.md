@@ -15,6 +15,18 @@
 
 No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or provider call belongs to this task.
 
+## Wake path matches Chat — 21 November 2026 (#1967)
+
+**Status: implemented and offline-tested; the PR's exact-head CI is the gate. No wake has run in production, so how a real wake uses the overview is unobserved.**
+
+| Step | State |
+| --- | --- |
+| Give `runBrain` the tool overview note Chat gets once per conversation, through the one gateway helper (`overviewFor`), with no second copy of the logic | Done |
+| A wake never touches the "overview sent" state of Dan's Chat conversation | Done |
+| Parity test: the tools `find_tools` shows a wake equal Chat's plus the brain-only tools; a failure lists the differences | Done |
+| Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
+| Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**

@@ -110,8 +110,9 @@ export interface PiBrainRunResult {
 
 export interface PiGateway extends ConversationAgent {
   /**
-   * One brain wake in its own scratch conversation, never the owner's chat conversation. It spends against the brain's
-   * budget, not the chat cap; the caller has already checked that budget. A failure is returned with what was billed.
+   * One brain wake in its own scratch conversation, never the owner's chat conversation. It opens like a new chat conversation
+   * (the same trusted context and tool overview) and spends against the brain's budget, not the chat cap; the caller has already
+   * checked that budget. A failure is returned with what was billed.
    */
   runBrain(input: {
     readonly runId: string;
@@ -404,6 +405,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   let capabilityNote = options.capabilityNote;
   /** The tool overview note last sent, and to which conversation: it is repeated only for a new conversation or a changed connection. */
   let noteSent: { readonly conversationId: string; readonly signature: string } | undefined;
+  /**
+   * The tool overview a turn in this conversation still needs, for chat and for a brain wake alike. A wake runs in a new
+   * conversation every time, so it always gets it; only chat records what it sent (`noteSent`), and a wake never does, so it
+   * cannot make Dan's next chat turn repeat the overview.
+   */
+  function overviewFor(conversationId: string) {
+    const overview = capabilityNote?.();
+    if (!overview || (noteSent?.conversationId === conversationId && noteSent.signature === overview.signature)) return undefined;
+    return { text: overview.text, sent: { conversationId, signature: overview.signature } };
+  }
   // Single-flight lock for the one conversation: a warm-up and a chat turn can never both have a request in flight.
   // It is claimed synchronously (no await between the check and the claim), so two callers cannot both pass it.
   let busy: { readonly kind: 'chat' | 'warm'; readonly done: Promise<void> } | null = null;
@@ -947,12 +958,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       grant = activation.grant;
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
-      const overview = capabilityNote?.();
-      let overviewSent: typeof noteSent;
-      if (overview && (noteSent?.conversationId !== conversationId || noteSent.signature !== overview.signature)) {
-        notes.push(overview.text);
-        overviewSent = { conversationId, signature: overview.signature };
-      }
+      const overview = overviewFor(conversationId);
+      let overviewSent = overview?.sent;
+      if (overview) notes.push(overview.text);
       const text = formatTurn({
         ...(stored?.contextHash === activationHash ? {} : { context: activationContext }), turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.text, notes,
       });
@@ -1104,9 +1112,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal: deadline,
       });
       grant = activation.grant;
+      const overview = overviewFor(conversationId);
       const message = formatTurn({
         context: [context, activation.context].filter(Boolean).join('\n\n'),
         turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body,
+        ...(overview ? { notes: [overview.text] } : {}),
       });
       for await (const event of respond(conversationId, message, deadline, grant)) {
         spend.note(event);
