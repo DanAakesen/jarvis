@@ -38,7 +38,7 @@ preserve investigation history; this section is the current qualification state.
 Factory quota is separate: #1649 merged as `b6b515d9` after full CI 42502476758.
 Live quota run 42503224623 received HTTP 403 AuthorizationFailed during quota
 inspection, before any quota write. The 128 GiB worker is not provisioned and Task 23
-is not complete. See [the quota runbook](../../factory-worker-quota.md).
+is not complete. See [the quota runbook](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e992873486ffaa20109f5a18749e654/docs/factory-worker-quota.md).
 
 
 ## New owner findings after the build

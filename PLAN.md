@@ -691,7 +691,7 @@ Next: finish exact-head offline qualification for #1966 and let Dispatcher own a
 
 ## PI voice measured, and the prompt grew — 16 November 2026 (#1887, P15-176)
 
-First `measure_pi` after voice (Deploy run 43831735508): the PI leg of a voice turn is 1.6 s to first text (plain) and 1.4 s (with a tool, after a spoken sentence from PI); the voice checks pass. Warm turns now carry about 17.7k input tokens (was about 7.5k), 99 percent cached, which is about [amount omitted] per warm turn at list price (0.007 at the assumed cached rate). Details, what the repository says about the cause, the options (none implemented) and the new "fixed prompt" smoke row that separates the base prompt from conversation growth: `docs/archive/harness-trial/spike-results.md`, "PI voice leg and prompt size".
+First `measure_pi` after voice (Deploy run 43831735508): the PI leg of a voice turn is 1.6 s to first text (plain) and 1.4 s (with a tool, after a spoken sentence from PI); the voice checks pass. Warm turns now carry about 17.7k input tokens (was about 7.5k), 99 percent cached, which is about [amount omitted] per warm turn at list price (0.007 at the assumed cached rate). Details, what the repository says about the cause, the options (none implemented) and the new "fixed prompt" smoke row that separates the base prompt from conversation growth: the historical spike record (#1851), "PI voice leg and prompt size".
 
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
 
@@ -719,7 +719,7 @@ Delivered as three stacked pull requests in the order of the issue. Owner rules 
 | --- | --- | --- |
 | 1 Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scales to zero), no read-only restriction, Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
 | 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy (since #1966 the switch is Settings > Proactive > "Background PI") |
-| 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in `docs/archive/harness-trial/spike-results.md`); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
+| 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in the historical spike record (#1851)); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
 
 **Brain, what was built and observed.** The brain reads the event queue, wakes the PI agent in a scratch conversation under exact guards (owner switch, pause, 10 minutes between wakes, 12 wakes a day, the 100 DKK proactive budget stop with notices at 80 percent and at the stop), lets it read, tell Dan (a chat message that always pushes; at most 8 a day, no repeats), keep notes under `PI/` and add inbox trail lines, and writes every decision to `PI/Log/<day>.md`. Replay of 38 real Actions results (15 to 16 November) through the real producers, queue, loop, tools and log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages (the 3 failed Deploys of main); backend suite and the SQL contract on SQL Server 2022 pass. **Not proven:** the model's judgement (the owner judges it behind the test switch), real cost per wake, the iOS rows (Apple CI only), and the push on a real device. Until the owner turns the switch on, nothing is claimed and nothing is spent.
 
@@ -799,7 +799,7 @@ selector; isolated runtime tests retain their own runtime with no automatic fall
 | 7 Cutover: PI is the only normal route | P15-172 (#1881) | Delivered; selector removal/release hardening in #1966 |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |
 
-Latency round 2 numbers are pending in `docs/archive/harness-trial/spike-results.md`; the plan holds a placeholder.
+Latency round 2 numbers are pending in the historical spike record (#1851); the plan holds a placeholder.
 
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858, P15-161)
 

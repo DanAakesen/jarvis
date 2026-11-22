@@ -1,6 +1,8 @@
 # Daily health acceptance in the existing backend
 
-Dan directly approved the revised #719 design on 13 October 2026: reuse Jarvis's backend and SQL, with no new Azure resources. Production composition is behind the explicit `JARVIS_HEALTH_UPLOAD_ENABLED` switch; its code default is false and the reviewed backend infrastructure explicitly sets it true. The post-merge deployment succeeded, but no upload-specific production authentication/processing or phone acceptance is established. Current credential status is not available to this report. See the [Daily v182 delivery status](../reference/daily-v182/delivery-status.md).
+**Status:** The checked-in contract and Daily freshness evidence were last updated on 20 October 2026. The upload routes and SQL processor are implemented behind `JARVIS_HEALTH_UPLOAD_ENABLED`. It defaults to false in code; the checked-in backend Bicep sets it to true. The deployed flag and credential state, real upload and processing, and phone acceptance were not verified for this refresh.
+
+The revised [#719](https://github.com/DanAakesen/jarvis/issues/719) design reuses Jarvis's backend and SQL, with no new Azure resources. See the [Daily v182 delivery status](../reference/daily-v182/delivery-status.md).
 
 ## Acceptance contract
 
@@ -52,13 +54,13 @@ The pinned source identifies **Health Auto Export**. Do not substitute Health Sy
 
 ## Protected device-capability management
 
-`SqlHealthCapabilities` generates a random 256-bit bearer in a redacted prepared handle. SQL stores only its SHA-256 reference, configured owner, device, scopes, expiry, revocation and reserved replacement reference. The existing owner-authenticated route is the only issuance/rotation/revocation interface; no CLI, second authentication service or operator grant exists. The credential can be created only after the explicit flag is enabled and is not currently provisioned.
+`SqlHealthCapabilities` generates a random 256-bit bearer in a redacted prepared handle. SQL stores only its SHA-256 reference, configured owner, device, scopes, expiry, revocation and reserved replacement reference. The existing owner-authenticated route is the only issuance/rotation/revocation interface; no CLI, second authentication service or operator grant exists. The credential can be created only after the explicit flag is enabled.
 
 Issue is idempotent for the retained handle; revoked records never reactivate. Rotation retains the device and may only narrow scopes. Old revocation, one reserved replacement and replacement issue commit atomically in SQL. Competing replacements conflict. Response loss remains uncertain; the owner must check status and rotate if the one-time reveal was lost. `useSecret()` is confined to the authenticated response and never writes logs/chat/GitHub. Handle loss cannot recover a bearer from its hash. No real credential is issued here.
 
 ## Readiness and rollback gates
 
-1. Exact-head independent review, normal full CI and isolated SQL tests remain required. This PR sets the existing backend flag in `infra/main.bicep` to `'true'` as explicitly authorized; it creates no new resource, identity or grant. Deployment is not evidence of successful endpoint/worker verification. Rollback sets the flag to `'false'` and updates the matching pin test in the same change, then redeploys; stored credential hashes and ingested data remain untouched.
+1. Use exact-head independent review, applicable CI and isolated SQL tests for changes. Deployment alone does not verify the endpoint or worker. To disable the path, revert the backend flag to `'false'` with the matching pin test and redeploy through the normal workflow. Preserve stored credential hashes and ingested data.
 2. The owner creates the credential through the owner-authenticated route after deployment. Verify endpoint origin/ingress and protected one-time credential custody; no new resource, identity, grant, SAS extraction or plaintext credential in GitHub is implied.
 3. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks remain unverified, as does actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
 4. #720 processing/freshness and the historical upload path's bounded grouping/limits require verification. The owner withdrew the #717 database-export/preflight route; do not revive it or treat it as a prerequisite. This synthetic implementation does not establish complete historical replay or cutover readiness.
@@ -68,4 +70,4 @@ Issue is idempotent for the retained handle; revoked records never reactivate. R
 
 Run backend lint/build and `npm test --workspace @jarvis/backend -- src/daily/health-upload src/auth/auth.test.ts src/app.test.ts src/database/migrations.test.ts`. The normal `Database CI` workflow runs `health-upload.integration.test.ts` against disposable loopback SQL Server, covering concurrency, rollback, real persistence and backend composition. Do not point tests at production; no local SQL image is started by this slice.
 
-The [legacy proposal](../archive/daily-health-ingestion/legacy-host-proposal.md), `proposal.bicep`, standalone `health-upload/main.ts`/host/recovery and Blob/Queue adapter remain **unused and superseded**, outside production wiring. Their existing emulator/regression tests remain; they are not SQL acceptance evidence. No old `DAILY_HEALTH_*` flag activates the new path.
+The dedicated host and Blob/Queue design was withdrawn. The standalone host/recovery and Blob/Queue adapters are outside production wiring. Their emulator/regression tests are not SQL acceptance evidence. No old `DAILY_HEALTH_*` flag activates the new path.

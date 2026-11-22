@@ -35,19 +35,21 @@ This is a map of merged work, not a device acceptance report. Priorities and the
 
 ## Areas and contracts
 
+The PI architecture and cutover checklist supersede the November harness trial. The [trial analysis](https://github.com/DanAakesen/jarvis/pull/1852) and [revised proposal](https://github.com/DanAakesen/jarvis/pull/1854) remain in Git history. The withdrawn dedicated Health host is not part of the SQL upload contract.
+
 | Document | Status | Use it for |
 | --- | --- | --- |
 | [PI cutover](pi/cutover.md) | Reference | Cutover inventory and the remaining old-engine decision; not an executable deletion plan. |
-| [PI implementation plan](pi/plan.md) | Historical | Original managed-harness sequence and design assumptions, retained at its referenced path. |
+| [PI implementation plan](pi/plan.md) | Historical | Original managed-harness plan; superseded for ongoing work by the architecture and cutover checklist. |
 | [Proactive assistance](proactive-assistance.md) | Reference | Proactive concepts, sources and feedback; the current PI path is in architecture. |
 | [Proactive diagrams](proactive-diagrams.md) | Reference | Earlier scheduling and delivery diagrams. |
 | [Event pipeline design](proactive-events/design.md) | Reference | Queue, source policy, interrupt tiers and acceptance boundaries. |
 | [Notification research](research/intelligent-proactive-notifications.md) | Reference | Research behind useful, non-repetitive reach-outs. |
-| [Inbox loop design](inbox-loop/design.md) | Reference | Vault note shape, capture, triage and follow-up. |
-| [Inbox acceptance](inbox-loop/acceptance.md) | Reference | Evidence and remaining owner acceptance for the loop. |
+| [Inbox loop design](inbox-loop/design.md) | Reference | Built, switched off by default; needs Dan's decision to switch on. Defines Vault capture, triage and follow-up. |
+| [Inbox acceptance](inbox-loop/acceptance.md) | Reference | Switch-on checklist and pending production and device acceptance. |
 | [Inbox MCP](inbox-loop/mcp.md) | Reference | Dedicated inbox MCP contract. |
 | [Inbox Shortcut](inbox-loop/shortcut.md) | Reference | Capture setup and the write-only route. |
-| [Health ingestion](daily-health-ingestion/README.md) | Reference | Health upload sources and boundaries. |
+| [Health ingestion](daily-health-ingestion/README.md) | Reference | Current SQL upload and processing contract. Production uploads and phone acceptance remain unverified. |
 | [Daily migration](daily-migration.md) | Historical | Old-to-current Health migration decisions; linked by the interactive map. |
 | [Daily schema mapping](daily-schema-mapping.md) | Reference | Retained source-to-target field mapping, not a migration to run. |
 | [Nutrition export Shortcut](nutrition-export-shortcut.md) | Reference | Export setup and its ingestion contract. |
@@ -61,10 +63,6 @@ This is a map of merged work, not a device acceptance report. Priorities and the
 | [Watch Factory/lift inputs](ios/design/watch/factory-lift-inputs-handoff-2026-11-10.md) | Reference | Native form handoff for task and lift capture. |
 | [Watch Home and complications](ios/design/watch/next-complications-and-home-2026-11-10.md) | Historical | Explored navigation and complication alternatives. |
 | [Watch steps and reconnect](ios/design/watch/steps-reconnect-handoff-2026-11-10.md) | Reference | Steps presentation and reconnect handoff. |
-| [Harness spike skills](harness-trial/spike/SKILL.md) | Reference | Fixture skill for the original harness spike. |
-| [Harness spike prompts](harness-trial/spike/prompts.md) | Reference | Original comparison inputs, not live PI instructions. |
-| [Harness spike MCP shim](harness-trial/spike/mcp-shim-design.md) | Reference | Original turn-authority design investigation. |
-| [Harness spike runbook](harness-trial/spike/runbook.md) | Historical | How the proposed spike was intended to run; not an authorised command. |
 
 ## UI handoffs and evidence
 
@@ -166,16 +164,8 @@ Use the snapshots for previous detail, not as active instructions. The pre-refre
 | [Approval friction review](archive/approval-friction-review.md) | Historical | Earlier audit of unnecessary approvals. |
 | [Copilot runtime recovery](archive/copilot-runtime-recovery-2026-11-07.md) | Historical | Recovery notes for an older runtime. |
 | [Health read coverage](archive/daily-health-read-coverage.md) | Historical | Dated tool/API gap inventory. |
-| [Legacy health host proposal](archive/daily-health-ingestion/legacy-host-proposal.md) | Historical | Evaluated retention option for the old host. |
 | [Factory concurrency correction](archive/factory-concurrency-correction.md) | Historical | Correction to the earlier worker sizing approach. |
 | [Factory worker delivery](archive/factory-worker-delivery-2026-11-08.md) | Historical | November handoff of worker delivery. |
-| [Factory quota review](archive/factory-worker-quota.md) | Historical | Capacity and quota investigation. |
-| [Harness trial](archive/harness-trial/README.md) | Historical | Trial scope, conclusions and limitations. |
-| [Harness diagnosis](archive/harness-trial/01-diagnosis.md) | Historical | What the earlier harness trial did and did not exercise. |
-| [Harness quality gains](archive/harness-trial/02-quality-gains.md) | Historical | Proposed quality improvements. |
-| [Harness target](archive/harness-trial/03-target-architecture.md) | Historical | Candidate architecture and open questions before PI cutover. |
-| [Harness recommendation](archive/harness-trial/04-recommendation.md) | Historical | Trial recommendation and decision points. |
-| [Harness spike results](archive/harness-trial/spike-results.md) | Historical | Scaffolding evidence and live tests that did not run. |
 | [Main Chat harness migration](archive/main-chat-harness-migration.md) | Historical | Proposal and staged path before PI. |
 | [Managed Chat adapter](archive/managed-chat-adapter.md) | Historical | Comparison adapter design and outcomes. |
 | [Managed Chat provisioning](archive/managed-chat-provisioning.md) | Historical | Provisioning evidence for the isolated comparison. |
@@ -186,7 +176,6 @@ Use the snapshots for previous detail, not as active instructions. The pre-refre
 | [Runtime comparison owner test](archive/runtime-comparison-owner-test.md) | Historical | Historical owner test procedure and limitations. |
 | [Runtime lifecycle comparison](archive/runtime-lifecycle-comparison.md) | Historical | Comparison of older lifecycle paths. |
 | [Scaffold approval recovery](archive/scaffold-approval-recovery.md) | Historical | Dated recovery investigation. |
-| [Secondary thread starter](archive/secondary-thread-starter.md) | Historical | Proposal for an older thread workflow. |
 | [Settings smoke 1350](archive/smoke-settings-1350.md) | Historical | Old Settings and runtime smoke evidence. |
 | [UI audit](archive/ui-audit.md) | Historical | Dated UI findings and recommendations. |
 | [UI implementation coverage](archive/ui-implementation-coverage.md) | Historical | Historical review of UI and fixture coverage. |
@@ -218,6 +207,5 @@ Use the snapshots for previous detail, not as active instructions. The pre-refre
 | [Integration verification](archive/ios/design/p15-integration-verification.md) | Historical | Native integration evidence and gaps at that time. |
 | [Owner test checklist](archive/ios/design/p15-owner-test-checklist.md) | Historical | Original native acceptance checklist. |
 | [6 November release](archive/ios/design/p15-release-2026-11-06.md) | Historical | Contents and verification of that release. |
-| [Resume handoff](archive/ios/design/p15-resume.md) | Historical | Instructions for resuming the original iOS work. |
 | [Settings verification](archive/ios/design/p15-settings-verification.md) | Historical | Native Settings verification snapshot. |
 | [Widget feedback](archive/ios/design/p15-widget-feedback.md) | Historical | Contrast and task widget review. |

@@ -178,7 +178,7 @@ Verified source heartbeat accepts authenticated bodyless POST without Content-Ty
 
 The separate unregistered SQL lifecycle library retains protected random prepared handles, idempotent issue and terminal revocation. A transaction atomically revokes the old capability and reserves/issues one same-device, narrowed-scope replacement. Retain the same handle after response ambiguity; SQL atomicity does not make secret delivery exactly once. No real provisioning or protected custody/delivery channel is created.
 
-Maintained client/instance request-rate guards still run before credential/database work. Uploads are bounded to 8 MiB; an owner inbox retains at most 256 MiB and 10,000 rows before 503 backpressure, without automatic age deletion. Verified processing/retention/compaction, ingress identity, deployed quotas, actual phone retries and protected backup/rollback remain activation gates. The [old host/Blob/Queue proposal](archive/daily-health-ingestion/legacy-host-proposal.md) is superseded and unused; its cost/recovery questions are withdrawn.
+Maintained client/instance request-rate guards still run before credential/database work. Uploads are bounded to 8 MiB; an owner inbox retains at most 256 MiB and 10,000 rows before 503 backpressure, without automatic age deletion. Verified processing/retention/compaction, ingress identity, deployed quotas, actual phone retries and protected backup/rollback remain activation gates. The dedicated host and Blob/Queue proposal was withdrawn; it is not part of the current acceptance contract.
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 

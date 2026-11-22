@@ -1,19 +1,19 @@
 # Loose Ends: switch-on and acceptance
 
-Status: **all eight steps are built, merged and dark.** Nothing below has run against a live vault, a real model or a device. Switching on is the owner's decision and deployment; this page is the checklist.
+Status: **built, switched off by default.** Switching on needs the owner's decision and a deployment. Production activation, real vault/model use and device acceptance are unverified.
 
 ## What each switch turns on
 
 | Switch | Where | Turns on |
 | --- | --- | --- |
 | `inboxEnabled` | `infra/main.bicep` parameter (sets `JARVIS_INBOX_ENABLED=true`) | Chat and voice tools (`inbox_capture`, `inbox_items`, `inbox_close`, `inbox_capture_credential`, `inbox_nudge_style`), `POST /inbox/capture`, the credential routes, `/inbox/mcp`, `/inbox/status` |
-| `inboxNudgesEnabled` | same (sets `JARVIS_INBOX_NUDGES_ENABLED=true`) | Inside each proactive run: the slot review and nudge, the daily missed-capture audit (18:00 run), the weekly deep review and nudge-style rewrite (first Sunday run) |
+| `inboxNudgesEnabled` | same (sets `JARVIS_INBOX_NUDGES_ENABLED=true`) | Enables the old engine's post-findings hook for slot reviews, the daily missed-capture audit and the weekly nudge-style review. |
 
-Both default to `false`. The nudges also need `JARVIS_PROACTIVE_ENABLED=true` (already on in production) and the Notes source enabled in Proactive settings. The proactive pause switch stops them too.
+Both default to `false`. The nudge hook also needs `JARVIS_PROACTIVE_ENABLED=true` and an enabled Notes source. PI's brain owns the scheduled slots and Check now when PI is configured. Enabling flags alone does not make that brain call the old engine's hook; check the [remaining trigger decision](../pi/cutover.md#43-the-old-chat-harness-and-old-proactive-pipeline-backend) before enabling scheduled nudges.
 
 ## What is left for the owner
 
-1. **Switch-on:** set `inboxEnabled` (then, after testing, `inboxNudgesEnabled`) to `true` in `infra/main.parameters.json` and deploy. Deploy applies migrations `0081` to `0085` (additive; each has a tested down script; `0080` is the proactive-events queue, already merged).
+1. **Switch-on:** with the owner's approval, enable `inboxEnabled` and qualify capture before considering nudges. Resolve the scheduled trigger before enabling `inboxNudgesEnabled`. Migrations `0081` to `0085` define the inbox records; `0080` defines the proactive-events queue.
 2. **Vault convention:** review and merge DanAakesen/vault#1 (the `Inbox/` convention in the vault `AGENTS.md`, plus a corrected sync paragraph). The backend does not depend on it; it lets other agents capture without Jarvis.
 3. **ChatGPT and claude.ai connectors:** create an Entra app registration with `inbox.read` and `inbox.write` scopes, like the Health connector. Not done and not buildable without it; until then the MCP server works for clients that send a bearer header (Claude Code, Codex, Copilot CLI).
 4. **Device acceptance** of the checklist below: nothing has run against the live vault, a real model or a device.
@@ -22,7 +22,7 @@ The GitHub App already has Contents write on the private vault (it writes notes 
 
 ## Acceptance checklist (owner, on a real device)
 
-Switch on `inboxEnabled` first, test, then `inboxNudgesEnabled`.
+Test capture before nudges. Test the scheduled rows only once the trigger and nudge activation are confirmed.
 
 - [ ] Say an idea in chat ("we should do a padel night before Christmas"). A note appears in `Inbox/` within seconds and in Obsidian within about ten minutes; your words are quoted verbatim.
 - [ ] Say the same by voice. Ask "what is in my inbox?" and see it listed.
