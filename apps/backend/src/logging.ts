@@ -7,6 +7,7 @@ import { safeSmokeReason } from './system-status.js';
 import { sanitizeManagedProviderCause } from './managed-provider-cause.js';
 import { voiceStages, voiceTimeoutStages, voiceEventTypes } from './voice/diagnostics.js';
 import { brainLogReasons, brainTickOutcomes } from './pi/brain/outcomes.js';
+import { safeRateLimitMessages } from './pi/rate-limit.js';
 import { allTurnKinds } from './pi/store.js';
 
 // This is the external export boundary, replaced by an offline sink in tests.
@@ -157,7 +158,7 @@ export function safeHistoricalLogFields(input: Record<string, unknown>): Record<
     'language', 'scope', 'source', 'channel', 'closedBy', 'family', 'verdict', 'cachePath',
     'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
     'errorCode', 'errorType', 'param', 'state', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
-    'event', 'code', 'server', 'tool', 'azureCatalogue',
+    'event', 'code', 'server', 'tool', 'azureCatalogue', 'providerMessage',
     'errorClass', 'trigger', 'activationType', 'activationSource', 'activationId', 'classes',
   ]);
   return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
@@ -232,6 +233,7 @@ const piStreamReasons = new Set([
   'foundry_response_failed', 'stream_ended_without_completed', 'stream_broke', 'approval_or_function_call_item',
   'no_stream', 'no_conversation', 'cancel_no_response_id', 'cancel_request_failed', 'deadline_notice_failed',
   'brain_wake_failed', 'client_tool_round_limit',
+  'http_rate_limited',
 ]);
 const piClientToolOutcomes = new Set(['answered_default', 'answered_task_client_owned', 'approved']);
 /** The brain's own words for what a pass decided and why a sweep or wake ended: the only vocabularies `pi.brain_tick` and `pi.brain` may carry. */
@@ -726,7 +728,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     for (const key of ['hasCallId', 'hasId', 'sawText', 'sawTool', 'sawOutput', 'previousCancelled']) {
       if (typeof input[key] === 'boolean') fields[key] = input[key];
     }
-    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 2) fields.attempt = input.attempt;
+    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 3) fields.attempt = input.attempt;
     if (Number.isInteger(input.argumentsLength) && Number(input.argumentsLength) >= 0 && Number(input.argumentsLength) <= 100_000_000) {
       fields.argumentsLength = input.argumentsLength;
     }
@@ -767,7 +769,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (input.msg === 'pi.stream_failed' || input.msg === 'pi.stream_retry' ||
       input.msg === 'pi.mcp_list_failed' || input.msg === 'pi.mcp_call_failed' || input.msg === 'pi.smoke_failed') {
-    // Short fixed vocabulary, plain labels and numbers only: never a prompt, reply, tool argument, token or provider message.
+    // Fixed summaries, short labels and numbers only: never raw provider text.
     const fields: Record<string, unknown> = {};
     if (typeof input.reason === 'string' && piStreamReasons.has(input.reason)) fields.reason = input.reason;
     if (typeof input.event === 'string' && piStreamEvents.has(input.event)) fields.event = input.event;
@@ -777,7 +779,16 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       if (typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/u.test(value)) fields[key] = value;
     }
     if (Number.isInteger(input.status) && Number(input.status) >= 100 && Number(input.status) <= 599) fields.status = input.status;
-    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 2) fields.attempt = input.attempt;
+    if (Number.isInteger(input.attempt) && Number(input.attempt) >= 1 && Number(input.attempt) <= 3) fields.attempt = input.attempt;
+    if (input.msg === 'pi.stream_failed' || input.msg === 'pi.stream_retry') {
+      if (Number.isInteger(input.round) && Number(input.round) >= 1 && Number(input.round) <= 8) fields.round = input.round;
+      if (typeof input.providerMessage === 'string' && safeRateLimitMessages.has(input.providerMessage)) {
+        fields.providerMessage = input.providerMessage;
+      }
+      for (const key of ['retryAfterMs', 'delayMs']) {
+        if (Number.isSafeInteger(input[key]) && Number(input[key]) >= 0) fields[key] = input[key];
+      }
+    }
     for (const key of ['elapsedMs', 'firstEventMs']) {
       const value = input[key];
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 600_000) fields[key] = value;

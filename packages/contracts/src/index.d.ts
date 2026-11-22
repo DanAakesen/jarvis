@@ -1044,7 +1044,7 @@ export const issueAttachmentFields: Readonly<Record<'attachmentIds' | 'publish',
 /** The plain words Dan reads (`chat`) and hears (`voice`) for each way a turn fails: the same sentence for both. See `failure-copy.js`. */
 export type FailureKind =
   | 'not_set_up' | 'allowance_used' | 'sign_in_failed' | 'agent_missing' | 'service_busy' | 'service_problem'
-  | 'unreachable' | 'no_answer_in_time' | 'no_conversation' | 'no_reply_stream' | 'cut_off' | 'cut_off_clean'
+  | 'unreachable' | 'no_answer_in_time' | 'no_conversation' | 'no_reply_stream' | 'cut_off' | 'cut_off_clean' | 'reply_not_written'
   | 'took_too_long' | 'took_too_long_clean' | 'still_answering' | 'cannot_see_frame' | 'no_reply' | 'stopped'
   | 'reply_too_long' | 'did_not_catch' | 'research_failed';
 export const failureCopy: Readonly<Record<FailureKind, Readonly<{ chat: string; voice: string }>>>;

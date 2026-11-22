@@ -27,6 +27,7 @@ describe('PI tool overview note', () => {
   it('stays within 1,500 characters with every area present and lists the connections', () => {
     const note = piCapabilityNote(registry, [bridge('gh_', 'GitHub', { state: 'idle' })]);
     expect(note.text.length).toBeLessThanOrEqual(1_500);
+    expect(note.text).toContain('use find_tools then call_tool for Jarvis tools, including weather, calendar and reminders');
     expect(note.text).toContain('GitHub=idle; Azure=not_configured');
     expect(note.text).toContain('Calendar: calendar_today_agenda');
     expect(note.text).toContain('Proactive findings');

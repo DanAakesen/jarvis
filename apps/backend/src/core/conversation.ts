@@ -820,6 +820,7 @@ return {
             let firstByteLogged = false;
             let agentIterator: AsyncIterator<ConversationAgentChunk> | undefined;
             let interrupted = false;
+            let receiptFailure: PiGatewayError | undefined;
             let invitationId: string | undefined;
             let foodResult: string | undefined;
             const invitations: string[] = [];
@@ -919,8 +920,11 @@ return {
               }
             } catch (error) {
               if (controller.signal.aborted) throw error;
-              if (!roundController.signal.aborted) throw error;
-              interrupted = true;
+              if (roundController.signal.aborted) interrupted = true;
+              else if (error instanceof PiGatewayError && error.receipt) {
+                receiptFailure = error;
+                partial = error.receipt;
+              } else throw error;
             } finally {
               unsubscribeInvitation();
               await agentIterator?.return?.();
@@ -959,7 +963,7 @@ return {
             if (interrupted) {
               throw new Error('Chat turn was interrupted without a steering message');
             }
-            if (foodResult) {
+            if (foodResult && !receiptFailure) {
               const presented = presentNutritionList(partial, foodResult);
               if (presented.startsWith(partial)) yield streamEvent('delta', { text: presented.slice(partial.length) });
               partial = presented;
@@ -995,7 +999,8 @@ return {
               } : {}),
             });
             if (!assistantMessage) throw new Error('Chat session ended');
-            publishActivity('ended');
+            if (receiptFailure) request.log.warn({ failure: receiptFailure.message }, 'conversation.reply_failed');
+            publishActivity(receiptFailure ? 'failed' : 'ended');
             try {
               app.notifyReply({ sessionId, messageId: assistantMessage.id });
             } catch {
@@ -1014,6 +1019,7 @@ return {
               }, 'visual.path');
             }
             yield streamEvent('done', { ...assistantMessage,
+              ...(receiptFailure ? { replyIncomplete: true } : {}),
               ...(agentPhaseTimings ? { agentTimings: agentPhaseTimings } : {}),
               ...(visualContext ? {
                 visualPath: visualResult?.visualPath ?? 'caption',

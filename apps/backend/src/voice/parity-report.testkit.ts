@@ -12,8 +12,8 @@ const without = (record: Record<string, unknown>, ...keys: string[]): Record<str
 
 /** What the owner got for one request, in terms both channels can be compared on. */
 export interface TurnExperience {
-  /** `reply` and `failure` are an answer; `stopped` is the chat notice for a cancelled turn; `silence` is a voice turn that said nothing. */
-  readonly kind: 'reply' | 'failure' | 'stopped' | 'silence';
+  /** A receipt reports recorded outcomes without pretending the model finished the reply. */
+  readonly kind: 'reply' | 'receipt' | 'failure' | 'stopped' | 'silence';
   readonly reply: string | null;
   readonly failure: string | null;
   readonly failureCode: string | null;
@@ -177,7 +177,10 @@ export function observeChat(world: ParityWorld, turns: readonly ChatTurn[], opti
     const progress = turn.events.filter(event => event.name === 'acknowledgment' || event.name === 'commentary').map(event => collapse(String(event.data.text)));
     const done = turn.events.find(event => event.name === 'done');
     const error = turn.events.find(event => event.name === 'error');
-    if (done) return { kind: 'reply', reply: collapse(String(done.data.text)), failure: null, failureCode: null, progress };
+    if (done) return {
+      kind: done.data.replyIncomplete === true ? 'receipt' : 'reply',
+      reply: collapse(String(done.data.text)), failure: null, failureCode: null, progress,
+    };
     const text = collapse(String(error?.data.error ?? ''));
     const stopped = text === failureCopy.stopped.chat;
     return {
@@ -201,6 +204,9 @@ export function observeVoice(world: ParityWorld, calls: readonly VoiceCall[], op
     const rest = progress.length > 0 ? spoken.slice(progress[0]!.length).trim() : spoken;
     const outcome = outcomes[index] ?? 'none';
     if (outcome === 'ok') return { kind: 'reply', reply: rest, failure: null, failureCode: null, progress };
+    if (rest.endsWith(failureCopy.reply_not_written.voice) && (outcome === 'failed' || outcome === 'timeout')) {
+      return { kind: 'receipt', reply: rest, failure: null, failureCode: null, progress };
+    }
     if (outcome === 'failed' || outcome === 'timeout') return { kind: 'failure', reply: null, failure: rest, failureCode: null, progress };
     return { kind: 'silence', reply: null, failure: null, failureCode: null, progress };
   });
@@ -209,7 +215,7 @@ export function observeVoice(world: ParityWorld, calls: readonly VoiceCall[], op
   const unansweredSpeech: string[] = [];
   const spokenMessages = world.store.messages.filter(message => message.role === 'jarvis');
   for (const [index, turn] of experience.entries()) {
-    if (turn.kind === 'reply') continue;
+    if (turn.kind === 'reply' || turn.kind === 'receipt') continue;
     const spoken = collapse(commentary.filter(part => part.delegationId === delegations[index]).map(part => part.content).join(' '));
     if (!spoken) continue;
     for (let start = 0; start < spokenMessages.length; start += 1) {
@@ -248,7 +254,8 @@ const turnInputs = (observation: Observation) => observation.inputs.filter(input
 const chatLedger = (observation: Observation) => observation.ledger.filter(row => row.kind === 'chat');
 const dropActivation = (row: Record<string, unknown>) => without(row, 'activationType', 'activationSource');
 
-const answered = (observation: Observation) => observation.turns.filter(turn => turn.kind === 'reply' || turn.kind === 'failure');
+const answered = (observation: Observation) => observation.turns.filter(turn =>
+  turn.kind === 'reply' || turn.kind === 'receipt' || turn.kind === 'failure');
 
 /** The stored assistant texts. A spoken transcript also holds the first progress note, which chat shows but never stores. */
 function storedReplies(observation: Observation): string[] {

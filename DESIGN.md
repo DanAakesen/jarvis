@@ -297,6 +297,11 @@ If the app never saw the message accepted, restore it without replacing a newer
 draft and keep Retry. If the app saw it accepted, show that the reply is unconfirmed
 until history shows the linked answer. No additional dialog is introduced.
 
+When the backend knows a tool's outcome but the model stopped before writing the
+reply, use the ordinary reply bubble for the saved receipt, not Retry/Dismiss.
+Voice reads the same receipt. The receipt says the reply was not finished and
+does not present any unfinished model text as the answer.
+
 ## Factory approval friction (7 November 2026)
 
 A direct coding instruction should produce an acknowledgment and visible work

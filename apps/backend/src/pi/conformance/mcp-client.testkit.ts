@@ -37,9 +37,6 @@ export interface McpClient {
   openTurn(options?: { readonly wake?: boolean; readonly activation?: PiTurnGrant['activation'] }): ConformanceTurn;
   find(turn: ConformanceTurn, query: string): Promise<FindResult>;
   call(turn: ConformanceTurn, name: string, args: Json, timeoutMs?: number, callId?: string): Promise<CallResult>;
-  direct(turn: ConformanceTurn, name: string, args: Json, callId?: string): Promise<CallResult>;
-  /** The tools/list answer, without the rest of the catalogue. */
-  listDoorTools(): Promise<readonly string[]>;
   /** The full tools/list definitions, as the harness reads them. */
   listDoorDefinitions(): Promise<readonly { readonly name: string; readonly description?: string; readonly inputSchema?: Json }[]>;
 }
@@ -96,9 +93,9 @@ export function createMcpClient(options: {
     return result?.content?.[0]?.text;
   };
 
-  async function callTool(name: string, args: Json, timeoutMs = 20_000, callId?: string): Promise<CallResult> {
+  async function callTool(args: Json, timeoutMs = 20_000, callId?: string): Promise<CallResult> {
     const started = performance.now();
-    const answer = await rpc('tools/call', { name, arguments: args, ...(callId ? { _meta: { tool_call_id: callId } } : {}) }, timeoutMs);
+    const answer = await rpc('tools/call', { name: 'call_tool', arguments: args, ...(callId ? { _meta: { tool_call_id: callId } } : {}) }, timeoutMs);
     const durationMs = performance.now() - started;
     const text = contentText(answer.body);
     let envelope: { outcome?: string; result?: unknown } | undefined;
@@ -132,16 +129,10 @@ export function createMcpClient(options: {
         note: parsed.result?.note, raw: text ?? answer.raw,
       };
     },
-    call: (turn, name, args, timeoutMs, callId) => callTool('call_tool', { turn: turn.grant.turn, name, arguments: args }, timeoutMs, callId),
-    direct: (turn, name, args, callId) => callTool(name, { ...args, turn: turn.grant.turn }, undefined, callId),
+    call: (turn, name, args, timeoutMs, callId) => callTool({ turn: turn.grant.turn, name, arguments: args }, timeoutMs, callId),
     async listDoorDefinitions() {
       const answer = await rpc('tools/list');
       return ((answer.body?.result as { tools?: { name: string; description?: string; inputSchema?: Json }[] } | undefined)?.tools ?? []);
-    },
-    async listDoorTools() {
-      const answer = await rpc('tools/list');
-      const tools = (answer.body?.result as { tools?: { name: string }[] } | undefined)?.tools ?? [];
-      return tools.map((tool) => tool.name).sort();
     },
   };
 }

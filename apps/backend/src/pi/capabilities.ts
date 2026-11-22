@@ -34,7 +34,7 @@ export function piCapabilityNote(registry: ToolRegistry, bridges: readonly Remot
     .map((state) => state.replace(/ \(.*\)$/u, '').replace('=starting', '=idle'))
     .join(';');
   const head = [
-    '[Tools: use the directly exposed MCP tools when they fit; use find_tools then call_tool for the rest. GitHub (gh_) and Azure (az_) tools load only when named in a search; "idle", "starting", "stale" and "unreachable" are not freshly verified.]',
+    '[Tools: use find_tools then call_tool for Jarvis tools, including weather, calendar and reminders. GitHub (gh_) and Azure (az_) tools load only when named in a search; "idle", "starting", "stale" and "unreachable" are not freshly verified.]',
     `Connections: Jarvis=ready; ${states.join('; ')}.`,
   ].join('\n');
   const index = capabilityIndex(registry, MAX_NOTE_CHARACTERS - head.length - 1);
