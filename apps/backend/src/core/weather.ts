@@ -386,7 +386,7 @@ function logPhase(request: FastifyRequest, entry: PhaseLog): void {
 export function createWeatherModule(
   artifacts: Pick<WorkspaceHtmlArtifactStore, 'create'>,
   fetcher?: typeof fetch,
-  workspaceItems?: WorkspaceItemsStore,
+  workspaceItems?: Pick<WorkspaceItemsStore, 'record'>,
   timingOverrides: Partial<WeatherTiming> = {},
 ): BackendModule {
   const timing: WeatherTiming = {
@@ -537,6 +537,7 @@ export function createWeatherModule(
         viewId,
         view,
       });
+      let artifactSaved = false;
       try {
         const initialCommand = command('create', statusView(title, 'Getting current weather…'));
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
@@ -560,6 +561,7 @@ export function createWeatherModule(
           throw new ToolFailure('The weather report failed workspace validation.');
         }
         const artifact = await artifacts.create(ownerId, title, html, sources, jobSignal);
+        artifactSaved = true;
         if (!isHtmlArtifact(artifact)) throw new ToolFailure('The weather report failed artifact validation.');
         const workspaceItem = await workspaceItems.record(ownerId, {
           id: `html_app:${artifact.id}`,
@@ -618,8 +620,14 @@ export function createWeatherModule(
               ? 'Weather report was refused.'
               : 'Weather report could not be completed.');
           } catch {
+            if (artifactSaved) {
+              throw new ToolFailure('The weather report was saved, but its job status could not be updated.', { outcomeUnknown: true });
+            }
             throw new ToolFailure('Weather report failed and its job status could not be saved.');
           }
+        }
+        if (artifactSaved) {
+          throw new ToolFailure('The weather report was saved, but setting it up in the workspace did not finish.', { outcomeUnknown: true });
         }
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolFailure(controller.signal.aborted

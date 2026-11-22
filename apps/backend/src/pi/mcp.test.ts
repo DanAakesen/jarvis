@@ -1061,7 +1061,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
   });
 
   it('shortens a direct read without splitting emoji or cutting its receipt or confirmation', async () => {
-    const value = { rows: '😀'.repeat(15_000), receipt: { id: 'receipt-42', status: 'delivered' }, confirmation: 'The read finished.' };
+    const value = { rows: '😀"\n\\'.repeat(6_000), receipt: { id: 'receipt-42', status: 'delivered' }, confirmation: 'The read finished.' };
     const read = counting('calendar_list_events', { defaultEffect: 'read' }, () => value);
     const { registry, tool, ledger } = setup([], { tools: [read.tool] });
     const grant = open(registry);
@@ -1069,13 +1069,52 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     const generic = await tool('call_tool', call(grant.turn, 'calendar_list_events', {}));
     expect(direct.body).toEqual(generic.body);
     expect(direct.body).toMatchObject({
-      outcome: 'ok', confirmation: 'Done: calendar_list_events succeeded.',
+      outcome: 'ok', confirmation: 'Done: calendar_list_events succeeded. Result shortened.',
       result: { truncated: true, totalCharacters: JSON.stringify(value).length, receipt: value.receipt, confirmation: value.confirmation },
     });
     const result = direct.body?.result;
-    expect(result.preview).toMatch(/^\{"rows":"😀+$/u);
+    const rows: string = JSON.parse(result.preview).rows;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(value.rows.length);
+    expect(rows).not.toMatch(/[\uD800-\uDFFF]/u);
+    expect(value.rows.startsWith(rows)).toBe(true);
     expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
     expect(ledger().map(({ truncated }) => truncated)).toEqual([true, true]);
+  });
+
+  it('keeps a cursor and status fields at the tail of an oversized object result', async () => {
+    const rows = [{ text: 'a'.repeat(12_000) }, { text: 'b'.repeat(13_000) }];
+    const paging = {
+      next: { date: '2026-11-22', key: 'b' },
+      hasMore: true,
+      pageInfo: { endCursor: 'cursor-2', hasNextPage: true },
+      coverage: { continuation: { rows: 'cursor-2' } },
+      warning: 'These are retained records, not live data.',
+      status: 'available',
+    };
+    const value = { rows, ...paging, truncated: false };
+    const read = counting('probe_paged_read', { defaultEffect: 'read' }, () => value);
+    const { registry, tool } = setup([], { tools: [read.tool] });
+    const grant = open(registry);
+    grant.discovered.add(read.tool.name);
+    const cut = await tool('call_tool', call(grant.turn, read.tool.name, {}));
+    const result = cut.body?.result;
+    expect(result).toMatchObject({ ...paging, sourceTruncated: false, truncated: true, totalCharacters: JSON.stringify(value).length });
+    expect(JSON.parse(result.preview)).toEqual({ rows: rows.slice(0, 1) });
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
+  });
+
+  it('says when the first item is too large rather than returning an apparently empty array', async () => {
+    const value = [{ text: 'x'.repeat(25_000) }, { text: 'second row' }];
+    const read = counting('probe_large_item', { defaultEffect: 'read' }, () => value);
+    const { registry, tool } = setup([], { tools: [read.tool] });
+    const grant = open(registry);
+    grant.discovered.add(read.tool.name);
+    const cut = await tool('call_tool', call(grant.turn, read.tool.name, {}));
+    expect(cut.body?.result).toMatchObject({
+      preview: '', truncated: true, totalCharacters: JSON.stringify(value).length,
+      note: 'Result shortened; the first array item did not fit, so narrow the query.',
+    });
   });
 
   it('returns a large write and its receipt in full, including on replay', async () => {

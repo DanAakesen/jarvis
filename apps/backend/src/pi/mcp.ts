@@ -22,7 +22,12 @@ const maxFullResults = 3;
 const maxOtherResults = 5;
 const maxResultCharacters = 24_000;
 const resultShortenedNote = 'Result shortened; narrow the query by limit, date range or path and call again.';
-const resultEvidenceKeys = new Set(['confirmation', 'receipt', 'receipts', 'verifiedRef']);
+const firstItemOmittedNote = 'Result shortened; the first array item did not fit, so narrow the query.';
+const resultMetadataKeys = new Set([
+  'confirmation', 'receipt', 'receipts', 'verifiedRef',
+  'next', 'nextCursor', 'nextPageToken', 'nextOffset', 'nextLink', 'hasMore', 'pageInfo', 'page', 'perPage', 'offset', 'limit',
+  'coverage', 'incompleteResults', 'partial', 'status', 'truncated', 'warning', 'warnings',
+]);
 const quickTools = new Set(['weather', 'calendar_list_events', 'owner_reminders']);
 /** The largest body a tool route accepts is 2 MiB (HTML apps); the door adds only a turn reference and a name around the arguments. */
 const maxDoorBodyBytes = 2 * 1024 * 1024 + 16 * 1024;
@@ -74,38 +79,71 @@ function say(body: { readonly outcome: Outcome } & Record<string, unknown>, isEr
   return { reply: text(body, isError), outcome: body.outcome, ...extra };
 }
 
-function shortenResult(result: unknown) {
-  const serialized = JSON.stringify(result);
-  if (serialized === undefined || serialized.length <= maxResultCharacters) return undefined;
-  const fields = result !== null && typeof result === 'object' && !Array.isArray(result) ? Object.entries(result) : [];
-  const evidence = Object.fromEntries(fields.filter(([key]) => resultEvidenceKeys.has(key)));
-  const shortened = { ...evidence, truncated: true, totalCharacters: serialized.length, preview: '', note: resultShortenedNote };
-  // Budget the encoded preview, including quote/backslash escaping; evidence stays whole even if it alone exceeds the budget.
-  let remaining = maxResultCharacters - JSON.stringify(shortened).length;
-  if (Array.isArray(result)) {
+/** JSON carried in `preview` is itself escaped as a string. Its two outer quotes are already budgeted. */
+const previewCost = (json: string) => JSON.stringify(json).length - 2;
+
+function jsonPreview(value: unknown, budget: number, omitFirstItem: () => void): string | undefined {
+  if (Array.isArray(value)) {
     const entries: string[] = [];
-    remaining -= 2; // Brackets, even when the first element will not fit.
-    for (const entry of result) {
+    let remaining = budget - 2;
+    for (const entry of value) {
       const item = JSON.stringify(entry) ?? 'null';
-      const cost = JSON.stringify(item).length - 2 + (entries.length > 0 ? 1 : 0);
+      const cost = previewCost(item) + (entries.length > 0 ? 1 : 0);
       if (cost > remaining) break;
       entries.push(item);
       remaining -= cost;
     }
-    shortened.preview = `[${entries.join(',')}]`;
-  } else {
-    const payload = Object.keys(evidence).length === 0
-      ? serialized
-      : JSON.stringify(Object.fromEntries(fields.filter(([key]) => !resultEvidenceKeys.has(key))));
+    if (entries.length === 0 && value.length > 0) {
+      omitFirstItem();
+      return undefined;
+    }
+    return budget >= 2 ? `[${entries.join(',')}]` : undefined;
+  }
+  if (value !== null && typeof value === 'object') {
+    if (budget < 2) return undefined;
+    const fields: string[] = [];
+    let remaining = budget - 2;
+    for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+      const prefix = `${fields.length > 0 ? ',' : ''}${JSON.stringify(key)}:`;
+      const prefixCost = previewCost(prefix);
+      if (prefixCost >= remaining) continue;
+      const item = jsonPreview(field, remaining - prefixCost, omitFirstItem);
+      if (item === undefined) continue;
+      fields.push(prefix + item);
+      remaining -= prefixCost + previewCost(item);
+    }
+    return `{${fields.join('')}}`;
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined || previewCost(serialized) <= budget) return serialized;
+  if (typeof value === 'string') {
+    const quoteCost = previewCost('""');
+    let remaining = budget - quoteCost;
     let end = 0;
-    for (const character of payload) {
-      const cost = character === '"' || character === '\\' ? 2 : character.length;
+    for (const character of value) {
+      const cost = previewCost(JSON.stringify(character)) - quoteCost;
       if (cost > remaining) break;
       end += character.length;
       remaining -= cost;
     }
-    shortened.preview = payload.slice(0, end);
+    if (end > 0) return JSON.stringify(value.slice(0, end));
   }
+  return undefined;
+}
+
+function shortenResult(result: unknown) {
+  const serialized = JSON.stringify(result);
+  if (serialized === undefined || serialized.length <= maxResultCharacters) return undefined;
+  const fields = result !== null && typeof result === 'object' && !Array.isArray(result)
+    ? Object.entries(result as Record<string, unknown>) : undefined;
+  const metadata = Object.fromEntries((fields ?? []).filter(([key]) => resultMetadataKeys.has(key))
+    .map(([key, value]) => [key === 'truncated' ? 'sourceTruncated' : key, value]));
+  const payload = fields ? Object.fromEntries(fields.filter(([key]) => !resultMetadataKeys.has(key))) : result;
+  const shortened = { ...metadata, truncated: true, totalCharacters: serialized.length, preview: '', note: resultShortenedNote };
+  // Keep paging, status and evidence whole, even when those fields alone exceed the budget.
+  const budget = maxResultCharacters - JSON.stringify(shortened).length -
+    Math.max(0, firstItemOmittedNote.length - resultShortenedNote.length);
+  shortened.preview = jsonPreview(payload, budget, () => { shortened.note = firstItemOmittedNote; }) ?? '';
   return shortened;
 }
 
@@ -504,17 +542,18 @@ export function createPiMcpRoutes(options: {
           // A 4xx or the 503 for a missing store answers before the tool starts; any other status can come after it ran.
           if (response.statusCode !== 200) return failed(response.statusCode >= 500 && response.statusCode !== 503);
           const serialized = response.body;
-          const parsed = JSON.parse(serialized) as { outcome?: unknown; result?: unknown };
+          const parsed = JSON.parse(serialized) as { outcome?: unknown; result?: unknown; confirmation: string };
           const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
           const outcomeUnknown = outcome === 'error' && typeof parsed.result === 'object' && parsed.result !== null &&
             (parsed.result as { outcomeUnknown?: unknown }).outcomeUnknown === true;
           grant.results.push({ tool: tool.name, outcome });
           if (outcome === 'ok' && effect === 'action') grant.actions.count += 1;
           const readOnly = effect === 'read' || (tool.execution === undefined && readOnlyTools.has(tool.name));
-          const shortened = outcome === 'ok' && readOnly ? shortenResult(parsed.result) : undefined;
+          // The capability catalogue has no page or range selector, so keep every tool and feature visible.
+          const shortened = outcome === 'ok' && readOnly && tool.name !== 'list_capabilities' ? shortenResult(parsed.result) : undefined;
           return {
             outcome, isError: parsed.outcome === 'error', truncated: shortened !== undefined,
-            text: shortened ? JSON.stringify({ ...parsed, result: shortened }) : serialized,
+            text: shortened ? JSON.stringify({ ...parsed, result: shortened, confirmation: `${parsed.confirmation} Result shortened.` }) : serialized,
             ...(outcomeUnknown ? { outcomeUnknown } : {}),
           };
         } catch {

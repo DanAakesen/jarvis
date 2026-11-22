@@ -156,6 +156,7 @@ export const factoryCases: Readonly<Record<string, readonly ToolCase[]>> = {
   resume_task: [ok('a paused task', { taskId: '103' }, (result) => expect(as<{ state: string }>(result).state).toBe('Running'))],
   cancel_task: [ok('a running task', { taskId: '105' }, (result) => expect(as<{ state: string }>(result).state).toBe('Cancelled'))],
   list_capabilities: [
+    ok('every tool and feature', {}, (result) => expect(as<{ tools: unknown[]; features: unknown[] }>(result).features.length).toBeGreaterThan(0)),
     ok('one tool’s schema', { tool: 'create_issue' }, (result) => expect(as<{ name: string }>(result).name).toBe('create_issue')),
   ],
   repo_overview: [

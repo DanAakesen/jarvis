@@ -29,7 +29,7 @@ Chat and Voice now queue on the shared conversation rather than returning `busy`
 
 ### P0 follow-up: smaller reads and direct quick tools
 
-After #2023, the MCP door shortens successful read results over 24,000 characters without cutting write results, confirmations or receipts. Chat, Voice and wakes can call `weather`, `calendar_list_events` and `owner_reminders` directly through the same dispatcher and replay checks. Three Danish phrases now find #2025's `proactive_message_feedback` in the top three on the first search. Offline coverage and the generated conformance table are in place; changes in search count and input tokens are not measured live.
+After #2023, the MCP door shortens successful read results over 24,000 characters without cutting paging details, write results, confirmations or receipts. `list_capabilities` stays whole because its catalogue cannot be paged. Chat, Voice and wakes can call `weather`, `calendar_list_events` and `owner_reminders` directly through the same dispatcher and replay checks. Three Danish phrases now find #2025's `proactive_message_feedback` in the top three on the first search. Offline coverage and the generated conformance table are in place; changes in search count and input tokens are not measured live.
 
 ### Completed 20–21 November
 

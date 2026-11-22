@@ -408,17 +408,34 @@ describe('weather report path', () => {
       },
       log: { info: (fields: Logged, event: string) => logs.push({ ...fields, event }) },
     } as unknown as FastifyRequest;
-    const weather = createWeatherModule({ create: async () => { throw new Error('no artifact'); } }, fetcher, {} as never, timing).tools[0]!;
-    return { logs, calls, tracker, run: (signal: AbortSignal) => weather.execute({ location: 'Copenhagen', days: 2 }, req, signal) };
+    const create = vi.fn<Parameters<typeof createWeatherModule>[0]['create']>(async () => { throw new Error('no artifact'); });
+    const record = vi.fn(async () => { throw new ToolFailure('The workspace item could not be recorded.'); });
+    const weather = createWeatherModule({ create }, fetcher, { record }, timing).tools[0]!;
+    return { logs, calls, tracker, create, record, run: (signal: AbortSignal) => weather.execute({ location: 'Copenhagen', days: 2 }, req, signal) };
   }
 
   it('fails with the provider cause and one report log when the forecast times out twice', async () => {
     const { logs, tracker, run } = reporting({ forecast: ['stall', 'stall'] });
     const failure = await run(new AbortController().signal).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(ToolFailure);
+    expect(failure).toHaveProperty('outcomeUnknown', false);
     expect((failure as Error).message).toBe('The weather provider did not answer in time at the forecast step after 2 tries.');
     expect(logs.filter((entry) => entry.phase === 'report')).toEqual([expect.objectContaining({ phase: 'report', outcome: 'timeout', attempt: 1, event: 'weather.phase' })]);
     expect(tracker.fail).toHaveBeenCalledWith('Weather report could not be completed.');
+  });
+
+  it('reports partial completion when the report is saved but the workspace item fails', async () => {
+    const { create, record, tracker, run } = reporting({});
+    create.mockImplementationOnce(async (_owner, title, html, sources) => ({
+      id: '00000000-0000-4000-8000-000000000123', kind: 'html', title, html, sources,
+      createdAt: '2026-11-22T10:00:00.000Z', pinned: false,
+    }));
+    await expect(run(new AbortController().signal)).rejects.toMatchObject({
+      name: 'ToolFailure', outcomeUnknown: true,
+      message: 'The weather report was saved, but setting it up in the workspace did not finish.',
+    });
+    expect(record).toHaveBeenCalledOnce();
+    expect(tracker.fail).toHaveBeenCalledOnce();
   });
 
   it('stops when the caller aborts, closes the job and logs no report outcome', async () => {

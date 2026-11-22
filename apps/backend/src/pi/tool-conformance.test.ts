@@ -357,7 +357,7 @@ describe('size: the door bounds what the model sees without changing what the to
     expect(done.outcome, `create_html_view answered ${done.outcome} ("${done.message ?? ''}")`).toBe('ok');
   });
 
-  it('shortens the full capability list only at the door, without changing the route’s tools or features', async () => {
+  it('returns the full capability list through the door even when it exceeds the read budget', async () => {
     const turn = world.client.openTurn();
     try {
       const response = await world.app.inject({
@@ -371,11 +371,12 @@ describe('size: the door bounds what the model sees without changing what the to
       expect(full.outcome).toBe('ok');
       expect(full.result.tools.length).toBeGreaterThan(0);
       expect(full.result.features.length).toBeGreaterThan(0);
+      expect(JSON.stringify(full.result).length).toBeGreaterThan(24_000);
       await world.client.find(turn, 'list_capabilities');
-      const preview = await world.client.call(turn, 'list_capabilities', {});
-      expect(preview.outcome).toBe('ok');
-      expect(preview.result).toMatchObject({ truncated: true, totalCharacters: JSON.stringify(full.result).length });
-      expect(JSON.stringify(preview.result).length).toBeLessThanOrEqual(24_000);
+      const catalogue = await world.client.call(turn, 'list_capabilities', {});
+      expect(catalogue.outcome).toBe('ok');
+      expect(catalogue.truncated).toBe(false);
+      expect(catalogue.raw).toBe(response.body);
     } finally {
       turn.close();
     }

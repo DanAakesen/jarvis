@@ -127,7 +127,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `inbox_items` | notes | chat and voice | read | ok | "what is in my inbox" (en, #3) | ok (4 calls) | 64 |  |
 | `inbox_trail` | pi | background wake | action | ok | "Add one dated line to an inbox item's trail, for example that I nudge…" (derived, #1) | ok | 49 |  |
 | `issue_comment` | factory | chat and voice | action | ok | "Post a comment directly to a GitHub issue" (derived, #1) | ok | 200 |  |
-| `list_capabilities` | factory | chat and voice | unclassified | ok | "what can you do" (en, #2) | ok | 47 |  |
+| `list_capabilities` | factory | chat and voice | unclassified | ok | "what can you do" (en, #2) | ok (2 calls) | 47 |  |
 | `list_jobs` | core | chat and voice | unclassified | ok | "what jobs are running in the background" (en, #2) | ok | 16 |  |
 | `list_projects` | factory | chat and voice | unclassified | ok | "list my projects" (en, #1) | ok | 16 |  |
 | `list_releases` | factory | chat and voice | unclassified | ok | "List the recorded releases for an active Software Factory project" (derived, #1) | ok (2 calls) | 41 |  |
