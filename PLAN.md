@@ -5818,10 +5818,12 @@ voice. Transcription survives an audio interruption after Stop and never
 automatically sends the draft. An unavailable direct route falls through to
 the phone without waiting for connectivity. Once a route has settled, an
 active capture can rebuild its graph at most twice per ten seconds; further
-instability offers Retry. Next: macOS Watch build, then Dan's paired-Watch
-checks in `docs/agent-context.md`. Build 120's dictation cause and hardware
-acceptance remain open. The no-buffer watchdog and tests that drive the Watch
-app's audio/companion wiring are follow-ups.
+instability offers Retry. Native CI caught route-recovery callbacks reading
+Watch state outside the main actor. The corrected model type-checks
+against JarvisCore and Linux platform stubs. Next: macOS Watch rebuild, then
+Dan's paired-Watch checks in `docs/agent-context.md`. Build 120's dictation
+cause and hardware acceptance remain open. The no-buffer watchdog and tests
+that drive the Watch app's audio/companion wiring are follow-ups.
 
 ## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
 

@@ -498,7 +498,7 @@ final class WatchModel: ObservableObject {
     private func transcribeDictation(_ recording: Data, epoch: UUID) async throws -> String {
         guard !recording.isEmpty else { throw WatchFailure.failed }
         let clipSeconds = WatchDictationDeadline.clipSeconds(bytes: recording.count)
-        let direct: (@MainActor () async throws -> String)?
+        let direct: (@MainActor @Sendable () async throws -> String)?
         do {
             if connection.credentialStorageFailed { throw WatchFailure.credentialStorage }
             if try WatchDirectDictation.credential() != nil {
@@ -620,7 +620,7 @@ final class WatchModel: ObservableObject {
     }
     private func startAudioCapture(
         tolerateDrops: Bool, mode: AVAudioSession.Mode, alternateMode: AVAudioSession.Mode,
-        onReady: () -> Void = {}, isCurrent: () -> Bool
+        onReady: @MainActor @Sendable () -> Void = {}, isCurrent: @MainActor @Sendable () -> Bool
     ) async throws -> AsyncStream<Data> {
         try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: {
             try audio.startCapture(tolerateDrops: tolerateDrops, mode: mode, alternateMode: alternateMode)
@@ -696,17 +696,12 @@ final class WatchModel: ObservableObject {
         guard voice || dictationState == .listening,
               audioRouteRecovery == nil, audio.needsRouteRecovery(changedEngine: changedEngine) else { return }
         let epoch = voice ? voiceGeneration : dictationGeneration
-        audioRouteRecovery = Task { [weak self] in
+        audioRouteRecovery = Task { @MainActor [weak self] in
             guard let self else { return }
-            func isCurrent() -> Bool {
-                !Task.isCancelled && (voice
-                    ? self.voiceGeneration == epoch && !self.endingVoice
-                    : self.dictationGeneration == epoch && self.dictationState == .listening)
-            }
-            func fail(_ reason: String) {
-                self.voiceLogger.error("Audio route recovery failed: \(reason, privacy: .public)")
-                if voice { self.failVoice("Audio changed and voice couldn’t reconnect.", reason: reason) }
-                else { self.failDictation("Audio changed and dictation couldn’t continue. Tap Message to type instead.") }
+            let isCurrent: @MainActor @Sendable () -> Bool = {
+                guard !Task.isCancelled else { return false }
+                if voice { return self.voiceGeneration == epoch && !self.endingVoice }
+                return self.dictationGeneration == epoch && self.dictationState == .listening
             }
             defer {
                 if isCurrent() {
@@ -717,9 +712,12 @@ final class WatchModel: ObservableObject {
             do {
                 try await Task.sleep(for: WatchVoiceRecovery.RouteBudget.settleDelay)
                 guard isCurrent() else { return }
-                switch self.audioRouteBudget.decide(needsRestart: self.audio.needsRouteRecovery()) {
+                let needsRestart = self.audio.needsRouteRecovery()
+                switch self.audioRouteBudget.decide(needsRestart: needsRestart) {
                 case .unchanged: return
-                case .exhausted: fail("audio_route_recovery_limit"); return
+                case .exhausted:
+                    self.failRouteRecovery(voice: voice, reason: "audio_route_recovery_limit")
+                    return
                 case .restart: break
                 }
                 self.repairingAudio = true
@@ -737,9 +735,14 @@ final class WatchModel: ObservableObject {
                 self.voiceLogger.info("Audio route recovered")
             } catch {
                 guard isCurrent() else { return }
-                fail("audio_route_restart_failed")
+                self.failRouteRecovery(voice: voice, reason: "audio_route_restart_failed")
             }
         }
+    }
+    private func failRouteRecovery(voice: Bool, reason: String) {
+        voiceLogger.error("Audio route recovery failed: \(reason, privacy: .public)")
+        if voice { failVoice("Audio changed and voice couldn’t reconnect.", reason: reason) }
+        else { failDictation("Audio changed and dictation couldn’t continue. Tap Message to type instead.") }
     }
     private func cancelRouteRecovery() {
         audioRouteRecovery?.cancel()

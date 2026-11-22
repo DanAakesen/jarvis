@@ -40,11 +40,11 @@ public enum WatchVoiceRecovery {
     /// Resetting a failed capture can also clear playback's handler. Install it only on the ready graph.
     @MainActor
     public static func startCapture<Capture>(
-        isCurrent: () -> Bool,
-        start: () throws -> Capture,
-        onFailure: (Int, Error) -> Void,
-        onReady: () -> Void = {},
-        wait: () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) }
+        isCurrent: @MainActor () -> Bool,
+        start: @MainActor () throws -> Capture,
+        onFailure: @MainActor (Int, Error) -> Void,
+        onReady: @MainActor () -> Void = {},
+        wait: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) }
     ) async throws -> Capture {
         var attempt = 1
         while true {
@@ -66,9 +66,9 @@ public enum WatchVoiceRecovery {
     /// Reachability alone isn't a recovery: confirm the same phone session within one overall deadline.
     @MainActor
     public static func reconnect(
-        now: () -> ContinuousClock.Instant = { .now },
-        wait: (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        heartbeat: (Duration) async throws -> Void
+        now: @MainActor () -> ContinuousClock.Instant = { .now },
+        wait: @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        heartbeat: @MainActor (Duration) async throws -> Void
     ) async throws {
         let deadline = now().advanced(by: .seconds(reconnectGraceSeconds))
         while true {

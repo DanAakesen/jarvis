@@ -1009,12 +1009,13 @@ On watchOS, a new capture uses a fresh graph and converts the actual tap
 format. After 250 ms for the route to settle, only a stopped graph or changed
 input/output ports trigger a rebuild on the same stream. A running graph
 does not restart just because the session reports a new rate or channel count.
-Allow two recoveries per capture in any ten-second window. The phone session
-ID and microphone packet sequence survive a rebuild; playback queued on the
-old route is stopped rather than replayed. A late callback from an earlier voice
-session cannot acknowledge playback on a new one. Watch Chat offers Retry if
-recovery fails or the route keeps changing past the limit. Paired-device audio
-remains unverified.
+The Watch checks that the capture is current, restarts the graph and reports
+failures on the main actor. JarvisCore's budget allows two recoveries per
+capture in any ten-second window. A rebuild preserves the phone session ID
+and microphone packet sequence and stops playback queued on the old route
+rather than replaying it. A late callback from an earlier voice session cannot
+acknowledge playback on a new one. Watch Chat offers Retry if recovery fails
+or the route keeps changing past the limit. Paired-device audio remains unverified.
 
 ## Home brief and daily activity implementation — 9 November 2026
 
