@@ -42,7 +42,7 @@ Determine which agent serves the affected path before changing a pin. Normal Cha
 ## Rotate credentials
 
 - **GitHub App key:** Generate a replacement while the old key still works. Write the PEM to the `github-app-private-key` Key Vault secret from a protected temporary file, verify metadata and one authorised App-backed operation, then retire the old key and remove the temporary file. The key never goes to a sandbox.
-- **GitHub webhook secret:** Write `github-app-webhook-secret` from a protected file, set the matching value in the GitHub App, and restart the backend to clear its cache. Verify recent deliveries after restart. Preserve the webhook URL and subscribed events.
+- **GitHub webhook secret:** Write `github-app-webhook-secret` from a protected file, set the matching value in the GitHub App, and restart the backend to clear its cache. In Recent Deliveries, redeliver failures from the rotation window and verify their 2xx responses. Preserve the webhook URL and subscribed events.
 - **Codex login:** Only re-seed when Settings reports **Action needed** and no Codex task or renewal is running. Use the Jarvis-only `CODEX_HOME`, not the operator's login. Write the resulting `auth.json` to `codex-login`, remove the temporary copy and let scheduled renewal verify health before starting another task.
 
 For a Key Vault update, use the file form of `az keyvault secret set` with the configured vault and `--output none`. Never pass a raw value on the command line or print secret readback. [Infrastructure setup](../infra/README.md) owns configuration names.

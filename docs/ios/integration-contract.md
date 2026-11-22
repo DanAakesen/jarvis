@@ -80,7 +80,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 - The pending confirmation is held in the memory of the one backend instance (the deployment is fixed at one replica), so a restart ends it. The app treats 404 as no longer available.
 - The app registers the `jarvis.approval` category with Approve and Decline actions, both marked `.authenticationRequired`. The handler makes one authenticated `POST /now/confirmations/:id` using the existing Keychain session, with an eight-second timeout and no retry.
 - The standard system notification permission prompt appears after sign-in and device unlock, before any approval exists. Denial prevents APNs registration; it does not block in-app approval.
-- The owner-only `POST /ios/approval-notifications` stores an APNs token, app language, time zone and preview-action preference; `DELETE` removes that device registration. After an approval is persisted/staged, the backend sends one APNs alert with `aps.alert`, `aps.category`, `aps.thread-id`, `aps.sound`, and top-level `confirmationID`. The body contains the bounded server summary and localized absolute expiry. Hidden previews select the no-actions category.
+- The owner-only `POST /ios/approval-notifications` stores an APNs token, time zone and preview-action preference; `DELETE` removes that device registration. After an approval is persisted/staged, the backend sends one APNs alert with `aps.alert`, `aps.category`, `aps.thread-id`, `aps.sound`, and top-level `confirmationID`. The body contains the bounded server summary and localized absolute expiry. The last registered `showActions` value selects the category; a changed preview setting may not be registered yet. Verify on a device that setting previews to Never and refreshing registration suppresses Approve and Decline.
 - There is no local-notification duplicate: `/now` only reconciles old local alerts and stale delivered alerts; foreground remote banners are suppressed while Chat shows the action bar. Own-device decisions dismiss the delivered notification. The backend does not send a second lifecycle push when another device resolves/expires an approval, so a lock-screen alert can remain until refresh; the existing endpoint rejects stale IDs.
 - APNs uses `apns-push-type: alert`, the app bundle topic, priority 10 and the confirmation expiry as the delivery expiration. These are actionable user notifications, not approval Live Activities. Existing task Live Activity updates remain separate.
 
@@ -203,7 +203,7 @@ shared contract code cited below.
   return 404. Bodies are strict and bounded; invalid requests return 400,
   store failures 503. These routes and lift reads are owner-only; the Jarvis
   agent token does not have access.
-- iPhone Gym also has a Vault-backed capture flow through `POST /health/lifts/capture`. See the [lift routes](../../apps/backend/src/health/routes/lifts.ts) and [Gym tool](../../apps/backend/src/health/tools/gym.ts).
+- Watch free-form lift capture uses `POST /health/lifts/capture` via the phone bridge. iPhone Gym saves a Vault note through `POST /notes`. The [Gym tool](../../apps/backend/src/health/tools/gym.ts) reads the Vault Gym notes as well as SQL lift history. See the [lift routes](../../apps/backend/src/health/routes/lifts.ts).
 
 ## 14. Usage, Status and Proactive
 
