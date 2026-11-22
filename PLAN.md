@@ -46,6 +46,18 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed and not audit
 8. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
 9. P1, proactive intelligence, ranks after P0. This summary plans no P1 steps. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence").
 
+## Wake path matches Chat — 21 November 2026 (#1967)
+
+**Status: implemented and offline-tested; the PR's exact-head CI is the gate. No wake has run in production, so how a real wake uses the overview is unobserved.**
+
+| Step | State |
+| --- | --- |
+| Give `runBrain` the tool overview note Chat gets once per conversation, through the one gateway helper (`overviewFor`), with no second copy of the logic | Done |
+| A wake never touches the "overview sent" state of Dan's Chat conversation | Done |
+| Parity test: the tools `find_tools` shows a wake equal Chat's plus the brain-only tools; a failure lists the differences | Done |
+| Parity test: a wake turn and a Chat turn share the turn line, trusted context, environment note and overview, in the same order | Done |
+| Confirm in a real trace that a wake receives and uses the overview | Open; needs a live wake |
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: merged as #2004 on 21 November (21:47 UTC); classification, follow-up loop and offline tests done. A live Chat retest ("use a sub-agent to check my calendar") is pending.**

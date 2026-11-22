@@ -256,6 +256,7 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 ## PI tool loading and discovery — 21 November 2026 (#1967)
 
 - `cd apps/backend && npx vitest run src/pi src/core/owner-message.test.ts src/core/conversation-progress.test.ts`, then backend build and lint. GitHub and Azure bridges start idle and load only when a `find_tools` query names them; do not add startup warm-ups. The Danish/English alias table is `intentAliases` in `pi/tool-search.ts`. No live model, Foundry, MCP or paid run is part of these checks; Dan owns physical acceptance.
+- Wake = Chat parity (`pi/gateway.test.ts`: "a brain wake opens like a new chat conversation"; `pi/mcp.test.ts`: "finds through find_tools what chat finds, plus exactly the tools only a wake has"): `cd apps/backend && npx vitest run src/pi/gateway.test.ts src/pi/mcp.test.ts`. A tool the brain factory (`createBrainTools`) registers must be listed in `brainOnlyTools` (`pi/brain/policy.ts`), or the discovery test fails with the tools that differ; a wake-only tool from another factory (like `watch_look`) is also named in that test. A wake gets Chat's tool overview through `overviewFor` in `pi/gateway.ts`; do not build a second copy. Offline only: no live wake, model call or `measure_pi`.
 
 ## Azure MCP cold start — 17 November 2026 (#1910, P15-208)
 
