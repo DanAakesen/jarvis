@@ -1398,6 +1398,15 @@ describe('PI gateway', () => {
         ['the text parts of one message closed by done events are reconciled by content index', [
           [created('resp_1'), textDelta(first, 'msg_1', 0, 0), textDone(first, 'msg_1', 0, 0), textDone(second, 'msg_1', 0, 1), completed(9, 3, 4)],
         ], ok(first + second, [9, 3, 4])],
+        ['an empty done text records nothing: the completed output still matches the unnamed deltas', [
+          [created('resp_1'), delta(first), textDone(''), finished([finalMessage(first)], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
+        ['only the output_text parts of a message are reply text: other items and other parts are not', [
+          [created('resp_1'), finished([
+            { type: 'reasoning', id: 'rs_1', content: [{ type: 'output_text', text: 'private thoughts' }] },
+            { type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'refusal', refusal: 'No.' }, { type: 'summary_text', text: 'ignored' }, { type: 'output_text', text: first }] },
+          ], 9, 3, 4)],
+        ], ok(first, [9, 3, 4])],
         ['text that only a done event brings, for an item first seen after a call, is output after the call', [
           [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), textDone(second, 'msg_9', 3), completed(11, 2, 7)],
         ], ok(second, [11, 2, 7], [], ['native:later_output'])],
@@ -1477,6 +1486,16 @@ describe('PI gateway', () => {
         const { run, calls } = setup([() => sse(created('resp_1'), ...frames, finished(items.map(({ id, text }) => finalMessage(text, id)), 5, 0, 5))]);
         expect((await run('hi')).filter(chunk => typeof chunk === 'string').join('')).toBe(items.map((item, index) => (index < 2_048 ? item.text : item.streamed)).join(''));
         expect(responsesOf(calls)).toHaveLength(1);
+      });
+
+      it.each([
+        ['the completed output', [created('resp_1'), finished([finalMessage(first), { ...statusless, status: 'completed' }], 10, 2, 5)], 'client_owned'],
+        ['a done event', [created('resp_1'), ...functionCall('lookup', 'call_1', '{}'), textDone(first, 'msg_9', 3), completed(10, 2, 5)], 'native'],
+      ])('counts reply text that only %s carried as text in the log of the call', async (_name, frames, classification) => {
+        const { logs, log } = capture();
+        const { run } = setup([() => sse(...frames), () => sse(created('resp_2'), delta(second), completed(12, 4, 6))], { log });
+        await run('hi');
+        expect(harnessCalls(logs)).toEqual([expect.objectContaining({ classification, sawText: true })]);
       });
 
       it.each([
