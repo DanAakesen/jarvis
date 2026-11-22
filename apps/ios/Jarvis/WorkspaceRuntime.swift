@@ -53,6 +53,8 @@ final class WorkspaceRuntime: ObservableObject {
     private var lastPresentedViewId: String?
     private var trustedBlobHost: String?
     private var sessionGeneration = 0
+    private var mapLookups: [String: Task<Void, Never>] = [:]
+    weak var mapVoice: VoiceScreenModel?
 
     private var language: JarvisAppLanguage {
         .default
@@ -68,6 +70,7 @@ final class WorkspaceRuntime: ObservableObject {
     func run() async {
         guard let workspaceClient else { return }
         let generation = sessionGeneration
+        defer { if generation == sessionGeneration { cancelMapLookups() } }
         do {
             for try await event in workspaceClient.events() {
                 guard !Task.isCancelled, generation == sessionGeneration else { return }
@@ -83,10 +86,17 @@ final class WorkspaceRuntime: ObservableObject {
                         updateConnectionStatus(for: error)
                     }
                 case .workspaceCommand(let command, let expiresAtMilliseconds, let host):
-                    await handle(command, expiresAtMilliseconds: expiresAtMilliseconds, trustedBlobHost: host)
+                    if command.operation == "apple-maps" {
+                        startMapLookup(command, expiresAt: expiresAtMilliseconds, using: workspaceClient)
+                    } else {
+                        await handle(command, expiresAtMilliseconds: expiresAtMilliseconds, trustedBlobHost: host)
+                    }
+                case .workspaceCancel(let id):
+                    mapLookups.removeValue(forKey: id)?.cancel()
                 case .connectionInterrupted:
+                    cancelMapLookups()
                     connectionStatus = .reconnecting
-                case .pendingConfirmationsChanged, .activityChanged, .factoryBoardChanged, .chatToolActivity, .workspaceCancel, .unknown:
+                case .pendingConfirmationsChanged, .activityChanged, .factoryBoardChanged, .chatToolActivity, .unknown:
                     break
                 }
             }
@@ -99,6 +109,8 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     func resetSession() {
+        cancelMapLookups()
+        JarvisAppleMapsStore.shared.clear()
         sessionGeneration += 1
         workspaceClient = client.map { JarvisWorkspaceClient(client: $0) }
         knownViews.removeAll()
@@ -242,6 +254,58 @@ final class WorkspaceRuntime: ObservableObject {
         return true
     }
 
+    private func cancelMapLookups() {
+        for lookup in mapLookups.values { lookup.cancel() }
+        mapLookups.removeAll()
+    }
+
+    private func startMapLookup(_ command: WorkspaceCommand, expiresAt: Int64, using client: JarvisWorkspaceClient) {
+        let id = command.commandId
+        let remaining = Double(expiresAt) / 1_000 - Date().timeIntervalSince1970
+        guard mapLookups[id] == nil, remaining > 0 else { return }
+        mapLookups[id] = Task {
+            let deadline = Task {
+                do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
+                mapLookups.removeValue(forKey: id)?.cancel()
+            }
+            defer {
+                deadline.cancel()
+                if !Task.isCancelled { mapLookups[id] = nil }
+            }
+            do {
+                guard UIApplication.shared.applicationState == .active else {
+                    try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: false,
+                        outcome: .refused, reason: "Open Jarvis on the iPhone to search Apple Maps.")
+                    return
+                }
+                guard let request = AppleMapsRequest(command: command) else {
+                    try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: false,
+                        outcome: .refused, reason: "The phone could not read the Apple Maps request.")
+                    return
+                }
+                let lookup = try await JarvisAppleMapsStore.shared.lookup(lookupId: id, request: request)
+                guard lookup.status != .unavailable else {
+                    try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: false,
+                        outcome: .error, reason: "Apple Maps is unavailable on the phone.")
+                    return
+                }
+                let spoken: Bool
+                if command.fields["speakResult"] == .bool(true), let mapVoice {
+                    spoken = await mapVoice.speakAppleMaps(lookup.result)
+                } else {
+                    spoken = false
+                }
+                try Task.checkCancellation()
+                let receipt = WorkspaceMapReceipt(matches: lookup.result.places.count, spoken: spoken, reason: lookup.status)
+                try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: true, mapReceipt: receipt)
+            } catch {
+                if !Task.isCancelled, let error = error as? JarvisWorkspaceClientError, error == .staleConnection {
+                    updateConnectionStatus(for: error)
+                }
+            }
+        }
+    }
+
     private func handle(
         _ command: WorkspaceCommand,
         expiresAtMilliseconds: Int64,
@@ -349,7 +413,7 @@ final class WorkspaceRuntime: ObservableObject {
         try await workspaceClient.register(WorkspaceSnapshot(
             windows: windows,
             contextPanelOpen: false,
-            device: WorkspaceDevice(kind: .phone, label: "iPhone")
+            device: WorkspaceDevice(kind: .phone, label: "iPhone", appleMaps: true)
         ))
     }
 

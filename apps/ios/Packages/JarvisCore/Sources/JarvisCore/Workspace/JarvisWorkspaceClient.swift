@@ -118,7 +118,8 @@ public final class JarvisWorkspaceClient: Sendable {
         expiresAtMilliseconds: Int64,
         applied: Bool,
         outcome: WorkspaceCommandOutcome? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        mapReceipt: WorkspaceMapReceipt? = nil
     ) async throws {
         guard Self.validCommandID(commandId),
               expiresAtMilliseconds > 0,
@@ -142,7 +143,8 @@ public final class JarvisWorkspaceClient: Sendable {
                 sessionId: sessionId,
                 applied: applied,
                 outcome: outcome,
-                reason: reason
+                reason: reason,
+                mapReceipt: mapReceipt
             ))
         } catch {
             throw JarvisClientError.responseEncodingFailure
@@ -327,6 +329,7 @@ private struct WorkspaceAcknowledgementRequest: Encodable {
     let applied: Bool
     let outcome: WorkspaceCommandOutcome?
     let reason: String?
+    let mapReceipt: WorkspaceMapReceipt?
 }
 
 private struct WorkspaceReadyEvent: Decodable {

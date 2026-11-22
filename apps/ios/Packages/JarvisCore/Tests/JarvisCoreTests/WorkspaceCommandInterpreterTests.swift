@@ -54,6 +54,42 @@ final class WorkspaceCommandInterpreterTests: XCTestCase {
             return XCTFail("expected a refusal")
         }
     }
+
+    func testAppleMapsInputAndBufferedArrival() throws {
+        var fields: [String: JSONValue] = ["target": .string("phone"), "query": .string("Museum"),
+            "origin": .string("Central Station"), "mode": .string("walking"), "arriveBy": .string("2026-11-23T09:00:00.000+01:00"),
+            "bufferMinutes": .number(10)]
+        let request = try XCTUnwrap(AppleMapsRequest(command: command("apple-maps", fields)))
+        XCTAssertEqual(request.mode, "walking")
+        XCTAssertEqual(request.arrivalDate, ISO8601DateFormatter().date(from: "2026-11-23T07:50:00Z"))
+        fields["arriveBy"] = .string("tomorrow morning")
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields)))
+        fields["arriveBy"] = nil
+        fields["origin"] = nil
+        fields["searchOnly"] = .bool(true)
+        XCTAssertEqual(AppleMapsRequest(command: command("apple-maps", fields))?.searchOnly, true)
+        fields["target"] = .string("web")
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields)))
+    }
+
+    func testAppleMapsSamplesOnlyRealIndicesAndCoarsensTheDeviceOrigin() {
+        XCTAssertEqual(AppleMapsRequest.sampleIndices(pointCount: 1), [0])
+        let samples = AppleMapsRequest.sampleIndices(pointCount: 10_000)
+        XCTAssertEqual(Set(samples).count, 64)
+        XCTAssertEqual(samples.first, 0)
+        XCTAssertEqual(samples.last, 9_999)
+        let point = AppleMapsPoint(latitude: 56.12345678, longitude: 10.12345678)
+        let coarse = AppleMapsRequest.approximate(point)
+        XCTAssertEqual(coarse.latitude, 56.123)
+        XCTAssertNotEqual(coarse.longitude, point.longitude)
+        XCTAssertEqual(coarse, AppleMapsRequest.approximate(coarse))
+    }
+
+    func testAppleMapsReceiptContainsOnlyTheCountSpeechFlagAndReason() throws {
+        let receipt = WorkspaceMapReceipt(matches: 2, spoken: true, reason: .needsOrigin)
+        let wire = try JSONDecoder().decode([String: JSONValue].self, from: JSONEncoder().encode(receipt))
+        XCTAssertEqual(wire, ["matches": .number(2), "spoken": .bool(true), "reason": .string("needs_origin")])
+    }
 }
 
 final class GeneratedViewPresentationTests: XCTestCase {

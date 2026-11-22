@@ -250,6 +250,7 @@ struct ContentView: View {
                         loadVoicePanelFixture()
                     }
 #endif
+                    workspaceRuntime.mapVoice = voiceModel
                     await workspaceRuntime.run()
                 }
                 .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in
