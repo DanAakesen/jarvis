@@ -18,14 +18,14 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | TestFlight **124** | Uploaded from `ee34f2c3e` by [run #124](https://github.com/DanAakesen/jarvis/actions/runs/45071501953). Dan reports tests 1 (project status and issue lookup), 2 (Notes), 3 (creating and completing a task), 6 (weather in the ongoing conversation) and 9 (one Proactive switch) passed. A separate request for the phone’s location failed. The channels were unspecified. Test 7 failed for iPhone Chat typing lag ([#2026](https://github.com/DanAakesen/jarvis/issues/2026)). The other checks, including the Voice part of test 7, await feedback. |
 | Backend | #2032 (Terra 600K capacity) and #2033 (tool access, rate-limit recovery; the iPhone Gym reads ship in the app) were deployed through [Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45064871117) before build 123/124. [Notes Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) succeeded from `ee34f2c3e`. Pipeline receipts do not prove live provider behavior. |
 | Repository and docs | Tracked files fell from 3,233 to 1.814 and tracked docs to about 3 MB; obsolete notes, handoffs, evidence, screenshots and prototypes are deleted (Git history keeps them). [`.github/copilot-instructions.md`](.github/copilot-instructions.md) is the source of truth and maps the key files; `AGENTS.md` only points to it. `p0.md`, `ui.md` and the key docs were rewritten to the current state. |
-| Background PI | Off by default in code; off per the 22 November handoff, not independently read back. Dan controls it in **Proactive suggestions** on the main Settings page. The existing 07:00/18:00 engine stays until decision A. |
+| Background PI | Dan turned it on in build 124. The Proactive page shows turns used, allowance and last activation. Live delivery awaits verification. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
 1. **Dan tests build 124** with the checks below. For any later change, the coordinator (the dispatcher session that reviews and merges PRs) checks that the exact head is current with `main`, required CI is green (including macOS for iOS), no unresolved threads or High findings remain, and the merge tree equals the qualified tree. Follow [Merge and release procedure](docs/agent-context.md#merge-and-release-procedure) and [TestFlight build](docs/agent-context.md#testflight-build). No live probes.
 2. **Test build 124 in daily-core order.** Ask the same things in Chat and Voice: project status and a GitHub issue; find, read and save a note (including a title-only note; check first-page visibility, pin title and a single reader headline); complete a task and verify its receipt; find a lift saved from iPhone Gym; read the nutrition totals on a logged day. Ask for weather via the existing conversation. Check iPhone typing, live Voice state/auto-scroll, then Watch dictation/voice and the single Proactive switch. Do not request a retest of a fix still in flight.
-3. **P1 after P0.** Dan decides when to enable Background PI. Verify the intended GitHub App event subscriptions (including `Release`) and observe one real wake with its signal, decision, and exact-message delivery before considering legacy deletion. The queue has GitHub, failed-reminder and calendar-clash signals. The heavy-snow/travel example is an acceptance goal, not a shipped end-to-end scenario.
+3. Verify a real Background PI wake and exact-message delivery. Replace the legacy engine while preserving Inbox nudges, then verify capture, follow-up and delivery against the Inbox acceptance checklist.
 
 **Unverified:** whether Foundry sends a usable `_meta` call ID (the ledger still works without one); real provider rate-limit message and cause (reported error code and offline fixtures are evidence, not a new live trace); iPhone follow/Voice label and Watch recovery on physical devices; real Background PI wake and delivery. Do not treat an offline replay or a merged fix as device acceptance.
 
@@ -33,12 +33,12 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | | Decision needed | Until then |
 | --- | --- | --- |
-| **A** | When to delete the old 07:00/18:00 proactive engine. | Keep it instrumented. Wait for one proven brain wake and Dan's decision. Deletion is parked at `1d912cda` on `danaakesen-shiny-carnival-engine-deletion`; not ready to merge. See [cutover gates](docs/pi/cutover.md). |
-| **B** | Should the Nutrition screen allow direct manual kcal entry? | Keep logging through the supported Food/Chat/Voice flow. Do not infer that manual entry shipped. |
+| **A** | Legacy proactive engine removal approved. | Move Inbox follow-ups to PI before retiring the old trigger. |
+| **B** | Manual kcal entry approved. | Implement on Nutrition and check that the day's totals update once. |
 | **C** | How and when should PI compact context within the one ongoing conversation? | Reported tool turns carried 84K–116K input tokens; the fresh instructions baseline was about 18K. Dan confirmed compaction is needed. Verify managed-endpoint support and context retention before implementation. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
-| **E** | Which Foundry admin operations should Jarvis expose? | [#2009](https://github.com/DanAakesen/jarvis/issues/2009): first compare with existing `az_` tools; scope instructions, versions/activation, models and deployments before adding writes. |
-| **F** | What approval applies when banking can move money? | Banking is out of scope. Ask Dan before implementing or performing anything that moves money; do not extrapolate the PI DELETE rule to banking. |
+| **E** | Foundry administration approved: agent instructions, versions, activation, models and deployments. | Compare existing Azure tools, then implement missing operations with readback. [#2009](https://github.com/DanAakesen/jarvis/issues/2009). |
+| **F** | Banking stays out of scope. | No banking implementation or money movement. |
 
 ## Last 8 days (15–22 November 2026)
 
@@ -69,7 +69,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Build 124 test 9 passed. Dan wants the single Proactive suggestions switch directly on the main Settings page. The inline control awaits device acceptance. Voice gesture acceptance remains open. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | #2029 merged. Verify first dictation, recovery and stable Voice on Watch. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Open. Track responsiveness and freshness separately from a successful response. |
-| [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Scope decision E. |
+| [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Scope approved in E. Implementation pending. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |
 
 ## Recently completed phase tasks

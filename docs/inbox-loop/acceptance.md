@@ -1,6 +1,6 @@
 # Loose Ends: switch-on and acceptance
 
-Status: **built, switched off by default.** Switching on needs the owner's decision and a deployment. Production activation, real vault/model use and device acceptance are unverified.
+Status: **built, switched off by default.** Dan approved capture and automatic follow-ups. Both production flags were verified off on 22 November. Production activation, real vault/model use and device acceptance are unverified.
 
 ## What each switch turns on
 

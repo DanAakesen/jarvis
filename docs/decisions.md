@@ -21,6 +21,8 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Dan confirmed that Chat and Voice share one ongoing conversation. Future context compaction must preserve it. On iPhone, the single Proactive suggestions switch belongs directly on the Settings page.
 
+Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the old scheduled engine, and Foundry administration covering instructions, versions, activation, models and deployments. He turned on Background PI. Banking remains out of scope.
+
 Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep this page under 20 KB.
 
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material

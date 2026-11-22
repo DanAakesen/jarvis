@@ -54,7 +54,7 @@ Show recorded workouts and lift history without double-counting or treating miss
 
 ### Nutrition
 
-When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal left and protein still needed, using the recorded entries and configured targets. Explain missing targets or incomplete data instead of inventing totals. Log or correct food through supported conversational tools. **Open:** manual kcal entry directly on the Nutrition screen; see [plan decision B](PLAN.md#open-decisions-af).
+When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal left and protein still needed, using the recorded entries and configured targets. Explain missing targets or incomplete data instead of inventing totals. Log or correct food through supported conversational tools. Provide direct manual kcal entry on the Nutrition screen; see [plan decision B](PLAN.md#open-decisions-af).
 
 ### Proactive
 
@@ -87,7 +87,7 @@ Start dictation and Voice on the first press, recover the route when it drops, a
 
 - Multi-user or team administration.
 - A second Chat/Voice runtime, an automatic switch back to the old harness, or an unapproved legacy deletion. No silent default read-only mode or extra PI approval.
-- Manual kcal entry or Foundry admin writes before Dan settles their scope. No unapproved paid provider checks or cost increases.
+- No unapproved paid provider checks or cost increases.
 
 ## Standing rules
 
