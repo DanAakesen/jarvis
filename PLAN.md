@@ -11,6 +11,7 @@
 | Daily-core golden scenarios (project, notes, tasks, workouts, nutrition) in English and Danish, one turn, no confirmation | Done |
 | Generated table `docs/tool-conformance.md`, checked on every run | Done |
 | Approvals inventory (non-delete gates, listed in the PR, none removed) | Done; Dan decides what to relax |
+| Independent review of the first head: Danish `huske` forms, Azure group trigger, order-independent cases (24 shuffled orders pass), a reachable hang message, approvals inventory re-verified line by line (nothing asks in Chat or Voice, deletes included) | Done |
 | Live Chat and Voice retest of the five scenarios on the deployed agent | **Open**; needs a live turn |
 
 No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or provider call belongs to this task.
