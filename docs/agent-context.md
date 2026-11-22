@@ -54,7 +54,7 @@ Keep [AGENTS.md](../AGENTS.md) as the entry point and read only the project cont
 | Runtime, data flow, identity, deployment or schema | [Architecture](architecture.md), and [data model](data-model.md) for database changes. |
 | Approved decision, setup or check | [Decisions](decisions.md) for rationale and evidence; this manual for commands and operations. |
 
-In [Decisions](decisions.md), add confirmed decisions and learnings newest first under **Decisions of the last 14 days**. Use the next unused decision (`#`) or learning (`L#`) number, checking the log and archive; do not renumber old entries. Move entries older than 14 days to the archive and leave links in the index. Keep proposals separate from confirmed decisions.
+Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep proposals separate from confirmed decisions.
 
 Run the focused offline checks, inspect the diff, and open **one ready PR** when it can be reviewed. Use `<task ID>: ...`, `fix-main: ...` or `docs: ...` as the [title workflow](../.github/workflows/pr-title.yml) requires. Give concrete tests, exact results and unverified behaviour. Use `Refs #N` for partial work or device acceptance; use an explicit closing reference only if the issue's acceptance is complete. Check native closing links as well as the PR body.
 
