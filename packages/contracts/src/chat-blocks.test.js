@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chatBlockInputSchema, chatBlockLimits, isChatBlock } from './index.js';
+import { chatBlockInputSchema, chatBlockLimits, isChatBlock, isWorkspaceCommand, isWorkspaceSnapshot } from './index.js';
 
 const source = { label: 'Open-Meteo', issuedAt: '2026-11-16T16:02:00.000Z' };
 const id = '5d0b2f9e-3c1a-4d57-8a5b-0f7f0b6a9c11';
@@ -88,4 +88,21 @@ test('rejects unknown properties, versions and types', () => {
 
 test('publishes a schema with the three block types', () => {
   assert.equal(chatBlockInputSchema.oneOf.length, 3);
+});
+
+test('Apple Maps history stores the original lookup; a route or result cannot enter the card', () => {
+  const lookupId = list.id;
+  const request = { query: 'pharmacy nearby', mode: 'walking', bufferMinutes: 10 };
+  const view = { version: 1, title: 'Apple Maps', renderer: 'map', source: { id: 'now', status: 'complete' },
+    data: { lookupId, request } };
+  const block = { ...list, data: { view } };
+  assert.equal(isChatBlock(block), true);
+  for (const extra of [{ places: [] }, { latitude: 55 }, { travelSeconds: 60 }]) {
+    assert.equal(isChatBlock({ ...block, data: { view: { ...view, data: { ...view.data, ...extra } } } }), false);
+  }
+  const command = { commandId: lookupId, operation: 'apple-maps', target: 'phone', ...request };
+  assert.equal(isWorkspaceCommand({ ...command, speakResult: true }), true);
+  assert.equal(isWorkspaceCommand({ ...command, target: 'all' }), false);
+  assert.equal(isWorkspaceCommand({ ...command, bufferMinutes: -1 }), false);
+  assert.equal(isWorkspaceSnapshot({ windows: [], contextPanelOpen: false, device: { kind: 'phone', appleMaps: true } }), true);
 });

@@ -460,6 +460,9 @@ export const generatedViewSchema = Object.freeze({
   }, ['version', 'title', 'renderer', 'source', 'data'])),
 });
 
+// Map views carry a lookup already performed on the phone. Only apple_maps produces them.
+const modelViewSchema = { oneOf: generatedViewSchema.oneOf.filter(view => view.properties.renderer.const !== 'map') };
+
 const workspaceCommandId = {
   ...string(128, 1),
   pattern: '^[A-Za-z0-9_-]{1,128}$',
@@ -558,7 +561,7 @@ export const workspaceCommandSchema = Object.freeze({
     region: { enum: workspaceWindowRegions },
     layout: { enum: workspaceArrangeLayouts },
     viewIds: { type: 'array', minItems: 1, maxItems: 8, items: workspaceViewIdSchema, uniqueItems: true },
-    view: generatedViewSchema,
+    view: modelViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
     y: { type: 'number', minimum: 0, maximum: 1 },
     width: { type: 'number', minimum: 0.32, maximum: 0.92 },
@@ -853,7 +856,7 @@ export function isGeneratedView(value, options = {}) {
   return true;
 }
 
-export const chatBlockInputSchema = createChatBlockInputSchema(generatedViewSchema);
+export const chatBlockInputSchema = createChatBlockInputSchema(modelViewSchema);
 export const isChatBlock = createChatBlockValidator(isGeneratedView);
 
 export function isWebResearchResult(value) {
