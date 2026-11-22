@@ -965,6 +965,7 @@ describe('PI gateway', () => {
       ['a cancel without a receipt', () => new Response(null, { status: 204 })],
       ['a cancel without a status', () => Response.json({})],
       ['a response completed before cancellation', () => Response.json({ status: 'completed' })],
+      ['a cancelled response with missing output', () => Response.json({ status: 'cancelled' })],
       ['a cancelled response with unseen tool work', () => Response.json({ status: 'cancelled', output: [{ type: 'mcp_call' }] })],
     ])('never retries a stream that merely stopped after %s', async (_name, cancel) => {
       const { run, calls, setCancel } = setup([() => sse(created), () => sse(delta('again'), completed(1, 0, 1))]);

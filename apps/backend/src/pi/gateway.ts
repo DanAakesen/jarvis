@@ -977,7 +977,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       // A 2xx response can describe a turn that completed before cancellation reached it.
       // Replaying its request could repeat work lost from the original stream.
       return isObject(body) && body.status === 'cancelled' &&
-        (body.output === undefined || (Array.isArray(body.output) && body.output.length === 0));
+        Array.isArray(body.output) && body.output.length === 0;
     } catch { return false; }
   }
 
