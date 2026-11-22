@@ -47,8 +47,8 @@ than the configured production origin; see [agent context](docs/agent-context.md
 ## Contributing
 
 Read [.github/copilot-instructions.md](.github/copilot-instructions.md) before changing the repo. Work on a task branch from
-current `main` in a separate worktree. Don't push directly to `main` or merge
-your own PR. Run offline checks before asking for review; don't run live or
+current `main` in a separate worktree. Merge through a PR: a push to `main`
+without a qualified PR makes Deploy fail. Run offline checks before asking for review; don't run live or
 paid checks without approval. Keep secrets, local authentication files and
 generated build output out of Git.
 

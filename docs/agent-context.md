@@ -86,7 +86,7 @@ The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it
 
 The dispatcher/coordinator uses local merge scripts that are not in the repository. This is the procedure in words; another machine does not need those scripts to understand the checks.
 
-1. The coordinator or owner verifies independent review of the **exact head**, no unresolved threads or High findings, and exact-head required checks green. Fix Medium findings or record explicit follow-ups. Agents never merge their own PR. Do not push to `main` or bypass checks.
+1. The coordinator or owner verifies independent review of the **exact head**, no unresolved threads or High findings, and exact-head required checks green. Fix Medium findings or record explicit follow-ups. Merge through a PR: a push to `main` with no CI-qualified PR behind it makes Deploy fail with `exact_qualification_missing`. Do not bypass checks.
 2. Bring the branch up to `origin/main`, resolving documentation conflicts additively rather than choosing one side wholesale. Re-run checks and review the updated head. The merged tree must equal the tree tested in CI; a green run for a previous head or a merely similar diff does not qualify. The checked-in enforcement is the [CI receipt](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
 3. After each merge to `main`, refresh and requalify other affected PRs. Updating another open iOS PR triggers `synchronize` and restarts its macOS checks. The update, not the push to `main` on its own, is the trigger. Batch coordinated merges instead of repeatedly updating native PRs.
 
