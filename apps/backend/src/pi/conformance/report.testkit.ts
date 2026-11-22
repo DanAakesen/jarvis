@@ -17,7 +17,7 @@ const visibilityLabel: Record<ToolRow['visibility'], string> = {
   chat: 'chat and voice', activation: 'activation turn', wake: 'background wake', legacy: 'HTTP only (legacy)',
 };
 
-const cell = (value: string) => value.replace(/\|/gu, '\\|').replace(/\s+/gu, ' ').trim();
+const cell = (value: string) => value.replace(/\\/gu, '\\\\').replace(/\|/gu, '\\|').replace(/\s+/gu, ' ').trim();
 const clip = (value: string, max: number) => (value.length <= max ? value : `${value.slice(0, max - 1)}…`);
 
 function callableCell(status: CallableStatus | undefined): string {
