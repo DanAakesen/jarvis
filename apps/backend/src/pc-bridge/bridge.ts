@@ -20,6 +20,7 @@ import {
   type KeySequence,
 } from '../core/keyboard-actions.js';
 import {
+  checkPcActGoal,
   runPcAct,
   type PcActBridge,
   type PcActOptions,
@@ -152,6 +153,8 @@ type PcCommand =
 
 interface PendingCommand {
   command: PcCommand['name'];
+  /** Keys or text typed into Chrome's focused field: the bridge's `blocked` answer then has two possible causes. */
+  keyboard: boolean;
   resolve: (result: Record<string, unknown>) => void;
   reject: (error: Error) => void;
   timer: NodeJS.Timeout;
@@ -375,6 +378,8 @@ export class PcBridgeConnection {
     return new Promise((resolve, reject) => {
       const pending: PendingCommand = {
         command: command.name,
+        keyboard: command.name === 'browser_act' &&
+          (command.arguments.action === 'keys' || command.arguments.action === 'type_focused'),
         resolve,
         reject,
         signal,
@@ -459,7 +464,9 @@ export class PcBridgeConnection {
           ? 'That Windows control is sensitive or unsupported; no action was performed.'
           : pending.command === 'window_capture' || pending.command === 'click_point' || pending.command === 'scroll_point'
             ? 'Screen capture or visual control is blocked while a sensitive field is focused.'
-            : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
+            : pending.keyboard
+              ? 'Nothing was typed or pressed: Chrome has to be the window in front, and the focused field must not be a sensitive one.'
+              : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
       ));
       else if (error === 'stale') this.finish(response.id, new ToolRefusal(
         pending.command.startsWith('uia_') || pending.command === 'click_point' || pending.command === 'scroll_point'
@@ -1181,6 +1188,11 @@ async function runCodexPrompt(
     throw new ToolRefusal('Provide one non-empty Codex prompt of at most 3,000 characters without control characters.');
   }
 
+  const goal = `In the Codex desktop app, enter the exact prompt ${JSON.stringify(input.prompt)} in the prompt field and submit it.`;
+  if (goal.length > 4_000) throw new ToolRefusal('That Codex prompt is too long to enter safely.');
+  // A prompt the PC goal rules refuse must not leave Codex open.
+  checkPcActGoal({ goal }, request);
+
   try {
     await runPcOpen(bridge, { target: 'app', value: 'Codex' }, signal, request.log);
   } catch (error) {
@@ -1190,8 +1202,6 @@ async function runCodexPrompt(
     throw error;
   }
 
-  const goal = `In the Codex desktop app, enter the exact prompt ${JSON.stringify(input.prompt)} in the prompt field and submit it.`;
-  if (goal.length > 4_000) throw new ToolRefusal('That Codex prompt is too long to enter safely.');
   const completedActions = new Set<PcActOperation>();
   const result = await runPcAct({ goal }, request, signal, guardedPcActBridge(bridge, request.log), {
     planner: options.pcActPlanner!,

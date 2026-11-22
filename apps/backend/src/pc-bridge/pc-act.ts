@@ -628,6 +628,21 @@ export function createJevPcActPlanner(
   };
 }
 
+/** The refusals that need no PC, in the order `runPcAct` applies them. `codex_prompt` applies them before it opens Codex. */
+export function checkPcActGoal(input: unknown, request: FastifyRequest): asserts input is { goal: string } {
+  if (!isRecord(input) || Object.keys(input).length !== 1 ||
+      typeof input.goal !== 'string' || !input.goal.trim() || input.goal.length > maxGoalLength ||
+      hasControlCharacters(input.goal)) {
+    throw new ToolRefusal(`Provide a PC goal between 1 and ${maxGoalLength} characters.`);
+  }
+  if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
+  if (sensitiveGoal(input.goal)) {
+    throw new ToolRefusal("I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.");
+  }
+
+  refuseGmailComputerAccess(input.goal);
+}
+
 export async function runPcAct(
   input: unknown,
   request: FastifyRequest,
@@ -635,19 +650,9 @@ export async function runPcAct(
   bridge: PcActBridge,
   options: PcActOptions,
 ): Promise<{ status: 'completed'; steps: number; result: string }> {
-  if (!isRecord(input) || Object.keys(input).length !== 1 ||
-      typeof input.goal !== 'string' || !input.goal.trim() || input.goal.length > maxGoalLength ||
-      hasControlCharacters(input.goal)) {
-    throw new ToolRefusal(`Provide a PC goal between 1 and ${maxGoalLength} characters.`);
-  }
-  if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
+  checkPcActGoal(input, request);
   const runRequested: NonNullable<PcActOptions['runRequested']> = options.runRequested ??
     (async (_summary, action, actionSignal) => { actionSignal.throwIfAborted(); return action(); });
-  if (sensitiveGoal(input.goal)) {
-    throw new ToolRefusal("I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.");
-  }
-
-  refuseGmailComputerAccess(input.goal);
   const runStartedAt = performance.now();
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(maxRunMs)]);
   const goal = input.goal.trim();
