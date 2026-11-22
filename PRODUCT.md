@@ -1,3 +1,7 @@
+## See the brain — 21 November 2026 (Refs #1969)
+
+Dan can tell what Background PI is doing without guessing. `GET /pi/brain` says `enabled: false` while it is off. While it is on it says when it looks next (`nextDueAt`; null means nothing is scheduled, so it is idle) and what its last pass decided (`lastTick`, empty after a restart until a pass has looked at the queue). Each time a pass decides something different (off, paused, spaced, daily cap, budget stop, filtered, done, failed) the backend logs it once with the queue depth, wakes today and spend this month, and it logs whether the switch was on at startup. Every wake is logged with its tokens and DKK. `GET /pi/status` names the kind of every PI turn (Chat, warm-up, smoke or Background PI wake, and what woke the wake), so an unexplained background call can be traced to its source. A failed proactive check now says where it failed and what kind of error it was.
+
 ## Personal Memory stays separate from Vault Knowledge — 20 November 2026 (#1968)
 
 Jarvis has three distinct information layers. **Session context** is the current conversation, recent turns, active task and tool results. **Personal Memory** is small, durable owner-scoped facts, preferences, decisions, corrections and unfinished commitments in Azure SQL, with a stable identity, exact source-message attribution and history. **Knowledge / Vault** is Dan's Obsidian/GitHub notes, tasks, plans and research; the Vault remains authoritative and its indexes are retrieval aids.

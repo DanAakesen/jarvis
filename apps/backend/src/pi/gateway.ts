@@ -10,7 +10,7 @@ import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
 import {
-  chatTurnKinds, type PiProactiveEvidence, type PiStore, type PiStoredTurn, type PiTurnRecord,
+  allTurnKinds, chatTurnKinds, type PiProactiveEvidence, type PiStore, type PiStoredTurn, type PiTurnKind, type PiTurnRecord,
 } from './store.js';
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
@@ -49,16 +49,53 @@ export interface PiWarmResult {
   readonly skipped?: 'budget_exhausted' | 'paused_after_failures' | 'recent_failure';
 }
 
+export interface PiTurnTotals { readonly turns: number; readonly costDkk: number }
+
+/** One turn of the ledger as the status shows it: what kind it was, and for a wake what woke it. Never text. */
+export interface PiRecentTurn {
+  readonly at: string;
+  readonly kind: PiTurnKind;
+  readonly outcome: PiTurnRecord['outcome'];
+  readonly inputTokens: number;
+  readonly cachedTokens: number;
+  readonly outputTokens: number;
+  readonly costDkk: number;
+  readonly totalMs: number;
+  readonly activation?: { readonly type: NonNullable<PiTurnRecord['activationType']>; readonly source: string | null };
+}
+
+/**
+ * Who made the calls, from the turn ledger: `chat` (Chat and Voice), `warm` (a warm-up of the conversation), `smoke` (the deploy
+ * smoke) and `brain` (a Background PI wake, with `activation.source` saying what woke it: `timer`, `manual`, `watch`, an event
+ * source or `mixed`). A watch look is not a kind of its own.
+ */
+export interface PiTurnAttribution {
+  /** The last 24 hours by kind; a kind with no turn is zero. */
+  readonly last24h: Readonly<Record<PiTurnKind, PiTurnTotals>>;
+  /** The newest turns of any kind, newest first, so a call that repeats on a schedule can be recognised. */
+  readonly recent: readonly PiRecentTurn[];
+}
+
+export const noTurnAttribution: PiTurnAttribution = {
+  last24h: { chat: { turns: 0, costDkk: 0 }, warm: { turns: 0, costDkk: 0 }, smoke: { turns: 0, costDkk: 0 }, brain: { turns: 0, costDkk: 0 } },
+  recent: [],
+};
+
+const recentTurnLimit = 20;
+
 export interface PiStatus {
   readonly enabled: boolean;
   readonly reason: null | 'not_configured' | 'budget_exhausted';
   readonly agent: { readonly name: string | null; readonly model: string; readonly effort: string };
   readonly month: { readonly spentDkk: number; readonly capDkk: number; readonly remainingDkk: number; readonly turns: number };
   readonly warm: { readonly state: 'cold' | 'warm'; readonly warmedAt: string | null };
+  /** The newest Chat, Voice, warm-up or smoke turn; a Background PI wake is in `turns`, not here. */
   readonly lastTurn: null | {
+    readonly kind: PiTurnKind;
     readonly at: string; readonly firstTextMs: number | null; readonly totalMs: number; readonly inputTokens: number;
     readonly cachedTokens: number; readonly outputTokens: number; readonly costDkk: number;
   };
+  readonly turns: PiTurnAttribution;
 }
 
 export interface PiGatewayOptions {
@@ -1113,7 +1150,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       const billed = usage ?? spend.estimate();
       const failedActivation = outcome !== 'ok' && grant
         ? options.activations.failed(grant, now(), AbortSignal.timeout(10_000))
-          .catch(() => log('pi.situation_stale_failed', { activation: grant?.activation?.id ?? '' }))
+          .catch(() => log('pi.situation_stale_failed', { activationId: grant?.activation?.id ?? '' }))
         : null;
       await record({
         kind: 'chat', messageId: /^[1-9]\d{0,18}$/u.test(input.messageId) ? input.messageId : null, model: PI_MODEL,
@@ -1224,7 +1261,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const toolResults = grant ? [...grant.results] : [];
     if (outcome !== 'ok' && grant) {
       await options.activations.failed(grant, now(), AbortSignal.timeout(10_000))
-        .catch(() => log('pi.situation_stale_failed', { activation: grant?.activation?.id ?? '' }));
+        .catch(() => log('pi.situation_stale_failed', { activationId: grant?.activation?.id ?? '' }));
     }
     if (grant) options.registry.close(grant.turn);
     // As for chat: a wake that reached the model without a usage report is charged at an estimate, so the stop cannot be dodged.
@@ -1268,14 +1305,21 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   async function status(signal: AbortSignal): Promise<PiStatus> {
-    const [stored, spent, last] = await Promise.all([
+    const dayAgo = new Date(now().getTime() - 24 * 60 * 60_000);
+    const [stored, spent, last, recent, byKind] = await Promise.all([
       options.store.getConversation(options.owner, signal),
       options.store.spendSince(monthStart(now()), chatTurnKinds, signal),
       options.store.lastTurn(chatTurnKinds, signal),
+      options.store.recentTurns(recentTurnLimit, allTurnKinds, signal),
+      Promise.all(allTurnKinds.map(kind => options.store.spendSince(dayAgo, [kind], signal))),
     ]);
     const warmedAt = stored?.agentName === options.agentName ? stored.warmedAt : null;
     const warm = warmedAt !== null && now().getTime() - warmedAt.getTime() < warmFreshMs;
     const exhausted = spent.costDkk >= options.monthlyCapDkk;
+    const totals = (kind: PiTurnKind): PiTurnTotals => {
+      const row = byKind[allTurnKinds.indexOf(kind)]!;
+      return { turns: row.turns, costDkk: Number(row.costDkk.toFixed(4)) };
+    };
     return {
       enabled: !exhausted, reason: exhausted ? 'budget_exhausted' : null,
       agent: { name: options.agentName, model: PI_MODEL, effort: PI_REASONING_EFFORT },
@@ -1285,6 +1329,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       },
       warm: { state: warm ? 'warm' : 'cold', warmedAt: warmedAt?.toISOString() ?? null },
       lastTurn: last ? lastTurn(last) : null,
+      turns: {
+        last24h: { chat: totals('chat'), warm: totals('warm'), smoke: totals('smoke'), brain: totals('brain') },
+        recent: recent.map(recentTurn),
+      },
     };
   }
 
@@ -1309,8 +1357,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
 function lastTurn(turn: PiStoredTurn) {
   return {
-    at: turn.at.toISOString(), firstTextMs: turn.firstTextMs, totalMs: turn.totalMs, inputTokens: turn.inputTokens,
+    kind: turn.kind, at: turn.at.toISOString(), firstTextMs: turn.firstTextMs, totalMs: turn.totalMs, inputTokens: turn.inputTokens,
     cachedTokens: turn.cachedTokens, outputTokens: turn.outputTokens, costDkk: turn.costDkk,
+  };
+}
+
+function recentTurn(turn: PiStoredTurn): PiRecentTurn {
+  return {
+    at: turn.at.toISOString(), kind: turn.kind, outcome: turn.outcome, inputTokens: turn.inputTokens, cachedTokens: turn.cachedTokens,
+    outputTokens: turn.outputTokens, costDkk: turn.costDkk, totalMs: turn.totalMs,
+    ...(turn.activationType ? { activation: { type: turn.activationType, source: turn.activationSource ?? null } } : {}),
   };
 }
 

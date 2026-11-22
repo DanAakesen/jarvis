@@ -1,3 +1,33 @@
+## Seeing the brain — 21 November 2026 (Refs #1969)
+
+```mermaid
+flowchart LR
+    TK["30 s scheduler<br/>proactive/scheduler.ts"] -->|"every tick"| BT["brain.tick<br/>queue, watches, timer"]
+    TK -->|"07:00 / 18:00 slot"| BS["brain.runScheduled"]
+    MR["POST /proactive/runs<br/>Check now"] --> BS
+    TK -.->|"slot, PI not configured"| EN["old slot engine<br/>proactive/engine.ts"]
+    MR -.->|"PI not configured"| EN
+    BT -->|"outcome changed"| L1["pi.brain_tick"]
+    BT -->|"wake ended"| L2["pi.brain"]
+    BS -->|"skipped or done"| L2
+    BT --> G["gateway.runBrain"]
+    BS --> G
+    G --> L3["pi.brain_run"]
+    ST["brain.start()"] --> L4["pi.brain_state"]
+    TK -.->|"a throw, with stage and class"| L5["proactive.failed"]
+    MR -.->|"a throw, with stage and class"| L5
+    EN -.->|"a throw, with stage and class"| L5
+    G --> LED[("pi_turn ledger<br/>chat · warm · smoke · brain")]
+    LED --> PS["GET /pi/status<br/>last24h by kind, newest 20"]
+    BT --> BC["GET /pi/brain<br/>lastTick, nextDueAt, queue, today, month"]
+```
+
+- **Who runs a slot:** `proactive/composition.ts` gives the scheduler `events?.runScheduled ?? run`: the brain's sweep when PI is configured (since #1964), the old slot engine when it is not.
+- **Brain events** (`logging.ts` allowlist, vocabulary in `pi/brain/outcomes.ts`): `pi.brain_tick` is logged by `createBrain` when a pass that read the queue returns a different outcome than the pass before (`queued`, `wakesToday`, `spendMonthDkk`, `nextDueInSec`); `pi.brain_state` once from `start()`; `pi.brain` for wake results, scheduled-sweep skips and what a wake needed but could not do; `pi.brain_run` from the gateway for every wake. A pass that returns `idle` or `active_activation` never read the queue and is not an outcome. Snapshot reads are bounded to 5 s and never change a tick. Before this change `pi.brain` and `pi.brain_run` were not in the `events` set, so the boundary exported them as `backend.event` with no fields.
+- **Every `pi.*` and `proactive.*` event is registered.** An event name that is not in the `events` set of `logging.ts` is exported as a bare `backend.event`; `logging.test.ts` reads the backend source for these two families and fails on a name that is not registered. `safeHistoricalLogFields` (behind `read_backend_logs`) keeps the error class, trigger, alert classes and the activation's type, source and id of a record; other identifiers stay out.
+- **Scheduler and engine failures:** `proactive.failed` carries a `reason` (`internal_error`, or `hook_failed` / `job_update_failed` from the engine), a `stage` and an `errorClass` (a class name, never a message). The engine now logs a run that threw (`run`) and a heartbeat that failed (`heartbeat`), which left no line before. `tick()` no longer rejects: a failing slot check is logged and the event tick still runs. A failed startup write is logged and the scheduler still starts. A slot is marked handled only after its settings read and claim were answered, so a thrown claim is retried on the next tick (a claim that returns no row, because the slot already has one, still settles it).
+- **Status:** `GET /pi/brain` reads `lastTick` and `nextDueAt` from the running brain (memory, null before the first pass) and `today.wakes` / `today.costDkk` from `pi_turn`; `GET /pi/status` reads `recentTurns` over every kind and `spendSince` per kind for 24 hours. Both are database reads; neither starts a model.
+
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 
 ```mermaid
@@ -449,7 +479,7 @@ flowchart TB
 | Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
 | Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
 | Budget | `proactive_spend` ledger, settings `monthlyBudgetDkk` (default 100) | Hard stop before a wake (worst case of one wake against what is left), one chat notice at 80 percent and one at the stop, a note in the wake text after 80 percent. The brain and the watches share this ledger. Chat and voice keep their own cap (`pi_turn` kinds `chat`, `warm`, `smoke`) |
-| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, "PI brain (test)" | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called |
+| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, "PI brain (test)" | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called. `GET` also says what the last pass decided (`lastTick`), when it looks again (`nextDueAt`) and today's wakes and DKK, so off and idle can be told apart |
 | One reader | `proactive/events/wiring.ts` | The queue has one reader: the brain **or** the old one-shot pipeline. Turning both on is a startup `ConfigurationError`, so nothing runs in parallel or in shadow. The old pipeline stays switched off and is deleted in #1887 |
 
 Not covered: the call channel, the Now card, tiers (owner decision: none for now), voice, standing watches (next pull request).
@@ -527,7 +557,7 @@ sequenceDiagram
 | MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` (injected by the Foundry project connection `jarvis-pi-mcp`) accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
 | Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role (a test role for the Deploy smoke only) |
 | In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
-| Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | Core and voice smoke results feed the System Status runtime evidence. The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
+| Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | Core and voice smoke results feed the System Status runtime evidence. `GET /pi/status` also names the kind of every turn (`lastTurn.kind`, `turns.last24h` per kind, `turns.recent`), so a background call can be told from the ledger. The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
 
 Configuration: `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET` (Container App secret `pi-mcp-secret`), `JARVIS_PI_MONTHLY_CAP_DKK` (default 100), plus optional GitHub and Azure MCP pairs. Both core values must be set or PI returns `pi_not_configured`. Every ordinary Bicep deploy validates and carries the prior complete configuration through a secure object, so provisioning is not repairing a deliberately stripped backend revision. Warm-ups are skipped over the cap, for 10 minutes after a failed warm-up and for 30 minutes after three failed turns in a row (`warm` returns `skipped`). A turn that ends before the provider reports usage but after the model started is charged at an estimate (12k input tokens plus streamed text) so the monthly stop counts it.
 
