@@ -3,6 +3,7 @@ import type { ProactiveStore } from '../../proactive/store.js';
 import { copenhagenDayStart, monthKey } from '../../proactive/time.js';
 import { brainTurnKinds, type PiStore } from '../store.js';
 import type { PiBackgroundSlotStatus } from '../activation-slots.js';
+import { PI_WAKE_PREFLIGHT_DKK } from '../pricing.js';
 import type { PiSituationService } from '../situation.js';
 import type { BrainTickOutcome } from './outcomes.js';
 import type { BrainTickRecord } from './runner.js';
@@ -40,7 +41,7 @@ export interface BrainStatus {
     readonly coldSweepMinDkk: 0.14;
     readonly coldSweepMaxDkk: 0.28;
     readonly representativeToolTurnDkk: 0.17;
-    readonly preflightWorstCaseDkk: 0.79;
+    readonly preflightWorstCaseDkk: number;
     readonly estimatedDayMinDkk: number;
     readonly estimatedDayMaxDkk: number;
     readonly estimatedThirtyDayMinDkk: number;
@@ -119,7 +120,7 @@ export function createBrainControl(options: {
         coldSweepMinDkk: 0.14,
         coldSweepMaxDkk: 0.28,
         representativeToolTurnDkk: 0.17,
-        preflightWorstCaseDkk: 0.79,
+        preflightWorstCaseDkk: PI_WAKE_PREFLIGHT_DKK,
         estimatedDayMinDkk: Number((slots.allowed * 0.14).toFixed(2)),
         estimatedDayMaxDkk: Number((slots.allowed * 0.28).toFixed(2)),
         estimatedThirtyDayMinDkk: Number((slots.allowed * 0.14 * 30).toFixed(2)),

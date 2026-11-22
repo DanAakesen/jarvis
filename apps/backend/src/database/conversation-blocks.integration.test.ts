@@ -4,6 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
 import { createConversationStore } from './conversation-store.js';
+import { createApprovalNotificationStore } from './approval-notification-store.js';
+import { createReplyNotificationStore } from './reply-notification-store.js';
+import { createPiStore } from './pi-store.js';
 import { createPiSituationStore } from './pi-situation-store.js';
 import { createProactiveStore } from './proactive-store.js';
 import { proactiveSettingsRevision } from '../proactive/preferences.js';
@@ -38,8 +41,11 @@ afterAll(async () => {
 describe('conversation blocks in the message store', () => {
   it('stores a proactive message and continuation receipt atomically and idempotently', async () => {
     const store = createConversationStore(pool);
-    const session = await store.createSession({ channel: 'chat', language: 'en' });
     const owner = randomUUID();
+    const session = await store.createSession({ channel: 'chat', language: 'en', ownerObjectId: owner });
+    expect(await createApprovalNotificationStore(pool).upsert(owner, {
+      deviceToken: 'da'.repeat(32), showActions: false, timeZone: 'Europe/Copenhagen',
+    })).toBe('saved');
     const runId = randomUUID();
     const input = {
       sessionId: session.id,
@@ -61,6 +67,7 @@ describe('conversation blocks in the message store', () => {
       at: new Date('2026-11-16T10:00:00.000Z'),
       dayStart: new Date('2026-11-15T23:00:00.000Z'),
       maxMessages: 8,
+      replyNotification: { ownerObjectId: owner },
     };
     const [first, retry] = await Promise.all([
       store.addProactiveMessage!(input),
@@ -89,6 +96,26 @@ describe('conversation blocks in the message store', () => {
           AND role = N'jarvis' AND text = N'I can move the reminder. Shall I?') AS messages,
         (SELECT COUNT(*) FROM dbo.pi_message WHERE owner_object_id = @owner) AS receipts;`);
     expect(rows.recordset[0]).toEqual({ messages: 1, receipts: 1 });
+    const claimAt = new Date(Date.now() + 1_000);
+    const deliveries = await createReplyNotificationStore(pool).claimDue(
+      owner, randomUUID(), claimAt, new Date(claimAt.getTime() + 20_000),
+    );
+    expect(deliveries).toMatchObject([{
+      messageId: first.message!.id, sessionId: session.id, proactiveText: input.text,
+    }]);
+
+    const piStore = createPiStore(pool);
+    const signal = new AbortController().signal;
+    expect(await piStore.latestProactiveMessage(owner, input.dayStart, signal)).toMatchObject({
+      messageId: first.message!.id, sessionId: session.id, evidence: input.evidence, followUpIds: input.followUpIds,
+    });
+    const stranger = randomUUID();
+    expect(await piStore.recordProactiveMessageFeedback(stranger, first.message!.id, 'wrong', claimAt, signal)).toBe(false);
+    expect(await piStore.recordProactiveMessageFeedback(owner, first.message!.id, 'useful', claimAt, signal)).toBe(true);
+    expect(await piStore.latestProactiveMessageFeedback(owner, signal)).toEqual({
+      messageId: first.message!.id, text: input.text, rating: 'useful',
+    });
+    expect(await piStore.latestProactiveMessageFeedback(stranger, signal)).toBeUndefined();
   });
 
   it('refuses grant-held situation evidence after its authority generation advances', async () => {

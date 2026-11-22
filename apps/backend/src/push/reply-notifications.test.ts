@@ -189,6 +189,7 @@ function delivery(overrides: Partial<FixtureDelivery> = {}): FixtureDelivery {
     messageId: '42',
     notificationId: 'reply-42',
     preview: 'Design review moved to 10:30',
+    proactiveText: null,
     expiresAt: new Date('2026-11-20T05:00:00.000Z'),
     attemptCount: 0,
     state: 'pending',
@@ -257,11 +258,35 @@ describe('reply notification contract', () => {
       messageID: '42',
       aps: {
         category: 'jarvis.reply',
-        alert: { body: 'Design review moved to 10:30' },
+        alert: { title: 'Jarvis', body: 'Design review moved to 10:30' },
       },
     });
   });
 
+  it('previews only the first sentence of a brain message and deep-links to the exact message', () => {
+    const first = 'Snow is expected on the motorway and could delay your drive by an hour.';
+    const messageId = '9007199254740993';
+    const payload = JSON.parse(replyNotificationPayload({
+      ...delivery(), messageId, proactiveText: `${first}\n${'Take the train instead. '.repeat(36)}`,
+    }).toString('utf8'));
+    expect(payload).toEqual({
+      kind: 'reply', sessionID: '41', messageID: messageId,
+      aps: {
+        'thread-id': 'jarvis.reply', category: 'jarvis.reply', sound: 'default',
+        alert: { title: 'Snow is expected on the motorway and could delay your dri...', body: first },
+      },
+    });
+  });
+
+  it('bounds both fields even when the first sentence of a brain message is itself long', () => {
+    const text = `Driving conditions: ${'heavy snow '.repeat(30).trim()}. The second sentence is not a preview.`;
+    const payload = JSON.parse(replyNotificationPayload({ ...delivery(), proactiveText: text }).toString('utf8'));
+    const { title, body } = payload.aps.alert;
+    expect(Array.from(title)).toHaveLength(60);
+    expect(Array.from(body)).toHaveLength(180);
+    expect(body.startsWith('Driving conditions: heavy snow')).toBe(true);
+    expect(body).not.toContain('second sentence');
+  });
   it('uses bounded backoff and stops after the attempt limit', () => {
     expect(replyNotificationRetryAt(1, 1_000, 100_000)).toBe(2_000);
     expect(replyNotificationRetryAt(4, 1_000, 100_000)).toBe(61_000);

@@ -1,3 +1,10 @@
+## 22 November 2026 — Price PI cache reads correctly, clean up wakes, and make reach-outs actionable (Refs #2011)
+
+- Apply the Azure GPT-6.1 Terra meters to new PI ledger rows: 0.34 DKK for cache reads, 6.7 for uncached input and 33.5 for output, per million tokens. Foundry usage has no cache-write count; the 8.39 DKK meter is documented but input not reported as a cache read is estimated at 6.7. An unreported round that started uses 18,000 input tokens (about 18,008 observed), plus estimated output. No backfill, migration or change to the general Foundry usage meter. Foreground and proactive caps stay separate.
+- Delete only the scratch conversations created for a wake or smoke, after any outcome. Cleanup waits at most five seconds, logs failure and does not change the turn result. Keep the owner conversation, the existing situational context and the 30-event batch. Which events deserve a message stays with the model.
+- Use the existing reply outbox and exact session/message link. Render the first sentence in a title of up to 60 characters and body of up to 180. Chat and Voice still read the same durable evidence and follow-up IDs. Store `useful`/`wrong` feedback on the exact message; the latest rating reaches the next otherwise due wake in one line, even after a pause. It stays available until a newer rating, without scheduling a wake or changing preferences.
+- This is offline qualification, not evidence of live model judgement, Foundry cleanup or delivery on an iPhone or Watch. No change to Foundry instructions, the owner switch or the parked legacy engine.
+
 ## 21 November 2026 — Week summary 2026-11-21: index of the 20–21 November decisions
 
 Index only: no new decision, evidence or trade-off. Each row names the detailed entry by its heading and says what it replaced. The summary of the state is in `PLAN.md` ("Week summary 2026-11-21"), `docs/architecture.md` ("System map") and `docs/agent-context.md` ("Working rules"). Entries marked "end of file" sit near the end of this file, not at the top.

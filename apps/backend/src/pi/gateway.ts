@@ -3,10 +3,10 @@ import {
   FOUNDRY_AGENT_SCOPE, parseEvents,
   type ConversationAgent, type ConversationAgentChunk, type ConversationAgentInput,
 } from '../core/chat-agent.js';
-import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { answerClientTool, argumentKeyNames, type ClientToolOutcome } from './client-tools.js';
 import { PiGatewayError } from './errors.js';
+import { ESTIMATED_PROMPT_TOKENS, piCostDkk, type PiUsage } from './pricing.js';
 import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { azureToolPrefix } from './remote-mcp.js';
 import {
@@ -16,8 +16,6 @@ import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 import type { PiActivationService } from './activation.js';
 import type { PiActivationType } from './situation.js';
 import type { PiCapabilityNote } from './capabilities.js';
-
-export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
 export interface PiRuntimeTurnEvidence {
   readonly channel: 'chat' | 'voice';
@@ -165,7 +163,7 @@ export interface PiGateway extends ConversationAgent {
   setCapabilityNote?(read: () => PiCapabilityNote): void;
   /** Low-level streaming used by the deploy smoke; it never touches the owner's conversation. */
   readonly smokeKit: {
-    createConversation(signal: AbortSignal): Promise<string>;
+    withConversation<T>(signal: AbortSignal, run: (conversationId: string) => Promise<T>): Promise<T>;
     respond(conversationId: string, input: string, signal: AbortSignal): AsyncGenerator<PiEvent>;
     openGrant(signal: AbortSignal): PiTurnGrant;
     closeGrant(turn: string): void;
@@ -176,14 +174,13 @@ export interface PiGateway extends ConversationAgent {
   };
 }
 
-/** Measured fixed prompt of the managed harness (about 11k input tokens per call), used only to price a turn that never reported usage. */
-const estimatedPromptTokens = 12_000;
 /** A failed warm-up is not retried for this long, and three failed turns in a row pause warm-ups for the longer one. */
 const warmFailureCooldownMs = 10 * 60_000;
 const repeatedFailures = 3;
 const repeatedFailurePauseMs = 30 * 60_000;
 /** A turn cancelled this recently may still be running on Foundry's side, which is worth knowing when the next one fails. */
 const previousCancelledWindowMs = 120_000;
+const scratchCleanupMs = 5_000;
 /** Streams that die like this before any output are the only ones retried: no text, reasoning or tool call exists, so nothing has run. */
 const retryableStreamFailures: ReadonlySet<string> = new Set(['stream_ended_without_completed', 'stream_broke']);
 /** A Foundry `response.failed` or `error` is retried only with one of these codes; `incomplete`, content filters, tool errors and unknown codes never are. */
@@ -218,7 +215,7 @@ function createSpendTracker() {
     estimate(): PiUsage | undefined {
       if (!started) return completed;
       return {
-        inputTokens: (completed?.inputTokens ?? 0) + estimatedPromptTokens, cachedTokens: completed?.cachedTokens ?? 0,
+        inputTokens: (completed?.inputTokens ?? 0) + ESTIMATED_PROMPT_TOKENS, cachedTokens: completed?.cachedTokens ?? 0,
         outputTokens: (completed?.outputTokens ?? 0) + Math.ceil(characters / 3),
       };
     },
@@ -493,11 +490,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return () => { if (busy === mine) busy = null; release(); };
   }
 
-  async function call(method: 'GET' | 'POST', path: string, body: unknown, signal: AbortSignal, stream = false): Promise<Response> {
+  async function call(method: 'GET' | 'POST' | 'DELETE', path: string, body: unknown, signal: AbortSignal, stream = false): Promise<Response> {
     const token = await options.getToken(FOUNDRY_AGENT_SCOPE, signal).catch((error: unknown) => {
       if (signal.aborted) throw error;
       throw new PiGatewayError('pi_unavailable', 'sign_in_failed', { cause: error, detail: 'token_unavailable' });
     });
+    signal.throwIfAborted();
     const connecting = new AbortController();
     const deadline = setTimeout(() => connecting.abort(new DOMException('PI connection timed out', 'TimeoutError')), connectTimeoutMs);
     deadline.unref();
@@ -533,6 +531,30 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       throw new PiGatewayError('pi_failed', 'no_conversation', { detail: 'no_conversation' });
     }
     return id;
+  }
+
+  async function cleanupScratchConversation(id: string, kind: 'brain' | 'smoke'): Promise<void> {
+    // A wake's own signal may already be cancelled. Bound cleanup, including the credential request, separately.
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        call('DELETE', `/conversations/${encodeURIComponent(id)}`, undefined, controller.signal)
+          .then(response => response.body?.cancel()),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            controller.abort();
+            reject(controller.signal.reason);
+          }, scratchCleanupMs);
+          timer.unref();
+        }),
+      ]);
+    } catch {
+      try { log('pi.conversation_cleanup_failed', { kind, reason: controller.signal.aborted ? 'timeout' : 'request_failed' }); }
+      catch { /* Cleanup diagnostics cannot change the outcome. */ }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async function ensureConversation(signal: AbortSignal): Promise<string> {
@@ -925,11 +947,6 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
   }
 
-  const costOf = (usage: PiUsage) => {
-    const costs = foundryTokenCosts(PI_MODEL, usage.inputTokens, usage.outputTokens);
-    return costs ? Number((costs.inputDkk + costs.outputDkk).toFixed(6)) : 0;
-  };
-
   /**
    * Chat and Voice count only their own turns (`chatTurnKinds`); Background PI wakes have their own budget. A spend that cannot be
    * read never fails the turn: it is logged, reported as `unreadable` and the turn goes on.
@@ -1015,10 +1032,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         throw error;
       } finally {
         lastTurnEnd = { outcome, at: performance.now() };
-        const billed = usage ?? (modelStarted ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: 1 } : undefined);
+        const billed = usage ?? (modelStarted ? { inputTokens: ESTIMATED_PROMPT_TOKENS, cachedTokens: 0, outputTokens: 1 } : undefined);
         await record({
           kind: 'warm', messageId: null, model: PI_MODEL, inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0,
-          outputTokens: billed?.outputTokens ?? 0, costDkk: billed ? costOf(billed) : 0, firstTextMs,
+          outputTokens: billed?.outputTokens ?? 0, costDkk: billed ? piCostDkk(billed) : 0, firstTextMs,
           totalMs: Math.round(performance.now() - started), outcome,
         }, billed, `pi:warm:${now().getTime()}`);
       }
@@ -1168,7 +1185,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       await record({
         kind: 'chat', messageId: /^[1-9]\d{0,18}$/u.test(input.messageId) ? input.messageId : null, model: PI_MODEL,
         inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0, outputTokens: billed?.outputTokens ?? 0,
-        costDkk: billed ? costOf(billed) : 0, firstTextMs, totalMs, outcome,
+        costDkk: billed ? piCostDkk(billed) : 0, firstTextMs, totalMs, outcome,
         ...(grant?.activation ? {
           activationId: grant.activation.id,
           activationType: grant.activation.type,
@@ -1193,7 +1210,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       }
       log('pi.turn', {
         channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
-        estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0,
+        estimated: usage === undefined && billed !== undefined, costDkk: billed ? piCostDkk(billed) : 0,
         activationId: grant?.activation?.id ?? null,
         rounds, clientItems, nativeCalls,
         activationType: grant?.activation?.type ?? (input.channel === 'voice' ? 'voice' : 'chat'),
@@ -1233,11 +1250,13 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let usage: PiUsage | undefined;
     let firstTextMs: number | null = null;
     let outcome: PiTurnRecord['outcome'];
+    let conversationId: string | undefined;
+    let totalMs: number;
     const spend = createSpendTracker();
     let text = '';
     let failure: PiGatewayError | undefined;
     try {
-      const conversationId = await createConversation(deadline);
+      conversationId = await createConversation(deadline);
       const context = await options.context(deadline);
       const activation = await options.activations.begin({
         id: input.runId,
@@ -1270,17 +1289,19 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       failure = error instanceof PiGatewayError ? error
         : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'took_too_long', { cause: error, detail: 'brain_deadline' })
         : (logStreamFailure('brain_wake_failed', null, 1), new PiGatewayError('pi_failed', 'cut_off', { cause: error, detail: 'brain_wake_failed' }));
+    } finally {
+      totalMs = Math.round(performance.now() - started);
+      if (grant) options.registry.close(grant.turn);
+      if (conversationId) await cleanupScratchConversation(conversationId, 'brain');
     }
     const toolResults = grant ? [...grant.results] : [];
     if (outcome !== 'ok' && grant) {
       await options.activations.failed(grant, now(), AbortSignal.timeout(10_000))
         .catch(() => log('pi.situation_stale_failed', { activationId: grant?.activation?.id ?? '' }));
     }
-    if (grant) options.registry.close(grant.turn);
     // As for chat: a wake that reached the model without a usage report is charged at an estimate, so the stop cannot be dodged.
     const billed = usage ?? spend.estimate();
-    const totalMs = Math.round(performance.now() - started);
-    const costDkk = billed ? costOf(billed) : 0;
+    const costDkk = billed ? piCostDkk(billed) : 0;
     await record({
       kind: 'brain', messageId: null, model: PI_MODEL, inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0,
       outputTokens: billed?.outputTokens ?? 0, costDkk, firstTextMs, totalMs, outcome,
@@ -1353,7 +1374,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     stream, warm, status, runBrain,
     setCapabilityNote(read) { capabilityNote = read; },
     smokeKit: {
-      createConversation,
+      async withConversation(signal, run) {
+        const id = await createConversation(signal);
+        try { return await run(id); }
+        finally { await cleanupScratchConversation(id, 'smoke'); }
+      },
       respond,
       openGrant: (signal) => options.registry.open({ ownerObjectId: options.owner, sessionId: '', messageId: '', smoke: true, signal }),
       closeGrant: (turn) => options.registry.close(turn),
@@ -1362,7 +1387,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         turn, now: now(), timeZone: options.timeZone, text,
         ...(channel === 'voice' ? { notes: [voiceChannelNote] } : channel === 'environment' && options.environment ? { notes: [options.environment] } : {}),
       }),
-      cost: costOf,
+      cost: piCostDkk,
       now,
     },
   };

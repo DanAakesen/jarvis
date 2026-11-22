@@ -36,6 +36,7 @@ export interface ClaimedReplyNotificationDelivery {
   readonly messageId: string;
   readonly notificationId: string;
   readonly preview: string;
+  readonly proactiveText: string | null;
   readonly expiresAt: Date;
   readonly attemptCount: number;
 }
@@ -97,6 +98,7 @@ interface ClaimedDeliveryRow {
   message_id: string;
   notification_id: string;
   preview: string;
+  proactive_text: string | null;
   expires_at: Date;
   attempt_count: number;
 }
@@ -448,11 +450,18 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
           SELECT d.id, CONVERT(nvarchar(36), r.registration_id) AS registration_id,
             r.device_token, CONVERT(varchar(20), d.jarvis_session_id) AS session_id,
             CONVERT(varchar(20), d.message_id) AS message_id,
-            d.notification_id, d.preview, d.expires_at, d.attempt_count
+            d.notification_id, d.preview, proactive.message_text AS proactive_text, d.expires_at, d.attempt_count
           FROM dbo.reply_notification_deliveries d
           INNER JOIN @claimed c ON c.id = d.id
           INNER JOIN dbo.approval_notification_registrations r
             ON r.registration_id = d.registration_id
+          OUTER APPLY (
+            SELECT TOP (1) receipt.message_text
+            FROM dbo.pi_message AS receipt
+            WHERE receipt.owner_object_id = @owner AND receipt.message_id = d.message_id
+              AND receipt.session_id = d.jarvis_session_id
+            ORDER BY receipt.id DESC
+          ) AS proactive
           WHERE d.lease_owner = @claimToken
           ORDER BY d.next_attempt_at, d.created_at;
           COMMIT TRANSACTION;`);
@@ -465,6 +474,7 @@ export function createReplyNotificationStore(pool: sql.ConnectionPool): ReplyNot
         messageId: row.message_id,
         notificationId: row.notification_id,
         preview: row.preview,
+        proactiveText: row.proactive_text,
         expiresAt: row.expires_at,
         attemptCount: row.attempt_count,
       }));

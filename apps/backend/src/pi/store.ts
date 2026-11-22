@@ -72,6 +72,12 @@ export interface PiProactiveMessageContext {
   readonly at: Date;
 }
 
+export interface PiProactiveMessageFeedback {
+  readonly messageId: string;
+  readonly rating: 'useful' | 'wrong';
+  readonly text: string;
+}
+
 export interface PiStore {
   getConversation(owner: string, signal: AbortSignal): Promise<PiConversationRow | null>;
   /** Keeps the stored conversation when it already belongs to this agent; otherwise binds the new one and clears its warm state. */
@@ -96,6 +102,8 @@ export interface PiStore {
     readonly textHashes: readonly string[];
   }>;
   latestProactiveMessage(owner: string, since: Date, signal: AbortSignal): Promise<PiProactiveMessageContext | undefined>;
+  recordProactiveMessageFeedback(owner: string, messageId: string, rating: PiProactiveMessageFeedback['rating'], at: Date, signal: AbortSignal): Promise<boolean>;
+  latestProactiveMessageFeedback(owner: string, signal: AbortSignal): Promise<PiProactiveMessageFeedback | undefined>;
   /** One look at a standing watch, recorded when the wake records it. The cost is filled in when the wake ends. */
   recordLook(watch: string, runId: string, at: Date, signal: AbortSignal): Promise<void>;
   /** Gives every look of a wake its share of what the wake cost. */
@@ -108,6 +116,7 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
   const conversations = new Map<string, PiConversationRow>();
   const turns: PiStoredTurn[] = [];
   const messages: (PiMessageRecord & { at: Date })[] = [];
+  const feedback = new Map<string, PiProactiveMessageFeedback & { at: Date; owner: string }>();
   const switches = new Map<string, { enabled: boolean; updatedAt: Date }>();
   const looks: { watch: string; runId: string; at: Date; costDkk: number }[] = [];
   return {
@@ -154,6 +163,18 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
         evidence: [...(record.evidence ?? [])],
         followUpIds: [...(record.followUpIds ?? [])],
       } : undefined;
+    },
+    async recordProactiveMessageFeedback(owner, messageId, rating, at) {
+      owner = owner.toLowerCase();
+      const message = messages.find(entry => entry.ownerObjectId?.toLowerCase() === owner && entry.messageId === messageId && entry.text);
+      if (!message?.text) return false;
+      feedback.set(`${owner}:${messageId}`, { owner, messageId, rating, text: message.text, at });
+      return true;
+    },
+    async latestProactiveMessageFeedback(owner) {
+      const latest = [...feedback.values()].filter(entry => entry.owner === owner.toLowerCase())
+        .sort((a, b) => b.at.getTime() - a.at.getTime())[0];
+      return latest ? { messageId: latest.messageId, rating: latest.rating, text: latest.text } : undefined;
     },
     async recordLook(watch, runId, at) { looks.push({ watch, runId, at, costDkk: 0 }); },
     async allocateRunCost(runId, perLookDkk) { for (const look of looks) if (look.runId === runId) look.costDkk = perLookDkk; },

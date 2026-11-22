@@ -3,6 +3,7 @@ import type { ConversationMessage, ConversationSession, ConversationStore } from
 import { VaultWriteConflictError } from '../../vault/github-client.js';
 import type { PiVault } from '../area.js';
 import type { PiBrainRunResult, PiGateway } from '../gateway.js';
+import { piCostDkk } from '../pricing.js';
 import type { PiBrainRun } from '../turns.js';
 
 /** A vault in memory with the same version rules as the real one: a write needs the current sha, a creation needs none. */
@@ -128,6 +129,7 @@ export interface ScriptedWake {
   readonly runId: string;
   readonly body: string;
   readonly run: PiBrainRun;
+  readonly estimatedInputTokens: number;
 }
 
 /**
@@ -135,7 +137,9 @@ export interface ScriptedWake {
  * returns its closing statement. Tests use it to prove what the loop does with a decision, not what a real model decides.
  */
 export function scriptedGateway(
-  decide: (wake: ScriptedWake) => Promise<{ text: string; tools?: PiBrainRunResult['toolResults']; fail?: boolean; inputTokens?: number; outputTokens?: number }>,
+  decide: (wake: ScriptedWake) => Promise<{
+    text: string; tools?: PiBrainRunResult['toolResults']; fail?: boolean; inputTokens?: number; cachedTokens?: number; outputTokens?: number;
+  }>,
 ): Pick<PiGateway, 'runBrain'> & { readonly wakes: ScriptedWake[] } {
   const wakes: ScriptedWake[] = [];
   return {
@@ -145,13 +149,14 @@ export function scriptedGateway(
         runId: input.runId, sent: [], wrote: [], looked: [],
         evidence: input.evidence ? [...input.evidence] : [],
       };
-      const wake = { runId: input.runId, body: input.body, run };
+      // Offline proxy: ~16.5k for the harness envelope, plus a conservative 3 UTF-8 bytes per token for replay text.
+      const estimatedInputTokens = 16_500 + Math.ceil(Buffer.byteLength(input.body, 'utf8') / 3);
+      const wake = { runId: input.runId, body: input.body, run, estimatedInputTokens };
       wakes.push(wake);
       const decision = await decide(wake);
-      const usage = { inputTokens: decision.inputTokens ?? 12_000, cachedTokens: 0, outputTokens: decision.outputTokens ?? 300 };
-      const cost = usage.inputTokens * 1e-6 * 6.6 + usage.outputTokens * 5e-6 * 6.6;
+      const usage = { inputTokens: decision.inputTokens ?? estimatedInputTokens, cachedTokens: decision.cachedTokens ?? 0, outputTokens: decision.outputTokens ?? 300 };
       return {
-        ok: decision.fail !== true, text: decision.text, usage, costDkk: cost, estimated: false, outcome: decision.fail ? 'failed' : 'ok',
+        ok: decision.fail !== true, text: decision.text, usage, costDkk: piCostDkk(usage), estimated: false, outcome: decision.fail ? 'failed' : 'ok',
         firstTextMs: 900, totalMs: 4_000, toolResults: decision.tools ?? [], run,
         ...(decision.fail ? { error: new (class extends Error { code = 'pi_failed'; })('x') as never } : {}),
       } as PiBrainRunResult;

@@ -524,6 +524,7 @@ describe('structured log export', () => {
     ['pi.usage_record_failed', { kind: 'warm' }],
     ['pi.situation_stale_failed', { activationId: '11111111-1111-4111-8111-111111111111' }],
     ['pi.mark_warm_failed', {}],
+    ['pi.conversation_cleanup_failed', { kind: 'brain', reason: 'timeout' }],
     ['pi.smoke_failed', { code: 'pi_timeout' }],
     ['pi.watches', { reason: 'watch_index_refresh_failed' }],
     ['proactive.reminder_tick', { reason: 'provider_unavailable', count: 3, durationMs: 840 }],

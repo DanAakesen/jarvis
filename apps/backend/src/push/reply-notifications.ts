@@ -9,6 +9,7 @@ import type { ApprovalNotificationSender } from './approval-notifications.js';
 
 const replyCategory = 'jarvis.reply';
 const redactedReply = 'New reply from Jarvis';
+const sentences = new Intl.Segmenter('en', { granularity: 'sentence' });
 const retryBackoffMs = [1_000, 5_000, 20_000, 60_000] as const;
 export const replyNotificationMaxAttempts = 5;
 
@@ -33,18 +34,31 @@ export interface ReplyNotificationWorkerOptions {
   readonly batchSize?: number;
 }
 
-export function safeReplyNotificationPreview(text: string): string {
-  const line = Array.from(text, (character) => {
+function previewLine(text: string): string {
+  return Array.from(text, (character) => {
     const codePoint = character.codePointAt(0);
     return codePoint !== undefined &&
       (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f))
       ? ' '
       : character;
   }).join('').replace(/\s+/gu, ' ').trim();
-  if (shouldRedact(line)) return redactedReply;
-  const characters = [...line];
-  if (characters.length <= 160) return characters.join('') || redactedReply;
-  return `${characters.slice(0, 157).join('').trimEnd()}...`;
+}
+
+function clipPreview(line: string, limit: number): string {
+  const characters = Array.from(line);
+  return characters.length <= limit ? line : `${characters.slice(0, limit - 3).join('').trimEnd()}...`;
+}
+
+export function safeReplyNotificationPreview(text: string): string {
+  const line = previewLine(text);
+  return !line || shouldRedact(line) ? redactedReply : clipPreview(line, 160);
+}
+
+function proactiveAlert(text: string): { title: string; body: string } {
+  const line = previewLine(text);
+  const first = sentences.segment(line)[Symbol.iterator]().next().value?.segment.trim();
+  const sentence = !first || shouldRedact(line) ? redactedReply : first;
+  return { title: clipPreview(sentence, 60), body: clipPreview(sentence, 180) };
 }
 
 export function serializeReplyNotificationEvidence(
@@ -62,16 +76,16 @@ export function replyNotificationPayload(
   input: Pick<ClaimedReplyNotificationDelivery, 'sessionId' | 'messageId'> & {
     readonly preview?: string;
     readonly text?: string;
+    readonly proactiveText?: string | null;
   },
 ): Buffer {
   const preview = input.preview ?? safeReplyNotificationPreview(input.text ?? '');
-  if (!validId(input.sessionId) || !validId(input.messageId) ||
-      !preview.trim() || [...preview].length > 160) {
+  if (!validId(input.sessionId) || !validId(input.messageId) || !preview.trim() || [...preview].length > 160) {
     throw new TypeError('Invalid reply notification');
   }
   return Buffer.from(JSON.stringify({
     aps: {
-      alert: { title: 'Jarvis', body: preview },
+      alert: input.proactiveText ? proactiveAlert(input.proactiveText) : { title: 'Jarvis', body: preview },
       category: replyCategory,
       'thread-id': replyCategory,
       sound: 'default',

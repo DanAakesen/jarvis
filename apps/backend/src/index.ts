@@ -128,6 +128,7 @@ import { createSituationTools } from './pi/situation-tools.js';
 import { createPiArea } from './pi/area.js';
 import { createBrain, type Brain } from './pi/brain/runner.js';
 import { createBrainComms } from './pi/brain/comms.js';
+import { createProactiveMessageFeedbackTool } from './proactive/feedback-tool.js';
 import { createBrainControl } from './pi/brain/control.js';
 import { createBrainTools } from './pi/brain/tools.js';
 import { createDecisionLog } from './pi/brain/decision-log.js';
@@ -1226,6 +1227,7 @@ try {
         ...(piSituationService ? { situation: piSituationService } : {}),
         now: () => new Date(),
       }) : []),
+      ...(brainComms && piStore ? [createProactiveMessageFeedbackTool(piStore, config.auth.ownerObjectId)] : []),
       ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
     ],
     registerRoutes: createPiRoutes({

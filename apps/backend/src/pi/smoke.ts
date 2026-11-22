@@ -1,6 +1,7 @@
 import { PI_MCP_SERVER_LABEL } from './definition.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
-import type { PiEvent, PiGateway, PiUsage } from './gateway.js';
+import type { PiEvent, PiGateway } from './gateway.js';
+import type { PiUsage } from './pricing.js';
 
 interface Measured {
   readonly firstTextMs: number | null;
@@ -86,9 +87,12 @@ export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiS
 export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: 'voice' }): Promise<PiSmokeVoiceReport>;
 export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: 'reach' }): Promise<PiSmokeReachReport>;
 export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: PiSmokePart }): Promise<PiSmokeCoreReport | PiSmokeVoiceReport | PiSmokeReachReport>;
-export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: PiSmokePart }): Promise<PiSmokeCoreReport | PiSmokeVoiceReport | PiSmokeReachReport> {
+export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: PiSmokePart }): Promise<PiSmokeCoreReport | PiSmokeVoiceReport | PiSmokeReachReport> {
   const kit = gateway.smokeKit;
-  const conversationId = await kit.createConversation(signal);
+  return kit.withConversation(signal, id => runSmokePart(kit, id, signal, options));
+}
+
+async function runSmokePart(kit: PiGateway['smokeKit'], conversationId: string, signal: AbortSignal, options: PiSmokeOptions & { readonly part: PiSmokePart }): Promise<PiSmokeCoreReport | PiSmokeVoiceReport | PiSmokeReachReport> {
   const listed = new Map<string, { tools: number; failed: boolean; reason?: string }>();
 
   async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean; environment?: boolean; conversation?: string } = {}): Promise<Measured & { abortToCloseMs: number }> {
@@ -152,7 +156,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   if (options.part === 'core') {
     // The fixed prompt on its own: a new conversation and a reply that needs no skill or tool. Its input tokens are what every
     // conversation starts with; anything a longer turn adds beyond it (skills loaded, tool results) is the conversation's own growth.
-    const baseline = await measure('Reply with exactly: ready', { conversation: await kit.createConversation(signal) });
+    const baseline = await kit.withConversation(signal, conversation => measure('Reply with exactly: ready', { conversation }));
     // A reply of a few dozen words, so streaming can be told from one buffered chunk; one short sentence cannot.
     const cold = await measure('In about 60 words, introduce yourself as PI, Jarvis on the Copilot harness, and say what you can do for Dan.');
     const warm: Measured[] = [];

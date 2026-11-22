@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
+  budgetState, canRunWithinBudget, effectiveProactiveBudget,
 } from '../../proactive/budget.js';
 import type { EventQueueStore } from '../../proactive/events/event-queue.js';
 import { MAX_EVENT_ATTEMPTS } from '../../proactive/events/rules.js';
@@ -11,7 +11,7 @@ import {
 } from '../../proactive/time.js';
 import { sourceIds } from '../../proactive/types.js';
 import { proactiveSettingsRevision } from '../../proactive/preferences.js';
-import { PI_MODEL } from '../definition.js';
+import { PI_WAKE_PREFLIGHT_DKK } from '../pricing.js';
 import type { PiBrainRun } from '../turns.js';
 import type { PiGateway } from '../gateway.js';
 import type { PiProactiveEvidence, PiStore } from '../store.js';
@@ -34,9 +34,6 @@ const HOUR_MS = 60 * 60_000;
 const RETRY_MS = 5 * 60_000;
 const timerMaxAgeMs = HOUR_MS;
 const defaultMaxAgeMs = 24 * HOUR_MS;
-/** What one wake may cost at worst, for the budget check before it starts: a long prompt and a long answer at the model's price. */
-const worstCaseInputTokens = 90_000;
-const worstCaseOutputTokens = 6_000;
 const maxPendingLogs = 24;
 /** A diagnostic read must never hold up a tick, a wake or startup. */
 const diagnosticReadMs = 5_000;
@@ -57,7 +54,7 @@ export interface BrainOptions {
   readonly queue: EventQueueStore;
   readonly gateway: Pick<PiGateway, 'runBrain'>;
   readonly proactive: Pick<ProactiveStore, 'settings' | 'spend' | 'runs'>;
-  readonly piStore: Pick<PiStore, 'readBrainSwitch'>;
+  readonly piStore: Pick<PiStore, 'readBrainSwitch' | 'latestProactiveMessageFeedback'>;
   readonly comms: BrainComms;
   readonly decisionLog: DecisionLog;
   readonly owner: string;
@@ -148,6 +145,17 @@ export function createBrain(options: BrainOptions) {
         return;
       }
       pendingLogs.shift();
+    }
+  }
+
+  async function feedbackForWake(signal: AbortSignal) {
+    try {
+      return await bounded(options.piStore.latestProactiveMessageFeedback(
+        options.owner, AbortSignal.any([signal, AbortSignal.timeout(diagnosticReadMs)]),
+      ), diagnosticReadMs);
+    } catch {
+      log('warn', { reason: 'feedback_unavailable' });
+      return undefined;
     }
   }
 
@@ -251,9 +259,8 @@ export function createBrain(options: BrainOptions) {
     }
     const month = monthKey(current);
     const spent = await proactive.spend.monthTotal(month);
-    const worstCase = estimateCost(PI_MODEL, worstCaseInputTokens, worstCaseOutputTokens).estimatedDkk;
     const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
-    if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
+    if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, PI_WAKE_PREFLIGHT_DKK)) {
       wake(new Date(current.getTime() + HOUR_MS));
       await notifyBudget('exhausted', spent, budgetLimit, signal);
       return result('budget_exhausted');
@@ -328,7 +335,7 @@ export function createBrain(options: BrainOptions) {
       satisfiedSlot: slotKey,
       allowQuiet: activationType === 'event',
       policyRevision: proactiveSettingsRevision(settings),
-      worstCaseDkk: worstCase,
+      worstCaseDkk: PI_WAKE_PREFLIGHT_DKK,
     });
     if (!reservation.allowed) {
       const retryAt = reservation.status.nextAllowedAt
@@ -348,7 +355,7 @@ export function createBrain(options: BrainOptions) {
       body: formatWake({
         runId, activationType, activationSource,
         now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections,
-        policyNote: policyNote(settings), budgetNote,
+        policyNote: policyNote(settings), budgetNote, feedback: await feedbackForWake(signal),
       }),
     }, signal);
     const at = now();
@@ -409,9 +416,8 @@ export function createBrain(options: BrainOptions) {
       return;
     }
     const spent = await options.proactive.spend.monthTotal(monthKey(current));
-    const worstCase = estimateCost(PI_MODEL, worstCaseInputTokens, worstCaseOutputTokens).estimatedDkk;
     const budgetLimit = effectiveProactiveBudget(settings.monthlyBudgetDkk);
-    if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, worstCase)) {
+    if (budgetLimit <= 0 || !canRunWithinBudget(budgetLimit, spent, PI_WAKE_PREFLIGHT_DKK)) {
       await notifyBudget('exhausted', spent, budgetLimit, signal);
       await finishWithoutWake(claim, 'skipped', 'budget_exhausted');
       return;
@@ -436,7 +442,7 @@ export function createBrain(options: BrainOptions) {
       satisfiedSlot: claim.run.slot,
       allowQuiet: claim.run.trigger === 'manual',
       policyRevision: proactiveSettingsRevision(settings),
-      worstCaseDkk: worstCase,
+      worstCaseDkk: PI_WAKE_PREFLIGHT_DKK,
     });
     if (!reservation.allowed) {
       await finishWithoutWake(claim, 'skipped', reservation.reason === 'spaced'
@@ -458,6 +464,7 @@ export function createBrain(options: BrainOptions) {
         events: [],
         sections: extra.sections,
         policyNote: policyNote(settings),
+        feedback: await feedbackForWake(signal),
         budgetNote,
       }),
     }, signal);
