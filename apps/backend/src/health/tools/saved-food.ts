@@ -175,7 +175,7 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
         if (!matches(row) || revision !== expected && revision !== expected + 1n ||
             kind !== 'feedback' && (typeof row.id !== 'string' || !row.id) ||
             change.operation === 'delete_plan' && revision !== expected + 1n) {
-          throw new ToolFailure('The saved-food change may have committed, but its exact receipt is unavailable. Read the saved record; do not retry with a new source or revision.');
+          throw new ToolFailure('The saved-food change may have committed, but its exact receipt is unavailable. Read the saved record; do not retry with a new source or revision.', { outcomeUnknown: true });
         }
         return { status: replay ? change.operation === 'delete_plan' ? 'already-deleted' : 'already-applied' : 'committed',
           operation: change.operation, record: kind === 'feedback' ? projectHealthRecord(row, feedbackFields) : projectNutritionRecord(row, kind) };

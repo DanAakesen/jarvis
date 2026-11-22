@@ -218,7 +218,7 @@ export class SqlHealthCoachStore implements HealthCoachStore {
     } catch (error) {
       if (started) await tx.rollback().catch(() => undefined);
       if (signal.aborted || error instanceof ToolFailure) throw error;
-      throw new ToolFailure('The recovery period was not confirmed as saved. Read markers before retrying.');
+      throw new ToolFailure('The recovery period was not confirmed as saved. Read markers before retrying.', { outcomeUnknown: true });
     }
   }
 }

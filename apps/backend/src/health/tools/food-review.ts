@@ -185,7 +185,7 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
           if (change.operation === 'log_estimate') return foodReceipt(row, key, identity.sourceFingerprint, change.operation, origin.proposalFingerprint);
           if (row.idempotency_key !== key || foodRecordRevision(row) !== expected! + 1n ||
               (change.operation === 'delete' ? row.deleted_at === null : row.deleted_at !== null || !hasFoodReview(row, origin))) {
-            throw new ToolFailure('The food change may have committed, but its receipt is unavailable. Read this exact intake before retrying.');
+            throw new ToolFailure('The food change may have committed, but its receipt is unavailable. Read this exact intake before retrying.', { outcomeUnknown: true });
           }
           return { status: 'committed', operation: change.operation, record: projectNutritionRecord(row, 'history') };
         }, operationSignal, { channel: 'browser', lifetimeSeconds: 120,

@@ -73,7 +73,7 @@ export function foodMessageIdentity(owner: string, source: ConversationMessage) 
 
 export function foodReceipt(row: Record<string, unknown>, key: string, sourceFingerprint: string, operation: string, proposalFingerprint?: string) {
   if (!row || typeof row.id !== 'string' || row.idempotency_key !== key || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
-    throw new ToolFailure('The intake may have committed, but its receipt is unavailable. Retry this same message; do not create a new intake.');
+    throw new ToolFailure('The intake may have committed, but its receipt is unavailable. Retry this same message; do not create a new intake.', { outcomeUnknown: true });
   }
   if (row.deleted_at !== null) throw new ToolRefusal('This message previously logged an intake that was deleted. It was not recreated.');
   const provenance: unknown = typeof row.nutrient_provenance_json === 'string' ? JSON.parse(row.nutrient_provenance_json) : null;

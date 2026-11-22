@@ -1046,7 +1046,7 @@ async function writeHandler(
     const merged = object(await confirmation.execute(() => githubJson(`${base}/pulls/${number}/merge`, token, signal, 'PUT', {
       merge_method: method, sha: expected.toLowerCase(),
     }), signal));
-    if (merged?.merged !== true) throw new ToolFailure('I couldn’t confirm that the pull request merged.');
+    if (merged?.merged !== true) throw new ToolFailure('I couldn’t confirm that the pull request merged.', { outcomeUnknown: true });
     return { status: 'merged', repository, number, sha: safeString(merged.sha, 40), message: safeString(merged.message, 500) };
   }
   if (name === 'pr_ready') {

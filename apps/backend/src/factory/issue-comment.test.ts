@@ -8,10 +8,10 @@ const issue = { number: 12, url: 'https://github.com/DanAakesen/jarvis/issues/12
 const never = new AbortController().signal;
 const caught = (work: Promise<unknown>) => work.then(() => undefined, (error: unknown) => error);
 
-/** GitHub keeps every comment it is sent. `lostReplies` posts land, but their answer never arrives. */
-function githubWith(options: { lostReplies?: number; refuse?: number } = {}) {
+/** GitHub keeps every comment it is sent. `lostReplies` posts land, but their answer never arrives; `badGateway` posts land and GitHub answers 502; `refuse` posts are refused (422). */
+function githubWith(options: { lostReplies?: number; refuse?: number; badGateway?: number } = {}) {
   const comments: { author: string; body: string }[] = [];
-  const state = { attempts: 0, lostReplies: options.lostReplies ?? 0, refuse: options.refuse ?? 0 };
+  const state = { attempts: 0, lostReplies: options.lostReplies ?? 0, refuse: options.refuse ?? 0, badGateway: options.badGateway ?? 0 };
   return {
     comments, state,
     client: {
@@ -19,8 +19,9 @@ function githubWith(options: { lostReplies?: number; refuse?: number } = {}) {
       readComments: async () => comments,
       createComment: async (_repository: string, _issue: number, body: string) => {
         state.attempts += 1;
-        if (state.refuse > 0) { state.refuse -= 1; throw Object.assign(new Error('GitHub issue request failed'), { status: 502 }); }
+        if (state.refuse > 0) { state.refuse -= 1; throw Object.assign(new Error('GitHub issue request failed'), { status: 422 }); }
         comments.push({ author: 'jarvis', body });
+        if (state.badGateway > 0) { state.badGateway -= 1; throw Object.assign(new Error('GitHub issue request failed'), { status: 502 }); }
         if (state.lostReplies > 0) { state.lostReplies -= 1; throw new TypeError('fetch failed'); }
       },
     },
@@ -78,11 +79,23 @@ describe('issue_comment, asked twice by one instruction', () => {
     expect(github.comments).toHaveLength(1);
   });
 
+  it('does not post a second time when GitHub answered 502 after it stored the comment', async () => {
+    const github = githubWith({ badGateway: 1 });
+    const comment = backend(github);
+    const unsure = await caught(comment('101', 'The search is slow on mobile.'));
+    expect(unsure).toBeInstanceOf(ToolFailure);
+    expect(unsure).toMatchObject({ outcomeUnknown: true });
+    expect((unsure as Error).message).toMatch(/not posted twice/u);
+    expect(await comment('101', 'The search is slow on mobile.')).toMatchObject({ status: 'commented', alreadyPosted: true });
+    expect(github.comments).toHaveLength(1);
+  });
+
   it('tries again when GitHub refused the first attempt', async () => {
     const github = githubWith({ refuse: 1 });
     const comment = backend(github);
     const refused = await caught(comment('101', 'The search is slow on mobile.'));
     expect((refused as Error).message).toBe('I couldn’t post the GitHub issue comment.');
+    expect(refused).toMatchObject({ outcomeUnknown: false });
     expect(await comment('101', 'The search is slow on mobile.')).toMatchObject({ status: 'commented' });
     expect(github.comments).toHaveLength(1);
     expect(github.state.attempts).toBe(2);

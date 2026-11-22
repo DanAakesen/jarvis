@@ -798,7 +798,7 @@ async function confirmIssueCreation(
           }
           await request.server.githubIssueClient!.createComment(action.repository, created.number, image, signal);
         } catch {
-          throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`);
+          throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`, { outcomeUnknown: true });
         }
       }
       return created;
@@ -809,12 +809,12 @@ async function confirmIssueCreation(
       throw new ToolRefusal(`${action.taskCode} was taken before confirmation; nothing was created. Draft the issue again to review the next available code.`);
     }
     if (error instanceof IssueCreationPartialError) {
-      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but its ${error.executor} handoff could not be confirmed. Check the issue before retrying.`);
+      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but its ${error.executor} handoff could not be confirmed. Check the issue before retrying.`, { outcomeUnknown: true });
     }
     if (error instanceof IssueWriteUncertainError) {
-      throw new ToolFailure('Could not confirm whether the issue was created. Check the repository before retrying.');
+      throw new ToolFailure('Could not confirm whether the issue was created. Check the repository before retrying.', { outcomeUnknown: true });
     }
-    throw new ToolFailure('The GitHub write could not be confirmed. Check the issue and attachment branch before retrying.');
+    throw new ToolFailure('The GitHub write could not be confirmed. Check the issue and attachment branch before retrying.', { outcomeUnknown: true });
   }
 }
 
@@ -1011,10 +1011,12 @@ export const factoryTools: readonly JarvisTool[] = [
               if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
               const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
               if (status === 403) throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
-              // GitHub answered with an error: nothing was posted. With no answer it may have been; the next try looks first.
-              throw new ToolFailure(typeof status === 'number'
+              // A 4xx answer means nothing was posted. A 5xx, or no answer at all, can come after GitHub stored the comment; the next try looks first.
+              const refused = typeof status === 'number' && status < 500;
+              throw new ToolFailure(refused
                 ? 'I couldn’t post the GitHub issue comment.'
-                : 'I couldn’t confirm whether the GitHub issue comment was posted. Asking again checks the issue first, so it is not posted twice.');
+                : 'I couldn’t confirm whether the GitHub issue comment was posted. Asking again checks the issue first, so it is not posted twice.',
+              refused ? {} : { outcomeUnknown: true });
             }
             return { status: 'commented', number: input.issueNumber, url: issue.url };
           }, { byDraft: true, forgetFailures: true });
@@ -1356,13 +1358,13 @@ export const factoryTools: readonly JarvisTool[] = [
         ...(reasoning ? { reasoningOverride: reasoning } : {}),
       }).catch((error: unknown) => {
         if (error instanceof LinkedIssueTaskCreationError) {
-          throw new ToolFailure(`GitHub issue #${error.issue.number} was created, but its Factory task could not be queued.`);
+          throw new ToolFailure(`GitHub issue #${error.issue.number} was created, but its Factory task could not be queued.`, { outcomeUnknown: true });
         }
         throw new ToolFailure('The GitHub issue or linked Factory task could not be created.');
       });
       if (!linked) throw new ToolRefusal('Active project not found.');
       if ('kind' in linked) {
-        throw new ToolFailure(`GitHub issue #${linked.issue.number} was created, but its Factory task could not be queued.`);
+        throw new ToolFailure(`GitHub issue #${linked.issue.number} was created, but its Factory task could not be queued.`, { outcomeUnknown: true });
       }
       return {
         task: { id: linked.task.id, title: linked.task.title, state: linked.task.state, agent: linked.task.agent },

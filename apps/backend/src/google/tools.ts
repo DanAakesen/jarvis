@@ -289,7 +289,7 @@ function calendarTruncated(payload: Record<string, unknown>, eventCount: number)
 // `item` names what a missing-item failure was about: an event, a draft or a message.
 function googleFailure(error: unknown, item?: string): never {
   if (!(error instanceof GoogleApiError)) throw error;
-  const failure = new ToolFailure(googleFailureReason(error, item));
+  const failure = new ToolFailure(googleFailureReason(error, item), error.kind === 'uncertain' ? { outcomeUnknown: true } : {});
   // Lets a repeat of this call tell a failure that changed nothing from one that may have happened.
   failure.cause = error;
   throw failure;
