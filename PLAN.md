@@ -1,3 +1,20 @@
+## Offline tool conformance suite — 21 November 2026 (#1967, #2012)
+
+**Status: suite, search fixes, tool fixes and generated table done and green offline; exact-head CI and a live Chat/Voice retest of the daily-core scenarios are pending. Dan decides the open items listed in the PR.**
+
+| Step | State |
+| --- | --- |
+| Enumerate the real registry; static harness checks (name, `___`, schema, description, size) and the 15 largest schemas in tokens | Done |
+| Discoverable: curated English and Danish phrases in the top 3 of the first `find_tools`; every other tool found from its own description; fixes as data in `pi/tool-search.ts` | Done |
+| Callable: every tool through the real `call_tool` path over in-memory stores and stubbed services; `requiresExternal` for hardware and live OAuth, still failing cleanly | Done |
+| Remote: stub GitHub and Azure MCP servers (idle, starting, ready, named-provider wait, stale, unreachable, erroring call, very large result) | Done |
+| Daily-core golden scenarios (project, notes, tasks, workouts, nutrition) in English and Danish, one turn, no confirmation | Done |
+| Generated table `docs/tool-conformance.md`, checked on every run | Done |
+| Approvals inventory (non-delete gates, listed in the PR, none removed) | Done; Dan decides what to relax |
+| Live Chat and Voice retest of the five scenarios on the deployed agent | **Open**; needs a live turn |
+
+No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or provider call belongs to this task.
+
 ## Native harness calls finish; client-owned ones are answered — 21 November 2026 (#1967)
 
 **Status: classification, follow-up loop and offline tests done; exact-head CI and a live Chat retest ("use a sub-agent to check my calendar") are pending.**
