@@ -98,6 +98,13 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 7. **Delivery.** A PR must contain current `main` and have green aggregate CI on its exact head before it merges, or Deploy stops at `exact_qualification_missing` and ships nothing. An independent review of the exact head comes before the merge. Agents never merge their own PRs.
 8. **No paid or live tests.** Do not run `measure_pi`, `probe_pi_wake`, a live smoke, a voice session, a Foundry, Azure or GitHub MCP call or a paid canary from a coding session. Dan owns Deploy, live and device acceptance. See "Test policy and Azure cost".
 
+## Shared Chat and Voice turn lifetimes — 22 November 2026
+
+- Offline regression checks: `cd apps/backend && npx vitest run src/pi/gateway.test.ts src/voice/pi-voice.test.ts src/voice/relay-termination.test.ts src/voice/chat-voice-parity.test.ts`. The fixtures hold a stream or a context read at a known point; they do not call Foundry or GPT-Live.
+- For an interrupted turn, compare `voice.pi_turn` with `pi.turn` by channel and time. `timeout` is the deadline; `cancelled` is an explicit stop at the gateway (including a superseded voice turn). In `pi.stream_failed`, `cancel_no_response_id` means the gateway could only stop the local stream; `cancel_request_failed` means the best-effort cancel did not answer successfully before handoff. Chat and Voice wait in arrival order at the gateway. A wait uses up the same deadline and produces no model request or `pi.turn` ledger row if it expires before the turn starts.
+- Deadline messages come from `failureCopy`: `took_too_long_clean` without evidence of tool work, `took_too_long` if work may already have been done. The gateway chooses for both Chat and Voice. Voice sends that sentence before the cancel request; queued turns still wait for the cancel or its 5 s bound.
+- A `voice.stage_timeout` for `proactive_context` with `voice.proactive_context_unavailable` means the optional read was skipped, not that audio startup failed. Check `voice.session_stage` for connection and readiness separately.
+
 ## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
 
 - GitHub releases, issues, comments, pull requests and failed default-branch checks, failed reminder deliveries and calendar clashes now reach the proactive event queue as plain events (`docs/architecture.md`, "Signals that matter to Dan"). No migration, setting or switch was added: an event follows the existing source switches it rests on (**Factory** for GitHub and Worker, **Calendar**, and **Todos** for a failed reminder), and the queue's entrance does not queue an event while one of them is off.

@@ -634,7 +634,7 @@ try {
         recordStatusEvidence('foundry.chat', {
           status: evidence.outcome === 'ok' ? 'ok'
             : evidence.outcome === 'cancelled' ? 'unknown'
-              : evidence.reason === 'busy' || evidence.reason === 'budget_exhausted' ? 'degraded' : 'down',
+              : evidence.reason === 'conversation_wait_timeout' || evidence.reason === 'budget_exhausted' ? 'degraded' : 'down',
           checkedAt: evidence.at,
           details: {
             configured: true,
