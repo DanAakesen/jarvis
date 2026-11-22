@@ -330,6 +330,7 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 ## iPhone TestFlight checks — 22 November 2026 (#2005, #2007, #2008)
 
 - From `apps/ios/Packages/JarvisCore`, `swift test --filter 'JarvisNotesRedesignTests|PiRuntimeTests|VoiceVisualHistoryTests|VoiceCaptionTests'` exercises title edits, the Proactive request contract and Voice direction/selection with fixtures. Linux Swift 6.2 can build JarvisCore and parse SwiftUI sources but cannot type-check or render the iPhone app. The macOS `watch` job builds the app.
+- When removing shared keys or APIs, check callers across all of `apps/ios`, including shorthand enum members such as `.paused`. Swift syntax parsing does not catch missing members; the macOS `capture` and `watch` jobs compile the app.
 - On a Mac simulator, `--ui-test-navigation --screenshot-screen=notes` provides a headingless root note (**Welcome**) and `--screenshot-settings-fixture` provides in-memory Settings. Use the Voice fixture flags below for the compact and expanded carousel. Static captures do not verify gestures or VoiceOver.
 - This PR uses offline and fixture checks only: no `measure_pi`, Foundry probes or live model smoke. The single Proactive switch is in iPhone Settings; do not add one back to the Proactive editor or change the owner `/pi/brain` contract.
 

@@ -10250,8 +10250,9 @@ The local account-bound cache stores pinned paths separately from note response
 cache invalidation. No vault schema changes or synthetic live content are added.
 On iPhone (#2005), `JarvisNoteParts` projects the leading H1 or filename into
 the same editable title field. The editor saves Markdown to the same path and
-reads back the saved note for the reader. The list can show that confirmed
-title before its normal asynchronous vault index refresh returns the same title.
+invalidates Notes and Tasks caches before reading the saved note back for the
+reader. The list can show that confirmed title before the asynchronous vault
+index returns it.
 JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.
 

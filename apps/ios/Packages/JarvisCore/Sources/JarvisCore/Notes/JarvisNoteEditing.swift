@@ -52,7 +52,10 @@ public struct JarvisNoteParts: Equatable, Sendable {
             let firstEnding = head.first(where: \.isNewline) ?? body.first(where: \.isNewline)
             let newline = firstEnding == "\r\n" ? "\r\n" : "\n"
             if !head.isEmpty, head.last?.isNewline == false { updated.head += newline }
-            updated.titleEnding = body.isEmpty ? "" : newline + newline
+            if !body.isEmpty {
+                let startsWithBlankLine = body.prefix(while: { !$0.isNewline }).allSatisfy(\.isWhitespace)
+                updated.titleEnding = startsWithBlankLine ? newline : newline + newline
+            }
         }
         updated.title = edited
         return updated.content

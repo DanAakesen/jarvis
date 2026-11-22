@@ -67,6 +67,7 @@ or save fails. There is no second switch, duplicate state caption, daily turn
 count, or separate Save button on this page. The Proactive editor still edits
 sources, categories, scope, budget, daily turns, feeds and guidance. The
 read-only detail is called **Background suggestions**, with no engine name.
+An existing backend pause reads as Off on both iPhone surfaces.
 This supersedes the iPhone layout below; the web UI is unchanged.
 
 ## Background PI in Proactive — 19 November 2026 (historical)

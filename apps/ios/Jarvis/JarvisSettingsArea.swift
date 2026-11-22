@@ -644,7 +644,7 @@ struct JarvisSettingsArea: View {
         case .string(let value): return localizedValue(value)
         case .integer(let value): return String(value)
         case .number(let value): return String(value)
-        case .boolean(let value): return copy(value ? .running : .paused)
+        case .boolean(let value): return copy(value ? .booleanOn : .booleanOff)
         case .null: return nil
         case .object, .array: return nil
         }

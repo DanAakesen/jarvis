@@ -450,9 +450,10 @@ The managed instructions read the tool reference from the first line. The normal
 - **Proactive:** Settings owns the iPhone's only master switch; the Proactive
   editor keeps source and policy controls. On means the backend can start a
   background wake (`available && enabled && !paused`), not that it will start
-  one immediately. Turning Off writes the owner flag only; turning On clears
-  an existing pause by revision before enabling the flag. Reminders, the web
-  UI and scheduling limits are unchanged.
+  one immediately. A backend pause reads as Off on iPhone. Turning Off writes
+  the owner flag only, not the pause setting; turning On clears an existing
+  pause by revision before enabling the flag. Reminders, the web UI and
+  scheduling limits are unchanged.
 - **Voice:** replace the Resize button and top-left Close from #1958 with a
   scroll-free resize grabber and top-right Close. Use the existing full-screen
   carousel when expanded. The footer means the Previous/Next row, not the

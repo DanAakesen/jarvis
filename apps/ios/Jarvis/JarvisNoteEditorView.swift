@@ -320,6 +320,9 @@ struct JarvisNoteEditorSheet: View {
 
     @MainActor
     private func finish(path: String, confirmed: VaultNote? = nil) async {
+        // The write landed even if the follow-up read fails.
+        await JarvisAppCache.invalidateAll(.notes)
+        await JarvisAppCache.invalidateAll(.tasks)
         let refreshed: VaultNote
         do {
             if let confirmed { refreshed = confirmed } else { refreshed = try await client.readNote(path: path) }
@@ -327,8 +330,6 @@ struct JarvisNoteEditorSheet: View {
             failure = .unconfirmed
             return
         }
-        await JarvisAppCache.invalidateAll(.notes)
-        await JarvisAppCache.invalidateAll(.tasks)
         onSaved(refreshed)
         dismiss()
     }

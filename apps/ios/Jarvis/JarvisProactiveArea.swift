@@ -328,12 +328,13 @@ struct JarvisProactiveArea: View {
     }
 
     private func sentence(_ status: JarvisProactiveStatus) -> String {
-        if status.background?.enabled == false { return text(.proactiveBackgroundOff) }
         switch JarvisProactiveLogic.statusLine(status) {
         case .checking:
             return text(.proactiveSentenceChecking)
-        case .paused:
-            return text(.proactiveSentencePaused)
+        case .off:
+            return text(.proactiveBackgroundOff)
+        case .unavailable:
+            return text(.proactiveUnavailable)
         case .quietHours(let next):
             guard let next else { return text(.proactiveSentenceQuietNoSlot) }
             return JarvisInsightsLocalization.format(.proactiveSentenceQuiet, language: language, dateTime(next))
@@ -402,10 +403,7 @@ struct JarvisProactiveArea: View {
                 }
                 .accessibilityHint(statusAvailabilityText)
             }
-            if loaded?.paused == true {
-                JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
-                    .accessibilityIdentifier("proactive.paused")
-            } else if loaded?.quietNow == true {
+            if let loaded, case .quietHours = JarvisProactiveLogic.statusLine(loaded) {
                 JarvisInsightsBadge(title: text(.proactiveQuietBanner), systemImage: "moon.zzz")
                     .accessibilityIdentifier("proactive.quiet")
             }

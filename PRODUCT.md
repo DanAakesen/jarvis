@@ -286,9 +286,10 @@ Background suggestions are a separate policy decision, not an engine
 selector. On iPhone, Settings > Proactive has one switch for them (#2007). It
 is off by default, resumes an existing pause when explicitly turned on, and
 keeps its state after reopening the app. An off switch prevents new background
-wakes; being on does not bypass source, budget or scheduling policy. Read and
-save failures offer Retry. Removing the normal engine selector does not remove
-the old harness infrastructure; that broader retirement remains gated separately.
+wakes without pausing reminders; being on does not bypass source, budget or
+scheduling policy. Read and save failures offer Retry. Removing the normal
+engine selector does not remove the old harness infrastructure; that
+broader retirement remains gated separately.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 

@@ -48,6 +48,16 @@ final class JarvisNotesRedesignTests: XCTestCase {
         XCTAssertEqual(parts.content(editedTitle: " ", path: path), parts.content)
     }
 
+    func testRenamingAHeadinglessNoteDoesNotAddAnotherBlankLine() {
+        let properties = "---\r\nflag: true\r\n---\r\n"
+        for body in ["\r\nOriginal body", " \t\r\nOriginal body", "\r\n\r\nOriginal body"] {
+            let source = properties + body
+            let renamed = JarvisNoteParts(source).content(editedTitle: "New title", path: "old-name.md")
+            XCTAssertEqual(renamed, properties + "# New title\r\n" + body)
+            XCTAssertEqual(JarvisNoteParts(renamed).readableBody, body)
+        }
+    }
+
     func testEditingOnlyTheBodyDoesNotPromoteTheFallbackTitle() {
         var parts = JarvisNoteParts("Original body")
         parts.body = "New body"

@@ -152,7 +152,6 @@
 "insights.proactiveTabEarlier" = "Earlier";
 "insights.proactiveTabs" = "View";
 "insights.proactiveSentenceChecking" = "Jarvis is checking now.";
-"insights.proactiveSentencePaused" = "Automatic suggestions are paused.";
 "insights.proactiveSentenceQuiet" = "Quiet hours. Next check %@.";
 "insights.proactiveSentenceQuietNoSlot" = "Quiet hours.";
 "insights.proactiveSentenceNext" = "Next check %@.";
@@ -232,7 +231,6 @@
 "insights.proactiveEmptyEarlier" = "No earlier suggestions";
 "insights.proactiveUnavailable" = "Proactive is not available";
 "insights.proactiveSignIn" = "Sign in again to see proactive suggestions";
-"insights.proactivePausedBanner" = "Paused";
 "insights.proactiveQuietBanner" = "Quiet hours";
 "insights.proactiveCheckStarted" = "Check started";
 "insights.proactiveCheckFailed" = "The check could not start";

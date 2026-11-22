@@ -97,6 +97,8 @@ public enum JarvisSettingsLocalizationKey: String, CaseIterable, Hashable, Senda
     case voiceMinimizeWindows = "settings.voice.minimizeWindows"
     case researchDepth = "settings.researchDepth"
     case maximumSources = "settings.maximumSources"
+    case booleanOn = "settings.booleanOn"
+    case booleanOff = "settings.booleanOff"
     case proactiveSuggestions = "settings.proactiveSuggestions"
     case proactiveSaveFailed = "settings.proactiveSaveFailed"
     case none = "settings.none"

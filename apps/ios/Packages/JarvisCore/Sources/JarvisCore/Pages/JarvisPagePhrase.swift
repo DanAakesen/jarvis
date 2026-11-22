@@ -292,8 +292,12 @@ public enum JarvisUsagePagePhrase {
 /// Proactive header phrase, written from the open suggestions and the next check.
 public enum JarvisProactivePagePhrase {
     public static func make(status: JarvisProactiveStatus, openItems: Int, language: JarvisAppLanguage, firstTitle: String? = nil) -> JarvisPagePhrase {
-        if status.paused {
-            return JarvisPagePhrase(markup: "Dan, proactive is {paused}.")
+        switch JarvisProactiveLogic.statusLine(status) {
+        case .off:
+            return JarvisPagePhrase(markup: "Dan, proactive suggestions are {off}.")
+        case .unavailable:
+            return JarvisPagePhrase(markup: "Dan, proactive suggestions are {unavailable}.")
+        default: break
         }
         if let firstTitle, openItems > 0 {
             let safeTitle = firstTitle.replacingOccurrences(of: "{", with: "(").replacingOccurrences(of: "}", with: ")")

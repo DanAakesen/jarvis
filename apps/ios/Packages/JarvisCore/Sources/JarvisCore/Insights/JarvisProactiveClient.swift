@@ -502,7 +502,8 @@ public struct JarvisProactiveSettingsEditor: Equatable, Sendable {
 
 public enum JarvisProactiveStatusLine: Equatable, Sendable {
     case checking
-    case paused
+    case off
+    case unavailable
     case quietHours(next: Date?)
     case nextCheck(Date)
     case none
@@ -512,11 +513,12 @@ public enum JarvisProactiveLogic {
     /// Status and open items refresh this often while the page is visible.
     public static let refreshInterval = Duration.seconds(10)
 
-    /// The next-check sentence: a running check wins, then paused, then quiet hours, then the next slot.
+    /// Use the same wake eligibility as the Settings switch before showing any schedule.
     public static func statusLine(_ status: JarvisProactiveStatus) -> JarvisProactiveStatusLine {
+        guard let background = status.background, background.available else { return .unavailable }
+        guard background.allowsProactiveWakes else { return .off }
         if status.lastRun?.status == .running { return .checking }
         let next = status.nextSlotAt.flatMap(JarvisInsightsDates.parse)
-        if status.paused { return .paused }
         if status.quietNow { return .quietHours(next: next) }
         if let next { return .nextCheck(next) }
         return .none

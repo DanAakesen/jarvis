@@ -431,6 +431,29 @@ final class PiRuntimeTests: XCTestCase {
         }
     }
 
+    func testProactivePageUsesTheSameOffStateAsTheSettingsSwitch() throws {
+        let fixtures = [
+            (brainResponse(enabled: false), JarvisProactiveStatusLine.off),
+            (brainResponse(enabled: true, paused: true), .off),
+            (brainResponse(enabled: false, available: false), .unavailable),
+            (brainResponse(enabled: true), .quietHours(next: nil)),
+        ]
+        for (response, expected) in fixtures {
+            let background = try JSONDecoder().decode(PiBrainStatus.self, from: response.body)
+            let status = JarvisProactiveStatus(
+                paused: background.paused, quietNow: true, nextSlotAt: nil, lastRun: nil,
+                budget: JarvisProactiveBudget(month: "2026-11", monthlyLimitDkk: 100, estimatedSpendDkk: 0, state: .ok),
+                sources: [], background: background
+            )
+            XCTAssertEqual(JarvisProactiveLogic.statusLine(status), expected)
+            if expected == .off {
+                XCTAssertFalse(background.allowsProactiveWakes)
+                let phrase = JarvisProactivePagePhrase.make(status: status, openItems: 0, language: .en)
+                XCTAssertEqual(phrase.plainText, "Dan, proactive suggestions are off.")
+            }
+        }
+    }
+
     func testPiBrainStatusAndMemoryReadsRemainRetryableAfterUnavailableResponses() async throws {
         let memoryBody = #"""
         {"items":[{"id":"1","type":"memory","title":"Fixture memory","folder":"General","content":"A retained memory"}],

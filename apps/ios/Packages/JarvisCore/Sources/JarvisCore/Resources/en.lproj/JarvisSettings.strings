@@ -81,6 +81,8 @@
 "settings.voice.minimizeWindows" = "Minimise windows when Voice starts";
 "settings.researchDepth" = "Research depth";
 "settings.maximumSources" = "Maximum sources";
+"settings.booleanOn" = "On";
+"settings.booleanOff" = "Off";
 "settings.proactiveSuggestions" = "Proactive suggestions";
 "settings.proactiveSaveFailed" = "Couldn't save Proactive.";
 "settings.none" = "None";
