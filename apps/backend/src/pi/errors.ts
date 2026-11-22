@@ -12,15 +12,20 @@ export class PiGatewayError extends Error {
   readonly userMessage: string;
   readonly spokenMessage: string;
   readonly detail: string | undefined;
+  /** A final message backed by actual tool results, not an error string or model reply. Keep it out of diagnostics. */
+  readonly receipt: string | undefined;
   /**
    * `detail` names the technical cause for the log and is never shown: the provider's own short error code, an HTTP answer as
    * `http_<status>`, or one of the gateway's own stream reasons (letters, digits and `_.:-` only).
    */
-  constructor(readonly code: PiErrorCode, readonly kind: FailureKind, options?: ErrorOptions & { readonly detail?: string | undefined }) {
+  constructor(readonly code: PiErrorCode, readonly kind: FailureKind, options?: ErrorOptions & {
+    readonly detail?: string | undefined; readonly receipt?: string;
+  }) {
     super(`PI gateway failed (${code}${options?.detail ? `: ${options.detail}` : ''})`, options);
     this.name = 'PiGatewayError';
     this.userMessage = failureCopy[kind].chat;
-    this.spokenMessage = failureCopy[kind].voice;
+    this.spokenMessage = options?.receipt ?? failureCopy[kind].voice;
     this.detail = options?.detail;
+    this.receipt = options?.receipt;
   }
 }

@@ -65,6 +65,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
   let running = 0;
 
   async function run(turn: PiVoiceTurn, controller: AbortController): Promise<void> {
+    const deadlineAt = performance.now() + deadlineMs;
     const deadline = AbortSignal.timeout(deadlineMs);
     const signal = AbortSignal.any([options.signal, controller.signal, deadline]);
     let outcome: PiVoiceTurnLog['outcome'];
@@ -76,7 +77,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       signal.throwIfAborted();
       let partial = '';
       for await (const chunk of options.agent.stream({
-        messageId: turn.messageId, sessionId: turn.sessionId, text: turn.text, channel: 'voice',
+        messageId: turn.messageId, sessionId: turn.sessionId, text: turn.text, channel: 'voice', deadlineAt,
         ...(turn.proactiveContext ? { proactiveContext: turn.proactiveContext } : {}),
         onTurnDeadline(text) {
           if (timeoutSpoken || options.signal.aborted || controller.signal.aborted) return;

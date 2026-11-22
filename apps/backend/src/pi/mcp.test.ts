@@ -117,13 +117,14 @@ describe('PI MCP server', () => {
     expect(elsewhere.statusCode).toBe(403);
   });
 
-  it('advertises only the door methods when no quick tools are registered', async () => {
-    const { rpc } = setup();
+  it('keeps the two MCP names available to existing conversations even with weather, calendar and reminders registered', async () => {
+    const tools = ['weather', 'calendar_list_events', 'owner_reminders'].map(name => ({ ...probe, name }));
+    const { rpc } = setup([], { tools });
     const names = ((await rpc(`jp.${secret}`, 'tools/list')).json?.result?.tools as Array<{ name: string }>).map((tool) => tool.name).sort();
     expect(names).toEqual(['call_tool', 'find_tools']);
   });
 
-  it('runs a direct tool with a live turn only, through the same route and ledger as call_tool', async () => {
+  it('calls calendar through the existing door with a discovered tool and a live turn', async () => {
     const calendar: JarvisTool = { ...probe, name: 'calendar_list_events', execution: { defaultEffect: 'read' } };
     const { registry, tool, recorded, ledger } = setup([], { tools: [calendar] });
     const grant = registry.open({
@@ -134,30 +135,33 @@ describe('PI MCP server', () => {
       },
     });
     const args = { text: 'hej' };
-    const missing = await tool(calendar.name, args);
+    const payload = { name: calendar.name, arguments: args };
+    const missing = await tool('call_tool', payload);
     expect(missing.isError).toBe(true);
     expect(recorded).toEqual([]);
-    const forged = await tool(calendar.name, { ...args, turn: `jt-${'a'.repeat(22)}` });
+    const forged = await tool('call_tool', { ...payload, turn: `jt-${'a'.repeat(22)}` });
     expect(forged.body).toMatchObject({ outcome: 'refused' });
-    // The generic call also works before a search or a direct invocation.
-    const generic = await tool('call_tool', { turn: grant.turn, name: calendar.name, arguments: args });
-    const direct = await tool(calendar.name, { ...args, turn: grant.turn });
-    expect(direct.body).toMatchObject({ tool: calendar.name, outcome: 'ok', result: { echoed: 'hej', messageId: '42', asAgent: true } });
-    expect(direct.body).toEqual(generic.body);
-    expect(grant.discovered.has(calendar.name)).toBe(true);
+    const request = { ...payload, turn: grant.turn };
+    expect((await tool('call_tool', request)).body).toMatchObject({ outcome: 'refused' });
+    const found = await tool('find_tools', { turn: grant.turn, query: calendar.name });
+    expect(found.body?.result.tools[0].name).toBe(calendar.name);
+    expect((await tool('call_tool', request)).body).toMatchObject({
+      tool: calendar.name, outcome: 'ok', result: { echoed: 'hej', messageId: '42', asAgent: true },
+    });
     registry.close(grant.turn);
-    const closed = await tool(calendar.name, { ...args, turn: grant.turn });
+    const closed = await tool('call_tool', request);
     expect(closed.body).toMatchObject({ outcome: 'refused' });
-    expect(recorded).toEqual(Array.from({ length: 2 }, () => ({ messageId: '42', tool: calendar.name })));
+    expect(recorded).toEqual([{ messageId: '42', tool: calendar.name }]);
     expect(ledger().map(({ tool, outcome, channel, provider }) => [tool, outcome, channel, provider])).toEqual([
       [calendar.name, 'refused', undefined, 'local'],
-      [calendar.name, 'ok', 'voice', 'local'],
+      [calendar.name, 'refused', 'voice', 'local'],
+      ['find_tools', 'ok', 'voice', 'local'],
       [calendar.name, 'ok', 'voice', 'local'],
       [calendar.name, 'refused', undefined, 'local'],
     ]);
   });
 
-  it('applies the existing wake source policy to a direct tool', async () => {
+  it('does not let a wake read a disabled source by naming its tool', async () => {
     const calendar: JarvisTool = { ...probe, name: 'calendar_list_events', execution: { defaultEffect: 'read' } };
     const { registry, tool, recorded } = setup([], { tools: [calendar] });
     const grant = registry.open({
@@ -168,8 +172,8 @@ describe('PI MCP server', () => {
         stateRevision: 0, stateHash: null, policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: ['calendar'],
       },
     });
-    const direct = await tool(calendar.name, { turn: grant.turn, text: 'hej' });
-    expect(direct.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
+    const result = await tool('call_tool', { turn: grant.turn, name: calendar.name, arguments: { text: 'hej' } });
+    expect(result.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('disabled') } });
     expect(grant.results).toEqual([{ tool: calendar.name, outcome: 'refused' }]);
     expect(recorded).toEqual([]);
   });
@@ -1060,26 +1064,25 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     });
   });
 
-  it('shortens a direct read without splitting emoji or cutting its receipt or confirmation', async () => {
+  it('shortens a calendar read without splitting emoji or cutting its receipt or confirmation', async () => {
     const value = { rows: '😀"\n\\'.repeat(6_000), receipt: { id: 'receipt-42', status: 'delivered' }, confirmation: 'The read finished.' };
     const read = counting('calendar_list_events', { defaultEffect: 'read' }, () => value);
     const { registry, tool, ledger } = setup([], { tools: [read.tool] });
     const grant = open(registry);
-    const direct = await tool('calendar_list_events', { turn: grant.turn });
-    const generic = await tool('call_tool', call(grant.turn, 'calendar_list_events', {}));
-    expect(direct.body).toEqual(generic.body);
-    expect(direct.body).toMatchObject({
+    await tool('find_tools', { turn: grant.turn, query: 'calendar_list_events' });
+    const readback = await tool('call_tool', call(grant.turn, 'calendar_list_events', {}));
+    expect(readback.body).toMatchObject({
       outcome: 'ok', confirmation: 'Done: calendar_list_events succeeded. Result shortened.',
       result: { truncated: true, totalCharacters: JSON.stringify(value).length, receipt: value.receipt, confirmation: value.confirmation },
     });
-    const result = direct.body?.result;
+    const result = readback.body?.result;
     const rows: string = JSON.parse(result.preview).rows;
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.length).toBeLessThan(value.rows.length);
     expect(rows).not.toMatch(/[\uD800-\uDFFF]/u);
     expect(value.rows.startsWith(rows)).toBe(true);
     expect(JSON.stringify(result).length).toBeLessThanOrEqual(24_000);
-    expect(ledger().map(({ truncated }) => truncated)).toEqual([true, true]);
+    expect(ledger().at(-1)).toMatchObject({ tool: 'calendar_list_events', truncated: true });
   });
 
   it('keeps a cursor and status fields at the tail of an oversized object result', async () => {

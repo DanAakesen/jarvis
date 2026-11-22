@@ -194,6 +194,39 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       expectParity(rows);
     }, 90_000);
 
+    it.each([false, true])('S2a finds and reads a note through both channels (rate limit after read: %s)', async lateRateLimit => {
+      const path = 'Personal/Bluebird plan.md';
+      const details = 'Bring a thermos and meet at the north gate at nine.';
+      const content = `# Bluebird plan\n\n${details}`;
+      const expected = lateRateLimit ? `Read vault note: ${path}. ${failureCopy.reply_not_written.chat}` : details;
+      const { rows, chat, voice, chatWorld, voiceWorld } = await runBoth({
+        title: `S2a: find a note and read it${lateRateLimit ? ' before an upstream failure' : ''}`,
+        ...sequence(['Find my Bluebird plan note and tell me what is inside.']),
+        async setup(world) {
+          world.daily.vault.files.set(path, { sha: 'a'.repeat(40), content });
+          await world.daily.indexVault();
+        },
+        script: [{
+          steps: [
+            find('vault_search'), call('vault_search', { kind: 'notes', query: 'Bluebird plan' }),
+            find('vault_read'), call('vault_read', tools => ({ path: result(tools, -2).results[0].path })),
+            ...(lateRateLimit ? [] : [{ say: (tools: Tools) => String(result(tools).content).split('\n\n').at(-1)! }]),
+          ],
+          ...(lateRateLimit ? { failWith: 'rate_limit_exceeded' } : {}),
+        }],
+      });
+      for (const observation of [chat, voice]) {
+        expect(observation.turns[0]).toMatchObject({ kind: lateRateLimit ? 'receipt' : 'reply', reply: expected });
+      }
+      for (const world of [chatWorld, voiceWorld]) {
+        expect(world.foundry.requests.filter(request => request.kind !== 'warmup').map(request => request.kind)).toEqual(['turn']);
+        expect(world.store.toolCalls.map(tool => tool.tool)).toEqual(['vault_search', 'vault_read']);
+        expect(result(world.foundry.mcp)).toMatchObject({ path, content });
+        expect(world.daily.vault.writes).toHaveLength(0);
+      }
+      expectParity(rows);
+    }, 60_000);
+
     it('S3 Tasks: create one due tomorrow, complete it, then ask what is due today', async () => {
       const { rows, chat, chatWorld, voiceWorld } = await runBoth({
         title: 'S3 Tasks: "create a task ... due tomorrow", "complete it", "what is due today"',
@@ -890,7 +923,16 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
     }, 60_000);
 
     it.each([
-      { title: 'S18a Foundry rate limit', script: [{ steps: [], httpStatus: 429, retryAfter: '7' }] as Script },
+      {
+        title: 'S18a Foundry rate limit',
+        script: Array.from({ length: 3 }, () => ({ steps: [], httpStatus: 429, retryAfter: '0' })) as Script,
+        rules: {
+          'blocks delivered over the conversation (persona, situation, capability)': rule(
+            'all three attempts repeat the rejected input exactly; Voice sent the persona and situation once in its warm-up',
+            ((chat: number[], voice: number[]) => isDeepStrictEqual(chat, [3, 3, 3]) && isDeepStrictEqual(voice, [1, 1, 3])) as never,
+          ),
+        } as Rules,
+      },
       { title: 'S18b a response that fails', script: [{ steps: [{ say: 'Let me' }], failWith: 'content_filter' }] as Script },
       {
         title: 'S18c an unexpected error inside PI', script: [] as Script,
@@ -913,6 +955,142 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       expect(chat.turns[0]!.kind).toBe('failure');
       expect(voice.turns[0]!.kind).toBe('failure');
       expect(voice.turns[0]!.failure).toBe(chat.turns[0]!.failure);
+      expectParity(rows);
+    }, 60_000);
+
+    const completeTask = [
+      find('vault search task complete'), call('vault_search', { kind: 'tasks', query: 'Pay rent' }),
+      call('vault_task_complete', tools => {
+        const task = result(tools).items[0];
+        return { path: task.path, line: task.line, text: task.text, version: task.version, done: true };
+      }),
+    ];
+    const taskSequence = sequence(['Complete the Pay rent task.']);
+
+    it('S4a reads an iPhone lift even when the SQL lift history is empty', async () => {
+      const path = 'Personal/Health/Gym log/2026-11-20-1645-legs.md';
+      const { rows, chat, chatWorld, voiceWorld } = await runBoth({
+        title: 'S4a: read a lift logged by the iPhone Gym sheet',
+        ...sequence(['What lift did I log on my phone?']),
+        setup(world) {
+          world.daily.gym.lifts.length = 0;
+          world.daily.vault.files.set(path, {
+            sha: 'a'.repeat(40),
+            content: '---\ntype: gym-log\nsession: legs\ndate: 2026-11-20\ntime: 16:45\n---\n\n# Gym log: Legs\n\n- Date: 2026-11-20 16:45\n- Session: Legs\n- Lift: Squat · 87.5 kg × 5 × 3\n',
+          });
+        },
+        script: [{ steps: [
+          find('what lifts did I log'), call('gym_lifts', { operation: 'list' }),
+          { say: tools => {
+            const lift = result(tools).phoneLogs.items[0];
+            return `You logged ${lift.exerciseName}, ${lift.weightKg} kilos, ${lift.sets} sets of ${lift.reps}.`;
+          } },
+        ] }],
+      });
+      expect(chat.turns[0]).toMatchObject({ kind: 'reply', reply: 'You logged Squat, 87.5 kilos, 3 sets of 5.' });
+      for (const world of [chatWorld, voiceWorld]) {
+        expect(result(world.foundry.mcp)).toMatchObject({ items: [], next: null, phoneLogs: {
+          status: 'available', partial: false, items: [{ path, localDateTime: '2026-11-20T16:45', exerciseName: 'Squat', weightKg: 87.5, reps: 5, sets: 3 }],
+        } });
+        expect(world.daily.vault.writes).toHaveLength(0);
+      }
+      expectParity(rows);
+    }, 60_000);
+
+    it('S18e retries a rejected round two after a real write without sending the owner message or executing the write again', async () => {
+      const { rows, chat, chatWorld, voiceWorld } = await runBoth({
+        title: 'S18e: round two is rate limited after completing a task',
+        ...taskSequence,
+        script: [
+          { steps: [...completeTask, { client: { name: 'task', callId: 'followup' } }] },
+          { steps: [], httpStatus: 429, retryAfter: '0' },
+          { steps: [{ say: tools => confirmation(tools) }] },
+        ],
+      });
+      expect(chat.turns[0]).toMatchObject({ kind: 'reply', reply: 'Completed task: Pay rent.' });
+      for (const world of [chatWorld, voiceWorld]) {
+        const requests = world.foundry.requests.filter(request => request.kind !== 'warmup');
+        expect(requests.map(request => request.kind)).toEqual(['turn', 'follow_up', 'follow_up']);
+        expect(requests[1]!.input).toEqual([{ type: 'function_call_output', call_id: 'followup', output: answerClientTool('task').output }]);
+        expect(requests[2]).toEqual(requests[1]);
+        expect(world.logs.filter(log => log.msg === 'pi.stream_retry')).toEqual([
+          expect.objectContaining({ round: 2, attempt: 1, reason: 'http_rate_limited', retryAfterMs: 0 }),
+        ]);
+        expect(world.store.toolCalls.filter(call => call.tool === 'vault_task_complete')).toHaveLength(1);
+        expect(world.daily.vault.writes).toHaveLength(1);
+        expect(world.daily.vault.files.get('Personal/Task inbox.md')?.content).toContain('- [x] Pay rent');
+        expect(world.store.messages.filter(message => message.role === 'dan')).toHaveLength(1);
+        expect(world.store.messages.filter(message => message.role === 'jarvis')).toHaveLength(1);
+      }
+      expectParity(rows);
+    }, 60_000);
+
+    it('S18f does not replay an accepted native stream after a write; Dan gets the saved receipt instead of partial model text', async () => {
+      const expected = `Completed task: Pay rent. ${failureCopy.reply_not_written.chat}`;
+      const { rows, chat, voice, chatWorld, voiceWorld } = await runBoth({
+        title: 'S18f: an accepted response is rate limited after completing a task',
+        ...taskSequence,
+        async chat(world) {
+          const turn = await world.chat.turn('Complete the Pay rent task.');
+          expect(turn.events.filter(event => event.name === 'done')).toEqual([
+            expect.objectContaining({ data: expect.objectContaining({ text: expected, replyIncomplete: true }) }),
+          ]);
+          expect(turn.events.some(event => event.name === 'error')).toBe(false);
+          const accepted = turn.events.find(event => event.name === 'user')!;
+          const reattached = await world.chat.reattach(turn.sessionId, String(accepted.data.id));
+          expect(reattached.events.filter(event => event.name === 'done')).toEqual([
+            expect.objectContaining({ data: expect.objectContaining({ text: expected }) }),
+          ]);
+          return [turn];
+        },
+        script: [{ steps: [...completeTask, { say: 'Unfinished model text' }], failWith: 'rate_limit_exceeded',
+          errorMessage: 'Tokens per minute. Please retry after 20 seconds. Bearer private-token' }],
+      });
+      for (const observation of [chat, voice]) expect(observation.turns[0]).toMatchObject({ kind: 'receipt', reply: expected });
+      for (const world of [chatWorld, voiceWorld]) {
+        expect(world.foundry.requests.filter(request => request.kind !== 'warmup').map(request => request.kind)).toEqual(['turn']);
+        expect(world.daily.vault.writes).toHaveLength(1);
+        expect(world.store.toolCalls.filter(call => call.tool === 'vault_task_complete')).toHaveLength(1);
+        expect(world.store.messages.filter(message => message.role === 'jarvis').map(message => message.text)).toEqual([expected]);
+        expect(world.piStore.turns.filter(turn => turn.kind === 'chat')).toEqual([expect.objectContaining({ outcome: 'failed', actionCount: 1 })]);
+        expect(world.logs.find(log => log.msg === 'pi.stream_failed')).toMatchObject({
+          round: 1, code: 'rate_limit_exceeded', sawText: true, sawTool: true, providerMessage: 'Token rate limit reached.', retryAfterMs: 20_000,
+        });
+        expect(JSON.stringify(world.logs)).not.toContain('private-token');
+      }
+      expectParity(rows);
+    }, 60_000);
+
+    it('S18g still gives the saved receipt if the rate limit outlasts both retries of round two', async () => {
+      const { rows, chat, voice, chatWorld, voiceWorld } = await runBoth({
+        title: 'S18g: round two stays rate limited after completing a task',
+        ...taskSequence,
+        script: [
+          { steps: [...completeTask, { client: { name: 'task', callId: 'followup' } }] },
+          ...Array.from({ length: 3 }, () => ({ steps: [], httpStatus: 429 })),
+        ],
+      });
+      for (const observation of [chat, voice]) expect(observation.turns[0]).toMatchObject({
+        kind: 'receipt', reply: `Completed task: Pay rent. ${failureCopy.reply_not_written.chat}`,
+      });
+      for (const world of [chatWorld, voiceWorld]) {
+        expect(world.foundry.requests.filter(request => request.kind !== 'warmup').map(request => request.kind)).toEqual(['turn', 'follow_up', 'follow_up', 'follow_up']);
+        expect(world.daily.vault.writes).toHaveLength(1);
+        expect(world.piTurnLogs()).toEqual([expect.objectContaining({ outcome: 'failed', rounds: 2 })]);
+        expect(world.piStore.turns.filter(turn => turn.kind === 'chat')).toEqual([expect.objectContaining({ outcome: 'failed', actionCount: 1 })]);
+      }
+      expectParity(rows);
+    }, 60_000);
+
+    it('S18h says what the work-status read proved without pretending to have written its summary', async () => {
+      const { rows, chat, voice } = await runBoth({
+        title: 'S18h: an accepted response is rate limited after loading work status',
+        ...sequence(['What is the status of the Jarvis project?']),
+        script: [{ steps: [find('work status'), call('get_work_status', { project: 'jarvis' })], failWith: 'rate_limit_exceeded' }],
+      });
+      for (const observation of [chat, voice]) expect(observation.turns[0]).toMatchObject({
+        kind: 'receipt', reply: `I got the work status. ${failureCopy.reply_not_written.chat}`,
+      });
       expectParity(rows);
     }, 60_000);
   });

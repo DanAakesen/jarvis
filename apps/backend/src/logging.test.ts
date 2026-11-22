@@ -301,6 +301,8 @@ describe('structured log export', () => {
   });
 
   it.each([
+    ['pi.stream_failed', { reason: 'http_rate_limited', code: 'http_429', status: 429, round: 2, attempt: 3, providerMessage: 'Token rate limit reached.', retryAfterMs: 7000 }],
+    ['pi.stream_retry', { reason: 'foundry_response_failed', event: 'response.failed', code: 'rate_limit_exceeded', round: 2, attempt: 1, retryAfterMs: 10, delayMs: 750 }],
     ['pi.stream_failed', { reason: 'foundry_response_failed', event: 'response.failed', code: 'server_error', attempt: 2, elapsedMs: 3960, firstEventMs: 120, sawText: false, sawTool: false, sawOutput: false, previousCancelled: true }],
     ['pi.stream_failed', { reason: 'stream_broke', attempt: 1, elapsedMs: 32_000, firstEventMs: 80, sawText: true, sawTool: false, sawOutput: true, previousCancelled: false }],
     ['pi.stream_failed', { reason: 'cancel_no_response_id', attempt: 1, elapsedMs: 900, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }],
@@ -319,7 +321,8 @@ describe('structured log export', () => {
     expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: event, properties: { service: 'jarvis-backend', ...fields } }));
     logger.info({
       reason: 'private reason', event: 'private event', code: 'not a code!', server: 'bad server', tool: 'bad/tool', status: 99,
-      attempt: 3, elapsedMs: -1, firstEventMs: Infinity, sawText: 'yes', previousCancelled: 1,
+      attempt: 4, round: 9, providerMessage: 'private provider text', retryAfterMs: -1, delayMs: Infinity,
+      elapsedMs: -1, firstEventMs: Infinity, sawText: 'yes', previousCancelled: 1,
     }, event);
     expect(JSON.parse(records[1]!)).toEqual({ level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: event });
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
@@ -340,7 +343,7 @@ describe('structured log export', () => {
     expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: 'pi.harness_item', properties: { service: 'jarvis-backend', ...fields } }));
     logger.info({
       trigger: 'private trigger', itemType: 'Has Spaces', name: 'https://private.example/x', serverLabel: 'a'.repeat(65), itemStatus: 'UPPER',
-      hasCallId: 'yes', hasId: 1, argumentsLength: -1, attempt: 3, elapsedMs: Infinity,
+      hasCallId: 'yes', hasId: 1, argumentsLength: -1, attempt: 4, elapsedMs: Infinity,
       eventTypes: ['ok.type', 'private event', 'https://private.example', 'x'.repeat(65), 42, ...Array.from({ length: 40 }, () => 'fine')],
       itemTypes: 'private',
     }, 'pi.harness_item');
