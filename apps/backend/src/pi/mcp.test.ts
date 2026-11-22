@@ -1,9 +1,14 @@
+import { createHash } from 'node:crypto';
+import { Writable } from 'node:stream';
+import pino from 'pino';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { createPiAuth } from '../auth/pi-credential.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
-import type { JarvisTool } from '../core/tool-registry.js';
+import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { createLogger } from '../logging.js';
+import { requestIdentity } from './mcp.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
 import type { RemoteMcpBridge } from './remote-mcp.js';
@@ -34,12 +39,17 @@ const probe: JarvisTool = {
 
 function setup(
   bridges: RemoteMcpBridge[] = [],
-  options: { tools?: JarvisTool[]; situation?: PiSituationService; smokeBudgetExhausted?: boolean } = {},
+  options: { tools?: JarvisTool[]; situation?: PiSituationService; smokeBudgetExhausted?: boolean; rawLog?: boolean } = {},
 ) {
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
   const recorded: Array<{ messageId: string; tool: string }> = [];
-  const app = buildApp(config, undefined, {
+  // The real logger, so the lines the tests read are exactly what would be exported. `rawLog` skips the allow-list to show
+  // what the door itself hands to the logger.
+  const written: string[] = [];
+  const sink = new Writable({ write(chunk: Buffer, _encoding, done) { written.push(chunk.toString()); done(); } });
+  const logger = options.rawLog === true ? pino({ level: 'info' }, sink) : createLogger(config, undefined, sink);
+  const app = buildApp(config, logger, {
     modules: [coreModule, { id: 'probe', tools: [probe, ...(options.tools ?? [])], registerRoutes: async () => {} },
       { id: 'pi', tools: [], registerRoutes: createPiRoutes({
         gateway: {
@@ -62,27 +72,30 @@ function setup(
   });
   apps.push(app);
   let id = 0;
-  async function rpc(token: string | undefined, method: string, params: Record<string, unknown> = {}, url = '/pi/mcp') {
-    id += 1;
+  /** `requestId` replays an earlier JSON-RPC id; without it each request gets the next number. */
+  async function rpc(token: string | undefined, method: string, params: Record<string, unknown> = {}, url = '/pi/mcp', requestId?: number | string) {
+    const sent = requestId ?? (id += 1);
     const response = await app.inject({
       method: 'POST', url, remoteAddress: '10.0.0.9',
       headers: {
         'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18',
         ...(token ? { authorization: bearer(token) } : {}),
       },
-      payload: { jsonrpc: '2.0', id, method, params },
+      payload: { jsonrpc: '2.0', id: sent, method, params },
     });
     const body = response.body.includes('data:')
       ? response.body.split('\n').find((line) => line.startsWith('data:'))!.slice(5) : response.body;
     return { status: response.statusCode, json: body ? JSON.parse(body) as Json : undefined };
   }
-  const tool = async (name: string, args: Record<string, unknown>) => {
-    const result = await rpc(`jp.${secret}`, 'tools/call', { name, arguments: args });
+  const tool = async (name: string, args: Record<string, unknown>, extra: { id?: number | string; meta?: Record<string, unknown> } = {}) => {
+    const result = await rpc(`jp.${secret}`, 'tools/call', { name, arguments: args, ...(extra.meta ? { _meta: extra.meta } : {}) }, '/pi/mcp', extra.id);
     const text = result.json?.result?.content?.[0]?.text as string | undefined;
     const body = text?.startsWith('{') ? JSON.parse(text) as Json : undefined;
-    return { isError: result.json?.result?.isError === true, body, status: result.status, raw: result.json };
+    return { isError: result.json?.result?.isError === true, body, text, status: result.status, raw: result.json };
   };
-  return { app, registry, rpc, tool, recorded };
+  /** The `pi.mcp_tool` lines the door wrote, as exported; `logged` is everything the app wrote. */
+  const ledger = () => written.map((line) => JSON.parse(line) as Json).filter((line) => line.msg === 'pi.mcp_tool');
+  return { app, registry, rpc, tool, recorded, ledger, logged: () => written.join('') };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -463,5 +476,434 @@ describe('PI MCP server', () => {
           reason: 'budget_exhausted',
         },
       });
+  });
+});
+
+/** A probe whose runs are counted, so a test can tell a call that ran from one answered with the first result. */
+function counting(
+  name: string,
+  execution: JarvisTool['execution'],
+  work: (run: number) => unknown = (run) => ({ run, marker: 'result-secret-91bc' }),
+) {
+  const runs = { count: 0 };
+  const probeTool: JarvisTool = {
+    name,
+    description: `Counting probe ${name}. Keyword: ${name.replace(/_/gu, '')}.`,
+    inputSchema: {
+      type: 'object', additionalProperties: false,
+      properties: { text: { type: 'string' }, note: { type: 'string' }, operation: { type: 'string' } },
+    },
+    ...(execution ? { execution } : {}),
+    execute: async () => { runs.count += 1; return work(runs.count); },
+  };
+  return { tool: probeTool, runs };
+}
+
+describe('PI MCP door: replayed requests, repeated actions and the call ledger', () => {
+  const open = (registry: ReturnType<typeof createPiTurnRegistry>, extra: Partial<Parameters<ReturnType<typeof createPiTurnRegistry>['open']>[0]> = {}) =>
+    registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live(), ...extra });
+  const call = (turn: string, name: string, args: Record<string, unknown>) => ({ turn, name, arguments: args });
+  /** A request that carries the harness's own call id in its `_meta`, as a replay of that request would carry it again. */
+  const as = (callId: string) => ({ meta: { tool_call_id: callId } });
+
+  it('runs identical actions under different call ids every time, and says on the ledger that they repeat', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, recorded, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    // Three sets of the same lift: the same arguments, three requests with three call ids, and key order does not matter.
+    const sets = [];
+    for (const [index, args] of [{ text: 'a', note: 'b' }, { note: 'b', text: 'a' }, { text: 'a', note: 'b' }].entries()) {
+      sets.push(await tool('call_tool', call(grant.turn, 'probe_write', args), as(`call-${index + 1}`)));
+    }
+    expect(sets.map(({ body }) => body?.result.run)).toEqual([1, 2, 3]);
+    for (const { body } of sets) expect(body).not.toHaveProperty('duplicate');
+    expect(write.runs.count).toBe(3);
+    expect(recorded).toHaveLength(3);
+    expect(grant.results).toHaveLength(3);
+    expect(grant.actions.count).toBe(3);
+    expect(ledger().map(({ duplicate, sameArgsRepeat, replayCheck }) => [duplicate, sameArgsRepeat, replayCheck])).toEqual([
+      [false, false, 'on'], [false, true, 'on'], [false, true, 'on'],
+    ]);
+
+    // Other arguments are another call, not a repeat; neither is the same call in another turn.
+    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'c' }), as('call-4'));
+    const later = open(registry);
+    later.discovered.add('probe_write');
+    await tool('call_tool', call(later.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-5'));
+    expect(ledger().slice(3).map(({ sameArgsRepeat }) => sameArgsRepeat)).toEqual([false, false]);
+    expect(write.runs.count).toBe(5);
+  });
+
+  it('answers a replayed request with the first result and duplicate: true, and does not run it again', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, recorded, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-1'));
+    // The same call id asking for the same thing, with the keys in another order, is the same request delivered again.
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { note: 'b', text: 'a' }), as('call-1'));
+    expect(first.body).toMatchObject({ tool: 'probe_write', outcome: 'ok', result: { run: 1 } });
+    expect(first.body).not.toHaveProperty('duplicate');
+    expect(replay.isError).toBe(false);
+    expect(replay.body).toEqual({ ...first.body, duplicate: true });
+    expect(write.runs.count).toBe(1);
+    expect(recorded).toHaveLength(1);
+    expect(grant.results).toEqual([{ tool: 'probe_write', outcome: 'ok' }]);
+    expect(grant.actions.count).toBe(1);
+    expect(grant.requests.count).toBe(2);
+    expect(ledger().map(({ duplicate, sameArgsRepeat, replayCheck }) => [duplicate, sameArgsRepeat, replayCheck])).toEqual([
+      [false, false, 'on'], [true, false, 'on'],
+    ]);
+
+    // A new call id with the same arguments is another request: it runs, and the ledger says it repeats.
+    const again = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-2'));
+    expect(again.body).toMatchObject({ outcome: 'ok', result: { run: 2 } });
+    expect(again.body).not.toHaveProperty('duplicate');
+    expect(ledger().at(-1)).toMatchObject({ duplicate: false, sameArgsRepeat: true });
+    // The first call id stays the first's; the new one answers its own replay.
+    expect((await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a', note: 'b' }), as('call-2'))).body).toEqual({ ...again.body, duplicate: true });
+    expect(write.runs.count).toBe(2);
+  });
+
+  it('never keeps a read, a tool with no classification or an operation classified as a read, whatever the call id', async () => {
+    const read = counting('probe_read', { defaultEffect: 'read' });
+    const unclassified = counting('probe_plain', undefined);
+    const operations = counting('probe_ops', { defaultEffect: 'action', operation: { field: 'operation', effects: { list: 'read', create: 'action' } } });
+    const { registry, tool, ledger } = setup([], { tools: [read.tool, unclassified.tool, operations.tool] });
+    const grant = open(registry);
+    for (const name of ['probe_read', 'probe_plain', 'probe_ops']) grant.discovered.add(name);
+    let callId = 0;
+    const sameId = async (name: string, args: Record<string, unknown>) => {
+      callId += 1;
+      await tool('call_tool', call(grant.turn, name, args), as(`call-${callId}`));
+      return tool('call_tool', call(grant.turn, name, args), as(`call-${callId}`));
+    };
+    for (const name of ['probe_read', 'probe_plain']) expect((await sameId(name, { text: 'same' })).body).not.toHaveProperty('duplicate');
+    expect([read.runs.count, unclassified.runs.count]).toEqual([2, 2]);
+    expect((await sameId('probe_ops', { operation: 'list' })).body).not.toHaveProperty('duplicate');
+    expect(operations.runs.count).toBe(2);
+    // An operation the tool does not classify, or none at all, is not an action either.
+    for (const args of [{ operation: 'constructor' }, { text: 'no operation' }]) {
+      expect((await sameId('probe_ops', args)).body).not.toHaveProperty('duplicate');
+    }
+    expect(operations.runs.count).toBe(6);
+    // Only the create operation is an action, so only its replay is recognised.
+    expect((await sameId('probe_ops', { operation: 'create' })).body).toMatchObject({ duplicate: true });
+    expect(operations.runs.count).toBe(7);
+    expect(ledger().some(({ sameArgsRepeat }) => sameArgsRepeat === true)).toBe(false);
+  });
+
+  it('does not keep an action that failed or was refused: a replay of it runs again, and nothing is refused', async () => {
+    const steps = [
+      () => { throw new Error('flaky'); },
+      () => { throw new ToolRefusal('not now'); },
+      () => ({ saved: true }),
+    ];
+    const write = counting('probe_write', { defaultEffect: 'action' }, (run) => steps[run - 1]!());
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const answers = [];
+    for (let index = 0; index < 4; index += 1) answers.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1')));
+    expect(answers.map(({ body }) => body?.outcome)).toEqual(['error', 'refused', 'ok', 'ok']);
+    expect(answers.map(({ body }) => body?.duplicate === true)).toEqual([false, false, false, true]);
+    expect(write.runs.count).toBe(3);
+    expect(grant.results.map(({ outcome }) => outcome)).toEqual(['error', 'refused', 'ok']);
+    expect(grant.actions.count).toBe(1);
+    // A refusal declined the action and an error reported no success, so running either again is no repeat.
+    expect(ledger().map(({ sameArgsRepeat }) => sameArgsRepeat)).toEqual([false, false, false, false]);
+  });
+
+  it('answers a replay that arrives while the first request is still running with that request\'s result', async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const write = counting('probe_write', { defaultEffect: 'action' }, async () => {
+      entered();
+      await new Promise<void>((resolve) => { release = resolve; });
+      return { saved: true };
+    });
+    const { registry, tool } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const first = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    await started;
+    const replay = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    await vi.waitFor(() => expect(grant.requests.count).toBe(2));
+    release();
+    const [one, two] = await Promise.all([first, replay]);
+    expect(write.runs.count).toBe(1);
+    expect(one.body).toMatchObject({ outcome: 'ok', result: { saved: true } });
+    expect(one.body).not.toHaveProperty('duplicate');
+    expect(two.body).toEqual({ ...one.body, duplicate: true });
+    expect(grant.results).toHaveLength(1);
+  });
+
+  it('runs a request that arrives under another call id while the first is still running, and calls it a repeat', async () => {
+    const releases: Array<() => void> = [];
+    const write = counting('probe_write', { defaultEffect: 'action' }, async () => {
+      await new Promise<void>((resolve) => { releases.push(resolve); });
+      return { saved: true };
+    });
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    // The model emits the same call twice, in parallel, on purpose.
+    const both = ['call-1', 'call-2'].map((callId) => tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as(callId)));
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    for (const release of releases) release();
+    const answers = await Promise.all(both);
+    expect(write.runs.count).toBe(2);
+    for (const { body } of answers) expect(body).not.toHaveProperty('duplicate');
+    // The one that went to the tool second is the repeat, whichever finished first.
+    expect(ledger().map(({ duplicate }) => duplicate)).toEqual([false, false]);
+    expect(ledger().filter(({ sameArgsRepeat }) => sameArgsRepeat === true)).toHaveLength(1);
+  });
+
+  it('lets a replay that waited on a first request which failed run the call itself', async () => {
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const write = counting('probe_write', { defaultEffect: 'action' }, async (run) => {
+      if (run > 1) return { saved: true };
+      entered();
+      await new Promise<void>((resolve) => { release = resolve; });
+      throw new Error('first run failed');
+    });
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const first = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    await started;
+    const replay = tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-1'));
+    await vi.waitFor(() => expect(grant.requests.count).toBe(2));
+    release();
+    const [one, two] = await Promise.all([first, replay]);
+    expect(one.body).toMatchObject({ outcome: 'error' });
+    expect(two.body).toMatchObject({ outcome: 'ok', result: { saved: true } });
+    expect(two.body).not.toHaveProperty('duplicate');
+    expect(write.runs.count).toBe(2);
+    expect(ledger().map(({ duplicate, sameArgsRepeat }) => [duplicate, sameArgsRepeat])).toEqual([[false, false], [false, false]]);
+  });
+
+  it('recognises no replay in a turn where one call id has asked for different things', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    // A harness that gives every request the same call id asks for a search, then for the same action three times.
+    await tool('find_tools', { turn: grant.turn, query: 'probewrite' }, as('call-7'));
+    const sets = [];
+    for (let index = 0; index < 3; index += 1) sets.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as('call-7')));
+    expect(sets.map(({ body }) => body?.result.run)).toEqual([1, 2, 3]);
+    for (const { body } of sets) expect(body).not.toHaveProperty('duplicate');
+    expect(write.runs.count).toBe(3);
+    expect(grant.identities.reused).toBe(true);
+    expect(ledger().map(({ replayCheck, duplicate, sameArgsRepeat }) => [replayCheck, duplicate, sameArgsRepeat])).toEqual([
+      ['on', false, false], ['id_reused', false, false], ['id_reused', false, true], ['id_reused', false, true],
+    ]);
+    // Another turn judges its own call ids again.
+    const next = open(registry);
+    next.discovered.add('probe_write');
+    await tool('call_tool', call(next.turn, 'probe_write', { text: 'a' }), as('call-9'));
+    await tool('call_tool', call(next.turn, 'probe_write', { text: 'a' }), as('call-9'));
+    expect(ledger().slice(4).map(({ replayCheck, duplicate }) => [replayCheck, duplicate])).toEqual([['on', false], ['on', true]]);
+    expect(write.runs.count).toBe(4);
+  });
+
+  it('runs a deliberate repeat when each model round opens a new connection and so numbers its requests 1 and 2 again', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    // The door is stateless, so a client that opens a connection per round starts again at id 1 every time. An identical search and an
+    // identical action are then byte-identical to a retried POST; only a call id in the meta could tell them apart, and there is none.
+    const rounds = [];
+    for (let round = 0; round < 3; round += 1) {
+      await tool('find_tools', { turn: grant.turn, query: 'probewrite' }, { id: 1 });
+      rounds.push(await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 2 }));
+    }
+    expect(rounds.map(({ body }) => body?.result.run)).toEqual([1, 2, 3]);
+    for (const { body } of rounds) expect(body).not.toHaveProperty('duplicate');
+    expect(write.runs.count).toBe(3);
+    expect(grant.results).toHaveLength(3);
+    expect(grant.identities.asked.size).toBe(0);
+    expect(ledger().every(({ replayCheck, duplicate }) => replayCheck === 'no_id' && duplicate === false)).toBe(true);
+    expect(ledger().filter(({ tool: name }) => name === 'probe_write').map(({ sameArgsRepeat }) => sameArgsRepeat)).toEqual([false, true, true]);
+  });
+
+  it('recognises a replay by a call id in the request meta and ignores the JSON-RPC id, whatever it is', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001, ...as('call-1') });
+    // Another JSON-RPC id, the same call id: the same request delivered again.
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9002, ...as('call-1') });
+    expect(replay.body).toEqual({ ...first.body, duplicate: true });
+    // The first JSON-RPC id again, another call id: another request.
+    const other = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), { id: 9001, ...as('call-2') });
+    expect(other.body).toMatchObject({ outcome: 'ok', result: { run: 2 } });
+    expect(other.body).not.toHaveProperty('duplicate');
+    expect(write.runs.count).toBe(2);
+  });
+
+  it('finds the identity of a request in its meta only: a string call id under a key ending in call_id or callId', () => {
+    expect(requestIdentity({ progressToken: 'p', toolCallId: 'abc-1' })).toBe('call:abc-1');
+    expect(requestIdentity({ call_id: 'c.2:x-3' })).toBe('call:c.2:x-3');
+    expect(requestIdentity({ 'x-ms-call-id': 'c4' })).toBe('call:c4');
+    // A value that is not a short token, a key that is not a call id and a missing meta give no identity. The JSON-RPC id is never one.
+    expect(requestIdentity({ call_id: 'not a call id!', progressToken: 'p' })).toBeUndefined();
+    expect(requestIdentity({ call_id: 7 })).toBeUndefined();
+    expect(requestIdentity({ callIdentifier: 'x', session: 'y' })).toBeUndefined();
+    expect(requestIdentity({ progressToken: 'p' })).toBeUndefined();
+    expect(requestIdentity(undefined)).toBeUndefined();
+    expect(requestIdentity(null)).toBeUndefined();
+  });
+
+  it('writes one ledger line per call with its name, outcome, size, channel, provider, replay state and a hash of the turn, and no argument, result or reference', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, ledger, logged } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    const found = await tool('find_tools', { turn: grant.turn, query: 'probewrite' });
+    const first = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), as('call-1'));
+    const replay = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), as('call-1'));
+    const repeat = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), as('call-2'));
+    const missing = await tool('call_tool', call(grant.turn, 'probe_missing', { text: 'argument-secret-7f3a' }));
+    const hash = createHash('sha256').update(grant.turn).digest('hex').slice(0, 8);
+    const line = (name: string, reply: { text?: string | undefined }, fields: Record<string, unknown>) => ({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'pi.mcp_tool', tool: name, elapsedMs: expect.any(Number),
+      resultBytes: Buffer.byteLength(reply.text!), truncated: false, duplicate: false, sameArgsRepeat: false, replayCheck: 'no_id',
+      turnHash: hash, channel: 'chat', provider: 'local', ...fields,
+    });
+    // A request without a call id has nothing to be recognised by; the ones that carry one list their meta key names.
+    const withCallId = { replayCheck: 'on', metaKeys: ['tool_call_id'] };
+    expect(ledger()).toEqual([
+      line('find_tools', found, { outcome: 'ok' }),
+      line('probe_write', first, { outcome: 'ok', ...withCallId }),
+      line('probe_write', replay, { outcome: 'ok', duplicate: true, ...withCallId }),
+      line('probe_write', repeat, { outcome: 'ok', sameArgsRepeat: true, ...withCallId }),
+      line('probe_missing', missing, { outcome: 'refused' }),
+    ]);
+    expect(ledger().every(({ elapsedMs }) => elapsedMs >= 0)).toBe(true);
+    const everything = logged();
+    for (const private_ of ['argument-secret-7f3a', 'result-secret-91bc', grant.turn, 'call-1', 'call-2']) expect(everything).not.toContain(private_);
+    expect(hash).toMatch(/^[0-9a-f]{8}$/u);
+  });
+
+  it('hands the logger nothing but the ledger fields, before the allow-list sees them', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, ledger, logged } = setup([], { tools: [write.tool], rawLog: true });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }));
+    await tool('call_tool', call(grant.turn, 'probe_write', { text: 'argument-secret-7f3a' }), { meta: { tool_call_id: 'call-secret-3c', progressToken: 'p-secret-5d' } });
+    const [plain, withMeta] = ledger();
+    const base = ['level', 'time', 'pid', 'hostname', 'reqId', 'msg'];
+    const fieldsOf = (line: Json | undefined) => Object.keys(line!).filter((key) => !base.includes(key)).sort();
+    const ledgerFields = ['channel', 'duplicate', 'elapsedMs', 'outcome', 'provider', 'replayCheck', 'resultBytes', 'sameArgsRepeat', 'tool', 'truncated', 'turnHash'];
+    expect(fieldsOf(plain)).toEqual(ledgerFields);
+    // The meta key names are the only thing the door takes from the meta; the values never reach the logger.
+    expect(fieldsOf(withMeta)).toEqual([...ledgerFields, 'metaKeys'].sort());
+    expect(withMeta!.metaKeys).toEqual(['progressToken', 'tool_call_id']);
+    for (const private_ of ['argument-secret-7f3a', 'result-secret-91bc', grant.turn, 'call-secret-3c', 'p-secret-5d']) expect(logged()).not.toContain(private_);
+  });
+
+  it('lists the names of the request meta keys on the ledger line, bounded and never their values, so the harness\'s real call-id key can be read from live lines', async () => {
+    const { registry, tool, ledger, logged } = setup();
+    const grant = open(registry);
+    const keys = Array.from({ length: 20 }, (_, index) => `x-key-${String(index).padStart(2, '0')}`);
+    await tool('find_tools', { turn: grant.turn, query: 'probe' }, { meta: { 'x-ms-call-id': 'call-secret-3c', 'bad key!': 'v-secret-1', progressToken: 'p-secret-5d' } });
+    await tool('find_tools', { turn: grant.turn, query: 'probe' }, { meta: Object.fromEntries(keys.map((key) => [key, 'v-secret-2'])) });
+    await tool('find_tools', { turn: grant.turn, query: 'probe' });
+    const [named, many, none] = ledger();
+    // Sorted; a key with a space or a symbol is dropped by the allow-list.
+    expect(named!.metaKeys).toEqual(['progressToken', 'x-ms-call-id']);
+    expect(many!.metaKeys).toEqual(keys.slice(0, 12));
+    expect(none).not.toHaveProperty('metaKeys');
+    for (const private_ of ['call-secret-3c', 'v-secret-1', 'v-secret-2', 'p-secret-5d']) expect(logged()).not.toContain(private_);
+  });
+
+  it('writes a ledger line for a forged or closed turn reference without a channel, and still refuses it as before', async () => {
+    const write = counting('probe_write', { defaultEffect: 'action' });
+    const { registry, tool, ledger } = setup([], { tools: [write.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_write');
+    const forgedTurn = 'jt-AAAAAAAAAAAAAAAAAAAAAA';
+    const forged = await tool('call_tool', call(forgedTurn, 'probe_write', { text: 'x' }));
+    const search = await tool('find_tools', { turn: forgedTurn, query: 'probewrite' });
+    registry.close(grant.turn);
+    const late = await tool('call_tool', call(grant.turn, 'probe_write', { text: 'x' }));
+    for (const reply of [forged, search, late]) expect(reply).toMatchObject({ isError: true, body: { outcome: 'refused' } });
+    expect(write.runs.count).toBe(0);
+    expect(ledger().map(({ tool: name, outcome, channel, turnHash }) => ({ name, outcome, channel, turnHash }))).toEqual([
+      { name: 'probe_write', outcome: 'refused', channel: undefined, turnHash: createHash('sha256').update(forgedTurn).digest('hex').slice(0, 8) },
+      { name: 'find_tools', outcome: 'refused', channel: undefined, turnHash: createHash('sha256').update(forgedTurn).digest('hex').slice(0, 8) },
+      { name: 'probe_write', outcome: 'refused', channel: undefined, turnHash: createHash('sha256').update(grant.turn).digest('hex').slice(0, 8) },
+    ]);
+  });
+
+  it('names the channel of the turn: chat, voice, wake or smoke', async () => {
+    const { registry, tool, ledger } = setup();
+    const activation = (type: 'voice') => ({
+      id: '00000000-0000-4000-8000-000000000003', type, source: type, slotKey: null, stateRevision: 0, stateHash: null,
+      policyRevision: 'a'.repeat(64), staleSources: 0, disabledSources: [],
+    });
+    const grants = [
+      ['chat', open(registry)],
+      ['voice', open(registry, { activation: activation('voice') })],
+      ['wake', open(registry, { sessionId: '', messageId: '', brain: { runId: '00000000-0000-4000-8000-000000000004', sent: [], wrote: [], looked: [] } })],
+      ['smoke', open(registry, { sessionId: '', messageId: '', smoke: true })],
+    ] as const;
+    for (const [, grant] of grants) await tool('find_tools', { turn: grant.turn, query: 'probe' });
+    expect(ledger().map(({ channel }) => channel)).toEqual(['chat', 'voice', 'wake', 'smoke']);
+  });
+
+  it('marks a result that was cut short, and counts the bytes the model was given', async () => {
+    const large = counting('probe_large', { defaultEffect: 'read' }, () => 'x'.repeat(250_000));
+    const { registry, tool, ledger } = setup([], { tools: [large.tool] });
+    const grant = open(registry);
+    grant.discovered.add('probe_large');
+    const cut = await tool('call_tool', call(grant.turn, 'probe_large', {}));
+    expect(cut.body).toMatchObject({ outcome: 'ok', truncated: true });
+    expect(ledger()).toEqual([expect.objectContaining({
+      tool: 'probe_large', outcome: 'ok', truncated: true, resultBytes: Buffer.byteLength(cut.text!),
+    })]);
+    expect(Buffer.byteLength(cut.text!)).toBeLessThan(250_000);
+  });
+
+  it('records the provider of a remote tool, still runs a remote repeat each time, and writes a line when the call throws', async () => {
+    const remoteCalls: string[] = [];
+    let failing = false;
+    const github: RemoteMcpBridge = {
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: vi.fn(),
+      tools: async () => [{
+        name: 'gh_issue_read', description: 'GitHub: read an issue', inputSchema: { type: 'object' }, moduleId: 'github',
+        execute: async () => { throw new Error('Remote tools run through the bridge'); },
+      }],
+      call: async (name) => {
+        if (failing) throw new Error('bridge-secret-5d1e');
+        remoteCalls.push(name);
+        return { outcome: 'ok', result: { title: 'remote' } };
+      },
+    };
+    const { registry, tool, ledger, logged } = setup([github]);
+    const grant = open(registry);
+    await tool('find_tools', { turn: grant.turn, query: 'github issue read' });
+    expect(grant.discovered.has('gh_issue_read')).toBe(true);
+    const first = await tool('call_tool', call(grant.turn, 'gh_issue_read', { issue_number: 1 }));
+    const repeat = await tool('call_tool', call(grant.turn, 'gh_issue_read', { issue_number: 1 }));
+    expect(remoteCalls).toEqual(['gh_issue_read', 'gh_issue_read']);
+    expect(first.body).not.toHaveProperty('duplicate');
+    expect(repeat.body).not.toHaveProperty('duplicate');
+    failing = true;
+    await tool('call_tool', call(grant.turn, 'gh_issue_read', { issue_number: 2 }));
+    expect(ledger().map(({ tool: name, provider, outcome, duplicate }) => [name, provider, outcome, duplicate])).toEqual([
+      ['find_tools', 'gh_', 'ok', false], ['gh_issue_read', 'gh_', 'ok', false], ['gh_issue_read', 'gh_', 'ok', false],
+      ['gh_issue_read', 'gh_', 'error', false],
+    ]);
+    const thrown = ledger().at(-1)!;
+    expect(thrown).not.toHaveProperty('resultBytes');
+    expect(thrown.channel).toBe('chat');
+    expect(logged()).not.toContain('bridge-secret-5d1e');
   });
 });
