@@ -4,8 +4,9 @@ export type PiErrorCode =
   | 'pi_not_configured' | 'pi_budget_exhausted' | 'pi_unavailable' | 'pi_timeout' | 'pi_failed' | 'pi_unsupported';
 
 /**
- * A failure with fixed, plain words for Dan (`userMessage` in Chat, `spokenMessage` in Voice, both from `failure-copy.ts`). Provider text
- * never reaches them. The stable `code` and the sanitised `detail` stay on the error for the log, the smoke and diagnostics.
+ * A failure with fixed, plain words for Dan (`userMessage` in Chat, `spokenMessage` in Voice; the same words, from `failureCopy` in
+ * `@jarvis/contracts`, so a failure reads and sounds alike). Provider text never reaches them. The stable `code` and the sanitised
+ * `detail` stay on the error for the log, the smoke and diagnostics.
  */
 export class PiGatewayError extends Error {
   readonly userMessage: string;

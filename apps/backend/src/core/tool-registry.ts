@@ -60,6 +60,19 @@ export interface ToolExecutionMetadata {
 }
 
 /**
+ * What one call of a tool does. A tool that classifies its operations is judged by the operation the arguments name (one it
+ * does not classify is `unclassified`, as in the older agent's `effect_for`); any other tool by its default effect.
+ */
+export function effectOf(tool: Pick<JarvisTool, 'execution'>, input: unknown): ToolEffect {
+  const execution = tool.execution;
+  if (!execution) return 'unclassified';
+  const { operation } = execution;
+  if (!operation) return execution.defaultEffect;
+  const named = input !== null && typeof input === 'object' ? (input as Record<string, unknown>)[operation.field] : undefined;
+  return typeof named === 'string' && Object.hasOwn(operation.effects, named) ? operation.effects[named]! : 'unclassified';
+}
+
+/**
  * Thrown by a tool that deliberately declines an action. The reason is shown to
  * Dan, so it must be safe to expose; any other thrown error is reported as a failure.
  */

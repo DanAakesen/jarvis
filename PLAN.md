@@ -1,3 +1,36 @@
+## Chat and Voice parity replay — 21 November 2026 (#1967, #1988)
+
+**Status: harness, 24 scenarios (27 tests) and three fixes done and qualified offline, and an independent review's harness race (S12b) fixed; one live Chat plus one live Voice trace of the same request are pending.**
+
+| Step | State |
+| --- | --- |
+| Drive one scripted scenario through the real chat route and the real `/voice` relay on the same gateway, MCP door and tool route; print a side-by-side table; fail on any undeclared difference | Done (`voice/chat-voice-parity.test.ts`) |
+| Dan's daily-core requests: Jarvis work and issue, notes, tasks, workouts, nutrition; one tool failure; non-delete write in one turn with no confirmation | Done (notes, tasks, gym, calendar run production tool code; Factory/GitHub and nutrition are contract fixtures) |
+| Native `task` call, client-owned call (one follow-up), very large result, Danish, stop/supersede, owner-message binding with a proactive message, replay/reconnect, blocks once per conversation, wake, cap, error mapping | Done |
+| Fix: voice warm-up delivered the persona twice; warm-up now sends and records what a turn sends | Done |
+| Fix: the same failure was told two ways; one `piTurnFailedMessage` in both channels | Done |
+| Fix: a voice turn's tool activity was labelled `chat`; the MCP door sends the channel and the route labels it `voice` | Done |
+| Review: S12b raced the stub's speech (the first note could reach the relay after Dan's next words and join that reply). Steps now wait for what the relay has observed; S12a-c also run with the first note 1.8 s late, and a failing row prints both sides | Done |
+| List existing non-delete confirmation gates for Dan | Done (PR body); none is reachable from a Chat or Voice PI turn |
+| Dan decides: chat-only nutrition-list rewrite, chat-only reflex path, voice session language, no `pi.turn` for refused turns | **Open** |
+| One live Chat and one live Voice trace of the same request (GPT-Live speech, Foundry signals, `source: "voice"` rendering) | **Open**; needs a live turn |
+
+## MCP door call ledger and replay recognition — 21 November 2026 (#1967)
+
+**Status: implemented and checked offline; exact-head CI and the first live measurement are pending.** The first version answered any second identical action of a turn from the first result; review rejected it because it would silently swallow intended repeats (three sets of the same lift, two identical entries, parallel identical calls), and nothing shows that Foundry replays calls. The second version used the JSON-RPC id as a fallback identity; a second review showed the stateless door can then swallow a deliberate repeat (a connection per model round numbers its requests 1, 2, 1, 2), so only a `_meta` call id is an identity now. An identical action under a different request always runs.
+
+| Step | State |
+| --- | --- |
+| One `pi.mcp_tool` line per finished `find_tools` / `call_tool`: tool, outcome, elapsedMs, resultBytes, truncated, duplicate, sameArgsRepeat, replayCheck, metaKeys, turn hash (8 hex), channel, provider; no arguments, results, `_meta` values or reference | Done |
+| Fields in the `logging.ts` allow-list; tested in `logging.test.ts` and, before the allow-list, in `mcp.test.ts` | Done |
+| Replay recognition: the same `_meta` call id asking for the same tool and arguments gets the first result with `duplicate: true`, also while the first is still running; failed and refused calls are not kept; reads never kept | Done |
+| No call id (the JSON-RPC id is never one), or a call id reused for something else: nothing is recognised as a replay (`replayCheck` `no_id` / `id_reused`) | Done |
+| `metaKeys`: the names of the request's `_meta` keys, so the harness's real call-id key can be read from live lines | Done |
+| `sameArgsRepeat` observation of identical actions that ran anyway (never changes execution) | Done |
+| Remote `gh_` / `az_` calls | Out of scope; never recognised |
+| Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
+| Measure in production (Log Analytics; `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): the `replayCheck` mix, which `_meta` keys Foundry sends, whether `duplicate` ever appears, what `sameArgsRepeat` shows (plan in `docs/decisions.md`) | Open; needs live turns |
+
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
 **Status: implemented and offline-tested; the PR's exact-head CI is the gate. No wake has run in production, so how a real wake uses the overview is unobserved.**
@@ -18,7 +51,7 @@
 | --- | --- |
 | Inventory every failure string on the PI path (gateway codes, `conversation.reply_failed`, tool texts, voice, web, iPhone) | Done; old → new table in the pull request |
 | One table of plain words in `@jarvis/contracts`, used by backend and web, with a plainness test | Done |
-| Keep the six `pi_*` codes; technical detail in `detail` and the log; plain `userMessage` and one spoken sentence per class | Done |
+| Keep the six `pi_*` codes; technical detail in `detail` and the log; one plain sentence per class, shown in Chat and spoken in Voice in the same words (the parity suite of #2021 compares them) | Done |
 | Say "nothing was done" only when nothing ran; otherwise say an action may have happened | Done |
 | A saved reply is never followed by an error; Stop is not a failure; a failed refresh after a reply is not a failed turn; tool rows no longer say "Failed" | Done; the web, backend and contracts tests fail on the old code |
 | A saved reply is never failed for its size: the clients read up to 4 MiB (progress frames stop at 1 MiB, `done` carries the reply) | Done (review); the web test fails on the old 1 MiB ceiling, the Swift test `ChatStreamLimitTests` runs in CI |

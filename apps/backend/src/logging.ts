@@ -110,7 +110,7 @@ const events = new Set([
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pi.budget_unreadable',
-  'pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed',
+  'pi.stream_failed', 'pi.stream_retry', 'pi.harness_item', 'pi.mcp_list_failed', 'pi.mcp_call_failed', 'pi.mcp_tool',
   'weather.phase',
   'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'voice.late_session_ended',
@@ -224,6 +224,11 @@ const weatherPhases = new Set(['geocode', 'forecast', 'home_location', 'report']
 const weatherOutcomes = new Set(['ok', 'timeout', 'network', 'http_status', 'invalid', 'too_large']);
 const weatherHosts = new Set(['open-meteo-geocoding', 'open-meteo-forecast']);
 const piStreamEvents = new Set(['response.failed', 'response.incomplete', 'error']);
+/** Fixed vocabularies of `pi.mcp_tool`: how a door call ended, the channel of its turn, which provider's tool it ran and whether replays could be recognised. */
+const piMcpOutcomes = new Set(['ok', 'refused', 'error']);
+const piMcpChannels = new Set(['chat', 'voice', 'wake', 'smoke']);
+const piMcpProviders = new Set(['local', 'gh_', 'az_']);
+const piMcpReplayChecks = new Set(['on', 'no_id', 'id_reused']);
 const piAzureCatalogueStates = new Set([
   'idle', 'ready', 'stale', 'starting', 'unreachable', 'empty', 'not_configured', 'not_searched',
 ]);
@@ -619,6 +624,32 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     for (const key of ['eventTypes', 'itemTypes']) {
       if (Array.isArray(input[key])) fields[key] = input[key].filter(token).slice(0, 25);
     }
+    return fields;
+  }
+  if (input.msg === 'pi.mcp_tool') {
+    // One finished MCP door call: the tool's name, how it ended, how long it took, how big the answer was, the channel and
+    // provider, an 8-hex hash of the turn reference, whether the request was a replay or an identical action repeated, whether
+    // replays could be recognised, and the names (never the values) of the request's `_meta` keys.
+    // Never arguments, result text, `_meta` values or the reference itself.
+    const fields: Record<string, unknown> = {};
+    if (typeof input.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.tool)) fields.tool = input.tool;
+    if (typeof input.outcome === 'string' && piMcpOutcomes.has(input.outcome)) fields.outcome = input.outcome;
+    if (typeof input.channel === 'string' && piMcpChannels.has(input.channel)) fields.channel = input.channel;
+    if (typeof input.provider === 'string' && piMcpProviders.has(input.provider)) fields.provider = input.provider;
+    if (typeof input.replayCheck === 'string' && piMcpReplayChecks.has(input.replayCheck)) fields.replayCheck = input.replayCheck;
+    if (Array.isArray(input.metaKeys)) {
+      const metaKeys = input.metaKeys
+        .filter((key): key is string => typeof key === 'string' && /^[A-Za-z0-9_.:/-]{1,64}$/u.test(key)).slice(0, 12);
+      if (metaKeys.length > 0) fields.metaKeys = metaKeys;
+    }
+    if (typeof input.turnHash === 'string' && /^[0-9a-f]{8}$/u.test(input.turnHash)) fields.turnHash = input.turnHash;
+    if (typeof input.elapsedMs === 'number' && Number.isFinite(input.elapsedMs) && input.elapsedMs >= 0 && input.elapsedMs <= 600_000) {
+      fields.elapsedMs = input.elapsedMs;
+    }
+    if (Number.isSafeInteger(input.resultBytes) && Number(input.resultBytes) >= 0 && Number(input.resultBytes) <= 100_000_000) {
+      fields.resultBytes = input.resultBytes;
+    }
+    for (const key of ['truncated', 'duplicate', 'sameArgsRepeat']) if (typeof input[key] === 'boolean') fields[key] = input[key];
     return fields;
   }
   if (input.msg === 'pi.stream_failed' || input.msg === 'pi.stream_retry' ||
