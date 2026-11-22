@@ -32,6 +32,7 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ### Tools
 
+- Dan can inspect Foundry agents and model deployments, edit instructions or an agent model in a new version, and select the serving version from Chat or Voice. Preserve the protected backend tool contract.
 - Ordinary Chat and Voice use PI. `find_tools` and `call_tool` reach Jarvis tools and `gh_`/`az_` operations through the same MCP connection. Native harness work runs in Foundry; durable code changes use Factory workers. GPT-Live handles voice, not a second tool engine.
 - Find the right tool from ordinary Danish or English requests, including the daily core on the first search. Retrieve supported results and distinguish empty, stale, partial and unavailable data. Return paging and write receipts intact; never say a write happened without evidence.
 - Use model judgement for routing and answers. Keep deterministic checks where the exact result matters: access boundaries, identity, persistence, idempotency and receipts. The PI approval exception is DELETE; do not create an app-wide policy change from that product rule.

@@ -1,5 +1,6 @@
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import { createConversationModule } from '../../../core/conversation.js';
+import { foundryProjectFixture } from '../../../core/foundry-agents.testkit.js';
 import { coreModule } from '../../../core/index.js';
 import { createRecipeModule } from '../../../core/recipe-management.js';
 import type { BackendModule } from '../../../modules.js';
@@ -100,7 +101,15 @@ export const coreGroup: GroupFactory = (context) => {
       { label: 'reasoning only', arguments: { reasoning: 'low' }, check: (result) => expectFields(result, { reasoning: 'low' }) },
       { label: 'model and reasoning', arguments: { model: 'gpt-6.1-terra', reasoning: 'medium' } },
     ],
+    manage_foundry_agent: [
+      { label: 'show project agents', arguments: { operation: 'list' }, check: (result) => expectList(result, 'entries') },
+      { label: 'list agent versions', arguments: { operation: 'list_versions', agent: 'fixture-agent' }, check: (result) => expectList(result, 'entries') },
+      { label: 'read model and instructions', arguments: { operation: 'read', agent: 'fixture-agent', version: '1' }, check: (result) => expectFields(result, { version: '1', model: 'model-a' }) },
+      { label: 'create a version using another deployment', arguments: { operation: 'create_version', agent: 'fixture-agent', expectedServingVersion: '1', expectedLatestVersion: '1', model: 'model-b' }, check: (result) => expectFields(result, { version: '2', servingVersion: '1' }) },
+      { label: 'pin the existing active version', arguments: { operation: 'activate', agent: 'fixture-agent', expectedServingVersion: '1', version: '1' }, check: (result) => expectFields(result, { servingVersion: '1', pinned: true }) },
+    ],
     manage_model_deployment: [
+      { label: 'list live models and deployments', arguments: { action: 'list' }, check: (result) => expectList(result, 'deployments') },
       {
         label: 'create a deployment of a catalogue model',
         arguments: { action: 'create', model: 'gpt-6-luna', version: '2026-10-15', sku: 'GlobalStandard', capacity: 10 },
@@ -233,6 +242,7 @@ export const coreGroup: GroupFactory = (context) => {
     appOptions: {
       settingsStore,
       modelCatalogue,
+      foundryAgentAdmin: foundryProjectFixture().admin,
       modelDeploymentWorkflow: createModelDeploymentFake(modelCatalogue, settingsStore, ownerInteractions),
       credentialStatusStore,
       renewCodexCredential: createCodexRenewalFake(credentialStatusStore),
@@ -243,7 +253,13 @@ export const coreGroup: GroupFactory = (context) => {
       conversationAttachments: createAttachmentsFake(),
       conversationSummaryStore: createConversationSummaryFake(),
       attachmentVision: attachmentVisionFake,
-      ownerInteractions,
+      ownerInteractions: {
+        ...ownerInteractions,
+        async requestConfirmation(kind, ...args) {
+          if (kind === 'delete') return;
+          return ownerInteractions.requestConfirmation(kind, ...args);
+        },
+      },
       workspaceCommands,
       systemStatusReader: createSystemStatusFake(),
       systemSmokeProbes: systemSmokeProbesFake as Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>,

@@ -31,11 +31,11 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | | Decision needed | Until then |
 | --- | --- | --- |
-| **A** | Legacy proactive engine removal approved. | Move Inbox follow-ups to PI before retiring the old trigger. |
+| **A** | Legacy proactive engine removal approved. | PI owns the slots. Verify capture and a qualifying follow-up in production. |
 | **B · decided** | Manual kcal adds one meal on iPhone. | Device check: in Health → Nutrition, log 100 kcal. Meals should gain one entry and Chat should report 100 more kcal for today. |
 | **C** | How and when should PI compact context within the one ongoing conversation? | Reported tool turns carried 84K–116K input tokens; the fresh instructions baseline was about 18K. Dan confirmed compaction is needed. Verify managed-endpoint support and context retention before implementation. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
-| **E** | Foundry administration approved: agent instructions, versions, activation, models and deployments. | Compare existing Azure tools, then implement missing operations with readback. [#2009](https://github.com/DanAakesen/jarvis/issues/2009). |
+| **E** | Foundry administration is approved. | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) covers instructions, versions, activation, models and deployments. Live acceptance is open. |
 | **F** | Banking stays out of scope. | No banking implementation or money movement. |
 
 ## Active issue backlog
@@ -52,7 +52,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Build 124 test 9 passed. Dan wants the single Proactive suggestions switch directly on the main Settings page. The inline control awaits device acceptance. Voice gesture acceptance remains open. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Build 124 test 8 failed dictation and Voice. Dan reported a possible brief audio connection before the call ended. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Provider sync and search freshness remain open. |
-| [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Scope approved in E. Implementation pending. |
+| [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Ask “show my Foundry agents”, then read the serving version and its model. Verify a version change on a test agent when authorized. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |
 
 ## Recently completed phase tasks

@@ -1,3 +1,7 @@
+## Foundry administration
+
+Ask Jarvis to show Foundry agents, read a version, prepare new instructions or select which version serves traffic. Ask for model deployments by name to inspect the live Azure catalogue.
+
 ## Watch startup connection feedback — 9 November 2026
 
 The Watch startup fix keeps transient activation/idle reachability changes quiet and history refresh failures inline. Real interrupted chat/voice actions retain feedback and draft recovery. Implementation is separate from deployment/device acceptance; primary owns delivery.

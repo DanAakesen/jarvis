@@ -63,6 +63,7 @@ import type { ConversationAttachmentStore } from './database/conversation-attach
 import type { ConversationSummaryStore } from './database/conversation-summary-store.js';
 import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
+import type { FoundryAgentAdmin } from './core/foundry-agents.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 import {
   createSystemSmokeReader, createSystemStatusReader, type SystemSmokeReader, type SystemStatusProbe,
@@ -131,6 +132,7 @@ export interface BuildAppOptions {
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
   readonly modelCatalogue?: ModelCatalogueReader;
+  readonly foundryAgentAdmin?: FoundryAgentAdmin | null;
   readonly modelDeploymentWorkflow?: ModelDeploymentWorkflow | null;
   readonly credentialStatusStore?: CredentialStatusStore;
   readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
@@ -193,6 +195,7 @@ declare module 'fastify' {
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
     modelCatalogue: ModelCatalogueReader;
+    foundryAgentAdmin: FoundryAgentAdmin | null;
     modelDeploymentWorkflow: ModelDeploymentWorkflow | null;
     credentialStatusStore: CredentialStatusStore | null;
     renewCodexCredential: (() => ReturnType<typeof runCodexRenewalOnce>) | null;
@@ -406,6 +409,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('modelCatalogue', options.modelCatalogue ?? { read: async () => fallbackModelCatalogue() });
+  app.decorate('foundryAgentAdmin', options.foundryAgentAdmin ?? null);
   app.decorate('modelDeploymentWorkflow', options.modelDeploymentWorkflow ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);

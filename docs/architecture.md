@@ -59,11 +59,13 @@ flowchart TB
 | The repository owns | `gpt-6.1-terra`, harness, tools, MCP connection and skills in [definition.json](../agents/pi/definition.json) | `gpt-live-1`, the `live` sub-protocol, client delegation and 24 kHz PCM contract |
 | Deploy after bootstrap | Reads the serving version. For code-owned drift, carries forward its live instruction text, verifies the new version and pins it. No write when the code-owned definition matches. | Verifies the serving technical contract and model deployment; drift fails Deploy. Does not rewrite an existing voice agent. |
 
+Chat and Voice use `manage_foundry_agent` for the Foundry project. Edits copy the serving definition to a new version. Activation pins a version and reads back the selector. Model roles and ARM deployments use the existing settings and deployment tools. A PI deployment deletion requires owner confirmation. Both managed PI model contracts above also apply at release. [Foundry agent API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject)
+
 The seed files apply when the agents are created, not as later portal text updates. Preserve the entire **KEEP THIS BLOCK** in the main agent's live instructions; it contains the turn-reference contract. Do not paste the voice text into `jarvis-pi`. Avoid changing Active while Deploy provisions: it rechecks the serving version before writing and pinning.
 
 ```mermaid
 flowchart LR
-    PORTAL["Portal: edit and activate a version"] --> ACTIVE["Serving version"]
+    PORTAL["Portal or Jarvis: edit and activate a version"] --> ACTIVE["Serving version"]
     ACTIVE --> DEPLOY["Deploy reads the version"]
     DEPLOY -->|PI code changed| VERSION["Carry forward text, verify, pin"]
     DEPLOY -->|PI unchanged| NONE["No write"]

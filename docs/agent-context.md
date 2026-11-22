@@ -131,7 +131,7 @@ The repository must stay small enough for a new agent to read it. [.github/copil
 
 ## Azure
 
-Local work does not require Azure credentials. Production inspection requires the correct tenant/subscription and a scoped role from the owner; verify the target before an authorised command. Keep change delivery in the main-only Deploy workflow. Do not change Foundry versions concurrently with Deploy; instructions are portal-owned after bootstrap, and `KEEP THIS BLOCK` is not editable. See [infra](../infra/README.md) and [agent ownership](architecture.md#the-two-foundry-agents).
+Local work does not require Azure credentials. Production inspection requires the correct tenant/subscription and a scoped role from the owner; verify the target before an authorised command. Keep change delivery in the main-only Deploy workflow. Do not change Foundry versions concurrently with Deploy; Foundry owns live instructions after bootstrap. Dan can edit them through Jarvis or the portal. Preserve `KEEP THIS BLOCK`. See [infra](../infra/README.md) and [agent ownership](architecture.md#the-two-foundry-agents).
 
 ### Verify the live agents (read-only)
 

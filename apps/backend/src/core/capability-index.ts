@@ -50,7 +50,7 @@ const categories: readonly Category[] = [
     examples: ['watch_for', 'stop_watching_for'] },
   { label: 'Settings and system',
     matches: exact('get_settings', 'update_settings', 'get_status_summary', 'get_system_health', 'get_usage',
-      'set_presence_mode', 'set_away_mode', 'set_jarvis_model', 'manage_model_deployment', 'renew_credential',
+      'set_presence_mode', 'set_away_mode', 'set_jarvis_model', 'manage_model_deployment', 'manage_foundry_agent', 'renew_credential',
       'read_backend_logs'),
     examples: ['get_settings', 'set_presence_mode', 'get_system_health', 'get_usage'] },
   { label: 'Proactive findings', matches: prefix('proactive_'),

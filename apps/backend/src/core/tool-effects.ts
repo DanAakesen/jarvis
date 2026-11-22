@@ -53,7 +53,10 @@ export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Obj
   mail_label: action,
   mail_send: action,
   mail_update_draft: action,
-  manage_model_deployment: action,
+  manage_foundry_agent: operations('operation', {
+    list: 'read', list_versions: 'read', read: 'read', create_version: 'action', activate: 'action',
+  }),
+  manage_model_deployment: operations('action', { list: 'read', create: 'action', delete: 'action' }),
   manage_repository: action,
   pause_task: action,
   pc_act: action,

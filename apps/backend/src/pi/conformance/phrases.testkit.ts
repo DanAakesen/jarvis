@@ -11,6 +11,8 @@ export interface PhraseRow {
 }
 
 export const phraseTable: readonly PhraseRow[] = [
+  { intent: 'foundry agents', en: 'show my Foundry agents', da: 'vis mine Foundry agenter', tools: ['manage_foundry_agent'] },
+  { intent: 'foundry deployments', en: 'list Foundry model deployments', da: 'vis Foundry model deployments', tools: ['manage_model_deployment'] },
   // Weather
   { intent: 'location', en: 'where am I', da: 'hvor er jeg', tools: ['get_settings'] },
   { intent: 'weather', en: 'what is the weather in Aarhus tomorrow', da: 'hvordan er vejret i Aarhus i morgen', tools: ['weather'] },

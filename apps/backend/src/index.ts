@@ -63,6 +63,7 @@ import {
 } from './voice/live-protocol.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
+import { createFoundryAgentAdmin } from './core/foundry-agents.js';
 import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
@@ -1565,6 +1566,15 @@ try {
       },
     }) } : {}),
     modelCatalogue,
+    ...(config.foundryProjectEndpoint && credential ? { foundryAgentAdmin: createFoundryAgentAdmin({
+      projectEndpoint: config.foundryProjectEndpoint,
+      managedAgents: [config.pi?.agentName, config.foundryVoiceAgentName].filter((name): name is string => Boolean(name)),
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry identity unavailable');
+        return token.token;
+      },
+    }) } : {}),
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(approvalInterpreter ? { approvalInterpreter } : {}),
     ...(decisionsAvailable ? { reflexClassifier } : {}),

@@ -47,7 +47,7 @@ async function bounded<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> 
   finally { signal.removeEventListener('abort', abort); }
 }
 
-async function readJson(response: Response, signal: AbortSignal): Promise<Record<string, unknown>> {
+export async function readFoundryObject(response: Response, signal: AbortSignal): Promise<Record<string, unknown>> {
   if (!response.ok || response.redirected || !response.body ||
       Number(response.headers.get('content-length')) > maxResponseBytes) {
     void response.body?.cancel().catch(() => {});
@@ -146,7 +146,7 @@ export function createManagedTargetReader(options: ManagedTargetReaderOptions): 
     try {
       const token = await bounded(getToken(FOUNDRY_AGENT_SCOPE, signal), signal);
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) throw new ManagedTargetReadError();
-      const get = async (url: URL) => readJson(await bounded(fetcher(url, {
+      const get = async (url: URL) => readFoundryObject(await bounded(fetcher(url, {
         method: 'GET', redirect: 'error', signal,
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Foundry-Features': 'MicrosoftCopilot=V1Preview' },
       }), signal), signal);

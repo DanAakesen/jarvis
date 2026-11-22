@@ -21,15 +21,15 @@ and when this file no longer matches the registry.
 
 | What | Count |
 | --- | ---: |
-| Registered tools | 158 |
-| Visible to chat and voice | 144 |
+| Registered tools | 159 |
+| Visible to chat and voice | 145 |
 | Visible only in an activation turn (situation tools) | 4 |
 | Visible only to a background wake | 4 |
 | Legacy confirmation endpoints (HTTP only, not advertised) | 6 |
-| Static contract ok | 158 |
-| Discoverable, top 3 | 152 |
+| Static contract ok | 159 |
+| Discoverable, top 3 | 153 |
 | Discoverable, listed (callable by name) | 0 |
-| Callable: ok | 152 |
+| Callable: ok | 153 |
 | Callable: refusal | 0 |
 | Callable: failure (typed) | 0 |
 | Callable: requiresExternal | 0 |
@@ -54,7 +54,7 @@ and when this file no longer matches the registry.
 | 12 | `pc_browser_act` | 281 | 281 | 392 |
 | 13 | `update_project` | 270 | 270 | 311 |
 | 14 | `health_summary` | 268 | 268 | 460 |
-| 15 | `gym_lifts` | 233 | 233 | 789 |
+| 15 | `manage_foundry_agent` | 241 | 241 | 311 |
 
 Schemas above the ceiling, each with a ratchet (they may not grow):
 
@@ -141,7 +141,8 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `mail_search` | google | chat and voice | unclassified | ok | "check my email" (en, #1) | ok (6 calls) | 49 |  |
 | `mail_send` | google | chat and voice | action | ok | "send an email to Anna" (en, #1) | ok (3 calls) | 80 |  |
 | `mail_update_draft` | google | chat and voice | action | ok | "change my draft to Anna" (en, #1) | ok (4 calls, 3 typed refusals or failures proven) | 97 |  |
-| `manage_model_deployment` | core | chat and voice | action | ok | "Create or delete a Foundry model deployment when Dan requests it, wit…" (derived, #1) | ok (2 calls) | 195 |  |
+| `manage_foundry_agent` | core | chat and voice | unclassified | ok | "show my Foundry agents" (en, #1) | ok (5 calls) | 241 |  |
+| `manage_model_deployment` | core | chat and voice | unclassified | ok | "list Foundry model deployments" (en, #1) | ok (3 calls) | 197 |  |
 | `manage_repository` | factory | chat and voice | action | ok | "Register an existing repository from the GitHub App installation usin…" (derived, #1) | ok (2 calls) | 49 |  |
 | `memory_correct` | notes | chat and voice | action | ok | "Correct an existing memory after Dan corrects or updates it" (derived, #1) | ok | 54 |  |
 | `memory_forget` | notes | chat and voice | action | ok | "forget that I like my coffee black" (en, #1) | ok | 37 |  |
