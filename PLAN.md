@@ -1,3 +1,19 @@
+## MCP door call ledger and replay recognition — 21 November 2026 (#1967)
+
+**Status: implemented and checked offline; exact-head CI and the first live measurement are pending.** The first version answered any second identical action of a turn from the first result; review rejected it because it would silently swallow intended repeats (three sets of the same lift, two identical entries, parallel identical calls), and nothing shows that Foundry replays calls. The second version used the JSON-RPC id as a fallback identity; a second review showed the stateless door can then swallow a deliberate repeat (a connection per model round numbers its requests 1, 2, 1, 2), so only a `_meta` call id is an identity now. An identical action under a different request always runs.
+
+| Step | State |
+| --- | --- |
+| One `pi.mcp_tool` line per finished `find_tools` / `call_tool`: tool, outcome, elapsedMs, resultBytes, truncated, duplicate, sameArgsRepeat, replayCheck, metaKeys, turn hash (8 hex), channel, provider; no arguments, results, `_meta` values or reference | Done |
+| Fields in the `logging.ts` allow-list; tested in `logging.test.ts` and, before the allow-list, in `mcp.test.ts` | Done |
+| Replay recognition: the same `_meta` call id asking for the same tool and arguments gets the first result with `duplicate: true`, also while the first is still running; failed and refused calls are not kept; reads never kept | Done |
+| No call id (the JSON-RPC id is never one), or a call id reused for something else: nothing is recognised as a replay (`replayCheck` `no_id` / `id_reused`) | Done |
+| `metaKeys`: the names of the request's `_meta` keys, so the harness's real call-id key can be read from live lines | Done |
+| `sameArgsRepeat` observation of identical actions that ran anyway (never changes execution) | Done |
+| Remote `gh_` / `az_` calls | Out of scope; never recognised |
+| Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
+| Measure in production (Log Analytics; `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): the `replayCheck` mix, which `_meta` keys Foundry sends, whether `duplicate` ever appears, what `sameArgsRepeat` shows (plan in `docs/decisions.md`) | Open; needs live turns |
+
 ## Offline tool conformance suite — 21 November 2026 (#1967, #2012)
 
 **Status: suite, search fixes, tool fixes and generated table done and green offline; exact-head CI and a live Chat/Voice retest of the daily-core scenarios are pending. Dan decides the open items listed in the PR.**
@@ -205,7 +221,7 @@ No external push/provider test is part of this change.
 | Empty delegated turn waits for its transcript up to 3 s before the "did not catch that" reply | Done |
 | No "listening" from transcript deltas while output plays, PI works or a delegation settles | Done |
 | Id/length-only log events for delegation, owner persist, did-not-catch and PI start | Done |
-| Stuck "Speaking" on iPhone (`VoiceAudioEngine.stopPlayback()` skips the finished handler) | Open; found by reading only, not changed |
+| Stuck "Speaking" on iPhone (`VoiceAudioEngine.stopPlayback()` skips the finished handler) | Done: the engine reports every response a stop silences (`VoicePlaybackLedger`); proven by a test that fails without the fix; Dan's device retest pending |
 | Whole spoken turn goes to PI; `offset_ms` no longer cuts it; direct turn closes after 1.5 s quiet; upstream error and activity-publish logs | Done in the PR for #1988 and #1967; offline tests only, build 119 on a device still to confirm |
 
 ## PI finds and calls its tools reliably — 21 November 2026 (#1967)
