@@ -52,6 +52,8 @@ export interface WorldOptions {
   readonly google?: (api: string, path: string, method: string, body: unknown) => Promise<Record<string, unknown>>;
   /** Make the PI spend read fail, as a SQL outage would. */
   readonly spendUnreadable?: boolean;
+  /** How long GPT-Live takes to speak a commentary once the relay has sent it (default none); the stub echoes it as the output transcript that much later. */
+  readonly speechLagMs?: (text: string) => number;
 }
 
 export interface ChatTurn {
@@ -71,6 +73,11 @@ export interface VoiceCall {
   delegations(): string[];
   /** When GPT-Live last received commentary (epoch ms). */
   lastCommentaryAt(): number;
+  /**
+   * Resolves once the relay has taken in everything GPT-Live has sent it so far. Events arrive in order and are handled as they arrive, so a
+   * blank word sent last and echoed back to the client proves it; the blank word changes nothing Dan said.
+   */
+  settle(): Promise<void>;
   end(): Promise<void>;
 }
 
@@ -274,13 +281,30 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
   const upstreamEvents: Record<string, unknown>[] = [];
   let spoken = 0;
   let commentaryAt = 0;
+  const speechTimers = new Set<NodeJS.Timeout>();
   // Delegation ids are unique across a world's voice sessions, so what each utterance got can be told apart after a reconnect.
   let utterances = 0;
+  let settles = 0;
   const eventsBySocket = new WeakMap<WebSocket, Record<string, unknown>[]>();
   upstream.on('connection', (socket) => {
     upstreamSockets.push(socket);
     eventsBySocket.set(socket, []);
     let previous: { readonly delegation: unknown } | undefined;
+    const queuedSpeech: Array<{ readonly at: number; readonly speech: string }> = [];
+    let speechTimer: NodeJS.Timeout | undefined;
+    const speakQueued = () => {
+      if (speechTimer) speechTimers.delete(speechTimer);
+      speechTimer = undefined;
+      while (queuedSpeech.length > 0 && queuedSpeech[0]!.at <= Date.now()) {
+        const next = queuedSpeech.shift()!;
+        if (socket.readyState === WebSocket.OPEN) socket.send(next.speech);
+      }
+      if (queuedSpeech.length > 0) {
+        speechTimer = setTimeout(speakQueued, Math.max(1, queuedSpeech[0]!.at - Date.now()));
+        speechTimer.unref();
+        speechTimers.add(speechTimer);
+      }
+    };
     socket.on('message', (data) => {
       const event = JSON.parse(data.toString()) as Record<string, unknown>;
       upstreamEvents.push(event);
@@ -292,7 +316,14 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
         previous = { delegation: event.delegation_id };
         commentaryAt = Date.now();
         spoken += 1;
-        socket.send(JSON.stringify({ type: 'session.output_transcript.delta', event_id: `spoken-${spoken}`, delta: lead + event.content }));
+        const speech = JSON.stringify({ type: 'session.output_transcript.delta', event_id: `spoken-${spoken}`, delta: lead + event.content });
+        const lag = options.speechLagMs?.(event.content) ?? 0;
+        // GPT-Live speaks one thing after another: a slow start delays everything queued behind it, and nothing is spoken out of order.
+        if (lag <= 0 && queuedSpeech.length === 0) socket.send(speech);
+        else {
+          queuedSpeech.push({ at: Math.max(Date.now() + lag, queuedSpeech.at(-1)?.at ?? 0), speech });
+          if (!speechTimer) speakQueued();
+        }
       } else if (event.type === 'session.close') {
         socket.send(JSON.stringify({ type: 'session.closed', event_id: 'closed-1', usage: { seconds: 12 } }));
       }
@@ -403,6 +434,12 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
       },
       delegations: () => [...delegationIds],
       lastCommentaryAt: () => commentaryAt,
+      async settle() {
+        settles += 1;
+        const eventId = `settle-${settles}`;
+        socket.send(JSON.stringify({ type: 'session.input_transcript.delta', event_id: eventId, delta: ' ' }));
+        await until(() => received.some(event => event.type === 'jarvis.voice.input_transcript.delta' && event.eventId === eventId), 'the relay to take in what GPT-Live sent');
+      },
       async end() {
         if (browser.readyState !== WebSocket.OPEN) return;
         browser.send(JSON.stringify({ type: 'jarvis.session.end' }));
@@ -422,6 +459,7 @@ export async function createParityWorld(options: WorldOptions = {}): Promise<Par
     })),
     piTurnLogs: () => logs.filter(record => record.msg === 'pi.turn'),
     async close() {
+      for (const timer of speechTimers) clearTimeout(timer);
       for (const socket of upstreamSockets) socket.terminate();
       await app.close();
       upstream.close();

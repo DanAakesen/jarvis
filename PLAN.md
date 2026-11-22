@@ -1,6 +1,6 @@
 ## Chat and Voice parity replay — 21 November 2026 (#1967, #1988)
 
-**Status: harness, 24 scenarios and three fixes done and qualified offline; the exact-head CI run and one live Chat plus one live Voice trace of the same request are pending.**
+**Status: harness, 24 scenarios (27 tests) and three fixes done and qualified offline, and an independent review's harness race (S12b) fixed; one live Chat plus one live Voice trace of the same request are pending.**
 
 | Step | State |
 | --- | --- |
@@ -10,6 +10,7 @@
 | Fix: voice warm-up delivered the persona twice; warm-up now sends and records what a turn sends | Done |
 | Fix: the same failure was told two ways; one `piTurnFailedMessage` in both channels | Done |
 | Fix: a voice turn's tool activity was labelled `chat`; the MCP door sends the channel and the route labels it `voice` | Done |
+| Review: S12b raced the stub's speech (the first note could reach the relay after Dan's next words and join that reply). Steps now wait for what the relay has observed; S12a-c also run with the first note 1.8 s late, and a failing row prints both sides | Done |
 | List existing non-delete confirmation gates for Dan | Done (PR body); none is reachable from a Chat or Voice PI turn |
 | Dan decides: chat-only nutrition-list rewrite, chat-only reflex path, voice session language, no `pi.turn` for refused turns | **Open** |
 | One live Chat and one live Voice trace of the same request (GPT-Live speech, Foundry signals, `source: "voice"` rendering) | **Open**; needs a live turn |

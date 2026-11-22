@@ -120,7 +120,8 @@ const sequence = (say: readonly string[]): Pick<Drive, 'chat' | 'voice'> => ({
 });
 
 const expectParity = (rows: readonly FacetRow[]) => {
-  expect(rows.filter(row => row.verdict === 'DIFFERENT').map(row => `${row.facet}: ${row.why}`)).toEqual([]);
+  const show = (value: unknown) => JSON.stringify(value) ?? 'undefined';
+  expect(rows.filter(row => row.verdict === 'DIFFERENT').map(row => `${row.facet}: ${row.why}\n  chat:  ${show(row.chat)}\n  voice: ${show(row.voice)}`)).toEqual([]);
 };
 const noTurnLedger: Rules = {
   'ledger: activation type and source': { why: 'the turn was refused before it began, so no ledger row of its own names a channel', allowed: true, holds: ((chat: unknown[][], voice: unknown[][]) => chat.every(row => row[0] === null) && voice.every(row => row[0] === null)) as never },
@@ -132,6 +133,19 @@ const warmedBeforehand: Rules = {
   'ledger: warm-up rows': { why: 'one warm-up was billed', allowed: true, holds: ((chat: number, voice: number) => chat === 1 && voice === 1) as never },
 };
 const rule = (why: string, holds: (chat: never, voice: never) => boolean, allowed?: true): IntentionalRule => ({ why, holds, ...(allowed ? { allowed } : {}) });
+/** What the relay has passed on to the client so far: GPT-Live's speech, and Dan's words as the relay received them. */
+const relayed = (voice: VoiceCall, type: 'jarvis.voice.output_transcript.delta' | 'jarvis.voice.input_transcript.delta') =>
+  collapse(voice.received.filter(event => event.type === type).map(event => String(event.delta)).join(''));
+/** Whether a spoken text has been stored as a transcript of its own. */
+const storedAlone = (world: ParityWorld, text: string) => world.store.messages.some(message => message.role === 'jarvis' && collapse(message.text) === text);
+
+/**
+ * GPT-Live starts speaking the first progress note late, and what follows is quick, as it is once a response is under way. The outcome
+ * must not depend on how late: the note can reach the relay after Dan has already said the next thing.
+ */
+const NOTE_LAGS_MS = [0, 1_800] as const;
+const firstNoteLate = (lagMs: number): WorldOptions => ({ speechLagMs: text => text === 'Checking your calendar.' ? lagMs : 0 });
+const lagged = (title: string, lagMs: number) => lagMs > 0 ? `${title}, first note ${lagMs} ms late` : title;
 
 describe.concurrent('Chat and Voice behave the same for the same owner request', () => {
   describe('the daily-core requests', () => {
@@ -435,9 +449,10 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       'reply text, flattened': rule(`${where}: the chat notice has no spoken counterpart`, ((chat: string[], voice: string[]) => chat[0]!.startsWith('Reply stopped') && voice[0] === '') as never),
     });
 
-    it('S12a stopping a turn: cancelled, billed at the same estimate, and the grant is closed', async () => {
+    it.each(NOTE_LAGS_MS)('S12a stopping a turn: cancelled, billed at the same estimate, and the grant is closed (first note %i ms late)', async (lag) => {
       const { rows, chatWorld, voiceWorld } = await runBoth({
-        title: 'S12a Stopped turn (chat Stop / voice session end)',
+        title: lagged('S12a Stopped turn (chat Stop / voice session end)', lag),
+        world: firstNoteLate(lag),
         script: world => [calendarTurn(world, 'stop')],
         setup: prewarmed,
         async chat(world) {
@@ -450,10 +465,16 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
         async voice(world, voice) {
           voice.say('What is on my calendar tomorrow?');
           await world.foundry.reached('stop');
+          // The session ends while the first note is being spoken, not before it has reached the relay: speech that arrives after the end is dropped.
+          await until(() => relayed(voice, 'jarvis.voice.output_transcript.delta').includes('Checking your calendar.'), 'the first progress note to reach the relay as speech');
           await voice.end();
           await voiceTurn(world, voice, 1, false);
         },
-        rules: { ...warmedBeforehand, ...stopped('explicit stop', 'chat Stop / voice session end') },
+        rules: {
+          ...warmedBeforehand, ...stopped('explicit stop', 'chat Stop / voice session end'),
+          'speech stored for turns that gave no answer': rule('the progress note spoken before the stop stays as a transcript; chat stores nothing for a stopped turn',
+            ((chat: string[], voice: string[]) => chat.length === 0 && voice.length === 1 && voice[0] === 'Checking your calendar.') as never),
+        },
         extra: async (chatSide, voiceSide) => ({ 'turn reference replayed after the turn is refused': { chat: await stale(chatSide), voice: await stale(voiceSide) } }),
       });
       for (const world of [chatWorld, voiceWorld]) {
@@ -466,10 +487,11 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       expectParity(rows);
     }, 90_000);
 
-    it('S12b the newest request wins: chat steering and a new voice delegation supersede the turn in flight', async () => {
+    it.each(NOTE_LAGS_MS)('S12b the newest request wins: chat steering and a new voice delegation supersede the turn in flight (first note %i ms late)', async (lag) => {
       const finalOnly = (why: string) => rule(why, ((chat: unknown[], voice: unknown[]) => voice.length === chat.length + 1 && isDeepStrictEqual(chat.at(-1), voice.at(-1))) as never);
       const { rows, chat, voice, chatWorld, voiceWorld } = await runBoth({
-        title: 'S12b Superseded turn (chat steer / second voice delegation)',
+        title: lagged('S12b Superseded turn (chat steer / second voice delegation)', lag),
+        world: firstNoteLate(lag),
         setup: prewarmed,
         script: world => [
           calendarTurn(world, 'first'),
@@ -484,11 +506,16 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
         async voice(world, voice) {
           voice.say('What is on my calendar tomorrow?');
           await world.foundry.reached('first');
+          // PI is held mid-turn. Dan speaks again once the first note has been spoken and stored on its own: speech that reaches the relay
+          // after his next words have begun joins the reply to those words, and then the two turns' transcripts run together.
+          await until(() => storedAlone(world, 'Checking your calendar.'), 'the first progress note to be stored as a transcript');
           voice.say('Actually, check Friday instead.');
           await voiceTurn(world, voice, 2);
         },
         rules: {
           ...warmedBeforehand,
+          'speech stored for turns that gave no answer': rule('the superseded turn keeps the progress note it spoke as a transcript; chat stores nothing for it',
+            ((chat: string[], voice: string[]) => chat.length === 0 && voice.length === 1 && voice[0] === 'Checking your calendar.') as never),
           'what Dan gets: kind': finalOnly('chat steering continues one stream; voice runs the second delegation as its own turn, and the first says nothing'),
           'what Dan gets: reply text': finalOnly('chat steering continues one stream; voice runs the second delegation as its own turn'),
           'what Dan gets: failure text': finalOnly('chat steering continues one stream; voice runs the second delegation as its own turn'),
@@ -512,10 +539,11 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
       expectParity(rows);
     }, 90_000);
 
-    it('S12c more speech or a second typed message while PI works never cancels the turn in flight', async () => {
+    it.each(NOTE_LAGS_MS)('S12c more speech or a second typed message while PI works never cancels the turn in flight (first note %i ms late)', async (lag) => {
       const side = { second: 0 };
       const { rows, chatWorld, voiceWorld } = await runBoth({
-        title: 'S12c A second message while PI works (chat POST / voice speech without a delegation)',
+        title: lagged('S12c A second message while PI works (chat POST / voice speech without a delegation)', lag),
+        world: firstNoteLate(lag),
         setup: prewarmed,
         script: world => [{ steps: [
           { say: 'Checking your calendar.' }, find('calendar list events'), { hold: 'working' },
@@ -532,8 +560,10 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
           voice.say('What is on my calendar tomorrow?');
           await world.foundry.reached('working');
           voice.say('Also, what about Friday?', { delegate: false });
-          // Longer than the relay's quiet window, so the aside counts as a finished turn when the answer starts.
-          await sleep(VOICE_TURN_QUIET_MS + 1_000);
+          // The relay stores the aside once it has been quiet for its quiet window, counted from the relay's receipt of the last word. Waiting for
+          // that receipt first, then the window, means no delay in delivering the words can leave the aside short of it when the answer starts.
+          await until(() => relayed(voice, 'jarvis.voice.input_transcript.delta').endsWith('Also, what about Friday?'), 'the aside to reach the relay');
+          await sleep(VOICE_TURN_QUIET_MS + 250);
           world.foundry.release('working');
           await voiceTurn(world, voice, 1);
         },
@@ -637,9 +667,15 @@ describe.concurrent('Chat and Voice behave the same for the same owner request',
           await voiceTurn(world, voice, 1);
           const stored = world.store.messages.map(message => message.id);
           const requests = world.foundry.requests.length;
+          const delegated = () => world.logs.filter(record => record.msg === 'voice.delegation_received').length;
+          const echoed = () => voice.received.filter(event => event.type === 'jarvis.voice.input_transcript.delta').map(event => event.eventId);
+          const before = delegated();
           said.replay();
-          await sleep(2_500);
-          side.voice.unchanged = isDeepStrictEqual(world.store.messages.map(message => message.id), stored) && world.foundry.requests.length === requests;
+          // Once the relay has taken the replay in, a duplicate it wrongly accepted has already shown: a second delegation, or a word echoed twice.
+          // What it would then do with them (store a second owner message, send a second request) is checked at the end, after the session closes.
+          await voice.settle();
+          side.voice.unchanged = isDeepStrictEqual(world.store.messages.map(message => message.id), stored) && world.foundry.requests.length === requests
+            && delegated() === before && new Set(echoed()).size === echoed().length;
           await voice.end();
           const reconnected = await world.openVoice();
           reconnected.say('And the day after?');
