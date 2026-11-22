@@ -24,7 +24,7 @@ export interface PiRuntimeTurnEvidence {
   readonly outcome: 'ok' | 'failed' | 'cancelled' | 'timeout';
   readonly at: string;
   readonly source: 'turn' | 'brain';
-  readonly reason?: 'budget_exhausted' | 'budget_unavailable' | 'busy' | 'preflight_failed';
+  readonly reason?: 'budget_exhausted' | 'budget_unavailable' | 'conversation_wait_timeout' | 'preflight_failed';
 }
 
 export type PiEvent =
@@ -145,7 +145,13 @@ export interface PiBrainRunResult {
   readonly error?: PiGatewayError | undefined;
 }
 
+interface PiTurnInput extends ConversationAgentInput {
+  /** Deliver the timeout sentence at the deadline, before the stream finishes its cancellation. */
+  readonly onTurnDeadline?: (spokenMessage: string) => void;
+}
+
 export interface PiGateway extends ConversationAgent {
+  stream(input: PiTurnInput, authorization: string, signal: AbortSignal): AsyncIterable<ConversationAgentChunk>;
   /**
    * One brain wake in its own scratch conversation, never the owner's chat conversation. It opens like a new chat conversation
    * (the same trusted context and tool overview) and spends against the brain's budget, not the chat cap; the caller has already
@@ -370,14 +376,16 @@ function argumentsOf(item: Record<string, unknown>): string {
   return '';
 }
 
-/** A stalled provider stream must not outlive a cancel or the turn deadline, whether or not the transport reacts to the signal. */
-function readUnlessAborted(reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>> {
-  if (signal.aborted) return Promise.reject(signal.reason);
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    signal.addEventListener('abort', onAbort, { once: true });
-    reader.read().then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+/** Bound provider I/O even when its transport does not react to abort. */
+async function untilAborted<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let abort!: () => void;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
   });
+  try { return await Promise.race([aborted, work()]); }
+  finally { signal.removeEventListener('abort', abort); }
 }
 
 /** Waits, and ends at once with the signal's reason when the turn is cancelled or runs out of time. */
@@ -417,6 +425,7 @@ interface StreamPhase {
   /** Any event beyond the response lifecycle and a tool listing: text, reasoning, a tool call or anything unknown. */
   sawOutput: boolean;
   responseId: string | null;
+  requestSent: boolean;
   failure: string | null;
   failureFields: Record<string, string>;
   /** Distinct event and output item types seen so far, in order, for `pi.harness_item`. */
@@ -481,27 +490,48 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (!overview || (noteSent?.conversationId === conversationId && noteSent.signature === overview.signature)) return undefined;
     return { text: overview.text, sent: { conversationId, signature: overview.signature } };
   }
-  // Single-flight lock for the one conversation: a warm-up and a chat turn can never both have a request in flight.
-  // It is claimed synchronously (no await between the check and the claim), so two callers cannot both pass it.
-  let busy: { readonly kind: 'chat' | 'warm'; readonly done: Promise<void> } | null = null;
-  function claim(kind: 'chat' | 'warm'): (() => void) | null {
-    if (busy) return null;
-    let release!: () => void;
-    const done = new Promise<void>(resolve => { release = resolve; });
-    const mine = { kind, done };
-    busy = mine;
-    return () => { if (busy === mine) busy = null; release(); };
+  let conversationActive = false;
+  const waitingTurns = new Set<() => void>();
+  function releaseConversation(): void {
+    // Hand the lock directly to the oldest live turn; a warm-up cannot get in between two turns.
+    const next = waitingTurns.values().next().value;
+    if (next) next();
+    else conversationActive = false;
+  }
+  function tryClaimConversation(): (() => void) | undefined {
+    if (conversationActive) return undefined;
+    conversationActive = true;
+    return releaseConversation;
+  }
+  async function claimTurn(signal: AbortSignal): Promise<() => void> {
+    signal.throwIfAborted();
+    return tryClaimConversation() ?? new Promise((resolve, reject) => {
+      const abort = () => {
+        waitingTurns.delete(acquire);
+        reject(signal.reason);
+      };
+      const acquire = () => {
+        waitingTurns.delete(acquire);
+        signal.removeEventListener('abort', abort);
+        resolve(releaseConversation);
+      };
+      waitingTurns.add(acquire);
+      signal.addEventListener('abort', abort, { once: true });
+    });
   }
 
-  async function call(method: 'GET' | 'POST', path: string, body: unknown, signal: AbortSignal, stream = false): Promise<Response> {
+  async function call(method: 'GET' | 'POST', path: string, body: unknown, signal: AbortSignal, stream?: StreamPhase): Promise<Response> {
+    signal.throwIfAborted();
     const token = await options.getToken(FOUNDRY_AGENT_SCOPE, signal).catch((error: unknown) => {
       if (signal.aborted) throw error;
       throw new PiGatewayError('pi_unavailable', 'sign_in_failed', { cause: error, detail: 'token_unavailable' });
     });
+    signal.throwIfAborted();
     const connecting = new AbortController();
     const deadline = setTimeout(() => connecting.abort(new DOMException('PI connection timed out', 'TimeoutError')), connectTimeoutMs);
     deadline.unref();
     try {
+      if (stream) stream.requestSent = true;
       const response = await fetcher(`${base}${path}${path.includes('?') ? '&' : '?'}api-version=v1`, {
         method, redirect: 'error', signal: AbortSignal.any([signal, connecting.signal]),
         headers: {
@@ -510,6 +540,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
+      if (signal.aborted) {
+        void response.body?.cancel().catch(() => {});
+        signal.throwIfAborted();
+      }
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
         throw httpFailure(response.status);
@@ -608,18 +642,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    */
   async function* respondOnce(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, phase: StreamPhase, attempt: number,
-  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean }> {
-    const response = await call('POST', '/responses', {
-      conversation: conversationId, input, stream: true,
-    }, signal, true);
-    if (!response.body) {
-      logStreamFailure('no_stream', phase, attempt);
-      throw new PiGatewayError('pi_failed', 'no_reply_stream', { detail: 'no_stream' });
-    }
-    const reader = response.body.getReader();
+  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly usage: PiUsage }> {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     const decoder = new TextDecoder();
     let buffer = '';
-    let completed = false;
+    let usage: PiUsage | undefined;
     const calls: HarnessCall[] = [];
     // Calls beyond the tracking limit are not tracked; they are only a problem when no output ever followed them.
     let overflowSeen = false;
@@ -668,8 +695,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     // Bytes of a frame that never completed may have been a tool event: they count as output, so nothing is retried over them.
     const markUnreadTail = () => { if (buffer.trim().length > 0 || decoder.decode().length > 0) phase.sawOutput = true; };
     try {
-      while (!completed) {
-        const chunk = await readUnlessAborted(reader, signal).catch((error: unknown) => {
+      const response = await untilAborted(() => call('POST', '/responses', {
+        conversation: conversationId, input, stream: true,
+      }, signal, phase), signal);
+      if (!response.body) {
+        logStreamFailure('no_stream', phase, attempt);
+        throw new PiGatewayError('pi_failed', 'no_reply_stream', { detail: 'no_stream' });
+      }
+      const source = response.body.getReader();
+      reader = source;
+      while (!usage) {
+        const chunk = await untilAborted(() => source.read(), signal).catch((error: unknown) => {
           if (signal.aborted) throw error;
           markUnreadTail();
           logStreamFailure('stream_broke', phase, attempt);
@@ -755,9 +791,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           } else if (type === 'response.mcp_list_tools.failed') {
             yield { kind: 'tools_listed', server: '', tools: 0, failed: true };
           } else if (type === 'response.completed' && isObject(payload.response)) {
-            const usage = isObject(payload.response.usage) ? payload.response.usage : {};
-            const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
-            completed = true;
+            const counts = isObject(payload.response.usage) ? payload.response.usage : {};
+            const details = isObject(counts.input_tokens_details) ? counts.input_tokens_details : {};
+            usage = { inputTokens: count(counts.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(counts.output_tokens) };
             if (Array.isArray(payload.response.output)) {
               // The completed output repeats what unnamed done events gave: it is the text of the first messages, so it is matched first.
               unplaced = unnamedDone + unplaced;
@@ -774,10 +810,6 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
                 }
               }
             }
-            yield {
-              kind: 'round_done',
-              usage: { inputTokens: count(usage.input_tokens), cachedTokens: count(details.cached_tokens), outputTokens: count(usage.output_tokens) },
-            };
             break;
           } else if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
             const detail = failureCode(payload, type);
@@ -786,17 +818,25 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           }
         }
       }
-      if (!completed) {
+      if (!usage) {
         markUnreadTail();
         logStreamFailure('stream_ended_without_completed', phase, attempt);
         throw new PiGatewayError('pi_failed', 'cut_off', { detail: 'stream_ended_without_completed' });
       }
-      return { calls, overflow: overflowSeen && !overflowFollowed };
+      return { calls, overflow: overflowSeen && !overflowFollowed, usage };
     } finally {
-      await reader.cancel().catch(() => {});
-      // Best effort: closing the stream is the real stop; this only helps when the service ran it in the background.
-      if (signal.aborted && phase.responseId !== null) {
-        void call('POST', `/responses/${encodeURIComponent(phase.responseId)}/cancel`, {}, AbortSignal.timeout(5_000)).catch(() => {});
+      void reader?.cancel().catch(() => {});
+      // Give Foundry a chance to stop the old response before handing the conversation to the next turn.
+      if (!usage && signal.aborted && phase.requestSent) {
+        if (phase.responseId === null) logStreamFailure('cancel_no_response_id', phase, attempt);
+        else {
+          const path = `/responses/${encodeURIComponent(phase.responseId)}/cancel`;
+          const cancelDeadline = AbortSignal.timeout(5_000);
+          try {
+            const response = await untilAborted(() => call('POST', path, {}, cancelDeadline), cancelDeadline);
+            void response.body?.cancel().catch(() => {});
+          } catch { logStreamFailure('cancel_request_failed', phase, attempt); }
+        }
       }
     }
   }
@@ -822,19 +862,20 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
    */
   async function* respondRound(
     conversationId: string, input: readonly unknown[], signal: AbortSignal, grant: PiTurnGrant | undefined, retryable: boolean,
-  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly phase: StreamPhase; readonly attempt: number }> {
+  ): AsyncGenerator<PiEvent, { readonly calls: HarnessCall[]; readonly overflow: boolean; readonly usage: PiUsage; readonly phase: StreamPhase; readonly attempt: number }> {
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
         startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
-        responseId: null, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
+        responseId: null, requestSent: false, failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
       try {
-        const { calls, overflow } = yield* respondOnce(conversationId, input, signal, phase, attempt);
-        return { calls, overflow, phase, attempt };
+        const result = yield* respondOnce(conversationId, input, signal, phase, attempt);
+        return { ...result, phase, attempt };
       } catch (error) {
+        if (signal.aborted) throw error;
         const transient = phase.failure !== null && (retryableStreamFailures.has(phase.failure) || (phase.failure === 'foundry_response_failed' &&
           phase.failureFields.event !== 'response.incomplete' && transientFoundryCodes.has(phase.failureFields.code ?? '')));
-        if (!retryable || attempt >= 2 || signal.aborted || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
+        if (!retryable || attempt >= 2 || !(error instanceof PiGatewayError) || phase.sawOutput || !transient ||
           !grant || toolMayHaveRun(grant)) {
           // `phase` is one response. Only the first response of a turn can say nothing happened: a later one exists because the
           // first ended on a call, so the turn has already streamed text or reached a tool, which this phase cannot see.
@@ -867,18 +908,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const resolved = new Set<string>();
     const total = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
     for (let round = 1; ; round += 1) {
-      const rounds = respondRound(conversationId, next, signal, grant, round === 1);
-      let finished: Awaited<ReturnType<typeof rounds.next>>;
-      let roundDone: PiEvent | undefined;
-      while (!(finished = await rounds.next()).done) {
-        if (finished.value.kind === 'round_done') {
-          total.inputTokens += finished.value.usage.inputTokens;
-          total.cachedTokens += finished.value.usage.cachedTokens;
-          total.outputTokens += finished.value.usage.outputTokens;
-          roundDone = finished.value;
-        } else yield finished.value;
-      }
-      const { calls, overflow, phase, attempt } = finished.value;
+      // Delegation also closes the provider response if the consumer stops between chunks.
+      const { calls, overflow, usage, phase, attempt } = yield* respondRound(conversationId, next, signal, grant, round === 1);
+      total.inputTokens += usage.inputTokens;
+      total.cachedTokens += usage.cachedTokens;
+      total.outputTokens += usage.outputTokens;
       const owned: HarnessCall[] = [];
       let native = 0;
       for (const harnessCall of calls) {
@@ -894,7 +928,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         yield { kind: 'done', usage: { ...total }, responseId: phase.responseId, ...(round > 1 ? { rounds: round, answered } : {}) };
         return;
       }
-      if (roundDone) yield roundDone;
+      yield { kind: 'round_done', usage };
       const unanswerable = owned.find(entry => callKey(entry.item) === undefined);
       if (unanswerable || overflow || owned.length > maxClientItemsPerRound) {
         if (unanswerable) logHarnessItem('rejected_item', unanswerable.item, phase, attempt);
@@ -975,7 +1009,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   async function warm(signal: AbortSignal): Promise<PiWarmResult> {
     const started = performance.now();
-    const release = claim('warm');
+    const release = tryClaimConversation();
     // A turn or another warm-up already owns the conversation; it will leave it warm, so there is nothing to spend.
     if (!release) return { state: 'warm', alreadyWarm: true, ms: 0 };
     try {
@@ -1026,8 +1060,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return { state: 'warm', alreadyWarm: false, ms: Math.round(performance.now() - started) };
   }
 
-  async function* stream(input: ConversationAgentInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
+  async function* stream(input: PiTurnInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
     const started = performance.now();
+    const channel = input.channel ?? 'chat';
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
+    const timedOut = () => deadline.reason instanceof DOMException && deadline.reason.name === 'TimeoutError';
     const notes: string[] = input.channel === 'voice' ? [voiceChannelNote] : [];
     if (input.visualContext !== undefined) {
       const description = input.visualContext.description;
@@ -1042,12 +1079,42 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     if (input.proactiveContext) notes.push(`[Jarvis recently told Dan this, and he may be replying to it]\n${input.proactiveContext}`);
     if (input.screenContext) notes.push(`[Shared screen context: ${JSON.stringify(input.screenContext)}]`);
 
+    let grant: PiTurnGrant | undefined;
+    let sawTool = false;
+    let rounds = 1;
+    let timeoutFailure: PiGatewayError | undefined;
+    const deadlineFailure = () => {
+      // A follow-up can only exist after a call, even if that call appeared only in the completed output.
+      const actionPossible = grant !== undefined && (sawTool || rounds > 1 || toolMayHaveRun(grant));
+      return timeoutFailure ??= new PiGatewayError('pi_timeout', actionPossible ? 'took_too_long' : 'took_too_long_clean', {
+        cause: deadline.reason, detail: 'turn_deadline',
+      });
+    };
+    const notifyDeadline = () => {
+      if (!timedOut()) return;
+      const error = deadlineFailure();
+      try { input.onTurnDeadline?.(error.spokenMessage); }
+      catch { logStreamFailure('deadline_notice_failed', null, 1); }
+    };
+    deadline.addEventListener('abort', notifyDeadline, { once: true });
+    const stopWatchingDeadline = () => deadline.removeEventListener('abort', notifyDeadline);
+
+    let releaseTurn: (() => void) | undefined;
     let budget: Awaited<ReturnType<typeof assertBudget>>;
     try {
-      budget = await assertBudget(signal);
+      releaseTurn = await claimTurn(deadline);
+      deadline.throwIfAborted();
+      budget = await assertBudget(deadline);
     } catch (error) {
+      stopWatchingDeadline();
+      releaseTurn?.();
+      if (deadline.aborted) {
+        if (!timedOut()) throw error;
+        reportRuntime(channel, 'timeout', 'turn', releaseTurn ? undefined : 'conversation_wait_timeout');
+        throw deadlineFailure();
+      }
       reportRuntime(
-        input.channel === 'voice' ? 'voice' : 'chat',
+        channel,
         'failed',
         'turn',
         error instanceof PiGatewayError && error.code === 'pi_budget_exhausted'
@@ -1055,32 +1122,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       );
       throw error;
     }
-    // A warm-up in flight primes the cache this turn will use; waiting for it is cheaper than racing it.
-    while (busy?.kind === 'warm') {
-      await Promise.race([busy.done, new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }))]);
-      signal.throwIfAborted();
-    }
-    const releaseTurn = claim('chat');
-    if (!releaseTurn) {
-      logStreamFailure('busy', null, 1);
-      reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', 'failed', 'turn', 'busy');
-      throw new PiGatewayError('pi_failed', 'still_answering', { detail: 'busy' });
-    }
-    const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
-    let grant: PiTurnGrant | undefined;
     let usage: PiUsage | undefined;
     let firstTextMs: number | null = null;
-    let outcome: PiTurnRecord['outcome'] = 'failed';
+    let outcome: PiTurnRecord['outcome'] | undefined;
     let sawText = false;
-    let sawTool = false;
     const spend = createSpendTracker();
-    let rounds = 1;
     let clientItems = 0;
     let nativeCalls = 0;
     try {
-      const conversationId = await ensureConversation(signal);
-      const context = await options.context(signal);
-      const stored = await options.store.getConversation(options.owner, signal);
+      const conversationId = await ensureConversation(deadline);
+      const context = await untilAborted(() => options.context(deadline), deadline);
+      const stored = await options.store.getConversation(options.owner, deadline);
       const activation = await options.activations.begin({
         type: input.channel === 'voice' ? 'voice' : 'chat',
         source: input.channel === 'voice' ? 'voice' : 'chat',
@@ -1138,25 +1190,26 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           clientItems = event.answered ?? clientItems;
         }
       }
+      await untilAborted(() => options.store.markWarm(options.owner, activationHash, now(), deadline), deadline)
+        .catch(() => { if (!deadline.aborted) log('pi.mark_warm_failed', {}); });
+      deadline.throwIfAborted();
+      stopWatchingDeadline();
       outcome = 'ok';
-      await options.store.markWarm(options.owner, activationHash, now(), signal).catch(() => log('pi.mark_warm_failed', {}));
     } catch (error) {
-      outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
+      stopWatchingDeadline();
+      outcome = timedOut() ? 'timeout' : deadline.aborted ? 'cancelled' : 'failed';
       if (error instanceof PiGatewayError && error.code === 'pi_unavailable' && error.detail === 'http_404' && !sawText) {
         // The conversation itself may be gone; forget it so the next message starts a new one.
         await options.store.dropConversation(options.owner, AbortSignal.timeout(5_000)).catch(() => {});
       }
-      if (deadline.aborted && !signal.aborted) {
-        // A grant that shows no tool, and no tool call in flight, means nothing was done: say so, so Dan knows he can just ask again.
-        // A second response exists only because the first ended on a call, even one that only its completed output listed and no
-        // streamed event showed, so after the first response something may have been done.
-        const actionPossible = grant !== undefined && (sawTool || rounds > 1 || toolMayHaveRun(grant));
-        throw new PiGatewayError('pi_timeout', actionPossible ? 'took_too_long' : 'took_too_long_clean', { cause: error, detail: 'turn_deadline' });
-      }
+      if (outcome === 'timeout') throw deadlineFailure();
       throw error;
     } finally {
-      releaseTurn();
+      stopWatchingDeadline();
+      outcome ??= timedOut() ? 'timeout' : deadline.aborted ? 'cancelled' : 'failed';
       lastTurnEnd = { outcome, at: performance.now() };
+      if (grant) options.registry.close(grant.turn);
+      releaseTurn();
       const totalMs = Math.round(performance.now() - started);
       // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
       // conservative estimate (the measured fixed prompt plus what streamed) so the monthly stop cannot be dodged.
@@ -1186,7 +1239,6 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         } : {}),
       }, billed, `pi:${input.messageId}:${now().getTime()}`);
       await failedActivation;
-      if (grant) options.registry.close(grant.turn);
       const azureCalls = { attempts: grant?.azure.attempts ?? 0, ok: 0, refused: grant?.azure.undiscoveredRefusals ?? 0, error: 0 };
       for (const result of grant?.results ?? []) {
         if (result.tool.startsWith(azureToolPrefix)) azureCalls[result.outcome] += 1;
@@ -1208,7 +1260,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         azureCalls,
         ...(budget === 'unreadable' ? { budgetRead: 'unavailable' } : {}),
       });
-      reportRuntime(input.channel === 'voice' ? 'voice' : 'chat', outcome, 'turn', budget === 'unreadable' ? 'budget_unavailable' : undefined);
+      reportRuntime(channel, outcome, 'turn', budget === 'unreadable' ? 'budget_unavailable' : undefined);
     }
   }
 

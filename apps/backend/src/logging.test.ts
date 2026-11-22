@@ -301,6 +301,7 @@ describe('structured log export', () => {
   it.each([
     ['pi.stream_failed', { reason: 'foundry_response_failed', event: 'response.failed', code: 'server_error', attempt: 2, elapsedMs: 3960, firstEventMs: 120, sawText: false, sawTool: false, sawOutput: false, previousCancelled: true }],
     ['pi.stream_failed', { reason: 'stream_broke', attempt: 1, elapsedMs: 32_000, firstEventMs: 80, sawText: true, sawTool: false, sawOutput: true, previousCancelled: false }],
+    ['pi.stream_failed', { reason: 'cancel_no_response_id', attempt: 1, elapsedMs: 900, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }],
     ['pi.stream_retry', { reason: 'stream_ended_without_completed', attempt: 1, elapsedMs: 900, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }],
     ['pi.mcp_list_failed', { server: 'azure', code: 'unreachable', status: 503, elapsedMs: 1200 }],
     ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue', code: 'tool_user_error', elapsedMs: 2500 }],
