@@ -2231,7 +2231,7 @@ reasoning distinctions, and separately classify the existing research runner
 boundary. Do not assume a shared root cause or use a parameter removal/effort
 fallback as a fix. All new diagnostic outputs are application-owned constants;
 provider text and worker events remain private. Live correction is unresolved.
-See [migration evidence and primary sources](archive/main-chat-harness-migration.md).
+See [migration evidence and primary sources](main-chat-harness-migration.md).
 
 ## 29 October 2026 — distinguish Foundry table errors from log permission evidence (#1341)
 
@@ -2265,7 +2265,7 @@ new question-button feature implied. These are confirmed scope/design decisions;
 model/region, persistent access grants and parity thresholds remain open. The
 first candidate only retains fixed rejected-field diagnostics; it does not prove
 the live error fixed or authorize cutover. See
-[migration evidence and open decisions](archive/main-chat-harness-migration.md).
+[migration evidence and open decisions](main-chat-harness-migration.md).
 
 ## 30 October 2026 — preserve the optional Copilot target in infrastructure deploys (#1350)
 
@@ -12617,7 +12617,7 @@ No deployment is included.
 
 Graph nodes share folder colors with the legend. Labels appear for search or
 selection, with an explicit Open action; accessible titles/folders remain on all
-nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
+nodes. See the [plan](../PLAN.md) for current Notes acceptance; the P15-93 verification is historical.
 
 ## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
 

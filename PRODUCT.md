@@ -330,7 +330,7 @@ settings, bindings and application policies are verified. The owner also approve
 retaining the Python bridge temporarily for voice fallback, using existing Jarvis
 tools only initially, and excluding test conversations from normal history. Cutover,
 rollback and retirement follow proven parity and required authorization. See
-[migration scope and open decisions](docs/archive/main-chat-harness-migration.md).
+[migration scope and open decisions](docs/main-chat-harness-migration.md).
 
 Jarvis is the owner's personal side project, not a multi-user product. The owner
 does not require extra pre-live exclusion of test transcripts from search, recent

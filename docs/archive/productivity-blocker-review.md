@@ -32,7 +32,7 @@ in his session. The exact cause of that live interruption remains unconfirmed.
   checks passed in 42500193416 and 42501271718; owner-device testing remains.
 - **Direct Factory requests needing another yes:** PR #1636 already accepts a
   verified direct request for its actual own-repository scope. The deployed
-  policy is described in [the earlier review](approval-friction-review.md).
+  policy is described in [the earlier review](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e992873486ffaa20109f5a18749e654/docs/approval-friction-review.md).
   A direct-request production write remains untested; task 23 used the older
   later-yes path and subsequently stopped for disk capacity.
 - **Navigation waiting for unused camera setup:** native 42485644758's retained

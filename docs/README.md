@@ -11,7 +11,7 @@ New machine? Start with the [operator manual](agent-context.md). For what to do 
 | [Design direction](../DESIGN.md) | Live | Current composition and interaction choices. |
 | [UI style guide](ui/style-guide.md) | Live | Shared tokens, components, state and motion rules. |
 | [Decisions](decisions.md) | Live | Accepted choices, why they were made and what is still open. |
-| [Features](features.md) | Live | Feature inventory and status by surface; current priorities live in the plan. |
+| [Features](features.md) | Reference | Factory's deployed catalog. Keep this path unchanged in docs-only PRs; see the plan for current status. |
 | [Data model](data-model.md) | Reference | SQL domains and tables; migrations are authoritative. |
 | [Runbook](runbook.md) | Live | Operations and recovery; check the operator manual before running any production command. |
 | [Backend logs](backend-logs.md) | Live | Allowlisted log fields, evidence and safe diagnostics. |
@@ -161,21 +161,16 @@ Use the snapshots for previous detail, not as active instructions. The pre-refre
 | Document | Status | Subject |
 | --- | --- | --- |
 | [Approval cleanup](archive/approval-cleanup-2026-11-10.md) | Historical | November cleanup and its checks. |
-| [Approval friction review](archive/approval-friction-review.md) | Historical | Earlier audit of unnecessary approvals. |
 | [Copilot runtime recovery](archive/copilot-runtime-recovery-2026-11-07.md) | Historical | Recovery notes for an older runtime. |
 | [Health read coverage](archive/daily-health-read-coverage.md) | Historical | Dated tool/API gap inventory. |
 | [Factory concurrency correction](archive/factory-concurrency-correction.md) | Historical | Correction to the earlier worker sizing approach. |
 | [Factory worker delivery](archive/factory-worker-delivery-2026-11-08.md) | Historical | November handoff of worker delivery. |
-| [Main Chat harness migration](archive/main-chat-harness-migration.md) | Historical | Proposal and staged path before PI. |
+| [Main Chat harness migration](main-chat-harness-migration.md) | Historical | Earlier migration; kept at its original path for the deployed catalog. |
 | [Managed Chat adapter](archive/managed-chat-adapter.md) | Historical | Comparison adapter design and outcomes. |
-| [Managed Chat provisioning](archive/managed-chat-provisioning.md) | Historical | Provisioning evidence for the isolated comparison. |
-| [Managed policy client](archive/managed-policy-client.md) | Historical | Earlier policy verification and handoff. |
 | [Productivity blocker review](archive/productivity-blocker-review.md) | Historical | Dated list of blockers and follow-up work. |
-| [Push-to-Chat continuity](archive/push-chat-continuity.md) | Historical | Earlier notification navigation and approval design. |
+| [Push-to-Chat continuity](push-chat-continuity.md) | Historical | Earlier notification design; kept at its original path for the deployed catalog. |
 | [PR 1343 review fixes](archive/review-fixes-1343.md) | Historical | Dated review findings and fixes. |
 | [Runtime comparison owner test](archive/runtime-comparison-owner-test.md) | Historical | Historical owner test procedure and limitations. |
-| [Runtime lifecycle comparison](archive/runtime-lifecycle-comparison.md) | Historical | Comparison of older lifecycle paths. |
-| [Scaffold approval recovery](archive/scaffold-approval-recovery.md) | Historical | Dated recovery investigation. |
 | [Settings smoke 1350](archive/smoke-settings-1350.md) | Historical | Old Settings and runtime smoke evidence. |
 | [UI audit](archive/ui-audit.md) | Historical | Dated UI findings and recommendations. |
 | [UI implementation coverage](archive/ui-implementation-coverage.md) | Historical | Historical review of UI and fixture coverage. |
@@ -184,28 +179,16 @@ Use the snapshots for previous detail, not as active instructions. The pre-refre
 
 | Document | Status | Subject |
 | --- | --- | --- |
-| [Build 87 checks](archive/ios/design/build87-owner-checks.md) | Historical | Device acceptance for that build. |
 | [Home brief handoff](archive/ios/design/home-brief-activity-handoff.md) | Historical | Design and validation record for the earlier Home change. |
 | [P15-92 verification](archive/ios/design/p15-92-verification.md) | Historical | Shared page pattern evidence. |
-| [P15-93 verification](archive/ios/design/p15-93-verification.md) | Historical | Native Notes evidence. |
-| [P15-94 verification](archive/ios/design/p15-94-verification.md) | Historical | Home and Factory alignment evidence. |
 | [P15-95 verification](archive/ios/design/p15-95-verification.md) | Historical | Health board alignment evidence. |
 | [P15-96 verification](archive/ios/design/p15-96-verification.md) | Historical | Insights alignment evidence. |
-| [Body trend feedback](archive/ios/design/p15-body-trend-feedback.md) | Historical | Dated native chart feedback. |
-| [Build 76 surfaces](archive/ios/design/p15-build76-surfaces.md) | Historical | Native surfaces captured in that build. |
 | [Build 79 feedback](archive/ios/design/p15-build79-feedback.md) | Historical | Feedback on Chat and page chrome. |
 | [Build 80 release](archive/ios/design/p15-build80-release.md) | Historical | Build contents and device checks. |
 | [Build 81 release](archive/ios/design/p15-build81-release.md) | Historical | Build contents and device checks. |
-| [Build 84 release](archive/ios/design/p15-build84-release.md) | Historical | Build contents and device checks. |
-| [Build 85 release](archive/ios/design/p15-build85-release.md) | Historical | Build contents and device checks. |
 | [Build 86 release](archive/ios/design/p15-build86-release.md) | Historical | Build contents and device checks. |
 | [Build 89 release](archive/ios/design/p15-build89-release.md) | Historical | Build contents and device checks. |
 | [Chat and Settings feedback](archive/ios/design/p15-chat-settings-feedback.md) | Historical | Native Chat and Settings correction evidence. |
 | [6 November device feedback](archive/ios/design/p15-device-feedback-2026-11-06.md) | Historical | Observations from the owner test. |
-| [Home hierarchy feedback](archive/ios/design/p15-home-hierarchy-feedback.md) | Historical | Earlier Home chrome refinements. |
-| [Home stream recovery](archive/ios/design/p15-home-stream-recovery.md) | Historical | Dated recovery evidence. |
-| [Integration verification](archive/ios/design/p15-integration-verification.md) | Historical | Native integration evidence and gaps at that time. |
 | [Owner test checklist](archive/ios/design/p15-owner-test-checklist.md) | Historical | Original native acceptance checklist. |
 | [6 November release](archive/ios/design/p15-release-2026-11-06.md) | Historical | Contents and verification of that release. |
-| [Settings verification](archive/ios/design/p15-settings-verification.md) | Historical | Native Settings verification snapshot. |
-| [Widget feedback](archive/ios/design/p15-widget-feedback.md) | Historical | Contrast and task widget review. |

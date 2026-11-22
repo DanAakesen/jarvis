@@ -6,7 +6,7 @@ Use this when starting on a new machine or handing off a task. [Plan](../PLAN.md
 
 ### Work from another machine
 
-1. Install Git and the GitHub CLI. Clone `https://github.com/DanAakesen/jarvis.git`, enter `jarvis`, and fetch `origin/main`. Use your GitHub account to push an isolated task branch or worktree and manage the issue/PR; the public checkout and offline checks do not require Azure or Apple credentials.
+1. Install Git and the GitHub CLI. Clone `https://github.com/DanAakesen/jarvis.git`, enter `jarvis`, and fetch `origin/main`. Sign in with your own GitHub account. Ask the owner for collaborator access to push to the repository; otherwise push to your fork and open the PR against `DanAakesen/jarvis:main`. Work on an isolated local branch or worktree. The public checkout and offline checks do not require Azure or Apple credentials.
 2. Install Node **22** (exact version in [`.nvmrc`](../.nvmrc)), npm **10** (exact version in [`package.json`](../package.json)), and Python **3.12** ([`.python-version`](../.python-version)). Check `node --version`, `npm --version`, and `python --version`; on Windows `py -3.12 --version` selects the right interpreter even if `python` points elsewhere.
 3. From the repository root, run `npm ci` once to restore the locked workspace dependencies. This bootstrap may fetch packages. For cache-only checks that do not need install hooks, use `npm ci --offline --ignore-scripts --no-audit --no-fund`. If the cache is incomplete or a check needs a prebuilt dependency, report what is missing. Do not change the lockfile to get a local run working.
 4. Use the checks below. Do not copy `.env` files, shell history, signing files, or credentials between machines. Tests use local fixtures. Production access is separate: normal Deploy uses the repository's `main` OIDC identity in Azure; Apple signing lives in the TestFlight workflow environment. Ask the owner for the appropriate access rather than using another machine's login.
@@ -28,11 +28,14 @@ Run these from the repository root unless the row says otherwise. These commands
 | Bicep | `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` with the CLI/compiler already installed. No `az login` or resource call for the build/lint. |
 | JarvisCore | In `apps/ios/Packages/JarvisCore`, `swift build` and `swift test` under Swift 6.2. CI uses the `swift:6.2` Linux image for this portable package. Use a cached image or installed toolchain for an offline run. |
 | iPhone and Watch apps | The native SwiftUI targets need macOS and Xcode, not a Windows or Linux checkout. [Apple Watch build](../.github/workflows/watch-build.yml) generates the Xcode project with XcodeGen and builds the Watch simulator/device and iPhone simulator targets. Signed install and physical tests are separate. |
-| Docs | `git diff --check`; use `git grep -n -I -F '<old-path-or-basename>'` before moving a file and `git grep -n -I 'agent-context\.md#'` for inbound manual links. Run a local link audit against the resulting tree: resolve paths from the linking file and check fragments against GitHub heading slugs or explicit anchors. CI has no general Markdown link checker. |
+| Browser | Use Playwright with an installed Chromium and cached `playwright-core` in a scratch directory. The [workspace content check](../scripts/check-workspace-content-browser.mjs) reads `PLAYWRIGHT_CORE_MODULE` and uses a local fixture. For signed-in layouts, stub auth only in a scratch Vite config; never change app auth or use live credentials. |
+| Docs | `git diff --check`; use `git grep -n -I -F '<old-path-or-basename>'` before moving a file and `git grep -n -I 'agent-context\.md#'` for inbound manual links. Resolve paths from the linking file and check fragments against GitHub heading slugs or explicit anchors. CI has no general Markdown link or Mermaid lint check. Render new or changed Mermaid diagrams locally. |
 
 ### What CI runs
 
 [Aggregate CI](../.github/workflows/ci.yml) qualifies ready PRs. [Its impact rules](../.github/scripts/pipeline_impact.py) select checks; shared or unknown inputs get wider coverage. Python tests come from the aggregate job. Depending on the change, the workflow calls web/contracts, backend (including a local container smoke and PC bridge), Vault mirror, SQL integration, offline Foundry contracts, runner, legacy agent, and JarvisCore jobs, or runs Bicep checks. **CI result** and its receipt are the merge evidence. The separate macOS Apple Watch build runs on iOS changes; general CI does not claim Simulator UI or physical-device acceptance.
+
+Do not edit [`docs/features.md`](features.md) in a docs-only change. It is built into the backend image, selects backend checks and triggers [Deploy](../.github/workflows/deploy.yml) when it lands on `main`.
 
 For a Notes change, run `swift test --filter 'JarvisNotesRedesignTests|JarvisClientTransportTests'` from `apps/ios/Packages/JarvisCore`. From `apps/backend` run `npm exec -- vitest run src/vault src/logging.test.ts src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`. These use local fixtures. [Database CI](../.github/workflows/database-ci.yml) covers the note metadata migration and guarded backfill on loopback SQL.
 
@@ -51,18 +54,20 @@ Keep [AGENTS.md](../AGENTS.md) as the entry point and read only the project cont
 | What changed | Update in the same PR |
 | --- | --- |
 | Progress, next action, blockers | [PLAN.md](../PLAN.md) and the issue. Leave automation-owned issue/status fields to the workflow; the issue stays open if device acceptance remains. |
-| Requirement or user workflow | [PRODUCT.md](../PRODUCT.md) and the relevant [feature record](features.md). |
+| Requirement or user workflow | [PRODUCT.md](../PRODUCT.md). Update the [deployed feature catalog](features.md) only with the corresponding implementation change. |
 | Visual or interaction contract | [DESIGN.md](../DESIGN.md); use the [style guide](ui/style-guide.md) and shared controls. |
 | Runtime, data flow, identity, deployment or schema | [Architecture](architecture.md), and [data model](data-model.md) for database changes. |
 | Approved decision, setup or check | [Decisions](decisions.md) for rationale and evidence; this manual for commands and operations. |
 
-Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep proposals separate from confirmed decisions.
+See [decisions.md](decisions.md) for where new entries go. Use the next unused number in each series (`#N` for decisions, `LN` for learnings). When using the **Decisions of the last 14 days** section, add confirmed entries at the top, newest first. Move older entries to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep proposals separate from confirmed decisions.
 
 Run the focused offline checks, inspect the diff, and open **one ready PR** when it can be reviewed. Use `<task ID>: ...`, `fix-main: ...` or `docs: ...` as the [title workflow](../.github/workflows/pr-title.yml) requires. Give concrete tests, exact results and unverified behaviour. Use `Refs #N` for partial work or device acceptance; use an explicit closing reference only if the issue's acceptance is complete. Check native closing links as well as the PR body.
 
 ### Task board
 
-GitHub issues are the live backlog. [Plan status](../.github/scripts/plan_status.py) syncs task rows and dependencies. The [Project Jarvis board](https://github.com/users/DanAakesen/projects/2) is a view, populated by [project-board.yml](../.github/workflows/project-board.yml) and [project_board.py](../.github/scripts/project_board.py). Do not hand-move cards to work around a sync.
+GitHub issues are the live backlog. [Plan status](../.github/scripts/plan_status.py) syncs task rows and dependencies. The [Project Jarvis board](https://github.com[private path omitted]/projects/2) is a view, populated by [project-board.yml](../.github/workflows/project-board.yml) and [project_board.py](../.github/scripts/project_board.py). Do not hand-move cards to work around a sync.
+
+A new `P##-##` row in a `PLAN.md` task table creates a GitHub issue if none matches on the next push to `main` that changes the plan ([plan-status.yml](../.github/workflows/plan-status.yml)). Use prose or an ordinary table for status recaps that should not create issues.
 
 | Column | What it means |
 | --- | --- |
@@ -102,16 +107,27 @@ The Apple build number is the workflow run number. Check that the exact build ha
 - **Product rules.** Keep PI model-driven. Use deterministic checks for facts, provenance and exact outcomes, not to add a second decision-maker. No new PI confirmation or approval except delete; preserve auth and sensible retry safety. Build the replacement, test it, then delete the old path explicitly. No new fallback, dual path or compatibility shim. Note any deliberately accepted cutover gap.
 - **Public repository.** Use secret names, never values. Keep live logs, captures, tokens, account details and real personal data out of docs, test evidence, cards and PRs. Use synthetic fixtures, not real examples.
 
+Do not rebuild the PI guardrails rejected in [the decisions log](decisions.md) (#1996): request/completion classifiers, pre-call refusals, per-tool contracts, answer withholding or buffering, `pi_incomplete`, Memory write contracts, wake receipts, durable-work enforcement, persona as a `pi_context` input, conversation rotation or replay, GPT-Live output gates or transcript matching, or a read-only default. This does not remove auth, delete confirmation or same-request tool dedupe.
+
+For Voice changes, test event shapes seen in real logs using sanitised, synthetic fixtures. Idealised sequences missed fragmented requests. An `offset_ms` value is not the end of an utterance, and a backchannel never cancels PI. Run the Chat/Voice parity suite for relay, gateway, MCP door and tool-route changes.
+
 ## Azure
 
 Local work does not require Azure credentials. Production inspection requires the correct tenant/subscription and a scoped role from the owner; verify the target before an authorised command. Keep change delivery in the main-only Deploy workflow. Do not change Foundry versions concurrently with Deploy; instructions are portal-owned after bootstrap, and `KEEP THIS BLOCK` is not editable. See [infra](../infra/README.md) and [agent ownership](architecture.md#the-two-foundry-agents).
+
+### Verify the live agents (read-only)
+
+After every save of the agent text in the Foundry portal, Dan activates the intended version and checks what is serving. This is an owner check, not an offline test. With authorised Foundry access, use only `GET /agents/<name>` and `GET /agents/<name>/versions/<version>` on the project endpoint. Inspect the 100% pin first and the latest version only if there is no pin. Follow the API version and feature headers in the [provisioner](../.github/scripts/provision_pi_agent.py) or use the [read-only query example](archive/agent-context-2026-10-03-to-2026-11-22.md#verify-the-live-agents-read-only).
+
+For `jarvis-pi`, check the model, harness, tool setup and both `KEEP THIS BLOCK` markers. For `jarvis-pi-live`, check the live voice kind, client delegation and audio contract. Compare the results to the checked-in [Chat](../agents/pi/definition.json) and [Voice](../agents/pi/voice-definition.json) definitions without printing the instruction text. If the intended version or tool block is missing, correct it in the portal and verify again. Do not run this check from a coding session without approval of the exact command.
 
 ### Configuration names only
 
 | Area | Names to look up in the checked-in configuration |
 | --- | --- |
 | Deploy OIDC variables | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` |
-| PI and its MCP connection | `FOUNDRY_PROJECT_ENDPOINT`, `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET`, `PI_GITHUB_TOKEN` |
+| PI backend environment | `FOUNDRY_PROJECT_ENDPOINT`, `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET`, `JARVIS_PI_GITHUB_TOKEN` |
+| Deploy secret for PI GitHub access | `PI_GITHUB_TOKEN` in GitHub Actions, mapped into the backend as `JARVIS_PI_GITHUB_TOKEN`. |
 | APNs (Key Vault-backed backend secrets) | `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_SIGNING_KEY` |
 | TestFlight environment | `APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`; `APPLE_TEAM_ID` is a variable. App configuration secret names are listed in the workflow. |
 

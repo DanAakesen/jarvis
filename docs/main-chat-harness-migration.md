@@ -1,5 +1,3 @@
-> **Historical record.** Git dates: 2026-10-29 to 2026-11-09. Retained as evidence, not a current runbook. Original at `0ff1d1650`.
-
 # Main chat harness migration (#1350)
 
 ## Owner decision — parked, 9 November 2026
@@ -45,7 +43,7 @@ ordinary Current smoke and local fixtures cannot replace that acceptance.
 Managed policy failures now retain the closed reason plus sanitized
 `providerCause` metadata across hosted/backend streams, backend failure logs,
 browser errors and system smoke status. See the
-[field contract](managed-policy-client.md#safe-policy-failure-diagnostics-1373).
+[field contract](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e992873486ffaa20109f5a18749e654/docs/managed-policy-client.md#safe-policy-failure-diagnostics-1373).
 Provider messages and raw bodies remain excluded. Local fixtures cover safe and
 unsafe metadata, HTTP-200 error events, and unchanged uncertain-claim blocking.
 
@@ -162,7 +160,7 @@ with scoped SQL session history and normal draft/session preservation. Current
 uses the retained bridge. Copilot is unavailable until live definition/settings,
 durable execution coordination and shared policy behavior pass. Protocol tests
 and synthetic screenshots are not that acceptance. See
-[the adapter's exact remaining gates](managed-chat-adapter.md).
+[the adapter's exact remaining gates](archive/managed-chat-adapter.md).
 
 The owner confirmed this is his personal side project and is not yet in use.
 Do not add extra exclusion from search, recent context or rolling summaries, or

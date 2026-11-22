@@ -1,5 +1,3 @@
-> **Historical record.** Git dates: 2026-11-09. Retained as evidence, not a current runbook. Original at `0ff1d1650`.
-
 # Push-to-chat continuity
 
 Owner-approved scope: tapping a proactive notification opens the existing normal

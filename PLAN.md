@@ -1034,7 +1034,7 @@ Native UI run 42650781412 completed with 72 passes and six failures: three earli
 Notes cases and three new push-to-chat checks. Two new checks incorrectly expect
 a disabled Send button when the empty composer shows Voice; the failure-recovery
 message check still needs investigation. Do not mark native acceptance passed.
-See [handoff](docs/archive/push-chat-continuity.md).
+See [handoff](docs/push-chat-continuity.md).
 
 ## Home brief and daily activity semantics — 9 November 2026
 
@@ -1684,7 +1684,7 @@ The settings correction is merged in #1353. Deploy 40852006540 passed every chat
 smoke scenario at 09:55 UTC; research remains down independently with
 `research_runner_failed`. This is passing chat smoke evidence, not ordinary-chat,
 research or two-runtime acceptance. Local test evidence and open boundaries are
-recorded in [migration notes](docs/archive/main-chat-harness-migration.md).
+recorded in [migration notes](docs/main-chat-harness-migration.md).
 
 ## Whole-Jarvis logging scope replaces backend-only (#1341; 29 October 2026)
 
@@ -1736,7 +1736,7 @@ backend lint/build and 13 sanitizer tests. The full backend suite passes 6,902
 tests with one skip. The baseline is still unresolved.
 Preserve main `82fff9f5` and the original log task's scope. Next: reviewed normal
 release evidence before choosing a correction; managed path/UI work remains
-unreleased. See [migration evidence](docs/archive/main-chat-harness-migration.md).
+unreleased. See [migration evidence](docs/main-chat-harness-migration.md).
 
 ## Reconcile log diagnostics with current main (#1341; 29 October 2026)
 
@@ -1790,7 +1790,7 @@ candidate passes 944. Next: independent review/qualification, then actual releas
 evidence before selecting a fix. Later runtime/UI/comparison/cutover stages remain
 pending. Dan approved Test agent runtime in the chat menu, Current/Copilot selection
 and a separate labelled conversation with no mid-conversation switch. The
-[migration notes](docs/archive/main-chat-harness-migration.md) include manual test questions
+[migration notes](docs/main-chat-harness-migration.md) include manual test questions
 and outstanding model, grant and parity decisions. No production default changes.
 
 ## Fixed backend-identity authorization observations (#1341; 29 October 2026)

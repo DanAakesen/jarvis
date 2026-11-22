@@ -135,9 +135,9 @@ note and task in Jarvis; it needs no appointments or existing personal data.
 Run this test using the sample shopping data below. This is a pretend purchase;
 do not buy anything. Briefly acknowledge, then use your Jarvis tools.
 
-My budget is [money omitted]. I need a monitor costing [money omitted] and a cable costing
-[money omitted]. I would also like a keyboard costing [money omitted] and a stand costing
-[money omitted]. The required items come first; prefer the keyboard over the stand
+My budget is 1,500 DKK. I need a monitor costing 900 DKK and a cable costing
+100 DKK. I would also like a keyboard costing 400 DKK and a stand costing
+250 DKK. The required items come first; prefer the keyboard over the stand
 when both optional items will not fit.
 
 Use the label HARNESS-CHECK-CURRENT-A.
@@ -146,7 +146,7 @@ Choose what fits the budget. Save the chosen items, prices, total, remaining
 budget and excluded item in one Personal note with that exact title. Read it
 back to confirm it was saved.
 
-Then apply this price correction: the keyboard costs [money omitted]. Update that same
+Then apply this price correction: the keyboard costs 450 DKK. Update that same
 note, recalculate the total and remaining budget, and preserve the other details.
 
 Create one Personal task titled "Review HARNESS-CHECK-CURRENT-A", with no due
@@ -168,8 +168,8 @@ with its corresponding label. The task has no due date or reminder.
 
 | Check | Expected evidence |
 | --- | --- |
-| Initial choice | Monitor [amount omitted] + cable [amount omitted] + keyboard [amount omitted] = [money omitted]; [money omitted] left; stand excluded. |
-| Price correction | The same note is updated: monitor [amount omitted] + cable [amount omitted] + keyboard [amount omitted] = [money omitted]; [money omitted] left; stand still excluded. |
+| Initial choice | Monitor 900 + cable 100 + keyboard 400 = 1,400 DKK; 100 DKK left; stand excluded. |
+| Price correction | The same note is updated: monitor 900 + cable 100 + keyboard 450 = 1,450 DKK; 50 DKK left; stand still excluded. |
 | Saved result | Reopen the note and task in the app; contents match the final result, IDs remain consistent, no duplicates. |
 | Verified completion | Tool activity shows the initial save/readback, update and final reads. The answer accurately reports any incomplete step. |
 | Scope | No purchase, calendar change, notification, unrelated edit or coding work. |

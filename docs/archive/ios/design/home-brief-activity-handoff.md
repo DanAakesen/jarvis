@@ -8,7 +8,7 @@ The earlier WIP native run passed its Home normal/English/Danish/accessibility c
 
 Draft PR: [#1689](https://github.com/DanAakesen/jarvis/pull/1689). Branch: `feature/home-brief-daily-activity`.
 Qualified code revision: `c9837c00abe1c0e524a4f9b1ff0569b9d36d8623`, with main `70c669c99204fd5b1ed34ea5e3ac66c07ec09307` preserved.
-Primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` owns integration, deployment and acceptance.
+Primary session `[session ID omitted]` owns integration, deployment and acceptance.
 
 Implemented: grounded cached Home brief; canonical native/web Instructions editor with independent existing scopes; Home-only instruction and integer visible-line setting (default 3, range 1–6) through existing settings/chat/voice tools; shared merged all-day active kcal and Apple exercise minutes for Today/7d/14d/30d; replacement daily sync/provenance and missing/zero/partial/stale handling. Accepted shared surfaces and transparent chrome are retained.
 
@@ -91,7 +91,7 @@ implemented change or a read of the owner's current HealthKit data.
 ## Implementation boundaries
 
 - Secondary implements, designs, builds and tests in its own feature branch.
-  Primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` (Jarvis2 primary) owns
+  Primary session `[session ID omitted]` (Jarvis2 primary) owns
   review, integration, migrations, signing and deployment. No secondary merge,
   deployment, live-setting change or infrastructure change.
 - Read repository instructions and relevant product/architecture/design context.

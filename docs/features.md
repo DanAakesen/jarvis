@@ -12,7 +12,7 @@ Implemented on the secondary branch, with CI tracked in PR #1686: proactive push
 normal Chat with the finding/evidence behind the scenes for typed, dictated and voice
 follow-ups. No duplicate message or visual chat change. Durable owner selection and
 duplicate-tap reuse are included. Primary integration and physical-device/model
-acceptance remain. [Details](archive/push-chat-continuity.md).
+acceptance remain. [Details](push-chat-continuity.md).
 
 ## Main chat managed harness (#1350; 29 October 2026)
 
@@ -20,7 +20,7 @@ acceptance remain. [Details](archive/push-chat-continuity.md).
 **Planned:** switchable managed main-chat path, identical automated comparisons
 and the approved separate runtime-test conversation through the existing chat
 menu. Manual comparison questions and evidence limits are in the
-[migration notes](archive/main-chat-harness-migration.md). No live parity, UI delivery or
+[migration notes](main-chat-harness-migration.md). No live parity, UI delivery or
 production cutover is claimed.
 
 # Features

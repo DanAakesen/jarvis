@@ -254,7 +254,7 @@ structural headers and floating Notes/Health docks, filters exact generic task
 source labels, and adds localized full source details. The previous detail view
 did not show that provenance; it is newly exposed here, not merely retained.
 Chat appearance and backend behavior remain unchanged. See
-[surface correction evidence](p15-build76-surfaces.md) for Apple references,
+[surface correction evidence](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e992873486ffaa20109f5a18749e654/docs/ios/design/p15-build76-surfaces.md) for Apple references,
 scope and remaining visual hypotheses.
 
 CodeQL 42236610687 passed. CI 42236611082 and the single native run 42236610739
@@ -556,7 +556,7 @@ CodeQL 42243718445 passed. Both language tests selected historical chart points
 successfully, but opening records produced a blank destination with only Back.
 The initial empty Group prevented detail loading/navigation modifiers mounting.
 The correction provides a concrete loading state/ZStack, retains localized decimal
-readings ([health value omitted] was incorrectly shown as [health value omitted]), and verifies loaded measurements
+readings ([health example omitted] was incorrectly shown as [health example omitted]), and verifies loaded measurements
 plus selection/scroll preservation on Back.
 
 The AX recording shows the complete plot fits: fast test drags coasted past it.
@@ -660,7 +660,7 @@ after a correctly targeted tap; production camera code is unchanged since build 
 The widget case compared intrinsic combined AX text widths (24 vs 26.33 pt) instead
 of allocated columns. Both Health language/detail/Back cases and AX Health passed.
 
-Inspected actual English/dark and Danish/light body charts: latest [health value omitted] / [health value omitted],
+Inspected actual English/dark and Danish/light body charts: latest [health example omitted] / [health example omitted],
 8 October historical selection, populated measurement detail and preserved selection
 on Back. Sparse Body fat and single-point Lean mass use separate scales with real
 dates; the complete plot fits above the dock at accessibility text size. English

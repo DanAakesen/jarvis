@@ -74,7 +74,7 @@ and new ignored/stale/extra/stream-disagreement cases. Its live diagnostic resul
 is pending. Reuse the existing version for
 that bounded check; do not create another agent or blindly repeat failed inputs.
 The previous rejected transport attempts remain historical evidence in
-[managed chat provisioning](managed-chat-provisioning.md).
+[managed chat provisioning](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e992873486ffaa20109f5a18749e654/docs/managed-chat-provisioning.md).
 
 ## Owner comparison
 

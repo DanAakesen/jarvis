@@ -447,7 +447,7 @@ Each phase ships dark behind its own flag and is verified before the next starts
 | Proactive one-shot parts PI replaces | `proactive/engine.ts` slot pipeline, `proactive/model.ts`, `proactive/prompt.ts`, the closed source and category lists in `proactive/types.ts`, keyword scope in `proactive/policy.ts`, `proactive/detect.ts`, `proactive/composition.ts`, `proactive/events/reasoner.ts`, `event-prompt.ts` and the routine-judgement part of `events/rules.ts`. **Kept:** queue, producers, dedupe, budget, ledger, push and native delivery, thumbs |
 | Reflex | `core/reflex.ts` stays only if it carries the instant acknowledgement; otherwise it goes |
 | Tests | Every test of the files above, including `jarvis-agent-ci.yml` and `foundry-contract.yml` jobs that only guard them |
-| Docs | `docs/archive/main-chat-harness-migration.md`, `docs/archive/managed-chat-adapter.md`, `docs/archive/managed-chat-provisioning.md`, `docs/archive/managed-policy-client.md`, `runtime-comparison-owner-test.md`, `runtime-lifecycle-comparison.md`, `copilot-runtime-recovery-2026-11-07.md` (history stays in git); `docs/architecture.md`, `PLAN.md`, `p0.md` updated |
+| Docs | See the [cutover checklist](cutover.md) for the current deletion inventory. The comparison and provisioning records are in Git history. |
 | Infra and pipelines | The hosted-agent image build and agent version steps in `.github/workflows/deploy.yml`, `jarvis-agent-ci.yml`, the `jarvis-agent` image in the registry, the hosted-agent identity and managed comparison-agent parameters in `infra/main.bicep`, the hosted agent resource |
 
 ### What the brain keeps and drops (assumption for the owner to veto)

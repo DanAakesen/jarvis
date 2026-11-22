@@ -28,8 +28,8 @@ Apple Watch remains with the secondary thread and is not included in this build.
 ## Validation
 
 - The new nested-source regression fails on the old code with two Today workouts
-  and 0 minutes/[health value omitted]. The fixed synthetic case shows two workouts, 90 minutes
-  and [health value omitted]. All four ranges, preserved manual values/identities, distinct
+  and 0 minutes/0 kcal. The fixed synthetic case shows two workouts, 90 minutes
+  and 600 kcal. All four ranges, preserved manual values/identities, distinct
   nearby workouts and source failure behavior are covered.
 - All 533 JarvisCore tests pass locally in Swift 6.2 and in CI 42515170283.
   CI result, Python checks and CodeQL 42515170223 passed on the exact PR head.
