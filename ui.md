@@ -10,7 +10,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
-| **Home** | The brief and next action, today's activity card, tasks and the iPhone Gym sheet. The activity stays usable when the brief is unavailable. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
+| **Home** | The brief and next action, today's activity card, tasks and the iPhone Gym sheet. The activity stays usable when the brief is unavailable. The + menu beside Upcoming opens New task, New note, Log workout and Log lift. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
 | **Chat** | The one PI conversation: streaming replies, composer with plus menu and dictation, grouped tool activity, generated blocks and charts, photos, reply targets from pushes, follow-latest, and the live Voice state when Voice is active. | `JarvisChatScreen`, `JarvisComposerBar`, `JarvisChatToolActivityList`, `JarvisChatBlockView`, `JarvisChatFollowLatest` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |

@@ -118,39 +118,6 @@ final class JarvisTodayModel: ObservableObject {
         JarvisTodayCorrelation.notes(for: entry, in: notes.value ?? [])
     }
 
-    /// "Chest · 2 d ago", or nil while there is nothing true to say yet.
-    func lastWorkoutText(language: JarvisAppLanguage) -> String? {
-        guard let entries = workouts.value else { return nil }
-        guard let last = entries.max(by: { $0.performedAt < $1.performedAt }) else {
-            return JarvisTodayLocalization.string(.noWorkoutYet, language: language)
-        }
-        let days = timeCalendar.dateComponents(
-            [.day],
-            from: timeCalendar.startOfDay(for: last.performedAt),
-            to: timeCalendar.startOfDay(for: now)
-        ).day ?? 0
-        let ago: String
-        switch days {
-        case ...0: ago = JarvisTodayLocalization.string(.agoToday, language: language)
-        case 1: ago = JarvisTodayLocalization.string(.agoYesterday, language: language)
-        default: ago = JarvisTodayLocalization.string(.agoDays, count: days, language: language)
-        }
-        let name = last.healthActivity.map { JarvisHealthLocalization.workoutName($0, language: language) }
-            ?? last.session.shortTitle(language: language)
-        return name + " · " + ago
-    }
-
-    /// "Bench press · 80 kg", or nil while there is nothing true to say yet.
-    func lastLiftText(language: JarvisAppLanguage) -> String? {
-        guard let entries = workouts.value else { return nil }
-        let lifts = entries.compactMap { entry in entry.lift.map { (entry.performedAt, $0) } }
-        guard let last = lifts.max(by: { $0.0 < $1.0 })?.1 else {
-            return JarvisTodayLocalization.string(.noLiftYet, language: language)
-        }
-        let weight = last.weightKg.rounded() == last.weightKg ? String(Int(last.weightKg)) : String(last.weightKg)
-        return last.exercise + " · " + weight + " kg"
-    }
-
     /// True when a block failed because the phone is offline but still shows what it loaded earlier.
     var isShowingOfflineCopy: Bool {
         (calendar.failure == .offline && calendar.value != nil)
