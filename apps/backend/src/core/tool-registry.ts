@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { isBrainOnlyTool } from '../pi/brain/policy.js';
 import { gmailAccessGuard } from './gmail-access-policy.js';
+import { writingTools } from './tool-effects.js';
 
 // Kept as HTTP compatibility endpoints for older clients, but no longer
 // advertised to the assistant as part of normal owner-request execution.
@@ -161,7 +162,8 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       }
       const inputSchema = structuredClone(tool.inputSchema);
       freezeSchema(inputSchema);
-      const execution = tool.execution === undefined ? undefined : structuredClone(tool.execution);
+      const declared = tool.execution ?? (Object.hasOwn(writingTools, tool.name) ? writingTools[tool.name] : undefined);
+      const execution = declared === undefined ? undefined : structuredClone(declared);
       if (execution) freezeSchema(execution);
       tools.set(tool.name, Object.freeze({
         ...tool, execute: guardGmailAccess(tool), inputSchema, ...(execution ? { execution } : {}),

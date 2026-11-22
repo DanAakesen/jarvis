@@ -128,9 +128,10 @@ const metaKeysOf = (meta: unknown): string[] =>
  * running. Everything else runs, even an identical action under another request, because the model may mean it (three sets of the
  * same lift); `repeat` says that an earlier action of the turn with the same tool and arguments had run, or was running, and changes
  * nothing.
- * Only a success is kept. A refusal declined the action and an error reported no success, so a replay of either runs again. That is a
- * choice, not proof that an error did nothing: the route reports an error after the tool ran too (an invalid or unserialisable or
- * over-size result, a failed audit record) and a tool can fail or be aborted part-way, so a replay of such a call can run its effect twice.
+ * Only a success, or an error that says the call may have done its work (`outcomeUnknown`), is kept. A refusal declined the action and
+ * an error that claims nothing happened reported no success, so a replay of either runs again. An error with no such claim is a
+ * choice, not proof that nothing ran: the route reports an error after the tool ran too (an invalid or unserialisable or over-size
+ * result), and a tool can fail or be aborted part-way. A call whose answer never arrived is reported as unknown for that reason.
  * This is recognition of a replay, not a gate: nothing is refused.
  */
 async function runAction(
@@ -153,7 +154,10 @@ async function runAction(
   const record: PiActionRun = {
     asked, identity, state: 'running',
     answer: running.then(
-      (answer) => { record.state = answer.outcome === 'ok' ? 'ok' : 'failed'; return record.state === 'ok' ? answer : undefined; },
+      (answer) => {
+        record.state = answer.outcome === 'ok' ? 'ok' : answer.outcomeUnknown === true ? 'unknown' : 'failed';
+        return record.state === 'failed' ? undefined : answer;
+      },
       () => { record.state = 'failed'; return undefined; },
     ),
   };
@@ -405,11 +409,21 @@ export function createPiMcpRoutes(options: {
         return say({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
       }
       const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
-      const failed = (): PiToolAnswer => {
+      // What this call does: the operation it names, not the tool's default (a gym list reads), and a writer that declares nothing
+      // is still a writer (see tool-effects.ts).
+      const effect = effectOf(tool, input.arguments);
+      /** `mayHaveRun`: the route gave up after it could have started the tool, so an action is not reported as having done nothing. */
+      const failed = (mayHaveRun: boolean): PiToolAnswer => {
         grant.results.push({ tool: tool.name, outcome: 'error' });
+        const unknown = mayHaveRun && effect === 'action';
         return {
-          outcome: 'error', isError: true, truncated: false,
-          text: JSON.stringify({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }),
+          outcome: 'error', isError: true, truncated: false, ...(unknown ? { outcomeUnknown: true } : {}),
+          text: JSON.stringify({
+            tool: tool.name, outcome: 'error',
+            result: unknown
+              ? { error: 'The tool did not answer, so it may or may not have gone through. Check before trying again.', outcomeUnknown: true }
+              : { error: 'The tool could not run. Nothing is confirmed as done.' },
+          }),
         };
       };
       const run = async (): Promise<PiToolAnswer> => {
@@ -429,12 +443,15 @@ export function createPiMcpRoutes(options: {
             payload: JSON.stringify(input.arguments),
             signal: abort,
           });
-          if (response.statusCode !== 200) return failed();
+          // A 4xx or the 503 for a missing store answers before the tool starts; any other status can come after it ran.
+          if (response.statusCode !== 200) return failed(response.statusCode >= 500 && response.statusCode !== 503);
           const serialized = response.body;
-          const parsed = JSON.parse(serialized) as { outcome?: unknown };
+          const parsed = JSON.parse(serialized) as { outcome?: unknown; result?: unknown };
           const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
+          const outcomeUnknown = outcome === 'error' && typeof parsed.result === 'object' && parsed.result !== null &&
+            (parsed.result as { outcomeUnknown?: unknown }).outcomeUnknown === true;
           grant.results.push({ tool: tool.name, outcome });
-          if (outcome === 'ok' && tool.execution?.defaultEffect === 'action') grant.actions.count += 1;
+          if (outcome === 'ok' && effect === 'action') grant.actions.count += 1;
           if (serialized.length > maxResultCharacters) {
             return {
               outcome, isError: false, truncated: true,
@@ -444,13 +461,13 @@ export function createPiMcpRoutes(options: {
               }),
             };
           }
-          return { outcome, isError: parsed.outcome === 'error', truncated: false, text: serialized };
+          return { outcome, isError: parsed.outcome === 'error', truncated: false, text: serialized, ...(outcomeUnknown ? { outcomeUnknown } : {}) };
         } catch {
-          return failed();
+          return failed(true);
         }
       };
       // An action is run through the replay check; anything that reads, or whose effect is not classified, simply runs.
-      const { answer, duplicate, repeat } = effectOf(tool, input.arguments) === 'action'
+      const { answer, duplicate, repeat } = effect === 'action'
         ? await runAction(grant, door, run)
         : { answer: await run(), duplicate: false, repeat: false };
       return {
