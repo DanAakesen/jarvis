@@ -76,6 +76,8 @@ struct JarvisNotesArea: View {
     @State var pinnedPaths: [String] = []
     @State var pinnedTaskIDs: [String] = []
     @State var directoryNotes: [String: [VaultNoteSummary]] = [:]
+    // The confirmed title for a renamed note while the vault's asynchronous index catches up.
+    @State var savedNoteTitles: [String: String] = [:]
     @State var directoryHasMore: [String: Bool] = [:]
     @State var directoryLoading = Set<String>()
     @State var directoryRequests: [String: UUID] = [:]
@@ -159,6 +161,10 @@ struct JarvisNotesArea: View {
                         Task { await noteDeleted(path) }
                     },
                     onNoteChanged: { refreshed in
+                        let title = JarvisNoteTitle.title(content: refreshed.content, path: refreshed.path)
+                        if title != JarvisNoteTitle.title(content: current.content, path: current.path) {
+                            savedNoteTitles[refreshed.path] = title
+                        }
                         reader = refreshed
                         refreshVersion += 1
                     },
@@ -194,16 +200,12 @@ struct JarvisNotesArea: View {
         if let client {
             switch presented {
             case let .newNote(folder, staged):
-                JarvisNoteEditorSheet(client: client, copy: copy, mode: .create(folder: folder, staged: staged)) { path, note in
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .create(folder: folder, staged: staged)) { note in
                     sheet = nil
                     successConfirmation = JarvisSuccessConfirmation(message: copy.saved)
                     refreshVersion += 1
-                    if let note {
-                        reader = note
-                        readerPresented = true
-                    } else {
-                        Task { await openNote(path: path) }
-                    }
+                    reader = note
+                    readerPresented = true
                 }
             case .newTask:
                 JarvisTaskEditorSheet(client: client, copy: copy, mode: .create(scope: .work)) {
@@ -513,6 +515,9 @@ struct JarvisNotesArea: View {
                             hasMore = next.hasMore
                         }
                         directoryNotes[directory] = notes
+                        for note in notes where savedNoteTitles[note.path] == note.title {
+                            savedNoteTitles.removeValue(forKey: note.path)
+                        }
                         directoryHasMore[directory] = hasMore
                     case .failed(let error, _): throw error
                     case .refreshing: break
@@ -624,6 +629,9 @@ struct JarvisNotesArea: View {
         do {
             let note = try await client.readNote(path: path)
             guard !Task.isCancelled, openingNoteRequest == request else { return }
+            if savedNoteTitles[path] != nil {
+                savedNoteTitles[path] = JarvisNoteTitle.title(content: note.content, path: path)
+            }
             reader = note
             readerPresented = true
         } catch {
@@ -648,6 +656,7 @@ struct JarvisNotesArea: View {
         await JarvisAppCache.invalidateAll(.notes)
         await JarvisAppCache.invalidateAll(.tasks)
         await setPinned(path, pinned: false)
+        savedNoteTitles.removeValue(forKey: path)
         for directory in Array(directoryNotes.keys) {
             directoryNotes[directory]?.removeAll { $0.path == path }
         }

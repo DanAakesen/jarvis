@@ -6,7 +6,6 @@ struct VoiceContentSlot: View {
     let language: JarvisAppLanguage
     let maximumHeight: CGFloat
     @Binding var height: CGFloat
-    @Binding var frame: CGRect
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
@@ -17,11 +16,9 @@ struct VoiceContentSlot: View {
         Group {
             if hasVisuals {
                 VoiceVisualCarousel(runtime: runtime, language: language, isExpanded: false, isActive: !isExpanded) {
-                    isExpanded = true
+                    setExpanded(true)
                 }
                 .frame(height: maximumHeight)
-                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("voiceScreen")) } action: { frame = $0 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
@@ -30,21 +27,26 @@ struct VoiceContentSlot: View {
         .onChange(of: hasVisuals, initial: true) { _, visible in
             if !visible {
                 height = 0
-                frame = .zero
-                isExpanded = false
+                setExpanded(false)
             }
 #if DEBUG && targetEnvironment(simulator)
             if visible, ProcessInfo.processInfo.arguments.contains("--screenshot-voice-fullscreen") {
-                isExpanded = true
+                setExpanded(true)
             }
 #endif
         }
         .fullScreenCover(isPresented: $isExpanded) {
             VoiceVisualCarousel(runtime: runtime, language: language, isExpanded: true, isActive: isExpanded) {
-                isExpanded = false
+                setExpanded(false)
             }
             .background { JarvisScreenBackground().ignoresSafeArea() }
         }
+    }
+
+    private func setExpanded(_ expanded: Bool) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = reduceMotion
+        withTransaction(transaction) { isExpanded = expanded }
     }
 }
 
@@ -64,31 +66,21 @@ private struct VoiceVisualCarousel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TabView(selection: Binding(
-                get: { selectedID },
-                set: { if isActive, let id = $0 { runtime.selectVoiceVisual(id) } }
-            )) {
-                ForEach(entries) { visual in
-                    VoiceVisualPage(presented: visual, runtime: runtime, language: language, inset: inset)
-                        .tag(visual.id)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
-            .overlay(alignment: .topLeading) {
-                HStack(spacing: JarvisDesignTokens.rowSpacing) {
-                    JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark", identifier: "voice.panel.close") {
-                        runtime.userDismissedView()
+            VStack(spacing: 0) {
+                panelHeader
+                TabView(selection: Binding(
+                    get: { selectedID },
+                    set: { if isActive, let id = $0 { runtime.selectVoiceVisual(id) } }
+                )) {
+                    ForEach(entries) { visual in
+                        VoiceVisualPage(presented: visual, runtime: runtime, language: language, inset: inset)
+                            .tag(visual.id)
                     }
-                    JarvisIconButton(
-                        title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand),
-                        systemImage: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                        identifier: "voice.panel.expand",
-                        action: toggleExpanded
-                    )
                 }
-                .padding(inset)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
             }
+            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
             if entries.count > 1, let index {
                 navigation(at: index)
             }
@@ -101,6 +93,29 @@ private struct VoiceVisualCarousel: View {
                 String(format: text(.voicePanelShown), visual.view.workspaceTitle(language: language))
             ).post()
         }
+    }
+
+    private var panelHeader: some View {
+        ZStack(alignment: .trailing) {
+            JarvisPanelGrabber(
+                title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand),
+                action: toggleExpanded
+            )
+            .gesture(
+                DragGesture(minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
+                    .onEnded { value in
+                        let direction = VoiceVerticalSwipe(
+                            translation: value.translation, minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance
+                        )
+                        if direction == (isExpanded ? .down : .up) { toggleExpanded() }
+                    }
+            )
+            .padding(.horizontal, JarvisDesignTokens.controlMinimumHeight)
+            JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark", identifier: "voice.panel.close") {
+                runtime.userDismissedView()
+            }
+        }
+        .padding(.horizontal, inset)
     }
 
     private func navigation(at index: Int) -> some View {
@@ -125,7 +140,7 @@ private struct VoiceVisualCarousel: View {
                 runtime.selectVoiceVisual(entries[index + 1].id)
             }
         }
-        .padding(.bottom, JarvisDesignTokens.compactSpacing)
+        .padding(.top, JarvisDesignTokens.compactSpacing)
     }
 
     private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
@@ -149,18 +164,11 @@ private struct VoiceVisualPage: View {
         }
     }
 
-    private var isHTML: Bool {
-        if case .htmlApp = presented.view { return true }
-        return false
-    }
-
-    private var controlsWidth: CGFloat {
-        JarvisDesignTokens.controlMinimumHeight * 2 + JarvisDesignTokens.rowSpacing * 2
-    }
-
     var body: some View {
         GeometryReader { geometry in
-            content(htmlHeight: max(JarvisDesignTokens.controlMinimumHeight, geometry.size.height - 2 * inset))
+            content(htmlHeight: max(
+                JarvisDesignTokens.controlMinimumHeight, geometry.size.height - 2 * JarvisDesignTokens.compactSpacing
+            ))
         }
     }
 
@@ -172,10 +180,8 @@ private struct VoiceVisualPage: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                         .accessibilityAddTraits(.isHeader)
-                        .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .center)
-                        .padding(.leading, controlsWidth)
                 }
-                sourceNote.padding(.leading, isHTML ? controlsWidth : 0)
+                sourceNote
                 GeneratedViewContent(
                     view: presented.view,
                     runtime: runtime,
@@ -192,11 +198,9 @@ private struct VoiceVisualPage: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(inset)
-            // A title-less visual can scroll under the controls, but its first content must also be readable at rest.
-            .padding(.top, isHTML || title?.isEmpty == false ? 0 : JarvisDesignTokens.controlMinimumHeight)
+            .padding(.horizontal, inset)
+            .padding(.vertical, JarvisDesignTokens.compactSpacing)
         }
-
         .scrollBounceBehavior(.basedOnSize)
         .onChange(of: presented.view) { _, _ in notice = nil }
     }

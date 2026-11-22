@@ -328,9 +328,9 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(requests.first?.body, Data("{}".utf8))
     }
 
-    func testPiBrainStatusDecodesAndTheSwitchIsAPutWithTheFlagOnly() async throws {
+    private func brainResponse(enabled: Bool, paused: Bool = false, available: Bool = true) -> HTTPResponse {
         let body = #"""
-        {"available":true,"enabled":true,"updatedAt":"2026-11-16T10:00:00.000Z","paused":false,
+        {"available":\#(available),"enabled":\#(enabled),"updatedAt":"2026-11-16T10:00:00.000Z","paused":\#(paused),
          "budget":{"limitDkk":100,"spentDkk":82.5,"state":"warn"},
          "month":{"wakes":14,"costDkk":1.9},"today":{"messages":2,"usedTurns":3,"allowedTurns":12},
          "lastWake":{"at":"2026-11-16T10:00:00.000Z","totalMs":4100,"inputTokens":12000,"cachedTokens":9000,"outputTokens":300,"costDkk":0.09,"outcome":"ok"},
@@ -342,15 +342,31 @@ final class PiRuntimeTests: XCTestCase {
          "cost":{"coldSweepMinDkk":0.14,"coldSweepMaxDkk":0.28,"representativeToolTurnDkk":0.17,"preflightWorstCaseDkk":0.79,
                  "estimatedDayMinDkk":1.68,"estimatedDayMaxDkk":3.36,"estimatedThirtyDayMinDkk":50.4,"estimatedThirtyDayMaxDkk":100}}
         """#
-        let transport = RecordingTransport([
-            HTTPResponse(statusCode: 200, body: Data(body.utf8)),
-            HTTPResponse(statusCode: 200, body: Data(body.utf8)),
-        ])
-        let chat = JarvisChatClient(client: try makeClient(transport: transport))
+        return HTTPResponse(statusCode: 200, body: Data(body.utf8))
+    }
 
-        let status = try await chat.piBrainStatus()
-        XCTAssertTrue(status.available)
-        XCTAssertTrue(status.enabled)
+    private func proactiveConfigResponse(paused: Bool) throws -> HTTPResponse {
+        let config: [String: Any] = [
+            "paused": paused, "monthlyBudgetDkk": 50, "backgroundTurnsPerDay": 12,
+            "sources": JarvisProactiveSourceID.allCases.map { ["id": $0.rawValue, "enabled": true] as [String: Any] },
+            "categories": JarvisProactiveCategory.allCases.map { ["id": $0.rawValue, "enabled": true] as [String: Any] },
+            "suggestionScope": "all", "newsFeeds": [], "guidance": "", "preferences": [],
+            "revision": String(repeating: "a", count: 64),
+        ]
+        return HTTPResponse(statusCode: 200, body: try JSONSerialization.data(withJSONObject: config))
+    }
+
+    func testProactiveOffWritesOnlyTheBrainFlagAndReopensOff() async throws {
+        let transport = RecordingTransport([
+            brainResponse(enabled: true),
+            brainResponse(enabled: false),
+            brainResponse(enabled: false),
+        ])
+        let appClient = try makeClient(transport: transport)
+        let proactive = JarvisProactiveClient(client: appClient)
+
+        let status = try await proactive.backgroundStatus()
+        XCTAssertTrue(status.allowsProactiveWakes)
         XCTAssertEqual(status.budget, PiBrainStatus.Budget(limitDkk: 100, spentDkk: 82.5, state: "warn"))
         XCTAssertEqual(status.month.wakes, 14)
         XCTAssertEqual(status.today.messages, 2)
@@ -360,35 +376,92 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(status.lastWake?.cachedTokens, 9000)
         XCTAssertEqual(status.logPending, 1)
 
-        _ = try await chat.setPiBrain(enabled: false)
+        let changed = try await proactive.setBackgroundEnabled(false)
+        XCTAssertFalse(changed.allowsProactiveWakes)
+        let reopened = try await JarvisProactiveClient(client: appClient).backgroundStatus()
+        XCTAssertFalse(reopened.allowsProactiveWakes)
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.map(\.method), [.get, .put])
-        XCTAssertEqual(requests.map(\.url.path), ["/api/pi/brain", "/api/pi/brain"])
+        XCTAssertEqual(requests.map(\.method), [.get, .put, .get])
+        XCTAssertEqual(requests.map(\.url.path), Array(repeating: "/api/pi/brain", count: 3))
         let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests[1].body)) as? [String: Any])
         XCTAssertEqual(sent["enabled"] as? Bool, false)
         XCTAssertEqual(sent.count, 1)
     }
 
+    func testProactiveOnResumesAnExistingPauseBeforeEnablingWakes() async throws {
+        let transport = RecordingTransport([
+            brainResponse(enabled: true, paused: true),
+            try proactiveConfigResponse(paused: true),
+            try proactiveConfigResponse(paused: false),
+            brainResponse(enabled: true),
+        ])
+        let proactive = JarvisProactiveClient(client: try makeClient(transport: transport))
+        let changed = try await proactive.setBackgroundEnabled(true)
+        XCTAssertTrue(changed.allowsProactiveWakes)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.get, .get, .patch, .put])
+        XCTAssertEqual(requests.map(\.url.path), [
+            "/api/pi/brain", "/api/proactive/settings", "/api/proactive/settings", "/api/pi/brain",
+        ])
+        let revisionPatch = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests[2].body)) as? [String: Any])
+        XCTAssertEqual(revisionPatch["paused"] as? Bool, false)
+        XCTAssertEqual(revisionPatch["expectedRevision"] as? String, String(repeating: "a", count: 64))
+        XCTAssertEqual(revisionPatch.count, 2)
+        let switchWrite = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests[3].body)) as? [String: Any])
+        XCTAssertEqual(switchWrite["enabled"] as? Bool, true)
+        XCTAssertEqual(switchWrite.count, 1)
+    }
+
+    func testProactiveOnDoesNotWriteTheBrainFlagAfterAPauseConflict() async throws {
+        let paused = brainResponse(enabled: true, paused: true)
+        let transport = RecordingTransport([
+            paused, paused,
+            try proactiveConfigResponse(paused: true),
+            HTTPResponse(statusCode: 409),
+        ])
+        let proactive = JarvisProactiveClient(client: try makeClient(transport: transport))
+        let status = try await proactive.backgroundStatus()
+        XCTAssertFalse(status.allowsProactiveWakes)
+        do {
+            _ = try await proactive.setBackgroundEnabled(true)
+            XCTFail("A conflicting resume must not report success")
+        } catch {
+            let requests = await transport.recordedRequests()
+            XCTAssertEqual(requests.map(\.method), [.get, .get, .get, .patch])
+        }
+    }
+
+    func testProactivePageUsesTheSameOffStateAsTheSettingsSwitch() throws {
+        let fixtures = [
+            (brainResponse(enabled: false), JarvisProactiveStatusLine.off),
+            (brainResponse(enabled: true, paused: true), .off),
+            (brainResponse(enabled: false, available: false), .unavailable),
+            (brainResponse(enabled: true), .quietHours(next: nil)),
+        ]
+        for (response, expected) in fixtures {
+            let background = try JSONDecoder().decode(PiBrainStatus.self, from: response.body)
+            let status = JarvisProactiveStatus(
+                paused: background.paused, quietNow: true, nextSlotAt: nil, lastRun: nil,
+                budget: JarvisProactiveBudget(month: "2026-11", monthlyLimitDkk: 100, estimatedSpendDkk: 0, state: .ok),
+                sources: [], background: background
+            )
+            XCTAssertEqual(JarvisProactiveLogic.statusLine(status), expected)
+            if expected == .off {
+                XCTAssertFalse(background.allowsProactiveWakes)
+                let phrase = JarvisProactivePagePhrase.make(status: status, openItems: 0, language: .en)
+                XCTAssertEqual(phrase.plainText, "Dan, proactive suggestions are off.")
+            }
+        }
+    }
+
     func testPiBrainStatusAndMemoryReadsRemainRetryableAfterUnavailableResponses() async throws {
-        let brainBody = #"""
-        {"available":true,"enabled":false,"updatedAt":null,"paused":false,
-         "budget":{"limitDkk":100,"spentDkk":0,"state":"ok"},
-         "month":{"wakes":0,"costDkk":0},"today":{"messages":0,"usedTurns":0,"allowedTurns":12},
-         "lastWake":null,"logPending":0,
-         "slots":{"used":0,"allowed":12,"remaining":12,"lastAt":null,"nextAllowedAt":null,"quiet":false,
-                  "queue":{"pending":0,"leased":0,"retrying":0}},
-         "situation":{"revision":0,"asOf":null,"updatedAt":null,
-                      "staleSources":[],"missingSources":[],"disabledSources":[]},
-         "cost":{"coldSweepMinDkk":0.14,"coldSweepMaxDkk":0.28,"representativeToolTurnDkk":0.17,"preflightWorstCaseDkk":0.79,
-                 "estimatedDayMinDkk":1.68,"estimatedDayMaxDkk":3.36,"estimatedThirtyDayMinDkk":50.4,"estimatedThirtyDayMaxDkk":100}}
-        """#
         let memoryBody = #"""
         {"items":[{"id":"1","type":"memory","title":"Fixture memory","folder":"General","content":"A retained memory"}],
          "count":1,"limit":50,"offset":0,"hasMore":false}
         """#
         let transport = RecordingTransport([
             HTTPResponse(statusCode: 503),
-            HTTPResponse(statusCode: 200, body: Data(brainBody.utf8)),
+            brainResponse(enabled: false),
             HTTPResponse(statusCode: 503),
             HTTPResponse(statusCode: 200, body: Data(memoryBody.utf8)),
         ])
@@ -396,14 +469,14 @@ final class PiRuntimeTests: XCTestCase {
             transport: transport,
             retryPolicy: RetryPolicy(maximumRetries: 0)
         )
-        let pi = JarvisChatClient(client: client)
+        let proactive = JarvisProactiveClient(client: client)
         do {
-            _ = try await pi.piBrainStatus()
-            XCTFail("Expected the first PI read to fail")
+            _ = try await proactive.backgroundStatus()
+            XCTFail("Expected the first Proactive read to fail")
         } catch {
             XCTAssertEqual(error as? JarvisClientError, .serviceUnavailable)
         }
-        let brain = try await pi.piBrainStatus()
+        let brain = try await proactive.backgroundStatus()
         XCTAssertFalse(brain.enabled)
 
         let settings = JarvisSettingsClient(client: client)

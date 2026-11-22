@@ -37,6 +37,14 @@ final class VoiceVisualHistoryTests: XCTestCase {
         XCTAssertNil(history.selectedID)
     }
 
+    func testResizeAndMinimizeSwipesRequireDominantVerticalTravel() {
+        XCTAssertEqual(VoiceVerticalSwipe(translation: CGSize(width: 10, height: -45), minimumDistance: 32), .up)
+        XCTAssertEqual(VoiceVerticalSwipe(translation: CGSize(width: -12, height: 32), minimumDistance: 32), .down)
+        XCTAssertNil(VoiceVerticalSwipe(translation: CGSize(width: 0, height: 31), minimumDistance: 32))
+        XCTAssertNil(VoiceVerticalSwipe(translation: CGSize(width: -60, height: -35), minimumDistance: 32))
+        XCTAssertNil(VoiceVerticalSwipe(translation: CGSize(width: 50, height: 50), minimumDistance: 32))
+    }
+
     private func visual(_ id: String, text: String = "Sample") throws -> PresentedWorkspaceView {
         let json = """
         {"version":1,"title":"\(text)","renderer":"text","source":{"id":"now","status":"complete"},"data":{"format":"plain","content":"\(text)"}}

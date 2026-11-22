@@ -16,14 +16,18 @@ extension JarvisNotesArea {
     // MARK: Notes
 
     private func summary(for path: String) -> VaultNoteSummary {
+        let directory = path.split(separator: "/").dropLast().joined(separator: "/")
+        if let note = directoryNotes[directory]?.first(where: { $0.path == path }) {
+            return withSavedTitle(note)
+        }
         if let node = graph?.nodes.first(where: { $0.path == path }) {
             return VaultNoteSummary(
-                path: node.path, title: node.title, folder: node.folder, directory: node.directory, updatedAt: node.updatedAt
+                path: node.path, title: savedNoteTitles[path] ?? node.title,
+                folder: node.folder, directory: node.directory, updatedAt: node.updatedAt
             )
         }
-        let directory = path.split(separator: "/").dropLast().joined(separator: "/")
         return VaultNoteSummary(
-            path: path, title: JarvisNoteTitle.fileTitle(path: path),
+            path: path, title: savedNoteTitles[path] ?? JarvisNoteTitle.fileTitle(path: path),
             folder: directory.split(separator: "/").first.map(String.init) ?? "", directory: directory, updatedAt: ""
         )
     }
@@ -56,8 +60,15 @@ extension JarvisNotesArea {
 
     private var listedNotes: [VaultNoteSummary] {
         let pinned = Set(pinnedPaths)
-        let notes = (directoryNotes[selectedFolder] ?? []).filter { !pinned.contains($0.path) }
+        let notes = (directoryNotes[selectedFolder] ?? []).filter { !pinned.contains($0.path) }.map(withSavedTitle)
         return JarvisNotesPresentation.sorted(notes, by: noteSort)
+    }
+
+    private func withSavedTitle(_ note: VaultNoteSummary) -> VaultNoteSummary {
+        guard let title = savedNoteTitles[note.path] else { return note }
+        return VaultNoteSummary(
+            path: note.path, title: title, folder: note.folder, directory: note.directory, updatedAt: note.updatedAt
+        )
     }
 
     private func sectionHeader(_ title: String, count: Int? = nil) -> some View {
@@ -399,7 +410,7 @@ extension JarvisNotesArea {
                                         .foregroundStyle(JarvisDesignTokens.primaryAccent)
                                         .accessibilityHidden(true)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(node.title).font(.headline).foregroundStyle(.primary)
+                                        Text(savedNoteTitles[node.path] ?? node.title).font(.headline).foregroundStyle(.primary)
                                         Text(hit.snippet.isEmpty ? JarvisNoteTitle.location(path: node.path) : hit.snippet)
                                             .font(.caption).foregroundStyle(.secondary)
                                             .lineLimit(JarvisDesignTokens.notesSearchSnippetLineLimit)

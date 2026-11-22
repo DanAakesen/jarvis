@@ -727,7 +727,7 @@ struct JarvisTodayScreen: View {
                 JarvisNoteEditorSheet(
                     client: client, copy: JarvisNotesCopy(language: language),
                     mode: .create(folder: "", staged: [])
-                ) { _, _ in
+                ) { _ in
                     sheet = nil
                     successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
                 }
