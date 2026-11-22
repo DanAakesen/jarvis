@@ -17,6 +17,7 @@ import {
   findingAllowed,
   hasTravelEvidence,
   proactiveEvidenceSourcesAllowed,
+  suggestionScopeWord,
 } from '../../proactive/policy.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import { PiSituationError, type PiSituationService } from '../situation.js';
@@ -188,7 +189,10 @@ export function createBrainTools(options: {
       }
       const inferredScope = classifySuggestionScope(text, [{ text }]);
       if (inferredScope !== 'unknown' && inferredScope !== suggestionScope) {
-        throw new ToolRefusal('The declared Personal/Work scope does not match the message. Nothing was sent.');
+        const word = suggestionScopeWord(text, inferredScope);
+        throw new ToolRefusal(
+          `The message reads as ${inferredScope}${word ? ` because it says "${word}"` : ''}, but its scope was declared ${suggestionScope}. Declare ${inferredScope} or reword the message. Nothing was sent.`,
+        );
       }
       if (hasTravelEvidence(text, []) && !relatedCategories.includes('travel')) relatedCategories.push('travel');
       try {
@@ -223,7 +227,7 @@ export function createBrainTools(options: {
           throw new ToolRefusal('The pending follow-ups could not be verified. Nothing was sent.');
         }
         const statusBySource = new Map(sourceStatuses.map((status) => [status.id, status]));
-        const authoritativeEvidence: PiProactiveEvidence[] = [
+        const offeredEvidence: PiProactiveEvidence[] = [
           ...(grant.brain!.evidence ?? []),
           ...(view?.state?.refs.map((ref) => ({
             source: ref.source,
@@ -235,23 +239,27 @@ export function createBrainTools(options: {
             origin: 'situation' as const,
             materialHash: ref.materialHash ?? null,
           })) ?? []),
-        ].filter((entry) => {
+        ];
+        const authoritativeEvidence = offeredEvidence.filter((entry) => {
           const invalidatedAt = statusBySource.get(entry.source as SourceId)?.invalidatedAt;
           return !invalidatedAt ||
             Date.parse(entry.verifiedAt) > Date.parse(invalidatedAt);
         });
-        const canonicalEvidence = evidence.map((claimed) => {
-          const known = authoritativeEvidence.find((candidate) =>
+        const findEvidence = (pool: readonly PiProactiveEvidence[], claimed: PiProactiveEvidence) =>
+          pool.find((candidate) =>
             candidate.source === claimed.source &&
             (candidate.observedAt !== null && claimed.observedAt !== null &&
               Date.parse(candidate.observedAt) === Date.parse(claimed.observedAt)) &&
             Date.parse(candidate.verifiedAt) === Date.parse(claimed.verifiedAt) &&
             (claimed.ref === null || candidate.ref === claimed.ref) &&
             (claimed.identity === null || candidate.identity === claimed.identity));
+        const canonicalEvidence = evidence.map((claimed) => {
+          const known = findEvidence(authoritativeEvidence, claimed);
           if (!known) {
-            throw new ToolRefusal(
-              'The evidence source, identity or observation does not match this wake or the current situation. Nothing was sent.',
-            );
+            // Evidence the server did offer, but verified before its source was switched off, is not a made-up tuple.
+            throw new ToolRefusal(findEvidence(offeredEvidence, claimed)
+              ? `The ${claimed.source} evidence was verified before that source was last switched off in Proactive settings, so it can no longer be cited; only a newer observation can. Nothing was sent.`
+              : 'The evidence source, identity or observation does not match this wake or the current situation. Nothing was sent.');
           }
           return { ...known };
         });

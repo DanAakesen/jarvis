@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { ConversationMessage, ConversationSession, ConversationStore } from '../../core/conversation-store.js';
+import type {
+  ConversationMessage, ConversationSession, ConversationStore, ProactiveConversationEvidence,
+} from '../../core/conversation-store.js';
 import { VaultWriteConflictError } from '../../vault/github-client.js';
 import type { PiVault } from '../area.js';
 import type { PiBrainRunResult, PiGateway } from '../gateway.js';
@@ -29,7 +31,7 @@ export function memoryVault(options: { failWrites?: () => boolean } = {}): PiVau
       files.set(to, content);
       return sha(content);
     },
-  } as never;
+  };
 }
 
 /** A conversation store with one chat feed, enough for the brain's messages. */
@@ -43,7 +45,7 @@ export function memoryConversations(options: { empty?: boolean } = {}) {
     messageId: string;
     textHash: string;
     text: string;
-    evidence: readonly import('../core/conversation-store.js').ProactiveConversationEvidence[];
+    evidence: readonly ProactiveConversationEvidence[];
     followUpIds: readonly string[];
     at: Date;
   }>();
