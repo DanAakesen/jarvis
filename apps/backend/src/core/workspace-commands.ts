@@ -238,11 +238,11 @@ export class WorkspaceCommandBroker {
       for (const sessionId of record.sessionIds) {
         this.connections.get(ownerId)?.get(sessionId)?.send('workspace-cancel', { commandId: command.commandId });
       }
-      settleError(new ToolFailure('Workspace command was cancelled; the client may already have applied it.'), 'error');
+      settleError(new ToolFailure('Workspace command was cancelled; the client may already have applied it.', { outcomeUnknown: true }), 'error');
     };
 
     record.timer = setTimeout(() => {
-      settleError(new ToolFailure('The workspace did not acknowledge the command within 10 seconds; it may already have been applied.'), 'error');
+      settleError(new ToolFailure('The workspace did not acknowledge the command within 10 seconds; it may already have been applied.', { outcomeUnknown: true }), 'error');
     }, commandTimeoutMs);
     signal.addEventListener('abort', onAbort, { once: true });
 
@@ -304,8 +304,11 @@ export class WorkspaceCommandBroker {
     this.records.clear();
   }
 
-  /** One tab declined; the command fails only when every tab it went to has declined. */
-  private decline(record: CommandRecord, sessionId: string, outcome: 'refused' | 'error', reason: string): void {
+  /**
+   * One tab declined; the command fails only when every tab it went to has declined. `mayHaveApplied` is for a tab that went away
+   * without answering: the text then says the command may already have been applied, and the failure is marked so it is read as written.
+   */
+  private decline(record: CommandRecord, sessionId: string, outcome: 'refused' | 'error', reason: string, mayHaveApplied = false): void {
     if (record.state !== 'pending' || !record.sessionIds.has(sessionId)) return;
     record.declined.set(sessionId, { outcome, reason });
     if (record.declined.size < record.sessionIds.size) return;
@@ -313,7 +316,7 @@ export class WorkspaceCommandBroker {
     record.state = refusal ? 'refused' : 'error';
     clearTimeout(record.timer);
     if (record.abort) record.signal.removeEventListener('abort', record.abort);
-    record.reject(refusal ? new ToolRefusal(refusal.reason) : new ToolFailure(reason));
+    record.reject(refusal ? new ToolRefusal(refusal.reason) : new ToolFailure(reason, mayHaveApplied ? { outcomeUnknown: true } : {}));
   }
 
   private disconnect(ownerId: string, sessionId: string): void {
@@ -322,7 +325,7 @@ export class WorkspaceCommandBroker {
     if (ownerConnections.size === 0) this.connections.delete(ownerId);
     for (const record of this.records.get(ownerId)?.values() ?? []) {
       this.decline(record, sessionId, 'error',
-        'The active workspace disconnected before acknowledging the command; it may already have been applied.');
+        'The active workspace disconnected before acknowledging the command; it may already have been applied.', true);
     }
   }
   private waitFor(promise: Promise<void>, signal: AbortSignal): Promise<void> {
@@ -330,7 +333,7 @@ export class WorkspaceCommandBroker {
     return new Promise((resolve, reject) => {
       const onAbort = () => {
         signal.removeEventListener('abort', onAbort);
-        reject(new ToolFailure('Workspace command was cancelled; the client may already have applied it.'));
+        reject(new ToolFailure('Workspace command was cancelled; the client may already have applied it.', { outcomeUnknown: true }));
       };
       signal.addEventListener('abort', onAbort, { once: true });
       promise.then(
@@ -443,7 +446,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
   return ['show', 'focus', 'minimise', 'restore', 'close', 'resize', 'place', 'arrange', 'minimise-all',
     'restore-all', 'close-all', 'pin', 'unpin'].includes(String(args.operation)) ||
     args.operation === 'conversation' && ['show', 'hide'].includes(String(args.action)) ||
-    args.operation === 'session' && ['language', 'voice', 'camera'].includes(String(args.action)) ||
+    args.operation === 'session' && ['voice', 'camera'].includes(String(args.action)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
       args.action === 'open' && args.view === undefined);

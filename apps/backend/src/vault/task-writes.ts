@@ -261,7 +261,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
       if (error instanceof TaskWriteError) throw error;
       if (error instanceof ToolRefusal) throw new TaskWriteError(400, error.message);
       if (error instanceof VaultWriteConflictError) throw new TaskWriteError(409, changedMessage);
-      throw new TaskWriteError(503, unknownMessage);
+      throw new TaskWriteError(503, unknownMessage, true);
     }
   }
 

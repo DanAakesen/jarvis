@@ -29,6 +29,8 @@ interface IntentAlias {
   readonly stems: readonly string[];
   readonly terms: readonly string[];
   readonly phrases?: readonly string[];
+  /** The row applies only when the query also holds one of these stems: a verb that means one thing for a note and another for a task. */
+  readonly also?: readonly string[];
   /** A verb row ("show", "create"): its terms count half, so they pick between the tools of one noun instead of outranking it. */
   readonly light?: true;
   readonly provider?: 'gh_' | 'az_';
@@ -137,7 +139,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: [], phrases: ['tidy up', 'ryd op', 'arrange windows', 'close all windows', 'side by side', 'minimise', 'minimize', 'luk alle vinduer', 'ordne vinduer'], terms: ['workspace', 'command'] },
   { stems: [], phrases: ['research going', 'how is the research', 'går det med research', 'research job', 'status of the research'], terms: ['jobs', 'job'] },
   { stems: [], phrases: ['stop research', 'cancel research', 'stop den research', 'afbryd research', 'stop the research'], terms: ['cancel', 'job'] },
-  { stems: ['rutine*', 'routine*', 'recipe*'], terms: ['routines'] },
+  { stems: ['*rutine*', 'routine*', 'recipe*'], terms: ['routines'] },
   { stems: [], phrases: ['what can you do', 'what can you', 'hvad kan du', 'what are you able', 'your capabilities', 'dine funktioner', 'hvilke værktøjer', 'which tools'], terms: ['capabilities'] },
   { stems: ['sprog', 'language'], phrases: ['the voice', 'stemmen', 'turn off voice', 'end voice'], terms: ['workspace', 'command'] },
   { stems: ['job*', 'baggrund*', 'background'], terms: ['jobs'] },
@@ -155,6 +157,70 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['worker*', 'workers', 'arbejder*'], terms: ['task', 'work', 'status'] },
   { stems: [], phrases: ['status på mit arbejde', 'status of my work', 'my work', 'mit arbejde', 'arbejdsstatus', 'work status'], terms: ['work', 'status'] },
   { stems: ['release*', 'deploy*', 'udgivelse*'], terms: ['release', 'deployment'] },
+  // How Dan asks for his daily-core things, in wording one stem cannot carry. A row with `also` counts only next to its noun, so a
+  // verb that edits a note does not drag in the task tools, and "tick off" means a task only when a task is named.
+  // Memory
+  { stems: [], phrases: ['keep in mind', 'bear in mind', 'husk på', 'tænk på'], terms: ['memory', 'remember'] },
+  { stems: [], phrases: ['did i tell you', 'have i told you', 'told you about', 'har jeg fortalt', 'fortalte jeg dig', 'fortalt dig'], terms: ['memory', 'search'] },
+  { stems: [], phrases: ['stop remembering', 'stop with remembering', 'hold op med at huske', 'stop med at huske', 'forget my', 'glem min', 'glem mit'], terms: ['memory', 'forget'] },
+  // Notes: a verb that adds to or edits the note he named finds vault_write.
+  { stems: ['add', 'tilføj*', 'tilfoej*', 'append', 'føj*', 'edit*', 'ret', 'rette*', 'ændr*', 'aendr*', 'rediger*', 'opdater*', 'update*', 'change', 'modify', 'rename*', 'omdøb*', 'title*', 'titel*', 'overskrift*', 'heading*'],
+    also: ['note', 'notes', 'noter*', '*note', '*noter', '*noten', 'notat*'], terms: ['vault', 'write'] },
+  { stems: [], phrases: ['what did i write', 'what did i note', 'what did i save', 'did i write', 'have i written', 'hvad skrev jeg', 'hvad har jeg skrevet', 'hvad noterede jeg', 'har jeg skrevet'], terms: ['vault', 'search', 'notes'] },
+  // Tasks: his own list is the vault's; the Factory's tasks are the worker's. "tick off", "reopen" and "rename" name a vault task.
+  { stems: [], phrases: ['my tasks', 'my task list', 'my open tasks', 'open tasks', 'tasks due', 'tasks today', 'mine opgaver', 'min opgaveliste', 'mine åbne opgaver', 'åbne opgaver', 'opgaver i dag', 'opgaver der skal'], terms: ['vault', 'search'] },
+  { stems: ['tick', 'afkryds*', 'reopen*', 'genåbn*'], phrases: ['check off', 'cross off', 'sæt kryds', 'kryds af'],
+    also: ['task', 'tasks', '*opgave*', 'todo*', 'to-do'], terms: ['vault', 'task', 'complete'] },
+  { stems: ['rename*', 'omdøb*', 'reprioritize*', 'prioriter*', 'important', 'vigtig*', 'urgent', 'haster*', 'reschedule*'],
+    also: ['task', 'tasks', '*opgave*', 'todo*', 'to-do'], terms: ['vault', 'task', 'edit'] },
+  // The Jarvis project: its status, an issue, a worker.
+  { stems: [], phrases: ['status of the', 'status on the', 'status for the', 'status på', 'how is the', 'hvordan går det med'], also: ['project*', 'projekt*', 'factory', 'work', 'arbejde*', 'worker*'], terms: ['work', 'status'] },
+  { stems: [], phrases: ['open an issue', 'open a new issue', 'file an issue', 'file a bug', 'report a bug', 'report an issue', 'raise an issue', 'log an issue', 'new issue', 'åbn et issue', 'åbn et nyt issue', 'opret et issue', 'lav et issue', 'nyt issue', 'indrapportér', 'indrapporter', 'rapportér en fejl', 'rapporter en fejl', 'meld en fejl'], terms: ['create', 'issue'] },
+  { stems: [], phrases: ['start work on', 'begin work on', 'work on issue', 'start on issue', 'pick up issue', 'begynd arbejdet', 'start arbejdet', 'begynd på issue', 'gå i gang med issue', 'kom i gang med issue', 'start issue'], terms: ['start', 'issue'] },
+  { stems: [], phrases: ['tell the worker', 'use the other approach', 'sig til worker', 'sig til workeren', 'redirect the worker', 'ret workeren'], terms: ['steer', 'task'] },
+  { stems: [], phrases: ['cancel the worker', 'stop the worker', 'annullér worker', 'annuller worker', 'stop workeren', 'afbryd workeren'], terms: ['cancel', 'task'] },
+  { stems: ['udrulning*', 'udrul*'], terms: ['release', 'deployment'] },
+  { stems: [], phrases: ['pull request summary', 'summary of the pull request', 'pr summary', 'oversigt over pull request', 'pull request-oversigt', 'pr-oversigt', 'linked issues', 'tilknyttede issues'], terms: ['pr', 'get'] },
+  { stems: [], phrases: ['open a pull request', 'open a pr', 'create a pull request', 'new pull request', 'åbn en pull request', 'opret en pull request', 'lav en pull request', 'åbn en pr', 'opret en pr'], terms: ['github', 'pull', 'create'], provider: 'gh_' },
+  // Workouts and food
+  { stems: ['dødløft*', 'knæbøjning*', 'militærpres*'], terms: ['gym', 'lifts'] },
+  { stems: ['madbudget*'], terms: ['nutrition', 'suggest'] },
+  { stems: [], phrases: ['totals today', 'nutrition totals', 'calories logged', 'calories so far', 'kalorier i dag', 'kalorier hidtil', 'ernæring i dag', 'what have i eaten', 'hvad har jeg spist'], terms: ['nutrition', 'history'] },
+  { stems: [], phrases: ['min gemte', 'mine gemte', 'my saved', 'my favourite', 'my favorite'], terms: ['saved', 'food'] },
+  // Calendar, in Danish too
+  { stems: ['begivenhed*', 'event', 'events'], terms: ['calendar', 'list', 'events'] },
+  { stems: ['fri', 'frie'], terms: ['calendar', 'free', 'slots'] },
+  { stems: ['planlæg*', 'planlaeg*'], terms: ['calendar', 'create'] },
+  { stems: [], phrases: ['plan lunch with', 'plan dinner with', 'plan a lunch', 'plan a dinner', 'plan a meeting', 'plan an appointment', 'plan a call', 'book lunch', 'book dinner', 'book a meeting', 'schedule lunch', 'schedule dinner', 'schedule a meeting'], terms: ['calendar', 'create'] },
+  { stems: [], phrases: ['har jeg en', 'har jeg noget', 'do i have', 'am i meeting'], also: ['*aftale*', 'aftale*', 'møde*', '*møde*', 'begivenhed*', 'calendar*', 'kalender*', '*kalender', 'appointment*', 'meeting*'], light: true, terms: ['list', 'events'] },
+  { stems: ['change', 'ændr*', 'aendr*', 'omlæg*', 'omlaeg*'], also: ['*aftale*', 'aftale*', '*møde*', 'møde*', 'meeting*', 'appointment*', 'calendar*', 'kalender*'], terms: ['calendar', 'update'] },
+  { stems: ['omlæg*', 'omlaeg*', 'ryk*'], also: ['*aftale*', 'aftale*', '*møde*', 'møde*', 'meeting*', 'appointment*'], terms: ['calendar', 'move'] },
+  { stems: [], phrases: ['i min indbakke efter', 'indbakke efter', 'search my inbox', 'my inbox for', 'find i min indbakke', 'søg i min indbakke'], terms: ['mail', 'search'] },
+  { stems: ['put', 'sæt', 'læg'], also: ['task', 'tasks', '*opgave*', 'todo*', 'to-do', 'huskeliste*'], terms: ['vault', 'task', 'create'] },
+  { stems: ['factory'], terms: ['list', 'task', 'work', 'status'] },
+  // Looking things up, research jobs, and where a result is shown
+  { stems: [], phrases: ['look up', 'latest news', 'news about', 'seneste nyheder', 'nyheder om', 'opening hours', 'åbningstider'], terms: ['web', 'research'] },
+  { stems: ['researchjob*'], terms: ['jobs', 'job'] },
+  { stems: [], phrases: ['fejlede research', 'failed research', 'prøv den fejlede', 'try the failed', 'annullér research', 'annuller research'], terms: ['retry', 'job'] },
+  { stems: [], phrases: ['i chatten', 'in the chat', 'in chat'], terms: ['show', 'chat'] },
+  { stems: ['præsenter*', 'present*'], light: true, terms: ['show', 'list', 'read'] },
+  { stems: [], phrases: ['open the settings', 'settings page', 'åbn indstillinger', 'siden med indstillinger', 'indstillingssiden', 'on the screen', 'on my screen', 'as a window', 'på skærmen', 'på min skærm', 'som et vindue', 'i et vindue'], terms: ['workspace', 'command'] },
+  // Dan's PC and browser
+  { stems: ['launch*'], phrases: ['start program', 'start the program', 'start programmet', 'start et program', 'start the app', 'start app', 'åbn programmet', 'åbn appen'], terms: ['pc', 'open'] },
+  { stems: [], phrases: ['press a button', 'press the button', 'click a button', 'tryk på en knap', 'tryk på knappen', 'klik på knappen', 'in the program', 'i programmet'], terms: ['pc', 'act'] },
+  { stems: [], phrases: ['do something in', 'gør noget i', 'use the browser', 'use chrome', 'brug browseren', 'brug chrome', 'in the browser', 'i browseren'], terms: ['browser', 'do'] },
+  // Watches
+  { stems: [], phrases: ['keeping an eye on', 'keep an eye on', 'what am i watching', 'what are you watching', 'what are you monitoring', 'hvad overvåger du', 'hvad holder du øje med'], terms: ['watch', 'list'] },
+  { stems: [], phrases: ['less often', 'more often', 'sjældnere', 'oftere', 'change how often', 'skift hvor ofte'], also: ['watch*', 'overvåg*', 'price', 'prisen', 'pris*', 'camera*', 'kamera*'], terms: ['watch', 'update'] },
+  { stems: [], phrases: ['afslut overvågning', 'stop overvågning', 'end the watch', 'stop the watch'], terms: ['watch', 'stop'] },
+  { stems: ['monitor*'], phrases: ['følg med'], terms: ['watch', 'create'] },
+  // Settings, presence, loose ends, proactive findings
+  { stems: ['*model*'], terms: ['model', 'settings'] },
+  { stems: ['skift*', 'switch'], light: true, terms: ['update', 'set'] },
+  { stems: ['fravær*', 'fraevaer*'], phrases: ['back at my desk', 'at my desk', 'i am back', 'away mode'], terms: ['presence', 'away', 'mode'] },
+  { stems: [], phrases: ['løse ender', 'løse tanker', 'loose ends'], terms: ['inbox', 'capture'] },
+  { stems: ['proactive*', 'proaktiv*', 'finding*', 'fund', 'observation*'], terms: ['proactive'] },
+  { stems: [], phrases: ['not useful', 'ikke nyttig', 'was wrong', 'var forkert', 'not helpful', 'ikke hjælpsom'], also: ['finding*', 'fund', 'observation*', 'proactive*', 'proaktiv*', 'suggestion*', 'forslag*', 'item*'], terms: ['proactive', 'item', 'feedback'] },
   // Verbs: what is asked of it.
   { stems: ['søg*', 'soeg*', 'find*', 'finde', 'look', 'lookup', 'tjek*', 'check*'], light: true, terms: ['search'] },
   { stems: ['opret*', 'tilføj*', 'tilfoej*', 'add', 'create*', 'ny', 'nyt', 'new', 'make', 'lav', 'lave'], light: true, terms: ['create'] },
@@ -193,8 +259,9 @@ function stemMatches(token: string, stem: string): boolean {
 const aliasesFor = (query: string): IntentAlias[] => {
   const found = tokensOf(query);
   const whole = normalizePhrase(query);
-  return intentAliases.filter((alias) => alias.stems.some((stem) => found.some((token) => stemMatches(token, stem)))
-    || (alias.phrases ?? []).some((phrase) => whole.includes(normalizePhrase(phrase))));
+  const holds = (stems: readonly string[]) => stems.some((stem) => found.some((token) => stemMatches(token, stem)));
+  return intentAliases.filter((alias) => (holds(alias.stems) || (alias.phrases ?? []).some((phrase) => whole.includes(normalizePhrase(phrase))))
+    && (alias.also === undefined || holds(alias.also)));
 };
 
 /** The remote providers a query names, by alias word or by a tool name such as `gh_issue_read`. */

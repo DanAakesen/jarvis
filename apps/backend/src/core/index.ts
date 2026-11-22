@@ -21,11 +21,13 @@ import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspac
 import { readWindowTool } from './read-window.js';
 import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
 import { findChatReflexReplay } from './reflex.js';
+import { sharedScreenForMessage } from './shared-screen.js';
 import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
 import { withConfirmationTurn } from './owner-interactions.js';
+import { safeErrorFields } from '../logging.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 const smokeTools = new Set(['get_system_health', 'github_read', 'list_jobs', 'workspace_command']);
@@ -236,6 +238,12 @@ export const coreModule: BackendModule = {
         if (messageHeader === undefined && messageId !== undefined && validMessageId) {
           request.jarvisMemorySourceMessageId = messageId;
         }
+        // The page Dan shares with a chat message belongs to the PI turn for that message, never to anything a caller sends.
+        const sharedScreen = request.jarvisPi === 'turn' && validMessageId ? sharedScreenForMessage(messageId!) : undefined;
+        if (sharedScreen) {
+          request.requireSharedScreenContext = true;
+          request.sharedScreenContext = sharedScreen;
+        }
         if (validMessageId && !app.toolCallStore) return reply.code(503).send({ error: 'Tool execution unavailable' });
         if (validMessageId && phoneSessionId === undefined && voiceItemHeader === undefined &&
             (tool.reflexSafe || tool.name === 'workspace_command')) {
@@ -314,7 +322,7 @@ export const coreModule: BackendModule = {
             result = { refused: error.message };
           } else if (error instanceof ToolFailure && !controller.signal.aborted) {
             outcome = 'error';
-            result = { error: error.message };
+            result = { error: error.message, ...(error.outcomeUnknown ? { outcomeUnknown: true } : {}) };
           } else {
             const unexpected = unexpectedToolFailure(error, controller.signal.aborted, effectOf(tool, request.body));
             outcome = 'error';
@@ -339,8 +347,9 @@ export const coreModule: BackendModule = {
               outcome,
             });
           } catch (error) {
-            activity('failed');
-            throw error;
+            // The tool has already run. Failing the reply now would tell the caller that nothing happened and invite a retry of a
+            // write that went through, so the reply stays what the tool made it and the lost audit row is reported here.
+            request.log.error({ tool: tool.name, outcome, ...safeErrorFields(error) }, 'tool.audit_failed');
           }
           activity('tool-call-finished', outcome);
         }

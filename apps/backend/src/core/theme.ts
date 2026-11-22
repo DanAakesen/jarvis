@@ -4,12 +4,14 @@ import { applySettingsPatch } from './settings-tools.js';
 
 const hexColor = { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 };
 const enumSchema = (values: readonly string[]) => ({ type: 'string', enum: [...values] });
-const numberSchema = (minimum: number, maximum: number) => ({
-  type: ['number', 'null'],
-  not: { type: 'null' },
-  minimum,
-  maximum,
-});
+const numberSchema = (minimum: number, maximum: number) => ({ type: 'number', minimum, maximum });
+
+// Fastify's validator coerces a null number to 0, so a null glow or radius must be refused before validation runs.
+const nullNumberTokens = (input: unknown) => {
+  const tokens = (input as { tokens?: unknown } | null | undefined)?.tokens;
+  return typeof tokens === 'object' && tokens !== null
+    ? (['glow', 'radius'] as const).filter((key) => (tokens as Record<string, unknown>)[key] === null) : [];
+};
 
 const inputSchema = {
   type: 'object',
@@ -66,6 +68,11 @@ export const setThemeTool: JarvisTool = {
   name: 'set_theme',
   description: 'Set allowlisted Jarvis appearance tokens. Set a colour to null to remove its override and use the theme default, or use reset: true to remove all three colour overrides.',
   inputSchema,
+  validateInput: (input) => nullNumberTokens(input).length === 0,
+  explainInvalidInput(input) {
+    const keys = nullNumberTokens(input);
+    return keys.length === 0 ? undefined : `${keys.map((key) => `tokens.${key}`).join(' and ')} must be a number, not null.`;
+  },
   async execute(input, request, signal) {
     if (signal.aborted) throw new Error('Theme update was cancelled.');
     const tokens = typeof input === 'object' && input !== null && !Array.isArray(input)

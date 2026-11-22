@@ -170,6 +170,25 @@ describe('Personal Memory', () => {
     expect(automatic).not.toHaveBeenCalled();
   });
 
+  it('accepts a key in Danish and stores one spelling of it', async () => {
+    const fixture = memoryStore(new Map([['42', 'Husk at jeg træner om fredagen.']]));
+    const module = createMemoryModule({ store: fixture.store });
+    const remember = (key: string) => tool(module, 'memory_remember').execute({
+      category: 'preference', key, content: 'Dan træner om fredagen.',
+    }, ownerRequest('42'), AbortSignal.timeout(1_000));
+
+    expect(await remember('Træningsdag')).toMatchObject({ id: '1', key: 'træningsdag', changed: true });
+    expect(await remember('Gåsedag')).toMatchObject({ id: '2', key: 'gåsedag', changed: true });
+    // The same word typed as a plain a plus a combining ring is the same key, not a second memory.
+    expect(await remember('Ga\u030Asedag')).toMatchObject({ id: '2', key: 'gåsedag', changed: false });
+    expect(fixture.records.size).toBe(2);
+
+    for (const key of ['træning dag', '.skjult', 'æble!', 'æ'.repeat(101)]) {
+      await expect(remember(key)).rejects.toBeInstanceOf(ToolRefusal);
+    }
+    await expect(remember('æble dag')).rejects.toThrow(/letters in any language/u);
+  });
+
   it('automatically captures one clearly stated fact without creating duplicate identities', async () => {
     const fixture = memoryStore(new Map([['42', 'I prefer afternoon appointments.']]));
     const module = createMemoryModule({

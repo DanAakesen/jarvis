@@ -3,6 +3,7 @@ import { presentNutritionList } from './food-presentation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { RecoverableChat } from './recoverable-chat.js';
 import { registerSseShutdown } from './sse.js';
+import { forgetSharedScreen, rememberSharedScreen } from './shared-screen.js';
 import type { FastifyRequest } from 'fastify';
 import { chatBlockLimits, type ConversationSearchPage } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
@@ -785,6 +786,7 @@ return {
         yield streamEvent('user', userMessage);
         publishActivity('thinking');
         app.chatBlocks.discard(sessionId);
+        const sharedScreenMessages = new Set<string>();
         try {
           const classifier = request.requireSharedScreenContext ? undefined : app.reflexClassifier;
           const finishReflex = classifier ? registerChatReflex(userMessage.id) : undefined;
@@ -836,6 +838,11 @@ return {
             try {
               const proactiveContext = session.runtimeTest ? undefined
                 : await app.proactiveConversationContext?.read(request.principal!.objectId);
+              if (piRequested && request.sharedScreenContext) {
+                // The PI agent calls its tools in requests of their own; they find the shared page by this message.
+                rememberSharedScreen(turnMessageId, request.sharedScreenContext);
+                sharedScreenMessages.add(turnMessageId);
+              }
               agentIterator = agent.stream({
                 messageId: turnMessageId,
                 agentSessionId,
@@ -1037,6 +1044,7 @@ return {
           }
           activeTurn.roundController = null;
           app.chatBlocks.discard(sessionId);
+          for (const id of sharedScreenMessages) forgetSharedScreen(id);
           if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
         }

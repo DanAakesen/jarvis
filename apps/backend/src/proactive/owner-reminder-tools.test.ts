@@ -151,6 +151,23 @@ describe('owner_reminders delivery evidence', () => {
     expect(await store.list(20)).toHaveLength(2);
   });
 
+  it('takes the same instant in another offset for a retry, not a second reminder', async () => {
+    const store = createMemoryOwnerReminderStore();
+    const tool = createOwnerReminderTool({ ownerObjectId: owner, store, vault: vault() as never, now: () => now });
+    const ask = (fireAt: string) => tool.execute(
+      { operation: 'create', task: taskTitle, fireAt }, ownerRequest(), AbortSignal.timeout(1_000),
+    ) as Promise<{ created: boolean; reminder: { id: string } }>;
+
+    const first = await ask('2026-11-20T10:05:00.000Z');
+    const retry = await ask('2026-11-20T11:05:00+01:00');
+    const spelled = await ask('2026-11-20T10:05:00Z');
+
+    expect([first.created, retry.created, spelled.created]).toEqual([true, false, false]);
+    expect(retry.reminder.id).toBe(first.reminder.id);
+    expect(spelled.reminder.id).toBe(first.reminder.id);
+    expect(await store.list(20)).toHaveLength(1);
+  });
+
   it('returns an actionable invalid-token reason rather than an unexplained row', async () => {
     const store = createMemoryOwnerReminderStore();
     const { schedule } = await store.create({

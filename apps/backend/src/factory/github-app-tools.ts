@@ -348,7 +348,7 @@ function searchRows(value: unknown, kind: 'issue' | 'pr'): unknown[] {
       labels: labels(result.labels),
       author: safeString(user?.login, 80),
       url: safeString(result.html_url, 500),
-      ...(kind === 'pr' ? { draft: result.draft === true, merged: result.merged === true } : {}),
+      ...(kind === 'pr' ? { draft: result.draft === true, merged: typeof object(result.pull_request)?.merged_at === 'string' } : {}),
     }];
   });
 }
@@ -702,6 +702,7 @@ async function prList(input: Input, repository: string, token: string, signal: A
       const head = object(pr.head);
       return [{
         number: pr.number, title: truncateUtf8(pr.title, 500), state: safeString(pr.state, 20),
+        merged: typeof pr.merged_at === 'string',
         draft: pr.draft === true, author: safeString(user?.login, 80),
         head: { ref: safeString(head?.ref, 255), sha: safeString(head?.sha, 40) },
         url: safeString(pr.html_url, 500),
@@ -1045,7 +1046,7 @@ async function writeHandler(
     const merged = object(await confirmation.execute(() => githubJson(`${base}/pulls/${number}/merge`, token, signal, 'PUT', {
       merge_method: method, sha: expected.toLowerCase(),
     }), signal));
-    if (merged?.merged !== true) throw new ToolFailure('I couldn’t confirm that the pull request merged.');
+    if (merged?.merged !== true) throw new ToolFailure('I couldn’t confirm that the pull request merged.', { outcomeUnknown: true });
     return { status: 'merged', repository, number, sha: safeString(merged.sha, 40), message: safeString(merged.message, 500) };
   }
   if (name === 'pr_ready') {

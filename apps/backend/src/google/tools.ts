@@ -75,14 +75,32 @@ function string(value: unknown, name: string, min: number, max: number, allowLin
   return value.trim();
 }
 
+const offsetDateTime = /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/u;
+
 function dateTime(value: unknown, name: string): Date {
-  if (typeof value !== 'string' || value.length > 40 ||
-      !/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/u.test(value)) {
+  if (typeof value !== 'string' || value.length > 40 || !offsetDateTime.test(value)) {
     throw new ToolRefusal(`${name} must be an ISO 8601 date and time with a timezone.`);
   }
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) throw new ToolRefusal(`${name} is not a valid date and time.`);
   return parsed;
+}
+
+/**
+ * A date-time that fails the schema has almost always forgotten its UTC offset, which the schema reports only as "use at least
+ * 20 characters" or as a pattern. Static wording, like every explanation: it reaches the model and the logs.
+ */
+function explainDateTimes(input: unknown, names: readonly string[], prefix = '', dateAllowed = false): string | undefined {
+  const values = object(input);
+  const name = names.find((candidate) => {
+    const value = values?.[candidate];
+    return typeof value === 'string' && !offsetDateTime.test(value) && !(dateAllowed && validDateParts(value));
+  });
+  if (name === undefined) return undefined;
+  const example = '2026-11-26T14:00:00+01:00';
+  return dateAllowed
+    ? `${prefix}${name} must be a date such as 2026-11-26, or a date and time with a UTC offset (time zone) such as ${example}.`
+    : `${prefix}${name} needs a date and time with a UTC offset (time zone), for example ${example} or 2026-11-26T13:00:00Z.`;
 }
 
 function dateTimeBody(value: Date) {
@@ -268,18 +286,22 @@ function calendarTruncated(payload: Record<string, unknown>, eventCount: number)
   return eventCount >= 50 || (typeof payload.nextPageToken === 'string' && payload.nextPageToken.length > 0);
 }
 
-function googleFailure(error: unknown): never {
+// `item` names what a missing-item failure was about: an event, a draft or a message.
+function googleFailure(error: unknown, item?: string): never {
   if (!(error instanceof GoogleApiError)) throw error;
-  throw new ToolFailure(googleFailureReason(error));
+  const failure = new ToolFailure(googleFailureReason(error, item), error.kind === 'uncertain' ? { outcomeUnknown: true } : {});
+  // Lets a repeat of this call tell a failure that changed nothing from one that may have happened.
+  failure.cause = error;
+  throw failure;
 }
 
-function googleFailureReason(error: GoogleApiError): string {
+function googleFailureReason(error: GoogleApiError, item = 'Google item'): string {
   return error.kind === 'throttled'
     ? 'Google is rate-limiting requests. Try again shortly.'
     : error.kind === 'forbidden'
       ? 'Google did not authorize this request. No change was made.'
       : error.kind === 'not-found'
-        ? 'That Google item could not be found.'
+        ? `That ${item} could not be found.`
         : error.kind === 'uncertain'
           ? 'I could not verify whether Google completed the action. Check Google Calendar or Gmail before trying again.'
           : error.kind === 'credentials-expired'
@@ -410,8 +432,9 @@ export function calendarViewPath(
 
 function validateWindow(start: Date, end: Date, maximumDays: number): void {
   const duration = end.getTime() - start.getTime();
-  if (duration <= 0 || duration > maximumDays * 24 * 60 * 60_000) {
-    throw new ToolRefusal(`The requested time window must be positive and no longer than ${maximumDays} days.`);
+  if (duration <= 0) throw new ToolRefusal('The end time must be after the start time.');
+  if (duration > maximumDays * 24 * 60 * 60_000) {
+    throw new ToolRefusal(`The time window can be at most ${maximumDays} days long.`);
   }
 }
 
@@ -452,9 +475,8 @@ function calendarRange(startValue: unknown, endValue: unknown, timeZone: string)
   const days = startDateOnly
     ? dateOrdinal(endValue) + 1 - dateOrdinal(startValue)
     : (end.getTime() - start.getTime()) / 86_400_000;
-  if (days <= 0 || days > 62) {
-    throw new ToolRefusal('The requested calendar range must be positive and no longer than 62 days.');
-  }
+  if (days <= 0) throw new ToolRefusal('The end must be after the start.');
+  if (days > 62) throw new ToolRefusal('The calendar range can be at most 62 days long.');
   return { start, end };
 }
 
@@ -600,6 +622,7 @@ export function createGoogleModule(
       },
       sensitive: true,
       reflexSafe: true,
+      explainInvalidInput: (input) => explainDateTimes(input, ['start', 'end'], '', true),
       execute: async (raw, _request, signal) => {
         const input = object(raw);
         const { start, end } = calendarRange(input?.start, input?.end, timeZone);
@@ -631,6 +654,7 @@ export function createGoogleModule(
       },
       sensitive: true,
       reflexSafe: true,
+      explainInvalidInput: (input) => explainDateTimes(input, ['after']),
       execute: async (raw, _request, signal) => {
         const input = object(raw);
         const after = input?.after === undefined ? now() : dateTime(input.after, 'after');
@@ -656,6 +680,7 @@ export function createGoogleModule(
         additionalProperties: false,
       },
       sensitive: true,
+      explainInvalidInput: (input) => explainDateTimes(input, ['startDateTime', 'endDateTime']),
       execute: async (raw, _request, signal) => {
         const input = object(raw);
         const start = dateTime(input?.startDateTime, 'startDateTime');
@@ -668,8 +693,9 @@ export function createGoogleModule(
         validateWindow(start, end, 31);
         try {
           const payload = await google.request('calendar', calendarViewPath(start, end), { signal });
-          const events = calendarEvents(payload)
-            .filter((event) => event.transparency !== 'transparent')
+          const listed = calendarEvents(payload);
+          const events = listed
+            .filter((event) => event.transparency !== 'transparent' && event.status !== 'cancelled' && !declinedByDan(event))
             .map((event) => ({
               start: googleDateTime(event.start, timeZone),
               end: googleDateTime(event.end, timeZone),
@@ -698,7 +724,7 @@ export function createGoogleModule(
               startLocal: calendarLocalTime(slotStart, timeZone),
               endLocal: calendarLocalTime(slotEnd, timeZone),
             })),
-            truncated: calendarTruncated(payload, events.length),
+            truncated: calendarTruncated(payload, listed.length),
           };
         } catch (error) { googleFailure(error); }
       },
@@ -708,6 +734,7 @@ export function createGoogleModule(
       description: 'Create the Google Calendar event requested by Dan without another approval.',
       inputSchema: createEventSchema,
       sensitive: true,
+      explainInvalidInput: (input) => explainDateTimes(input, ['startDateTime', 'endDateTime']),
       execute: async (raw, request, signal) => {
         const event = createEvent(raw, timeZone);
         const source = await currentDanMessage(request);
@@ -740,6 +767,12 @@ export function createGoogleModule(
         additionalProperties: false,
       },
       sensitive: true,
+      explainInvalidInput: (input) => {
+        const events = object(input)?.events;
+        if (!Array.isArray(events)) return undefined;
+        return events.map((event, index) => explainDateTimes(event, ['startDateTime', 'endDateTime'], `events.${index}.`))
+          .find((explanation) => explanation !== undefined);
+      },
       execute: async (raw, request, signal) => {
         const input = object(raw);
         if (!Array.isArray(input?.events) || input.events.length < 2 || input.events.length > 10) {
@@ -816,6 +849,12 @@ export function createGoogleModule(
         additionalProperties: false,
       },
       sensitive: true,
+      explainInvalidInput: (input) => {
+        const given = object(input);
+        return typeof given?.eventId === 'string' && Object.keys(given).length === 1
+          ? 'Give at least one field to change besides eventId: title, startDateTime with endDateTime, location, attendees or description.'
+          : explainDateTimes(input, ['startDateTime', 'endDateTime']);
+      },
       execute: async (raw, request, signal) => {
         const input = object(raw);
         const eventId = string(input?.eventId, 'eventId', 1, 512);
@@ -868,10 +907,10 @@ export function createGoogleModule(
                   body: patch,
                 });
                 return { status: 'completed', detail: 'The event was updated in Google Calendar.' };
-              } catch (error) { googleFailure(error); }
+              } catch (error) { googleFailure(error, 'calendar event'); }
             },
           });
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'calendar event'); }
       },
     },
     {
@@ -888,6 +927,7 @@ export function createGoogleModule(
         additionalProperties: false,
       },
       sensitive: true,
+      explainInvalidInput: (input) => explainDateTimes(input, ['startDateTime', 'endDateTime']),
       execute: async (raw, request, signal) => {
         const input = object(raw);
         const eventId = string(input?.eventId, 'eventId', 1, 512);
@@ -916,10 +956,10 @@ export function createGoogleModule(
                   body: { start: dateTimeBody(start), end: dateTimeBody(end) },
                 });
                 return { status: 'completed', detail: 'The event was moved in Google Calendar.' };
-              } catch (error) { googleFailure(error); }
+              } catch (error) { googleFailure(error, 'calendar event'); }
             },
           });
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'calendar event'); }
       },
     },
     {
@@ -948,10 +988,10 @@ export function createGoogleModule(
               try {
                 await google.request('calendar', path, { method: 'DELETE', signal: confirmSignal });
                 return { status: 'completed', detail: 'The event was deleted from Google Calendar.' };
-              } catch (error) { googleFailure(error); }
+              } catch (error) { googleFailure(error, 'calendar event'); }
             },
           });
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'calendar event'); }
       },
     },
     {
@@ -1029,7 +1069,7 @@ export function createGoogleModule(
             truncated: messages.length === maxResults ||
               (typeof listing.nextPageToken === 'string' && listing.nextPageToken.length > 0),
           };
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'Gmail message'); }
       },
     },
     {
@@ -1079,7 +1119,7 @@ export function createGoogleModule(
             truncated: validDrafts.length === maxResults ||
               (typeof listing.nextPageToken === 'string' && listing.nextPageToken.length > 0),
           };
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'Gmail draft'); }
       },
     },
     {
@@ -1141,10 +1181,10 @@ export function createGoogleModule(
                   },
                 });
                 return { status: 'completed', detail: 'The Gmail draft was updated.' };
-              } catch (error) { googleFailure(error); }
+              } catch (error) { googleFailure(error, 'Gmail draft'); }
             },
           });
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'Gmail draft'); }
       },
     },
     {
@@ -1176,10 +1216,10 @@ export function createGoogleModule(
               try {
                 await google.request('gmail', path, { method: 'DELETE', signal: confirmSignal });
                 return { status: 'completed', detail: 'The Gmail draft was deleted.' };
-              } catch (error) { googleFailure(error); }
+              } catch (error) { googleFailure(error, 'Gmail draft'); }
             },
           });
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'Gmail draft'); }
       },
     },
     {
@@ -1209,7 +1249,7 @@ export function createGoogleModule(
                 body: { removeLabelIds: ['INBOX'] },
               });
               return { status: 'completed', detail: 'The Gmail message was archived.' };
-            } catch (error) { googleFailure(error); }
+            } catch (error) { googleFailure(error, 'Gmail message'); }
           },
         });
       },
@@ -1286,7 +1326,7 @@ export function createGoogleModule(
                   },
                 });
                 return { status: 'completed', detail: 'The Gmail message labels were updated.' };
-              } catch (error) { googleFailure(error); }
+              } catch (error) { googleFailure(error, 'Gmail message'); }
             },
           });
         } catch (error) { googleFailure(error); }
@@ -1317,7 +1357,7 @@ export function createGoogleModule(
             `/users/me/messages/${encodeURIComponent(messageId)}?format=full`,
             { signal },
           );
-        } catch (error) { googleFailure(error); }
+        } catch (error) { googleFailure(error, 'Gmail message'); }
         const headers = gmailHeaders(original);
         const originalSubject = (headers.subject ?? '(no subject)').slice(0, 300);
         const from = headers.from ?? '';

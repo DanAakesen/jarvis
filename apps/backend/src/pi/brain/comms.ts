@@ -33,6 +33,22 @@ export interface BrainCommsOptions {
 const hash = (text: string) => createHash('sha256').update(text.trim().replace(/\s+/gu, ' ').toLowerCase()).digest('hex');
 
 /**
+ * The chat store's atomic write `THROW`s these SQL errors on purpose (database/conversation-store.ts): the situation evidence changed
+ * before delivery (51002), or another message held the admission lock too long (51001). Nothing was stored, so the brain is told in
+ * words instead of getting a masked failure. (51002 also means "reply notification turn unavailable", which a brain message never asks for.)
+ */
+function storeRefusal(error: unknown): BrainCommsRefusal | undefined {
+  const number = (error as { number?: unknown } | null)?.number;
+  if (number === 51002) {
+    return new BrainCommsRefusal('The evidence behind this message changed just before delivery. Nothing was sent; check the current situation and try again if it still matters.');
+  }
+  if (number === 51001) {
+    return new BrainCommsRefusal('Another message to Dan was still being delivered. Nothing was sent; try again in a moment.');
+  }
+  return undefined;
+}
+
+/**
  * The brain's voice: a chat message from Jarvis, stored in the owner's conversation and pushed. There are no tiers and no
  * second channel: what the brain decides to say is a chat message, and a chat message always pushes. A message that cannot be
  * stored is not pushed, and a failure is reported, never swallowed.
@@ -97,7 +113,7 @@ export function createBrainComms(options: BrainCommsOptions) {
         at,
         dayStart: copenhagenDayStart(at),
         maxMessages: MAX_BRAIN_MESSAGES_PER_DAY,
-      });
+      }).catch((error: unknown) => { throw storeRefusal(error) ?? error; });
       if (atomic.status === 'daily_limit') {
         throw new BrainCommsRefusal(`I have already messaged Dan ${MAX_BRAIN_MESSAGES_PER_DAY} times today, which is the limit. Nothing was sent; put it in a note for tomorrow.`);
       }
