@@ -18,4 +18,17 @@ final class ChatComposerDraftTests: XCTestCase {
         XCTAssertFalse(draft.hasMessage)
         XCTAssertEqual(draft.value.text, "")
     }
+
+    func testUnacknowledgedSendRestoresExactTextWithoutReplacingANewerDraft() {
+        var draft = ComposerDraft(text: "Keep my text\n")
+        let sent = draft.consume()
+        let revision = draft.revision
+        XCTAssertTrue(draft.restore(sent, revision: revision))
+        XCTAssertEqual(draft.text, "Keep my text\n")
+        draft.edit("Something new", revision: revision)
+        XCTAssertFalse(draft.restore(sent, revision: revision))
+        XCTAssertEqual(draft.consume(), "Something new")
+        XCTAssertFalse(draft.restore(sent, revision: revision))
+        XCTAssertEqual(draft.text, "")
+    }
 }

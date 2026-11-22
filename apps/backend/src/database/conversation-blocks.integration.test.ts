@@ -39,6 +39,20 @@ afterAll(async () => {
 });
 
 describe('conversation blocks in the message store', () => {
+  it.each([false, true])('keeps the saved reply linked to its turn in history (reply push enabled: %s)', async (notify) => {
+    const store = createConversationStore(pool);
+    const owner = randomUUID();
+    const session = await store.createSession({ channel: 'chat', language: 'en', ownerObjectId: owner });
+    const request = await store.addMessage({ sessionId: session.id, role: 'dan', text: 'Question', model: null });
+    const reply = await store.addMessage({
+      sessionId: session.id, role: 'jarvis', text: 'Saved answer', model: 'pi', replyToTurnId: request!.id,
+      ...(notify ? { replyNotification: { ownerObjectId: owner, turnMessageId: request!.id } } : {}),
+    });
+    expect(reply?.replyToTurnId).toBe(request!.id);
+    const history = await store.getHistory({ limit: 10, sessionId: session.id });
+    expect(history.messages.map(message => message.replyToTurnId)).toEqual([undefined, request!.id]);
+  });
+
   it('stores a proactive message and continuation receipt atomically and idempotently', async () => {
     const store = createConversationStore(pool);
     const owner = randomUUID();

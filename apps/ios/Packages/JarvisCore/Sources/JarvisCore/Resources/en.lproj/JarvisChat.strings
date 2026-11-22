@@ -150,7 +150,7 @@
 "chat.turn.working" = "Working…";
 "chat.turn.writing" = "Writing reply…";
 "chat.turn.partial" = "Unfinished reply.";
-"chat.turn.superseded" = "Replaced by your follow-up.";
+"chat.turn.superseded" = "Reply replaced by your follow-up.";
 "chat.turn.stopped" = "Reply stopped.";
 "chat.turn.stopUnconfirmed" = "Couldn't confirm that the reply stopped. Wait for the reply.";
 "chat.turn.unconfirmed" = "I couldn't confirm that reply. If you asked me to do something, check what happened before trying again.";

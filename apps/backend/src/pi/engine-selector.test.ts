@@ -28,8 +28,10 @@ function setup(options: {
   const piAgent = options.pi?.gateway ?? options.piAgent;
   const store = {
     getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null, ...(options.runtimeTest ? { runtimeTest: options.runtimeTest } : {}) }),
-    addMessage: async (input: { sessionId: string; role: 'dan' | 'jarvis'; text: string; model: string | null }) => {
-      const message = { id: String(messages.length + 1), sessionId: input.sessionId, role: input.role, text: input.text, model: input.model, at: new Date() };
+    addMessage: async (input: Parameters<ConversationStore['addMessage']>[0]) => {
+      const { sessionId, role, text, model, replyToTurnId } = input;
+      const message = { id: String(messages.length + 1), sessionId, role, text, model, at: new Date(),
+        ...(replyToTurnId === undefined ? {} : { replyToTurnId }) };
       messages.push(message);
       return message;
     },
@@ -37,6 +39,12 @@ function setup(options: {
       messages.filter(message => message.sessionId === sessionId && message.role === 'dan' && BigInt(message.id) > BigInt(after)),
     getDanMessageIdBySourceItemId: async () => null,
     readRecentUserMessages: async () => [],
+    getHistory: async () => ({
+      messages: messages.map(message => ({
+        ...message, channel: 'chat', language: 'en', interrupted: false, voiceMinutes: null, toolCalls: [], attachments: [],
+      })),
+      nextCursor: null,
+    }),
   } as unknown as ConversationStore;
   const current: ConversationAgent = { stream: async function* () { yield 'from the current engine'; } };
   const app = buildApp(config, undefined, {
@@ -172,13 +180,24 @@ describe('PI is the default engine on the chat turn', () => {
   });
 
   it('still delivers a saved reply when its notification fails', async () => {
-    const { turn, messages } = setup({
+    const { app, turn, messages } = setup({
       piAgent: { stream: async function* () { yield 'Saved answer'; } },
       notifyReply: () => { throw new Error('fixture notification failed'); },
     });
     const result = await turn({ text: 'hi' });
     expect(result.events.map(event => event.name)).toEqual(['user', 'delta', 'done']);
-    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'Saved answer' });
+    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', text: 'Saved answer', replyToTurnId: '1' });
+    const cancel = await app.inject({
+      method: 'POST', url: '/conversation/sessions/7/turns/1/cancel',
+      headers: { authorization: 'Bearer a.b.c' }, payload: {},
+    });
+    expect(cancel.statusCode).toBe(200);
+    expect(cancel.json()).toEqual({ cancelled: false });
+    const history = await app.inject({
+      method: 'GET', url: '/conversation/history', headers: { authorization: 'Bearer a.b.c' },
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().messages.at(-1)).toMatchObject({ replyToTurnId: '1', text: 'Saved answer' });
   });
 
   it('confirms a stopped reply separately from a failure', async () => {
@@ -199,6 +218,32 @@ describe('PI is the default engine on the chat turn', () => {
     expect((await result).events.at(-1)).toEqual({
       name: 'error', data: { code: 'stopped', error: failureCopy.stopped.chat },
     });
+    expect(messages.map(message => message.role)).toEqual(['dan']);
+  });
+
+  it('does not report a service shutdown as a user stop', async () => {
+    const entered = Promise.withResolvers<void>();
+    const { app, turn, messages } = setup({
+      piAgent: { stream: async function* (_input, _authorization, signal) {
+        entered.resolve();
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }));
+        if (!signal.aborted) yield 'Uncancelled fixture reply';
+      } },
+    });
+    const replayStarted = Promise.withResolvers<void>();
+    const replayPath = '/conversation/sessions/7/turns/1/events';
+    app.addHook('onSend', async (request) => {
+      if (request.url === replayPath) replayStarted.resolve();
+    });
+    const result = turn({ text: 'hi' });
+    await entered.promise;
+    const replay = app.inject({ method: 'GET', url: replayPath, headers: { authorization: 'Bearer a.b.c' } }).then(response => response);
+    await replayStarted.promise;
+    const [ended, reattached] = await Promise.all([result, replay, app.close()]);
+    expect(ended.events.at(-1)).toEqual({ name: 'reconnect', data: {} });
+    expect(reattached.statusCode).toBe(200);
+    expect(reattached.body).toContain(`event: error\ndata: ${JSON.stringify({ error: failureCopy.cut_off.chat })}\n\n`);
+    expect(reattached.body).not.toContain(failureCopy.stopped.chat);
     expect(messages.map(message => message.role)).toEqual(['dan']);
   });
 
@@ -223,7 +268,7 @@ describe('PI is the default engine on the chat turn', () => {
     const { events } = await result;
     expect(events.map(event => event.name)).toEqual(['user', 'superseded', 'delta', 'done']);
     expect(events[1]!.data).toEqual({ messageId: '1' });
-    expect(events.at(-1)?.data.text).toBe('Reply to the follow-up');
+    expect(events.at(-1)?.data).toMatchObject({ text: 'Reply to the follow-up', replyToTurnId: '1' });
   });
 
   it('refuses the obsolete Current engine selection', async () => {

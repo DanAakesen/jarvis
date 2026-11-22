@@ -255,6 +255,7 @@ const historySchema = {
           role: { type: 'string', enum: ['dan', 'jarvis'] },
           text: { type: 'string' },
           model: { type: ['string', 'null'] },
+          replyToTurnId: idSchema,
           interrupted: { type: 'boolean' },
           voiceMinutes: { type: ['number', 'null'], minimum: 0 },
           metadata: {
@@ -413,6 +414,7 @@ return {
     });
     const activeTurns = new Map<string, ActiveChatTurn>();
     const recoverableTurns = new Map<string, RecoverableChat>();
+    const ownerStopped = new DOMException('Chat reply was stopped', 'AbortError');
     app.addHook('onClose', async () => {
       for (const turn of recoverableTurns.values()) turn.controller.abort();
     });
@@ -441,8 +443,9 @@ return {
       }, async (request, reply) => {
         const turn = recoverableTurns.get(request.params.messageId);
         if (!turn || turn.sessionId !== request.params.sessionId) return reply.code(404).send({ error: 'Chat turn not found' });
-        turn.controller.abort();
-        return { cancelled: true };
+        if (turn.finished) return { cancelled: false };
+        turn.controller.abort(ownerStopped);
+        return { cancelled: turn.controller.signal.reason === ownerStopped };
       });
     app.post('/conversation/attachments', {
       bodyLimit: MAX_ATTACHMENT_REQUEST_BYTES,
@@ -781,6 +784,9 @@ return {
       reply.header('Content-Type', 'text/event-stream; charset=utf-8')
         .header('Cache-Control', 'no-cache, no-transform')
         .header('X-Accel-Buffering', 'no');
+      const abortedReply = () => streamEvent('error', controller.signal.reason === ownerStopped
+        ? { code: 'stopped', error: failureCopy.stopped.chat }
+        : { error: failureCopy.cut_off.chat });
       const source = (async function* () {
         yield streamEvent('user', userMessage);
         publishActivity('thinking');
@@ -972,6 +978,7 @@ return {
               role: 'jarvis',
               text: partial,
               model: piRequested ? 'pi' : null,
+              replyToTurnId: userMessage.id,
               ...(replyBlocks.length > 0 ? { blocks: replyBlocks } : {}),
               ...(app.replyNotificationsEnabled ? {
                 replyNotification: {
@@ -1009,11 +1016,11 @@ return {
             return;
           }
           publishActivity('interrupted');
-          yield streamEvent('error', { code: 'stopped', error: failureCopy.stopped.chat });
+          yield abortedReply();
         } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
-            yield streamEvent('error', { code: 'stopped', error: failureCopy.stopped.chat });
+            yield abortedReply();
           } else {
             request.log.warn(
               { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown',

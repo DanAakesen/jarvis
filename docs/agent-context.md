@@ -124,7 +124,7 @@ For voice, swap the event list for `'voice.delegation_received', 'voice.owner_gr
 ## iPhone Chat composer and reply checks — 22 November 2026 (#2026, #2010)
 
 - Use the JarvisCore suite (`swift test --package-path apps/ios/Packages/JarvisCore` or the `swift:6.2` Linux container used by `ios-ci.yml`). The draft, reply outcome and SSE tests are offline. The watch-build job compiles the iPhone app with Xcode; Linux cannot qualify the SwiftUI layout or UIKit keyboard.
-- The backend fixture checks are `npm test --workspace @jarvis/backend -- src/pi/engine-selector.test.ts src/core/recoverable-chat.test.ts src/voice/chat-voice-parity.test.ts`. They use scripted replies, not a live provider. Do not run `measure_pi`, a deploy smoke or a Foundry probe to qualify this change.
+- Run the full backend fixture suite (`npm test --workspace @jarvis/backend`) plus lint and build on the pinned Node version. The route and Chat/Voice parity tests use scripted replies. Where SQL Server is available, use the local `conversation-blocks.integration.test.ts` fixture to check that history includes the saved reply's turn ID with or without a reply notification. Do not run `measure_pi`, a deploy smoke or a Foundry probe.
 - On iPhone, enable Background motion, leave Voice and sharing idle and type rapidly in a 100+ message Chat. Verify each character, the keyboard and scrolling. Check a completed answer, Stop before completion and a follow-up while Jarvis is still answering. Open Plus > **Test a reply** and send a short prompt in an available setup; check the reply and return to the unchanged normal draft/history.
 
 ## See the brain — 21 November 2026 (Refs #1969)

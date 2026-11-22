@@ -226,11 +226,10 @@ public final class JarvisChatClient: Sendable {
                 idempotent: false
             )
             guard response.statusCode == 200,
-                  let result = try? JSONDecoder().decode(CancelTurnResponse.self, from: response.body),
-                  result.cancelled else {
+                  let result = try? JSONDecoder().decode(CancelTurnResponse.self, from: response.body) else {
                 throw JarvisChatClientError.invalidResponse
             }
-            return true
+            return result.cancelled
         } catch let error as JarvisClientError {
             if case .httpStatus(404) = error { return false }
             throw error

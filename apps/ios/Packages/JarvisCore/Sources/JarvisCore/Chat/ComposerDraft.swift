@@ -22,6 +22,14 @@ public struct ComposerDraft: Equatable, Sendable {
         text = ""
         return submitted
     }
+
+    /// Put back an unacknowledged send without overwriting a newer draft.
+    @discardableResult
+    public mutating func restore(_ submitted: String, revision: UUID) -> Bool {
+        guard revision == self.revision, text.isEmpty else { return false }
+        text = submitted
+        return true
+    }
 }
 
 /// Chat observes text edits in the composer, not through its transcript model.

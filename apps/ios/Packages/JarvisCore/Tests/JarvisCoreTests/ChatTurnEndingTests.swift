@@ -33,15 +33,29 @@ final class ChatTurnEndingTests: XCTestCase {
         )
     }
 
-    func testLosingTheReplyCannotEstablishFailureEvenBeforeTheRequestWasAcknowledged() {
+    func testLosingTheReplyIsUnconfirmedOnlyAfterTheRequestWasAcknowledged() {
         XCTAssertEqual(
             ChatTurnEnding.after(error: JarvisChatClientError.turnNotFound, taskCancelled: false, accepted: true),
             .unconfirmed
         )
-        XCTAssertEqual(
-            ChatTurnEnding.after(error: JarvisClientError.timedOut, taskCancelled: false, accepted: false),
-            .unconfirmed
-        )
+        let lostConnection: [any Error] = [
+            JarvisClientError.networkFailure, JarvisClientError.timedOut, JarvisChatClientError.streamEnded,
+        ]
+        for error in lostConnection {
+            XCTAssertEqual(ChatTurnEnding.after(error: error, taskCancelled: false, accepted: true), .unconfirmed)
+            XCTAssertEqual(ChatTurnEnding.after(error: error, taskCancelled: false, accepted: false), .failed)
+        }
+    }
+
+    func testOnlyALinkedCompleteReplyClearsAnUnconfirmedTurnInNormalHistory() throws {
+        let request = row("10", role: "dan")
+        let proactive = row("11", role: "jarvis")
+        let fragment = row("12", role: "jarvis", interrupted: true, replyToTurnID: "10")
+        let otherReply = row("13", role: "jarvis", replyToTurnID: "9")
+        let reply = row("14", role: "jarvis", replyToTurnID: "10")
+        XCTAssertFalse(try history([request, proactive, fragment, otherReply]).confirmsReply(toTurn: "10"))
+        // The originating request may no longer be in the latest page.
+        XCTAssertTrue(try history([reply]).confirmsReply(toTurn: "10"))
     }
 
     func testTestHistoryOnlyConfirmsTheMatchingFinishedReply() throws {
@@ -52,18 +66,25 @@ final class ChatTurnEndingTests: XCTestCase {
         let nextRequest = row("14", role: "dan")
         let nextAnswer = row("15", role: "jarvis")
         func confirms(_ rows: [[String: Any]]) throws -> Bool {
-            let data = try JSONSerialization.data(withJSONObject: ["messages": rows])
-            let page = try JSONDecoder().decode(ChatHistoryPage.self, from: data)
-            return page.confirmsTestReply(to: "10", sessionID: "7")
+            try history(rows).confirmsTestReply(to: "10", sessionID: "7")
         }
         XCTAssertTrue(try confirms([answer, request, fragment, nextRequest, nextAnswer]))
         XCTAssertFalse(try confirms([request, fragment, otherSession, nextRequest, nextAnswer]))
         XCTAssertFalse(try confirms([answer]))
     }
 
-    private func row(_ id: String, role: String, sessionID: String = "7", interrupted: Bool = false) -> [String: Any] {
-        ["id": id, "sessionId": sessionID, "channel": "chat", "language": "en", "role": role, "text": "Fixture",
-         "at": "2026-11-22T12:00:00Z", "interrupted": interrupted, "toolCalls": [], "attachments": []]
+    private func history(_ rows: [[String: Any]]) throws -> ChatHistoryPage {
+        let data = try JSONSerialization.data(withJSONObject: ["messages": rows])
+        return try JSONDecoder().decode(ChatHistoryPage.self, from: data)
+    }
+
+    private func row(_ id: String, role: String, sessionID: String = "7", interrupted: Bool = false, replyToTurnID: String? = nil) -> [String: Any] {
+        var row: [String: Any] = [
+            "id": id, "sessionId": sessionID, "channel": "chat", "language": "en", "role": role, "text": "Fixture",
+            "at": "2026-11-22T12:00:00Z", "interrupted": interrupted, "toolCalls": [], "attachments": [],
+        ]
+        row["replyToTurnId"] = replyToTurnID
+        return row
     }
 }
 

@@ -10,10 +10,6 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var messages: [JarvisChatRow] = []
     @Published var sendRevision = 0
     @Published var composerDraft = ComposerDraft()
-    var draft: String {
-        get { composerDraft.text }
-        set { composerDraft.replace(with: newValue) }
-    }
     @Published var partial = ""
     @Published var acknowledgment = ""
     @Published var progressUpdates: [String] = []
@@ -45,7 +41,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
 
     var canSend: Bool {
         session != nil && !loading && !sending && !recovery.requiresHistoryReview && !recovery.sessionBlocked &&
-            !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !composerDraft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func checkAvailability() async {
@@ -113,7 +109,8 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     func send() {
         guard canSend, let client, let session else { return }
         sendRevision += 1
-        let text = composerDraft.consume().trimmingCharacters(in: .whitespacesAndNewlines)
+        let submittedText = composerDraft.consume()
+        let draftRevision = composerDraft.revision
         sending = true
         error = nil
         turnFeedback = nil
@@ -133,10 +130,11 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                 turn = nil
             }
             do {
-                let events = try await client.sendTurn(sessionId: session.id, text: text)
+                let events = try await client.sendTurn(sessionId: session.id, text: submittedText.trimmingCharacters(in: .whitespacesAndNewlines))
                 try await consume(events)
             } catch {
-                reportTurnEnding(error, unsentText: text)
+                if activeMessageID == nil { composerDraft.restore(submittedText, revision: draftRevision) }
+                reportTurnEnding(error)
             }
         }
     }
@@ -212,7 +210,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         turnFeedback = copy(.runtimeReplyReceived)
     }
 
-    private func reportTurnEnding(_ failure: any Error, unsentText: String? = nil) {
+    private func reportTurnEnding(_ failure: any Error) {
         let server = (failure as? JarvisChatClientError)?.serverFailure
         error = nil
         switch ChatTurnEnding.after(error: failure, taskCancelled: Task.isCancelled, accepted: activeMessageID != nil) {
@@ -223,14 +221,14 @@ private final class JarvisRuntimeTestModel: ObservableObject {
             recovery.historyReviewed()
             turnFeedback = server?.message ?? copy(.turnStopped)
         case .failed:
-            if activeMessageID == nil, draft.isEmpty, let unsentText { draft = unsentText }
             activeMessageID = nil
-            recovery.failed(code: server?.code)
-            if !recovery.sessionBlocked { recovery.historyReviewed() }
+            if let server { recovery.failed(code: server.code) }
             switch failure {
             case JarvisClientError.serviceUnavailable: turnFeedback = copy(.errUnavailable)
             case JarvisClientError.signInRequired: turnFeedback = copy(.errSignIn)
             case JarvisClientError.rateLimited: turnFeedback = copy(.errRateLimited)
+            case JarvisClientError.networkFailure: turnFeedback = copy(.errOffline)
+            case JarvisClientError.timedOut: turnFeedback = copy(.errTimedOut)
             case JarvisChatClientError.invalidTextLength: turnFeedback = copy(.errTextLength)
             default: turnFeedback = server?.message ?? copy(.errGeneric)
             }
@@ -245,12 +243,13 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         stopping = true
         do {
             // Keep consuming the stream after cancellation so the final saved reply is visible.
-            _ = try await client.cancelTurn(sessionId: session.id, messageId: activeMessageID)
+            if try await client.cancelTurn(sessionId: session.id, messageId: activeMessageID) { return }
         } catch {
-            guard self.activeMessageID == activeMessageID else { return }
-            stopping = false
-            self.error = .turnStopUnconfirmed
+            // Losing the stop request does not fail the reply.
         }
+        guard self.activeMessageID == activeMessageID else { return }
+        stopping = false
+        self.error = .turnStopUnconfirmed
     }
 
     private func append(_ message: JarvisChatRow) {

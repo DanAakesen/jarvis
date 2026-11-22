@@ -522,6 +522,7 @@ struct JarvisChatScreen: View {
                 Text(copy(.turnSuperseded))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
             if !row.message.blocks.isEmpty {
@@ -712,7 +713,7 @@ struct JarvisChatScreen: View {
                         accessibilityTitle: "Dismiss chat notice"
                     ) {
                         if model.actionError != nil { model.actionError = nil }
-                        else { model.turnNotice = nil }
+                        else { model.dismissTurnNotice() }
                     }
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)

@@ -12,14 +12,6 @@ public enum ChatTurnEnding: Equatable, Sendable {
         if let failure = (error as? JarvisChatClientError)?.serverFailure {
             return failure.code == "stopped" ? .stopped : .failed
         }
-        if accepted { return .unconfirmed }
-        switch error {
-        case JarvisClientError.networkFailure, JarvisClientError.timedOut,
-             JarvisChatClientError.streamEnded, JarvisChatClientError.invalidResponse, JarvisChatClientError.responseTooLarge:
-            return .unconfirmed
-        default:
-            break
-        }
-        return .failed
+        return accepted ? .unconfirmed : .failed
     }
 }

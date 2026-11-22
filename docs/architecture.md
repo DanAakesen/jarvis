@@ -1199,14 +1199,24 @@ the existing `failureCopy` sentence without marking the turn failed. Stop leaves
 the stream open, so a reply saved in the race still wins. Steering retains any
 saved `interrupted` reply fragment; if there is none, `superseded` carries the
 request ID while the replacement continues. Replay loss leaves the result
-unconfirmed rather than failed. A reply notification failure cannot change the
-saved reply's result.
+unconfirmed rather than failed if the stream acknowledged the message. Otherwise
+Chat keeps the sent text for Retry and restores it if the draft is still empty
+and on that send's revision. A reply notification failure cannot change the
+saved reply's result. A service shutdown cuts off the reply; only an explicit
+stop request produces a `stopped` result.
+
+A saved typed reply carries `replyToTurnId`, the accepted message ID that
+opened the stream, even if a follow-up steered it. The conversation store writes
+the link in the existing message metadata and exposes it in history. Chat
+dismisses an unconfirmed notice only on the linked saved reply, never on an
+unrelated message such as a proactive update in the same session.
 
 The iPhone **Test a reply** sheet still uses the existing isolated `current` and
 `copilot` sessions. It reports a reply from `done` or, after a disconnect, from a
 complete reply after the accepted request and before the next request in the
 same test session. A fragment or a later request's answer does not count. It does
-not rerun an accepted message, and a history read cannot release a managed claim.
+not rerun an accepted message. A server-reported failure requires a history
+review, and that read cannot release a managed claim.
 
 An explicit `refresh_managed_chat_definition` deployment input may create one new
 immutable version of the existing comparison agent when no current-manifest match
