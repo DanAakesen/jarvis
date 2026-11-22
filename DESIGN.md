@@ -41,6 +41,8 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Watch
 
+The dashboard opens with Chat (or Resume voice) and a labelled Menu in the scrolling content. The system owns the clock and Back area. Whole section headings open their details. The menu groups daily, health and project destinations.
+
 Keep one Chat entry point. When reading history, collapse the composer to **Reply** only if it will not interrupt a draft, dictation or a call. **Reply** reopens the composer. At rest show Message, dictation and the Voice orb; with text, preserve editing, clear/send and keyboard access. Give transient status its own space above the action row.
 
 In a focused Voice call, replace the composer and Start control with **Mute/Unmute** and **End**, keeping state and captions visible. End returns to the same Chat session, not a parallel transcript. Recovery keeps the draft; a new attempt must not inherit a prior capture or get stuck at Starting. Show a reconnect/error and a way back to typing. Keep complications glanceable; steps show today's evidence, never invented progress.

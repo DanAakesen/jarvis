@@ -27,7 +27,7 @@ Around the destinations: the opening screen (`JarvisOpeningView`, startup only),
 
 ## Apple Watch
 
-One app (`apps/ios/Watch`) with these screens: **Chat** (one entry point with an adaptive composer, dictation and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**. Complications show steps and the Gym lift entry.
+The Watch dashboard opens Chat or a grouped Menu in one tap. Below them are the agenda, workouts, body fat, tasks and recent notes. The app also includes: **Chat** (one entry point with an adaptive composer, dictation and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**. Complications show steps and the Gym lift entry.
 
 ## Widgets and Live Activities
 

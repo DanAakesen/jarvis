@@ -28,15 +28,13 @@ struct WatchRoot: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var path: [WatchRoute] = []
     @State private var pendingDictation = false
-    @State private var page = 0
     init() {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("--watch-fixture") else { return }
         var path: [WatchRoute] = []
-        var page = 0
         if arguments.contains("--watch-screen=chat") { path = [.chat] }
-        if arguments.contains("--watch-screen=actions") { page = 1 }
+        if arguments.contains("--watch-screen=actions") { path = [.menu] }
         if arguments.contains("--watch-screen=health") { path = [.health] }
         if arguments.contains("--watch-screen=tasks") { path = [.tasks] }
         if arguments.contains("--watch-screen=personal-new-task") ||
@@ -57,32 +55,18 @@ struct WatchRoot: View {
         if arguments.contains("--watch-screen=log-lift") { path = [.logLift] }
         if arguments.contains("--watch-screen=log-lift-complication") { path = [.logLiftComplication] }
         _path = State(initialValue: path)
-        _page = State(initialValue: page)
         #endif
     }
 
     var body: some View {
         NavigationStack(path: $path) {
-            TabView(selection: $page) {
-                WatchDashboardView().tag(0)
-                actionPage.tag(1)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .automatic))
-            .toolbar(.hidden, for: .navigationBar)
+            WatchDashboardView(voiceActive: model.voiceID != nil)
+                .navigationTitle("Jarvis")
             .navigationDestination(for: WatchRoute.self) { route in
                 switch route {
                 case .chat: WatchChatView(dictate: dictate, pendingDictation: $pendingDictation).watchCaptureReady("chat")
                 case .menu:
-                    List {
-                        NavigationLink("Tasks Today", value: WatchRoute.tasks)
-                        NavigationLink("Agenda", value: WatchRoute.agenda)
-                        NavigationLink("Workouts", value: WatchRoute.workouts)
-                        NavigationLink("Body Fat", value: WatchRoute.bodyFat)
-                        NavigationLink("Recent Notes", value: WatchRoute.notes)
-                        NavigationLink("Home", value: WatchRoute.home)
-                        NavigationLink("Nutrition", value: WatchRoute.nutrition)
-                        NavigationLink("Manage lifts", value: WatchRoute.lifts)
-                    }.navigationTitle("Menu")
+                    menu.watchCaptureReady("actions")
                 case .health:
                     WatchHealthView(entry: .init(date: Date(), health: connection.snapshot, current: connection.snapshot?.isCurrent(at: Date()) == true))
                         .frame(height: 100).navigationTitle("Health")
@@ -136,7 +120,7 @@ struct WatchRoot: View {
             case .notes: path = [.notes]
             case .home: path = [.home]
             case .nutrition: path = [.nutrition]
-            case .dashboard: page = 0; path = []
+            case .dashboard: path = []
             case .logLift: path = [.logLift]
             case .chat: path = [.chat]
             case .menu: path = [.menu]
@@ -209,36 +193,44 @@ struct WatchRoot: View {
         }
     }
 
-    /// Menu page: one Chat row and Factory, the menu button bottom right. The top right stays free for the system time.
     private func openPendingReplyNotification() {
         guard let target = JarvisReplyNotificationTarget.pending()
             ?? JarvisReplyNotificationTarget.active() else {
             return
         }
-        page = 0
         path = [.chat]
         Task { await model.openReplyTarget(target) }
     }
 
-    private var actionPage: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-                Text("Jarvis").font(.system(.headline, design: .rounded))
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 4)
-                // A session kept alive after Back stays reachable from here, where Chat shows it with Mute and End.
-                JarvisWatchAction(title: model.voiceID == nil ? "Chat" : "Resume voice", kind: model.voiceID == nil ? .chat : .voice) {
-                    path.append(.chat)
-                }
-                JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
-                if !connection.reachable { Text("iPhone unavailable. Voice and sending need a connection.").font(.caption).foregroundStyle(.secondary) }
+    private var menu: some View {
+        List {
+            Section("Daily") {
+                menuLink("Agenda", "calendar", .agenda)
+                menuLink("Tasks", "checklist", .tasks)
+                menuLink("Notes", "note.text", .notes)
+                menuLink("Home brief", "sunrise", .home)
+            }
+            Section("Health") {
+                menuLink("Log lift", "plus.circle", .logLift)
+                menuLink("Workouts", "figure.run", .workouts)
+                menuLink("Manage lifts", "dumbbell", .lifts)
+                menuLink("Nutrition", "fork.knife", .nutrition)
+                menuLink("Body Fat", "chart.line.uptrend.xyaxis", .bodyFat)
+                menuLink("Health summary", "heart", .health)
+            }
+            Section("Project") {
+                menuLink("Factory", "chevron.left.forwardslash.chevron.right", .factory)
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            WatchIconButton(systemName: "line.3.horizontal", label: "Menu") { path.append(.menu) }
-                .padding(.trailing, 4).padding(.bottom, 14)
-        }
-        .watchCaptureReady("actions")
+        .navigationTitle("Menu")
     }
+
+    private func menuLink(_ title: LocalizedStringKey, _ symbol: String, _ route: WatchRoute) -> some View {
+        NavigationLink(value: route) {
+            Label(title, systemImage: symbol)
+        }
+    }
+
     private func dictate() {
         Task { await model.startDictation() }
     }
