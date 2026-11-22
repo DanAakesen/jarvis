@@ -217,7 +217,7 @@ resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
 Group provisioning and bounded qualification are implemented; actual provisioning,
 Factory routing, live acceptance and VM retirement remain pending.
-See [qualification and evidence](docs/factory-concurrency-correction.md).
+See [qualification and evidence](docs/archive/factory-concurrency-correction.md).
 
 ## Direct Home send recovery (7 November 2026)
 
@@ -2932,7 +2932,7 @@ or start coding until the existing later-owner-approval condition is satisfied.
 
 ### Build 79 owner feedback: retained bugs and proposal recovery
 
-The active regression ledger is `docs/ios/design/p15-build79-feedback.md`.
+The active regression ledger is `docs/archive/ios/design/p15-build79-feedback.md`.
 A sent composer clears immediately and rejects late input from that submission,
 while preserving a new draft. One active progress row remains until the turn ends.
 An own-code proposal must be recoverable in its original conversation after a later
@@ -2995,7 +2995,7 @@ presenting queued work as an executing agent.
 The provisioned 128 GiB VM handles only one active coding task. It proves storage
 and idle deallocation, not the Factory concurrency requirement. The managed worker
 correction and acceptance criteria are in
-[Factory concurrency correction](docs/factory-concurrency-correction.md).
+[Factory concurrency correction](docs/archive/factory-concurrency-correction.md).
 
 ## Long-running conversation progress (8 November 2026)
 

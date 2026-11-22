@@ -100,7 +100,7 @@ Rejected by Dan, so not to be rebuilt without a new decision (list in the #1996 
 - **Rejected first design:** the first version of this change answered any second identical action call of a turn (same tool, same canonical arguments) with the first result. Review rejected it: it silently swallows legitimate identical repeats (three sets of the same lift as three `gym_lifts` creates, two identical food entries, tasks or reminders, parallel identical calls the model emits on purpose), the model sees a success-looking result and tells Dan everything was logged while one row exists, and nothing shows that Foundry replays calls. Silent suppression of an intended action is worse than a rare duplicate, and PI is unrestricted and must be useful.
 - **Rejected second design (the JSON-RPC id as a fallback identity):** the door is stateless (there is no MCP session; `ctx.sessionId` is undefined), so a client that opens a new connection for each model round numbers its requests 1, 2, 1, 2, ... An identical search plus an identical action in a later round is then byte-identical to a retried POST, and the `id_reused` guard cannot see it, because each id asks for the same thing as before. Every later deliberate repeat returned `duplicate: true` without running: reproduced by the reviewer with the real MCP SDK client over loopback, and by `mcp.test.ts` (the action ran once and answered `run: 1` three times). The id is therefore not used at all.
 - **Replay recognition:** an identical action under a different request **always runs**. A request is a replay only when it carries the same **call id** as an earlier one and asks for the same tool with the same canonical (sorted-key) arguments. The call id is a string in the request's `_meta` under a key ending in `call_id` or `callId` (`requestIdentity`); nothing else is an identity, and **a request without one is never recognised** (`replayCheck: no_id`). A replay gets the first result with `duplicate: true` and does not run again, also while the first is still running. Only an action counts (`effectOf`, below); reads and unclassified tools always run. Only a success is kept: a refusal declined the action and an error reported no success, so a replay of either runs again, and a replay that waited on a first run which failed runs the call itself. That is a choice, not proof that an error did nothing: the tool route (`core/index.ts`) also reports `error` after the tool has run, when its result is an invalid generated view or cannot be serialised or is over 1 MiB, and when the audit record then fails (an HTTP 500, which the door reports as an error); a tool can also fail or be aborted part-way. A replay of such a call can therefore run its effect a second time. Nothing is refused and no approval was added. **Amended 22 November 2026 (#2012):** a failed audit record no longer makes the route fail after the tool ran, and an error that says the call may have done its work (`outcomeUnknown`, including an unexpected error from a write) is kept like a success, so its replay is answered with it and not run again; see "22 November 2026 — A write is told as it happened".
-- **What the safeguard covers, and what it does not:** every door request of a turn, searches included, is noted with what it asked for under its call id. Once a call id has been seen asking for something else, `replayCheck` is `id_reused` for the rest of that turn and nothing in it is taken for a replay. That catches a call id reused for **different** requests (a harness that gives every request the same id). It cannot catch one reused for **identical** requests: that looks exactly like a replay. Recognition therefore rests on the harness's call ids being unique per call, which is **unverified**. If Foundry sends no call id at all, nothing is ever recognised, `duplicate` never appears and only the ledger works. Whether Foundry sends one, and under which key, is **not known**: the harness spike never ran (`docs/harness-trial/spike-results.md`), so the key match (`call_id`, `callId`, `tool_call_id`) is a guess; `metaKeys` shows the real keys and `replayCheck` shows whether the matcher found one.
+- **What the safeguard covers, and what it does not:** every door request of a turn, searches included, is noted with what it asked for under its call id. Once a call id has been seen asking for something else, `replayCheck` is `id_reused` for the rest of that turn and nothing in it is taken for a replay. That catches a call id reused for **different** requests (a harness that gives every request the same id). It cannot catch one reused for **identical** requests: that looks exactly like a replay. Recognition therefore rests on the harness's call ids being unique per call, which is **unverified**. If Foundry sends no call id at all, nothing is ever recognised, `duplicate` never appears and only the ledger works. Whether Foundry sends one, and under which key, is **not known**: the harness spike never ran (the historical spike record (#1851)), so the key match (`call_id`, `callId`, `tool_call_id`) is a guess; `metaKeys` shows the real keys and `replayCheck` shows whether the matcher found one.
 - **`sameArgsRepeat`:** true when an earlier action of the same turn with the same tool and canonical arguments had run, or was still running, and this call ran too. It changes nothing. An earlier refusal or error does not count (it reported no success); a replay is `duplicate`, not a repeat. Without a call id it cannot tell a retried POST from a deliberate repeat.
 - **Which calls:** `effectOf(tool, arguments)` in `core/tool-registry.ts` decides what a call is: the tool's `execution.defaultEffect`, or, for a tool that classifies its operations (`gym_*`, `inbox_nudge_style`, `inbox_capture_credential`), the operation named in the arguments, `unclassified` when it names none (the rule the older agent used). A `list` of an action tool is a read. `grant.actions.count` still uses `defaultEffect`, unchanged. Only a short list is classified `action` today (the inbox, PI brain, watch, situation, memory and gym tools, and `create_task`), so most writers (calendar, mail, vault, Health food, GitHub) are never replay-recognised until they are classified. Remote `gh_`/`az_` calls are out of scope. **Amended 22 November 2026 (#2012):** the count now uses `effectOf` too, and the writers are classified in `core/tool-effects.ts`; remote calls are still out of scope. Gateway stream handling (#2004), cost accounting and result-size limits are unchanged. A call rejected by schema validation before it reaches the door (a malformed reference or name) writes no line.
 - **Steering:** the `call_tool` description is unchanged. The sentence the first version added ("an action repeated with the same arguments is not run again") would now be false. The Foundry-owned instructions are untouched.
@@ -795,7 +795,7 @@ Owner, 16 November 2026, recorded as given: "If you keep adding restrictions we 
 | Watches: no limit on open watches, no limit on looks, no minimum gap, no horizon; a wake can open and change watches | The proactive budget and the wake guards bound spend. Kept as technical: a next look must be a valid time, and a due watch that got no look moves an hour ahead so one stuck watch cannot wake the brain in a loop |
 | GitHub is offered through the Jarvis MCP door as `gh_` tools, not as a harness MCP tool | Measured after the full server was attached to the harness (Deploy 43901841128): input tokens per turn about 31k (17.7k before), warm first text 2.4 to 5.7 s (1.1 to 1.5 s before), a tool turn 95k input. The harness lists every tool of every MCP server in every turn. The next Deploy (43905474658, built-ins also on) measured about 37.5k input tokens, warm first text 3.5 to 4.3 s, voice plain 4.1 s and voice with a tool 8.9 s. Options checked: (a) GitHub's remote server has no dynamic or tool-search mode (its docs have toolsets, individual tools, read-only, lockdown, insiders and feature flags only); (b) tool search with `defer_loading` exists for the Azure OpenAI Responses API, but nothing says the harness prompt-agent definition accepts it, and a wrong field fails agent-version creation, so it cannot be tried safely; (c) our own `find_tools` pattern works today. Chosen: (c). The backend holds the token and a small MCP client, so PI keeps every GitHub tool and the prompt carries none until a search asks for them. The token also leaves the Foundry project connection, where project members could read it |
 | Harness built-ins on (`default_config.enabled: true`: shell, filesystem read and write, web, sub-agents) via `builtinTools: "enabled"` in `agents/pi/definition.json`; the provisioner reads it and the readback must match | Documented names are `filesystem_read`, `filesystem_write`, `shell`, `web` and `subagents`; the web tool covers fetching, and there is no separate web-search or file-input name (an unknown name makes agent-version creation fail), so none is configured. Foundry's own default is all five on |
-| **Measurement still open.** The Deploy `measure_pi` run needs the production Foundry project and a Deploy, which this change does not run. After merge and Deploy, compare first-text time and input tokens with the baseline (warm first text 1.1 to 1.3 s, cold 3.3 s, about 17.7k input tokens per warm turn; `docs/harness-trial/spike-results.md`). Rule from the owner: keep the built-ins on unless first text gets clearly worse (more than 2x); then set `builtinTools` back to `"disabled"` | The built-ins add tool descriptions to every prompt, so the effect has to be measured, not assumed |
+| **Measurement still open.** The Deploy `measure_pi` run needs the production Foundry project and a Deploy, which this change does not run. After merge and Deploy, compare first-text time and input tokens with the baseline (warm first text 1.1 to 1.3 s, cold 3.3 s, about 17.7k input tokens per warm turn; the historical spike record (#1851)). Rule from the owner: keep the built-ins on unless first text gets clearly worse (more than 2x); then set `builtinTools` back to `"disabled"` | The built-ins add tool descriptions to every prompt, so the effect has to be measured, not assumed |
 | Kept, because the owner set them: the 100 DKK proactive budget and the chat cap. Kept as guards on a wake's cadence and noise, not on capability: at least 10 minutes between wakes, at most 12 wakes a day, at most 8 `message_dan` messages a day with exact repeats refused | Reported to the owner as remaining limits; removing them is one change each |
 | Left as technical, not policy: memory writes (they bind to a stored Dan message), Health changes and watch-for-camera (they act inside a live chat or voice session), the Gmail direct-access rule for computer use, secret scanning on vault writes and messages, the smoke role (Deploy test only) | A wake or a turn has nothing to attach these to, or the rule protects a credential or a provider term |
 
@@ -968,7 +968,7 @@ Info.plist now has both; the update string says Jarvis does not write to Health.
 
 Owner decisions, recorded as given. The system is named PI (Proactive Intelligence). Routes 1 (PI brain) and 4 (chat and voice) on the managed Copilot harness are one plan: one agent, one long session, with Voice Live staying the realtime speech layer and calling the same agent. Decisions are LLM only to begin with; deterministic logic only where an exact result is required. Workers in the drawing are the coding sessions.
 
-**No runtime fallback.** PI is built on the harness and tested beside the old path; when the owner is happy, everything it replaces is deleted (custom agent loop, tool lookup, chat runtime path, the replaced parts of the one-shot proactive pipeline, dead tests, docs and infra). No fallback or compatibility code stays. Rollback is redeploying the previous release or reverting a commit. A test-only runtime selector is allowed while testing and is deleted in the cutover phases. Deletion is an explicit final phase with an inventory and a gate. This replaces the earlier "automatic fallback" wording in `docs/harness-trial/`. Consequence accepted by the choice: the harness is in public preview with no SLA, so after deletion a Foundry outage is a PI outage.
+**No runtime fallback.** PI is built on the harness and tested beside the old path; when the owner is happy, everything it replaces is deleted (custom agent loop, tool lookup, chat runtime path, the replaced parts of the one-shot proactive pipeline, dead tests, docs and infra). No fallback or compatibility code stays. Rollback is redeploying the previous release or reverting a commit. A test-only runtime selector is allowed while testing and is deleted in the cutover phases. Deletion is an explicit final phase with an inventory and a gate. This replaces the earlier "automatic fallback" wording in the original trial (#1837). Consequence accepted by the choice: the harness is in public preview with no SLA, so after deletion a Foundry outage is a PI outage.
 
 **Standing watches.** The owner can ask PI to keep him updated on a build, topic, price, person or repo. A watch is a free-text vault note; the brain loop loads open watches as part of Get context; the model decides what is worth reporting; reports use the normal comms channels and are logged to the vault; the owner lists, changes and stops watches in chat or voice. Research found no documented way for the managed harness to wake itself (Foundry routines are preview with GitHub-issue events only; the reminder tool is documented for hosted agents), so the existing ticker is the waker and the vault is the truth. Plan: `docs/pi/plan.md`. Phase issues P15-165 to P15-173.
 
@@ -1517,7 +1517,7 @@ This runtime code is not yet deployed or live-tested.
 The separately prepared retirement change removes the VM template, quota workflow,
 launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
 It must not be merged until managed cutover and dedicated-resource cleanup pass.
-See [qualification and evidence](factory-concurrency-correction.md).
+See [qualification and evidence](archive/factory-concurrency-correction.md).
 
 ## 8 November 2026 — Retain workout measurements when combining Home sources
 
@@ -1566,7 +1566,7 @@ unchanged passes only with source/call-site identity; preserve the failed artifa
 
 Approval #1636 is live after 42398836350. iOS #1635 merged with the exact qualified
 tree and Deploy 42399723720 passed. Build 81 upload is tracked in
-`docs/ios/design/p15-build81-release.md`. Do not infer scaffold completion from
+`docs/archive/ios/design/p15-build81-release.md`. Do not infer scaffold completion from
 issue creation: task 23 committed code, then stopped with disk_low.
 
 ## 7 November 2026 — Deliver native stream acceptance before waiting
@@ -2217,7 +2217,7 @@ overrides, preserves saved values and records effective request settings. It doe
 not assert ordinary chat is broken from a forced-none test failure. Synthetic
 regressions pass; the owner approved publication with #1353. Review, qualification
 and live acceptance are pending. No screenshot or
-private configuration record is included. See [local report](smoke-settings-1350.md).
+private configuration record is included. See [local report](archive/smoke-settings-1350.md).
 
 ## 29 October 2026 — preserve Terra settings while distinguishing its rejection (#1350)
 
@@ -3364,7 +3364,7 @@ and expose only normalized workout metrics not already represented there. Cap
 that additional list at 100 and mark the result partial on truncation; do not
 expand the separate pagination work with a new detail cursor.
 
-The source-linked [read coverage matrix](daily-health-read-coverage.md)
+The source-linked [read coverage matrix](archive/daily-health-read-coverage.md)
 distinguishes storage/schema correspondence from actual tool reachability.
 Unresolved pinned-source parity and excluded source operations remain ruled by
 the existing matrix and owner decisions. Synthetic tests do not establish live
@@ -5404,7 +5404,7 @@ handset chat, voice and control fit; preserve the task-board 1099px and task
 detail 720px thresholds as container queries because they respond to allocated
 component width. Daily's existing 640px and 760px media rules are untouched
 because that page is being built in parallel. The responsive probe and every
-boundary comparison are recorded in `docs/ui-audit.md` under "Pass 3:
+boundary comparison are recorded in `docs/archive/ui-audit.md` under "Pass 3:
 responsive and overflow".
 
 ## Discover vault tasks in source notes using native Tasks markers (18 October 2026; P13-18 / #999)
@@ -10997,7 +10997,7 @@ route, data behavior or copy-meaning change. The per-project policy's success
 announcement is the concise “Saved.” while its standing applicability hint
 remains visible and the success stays announced with `role="status"`. The
 bounded code audit and follow-up surfaces are recorded in
-[`docs/ui-audit.md`](ui-audit.md); browser acceptance remains separate evidence.
+[`docs/archive/ui-audit.md`](archive/ui-audit.md); browser acceptance remains separate evidence.
 
 ## P14-04 — Ratchet shared borders, radii and surfaces (18 October 2026)
 
@@ -12617,7 +12617,7 @@ No deployment is included.
 
 Graph nodes share folder colors with the legend. Labels appear for search or
 selection, with an explicit Open action; accessible titles/folders remain on all
-nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
+nodes. See the [plan](../PLAN.md) for current Notes acceptance; the P15-93 verification is historical.
 
 ## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
 
@@ -13222,10 +13222,10 @@ Native qualification and TestFlight delivery are pending.
 ### 8 November 2026 — Defer owner Copilot comparison and save testing scope
 
 The owner has no time for the full comparison now and asks to save it. Preserve
-all prompts and steps in docs/runtime-comparison-owner-test.md and mark owner
+all prompts and steps in docs/archive/runtime-comparison-owner-test.md and mark owner
 comparison deferred, separate from the passed automated compatibility canary.
 Consolidate unverified device behavior, accepted appearance decisions and the
-blocked Factory recovery in docs/ios/design/p15-owner-test-checklist.md.
+blocked Factory recovery in docs/archive/ios/design/p15-owner-test-checklist.md.
 
 
 The owner also repeats that Writing reply is part of Chat, not the Now bar. Move
@@ -13341,7 +13341,7 @@ reposting a request. Local reconnect time is an outage budget, not a work deadli
 ### 8 November 2026 — Review productivity gates by actual failure
 
 The owner explicitly requests a broader approval/timeout review. Record findings in
-`docs/productivity-blocker-review.md`: distinguish service-unavailable decisions
+`docs/archive/productivity-blocker-review.md`: distinguish service-unavailable decisions
 from owner ambiguity, retain proposals/receipts durably, and reconcile uncertain
 work without duplicate actions. Existing authorization and resource checks remain.
 These follow-ups are not implemented by the long-running stream fix. Cloud threads
@@ -13351,7 +13351,7 @@ still need coordinated integration even when local workspaces are isolated.
 The owner explicitly assigns full SDLC ownership to Jarvis2 primary, session
 `01a1adc7-aebe-76f2-b63d-a852c887204f`. Jarvis2 secondary is development/research
 only and must never deploy; integration and delivery stay with the primary. Save
-the scope and handoff instructions in `docs/secondary-thread-starter.md`.
+the scope and handoff instructions in the retired secondary-thread prompt.
 
 ## 8 November 2026 — Active reply timer and ongoing progress
 
@@ -13387,7 +13387,7 @@ change the chosen size/region. Subscription quota access and Microsoft.Quota
 registration are prerequisites. Submission, Azure approval, provisioning and idle
 verification are separate states. Unknown quota-write outcomes are inspected,
 not automatically retried. Implementation has eight passing focused tests;
-no live quota request is claimed. See docs/factory-worker-quota.md.
+no live quota request is claimed. See the [dated Factory delivery record](archive/factory-worker-delivery-2026-11-08.md).
 
 ## 8 November 2026 — Keep delivery status visible across workstreams
 
@@ -13626,7 +13626,7 @@ This supersedes the quota/registration/authentication blockers above. One worker
 is delivered; fleet expansion is not implemented. Task 23 has not been replayed
 or declared complete. Owner-authenticated recovery and a complete Factory task
 remain the final end-to-end acceptance; use the saved branch and never a duplicate
-Prepare task. Current release record: docs/factory-worker-delivery-2026-11-08.md.
+Prepare task. Current release record: docs/archive/factory-worker-delivery-2026-11-08.md.
 
 
 ## 9 November 2026 Copenhagen — Current owner comparison completed
@@ -13675,7 +13675,7 @@ build-performance and concurrency qualification before adoption. No provider
 cutover, quota increase, new worker or 100-agent load run occurs in this change.
 Read-only catalogue inspection supports that qualification; a visible catalogue
 is not a working sandbox or proof of available capacity. See
-docs/factory-concurrency-correction.md for sources and acceptance requirements.
+docs/archive/factory-concurrency-correction.md for sources and acceptance requirements.
 
 ### Managed capacity readback — 9 November, 08:33 Copenhagen
 
@@ -13820,7 +13820,7 @@ confirms Home currently sums workout measurements for all periods. Use daily
 active energy and define time as Apple exercise minutes, with honest labels and
 shared Home/Health semantics. The time definition and initial 1–6 line range
 (default 3) are implementation recommendations, not an already selected owner
-preference. See `docs/ios/design/home-brief-activity-handoff.md` for evidence.
+preference. See `docs/archive/ios/design/home-brief-activity-handoff.md` for evidence.
 No Home implementation or live-device data verification is claimed.
 
 ## Final managed Factory rollout — 9 November 2026
