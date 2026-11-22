@@ -1,3 +1,12 @@
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+- GitHub releases, issues, comments, pull requests and failed default-branch checks, failed reminder deliveries and calendar clashes now reach the proactive event queue as plain events (`docs/architecture.md`, "Signals that matter to Dan"). No migration, setting or switch was added: an event follows the existing source switches it rests on (**Factory** for GitHub and Worker, **Calendar**, and **Todos** for a failed reminder), and the queue's entrance does not queue an event while one of them is off.
+- New event producers: the brain can tell Dan about an event only with evidence the wake supplied, one tuple per source the event rests on. Either the event's source follows a Proactive switch (`eventSourceSwitch` in `proactive/events/types.ts`) or the event declares `detail.evidenceSources` (first key of `detail`, because the wake clips `detail=` to 400 characters); otherwise `message_dan` refuses it for every source. Add a row for the new kind to `pi/brain/signals.test.ts`, which runs the real brain loop and the real `message_dan`.
+- Manual step for Dan, not done here: in the GitHub App's settings subscribe to **Release** and confirm **Issue comment**, **Issues**, **Pull request** and **Check run** are ticked. `docs/github-app-manifest.json` is only the setup reference; nothing in this change calls GitHub. Only tracked repositories (the vault and active Factory projects) reach the queue.
+- Offline gates (Node 22, `.nvmrc`): `npm test --workspace @jarvis/backend -- --run src/github/webhook.test.ts src/proactive/events src/proactive/owner-reminder-ticker.test.ts src/pi/brain`, then `npm run build`, `npm run lint` and `npm test` with `--workspace @jarvis/backend`. The webhook test posts signed payload fixtures (`github/webhook.testkit.ts`) through the real route and mapping into the memory queue; it also fails when the receiver accepts an event the App manifest does not list. `pi/brain/signals.test.ts` feeds the same fixtures, a clash and a failed reminder through the real brain loop and the real `message_dan` over `/pi/mcp`, with the model's evidence built only from what the wake prints.
+- No model, GitHub, Azure, APNs or live webhook call is made or authorized. Whether the brain handles the new events well is Dan's to judge behind the PI switch.
+- Operate: events show in `proactive_events` with source `github`, `reminder` or `calendar`. A lost reminder signal logs `delivery_failed_event_unavailable` on `proactive.reminder_tick`; the schedule row stays the record of the delivery.
+
 ## Chat/Voice parity replay — 21 November 2026 (#1967, #1988)
 
 - `cd apps/backend && npx vitest run src/voice/chat-voice-parity.test.ts --reporter=verbose` prints a side-by-side Chat/Voice table per scenario (the default reporter hides logs of passing runs); it takes about 40 s offline, makes no provider, paid or voice call and needs no database. Run it, then `src/pi src/voice`, backend build and lint, after any change to `pi/gateway.ts`, `pi/mcp.ts`, `core/conversation.ts`, `voice/relay.ts` or `voice/pi-voice.ts`.
@@ -5169,7 +5178,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Actions | Read-only | Read workflow runs |
 | Deployments | Read-only | Read deployment status |
 
-Subscribe to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
+Subscribe to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, `release`, and `workflow_run`. GitHub requires repository metadata read access automatically. Install only on the repositories Dan selects for Jarvis; do not grant access to all repositories by default.
 
 Do not configure a webhook URL or secret until P0-16 has deployed the backend and P3-03 has implemented its receiver. The manifest intentionally has no webhook URL. A GitHub App ID is not a secret; the private key and webhook secret are.
 

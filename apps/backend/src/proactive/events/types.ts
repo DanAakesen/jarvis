@@ -1,3 +1,5 @@
+import { sourceIds, type SourceId } from '../types.js';
+
 export const outreachTiers = ['low', 'medium', 'high'] as const;
 export type OutreachTier = typeof outreachTiers[number];
 export type OutreachRating = 'up' | 'down';
@@ -6,6 +8,30 @@ export const EVENT_SUMMARY_MAX = 400;
 export const EVENT_DETAIL_MAX_BYTES = 4_096;
 export const EVENT_SOURCE_PATTERN = /^[a-z][a-z0-9_.-]{0,63}$/u;
 export const EVENT_KIND_PATTERN = /^[a-z][a-z0-9_.:-]{0,95}$/u;
+
+/** The Proactive source switch that governs a bare event source, if there is one: GitHub and Worker results belong to Factory. */
+export function eventSourceSwitch(source: string): SourceId | undefined {
+  if ((sourceIds as readonly string[]).includes(source)) return source as SourceId;
+  return source === 'github' || source === 'worker' ? 'factory' : undefined;
+}
+
+/**
+ * Every Proactive source an event rests on: the one its own source follows, and any it declares in `detail.evidenceSources`
+ * (a failed reminder rests on Todos, a follow-up on the sources it was made from). The queue's entrance does not queue the
+ * event while one of them is off, the brain settles it as source disabled, and these are the sources the wake can offer as
+ * evidence for it: an event that rests on none can never back a message to Dan.
+ */
+export function eventSourceSwitches(
+  event: { readonly source: string; readonly detail?: Record<string, unknown> | undefined },
+): SourceId[] {
+  const own = eventSourceSwitch(event.source);
+  const declared = event.detail?.evidenceSources;
+  const evidence = Array.isArray(declared)
+    ? declared.filter((value): value is SourceId =>
+      typeof value === 'string' && (sourceIds as readonly string[]).includes(value))
+    : [];
+  return [...new Set([...(own ? [own] : []), ...evidence])];
+}
 
 /** Source and kind are free text on purpose: a new producer needs no schema or enum change. */
 export interface ProactiveEventInput {

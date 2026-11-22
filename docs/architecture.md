@@ -1,3 +1,41 @@
+## Signals that matter to Dan — 21 November 2026 (P1-2, Refs #1969)
+
+```mermaid
+flowchart LR
+    GH["GitHub webhook<br/>tracked repositories only"] --> MAP["webhook-mapping.ts<br/>payload to typed mapping"]
+    MAP --> GE["githubEvent<br/>release, issues, comment, pull request,<br/>failed default-branch check, workflow, deploy"]
+    CAL["Calendar poll, 15 min<br/>facts already read"] --> CL["clashEvents<br/>one event per overlapping pair"]
+    REM["Reminder ticker<br/>delivery ended failed after retries"] --> RF["reminderFailureEvent"]
+    GE --> GATE
+    CL --> GATE
+    RF --> GATE
+    GATE{"Queue entrance<br/>is every Proactive source it rests on on?<br/>github, worker: Factory<br/>calendar: Calendar<br/>failed reminder: Todos"}
+    GATE -->|"yes, or it rests on none"| Q[("Event queue<br/>identity + material = dedupe")]
+    GATE -->|no| NO["not queued"]
+    Q --> BR["PI brain<br/>decides whether Dan hears"]
+    BR -->|"wake evidence: one tuple per source the event rests on"| MD["message_dan<br/>accepts only that evidence"]
+    LEG["Legend: arrows are data flow; no model call and no rule about Dan before the queue"]:::legend
+```
+
+| Event (source: kind) | Made from | Dedupe key (identity plus material) |
+| --- | --- | --- |
+| `github: release.published` | `release` published | `github:release:<repo>:<release id>:<published_at>` |
+| `github: issues.opened`, `issues.closed`, `issues.reopened` | `issues` | `github:issues:<repo>#<number>:<action>:<time>`, the time being `created_at`, `closed_at` or `updated_at` |
+| `github: issue_comment.created` | `issue_comment` created, on an issue or a pull request | `github:issue_comment:<repo>:<comment id>` |
+| `github: pull_request.opened` | `pull_request` opened | `github:pull_request:<repo>#<number>:opened` |
+| `github: pull_request.closed` | `pull_request` closed **and merged** | `github:pull_request:<repo>#<number>:closed:<merged_at>` |
+| `github: pull_request.review_requested` | `pull_request` review requested | `github:pull_request:<repo>#<number>:review_requested:<reviewer>:<updated_at>` |
+| `github: check_run.failure` | `check_run` completed, failed, head branch is the repository default branch | `github:check_run:<repo>:<check run id>:failure` |
+| `reminder: reminder.delivery_failed` | `reminder-ticker.ts`, after `finishClaim` wrote a terminal failed outcome; rests on **Todos** (`detail.evidenceSources`) | identity `reminder:<schedule id>`, material the due time |
+| `calendar: calendar.clash` | `scheduled-producers.ts`, from the calendar poll's facts | identity `calendar:clash:<hash of the two entry identities>`, material both entries and their time ranges |
+
+- **Code:** `github/webhook-mapping.ts` (typed mappings: `release`, `issue`, `issue_comment`, and extra fields on `pull_request` and `check_run`), `github/webhook.ts` (accepts `release` and `issue_comment`; `githubWebhookEvents` is the list a test compares with the App manifest), `proactive/events/producers.ts` (`githubEvent`, `clashEvents`, `reminderFailureEvent`), `proactive/events/wiring.ts` (the entrance), `proactive/events/types.ts` (`eventSourceSwitch`, `eventSourceSwitches`). Every GitHub event is keyed only by the payload, so a redelivered webhook is the same event; summaries are at most 400 UTF-16 units; free text from a payload is cleaned of control, format (zero-width, bidirectional, tag) and separator characters and cut to one line, in the summary and in `detail` alike. Tests: `github/webhook.test.ts` (signed payloads through the route into the queue) and `pi/brain/signals.test.ts` (the real brain loop and `message_dan`).
+- **Entrance and switches:** `createEventPath().sink`, the queue's one entrance for the webhook, alerts, Worker results, reminder failures and the pollers, reads the Proactive settings and does not queue an event while a source it rests on is off. `eventSourceSwitches` lists those sources: the one its own source follows (`github` and `worker` follow **Factory**, a source id is its own) and any it declares in `detail.evidenceSources` (a failed reminder: **Todos**); `alert`, `timer` and `cost` rest on none. The brain still settles what was queued before a switch went off. The brain, its wake evidence and the activation service use the same helpers; their private copies are gone.
+- **Evidence for a message:** a wake can back a message to Dan only with evidence it supplied. `pi/brain/runner.ts` builds one tuple (source, event ID, identity, observed and verified instants) per source an event rests on, and `message_dan` (`pi/brain/tools.ts`) matches the model's tuple against those. An event that rests on no Proactive source can therefore never back a message: every producer needs a source that follows a switch or a declared `evidenceSources`, and `pi/brain/signals.test.ts` runs the real tool for each kind and fails otherwise. Todos off means no failed-reminder signal; the reminder still fires and `owner_reminders.read` still reports its delivery.
+- **Reminder signal:** `createReminderTicker` takes the entrance as `events`. `composition.ts` now builds the event path before the ticker. A retrying reminder is silent; a failed or suppressed-by-delivery outcome is reported once, and an enqueue failure is only logged.
+- **Webhook route:** the mapped `issues` actions (`opened`, `closed`, `reopened`) now take the mapped path (recorded `ok`, Now feed refreshed, Factory board refreshed) instead of being recorded as ignored; every other `issues` action keeps the old ignored path. `issue_comment` and `release` neither touch the Factory tables nor the board.
+- **Not covered:** repositories the receiver does not track (the vault and active Factory projects), pushes, and cancelling a pending clash whose entries moved apart. `release.published` is a GitHub release (a tag published with notes), not the Factory's `releases` table, where a release is one merge to the default branch.
+
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)
 
 ```mermaid
@@ -415,11 +453,12 @@ The brain is the PI agent woken by a trigger, with the `jarvis-brain` skill. One
 ```mermaid
 flowchart TB
     subgraph SIG["Signals (existing producers, one queue)"]
-        S1["GitHub webhook<br/>workflow and deploy results"]
+        S1["GitHub webhook<br/>builds, deploys, releases, issues,<br/>pull requests, failed default-branch checks"]
         S2["Alerts: budget, deploy, sandbox"]
-        S3["Mail and calendar changes<br/>polled every 15 min"]
+        S3["Mail and calendar changes, calendar clashes<br/>polled every 15 min"]
         S4["Timer review<br/>every 6 h, not at night"]
         S5["Worker results<br/>done, needs attention, cancelled, PR opened"]
+        S6["Failed reminder delivery"]
     end
     Q[("dbo.proactive_events<br/>queue, dedupe, leases")]
     T["30 s ticker<br/>(proactive scheduler)"]
@@ -7418,7 +7457,7 @@ invalid input. `issue_comment` remains a Factory tool.
 
 GitHub reads return labelled untrusted content, bound page sizes and output fields; each HTTP request has a ten-second timeout and one-megabyte response cap. Comments and issue bodies are byte-bounded. Outgoing text is secret-scanned. Ordinary writes execute when Dan requests them; issue/PR closure, PR merge, file writes to the default branch and public-repository file publication require a later Dan message, from the same session, that clearly approves the staged action (the shared approval interpreter decides the meaning). `pr_merge` verifies the expected head SHA and refuses failing check runs or commit statuses unless Dan explicitly says to proceed. Public image publication retains its visible warning and simple approval. No `apps/web`, persistence, migration or dependency changes.
 
-[`github-app-manifest.json`](github-app-manifest.json) is the initial private-App setup template, not a current permission source. Its requested permissions and subscribed events record the original P3/P7 setup; the live installation map is authoritative for tool access. P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled.
+[`github-app-manifest.json`](github-app-manifest.json) is the initial private-App setup template, not a current permission source. Its requested permissions and subscribed events record the original P3/P7 setup; the live installation map is authoritative for tool access. P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled. P1-2 adds the `release` subscription to the file for the proactive signals (a test requires every event the receiver accepts to be listed); the live App needs `Release` ticked in its settings by Dan.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens

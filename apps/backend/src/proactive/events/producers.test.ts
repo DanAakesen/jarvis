@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GithubWebhookMapping } from '../../github/webhook-mapping.js';
 import type { ProactiveSource, SourceFact } from '../types.js';
 import { createMemoryEventQueueStore, normalizeEvent } from './event-queue.js';
-import { alertEvent, factEvent, githubEvent, workerEvent } from './producers.js';
+import { alertEvent, clashEvents, factEvent, githubEvent, workerEvent } from './producers.js';
 import { createSourceChangePoller, createTimerProducer, detectCostSpike } from './scheduled-producers.js';
 import type { ProactiveEventInput } from './types.js';
 import { defaultProactiveSettings } from '../store.js';
@@ -51,11 +51,15 @@ describe('GitHub and alert producers', () => {
     expect(githubEvent({ ...workflow, status: 'in_progress', conclusion: null }, NOW)).toBeUndefined();
   });
 
-  it('maps deployment results and ignores pull requests, pushes and issue labels', () => {
+  it('maps deployment results and ignores pushes, issue labels and a pull request Jarvis recorded itself', () => {
     expect(githubEvent({ kind: 'deployment_status', repository: 'DanAakesen/jarvis', id: 9, sha: 'b'.repeat(40), environment: 'production', status: 'failure', at: NOW.toISOString() }, NOW))
       .toMatchObject({ kind: 'deployment_status.failure' });
     expect(githubEvent({ kind: 'push', repository: 'DanAakesen/jarvis', ref: 'refs/heads/main', sha: 'c'.repeat(40), at: NOW.toISOString() }, NOW)).toBeUndefined();
     expect(githubEvent({ kind: 'issue_labeled', repository: 'DanAakesen/jarvis', number: 1, label: 'Jarvis' }, NOW)).toBeUndefined();
+    expect(githubEvent({
+      kind: 'pull_request', repository: 'DanAakesen/jarvis', number: 3, branch: 'jarvis/task-3', headSha: 'd'.repeat(40),
+      state: 'open', openedAt: NOW.toISOString(), mergedAt: null,
+    }, NOW)).toBeUndefined();
   });
 
   it('queues activity alerts but never its own outreach cards', () => {
@@ -237,6 +241,108 @@ describe('mail and calendar change poller', () => {
       observe: async () => ({ changed: false, baseline: false, admissible: false }),
     });
     await poller.poll();
+    expect(sink.enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('calendar clash events', () => {
+  const entry = (id: string, startsAt: string, endsAt: string, extra: Partial<SourceFact> = {}): SourceFact => ({
+    ref: `cal:${id}`, identity: `calendar-event:${id}`, kind: 'event', label: 'Calendar', text: `Meeting ${id}`,
+    observedAt: NOW.toISOString(), startsAt, endsAt, allDay: false, ...extra,
+  });
+  const planning = entry('a', '2026-11-16T09:00:00.000Z', '2026-11-16T10:00:00.000Z');
+  const dentist = entry('b', '2026-11-16T09:30:00.000Z', '2026-11-16T10:30:00.000Z');
+  const movedDentist = entry('b', '2026-11-16T09:15:00.000Z', '2026-11-16T10:30:00.000Z');
+  const calendar = (facts: () => SourceFact[]): ProactiveSource => ({
+    id: 'calendar', label: 'Calendar',
+    async read() { return { source: 'calendar', state: 'ok', reason: null, observedAt: NOW.toISOString(), facts: facts() }; },
+  });
+
+  it('makes one event per overlapping pair, whichever order the calendar lists them in', () => {
+    const clashes = clashEvents([planning, dentist], NOW);
+    expect(clashes).toHaveLength(1);
+    expect(clashes[0]).toMatchObject({ source: 'calendar', kind: 'calendar.clash', occurredAt: NOW });
+    expect(clashes[0]!.dedupeKey).toMatch(/^calendar:clash:[0-9a-f]{40}$/u);
+    expect(clashes[0]!.detail).toMatchObject({ startsAt: '2026-11-16T09:30:00.000Z', endsAt: '2026-11-16T10:00:00.000Z' });
+    expect(clashes[0]!.summary).toBe('Calendar clash from 2026-11-16 10:30 to 2026-11-16 11:00: "Meeting a" overlaps "Meeting b"');
+    // The key does not depend on the listing order, and the summary names the earlier entry first.
+    const reversed = clashEvents([dentist, planning], NOW)[0]!;
+    expect(reversed).toMatchObject({ dedupeKey: clashes[0]!.dedupeKey, identity: clashes[0]!.identity, summary: clashes[0]!.summary });
+    expect(() => normalizeEvent(clashes[0]!)).not.toThrow();
+  });
+
+  it('ignores entries that only touch, all-day entries and the same entry listed twice', () => {
+    const next = entry('c', '2026-11-16T10:00:00.000Z', '2026-11-16T11:00:00.000Z');
+    const allDay = entry('d', '2026-11-16T00:00:00.000Z', '2026-11-17T00:00:00.000Z', { allDay: true });
+    expect(clashEvents([planning, next, allDay, planning], NOW)).toEqual([]);
+  });
+
+  it('pairs every overlap among three entries and keys a moved entry by its identity and its new times', () => {
+    const third = entry('c', '2026-11-16T09:45:00.000Z', '2026-11-16T10:15:00.000Z');
+    expect(clashEvents([planning, dentist, third], NOW)).toHaveLength(3);
+    const [before] = clashEvents([planning, dentist], NOW);
+    const [after] = clashEvents([planning, movedDentist], NOW);
+    expect(after!.identity).toBe(before!.identity);
+    expect(after!.dedupeKey).not.toBe(before!.dedupeKey);
+  });
+
+  it('queues a clash once, replaces it when an entry moves and ignores it again after a restart', async () => {
+    const queue = createMemoryEventQueueStore();
+    // The calendar has events already, so this is not a first poll.
+    await queue.enqueue({ source: 'calendar', kind: 'event.new_or_changed', dedupeKey: 'old', summary: 's', occurredAt: NOW }, NOW);
+    const inserted: boolean[] = [];
+    const sink = {
+      enqueue: vi.fn(async (event: ProactiveEventInput) => { inserted.push((await queue.enqueue(event, NOW)).inserted); }),
+    };
+    let facts = [planning, dentist];
+    const newPoller = () => createSourceChangePoller({
+      sources: [calendar(() => facts)], sink, queue, now: () => NOW, settings: async () => defaultProactiveSettings(),
+    });
+    const clashes = () => sink.enqueue.mock.calls.filter(([event]) => event.kind === 'calendar.clash');
+
+    const poller = newPoller();
+    await poller.poll();
+    await poller.poll();
+    expect(clashes()).toHaveLength(1);
+    facts = [planning, movedDentist];
+    await poller.poll();
+    expect(clashes()).toHaveLength(2);
+    const claimed = (await queue.claim(NOW, 50, 60_000)).filter(({ kind }) => kind === 'calendar.clash');
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]!.detail).toMatchObject({ startsAt: '2026-11-16T09:15:00.000Z' });
+
+    // A restarted backend forgets what it polled; the queue remembers every fact and clash.
+    inserted.length = 0;
+    await newPoller().poll();
+    expect(inserted.length).toBeGreaterThan(0);
+    expect(inserted.every((value) => !value)).toBe(true);
+  });
+
+  it('records a clash already on a calendar seen for the first time as baseline, not news', async () => {
+    const queue = createMemoryEventQueueStore();
+    const sink = { enqueue: vi.fn(async (event: ProactiveEventInput) => { await queue.enqueue(event, NOW); }) };
+    const poller = createSourceChangePoller({
+      sources: [calendar(() => [planning, dentist])], sink, queue, now: () => NOW, settings: async () => defaultProactiveSettings(),
+    });
+    await poller.poll();
+    expect(sink.enqueue.mock.calls.some(([event]) => event.kind === 'calendar.clash')).toBe(true);
+    expect(sink.enqueue.mock.calls.every(([event]) => event.baseline === true)).toBe(true);
+    expect(await queue.hasWork(NOW)).toBe(false);
+  });
+
+  it('does not read the calendar, or find a clash, while its source is switched off', async () => {
+    const queue = createMemoryEventQueueStore();
+    const sink = { enqueue: vi.fn() };
+    const read = vi.fn(async () => ({
+      source: 'calendar' as const, state: 'ok' as const, reason: null, observedAt: NOW.toISOString(), facts: [planning, dentist],
+    }));
+    const settings = defaultProactiveSettings();
+    settings.sources.calendar = false;
+    const poller = createSourceChangePoller({
+      sources: [{ id: 'calendar', label: 'Calendar', read }], sink, queue, now: () => NOW, settings: async () => settings,
+    });
+    await poller.poll();
+    expect(read).not.toHaveBeenCalled();
     expect(sink.enqueue).not.toHaveBeenCalled();
   });
 });

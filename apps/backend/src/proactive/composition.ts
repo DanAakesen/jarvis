@@ -153,6 +153,24 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ? createProactiveReminderStore(options.pool, options.ownerObjectId)
       : createMemoryProactiveReminderStore(options.ownerObjectId))
     : undefined;
+  const events = createEventPath({
+    enabled: options.eventsEnabled === true,
+    brain: options.brain,
+    ownerObjectId: options.ownerObjectId,
+    pool: options.pool,
+    store,
+    sources,
+    ...(options.situation ? { situation: options.situation } : {}),
+    modelCatalogue: options.modelCatalogue,
+    getCredentialToken: options.getCredentialToken,
+    foundryProjectEndpoint: options.foundryProjectEndpoint,
+    systemPushSender: alertsReady ? options.systemPushSender : undefined,
+    nowCardFeed: options.nowCardFeed,
+    usageStore: options.usageStore,
+    now,
+    logger: options.logger,
+  });
+  if (events) options.registerEventSink?.(events.sink);
   const reminderTicker = (reminderReady || ownerReminderReady) && options.vaultClient &&
     options.pushStore && options.systemPushSender
     ? createReminderTicker({
@@ -165,6 +183,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(alertLedger ? { ledger: alertLedger } : {}),
       ownerObjectId: options.ownerObjectId,
       send: options.systemPushSender,
+      ...(events ? { events: events.sink } : {}),
       now,
       ...(options.logger ? { logger: options.logger } : {}),
     })
@@ -210,24 +229,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(todoWriter ? [todoWriter] : []),
     ],
   });
-  const events = createEventPath({
-    enabled: options.eventsEnabled === true,
-    brain: options.brain,
-    ownerObjectId: options.ownerObjectId,
-    pool: options.pool,
-    store,
-    sources,
-    ...(options.situation ? { situation: options.situation } : {}),
-    modelCatalogue: options.modelCatalogue,
-    getCredentialToken: options.getCredentialToken,
-    foundryProjectEndpoint: options.foundryProjectEndpoint,
-    systemPushSender: alertsReady ? options.systemPushSender : undefined,
-    nowCardFeed: options.nowCardFeed,
-    usageStore: options.usageStore,
-    now,
-    logger: options.logger,
-  });
-  if (events) options.registerEventSink?.(events.sink);
   const scheduledRun = events?.runScheduled ?? run;
   const scheduler = createProactiveScheduler({
     store, now, run: scheduledRun, ...(options.logger ? { logger: options.logger } : {}),
