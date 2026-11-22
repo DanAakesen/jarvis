@@ -1,6 +1,6 @@
 ## System map — PI, tools, voice and who owns what (21 November 2026)
 
-This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `6379822d` (#2004, 21 November 2026, 21:47 UTC).
+This section summarises the 20–21 November 2026 changes. The dated sections below keep the detail. Where one of them disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Statements describe the code on `main` as of commit `df84095f` (#2014, 21 November 2026, 23:23 UTC).
 
 ### Legend
 
@@ -131,22 +131,22 @@ flowchart TB
 - Never paste the voice text into `jarvis-pi`. It removes the tool contract (the `[Turn ...]` line, `find_tools`, `call_tool`) and PI can no longer reach a Jarvis tool. The seed wraps that section in `KEEP THIS BLOCK: backend tool contract (start)` and `(end)`; keep both lines and everything between them in the live text. Reported by Dan; the markers and the contract are in `agents/pi/instructions.md`, but the live text can only be read in Foundry.
 - A portal-saved version may drop the fingerprint metadata Deploy stores. Then the next Deploy publishes one more version with the same text and pins it (decision of 2026-11-20; unverified live).
 
-### One door, four layers
+### One door, and the intended layers by weight
 
 - One MCP door (`pi/mcp.ts`, `/pi/mcp`) with two tools. `find_tools` takes the turn reference and a few keywords and returns matching tools with their schemas. `call_tool` runs a tool by exact name, only if `find_tools` returned it in the same turn (names in `otherMatches` count). The door runs the same registry and guards as Chat.
 - About 140 Jarvis tools (141 reported from production; a rough static count of tool definitions in `apps/backend/src` gives 136 to 146 depending on what is counted, and the registered number depends on the enabled modules), plus the `gh_` GitHub tools and the `az_` Azure tools offered by the backend bridges. Chat and Voice do not see the legacy confirmation tools or the brain-only tools; a background wake sees the brain-only tools too.
 - Local-first loading. A search returns local tools at once. A bridge starts idle, with no warm-up at start-up or from `/pi/warm`, and loads only when the query names it (for example GitHub, issue, repo, Azure, resource, or a `gh_` / `az_` tool name). It then gets an 8 s bounded wait and a "search again shortly" note. The first Azure question after a quiet period therefore needs a second search.
 - Exact-name calls rank first; `intentAliases` in `pi/tool-search.ts` maps English and Danish wording (for example "vejr" to `weather`).
-- A capability note (connection states plus a capability index, at most 1,500 characters) goes with the first turn of a Foundry conversation and again only when the GitHub/Azure connection state changes. It is held in memory, so a backend restart sends it once more.
+- A capability note (connection states plus a capability index, at most 1,500 characters) goes with the first turn of a Foundry conversation and again only when the GitHub/Azure connection state changes. It is held in memory, so a backend restart sends it once more. A background wake always runs in a new scratch conversation, so every wake carries the note (one gateway helper, `overviewFor` in `pi/gateway.ts`, serves Chat and wakes), and a wake never counts as the note having been sent for Dan's Chat conversation (#2014).
 - Tool authority is the exact owner message attached to the turn (`core/owner-message.ts`), not the newest stored message.
 - GPT-Live has no tools at all; it only delegates.
 
-Dan's design layers the work by weight. The routing rules live in the Foundry-owned `jarvis-pi` instructions ("Choosing tools"), so the repository holds only the seed.
+Intended layering, as Dan reported it to me: the work is layered by weight. This is his design, not something the repository enforces or I could verify. The repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives: Azure to `az_`, code and issues to `gh_`, notes, tasks, mail, calendar and health to the Jarvis tools, and Dan's PC when he asks or names something that only exists there. I did not read the live `jarvis-pi` text in Foundry, so whether it holds weight-based rules is unknown. Writing them there is a next step for Dan (`PLAN.md`, "Next steps").
 
 ```mermaid
 flowchart LR
     R["Dan's request"] --> W{"How heavy is the job?"}
-    RULES["Routing rules<br/>Foundry-owned jarvis-pi instructions"]:::foundry -.-> W
+    RULES["Intended routing rules<br/>in the Foundry-owned<br/>jarvis-pi instructions<br/>live text not read"]:::foundry -.-> W
     W -->|"quick, same turn"| T["Jarvis tools through the door<br/>find_tools, then call_tool<br/>plus gh_ and az_"]:::code
     W -->|"scratch compute"| B["Harness built-ins, run by Foundry<br/>files, shell, web fetch, sub-agents"]:::hosted
     W -->|"deep or durable"| F["Factory workers<br/>coding sessions, results return as events"]:::code
@@ -157,7 +157,7 @@ flowchart LR
     classDef data fill:#efe7fb,stroke:#6b46c1,color:#24123f
 ```
 
-PI is unrestricted: no guardrails or read-only defaults. Dan's rule, as relayed and not audited against the code, is that the only approvals anywhere are for delete actions (`PRODUCT.md`, "North star"). The MCP tool runs with approval `never`.
+PI is unrestricted: no guardrails or read-only defaults. Dan's rule, as relayed (recorded in issues [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)) and not audited against the code: no approvals, confirmations or gates except DELETE actions (`PRODUCT.md`, "North star"). The MCP tool runs with approval `never`.
 
 ### Gateway and the harness stream
 
@@ -165,7 +165,7 @@ PI is unrestricted: no guardrails or read-only defaults. Dan's rule, as relayed 
 flowchart TB
     S["Foundry response stream"] --> I{"Output item type"}
     I -->|"message, reasoning,<br/>mcp_call, mcp_list_tools"| H["Handled: text, progress,<br/>tool and list results"]:::code
-    I -->|"other typed items,<br/>for example shell_call"| U["Logged once per type as<br/>pi.harness_item unknown_item<br/>The stream continues"]:::code
+    I -->|"other typed items<br/>(Dan reports shell_call)"| U["Logged once per type as<br/>pi.harness_item unknown_item<br/>The stream continues"]:::code
     I -->|"function_call or<br/>mcp_approval_request"| F["Never end the stream.<br/>Read to the terminal event,<br/>then classify each call"]:::code
     F --> N["Native: Foundry already<br/>ran it, for example a task<br/>sub-agent. Never answered"]:::code
     F --> C["Client-owned: the response<br/>ended with it unanswered<br/>One follow-up, same<br/>conversation, max 8<br/>responses per turn"]:::code
@@ -174,9 +174,9 @@ flowchart TB
 ```
 
 - The harness's `task` function_call is a native sub-agent that Foundry had already run. In the production trace it searched, called `calendar_list_events` through the Jarvis door and answered. The gateway then threw `approval_or_function_call_item` and closed the stream, and Foundry's outer request recorded HTTP 500. The first fix attempt (answering `task` with "not available") was wrong for that reason and was replaced before #2004 merged.
-- Other built-ins appear as typed items such as `shell_call` and `shell_call_output`. On `main` any item type other than `message`, `reasoning`, `mcp_call`, `mcp_list_tools`, `function_call` and `mcp_approval_request` is only logged, once per type, and the stream continues. The item names are Dan's production observation; the repository has no handling that names them.
+- Other built-ins appear as typed items such as `shell_call` and `shell_call_output`. On `main` any item type other than `message`, `reasoning`, `mcp_call`, `mcp_list_tools`, `function_call` and `mcp_approval_request` is only logged, once per type, and the stream continues. The item names are Dan's production observation: they appear nowhere else in the repository, and no code handles them by name.
 - Rule since #2004: never end the stream for a call. Read to the terminal event, then classify each call. Native (a `function_call_output`, the item's own output or later output shows the harness ran it): never answered. Client-owned (the response ended with the call unanswered and its item complete): one follow-up `responses.create` on the same conversation with an honest "not available" output (`task` has no handler) and `approve: true` for a genuine approval request, at most 8 responses per turn; a call id settles once per turn. Unknown (any other item status): left alone and logged as `incomplete_item`. The gateway never runs shell or starts an agent. It fails the turn with `approval_or_function_call_item` for a client-owned call without a usable id, for more than 16 client-owned calls in one response, or for more than 512 calls with no output after them, and with `client_tool_round_limit` when client-owned calls are still pending after the 8th response. Native calls are not capped, but only 512 are tracked per response.
-- Retry safety (#1999, kept by #2004): `respond()` retries a Foundry stream once, after 750 ms, only when nothing observable can have run (a stream that carried any call or tool output is never retried, and only the first response of a turn can be): a turn grant exists, no text, reasoning, tool call, function call, unknown event, unparseable or half-read frame, no MCP request, tool result, action or push, and a transient failure (a stream that ends or breaks, or `response.failed` / `error` with `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`). It needs a confirmed cancel of the stalled response and bills once. Details are in the section "Remote MCP catalogues load on demand".
+- Retry safety (#1999, kept by #2004): `respond()` retries a Foundry stream once, after 750 ms, only when nothing observable can have run (a stream that carried any call or tool output is never retried, and only the first response of a turn can be): a turn grant exists, no text, reasoning, tool call, function call, unknown event, unparseable or half-read frame, no MCP request, tool result, action or push, and a transient failure (a stream that ends or breaks, or `response.failed` / `error` with `server_error`, `rate_limit`, `rate_limit_exceeded`, `too_many_requests`, `temporarily_unavailable` or `timeout`). A stream that ended or broke has its response cancelled first, and the retry needs that cancel confirmed (the cancel succeeds and the response no longer reads `in_progress` or `queued`). Events whose response id is unknown end the turn, while a stream that died before any event has no response id and is retried without a cancel. A transient `response.failed` or `error` needs no cancel. The turn is billed once. Details are in the section "Remote MCP catalogues load on demand".
 - Weather timeouts: a Chat `weather` call returned after exactly 8015 ms on build 119. The tool now logs `weather.phase` per step and retries each fetch once after a timeout, network error, 429 or 5xx, inside the same 8 s budget (an attempt takes at most 3 s). Dan reports that the forecast fetch stalls intermittently and that the one retry recovered it in production; the repository cannot show this.
 
 ### Voice: how a spoken request reaches PI
@@ -189,7 +189,7 @@ sequenceDiagram
     participant G as PI gateway
     D->>L: speaks
     L-->>R: transcript deltas, still arriving
-    L-->>R: session.delegation.created<br/>offset_ms is only logged
+    L-->>R: session.delegation.created<br/>offset_ms is logged, never used to cut a turn
     R->>R: wait 1.5 s of quiet, max 3 s
     R->>R: store one owner message
     R->>G: start PI once
@@ -203,7 +203,7 @@ sequenceDiagram
 - `offset_ms` on the delegation is not the end of Dan's utterance: GPT-Live sends the delegation while the transcript is still arriving. The relay logs it and never cuts words with it.
 - The relay assembles the whole spoken turn: every input delta joins the open turn until PI starts for it or the reply to it begins. A delegation waits for 1.5 s of quiet (`VOICE_TURN_QUIET_MS`, at most 3 s `VOICE_TRANSCRIPT_MAX_WAIT_MS`), stores the whole turn once and starts PI once. A direct (non-delegated) turn is stored after the same 1.5 s. Only the assistant's output is still grouped on 0.6 s of quiet.
 - A delegation that arrives after GPT-Live began answering adopts the stored direct turn if no reply has completed for it, nothing newer was said and it is at most 10 s old. An empty turn at the 3 s bound gets "did not catch that".
-- Backchannels never cancel PI. Only a new delegation (which supersedes the turn in flight, as steering does in Chat) or the session ending stops it. There is no separate stop command; "stop that" reaches PI as a delegation.
+- Backchannels never cancel PI. Only a new delegation (which supersedes the turn in flight, as steering does in Chat), the session ending, or the 90 s voice turn deadline (`PI_VOICE_TURN_DEADLINE_MS`, after which Jarvis says so) stops it. There is no separate stop command; "stop that" reaches PI as a delegation.
 - Ordering is Dan before Jarvis: the reply is stored after the owner message it answers, within a bounded wait, so restored history keeps the order.
 - Relay log events (ids, lengths, states and reasons only, never words): `voice.delegation_received`, `voice.owner_group_persisted`, `voice.did_not_catch`, `voice.pi_turn_started`, `voice.activity_published`, `voice.upstream_event_error`, and `voice.pi_turn` from the PI side.
 
@@ -230,7 +230,8 @@ The gateway also computes `azureToolsOffered` and `azureCalls` for `pi.turn`, bu
 
 - Live behaviour. The PRs of the week ran offline checks only. Production logs and a Foundry trace informed #2001 and #2004, and Dan reported the weather result; Dan owns live and device acceptance.
 - The portal behaviour (a saved version is not Active until Dan sets it), the loss of the version fingerprint on a portal save, and the exact tool count in production.
-- The built-in item names `shell_call` and `shell_call_output` and the `task` behaviour come from production traces that are not in the repository, apart from the #2004 decision text.
+- The `task` behaviour is in the #2004 decision text, which cites a Foundry trace that is not in the repository. The `shell_call` and `shell_call_output` item names are Dan's production observation and appear nowhere else in the repository.
+- Whether the live `jarvis-pi` instructions carry weight-based routing rules. I did not read them; the repository seed routes only by where a thing lives.
 - #2004 is merged but has not been seen in a real trace. The four points the #2004 decision lists (every native call shows a native signal before `response.completed`, a client-owned call is accepted while the previous response reads `in_progress`, the real `status` of an approval request, and whether native children outlive `response.completed`) are open.
 
 ## Durable owner-reminder APNs evidence — 20 November 2026 (#1990)

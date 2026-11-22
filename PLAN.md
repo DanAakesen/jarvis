@@ -1,12 +1,12 @@
 ## Week summary 2026-11-21 — PI tools and reliability (current focus)
 
-**Status: the 20–21 November work is merged on `main` (#2004 last, at 21:47 UTC). Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
+**Status: the 20–21 November work is merged on `main` (#2014 last, at 23:23 UTC on 21 November). Issues #1967 (PI finds tools and finishes owner requests) and #1988 (GPT-Live voice fidelity) stay open. Every PR below was checked offline only; live, paid and physical-device acceptance stays with Dan.** This section is the summary. The dated sections below keep the detail; where one disagrees with this section or with a newer entry in `docs/decisions.md`, the newer text wins. Decision index: `docs/decisions.md`, "Week summary 2026-11-21". System map and diagrams: `docs/architecture.md`, "System map". Commands and rules: `docs/agent-context.md`, "Working rules".
 
 ### Current focus: tool design and PI reliability (Dan's P0)
 
-Dan's goal for PI is a bot experience that is "always on", knows him, "can be proactive" and knows him "super well" when he reaches out himself (his words, `PRODUCT.md`, "North star"). Priorities as relayed: **P0** every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. **P1** proactive intelligence. The work in this section is P0; P1 ranks next. Inference: these are priority ranks, not the plan phases P0–P15.
+Dan's goal for PI is a bot experience that is "always on", knows him, "can be proactive" and knows him "super well" when he reaches out himself (his words; `PRODUCT.md`, "North star"). It is recorded as issues [#2012](https://github.com/DanAakesen/jarvis/issues/2012) (P0) and [#2011](https://github.com/DanAakesen/jarvis/issues/2011) (P1). Priorities as relayed: **P0** every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. **P1** proactive intelligence. The work in this section is P0; P1 ranks next. Inference: these are priority ranks, not the plan phases P0–P15.
 
-Dan's design layers work by weight. PI reaches the Jarvis tools through one door (`find_tools`, `call_tool`). The routing rules live in the Foundry-owned `jarvis-pi` instructions, not in the repo.
+Dan's intended layering is by weight of the job. That is his design as he reported it to me: I did not read the live `jarvis-pi` instructions, and the repository seed (`agents/pi/instructions.md`, "Choosing tools") routes only by where a thing lives. PI reaches the Jarvis tools through one door (`find_tools`, `call_tool`).
 
 | Weight of the job | Layer | Examples |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Dan's design layers work by weight. PI reaches the Jarvis tools through one door
 | Deep or durable | Factory workers: coding sessions started and followed with Jarvis tools | a code change that ends in a pull request |
 | Knowledge | Vault notes and SQL Personal Memory | "remember that…", plans, research |
 
-PI has no guardrails or read-only defaults. Dan's rule, as relayed and not audited against the code: the only approvals anywhere are for delete actions.
+PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012)) and not audited against the code: no approvals, confirmations or gates except DELETE actions.
 
 ### Completed 20–21 November
 
@@ -30,13 +30,14 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed and not audit
 | Voice states, caption order, reconnect and Watch v2 events made truthful | #1993 | Backend, web and contracts offline; Swift checks ran in CI only. Device acceptance open |
 | PI finds and calls tools: local-first loading, exact-name calls with aliases, one overview note, a non-blocking budget read, progress lines that never end a turn, owner-message binding, `structuredContent` | #1996 | Backend 803 tests. A larger attempt (#1987) was closed unmerged; Dan approved these seven items |
 | Speech never cancels PI; only a new delegation or the session end does | #1997 | Voice tests offline |
-| The whole spoken request goes to PI: all words of the open turn, 1.5 s of quiet, one stored owner message. `offset_ms` is only logged | #2000, #2001 | Offline tests with event shapes from production logs. Device retest open |
+| The whole spoken request goes to PI: all words of the open turn, 1.5 s of quiet, one stored owner message. `offset_ms` is validated and logged, never used to cut the turn | #2000, #2001 | Offline tests with event shapes from production logs. Device retest open |
 | Failures can be diagnosed and a dead stream is retried once. The weather tool logs its phases and retries one stalled fetch | #1999, #2002, #2003 | Offline tests. After #2003 deployed, Dan reported that the forecast fetch stalls intermittently and the one retry recovered it (production report, not checkable from the repo) |
 | Native harness calls finish on their own: the gateway reads the stream to its end and answers only client-owned calls | #2004 | Merged at 21:47 UTC. Offline tests. Whether the native signals and the client-owned shape hold in a real trace is open |
+| A wake gets the same tool overview as Chat, and parity tests pin that `find_tools` shows a wake what it shows Chat plus the brain-only tools | #2014 | Merged at 23:23 UTC. Offline tests. No wake has run in production, so how a real wake uses the overview is unobserved |
 
 ### Next steps (proposals; each needs Dan's go-ahead)
 
-1. Once #2004 is deployed, Dan retests "use a sub-agent to check my calendar" in Chat. The `pi.harness_item` lines (`trigger: harness_call`) then confirm the four points the #2004 decision says only a real trace can show.
+1. Once #2004 is deployed, Dan retests "use a sub-agent to check my calendar" in Chat. The `pi.harness_item` lines (`trigger: harness_call`) show each call's classification, the rule behind it and its item status. That bears on the first of the four points the #2004 decision says only a real trace can show (a native signal for every native call) and, if an approval request occurs, on the third (its real `status`). The second (a client-owned call accepted while the previous response reads `in_progress`) shows only in the next round: `rounds` in `pi.turn`, or a `pi.stream_failed`. The fourth (whether native children outlive `response.completed`) needs the Foundry trace.
 2. Dan tunes the routing rules (layers by weight) in the Foundry `jarvis-pi` instructions, keeps the `KEEP THIS BLOCK` tool contract, sets the new version Active, and checks it with the read-only `az rest GET` in `docs/agent-context.md`.
 3. Dan retests voice on a new TestFlight build: a request spoken with pauses reaches PI whole, a backchannel does not stop PI, and captions keep Dan-before-Jarvis order.
 4. Open defect, not fixed: the iPhone "Speaking" state sticks (reported by Dan, #1988). A likely cause was found by reading the code: `VoiceAudioEngine.stopPlayback()` skips the finished handler. Unverified on a device.
@@ -44,11 +45,11 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed and not audit
 6. Known trade-off of #1996: the first Azure question after a quiet period needs a second search while the container wakes.
 7. Read the next `weather.phase` lines if a weather call fails again.
 8. Physical acceptance of Memory, GPT-Live, reply pushes, reminders and proactive state (#1983–#1986, #1991, #1995) stays with Dan. The phase 8 deletion gate in `docs/pi/cutover.md` stays closed; no deletion is authorised.
-9. P1, proactive intelligence, ranks after P0. This summary plans no P1 steps. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence").
+9. P1, proactive intelligence, ranks after P0 and is tracked in [#2011](https://github.com/DanAakesen/jarvis/issues/2011); the P0 acceptance list (daily-core requests in Chat and Voice) is [#2012](https://github.com/DanAakesen/jarvis/issues/2012). This summary does not repeat either. The situational loop and its sources already exist and Background PI is off by default (`PRODUCT.md`, "PI situational intelligence"). [#2011](https://github.com/DanAakesen/jarvis/issues/2011) reports that no wake ran in 30 days of logs; I did not re-check that.
 
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
-**Status: implemented and offline-tested; the PR's exact-head CI is the gate. No wake has run in production, so how a real wake uses the overview is unobserved.**
+**Status: merged as #2014 on 21 November (23:23 UTC); implemented and offline-tested. No wake has run in production, so how a real wake uses the overview is unobserved.**
 
 | Step | State |
 | --- | --- |
@@ -142,7 +143,7 @@ No live model/provider smoke, deployment or spending is authorized. Physical Cha
 | Define and provision one immutable `jarvis-pi-live` voice agent on `gpt-live-1`, PCM 24 kHz, client delegation, through `provision_pi_agent.py` (since 2026-11-20 seeded once; instructions and voice are Foundry-owned) | Done in source |
 | Replace the direct model WebSocket with the exact Foundry agent Live route and backend-only Entra/preview headers | Done in source |
 | Preserve native full duplex and the existing `/voice` client route; normalise provider events to `jarvis.voice.*` and use native mute/unmute | Done in source |
-| Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, wait for quiet (0.6 s at the cutover; since #2001 the whole open turn and 1.5 s, max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source; changed by #2001 |
+| Keep native transcript fragments in one event/timeline-correlated owner turn through pauses; after delegation, wait for quiet (0.6 s at the cutover; since #2001 the whole open turn and 1.5 s, max three seconds), persist Dan first, then run PI and return delegated commentary | Done in source; changed by #2001: no timeline or `offset_ms` association any more, every input delta joins the open turn |
 | Remove the external STT role/selector and old reply/barge-in controls; make the voice catalogue and role only `gpt-live-1` | Done in source |
 | In Deploy, wait for the active voice agent and configured ready backend, then idempotently delete both replaced deployments through ARM | Done in source |
 | Update product/design/architecture/context/decision references and keep older direct-path records explicitly historical | Done |
@@ -164,7 +165,9 @@ confusion, make assistant transcript updates role/session scoped, cut to
 `jarvis.voice.v2`, retain transcript fragments through pauses by event/timeline
 correlation, remove infra-time voice targeting, stop raw-silence inactivity
 refresh, and make visual rejection stop/disable capture visibly. These fixes are
-committed separately and do not amend `2db2a87`.
+committed separately and do not amend `2db2a87`. Superseded in part by #2001: the
+event/timeline association of words with the owner turn is gone: `offset_ms` is
+validated and logged but never cuts a turn, and every input delta joins the open turn.
 
 Final protocol hardening accepts an omitted optional format echo but rejects an
 explicit 24 kHz conflict, caps every commentary append at 256 UTF-8 bytes, and
@@ -497,7 +500,7 @@ Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so
 | Deploy measurement of the PI leg of a voice turn (first text, total, DKK, speakable-reply check, voice tool turn) | **Built in the `measure_pi` smoke; not yet run.** The numbers go into the pull request when the dispatcher runs Deploy with `measure_pi` |
 | Real audio latency (speech stop to first audio) and per-turn cost with Voice Live | **Open: the owner's phone test.** The relay logs `voice.pi_turn` (transcript to first PI text and to the end of the PI turn) and `voice.turn_timing` (first audio) |
 
-**How a spoken turn runs.** The relay no longer lets the Voice Live model pick among about 150 tools. On the PI engine Voice Live has no tools and a short "voice only" prompt. When the final transcript of an utterance arrives, the relay stores it as Dan's message (as before), starts a PI turn with the voice channel note and the stored message id (so tools still prove the write against Dan's own words), speaks PI's own sentence before a tool call as soon as it exists (the natural acknowledgement; PI writes it), and speaks the answer with `response.create` (tools off) when the turn ends. A newer utterance cancels the turn in flight (the newest wins; the cancel happens when Dan starts speaking, so a stale answer never lands on top of him); a barge-in is Voice Live's own and stops speech as before; the session ending stops the turn. Errors are spoken in PI's honest words ("No other engine was used"). The PI conversation is warmed while Voice Live connects, so the accepted first-turn wait (3.3 s cold, 1.1 to 1.3 s warm, measured 16 November) overlaps the connection.
+**How a spoken turn runs.** The relay no longer lets the Voice Live model pick among about 150 tools. On the PI engine Voice Live has no tools and a short "voice only" prompt. When the final transcript of an utterance arrives, the relay stores it as Dan's message (as before), starts a PI turn with the voice channel note and the stored message id (so tools still prove the write against Dan's own words), speaks PI's own sentence before a tool call as soon as it exists (the natural acknowledgement; PI writes it), and speaks the answer with `response.create` (tools off) when the turn ends. A newer utterance cancels the turn in flight (the newest wins; the cancel happens when Dan starts speaking, so a stale answer never lands on top of him); a barge-in is Voice Live's own and stops speech as before; the session ending stops the turn. Errors are spoken in PI's honest words ("No other engine was used"). The PI conversation is warmed while Voice Live connects, so the accepted first-turn wait (3.3 s cold, 1.1 to 1.3 s warm, measured 16 November) overlaps the connection. **Superseded:** GPT-Live replaced Voice Live (#1984). Since #1997 speech never cancels PI; only a new delegation, the session end or the 90 s voice turn deadline stops it (Jarvis says so at the deadline). Since #2001 the owner turn is stored after 1.5 s of quiet.
 
 **Known limits, stated in the pull request.** With PI, voice has no camera or screen sharing yet (the relay answers `not_supported`) and no typed requests through the voice socket. If PI is not set up on the backend or is over its monthly cap, the voice session ends or says so; it never switches engine. The old harness remains for isolated runtime testing and the separately gated phase-8 retirement; it is not a normal-route fallback.
 
@@ -532,7 +535,7 @@ Delivered as three stacked pull requests in the order of the issue. Owner rules 
 | Part | Pull request | State |
 | --- | --- | --- |
 | 1 Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scales to zero), no read-only restriction, Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
-| 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy |
+| 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy (since #1966 the switch is Settings > Proactive > "Background PI") |
 | 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in `docs/harness-trial/spike-results.md`); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
 
 **Brain, what was built and observed.** The brain reads the event queue, wakes the PI agent in a scratch conversation under exact guards (owner switch, pause, 10 minutes between wakes, 12 wakes a day, the 100 DKK proactive budget stop with notices at 80 percent and at the stop), lets it read, tell Dan (a chat message that always pushes; at most 8 a day, no repeats), keep notes under `PI/` and add inbox trail lines, and writes every decision to `PI/Log/<day>.md`. Replay of 38 real Actions results (15 to 16 November) through the real producers, queue, loop, tools and log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages (the 3 failed Deploys of main); backend suite and the SQL contract on SQL Server 2022 pass. **Not proven:** the model's judgement (the owner judges it behind the test switch), real cost per wake, the iOS rows (Apple CI only), and the push on a real device. Until the owner turns the switch on, nothing is claimed and nothing is spent.

@@ -109,7 +109,7 @@ only, never words).
 Transcript pauses do not split an owner turn. Every input delta joins the open
 turn; at client delegation the relay waits for 1.5 seconds of quiet since the
 last delta (`VOICE_TURN_QUIET_MS`, at most three seconds) and stores the whole
-turn once (`offset_ms` is only logged). GPT-Live has no
+turn once (`offset_ms` is logged, never used to cut a turn). GPT-Live has no
 transcript-done or output-audio-done event, so later output is split/persisted
 on 0.6-second quiet or a three-second persistence bound. If no provider audio
 was exercised, none of this is provider or acoustic acceptance.

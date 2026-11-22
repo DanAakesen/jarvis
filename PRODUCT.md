@@ -1,15 +1,15 @@
 ## North star — what PI is for (Dan, 21 November 2026)
 
-Dan's goal for PI, from his message of 21 November 2026 relayed by the Dispatcher session. Quotation marks mark his exact words. "As relayed" marks the Dispatcher's summary of his rules. "Inference" marks my reading, not his words.
+Dan's goal for PI, recorded as GitHub issues [#2012](https://github.com/DanAakesen/jarvis/issues/2012) (P0, daily-core requests in Chat and Voice) and [#2011](https://github.com/DanAakesen/jarvis/issues/2011) (P1, proactive companion) and relayed to this session by the Dispatcher on 21 November 2026. Text inside quotation marks is his exact words. A paraphrase, an "as relayed" note and an "Inference" are outside quotation marks and labelled.
 
 > "the goal with PI was to get a dots / duet / muse / grok bot experience, that is always on, and know me and can be proactive, and know me super well when i manually reach out."
 
-- **Daily core, in his order:** "the jarvis project, notes, task, workouts. And when i have periods where i log food, then also nutrition, like how many calories i have logged i have left, how many proteins i need the rest of the day." And: "And later when we add banking there will be more scenarios."
-- **Proactive example:** "heavy snow when my agenda says 2 hour transport", which he calls "something i will not ask often, but nice to get proactive if relevant for driving or travel".
+- **Daily core, in his order (paraphrase, not his words):** 1. the Jarvis project; 2. notes; 3. tasks; 4. workouts; 5. nutrition, in the periods when he logs food (calories logged and left today, protein still needed); 6. banking, later, which will add scenarios. As relayed: ask him again before anything that moves money. His own words, from the north-star note relayed to me: "That is stuff i really need jarvis for when it works as expected."
+- **Proactive example:** "Weather is not something i will ask often, but something that is nice to get proactive if its relevant for driving or travel. Like heavy snow when my agenda says 2 hour transport."
 - **Priorities (as relayed):** P0 is that every tool call, harness built-ins and Jarvis tools alike, behaves the same in Chat and in Voice, with no errors. P1 is proactive intelligence.
-- **Approvals (as relayed):** the only approvals anywhere are for delete actions.
+- **Approvals (as relayed):** no approvals, confirmations or gates except DELETE actions.
 
-Inference: P0 and P1 are priority ranks, not the plan phases P0–P15 in `PLAN.md`. The approvals rule continues the direction of "Owner action policy — current, 9 November 2026" below (no second approval for the owner's clear request) and keeps one exception, delete actions, which that policy does not name. Older approval sections in this file describe earlier behaviour, and I did not audit the code for approvals that remain. For the snow example the building blocks exist (a weather source, a calendar-derived travel source and a coarse Location source, described below); no end-to-end test of it is recorded. Current work follows these priorities: `PLAN.md`, "Week summary 2026-11-21".
+Inference: P0 and P1 are priority ranks, not the plan phases P0–P15 in `PLAN.md`. The approvals rule continues the direction of "Owner action policy — current, 9 November 2026" below (no second approval for the owner's clear request) and keeps one exception, delete actions, which that policy does not name. Older approval sections in this file describe earlier behaviour, and I did not audit the code for approvals that remain. Open question: how the relayed "ask him again before anything that moves money" fits that rule is not stated in what I received; banking is later work. For the snow example the building blocks exist (a weather source, a calendar-derived travel source and a coarse Location source, described below); no end-to-end test of it is recorded. Current work follows these priorities: `PLAN.md`, "Week summary 2026-11-21".
 
 ## Personal Memory stays separate from Vault Knowledge — 20 November 2026 (#1968)
 
@@ -1242,7 +1242,7 @@ guard or other role change is part of this work.
 Voice sessions use `jarvis-pi-live` as the native speech layer. GPT-Live never
 receives Jarvis's tool catalogue. The relay keeps every word of Dan's open turn
 together through pauses. The delegation's `offset_ms` is not where the utterance
-ends, so it is only logged and never cuts the request. When the delegation
+ends, so it is logged and never cuts the request. When the delegation
 arrives, the relay waits until the turn has been quiet for 1.5 seconds (at most
 three), stores Dan's whole message once, and only then starts the same
 PI gateway and `dbo.pi_conversation` used by Chat. PI's first short commentary and
