@@ -1,6 +1,6 @@
 # Product archive: October–November 2026
 
-Historical snapshot from `PRODUCT.md` at `0ff1d1650e99`, through the 22 November handoff. Use the current [document](../../PRODUCT.md) for active requirements and decisions.
+Historical snapshot from `PRODUCT.md` at `ee34f2c3e0be`, through the 22 November handoff. Use the current [document](../../PRODUCT.md) for active requirements and decisions.
 
 Original wording is retained except for public-repo redactions and link/anchor maintenance. Commands and statuses below are historical, not authorization to run anything.
 
@@ -147,7 +147,10 @@ field and a separate + (New note, New task, New folder). Notes open in a reader 
 notes with explicit Save and Cancel, never loses a draft and never overwrites a newer version without a confirmed choice. Tasks
 show one orange completion circle, the source note, date, priority and scope; they can be completed, edited, rescheduled, pinned
 and deleted (only that task line). Short left swipe pins, long left swipe deletes, and every swipe has a menu or accessibility alternative.
-Rename, Move to folder, bulk selection and Undo are not offered because the vault cannot do them safely yet.
+A note's title follows its leading heading or readable filename in Pinned, the list, the reader and generated links.
+The reader shows the headline once. A pin whose note cannot be found stays removable by path.
+Editing the title does not rename or move its file. A saved note can be listed even if it has no body. File rename,
+Move to folder, bulk selection and Undo are not offered because the vault cannot do them safely yet.
 
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858)
 
@@ -220,7 +223,7 @@ resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
 Group provisioning and bounded qualification are implemented; actual provisioning,
 Factory routing, live acceptance and VM retirement remain pending.
-See [qualification and evidence](../factory-concurrency-correction.md).
+See [qualification and evidence](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0beaf0824f52ce3aab6e47022142515/docs/factory-concurrency-correction.md).
 
 ## Direct Home send recovery (7 November 2026)
 
@@ -333,7 +336,7 @@ settings, bindings and application policies are verified. The owner also approve
 retaining the Python bridge temporarily for voice fallback, using existing Jarvis
 tools only initially, and excluding test conversations from normal history. Cutover,
 rollback and retirement follow proven parity and required authorization. See
-[migration scope and open decisions](../main-chat-harness-migration.md).
+[migration scope and open decisions](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0beaf0824f52ce3aab6e47022142515/docs/main-chat-harness-migration.md).
 
 Jarvis is the owner's personal side project, not a multi-user product. The owner
 does not require extra pre-live exclusion of test transcripts from search, recent
@@ -1859,7 +1862,7 @@ The separate daily web-research count includes successful, refused, and failed c
 - **Ultrafast browser agent:** `browser_do` uses one Jev decision per observed browser step to choose a fixed operation and indexed target. Foundry writes text only for TYPE actions; only send, delete, pay/purchase, post, push, or overwrite actions retain P7-03 confirmation, and Jarvis stops rather than entering passwords, card numbers, or one-time codes. The bounded run reports its step and result in the workspace and independently checks completion.
 - **Act on the shared tab (P7-19):** When Dan asks to act on the page he is sharing, capture that display's window label alongside its transient vision description. Match both only against the live bridge tab list; ask Dan to choose on ambiguity and offer to send steps if Chrome is offline. Run the bounded Jev agent on the matched tab, announce brief voice progress, show step/results in the workspace, and honor “stop.” Never use model output as selectors, coordinates or scripts; P7-18 still rechecks each observed element and confirms only irreversible send/delete/pay/purchase/post/push/overwrite actions.
 - **Security:** agents run with full permissions inside their sandbox and can read its tokens, so each token is scoped to the task. Jarvis data and other areas are never reachable from a sandbox.
-- **Cost:** see [Cost](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e99/docs/architecture.md#cost) in the architecture map.
+- **Cost:** see [Cost](https://github.com/DanAakesen/jarvis/blob/0ff1d1650e992873486ffaa20109f5a18749e654/docs/architecture.md#cost) in the architecture map.
 - **Existing systems:** Banking is an existing Azure app using the Agents API (integration code not inspected yet). Daily is an existing ChatGPT site and remains running/canonical with ordinary authorized writes before evidence-gated cutover; its approved functions and history migrate through P12. Migration tooling must not rewrite its application/source code/schema or records.
 
 ## Success criteria
@@ -2998,7 +3001,7 @@ presenting queued work as an executing agent.
 The provisioned 128 GiB VM handles only one active coding task. It proves storage
 and idle deallocation, not the Factory concurrency requirement. The managed worker
 correction and acceptance criteria are in
-[Factory concurrency correction](../factory-concurrency-correction.md).
+[Factory concurrency correction](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0beaf0824f52ce3aab6e47022142515/docs/factory-concurrency-correction.md).
 
 ## Long-running conversation progress (8 November 2026)
 

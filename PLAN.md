@@ -15,15 +15,15 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | Delivery | State |
 | --- | --- |
 | TestFlight **122** | Latest shipped build. The [upload](https://github.com/DanAakesen/jarvis/actions/runs/45043429429) succeeded from `cd066648` and contains #2027, #2028, #2029 and #2030. |
-| **Notes [#2031](https://github.com/DanAakesen/jarvis/pull/2031)** | In review. Fixes missing new notes, wrong list/pin titles and duplicate headlines. Includes inventory migration `0103`. The PR reports offline regressions covered; exact-head macOS qualification and device acceptance are separate. |
-| TestFlight **123** | Next expected build, not shipped. New iOS changes are the Notes fixes in #2031 and live Voice follow, state labels and responsiveness in #2034. Wait for the Notes merge and its backend Deploy. |
-| Backend | #2032 (Terra 600K capacity) and #2033 (tool access, rate-limit recovery and iPhone Gym reads) are already deployed and apply to build 122. [Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45064871117) succeeded at `0ff1d1650` (#2034); that receipt does not prove live provider behavior. |
+| **Notes [#2031](https://github.com/DanAakesen/jarvis/pull/2031)** | Merged at `ee34f2c3e`. Fixes missing new notes, wrong list/pin titles and duplicate headlines. Includes inventory migration `0103`. Device acceptance is pending. |
+| TestFlight **123** | Next expected build, not shipped. New iOS changes are Notes #2031 and live Voice follow, state labels and responsiveness in #2034. Both merged; wait for the Notes backend Deploy before uploading. |
+| Backend | #2032 (Terra 600K capacity) and #2033 (tool access, rate-limit recovery and iPhone Gym reads) reached build 122 via [Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45064871117). The [Notes Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) was in progress at this check. Pipeline receipts do not prove live provider behavior. |
 | Background PI | Off by default in code; off per the 22 November handoff, not independently read back. Dan controls it in **Settings → Proactive**. The existing 07:00/18:00 engine stays until decision A. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. **Land Notes, then ship.** The coordinator is the dispatcher session that reviews and merges PRs. It checks that the exact head is current with `main`, required CI is green (including macOS), no unresolved threads or High findings remain, and the merge tree equals the qualified tree. Follow [Merge and release procedure](docs/agent-context.md#merge-and-release-procedure) and [TestFlight build](docs/agent-context.md#testflight-build). No live probes as part of this handoff.
+1. **Wait for Notes Deploy, then ship.** The coordinator is the dispatcher session that reviews and merges PRs. It checks that the exact head is current with `main`, required CI is green (including macOS for iOS), no unresolved threads or High findings remain, and the merge tree equals the qualified tree. Follow [Merge and release procedure](docs/agent-context.md#merge-and-release-procedure) and [TestFlight build](docs/agent-context.md#testflight-build). No live probes as part of this handoff.
 2. **After build 123 lands**, give Dan the build number and test in daily-core order. Ask the same things in Chat and Voice: project status and a GitHub issue; find, read and save a note (including a title-only note; check first-page visibility, pin title and a single reader headline); complete a task and verify its receipt; find a lift saved from iPhone Gym; read the nutrition totals on a logged day. Ask for weather via the existing conversation. Check iPhone typing, live Voice state/auto-scroll, then Watch dictation/voice and the single Proactive switch. Do not request a retest of a fix still in flight.
 3. **P1 after P0.** Dan decides when to enable Background PI. Verify the intended GitHub App event subscriptions (including `Release`) and observe one real wake with its signal, decision, and exact-message delivery before considering legacy deletion. The queue has GitHub, failed-reminder and calendar-clash signals. The heavy-snow/travel example is an acceptance goal, not a shipped end-to-end scenario.
 
@@ -42,7 +42,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ## Last 8 days (15–22 November 2026)
 
-The 112 merged PR numbers below are from `main`'s first-parent history. A merge records code or documentation delivery, not acceptance on a device or with a live model.
+The 113 merged PR numbers below are from `main`'s first-parent history. A merge records code or documentation delivery, not acceptance on a device or with a live model.
 
 | Theme | What changed | Merged PRs |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ The 112 merged PR numbers below are from `main`'s first-parent history. A merge 
 | **P1: proactive reach-outs** | Event queue, brain and standing watches; durable situational state and follow-ups; wake/Chat tool parity. Add GitHub, failed reminder and calendar-clash signals, tick/skip evidence and named failures. Correct cache accounting, clean up scratch wakes, link reply previews and carry feedback into the next due wake. Legacy slots remain. | #1862, #1904, #1906, #1907, #1964, #1986, #2014, #2018, #2019, #2025 |
 | **Vault, Loose Ends and Memory** | Build the Vault-backed capture/index/tools/nudge loop and cut over to one vault layout. Restore authoritative mirror evidence. Keep SQL Personal Memory separate from Vault Knowledge; the iPhone Gym store is visible to the assistant after #2033. | #1848, #1860, #1863, #1864, #1865, #1866, #1867, #1868, #1896, #1912, #1963, #1965, #1983 |
 | **iPhone: talk, type and follow** | Native GPT-Live, truthful states/captions, a complete spoken request and barge-in without cancelling PI. Reliable playback-stop receipts, responsive drafts and voice-following Chat with state labels. Exact reply pushes, useful previews and delivery evidence for reminders. | #1984, #1985, #1991, #1993, #1995, #1997, #2000, #2001, #2013, #2027, #2034 |
-| **Notes, app UI and design** | Notes/Tasks redesign and folder ordering; native title edit, one Proactive settings panel and Voice gesture changes. Conversational blocks, Voice previews/carousel, tool tree, graph, orb and design handovers. Notes inventory and title consistency are **in flight**, not part of this merged row. | #1853, #1893, #1899, #1902, #1921, #1926, #1927, #1930, #1931, #1932, #1933, #1934, #1937, #1947, #1948, #1949, #1953, #1960, #2028 |
+| **Notes, app UI and design** | Notes/Tasks redesign and folder ordering; native title edit, one Proactive settings panel and Voice gestures. Conversational blocks, Voice previews/carousel, tool tree, graph, orb and design handovers. Notes inventory and title consistency merged in #2031. | #1853, #1893, #1899, #1902, #1921, #1926, #1927, #1930, #1931, #1932, #1933, #1934, #1937, #1947, #1948, #1949, #1953, #1960, #2028, #2031 |
 | **Watch** | First-press and dictation work, complication freshness, capture deadlines and formats, healthy route recovery, focused Voice and adaptive Chat composer. | #1857, #1861, #1871, #1938, #1946, #1950, #1951, #1952, #1954, #1959, #2029 |
 | **Operations and docs** | Terra capacity set to 600K tokens/min in infrastructure and reported applied in #2032. Updated deployment/usage controls, TestFlight crash feedback and the PI docs. | #1889, #1900, #1929, #2015, #2032 |
 
@@ -61,10 +61,10 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 | Issue | State at this handoff |
 | --- | --- |
-| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Core fixes merged; Notes #2031 still in flight. Verify daily-core behavior after the release. |
+| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Core fixes merged. Verify daily-core behavior after the release. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. Dan's first enabled wake and delivery acceptance open. |
-| [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Editing merged in #2028. First-page visibility and canonical title consistency are in #2031. |
+| [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Editing merged in #2028; first-page visibility and consistent titles merged in #2031. Device acceptance open. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010), [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — truthful Chat status and typing | #2017, #2027 and #2034 merged. Device acceptance open. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | #2028 and #2034 merged. Device acceptance open. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | #2029 merged. Verify first dictation, recovery and stable Voice on Watch. |

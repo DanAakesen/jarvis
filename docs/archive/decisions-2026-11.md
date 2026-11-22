@@ -1,6 +1,6 @@
 # Decision archive: November 2026
 
-Historical snapshot from `docs/decisions.md` at `0ff1d1650e99`, through the 22 November handoff. See the October archive for the original mixed-month decision table. Use the current [document](../decisions.md) for active requirements and decisions.
+Historical snapshot from `docs/decisions.md` at `ee34f2c3e0be`, through the 22 November handoff. See the October archive for the original mixed-month decision table. Use the current [document](../decisions.md) for active requirements and decisions.
 
 Original wording is retained except for public-repo redactions and link/anchor maintenance. Commands and statuses below are historical, not authorization to run anything.
 
@@ -500,6 +500,32 @@ The managed instructions read the tool reference from the first line. The normal
   not to a whole-screen drag checked against saved rectangles.
 - **Verification:** native compilation belongs to Apple CI; Dan owns
   acceptance on an iPhone. No live model, provider or paid check is needed.
+
+### TestFlight 122 follow-up: Notes labels come from the note (Refs #2005, #2012)
+
+- Use the same leading H1 (after frontmatter) or readable filename in the
+  reader, list, Pinned and generated connection labels. The path and SHA-checked
+  editing stay unchanged; explicit wiki aliases and authored Markdown link labels
+  stay as written. Remove the phone's saved-title override.
+- Keep note inventory and title separate from search chunks. Migration `0103`
+  seeds existing paths and dates. After normal sync makes the index ready, read
+  up to 32 matching legacy blobs, newest first, within 20 seconds. Reuse a
+  successful read for embedding repair only if embeddings are also missing
+  and the existing budget allows it. Failed reads leave filename titles and
+  existing search chunks available while the batch continues. Do not invent
+  a search chunk for a title-only note. Coalesce pushes during sync into one
+  follow-up tree read so changes are not lost during the batch.
+- Keep the last Notes snapshot visible while rechecking on open. Read pins by
+  exact path, not through the capped graph. Resolve missing titles for those
+  paths within 20 seconds without embedding work, so a legacy pin need not wait
+  for the background batch. Skip unusable paths and keep unresolved pins
+  removable. Load newest root and folder entries without reusing an HTTP
+  response or validator; other sort choices still reorder the loaded rows.
+  `Personal` still lists only its direct children.
+- Treat consecutive leading H1s with the same title as duplicate headlines.
+  Drop them from newly created `vault_write` Markdown and from the reader
+  presentation of existing notes. Do not rewrite existing files or remove later
+  sections, different headings, or ordinary body text.
 
 ## 18 November 2026 — iPhone Voice keeps visuals for the current call (#1958, P15-210)
 
@@ -1497,7 +1523,7 @@ This runtime code is not yet deployed or live-tested.
 The separately prepared retirement change removes the VM template, quota workflow,
 launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
 It must not be merged until managed cutover and dedicated-resource cleanup pass.
-See [qualification and evidence](../factory-concurrency-correction.md).
+See [qualification and evidence](https://github.com/DanAakesen/jarvis/blob/ee34f2c3e0beaf0824f52ce3aab6e47022142515/docs/factory-concurrency-correction.md).
 
 ## 8 November 2026 — Retain workout measurements when combining Home sources
 

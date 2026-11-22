@@ -19,6 +19,11 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions of the last 14 days**, newest first, using the next unused number in its own series; move entries older than 14 days to the monthly archive and add a dated index link, preserving their IDs and anchors. Keep this page under 20 KB.
 
+### 22 November 2026 — Give Notes one title and a file inventory ([#2031](https://github.com/DanAakesen/jarvis/pull/2031))
+
+- **Decision:** Keep file inventory separate from search chunks (`0103`) so title-only notes can list. Use the leading H1 or readable filename and read pins by path. Refresh newest-first on open and show one headline without rewriting saved Markdown.
+- **Evidence:** Offline fixtures cover saves, refreshed lists/pins and partial backfill. Merged at `ee34f2c3e`; deployment and device acceptance are separate.
+
 ### 22 November 2026 — Keep the established PI tool names and never replay an uncertain effect ([#2033](https://github.com/DanAakesen/jarvis/pull/2033), [#2032](https://github.com/DanAakesen/jarvis/pull/2032), [#2030](https://github.com/DanAakesen/jarvis/pull/2030))
 
 - **Decision:** Use `find_tools`/`call_tool` for weather, calendar and reminders. Drop #2030's three direct names; keep paging, the 24,000-character read cap, receipts, effect metadata and Danish aliases. Keep `list_capabilities` whole (not paged).
@@ -29,7 +34,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 ### 22 November 2026 — Show iPhone Voice and Chat state from what actually happened ([#2034](https://github.com/DanAakesen/jarvis/pull/2034), [#2027](https://github.com/DanAakesen/jarvis/pull/2027), [#2028](https://github.com/DanAakesen/jarvis/pull/2028))
 
 - **Decision:** Keep draft edits local, cancel only obsolete follow work, follow the live Voice exchange unless Dan scrolls back, and show the active Voice state in Chat. Thinking persists during tool work; audio completion does not wait for transcript writes. One Proactive settings panel, editable Notes titles, and Voice caption scroll that does not close Voice.
-- **Why/evidence:** Typing and status fixes #2027 and Notes, Proactive and gesture fixes #2028 shipped in 122. Voice follow and state fixes #2034 are planned for 123 with Notes #2031. The [iOS follow modifier](../apps/ios/Jarvis/JarvisChatFollowLatest.swift) and [relay fixtures](../apps/backend/src/voice/relay-events.test.ts) cover state transitions. #2034 reports 37 offline parity scenarios; scrolling, labels, interruptions and gestures need device acceptance.
+- **Why/evidence:** #2027 and #2028 shipped in 122. #2034 is in the next build with Notes #2031. The [iOS follow modifier](../apps/ios/Jarvis/JarvisChatFollowLatest.swift) and [relay fixtures](../apps/backend/src/voice/relay-events.test.ts) cover transitions. #2034 reports 37 offline parity scenarios. Scrolling, labels, interruptions and gestures need device acceptance.
 
 ### 22 November 2026 — Recover Watch capture and show an honest reconnect ([#2029](https://github.com/DanAakesen/jarvis/pull/2029), [#2013](https://github.com/DanAakesen/jarvis/pull/2013))
 
@@ -38,8 +43,8 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 
 ### 22 November 2026 — Keep write effects and receipts explicit ([#2023](https://github.com/DanAakesen/jarvis/pull/2023), [#2016](https://github.com/DanAakesen/jarvis/pull/2016))
 
-- **Decision:** Log each finished tool-door call without arguments, results or call ID values. A replay uses the same `_meta` call ID, tool and arguments; action successes and `outcomeUnknown` results keep the first receipt. A deliberate repeat under a different request still runs. Never dedupe from a JSON-RPC ID or argument equality alone.
-- **Why/evidence:** [MCP replay fixtures](../apps/backend/src/pi/mcp.test.ts) cover repeated/uncertain writes. The [effect map](../apps/backend/src/core/tool-effects.ts) drives classification; the GitHub comment receipt stays outside the 4,000-character text, and Danish aliases get daily-core results on the first search. No new approvals. Whether real Foundry calls carry a usable `_meta` ID is open.
+- **Decision:** Log finished calls without arguments, results or IDs. Replay requires the same `_meta` call ID, tool and arguments. Keep the first receipt for successes or `outcomeUnknown`; a distinct request still runs. A JSON-RPC ID or equal arguments alone is not enough.
+- **Evidence:** [MCP fixtures](../apps/backend/src/pi/mcp.test.ts) cover repeated and uncertain writes. The [effect map](../apps/backend/src/core/tool-effects.ts) classifies calls. Keep GitHub comment receipts outside the 4,000-character text and Danish aliases searchable on the first try. Live `_meta` IDs are unverified; no new approvals.
 
 ### 22 November 2026 — Share turn ordering, cancellation and failure wording ([#2024](https://github.com/DanAakesen/jarvis/pull/2024), [#2017](https://github.com/DanAakesen/jarvis/pull/2017))
 
@@ -48,8 +53,8 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 
 ### 22 November 2026 — Prove tool reach and stream contracts offline ([#2022](https://github.com/DanAakesen/jarvis/pull/2022), [#2021](https://github.com/DanAakesen/jarvis/pull/2021), [#2020](https://github.com/DanAakesen/jarvis/pull/2020), [#2004](https://github.com/DanAakesen/jarvis/pull/2004))
 
-- **Decision:** Use the [tool conformance suite](../apps/backend/src/pi/tool-conformance.test.ts) to exercise the registered Jarvis surface in its intended contexts; let [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) flag any undeclared channel difference. #2021 started with 24 scenarios (27 tests), not 27 distinct scenarios. Preserve alternative fixture paths only where a channel's real interface differs.
-- **Why/evidence:** Native harness work needs the full stream, not a second client response. Answer only positively completed client-owned calls; recover terminal-only text and classify later output correctly. Gateway fixtures use byte-fragmented streams. Provider emission of those shapes and any non-DELETE gates outside ordinary PI Chat/Voice were not re-audited in this rewrite.
+- **Decision:** Check the registered Jarvis surface with [tool conformance](../apps/backend/src/pi/tool-conformance.test.ts); [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) flags undeclared channel differences. #2021 started with 24 scenarios (27 tests). Separate fixtures only where interfaces differ.
+- **Evidence:** Gateway fixtures fragment streams by byte. Native harness work needs the full stream, not a second response. Answer only completed client-owned calls and recover terminal-only text. Live event shapes and non-DELETE gates outside ordinary PI Chat/Voice were not re-audited.
 
 ### 22 November 2026 — Make brain work and follow-ups observable ([#2025](https://github.com/DanAakesen/jarvis/pull/2025), [#2019](https://github.com/DanAakesen/jarvis/pull/2019), [#2018](https://github.com/DanAakesen/jarvis/pull/2018), [#2014](https://github.com/DanAakesen/jarvis/pull/2014))
 
@@ -94,8 +99,7 @@ Add each confirmed decision (`#N`) or learning (`LN`) at the top of **Decisions 
 
 ### 15–17 November 2026 — Use the Vault for Loose Ends and keep the harness built-ins
 
-- **Decision:** Use one Vault layout for durable Loose Ends notes and a rebuildable index; capture and nudge are not separate sources of truth ([#1848](https://github.com/DanAakesen/jarvis/pull/1848), [#1896](https://github.com/DanAakesen/jarvis/pull/1896)). Keep the managed harness built-ins for their capability, with GitHub and Azure routed through Jarvis MCP ([#1917](https://github.com/DanAakesen/jarvis/pull/1917), [#1915](https://github.com/DanAakesen/jarvis/pull/1915), [#1918](https://github.com/DanAakesen/jarvis/pull/1918)).
-- **Why/evidence:** The merged rollout and cutover docs distinguish the source Vault records, rebuilt indexes, and harness work. Retiring or adding a tool still needs its own evidence.
+- **Decision:** Keep durable Loose Ends notes in one Vault layout; capture, nudge and the rebuildable index are not new sources ([#1848](https://github.com/DanAakesen/jarvis/pull/1848), [#1896](https://github.com/DanAakesen/jarvis/pull/1896)). Keep harness built-ins; route GitHub and Azure through Jarvis MCP ([#1917](https://github.com/DanAakesen/jarvis/pull/1917), [#1915](https://github.com/DanAakesen/jarvis/pull/1915), [#1918](https://github.com/DanAakesen/jarvis/pull/1918)). A tool change needs its own evidence.
 
 ### 9–14 November 2026 — Keep earlier delivery decisions as history
 

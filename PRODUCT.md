@@ -42,7 +42,7 @@ Show actual issues, PRs, worker state and releases, and surface what needs Dan's
 
 ### Notes
 
-The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. An explicitly saved note should be visible on the relevant first page, including notes with only a title. The editor, list, graph, pins and reader should agree on the title, with the readable filename used when Markdown has no title. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Title editing is merged; [#2031](https://github.com/DanAakesen/jarvis/pull/2031) tracks the pending inventory/title fixes.
+The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not move or rename the file. A missing note can still be unpinned by path. The inventory and title fixes in [#2031](https://github.com/DanAakesen/jarvis/pull/2031) merged; device acceptance is pending.
 
 ### Tasks
 

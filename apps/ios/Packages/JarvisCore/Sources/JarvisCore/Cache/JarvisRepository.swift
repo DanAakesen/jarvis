@@ -11,7 +11,8 @@ public enum JarvisRepositoryKind: String, CaseIterable, Sendable {
     public var freshness: Duration {
         switch self {
         case .calendar: .seconds(120)
-        case .notes, .tasks: .seconds(300)
+        case .notes: .zero // Chat, Voice and Obsidian can write outside the Notes screen.
+        case .tasks: .seconds(300)
         case .factory: .seconds(60)
         case .usage: .seconds(120)
         case .status: .seconds(60)

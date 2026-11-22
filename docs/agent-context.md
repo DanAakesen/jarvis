@@ -381,6 +381,25 @@ events
 - On a Mac simulator, `--ui-test-navigation --screenshot-screen=notes` provides a headingless root note (**Welcome**) and `--screenshot-settings-fixture` provides in-memory Settings. Use the Voice fixture flags below for the compact and expanded carousel. Static captures do not verify gestures or VoiceOver.
 - This PR uses offline and fixture checks only: no `measure_pi`, Foundry probes or live model smoke. The single Proactive switch is in iPhone Settings; do not add one back to the Proactive editor or change the owner `/pi/brain` contract.
 
+### Notes follow-up for TestFlight 122 (Refs #2005, #2012)
+
+- `swift test --filter 'JarvisNotesRedesignTests|JarvisClientTransportTests'` covers
+  the title rule, repeated headline, generated link labels, exact-path pins and
+  warm root and Personal pages, including unconditional pull-to-refresh.
+  SwiftUI still needs the macOS build and device acceptance.
+- `cd apps/backend && npm exec -- vitest run src/vault src/logging.test.ts src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`
+  exercises the shared Chat/Voice writer, first-request pin titles, sync
+  coalescing and the legacy title deadline. `vault.title_backfill` reports
+  the count of failed attempts in an optional batch without changing index
+  readiness or logging paths or note content. `database-ci.yml` verifies
+  migration `0103`, bodyless-note inventory and guarded backfill writes against
+  loopback SQL without using providers or Dan's vault.
+- Deploy the backend with migration `0103` before delivering the phone build;
+  the phone uses the new owner-only summary route and `sort=updated`.
+  A vault commit and a successful index update are separate outcomes. If
+  a saved note still seems missing, check its exact path, directory, and index
+  status before attributing it to the vault mirror.
+
 ## iPhone Voice carousel — 18 November 2026 (#1958, P15-210)
 
 - Run `swift test --filter 'VoiceVisualHistoryTests|VoiceCaptionTests'` in `apps/ios/Packages/JarvisCore`. The macOS iPhone screenshot step in `watch-build.yml` uses `--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel` with synthetic captions and chart/HTML pages. Add `--screenshot-voice-chart` for the older native chart or `--screenshot-voice-fullscreen` for the full-screen HTML fixture. Static captures do not test swipes, arrival during a call, or motion.
@@ -7005,6 +7024,8 @@ chat/realtime model image delivery has been verified.
 
 ## Release procedure
 
+<a name="merge-and-release-procedure"></a> Start with the [exact-head merge checks](#merge).
+
 - Pin external workflow actions to a full commit SHA. Resolve `refs/tags/<release>` through GitHub's Git refs API; if it returns a tag object, dereference that object through the Git tags API until the target is a commit. Use the commit SHA in `uses:` and keep the release tag as a trailing comment. Dependabot updates GitHub Actions pins weekly.
 - Every change reaches `main` through a qualified PR merged by the integration
   owner (see [Merge](#merge)). Deploy verifies the exact tested tree and applies
@@ -7020,7 +7041,7 @@ chat/realtime model image delivery has been verified.
 
 - English; short bullets, tables, diagrams, and brief supporting text.
 - Keep requirements, proposals, evidence, and open questions distinct.
-- Keep stable decision (#) and learning (L#) numbers; add new ones at the end of [decisions.md](decisions.md).
+- Follow the numbering and rotation rules in [Decisions of the last 14 days](decisions.md#decisions-of-the-last-14-days).
 - When a status, decision, or learning changes, update the matching boxes in [architecture-flows.html](architecture-flows.html) in the same change.
 - Prototype reports keep only run instructions and raw evidence; decisions and learnings belong in [decisions.md](decisions.md).
 
@@ -8270,6 +8291,8 @@ its App Group provisioning also need the owner's portal check before signed
 device testing.
 
 ## iOS Phase 1b: owner-started TestFlight upload
+
+<a name="testflight-build"></a> After a backend merge, the release owner waits for the matching [Deploy](../.github/workflows/deploy.yml), then runs `gh workflow run ios-testflight.yml --ref main -f branch=main`. The Apple build number is the workflow run number.
 
 `.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only
 on manual dispatch. GitHub requires write access to dispatch it. The single
