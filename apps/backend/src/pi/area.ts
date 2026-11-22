@@ -20,6 +20,8 @@ export const MAX_PI_FILE_BYTES = 256 * 1024;
 
 const fileName = /^[^/\\:*?"<>|#%^[\]\p{Cc}\p{Cf}.][^/\\:*?"<>|#%^[\]\p{Cc}\p{Cf}]{0,99}\.md$/u;
 const maxAttempts = 3;
+/** A credential-like word in a note name is refused like one in its text. Say that, not that the folder is wrong. */
+const credentialName = 'Secrets and credentials can never be saved to the vault, and that includes the note name. Nothing was written.';
 
 /** True for a note PI may write: `PI/<Log|Watches|Notes>/<name>.md`, or `PI/Watches/Closed/<name>.md`. */
 export function isPiPath(path: string): boolean {
@@ -32,7 +34,7 @@ export function isPiPath(path: string): boolean {
 }
 
 function assertWritable(path: string, content: string): void {
-  if (!isPiPath(path)) throw new PiAreaError('refused', 'PI may only write notes under PI/Log, PI/Watches and PI/Notes. Nothing was written.');
+  if (!isPiPath(path)) throw new PiAreaError('refused', shouldRedact(path) ? credentialName : 'PI may only write notes under PI/Log, PI/Watches and PI/Notes. Nothing was written.');
   if (Buffer.byteLength(content, 'utf8') > MAX_PI_FILE_BYTES) {
     throw new PiAreaError('too_large', 'That note would be too large. Start a new note instead. Nothing was written.');
   }
@@ -53,7 +55,7 @@ export function createPiArea(options: { readonly vault: PiVault }) {
   const { vault } = options;
 
   async function read(path: string, signal: AbortSignal): Promise<{ content: string; sha: string } | null> {
-    if (!isPiPath(path)) throw new PiAreaError('refused', 'That is not a PI note path.');
+    if (!isPiPath(path)) throw new PiAreaError('refused', shouldRedact(path) ? credentialName : 'That is not a PI note path.');
     try {
       const file = await vault.read(path, signal);
       return file ? { content: file.content, sha: file.sha } : null;

@@ -163,7 +163,7 @@ interface SetTaskModelInput {
 }
 
 function requireStore<T>(store: T | null, name: string): T {
-  if (!store) throw new Error(`${name} unavailable`);
+  if (!store) throw new ToolFailure(`${name} cannot be reached right now, so nothing was done. Try again shortly.`);
   return store;
 }
 
@@ -1045,26 +1045,31 @@ export const factoryTools: readonly JarvisTool[] = [
         : undefined;
       const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
       if (repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
-        const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
-        if (!existing || existing.isPullRequest || existing.state !== 'open') {
-          throw new ToolRefusal('Only an open GitHub issue can be started.');
+        try {
+          const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
+          if (!existing || existing.isPullRequest || existing.state !== 'open') {
+            throw new ToolRefusal('Only an open GitHub issue can be started.');
+          }
+          const ownProject = selectedProject ?? await resolveProject(JARVIS_REPOSITORY, request.server.projectStore ?? null);
+          if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
+            return await executeStartIssue(request, issue, ownProject.id);
+          }
+          const staged = await stageIssueCreation(request.server, {
+            ...(selectedProject ? { project: selectedProject.id } : {}),
+            issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
+          }, message, signal, selectedProject, pi);
+          return await confirmIssueCreation(request, staged.confirmationCode, signal, true);
+        } catch (error) {
+          if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          throw new ToolFailure('I couldn’t start that issue because GitHub or the task store did not answer. Nothing was started; try again shortly.');
         }
-        const ownProject = selectedProject ?? await resolveProject(JARVIS_REPOSITORY, request.server.projectStore ?? null);
-        if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
-          return executeStartIssue(request, issue, ownProject.id);
-        }
-        const staged = await stageIssueCreation(request.server, {
-          ...(selectedProject ? { project: selectedProject.id } : {}),
-          issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
-        }, message, signal, selectedProject, pi);
-        return confirmIssueCreation(request, staged.confirmationCode, signal, true);
       }
       return executeStartIssue(request, issue, project);
     },
   },
   {
     name: 'list_projects',
-    description: 'List active Software Factory projects and their IDs for selecting a project.',
+    description: 'List active Software Factory projects and their IDs for selecting a project. Use when Dan asks which projects exist.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     reflexSafe: true,
     execute: async (_input, request) => {
@@ -1143,7 +1148,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'get_task',
-    description: 'Get a task and bounded event summaries without exposing event payloads.',
+    description: 'Get a task and bounded event summaries without exposing event payloads. Use when Dan asks how a worker or task is doing.',
     execution: { defaultEffect: 'read' },
     inputSchema: {
       type: 'object',
@@ -1169,7 +1174,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'list_releases',
-    description: 'List the recorded releases for an active Software Factory project.',
+    description: 'List the recorded releases for an active Software Factory project. Use when Dan asks which releases a project has shipped.',
     inputSchema: {
       type: 'object',
       properties: { projectId: idSchema },
@@ -1189,7 +1194,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'get_release',
-    description: 'Get a recorded release and its linked workflow and deployment status.',
+    description: 'Get a recorded release and its linked workflow and deployment status. Use when Dan asks about one release or whether it is deployed.',
     inputSchema: {
       type: 'object',
       properties: { releaseId: idSchema },
@@ -1321,7 +1326,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'set_task_model',
-    description: 'Set the coding agent, model, or reasoning for a Ready task; running tasks are not changed.',
+    description: 'Set the coding agent, model, or reasoning for a Ready task; running tasks are not changed. Use when Dan asks to change a task’s model or agent.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1411,7 +1416,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'steer_task',
-    description: 'Send a correction to the current turn of a running task.',
+    description: 'Send a correction to the current turn of a running task. Use when Dan wants to redirect a running worker.',
     inputSchema: {
       type: 'object',
       properties: {

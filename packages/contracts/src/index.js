@@ -1110,7 +1110,7 @@ const workspaceOperationShapes = Object.freeze({
   unpin: operationShape(['viewId']),
 });
 const workspaceActionValues = Object.freeze({
-  conversation: ['show', 'hide'], session: ['language', 'voice', 'camera'], 'context-panel': ['open', 'close', 'toggle'],
+  conversation: ['show', 'hide'], session: ['voice', 'camera'], 'context-panel': ['open', 'close', 'toggle'],
 });
 const workspaceSessionValues = Object.freeze({ voice: ['end'], camera: ['front', 'rear', 'off'] });
 const generatedViewKeys = Object.freeze(['version', 'title', 'renderer', 'source', 'data', 'actions']);

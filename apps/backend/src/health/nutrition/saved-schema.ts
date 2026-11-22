@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { inlineJsonValueSchema } from './inline-schema.js';
 
 const text = (max = 256) => z.string().min(1).max(max).refine(value =>
   value.trim() === value && Array.from(value).every(character => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127));
@@ -52,7 +53,7 @@ export const savedReadSchema = z.discriminatedUnion('operation', [
   z.object({ operation: z.literal('lookup_saved'), name: text(2000) }).strict(),
   z.object({ operation: z.literal('read_preferences'), favoriteIds: z.array(text()).min(1).max(50) }).strict(),
 ]);
-export const internalSavedInputSchema = z.toJSONSchema(internalSavedInput, {
+export const internalSavedInputSchema = inlineJsonValueSchema(z.toJSONSchema(internalSavedInput, {
   target: 'draft-7', io: 'input',
   override: ({ zodSchema, jsonSchema }) => {
     const nullable = [macro, mealType, description, preference].find(schema => schema === zodSchema);
@@ -63,4 +64,4 @@ export const internalSavedInputSchema = z.toJSONSchema(internalSavedInput, {
     if (Array.isArray(inner.enum)) jsonSchema.enum = [...inner.enum, null];
     delete jsonSchema.anyOf;
   },
-});
+}));

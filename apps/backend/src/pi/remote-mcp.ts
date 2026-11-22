@@ -87,6 +87,8 @@ export function createRemoteMcpBridge(options: {
   readonly token: (signal: AbortSignal) => Promise<string>;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
+  /** How long one search waits for the catalogue (default 8 s). Tests shorten it; production leaves it. */
+  readonly searchWaitMs?: number;
 }): RemoteMcpBridge {
   const send = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
@@ -180,7 +182,7 @@ export function createRemoteMcpBridge(options: {
       return failure !== undefined ? { state: 'unreachable', reason: failure } : { state: 'idle' };
     },
     warm() { if (!listed || now() - listed.at >= listTtlMs) void refresh(); },
-    async tools(signal, waitMs = searchWaitMs) {
+    async tools(signal, waitMs = options.searchWaitMs ?? searchWaitMs) {
       if (listed && now() - listed.at < listTtlMs) return listed.tools;
       // Bounded: a slow server costs a search a few seconds, then the last list (or none) is used.
       const loading = refresh();

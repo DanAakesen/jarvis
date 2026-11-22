@@ -6,6 +6,8 @@ import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 const hourMs = 60 * 60_000;
 const staleMs = 5 * 60_000;
+// A check stamped a moment after this lookup began (the last-error entry is stamped when it is read) is not from the future.
+const futureToleranceMs = 30_000;
 const subsystemIds = ['database', 'foundry.chat', 'foundry.voice', 'foundry.embeddings',
   'vault_index', 'github_app', 'google', 'pc_bridge', 'runner', 'deployed_commit', 'last_error'] as const;
 const credentialNames = ['codex-login', 'copilot-token', 'github-app', 'github-app-key'] as const;
@@ -77,7 +79,7 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
     recovery: SystemHealthComponent['recovery'] = [], freshness: boolean | number = false) => {
     const at = timestamp(checkedAt);
     const maxAge = typeof freshness === 'number' ? freshness : staleMs;
-    if (freshness && status !== 'unknown' && (!at || now - Date.parse(at) > maxAge || Date.parse(at) > now)) {
+    if (freshness && status !== 'unknown' && (!at || now - Date.parse(at) > maxAge || Date.parse(at) > now + futureToleranceMs)) {
       status = 'unknown';
       detail = 'Cached check is stale or has no valid timestamp.';
     }

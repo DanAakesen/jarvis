@@ -65,10 +65,18 @@ function encodedPath(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/');
 }
 
+/** A response above its size limit. When a note is being read, that means the note is too large, not that GitHub is unwell. */
+class ResponseTooLargeError extends Error {
+  constructor() {
+    super('GitHub response is too large');
+    this.name = 'ResponseTooLargeError';
+  }
+}
+
 async function responseBody(response: Response, limit: number): Promise<unknown> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > limit) {
-    throw new Error('GitHub response is too large');
+    throw new ResponseTooLargeError();
   }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('GitHub response is invalid');
@@ -81,7 +89,7 @@ async function responseBody(response: Response, limit: number): Promise<unknown>
       size += value.byteLength;
       if (size > limit) {
         await reader.cancel().catch(() => undefined);
-        throw new Error('GitHub response is too large');
+        throw new ResponseTooLargeError();
       }
       chunks.push(value);
     }
@@ -168,7 +176,9 @@ export function createGitHubVaultClient(options: {
     const { response, value } = await request(
       `/repos/${VAULT_REPOSITORY}/contents/${encodedPath(path)}?ref=${encodeURIComponent(ref)}`,
       signal,
-    );
+    ).catch((error: unknown) => {
+      throw error instanceof ResponseTooLargeError ? new VaultFileTooLargeError() : error;
+    });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error('Could not read the vault note');
     const file = object(value);

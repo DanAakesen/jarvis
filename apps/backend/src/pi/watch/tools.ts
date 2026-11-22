@@ -150,7 +150,7 @@ export function createWatchTools(options: {
     {
       name: 'watch_stop',
       description: [
-        'End a watch: Dan said to stop it, or its stop condition is met (then I also tell him, with message_dan in a wake or in the reply in chat). The note moves to the closed watches with a trail line. reason is free text.',
+        'End a watch. Use it when Dan says to stop it, or when its stop condition is met (then I also tell him, with message_dan in a wake or in the reply in chat). The note moves to the closed watches with a trail line. reason is free text.',
         'In a background wake it records the stop condition I found.',
       ].join(' '),
       execution: { defaultEffect: 'action' },

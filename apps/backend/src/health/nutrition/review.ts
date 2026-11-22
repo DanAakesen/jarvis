@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { canonicalJson, copenhagenDate, storedMeal, writeMeal, type MealInput } from './model.js';
+import { inlineJsonValueSchema } from './inline-schema.js';
 import {
   foodLookupComponentSchema, foodLookupComponents, foodLookupGramsSchema, foodLookupPreparationSchema,
 } from './lookup-schema.js';
@@ -36,7 +37,7 @@ export const foodReviewSchema = z.object({ change: z.discriminatedUnion('operati
   z.object({ operation: z.literal('delete'), ...target }).strict(),
 ]) }).strict();
 // Ajv removes valid branch fields with strict anyOf; the tool enforces the union.
-export const foodReviewInputSchema = z.toJSONSchema(z.object({
+export const foodReviewInputSchema = inlineJsonValueSchema(z.toJSONSchema(z.object({
   change: z.object({
     operation: z.enum(['log_estimate', 'lookup_components', 'correct', 'delete']), food: food.optional(),
     components: foodLookupComponents.optional(),
@@ -53,7 +54,7 @@ export const foodReviewInputSchema = z.toJSONSchema(z.object({
     Object.assign(jsonSchema, numeric, { type: nullable === foodLookupPreparationSchema ? ['string', 'null'] : ['number', 'null'] });
     delete jsonSchema.anyOf;
   },
-});
+}));
 export type FoodReviewChange = z.infer<typeof foodReviewSchema>['change'];
 export interface FoodReviewOrigin {
   sourceMessageId: string; sourceFingerprint: string; operation: string; proposalFingerprint: string;

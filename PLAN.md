@@ -88,6 +88,24 @@ PI has no guardrails or read-only defaults. Dan's rule, as relayed (recorded in 
 | Classify the writers that carry no `execution` metadata so they are covered | Open; not started |
 | Measure in production (Log Analytics; `read_backend_logs` drops `replayCheck`, `metaKeys` and `turnHash`): the `replayCheck` mix, which `_meta` keys Foundry sends, whether `duplicate` ever appears, what `sameArgsRepeat` shows (plan in `docs/decisions.md`) | Open; needs live turns |
 
+## Offline tool conformance suite — 21 November 2026 (#1967, #2012)
+
+**Status: suite, search fixes, tool fixes and generated table done and green offline; exact-head CI and a live Chat/Voice retest of the daily-core scenarios are pending. Dan decides the open items listed in the PR.**
+
+| Step | State |
+| --- | --- |
+| Enumerate the real registry; static harness checks (name, `___`, schema, description, size) and the 15 largest schemas in tokens | Done |
+| Discoverable: curated English and Danish phrases in the top 3 of the first `find_tools`; every other tool found from its own description; fixes as data in `pi/tool-search.ts` | Done |
+| Callable: every tool through the real `call_tool` path over in-memory stores and stubbed services; `requiresExternal` for hardware and live OAuth, still failing cleanly | Done |
+| Remote: stub GitHub and Azure MCP servers (idle, starting, ready, named-provider wait, stale, unreachable, erroring call, very large result) | Done |
+| Daily-core golden scenarios (project, notes, tasks, workouts, nutrition) in English and Danish, one turn, no confirmation | Done |
+| Generated table `docs/tool-conformance.md`, checked on every run | Done |
+| Approvals inventory (non-delete gates, listed in the PR, none removed) | Done; Dan decides what to relax |
+| Independent review of the first head: Danish `huske` forms, Azure group trigger, order-independent cases (24 shuffled orders pass), a reachable hang message, approvals inventory re-verified line by line (nothing asks in Chat or Voice, deletes included) | Done |
+| Live Chat and Voice retest of the five scenarios on the deployed agent | **Open**; needs a live turn |
+
+No guardrail, refusal, gate, approval or fallback was added. No merge, deploy or provider call belongs to this task.
+
 ## Wake path matches Chat — 21 November 2026 (#1967)
 
 **Status: merged as #2014 on 21 November (23:23 UTC); implemented and offline-tested. No wake has run in production, so how a real wake uses the overview is unobserved.**

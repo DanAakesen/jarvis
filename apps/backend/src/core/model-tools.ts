@@ -11,7 +11,7 @@ interface SetJarvisModelInput {
 
 export const setJarvisModelTool: JarvisTool = {
   name: 'set_jarvis_model',
-  description: 'Compatibility alias for update_settings: set the chat model or reasoning for the next chat or Danish voice session.',
+  description: 'Compatibility alias for update_settings: set the chat model or reasoning for the next chat or Danish voice session. Use when Dan asks to switch the chat model or its reasoning level.',
   inputSchema: {
     type: 'object',
     properties: {

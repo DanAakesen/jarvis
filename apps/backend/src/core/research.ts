@@ -570,7 +570,7 @@ export function createHtmlResearchModule(
       },
       {
         name: 'retry_job',
-        description: 'Retry a failed research job by its jobId. The saved topic and research depth are reused.',
+        description: 'Retry a failed research job by its jobId. The saved topic and research depth are reused. Use when Dan asks to try a failed research job again.',
         inputSchema: {
           type: 'object',
           properties: {

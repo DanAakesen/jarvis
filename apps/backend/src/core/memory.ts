@@ -470,7 +470,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     },
     {
       name: 'memory_history',
-      description: 'Inspect the current and up to nine previous source-linked versions of one memory.',
+      description: 'Inspect the current and up to nine previous source-linked versions of one memory. Use when Dan asks how a saved memory changed or what it said before.',
       execution: { defaultEffect: 'read' },
       inputSchema: {
         type: 'object',

@@ -19,6 +19,8 @@ import type { SourceId } from '../proactive/types.js';
 const maxFullResults = 3;
 const maxOtherResults = 5;
 const maxResultCharacters = 200_000;
+/** The largest body a tool route accepts is 2 MiB (HTML apps); the door adds only a turn reference and a name around the arguments. */
+const maxDoorBodyBytes = 2 * 1024 * 1024 + 16 * 1024;
 const notFound = 'Unknown tool, or not looked up yet. Call find_tools first, then call_tool. Nothing was done.';
 const unknownTurn = 'This turn is not active, so nothing was done. Use the exact turn reference from the current message.';
 
@@ -461,7 +463,7 @@ export function createPiMcpRoutes(options: {
   return async (app) => {
     app.route({
       method: ['POST', 'GET', 'DELETE'], url: piMcpPath,
-      bodyLimit: 256 * 1024,
+      bodyLimit: maxDoorBodyBytes,
       onRequest: async (request, reply) => {
         reply.header('Cache-Control', 'no-store');
         // Only the managed agent's credential reaches this route; a browser or another service never does.
