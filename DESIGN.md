@@ -186,8 +186,10 @@ switch while a query is present; clearing the query restores the previous folder
   after a real change. Task detail, Edit task, Date & time and Task options follow the
   same anatomy; the schedule and options sheets return to the same draft.
 - **Note labels.** Pinned, list, reader and generated link labels use the same note title;
-  explicit link aliases stay as written. Reopening Notes shows the last available rows
-  during refresh. A pin that cannot yet be resolved does not show a guessed filename.
+  explicit link aliases stay as written. The reader shows the headline once and hides only immediately
+  repeated copies of its H1, leaving later sections and the editable Markdown intact. Reopening Notes
+  shows the last available rows during refresh. An unresolved pin shows its vault path in the same
+  row surface with a labelled Unpin icon button; it has no Open or Delete action.
 - **Recovery.** A conflict keeps the draft and offers Keep editing or Review changes (a line comparison, then an
   explicit, confirmed choice). A failed or unconfirmed save keeps the draft and offers Retry, which first checks what the
   vault holds. Nothing is overwritten without an explicit choice.

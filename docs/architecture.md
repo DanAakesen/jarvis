@@ -10332,19 +10332,27 @@ reader.
 
 For the build 122 follow-up, `dbo.vault_notes` stores the indexed path, blob SHA,
 display title and content-update time independently of `dbo.vault_chunks`.
-Migration `0103` copies existing paths and dates; normal sync fills missing
-titles from the matching Markdown blob without replacing its search chunks
-solely for a title. Title-only notes have a file row and no search chunks.
-After a note commit, the REST writer stores metadata and lexical chunks
-without waiting for embeddings. Chat and Voice share `vault_write`, which
-still tries bounded immediate vector indexing and can fall back to lexical
-chunks and the title. A failed index update does not undo the Git commit;
-background sync remains the repair path.
+Migration `0103` copies existing paths and dates with null titles. Normal sync
+publishes inventory readiness before attempting up to 32 legacy reads under
+a separate 20-second deadline. It updates each title only for the matching
+blob SHA and keeps that progress if a batch fails. A later normal sync can
+resume; unfinished rows use readable filenames and remain searchable by
+their existing chunks. A row missing both title and embeddings can get
+embeddings on a later sync after its title is filled. Title-only notes have a
+file row and no search chunks. The REST writer indexes metadata and lexical
+chunks after the commit. Chat and Voice share `vault_write`, which removes
+repeated leading title headings on creation and tries bounded vector
+indexing, falling back to lexical chunks and the title. An index update
+failure does not undo a Git commit; background sync remains the repair path.
 
 The owner-only `/notes`, `/notes/summaries` (bounded batches of exact paths)
 and `/knowledge/graph` use the metadata title. The phone revalidates its
 account-bound Notes snapshots on open and requests newest-first directory
-pages; pins are not limited to the current page or graph. Folder scope is
+pages without HTTP cache reuse or `If-None-Match`; pull-to-refresh does the
+same at the root and in folders. The owner route still sends `no-store` and
+computes an ETag from the current payload for conditional clients. Pins are
+not limited to the current page or graph; a batch skips invalid paths, and
+an unresolved pin retains its local path and Unpin action. Folder scope is
 still direct-child, and Graph retains its existing node and link bounds.
 JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.

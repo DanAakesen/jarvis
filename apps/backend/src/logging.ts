@@ -113,6 +113,7 @@ const events = new Set([
   'telemetry.stdout_only', 'telemetry.export_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
   'voice.partials_unavailable', 'chat.latency', 'chat.agent_session', 'memory.embedding', 'vault.index', 'vault.write',
+  'vault.title_backfill',
   'inbox.write', 'inbox.tool', 'inbox.index_unavailable', 'inbox.triage', 'inbox.nudge',
   'pc_act.step',
   'reflex.decision',
@@ -882,6 +883,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
           ? String(folder) : 'other'))].slice(0, 5);
     }
   }
+  if (input.msg === 'vault.title_backfill' && input.outcome === 'error') fields.outcome = input.outcome;
   if (input.msg === 'vault.write') {
     if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
     fields.folder = ['People', 'Work', 'Personal', 'General'].includes(String(input.folder))

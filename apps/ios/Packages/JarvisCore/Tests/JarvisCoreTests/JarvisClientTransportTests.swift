@@ -327,9 +327,7 @@ final class JarvisClientTransportTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_795_344_000)
         let cache = JarvisCache(storage: JarvisInMemoryCacheStorage(), now: { now })
         await cache.bind(account: "fixture-owner")
-        let folder = JarvisRepository(cache: cache, kind: .notes, scope: "dir:Personal") {
-            try await notes.fetchNotes(directory: "Personal", recentFirst: true, validator: $0)
-        }
+        let folder = notes.directoryRepository(cache: cache, directory: "Personal")
         let before = await folder.resolve()
         XCTAssertEqual(before.value?.notes, [])
         var showedCache = false
@@ -347,6 +345,50 @@ final class JarvisClientTransportTests: XCTestCase {
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.count, 2)
         XCTAssertTrue(requests.allSatisfy { $0.url.query?.contains("sort=updated") == true })
+    }
+
+    func testPullToRefreshReplacesWarmRootAndPersonalPagesWithoutValidators() async throws {
+        func page(path: String, title: String, directory: String) -> HTTPResponse {
+            jsonResponse(status: 200, body: [
+                "notes": [["path": path, "title": title, "folder": directory,
+                           "directory": directory, "updatedAt": "2026-11-22T10:01:00.000Z"]],
+                "limit": 50, "offset": 0, "hasMore": false
+            ])
+        }
+        let transport = FakeHTTPTransport([
+            .response(page(path: "New root.md", title: "New root", directory: "")),
+            .response(page(path: "Personal/Build 122.md", title: "Build 122", directory: "Personal"))
+        ])
+        let notes = JarvisNotesClient(client: try makeClient(transport: transport))
+        let now = Date(timeIntervalSince1970: 1_795_344_000)
+        let account = "fixture-owner"
+        let storage = JarvisInMemoryCacheStorage()
+        let cache = JarvisCache(storage: storage, now: { now })
+        await cache.bind(account: account)
+        for (directory, freshTitle) in [("", "New root"), ("Personal", "Build 122")] {
+            let oldPath = directory.isEmpty ? "Old.md" : "\(directory)/Old.md"
+            let oldPage = page(path: oldPath, title: "Old", directory: directory)
+            await storage.write(JarvisCacheEntry(data: oldPage.body, fetchedAt: now, validator: "\"old-page\""),
+                                account: account, key: JarvisRepositoryKind.notes.key(scope: "dir:\(directory)"))
+            let repository = notes.directoryRepository(cache: cache, directory: directory)
+            let cached = await repository.cachedValue()
+            XCTAssertEqual(cached?.notes.map(\.title), ["Old"])
+            let refreshed = await repository.resolve(force: true)
+            XCTAssertNil(refreshed.error)
+            XCTAssertEqual(refreshed.value?.notes.map(\.title), [freshTitle])
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
+        for (request, directory) in zip(requests, ["", "Personal"]) {
+            XCTAssertEqual(request.method, .get)
+            XCTAssertEqual(request.url.path, "/api/notes")
+            XCTAssertEqual(request.headers["Cache-Control"], "no-cache")
+            XCTAssertNil(request.headers["If-None-Match"])
+            let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems
+            XCTAssertEqual(query?.first(where: { $0.name == "directory" })?.value, directory)
+            XCTAssertTrue(query?.contains(URLQueryItem(name: "sort", value: "updated")) == true)
+            XCTAssertTrue(query?.contains(URLQueryItem(name: "offset", value: "0")) == true)
+        }
     }
 
     func testPinSummariesResolveByExactPathWithoutUsingGraphOrFolderPages() async throws {

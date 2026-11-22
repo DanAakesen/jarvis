@@ -511,9 +511,8 @@ struct JarvisNotesArea: View {
         do {
             if offset == 0 {
                 let retainedCount = directoryNotes[directory]?.count ?? 0
-                let repository: JarvisRepository<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: "dir:\(directory)") {
-                    try await client.fetchNotes(directory: directory, recentFirst: true, validator: $0)
-                }
+                await JarvisAppCache.bindIfNeeded()
+                let repository = client.directoryRepository(cache: JarvisAppCache.shared, directory: directory)
                 for await update in repository.updates(force: force) {
                     guard !Task.isCancelled, directoryRequests[directory] == request else { return }
                     switch update {

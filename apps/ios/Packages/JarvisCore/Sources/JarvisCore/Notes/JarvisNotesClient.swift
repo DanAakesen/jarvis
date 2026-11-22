@@ -323,10 +323,17 @@ public final class JarvisNotesClient: Sendable {
         recentFirst: Bool = false
     ) async throws -> VaultNotePage {
         let items = try Self.noteQuery(directory: directory, query: query, folder: folder, offset: offset, recentFirst: recentFirst)
-        let response = try await request(
-            method: .get, path: ["notes"], query: items, idempotent: true
+        let response = try await client.performAuthenticatedRequest(
+            method: .get, path: ["notes"], queryItems: items, headers: ["Cache-Control": "no-cache"], idempotent: true
         )
         return try Self.parseNotePage(response.body, directory: directory, offset: offset)
+    }
+
+    /// Keeps the last rendered page for fast open, but always fetches the current first page without a validator.
+    public func directoryRepository(cache: JarvisCache, directory: String) -> JarvisRepository<VaultNotePage> {
+        JarvisRepository(cache: cache, kind: .notes, scope: "dir:\(directory)") { _ in
+            .modified(try await self.notes(directory: directory, recentFirst: true), validator: nil)
+        }
     }
 
     /// Conditional read of the first page of a folder for the repository layer.

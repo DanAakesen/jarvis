@@ -72,6 +72,18 @@ final class JarvisNotesRedesignTests: XCTestCase {
         XCTAssertEqual(JarvisNoteParts(newTitle: " Plan ", body: "Body").content, "# Plan\n\nBody")
     }
 
+    func testReaderDoesNotRenderARepeatedLeadingH1BelowItsTitle() {
+        let body = "\r\nThe test word is cobalt.\r\n\r\n# Build 122\r\nThis later heading stays."
+        let source = "---\r\ntags: [test]\r\n---\r\n# Build 122\r\n\r\n# Build 122  \r\n\r\n# Build 122\r\n" + body
+        let parts = JarvisNoteParts(source)
+        XCTAssertEqual(parts.displayedTitle(path: "Personal/build.md"), "Build 122")
+        XCTAssertEqual(parts.readableBody, body)
+        XCTAssertEqual(parts.content, source)
+        for firstLine in ["## Build 122", "Build 122", "# Another heading", "```\n# Build 122\n```"] {
+            XCTAssertEqual(JarvisNoteParts("# Build 122\n\n\(firstLine)").readableBody, "\n\(firstLine)")
+        }
+    }
+
     func testRecoveryNeverOverwritesANewerVersion() throws {
         let draft = "# T\n\nmine"
         let same = try note(draft)

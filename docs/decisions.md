@@ -478,13 +478,20 @@ The managed instructions read the tool reference from the first line. The normal
   editing stay unchanged; explicit wiki aliases and authored Markdown link labels
   stay as written. Remove the phone's saved-title override.
 - Keep note inventory and title separate from search chunks. Migration `0103`
-  seeds existing paths and dates; sync reads unchanged legacy Markdown once to
-  fill titles without re-embedding solely for the backfill. Do not invent a
+  seeds existing paths and dates. After normal sync makes the index ready, read
+  up to 32 matching legacy blobs within 20 seconds to fill titles without
+  re-embedding. Serve readable filenames and existing search chunks meanwhile;
+  retain progress across failures and resume on a later sync. Do not invent a
   search chunk for a title-only note.
 - Keep the last Notes snapshot visible while rechecking on open. Read pins by
-  exact path, not through the capped graph. Load newest folder entries before
-  paging on iPhone; other sort choices still reorder the rows already loaded.
-  `Personal` still lists only its direct children.
+  exact path, not through the capped graph; omit unusable paths from a batch and
+  keep unresolved pins removable on the phone. Load newest root and folder
+  entries without reusing an HTTP response or validator; other sort choices
+  still reorder the loaded rows. `Personal` still lists only its direct children.
+- Treat consecutive leading H1s with the same title as duplicate headlines.
+  Drop them from newly created `vault_write` Markdown and from the reader
+  presentation of existing notes. Do not rewrite existing files or remove later
+  sections, different headings, or ordinary body text.
 
 ## 18 November 2026 — iPhone Voice keeps visuals for the current call (#1958, P15-210)
 

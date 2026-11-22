@@ -195,8 +195,10 @@ flowchart LR
         memory_deletions
     end
     subgraph VAULT["11 · GitHub vault index"]
+        vault_notes
         vault_chunks
     end
+    vault_repo["Private GitHub vault"] -.-> vault_notes
     vault_repo["Private GitHub vault"] -.-> vault_chunks
     subgraph OPS["6 · Operations"]
         webhook_deliveries
@@ -240,7 +242,7 @@ flowchart LR
 | 8 | Phone, notifications and confirmations | Phone-call sessions plus expiring browser approvals; `teams_conversations` remains dormant optional-integration storage, not used in production | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Personal Memory | Authoritative durable owner facts, preferences, decisions and commitments, separate from Vault Knowledge | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata and explicitly pinned workspace views; image bytes are private Blob objects | `workspace_artifacts`, `workspace_pins` |
-| 11 | GitHub vault index | Derived heading chunks and optional vectors keyed by vault path and blob SHA; vault content remains authoritative in GitHub | `vault_chunks` |
+| 11 | GitHub vault index | Derived note inventory, display titles, search chunks and optional vectors; vault content remains authoritative in GitHub | `vault_notes`, `vault_chunks` |
 | 12 | Owner sign-in sessions | The optional, revocable 10-day owner session (`JARVIS_OWNER_SESSION_ENABLED`, default off); unrelated to the conversation `jarvis_sessions` | `owner_sessions` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.
@@ -810,8 +812,12 @@ after a down migration; the idempotent setup batch can recreate the index later.
 of the note path, blob SHA, and chunk index. It stores the original path, heading,
 and bounded note chunk, plus an optional `vector(1536)` embedding when supported.
 Startup and verified `master` push syncs replace changed note chunks and delete
-removed paths. The table contains only the searchable derived index; note content
-and durable facts remain authoritative in `DanAakesen/vault`.
+removed paths. `0103_vault_note_metadata.sql` adds `dbo.vault_notes`, one row per
+indexed note, including title-only notes with no chunks. The row stores the
+path hash, path, blob SHA, nullable display title and content-update timestamp.
+Migrated rows retain their dates and use filename titles until a bounded batch
+fills the title for the matching SHA. Both tables are derived indexes; note
+content and durable facts remain authoritative in `DanAakesen/vault`.
 
 ## Owner session schema (group 12)
 

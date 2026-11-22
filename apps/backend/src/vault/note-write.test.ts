@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
+import { MEMORY_EMBEDDING_DIMENSIONS } from '../core/memory-embeddings.js';
 import { createMemoryVault, createVaultIndexFake } from '../pi/conformance/groups/notes-vault.testkit.js';
-import { createVaultModule } from './index.js';
+import { createVaultModule, type VaultModule } from './index.js';
 
 const signal = new AbortController().signal;
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -13,6 +14,13 @@ const gardenPlan = '# Garden plan\n\nRaised beds along the south fence.';
 const pergola = {
   path: 'Personal/Pergola.md', content: '# Pergola\n\nBuild a pergola over the terrace.', reason: 'Dan asked for a note', automaticCapture: false,
 };
+const request = { principal: { objectId: 'owner' }, headers: { 'x-jarvis-message-id': '42' } } as unknown as FastifyRequest;
+const callTool = (module: VaultModule, name: string, args: Record<string, unknown>) =>
+  module.tools.find((tool) => tool.name === name)!.execute(args, request, signal) as Promise<Record<string, unknown>>;
+const ownerApp = (module: VaultModule) => buildApp(config, undefined, {
+  modules: [module],
+  auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Fixture owner' }),
+});
 
 /** Hold the first tree read after a write so the test can browse before the background sync finishes. */
 async function fixture(seed?: (vault: ReturnType<typeof createMemoryVault>) => void) {
@@ -43,14 +51,9 @@ async function fixture(seed?: (vault: ReturnType<typeof createMemoryVault>) => v
     memoryStore: { getSourceMessage: async (messageId) => ({ messageId, text: 'Save a note about the pergola.' }) },
   });
   await module.synchronize(signal);
-  const request = { principal: { objectId: 'owner' }, headers: { 'x-jarvis-message-id': '42' } } as unknown as FastifyRequest;
   const call = (name: string, args: Record<string, unknown>) =>
-    module.tools.find((tool) => tool.name === name)!.execute(args, request, signal) as Promise<Record<string, unknown>>;
-  const ownerApp = () => buildApp(config, undefined, {
-    modules: [module],
-    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Fixture owner' }),
-  });
-  return { index, replaceFile, vault, write, module, call, releaseReindex, ownerApp };
+    callTool(module, name, args);
+  return { index, replaceFile, vault, write, module, call, releaseReindex, ownerApp: () => ownerApp(module) };
 }
 
 describe('vault_search straight after vault_write', () => {
@@ -116,11 +119,53 @@ describe('browsing committed vault notes', () => {
     }
   });
 
+  it('shows a Chat note with a body on page one after a pull refresh, before the resync', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-22T10:00:00Z'));
+    const { call, ownerApp, vault, releaseReindex, module } = await fixture((vault) => {
+      vault.seed('Welcome.md', '# Welcome\n\nThis note is at the root.');
+      for (let i = 0; i < 50; i += 1) vault.seed(`Personal/Archive ${i}.md`, '# Archived\n\nAn old note.');
+    });
+    const app = ownerApp();
+    try {
+      const url = '/notes?directory=Personal&sort=updated&limit=50&offset=0';
+      const before = await app.inject({ url, headers });
+      expect(before.statusCode).toBe(200);
+      expect(before.json().notes).toHaveLength(50);
+      expect(before.headers.etag).toEqual(expect.any(String));
+      vi.setSystemTime(new Date('2026-11-22T10:01:00Z'));
+      const path = 'Personal/Build 122.md';
+      const head = '---\r\ntags: [test]\r\n---\r\n# Build 122';
+      const body = '\r\n\r\nThe test word is cobalt.\r\n\r\n# Build 122\r\nThis heading later in the note stays.';
+      const saved = await call('vault_write', { ...pergola, path, content: `${head}\r\n\r\n# Build 122${body}` });
+      expect(saved.confirmation).toContain('Saved to vault');
+      expect(vault.files.get(path)).toBe(head + body);
+
+      const page = await app.inject({ url, headers: { ...headers, 'cache-control': 'no-cache' } });
+      expect(page.statusCode).toBe(200);
+      expect(page.headers['cache-control']).toBe('no-store');
+      expect(page.headers.etag).not.toBe(before.headers.etag);
+      expect(page.json()).toMatchObject({ hasMore: true, offset: 0, limit: 50 });
+      expect(page.json().notes[0]).toMatchObject({ path, title: 'Build 122', directory: 'Personal' });
+      expect((await call('vault_search', { query: 'cobalt' })).results).toEqual([
+        expect.objectContaining({ path, snippet: expect.stringContaining('cobalt') }),
+      ]);
+      const root = await app.inject({ url: '/notes?directory=&sort=updated&limit=50&offset=0', headers });
+      expect(root.statusCode).toBe(200);
+      expect(root.json().notes).toMatchObject([{ path: 'Welcome.md', directory: '' }]);
+    } finally {
+      releaseReindex();
+      await module.synchronize(signal);
+      await app.close();
+      vi.useRealTimers();
+    }
+  });
+
   it('uses the edited H1 across list, pins and the linked graph node without changing the path', async () => {
     const path = 'Work/Events/old-title.md';
     const source = 'Work/events-index.md';
     const title = 'New > schedule';
-    const { vault, module, ownerApp, releaseReindex } = await fixture((vault) => {
+    const { vault, index, module, ownerApp, releaseReindex } = await fixture((vault) => {
       vault.seed(path, '# Old title\n\nOld notes.');
       vault.seed(source, `Body\n[[${path}]]`);
       vault.seed('Work/Events/venue_map.md', 'Preamble.\n\n## Details\n\nVenue information.');
@@ -135,9 +180,13 @@ describe('browsing committed vault notes', () => {
       expect(edited.statusCode).toBe(200);
       const folder = await app.inject({ url: '/notes?directory=Work%2FEvents', headers });
       expect(folder.json().notes).toMatchObject([{ path, title }, { title: 'Venue map' }]);
-      const pins = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths: [path, 'Work/missing.md'] } });
+      const graphFiles = vi.spyOn(index, 'graphFiles');
+      const pins = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: {
+        paths: ['../bad.md', path, 'Work/missing.md', '', `Work/${'a'.repeat(181)}.md`],
+      } });
       expect(pins.statusCode).toBe(200);
       expect(pins.json().notes).toMatchObject([{ path, title }]);
+      expect(graphFiles).toHaveBeenLastCalledWith(expect.any(AbortSignal), [path, 'Work/missing.md']);
       const graph = (await app.inject({ url: '/knowledge/graph', headers })).json();
       const linkedNode = graph.nodes.find((node: { path: string }) => node.path === path);
       expect(linkedNode).toMatchObject({ title });
@@ -145,12 +194,120 @@ describe('browsing committed vault notes', () => {
       const read = await app.inject({ url: `/notes/note?path=${encodeURIComponent(path)}`, headers });
       expect(read.json()).toMatchObject({ path, content });
       const invalid = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths: ['../bad.md'] } });
-      expect(invalid.statusCode).toBe(400);
+      expect(invalid.statusCode).toBe(200);
+      expect(invalid.json()).toEqual({ notes: [] });
       const anonymous = await app.inject({ method: 'POST', url: '/notes/summaries', payload: { paths: [path] } });
       expect(anonymous.statusCode).toBe(401);
     } finally {
       releaseReindex();
       await module.synchronize(signal);
+      await app.close();
+    }
+  });
+});
+
+function legacyFixture(count: number, withEmbedder = false) {
+  const vault = createMemoryVault();
+  const index = createVaultIndexFake();
+  const log = vi.fn();
+  const embedding = Array<number>(MEMORY_EMBEDDING_DIMENSIONS).fill(1);
+  const embed = vi.fn(async () => embedding);
+  const model = 'fixture-model';
+  const paths = Array.from({ length: count }, (_, index) => `Personal/legacy-${String(index + 1).padStart(2, '0')}.md`);
+  for (const [i, path] of paths.entries()) {
+    const heading = `Saved title ${i + 1}`;
+    const content = 'A legacy note body.';
+    const embedded = withEmbedder && i < paths.length - 1;
+    vault.seed(path, `# ${heading}\n\n${content}`);
+    index.seedLegacyFile(path, vault.shaOf(path)!, [{
+      index: 0, heading, content, embedding: embedded ? embedding : null, embeddingModel: embedded ? model : null,
+    }]);
+  }
+  const module = createVaultModule({
+    client: vault, indexStore: index, log,
+    memoryStore: { getSourceMessage: async () => null },
+    ...(withEmbedder ? { embedder: { model, embed } } : {}),
+  });
+  return { vault, index, log, embed, model, paths, module };
+}
+
+describe('legacy vault title backfill', () => {
+  it('caps legacy reads while listing pending titles by filename, then resumes the remaining rows', async () => {
+    const { vault, index, embed, model, paths, module } = legacyFixture(33, true);
+    const pendingPath = paths.at(-1)!; // Also missing its embedding.
+    const newPath = 'Personal/new-note.md';
+    vault.seed(newPath, '# New title');
+    const read = vi.spyOn(vault, 'read');
+    const app = ownerApp(module);
+    try {
+      await expect(module.synchronize(signal)).resolves.toMatchObject({ added: 1 });
+      expect(read).toHaveBeenCalledTimes(33); // One new note and at most 32 old blobs.
+      expect(read).not.toHaveBeenCalledWith(pendingPath, expect.anything());
+      expect(embed).not.toHaveBeenCalled();
+      expect((await index.files(model, signal)).filter((file) => file.titleMissing))
+        .toMatchObject([{ path: pendingPath, embeddingMissing: true }]);
+      const page = await app.inject({ url: '/notes?directory=Personal', headers });
+      expect(page.statusCode).toBe(200);
+      expect(page.json().notes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: newPath, title: 'New title' }),
+        expect.objectContaining({ path: pendingPath, title: 'Legacy 33' }),
+      ]));
+
+      read.mockClear();
+      await module.synchronize(signal);
+      expect(read.mock.calls.map(([path]) => path)).toEqual([pendingPath]);
+      const refreshed = await app.inject({ url: '/notes?directory=Personal', headers });
+      expect(refreshed.json().notes).toContainEqual(expect.objectContaining({ path: pendingPath, title: 'Saved title 33' }));
+      expect((await index.files(model, signal)).some((file) => file.titleMissing)).toBe(false);
+    } finally { await app.close(); }
+  });
+
+  it.each(['read failure', 'deadline'])('keeps serving through a title backfill %s', async (failure) => {
+    const { vault, log, paths, module } = legacyFixture(2);
+    const read = vault.read;
+    const startedRead = Promise.withResolvers<AbortSignal>();
+    const resumeRead = Promise.withResolvers<void>();
+    vi.spyOn(vault, 'read').mockImplementationOnce(read).mockImplementationOnce(async (path, readSignal) => {
+      startedRead.resolve(readSignal);
+      await resumeRead.promise;
+      if (failure === 'read failure') throw new Error('GitHub request failed');
+      return read(path, readSignal);
+    });
+    const deadline = new AbortController();
+    const nativeTimeout = AbortSignal.timeout;
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) =>
+      ms === 20_000 ? deadline.signal : nativeTimeout(ms));
+    const app = ownerApp(module);
+    const sync = module.synchronize(signal);
+    try {
+      const batchSignal = await startedRead.promise;
+      const page = await app.inject({ url: '/notes?directory=Personal', headers });
+      expect(page.statusCode).toBe(200);
+      expect(page.json().notes).toMatchObject([
+        { path: paths[0], title: 'Saved title 1' },
+        { path: paths[1], title: 'Legacy 02' },
+      ]);
+
+      if (failure === 'deadline') {
+        deadline.abort();
+        expect(batchSignal.aborted).toBe(true);
+        expect(signal.aborted).toBe(false);
+      }
+      resumeRead.resolve();
+      await expect(sync).resolves.toEqual({ added: 0, changed: 0, removed: 0 });
+      expect(module.syncStatus().outcome).toBe('ok');
+      expect(log).toHaveBeenCalledWith('vault.title_backfill', { outcome: 'error' });
+      const pins = await app.inject({ method: 'POST', url: '/notes/summaries', headers, payload: { paths } });
+      expect(pins.statusCode).toBe(200);
+      expect(pins.json().notes).toMatchObject([{ title: 'Saved title 1' }, { title: 'Legacy 02' }]);
+      const graph = await app.inject({ url: '/knowledge/graph', headers });
+      expect(graph.statusCode).toBe(200);
+      expect(graph.json().nodes).toContainEqual(expect.objectContaining({ path: paths[1], title: 'Legacy 02' }));
+      expect(await callTool(module, 'vault_search', { query: 'legacy' })).toMatchObject({ count: 2 });
+    } finally {
+      resumeRead.resolve();
+      await sync.catch(() => undefined);
+      timeout.mockRestore();
       await app.close();
     }
   });

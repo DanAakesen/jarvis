@@ -371,10 +371,13 @@ events
 ### Notes follow-up for TestFlight 122 (Refs #2005, #2012)
 
 - `swift test --filter 'JarvisNotesRedesignTests|JarvisClientTransportTests'` covers
-  the title rule, generated link labels, exact-path pins and a warm-folder reopen.
+  the title rule, repeated headline, generated link labels, exact-path pins and
+  warm root and Personal pages, including unconditional pull-to-refresh.
   SwiftUI still needs the macOS build and device acceptance.
-- `cd apps/backend && npm exec -- vitest run src/vault src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`
-  exercises the shared Chat/Voice writer and Notes routes with fixtures. The
+- `cd apps/backend && npm exec -- vitest run src/vault src/logging.test.ts src/pi/tool-conformance.test.ts src/voice/chat-voice-parity.test.ts`
+  exercises the shared Chat/Voice writer, capped legacy title backfill and
+  Notes routes with fixtures. `vault.title_backfill` reports an optional
+  batch failure without changing the index's readiness or logging note content. The
   `database-ci.yml` loopback SQL fixture verifies migration `0103` and the
   bodyless-note inventory without using providers or Dan's vault.
 - Deploy the backend with migration `0103` before delivering the phone build;

@@ -15,21 +15,17 @@ extension JarvisNotesArea {
 
     // MARK: Notes
 
-    private func summary(for path: String) -> VaultNoteSummary? {
-        let directory = path.split(separator: "/").dropLast().joined(separator: "/")
-        return pinnedSummaries[path] ?? directoryNotes[directory]?.first(where: { $0.path == path })
-    }
-
     /// Pins inside the folder being browsed; at the vault root every pin shows.
-    var scopedPinnedNotes: [VaultNoteSummary] {
-        pinnedPaths
-            .filter { selectedFolder.isEmpty || $0.hasPrefix(selectedFolder + "/") }
-            .compactMap(summary(for:))
+    private var scopedPinnedPaths: [String] {
+        pinnedPaths.filter { selectedFolder.isEmpty || $0.hasPrefix(selectedFolder + "/") }
     }
 
     var pinnedItems: [JarvisReorderItem] {
-        pinnedPaths.compactMap(summary(for:)).map { note in
-            return JarvisReorderItem(path: note.path, title: note.title, location: JarvisNoteTitle.location(path: note.path))
+        pinnedPaths.map { path in
+            guard let note = pinnedSummaries[path] else {
+                return JarvisReorderItem(path: path, title: path, location: "")
+            }
+            return JarvisReorderItem(path: path, title: note.title, location: JarvisNoteTitle.location(path: path))
         }
     }
 
@@ -58,7 +54,7 @@ extension JarvisNotesArea {
     }
 
     private var notesPage: some View {
-        let pinned = scopedPinnedNotes
+        let pinned = scopedPinnedPaths
         let folders = childFolders
         let notes = listedNotes
         let isLoadingNotes = directoryNotes[selectedFolder] == nil && !failedReads.contains(.directory)
@@ -70,8 +66,14 @@ extension JarvisNotesArea {
                 }
                 if !pinned.isEmpty {
                     sectionHeader(copy.pinned)
-                    ForEach(pinned) { note in
-                        noteRow(note, first: note.id == pinned.first?.id, last: note.id == pinned.last?.id)
+                    ForEach(pinned, id: \.self) { path in
+                        let first = path == pinned.first
+                        let last = path == pinned.last
+                        if let note = pinnedSummaries[path] {
+                            noteRow(note, first: first, last: last)
+                        } else {
+                            unresolvedPinRow(path, first: first, last: last)
+                        }
                     }
                 }
                 if !folders.isEmpty {
@@ -111,6 +113,18 @@ extension JarvisNotesArea {
 
     private func rowDivider(_ last: Bool) -> some View {
         JarvisHairline().padding(.leading, 52).opacity(last ? 0 : 1)
+    }
+
+    private func unresolvedPinRow(_ path: String, first: Bool, last: Bool) -> some View {
+        HStack(spacing: 0) {
+            JarvisDetailRow(title: path)
+            JarvisIconButton(title: copy.unpin, systemImage: "pin.slash", identifier: "notes.unpin.\(path)") {
+                Task { await setPinned(path, pinned: false) }
+            }
+            .padding(.trailing, JarvisPageHeaderMetrics.rowInset)
+        }
+        .overlay(alignment: .bottom) { rowDivider(last) }
+        .jarvisLazyRowSurface(first: first, last: last)
     }
 
     func noteRow(_ note: VaultNoteSummary, first: Bool, last: Bool) -> some View {

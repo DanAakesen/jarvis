@@ -144,6 +144,7 @@ refuses to discard delivery evidence or newer schedule state.
 
 `0103_vault_note_metadata.sql` keeps one listing row per indexed note, even if
 it has no searchable body. It seeds existing paths, blob SHAs and dates from
-the chunk index; vault sync fills missing titles from the original notes.
+the chunk index. Vault sync fills missing titles in bounded batches after the
+index is ready; lists use readable filenames meanwhile.
 The down batch drops only the derived metadata, not the vault or search chunks.
 Roll back the dependent backend before running it.

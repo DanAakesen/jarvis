@@ -137,6 +137,7 @@ notes with explicit Save and Cancel, never loses a draft and never overwrites a 
 show one orange completion circle, the source note, date, priority and scope; they can be completed, edited, rescheduled, pinned
 and deleted (only that task line). Short left swipe pins, long left swipe deletes, and every swipe has a menu or accessibility alternative.
 A note's title follows its leading heading or readable filename in Pinned, the list, the reader and generated links.
+The reader shows the headline once. A pin whose note cannot be found stays removable by path.
 Editing the title does not rename or move its file. A saved note can be listed even if it has no body. File rename,
 Move to folder, bulk selection and Undo are not offered because the vault cannot do them safely yet.
 

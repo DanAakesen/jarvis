@@ -104,13 +104,18 @@ function cosine(left: readonly number[], right: readonly number[]): number {
   return leftNorm === 0 || rightNorm === 0 ? 0 : dot / Math.sqrt(leftNorm * rightNorm);
 }
 
-export function createVaultIndexFake(): VaultIndexStore {
+export function createVaultIndexFake(): VaultIndexStore & {
+  seedLegacyFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[]): void;
+} {
   const notes = new Map<string, IndexedNote>();
   const chunkRows = () => [...notes].sort(([left], [right]) => left.localeCompare(right))
     .flatMap(([path, note]) => note.chunks.map((chunk) => ({ path, chunk })));
   const hit = (path: string, chunk: VaultIndexedChunk, score: number): VaultSearchHit => ({ path, heading: chunk.heading, content: chunk.content, score });
 
   return {
+    seedLegacyFile(path, blobSha, chunks) {
+      notes.set(path, { blobSha, title: null, chunks, links: [], indexedAt: new Date() });
+    },
     async initialize() {},
     supportsVectorSearch: () => true,
     async summary(embeddingModel, signal) {

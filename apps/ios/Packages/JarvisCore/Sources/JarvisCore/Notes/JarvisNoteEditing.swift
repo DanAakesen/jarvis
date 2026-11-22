@@ -62,7 +62,20 @@ public struct JarvisNoteParts: Equatable, Sendable {
     }
 
     /// The text the reader shows under the title and provenance: no properties and no repeated title.
-    public var readableBody: String { body }
+    public var readableBody: String {
+        guard let title = title?.trimmingCharacters(in: .whitespacesAndNewlines) else { return body }
+        var cursor = body.startIndex
+        var bodyStart = cursor
+        while cursor < body.endIndex {
+            let end = body[cursor...].firstIndex { $0 == "\n" || $0 == "\r\n" } ?? body.endIndex
+            let line = body[cursor..<end]
+            cursor = end == body.endIndex ? end : body.index(after: end)
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+            guard line.hasPrefix("# "), line.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines) == title else { break }
+            bodyStart = cursor
+        }
+        return String(body[bodyStart...])
+    }
 }
 
 public enum JarvisNoteTitle {
