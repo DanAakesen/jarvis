@@ -21,20 +21,20 @@ and when this file no longer matches the registry.
 
 | What | Count |
 | --- | ---: |
-| Registered tools | 161 |
-| Visible to chat and voice | 147 |
+| Registered tools | 169 |
+| Visible to chat and voice | 155 |
 | Visible only in an activation turn (situation tools) | 4 |
 | Visible only to a background wake | 4 |
 | Legacy confirmation endpoints (HTTP only, not advertised) | 6 |
-| Static contract ok | 161 |
-| Discoverable, top 3 | 155 |
+| Static contract ok | 169 |
+| Discoverable, top 3 | 163 |
 | Discoverable, listed (callable by name) | 0 |
-| Callable: ok | 155 |
+| Callable: ok | 161 |
 | Callable: refusal | 0 |
 | Callable: failure (typed) | 0 |
 | Callable: requiresExternal | 0 |
 | Callable: not advertised (legacy) | 6 |
-| Callable: skipped | 0 |
+| Callable: skipped | 2 |
 
 ## The 15 largest schemas
 
@@ -69,6 +69,14 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `archive_project` | factory | chat and voice | action | ok | "Archive the active Software Factory project requested by the owner wi…" (derived, #1) | ok | 41 |  |
 | `attachment_list` | core | chat and voice | unclassified | ok | "List files Dan sent in conversation history" (derived, #1) | ok | 16 |  |
 | `attachment_read` | core | chat and voice | unclassified | ok | "Read a bounded text page, search snippet, or cached image description…" (derived, #1) | ok (3 calls) | 75 |  |
+| `azure_storage_queue_create` | pi | chat and voice | action | ok | "create a Jarvis storage queue" (en, #1) | ok | 42 |  |
+| `azure_storage_queue_delete` | pi | chat and voice | action | ok | "Use this when Dan asks to delete a Jarvis Storage queue and every mes…" (derived, #2) | skipped | 42 | skipped: Requires a live, owner-confirmed browser action. |
+| `azure_storage_queue_delete_message` | pi | chat and voice | action | ok | "delete message from the Jarvis storage queue" (en, #1) | skipped | 79 | skipped: Requires a live, owner-confirmed browser action. |
+| `azure_storage_queue_names` | pi | chat and voice | unclassified | ok | "show me the queue names in Jarvis Storage" (en, #1) | ok | 43 |  |
+| `azure_storage_queue_peek` | pi | chat and voice | unclassified | ok | "peek messages in the Jarvis Storage queue" (en, #2) | ok | 55 |  |
+| `azure_storage_queue_properties` | pi | chat and voice | unclassified | ok | "Use this when you need the properties and approximate message count f…" (derived, #1) | ok | 42 |  |
+| `azure_storage_queue_receive` | pi | chat and voice | action | ok | "receive messages from the Jarvis storage queue" (en, #1) | ok | 73 |  |
+| `azure_storage_queue_send` | pi | chat and voice | action | ok | "send a message to the Jarvis storage queue" (en, #1) | ok | 60 |  |
 | `backend_sleep` | core | chat and voice | unclassified | ok | "put the Jarvis backend to sleep" (en, #1) | ok (2 calls) | 37 |  |
 | `browser_do` | pc | chat and voice | action | ok | "go to dmi.dk and check the forecast" (en, #2) | ok (3 calls) | 64 |  |
 | `browser_do_shared` | pc | chat and voice | action | ok | "click the button on the page I am sharing" (en, #1) | ok (2 calls, 1 typed refusals or failures proven) | 49 |  |

@@ -29,8 +29,9 @@ export function createStorageQueueTools(client: StorageQueueService): JarvisTool
       try {
         const pages = client.listQueues({ ...(args.prefix ? { prefix: args.prefix } : {}), abortSignal: signal })
           .byPage({ maxPageSize: 100, ...(args.continuationToken ? { continuationToken: args.continuationToken } : {}) });
-        const page = (await pages[Symbol.asyncIterator]().next()).value;
-        return { queues: (page?.queueItems ?? []).map((item) => item.name), continuationToken: page?.continuationToken ?? null };
+        const next = await pages[Symbol.asyncIterator]().next();
+        if (next.done) return { queues: [], continuationToken: null };
+        return { queues: (next.value.queueItems ?? []).map(item => item.name), continuationToken: next.value.continuationToken ?? null };
       } catch { throw safeFailure(signal); }
     },
   };
