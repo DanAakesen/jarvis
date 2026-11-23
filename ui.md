@@ -27,7 +27,7 @@ Around the destinations: the opening screen (`JarvisOpeningView`, startup only),
 
 ## Apple Watch
 
-The Watch dashboard opens Chat or an adaptive tile Menu in one tap. Below them are the agenda, workouts, body fat, tasks and recent notes. The app also includes: **Chat** (one entry point with an adaptive composer, dictation and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**.
+The Watch dashboard opens Chat or an adaptive tile Menu in one tap. Below them are the agenda, workouts, body fat, tasks and recent notes. The app also includes: **Chat** (one entry point with a multiline draft, dictation directly into the composer and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**.
 
 ## Widgets and Live Activities
 
