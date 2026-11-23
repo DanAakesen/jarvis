@@ -119,6 +119,8 @@ struct GeneratedViewContent: View {
             TableRenderer(data: envelope.data, language: language)
         case .list(let envelope):
             ListRenderer(data: envelope.data, runtime: runtime, language: language, onAction: onAction)
+        case .map(let envelope):
+            JarvisAppleMapsCard(card: envelope.data)
         case .detail(let envelope):
             DetailRenderer(data: envelope.data)
         case .text(let envelope):
@@ -843,6 +845,7 @@ extension GeneratedView {
         switch self {
         case .table(let value): value.title
         case .list(let value): value.title
+        case .map(let value): value.title
         case .detail(let value): value.title
         case .text(let value): value.title
         case .timeline(let value): value.title
@@ -863,6 +866,7 @@ extension GeneratedView {
         switch self {
         case .table(let value): value.source
         case .list(let value): value.source
+        case .map(let value): value.source
         case .detail(let value): value.source
         case .text(let value): value.source
         case .timeline(let value): value.source
@@ -881,6 +885,7 @@ extension GeneratedView {
         switch self {
         case .table(let value): value.actions ?? []
         case .list(let value): value.actions ?? []
+        case .map(let value): value.actions ?? []
         case .detail(let value): value.actions ?? []
         case .text(let value): value.actions ?? []
         case .timeline(let value): value.actions ?? []

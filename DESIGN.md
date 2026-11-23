@@ -18,6 +18,8 @@ Use the shared orb and network, not a screen-specific effect. Chat, Voice and th
 - **Compact tool tree.** Use an icon, an action label and inline disclosure for grouped calls. While running, trace a moving highlight around the icon outline and shimmer the label; don't pulse the icon. A group shows the worst child state: running while any child runs, then failure before refusal, then success only if every child succeeded. Child status must remain readable without colour or motion. Omit counts and filler.
 - **Blocks stay in the conversation.** Generated results scroll as part of the assistant message and stay in history, not in a sheet. Keep date, place, units, source and issue time with the relevant result. Charts use one scale per unit and provide View data and Copy data. Missing values are gaps, not zeros. Unsupported content keeps a text alternative. Keep ordinary assistant prose unboxed.
 
+The Apple Maps card shows the native map with each place or route, a labelled estimate and one Directions action. Multiple matches are selectable. The owner can repeat an expired lookup. Voice can read the estimate while the phone shows the same card.
+
 ## Voice
 
 Use the established Voice screen and controls; no provider selector, engine badge or split speech settings. Connecting, Listening, Thinking, Speaking, Reconnecting and Ended reflect evidence from the session. Speaking is audio playback, not proof that the mic is off; captions have stable speaker/order and must not jump backwards on reconnect. The GPT-Live backend is audio-only: after an unsupported camera or screen response, stop capture and explain why.

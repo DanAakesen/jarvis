@@ -143,6 +143,8 @@ flowchart TB
 
 **Limits we hit.** [`infra/main.parameters.json`](../infra/main.parameters.json) sets GPT-6.1 Terra GlobalStandard capacity to **600** (600K tokens/minute); Bicep passes that parameter to the deployment. The [#2032](https://github.com/DanAakesen/jarvis/pull/2032) incident reported **84K–116K input tokens per request** on large tool turns; several rounds can hit a shared limit. These are historical measurements, not a local benchmark or a guarantee. The harness can also deny an MCP name in the current session policy *before* `/pi/mcp` sees it. Stick to the two established names and check `pi.stream_failed` and `pi.mcp_tool` together. Weather worked in the ongoing conversation on build 124. The actual rate-limit response and provider replay IDs remain unverified. Chat and Voice can request the coarse iPhone observation with its timestamp through get_settings (area location).
 
+Apple Maps requests use the signed-in iPhone workspace connection. MapKit searches and routes on the phone. The native card and local spoken estimate use a temporary result. PI receives a bounded status receipt. Conversation history holds the lookup request and handle so the owner can request a fresh estimate. [Apple Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/).
+
 ## Memory and Vault Knowledge
 
 | Store or context | Rule |

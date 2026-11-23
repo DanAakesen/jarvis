@@ -1,3 +1,7 @@
+## Apple Maps on iPhone
+
+Ask for a nearby place, a route, or when to leave for a calendar event with an address. Apple Maps on the active iPhone supplies the estimate. The card opens Directions and Voice can read the result hands-free. Ask with a starting address when location access is unavailable.
+
 ## Foundry administration
 
 Ask Jarvis to show Foundry agents, read a version, prepare new instructions or select which version serves traffic. Ask for model deployments by name to inspect the live Azure catalogue.

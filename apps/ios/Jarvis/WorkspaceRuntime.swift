@@ -357,6 +357,7 @@ final class WorkspaceRuntime: ObservableObject {
         switch view {
         case .table(let envelope): envelope.title
         case .list(let envelope): envelope.title
+        case .map(let envelope): envelope.title
         case .detail(let envelope): envelope.title
         case .text(let envelope): envelope.title
         case .timeline(let envelope): envelope.title
