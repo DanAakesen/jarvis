@@ -14,14 +14,14 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **124** | Latest confirmed upload. Dan passed project/issue lookup, Notes, task create/complete, weather in the same conversation and the Proactive switch. Typing, phone location, target settings and Watch dictation/Voice failed. The native fixes from the [merged follow-up](https://github.com/DanAakesen/jarvis/pull/2043) are not in build 124 and are **not accepted on device**. Current Apple tester availability was not read back. |
+| TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). It includes the [native follow-up](https://github.com/DanAakesen/jarvis/pull/2043) and is **not accepted on device**. Build 124 passed project/issue lookup, Notes, task create/complete, weather in the same conversation and the Proactive switch; typing, phone location, target settings and Watch dictation/Voice failed. |
 | Backend | The [recovery Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45100763826) after the lowercase flag fix passed deterministic readiness and the release result check. Manual live conversation acceptance did not run. |
 | Background PI | Dan turned it on in build 124. The Proactive page shows turns used, allowance and last activation. A real GitHub workflow failure triggered a successful review on 23 November. It sent no message. Device delivery awaits verification. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. Wait for an internally available TestFlight build containing the follow-up. Then start with project lookup, finding/renaming a note and creating/completing a task in Chat and Voice. With logged data, compare a Gym lift and today's Nutrition totals across both channels.
+1. Install TestFlight 125. Start with project lookup, finding/renaming a note and creating/completing a task in Chat and Voice. With logged data, compare a Gym lift and today's Nutrition totals across both channels.
 2. Leave Chat during a reply and return to one answer; run the typing check below during a reply. Ask for the phone's location in the same conversation. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
 3. In Settings, verify the single Proactive switch and open Training and Nutrition targets. Save one intended change and reopen each page. Report the exact error if a page still fails.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
