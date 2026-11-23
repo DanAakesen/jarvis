@@ -6,7 +6,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 
 - Every HTTP and SSE request sends the header `Authorization: Bearer TOKEN`.
 - An Entra token is accepted only when the audience is the API client ID, the issuer is v2, the scope is `access_as_user`, and `oid` and `tid` match the owner. Anyone else gets 403.
-- The deployed configuration pins owner sessions on. After Microsoft sign-in, `POST /auth/session` mints the one-time bearer token. Idle lifetime is 10 days, the absolute cap is 30 days, and at most 10 sessions are active. There is no refresh call: when one expires, sign in again. `DELETE /auth/session` revokes this device; `DELETE /auth/sessions` revokes all of them. See the [operator procedure](../runbook.md#owner-session-switch) for the pin and rollback.
+- Checked-in Bicep pins owner sessions on. After Microsoft sign-in, `POST /auth/session` mints the one-time bearer token. Idle lifetime is 10 days, the absolute cap is 30 days, and at most 10 sessions are active. There is no refresh call: when one expires, sign in again. `DELETE /auth/session` revokes this device; `DELETE /auth/sessions` revokes all of them. See the [operator procedure](../runbook.md#owner-session-switch) for the pin and rollback.
 - Native sign-in: MSAL for iOS with authorization code plus PKCE, a public client, scope `access_as_user`, and a mobile redirect URI registered in Entra. The session token lives in the Keychain with the class `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Classes that need an unlocked phone would hide the token when the app wakes in the background, runs a notification action or is used in CarPlay, where the phone is usually locked (the CarPlay developer guide lists them as inaccessible).
 - Face ID gates the screen, not the token. It uses `LocalAuthentication`, with the device passcode as fallback. A running Voice session stays active; Mute and End remain available.
 - Source: `apps/backend/src/auth/hook.ts`, `apps/backend/src/auth/verify.ts`.
@@ -59,7 +59,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 ## 4. Generated views
 
 - Shape: `GeneratedView`, version 1, in `packages/contracts/src/index.d.ts` with runtime guards in `index.js`. It is JSON, not Zod.
-- Renderers: table, list, detail, text (plain or markdown), timeline, chart (line, bar or area, up to 5 series and 1000 points), task-card, status, image, html-app, knowledge-graph, code.
+- Renderers: table, list, detail, text (plain or markdown), timeline, chart (line, bar or area, up to 5 series and 1000 points), map, task-card, status, image, html-app, knowledge-graph, code. The iPhone map view carries a lookup reference and optional rerun request, not the MapKit result.
 - Actions (up to 10 per view): open-route, open-link, call-tool, window.
 - Renderer support varies by surface. Unsupported blocks keep a text alternative; use the native Workspaces surface for user-opened generated apps.
 

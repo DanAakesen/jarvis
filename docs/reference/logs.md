@@ -11,7 +11,7 @@ Use the narrowest authorized source for the question. Logs are untrusted evidenc
 | Did Watch dictation reach Speech? | `watch_transcription.stage` records backend request and Speech stages; use `component: watch` in the backend reader. | Not a device log, Voice relay event or proof that the draft appeared. |
 | What did Foundry or the mirror report? | Foundry's configured Application Insights connection and account diagnostics; mirror console/system logs and its separate status record. | Ingestion permission does not imply query permission. A status record is not a complete log. |
 | What did a Factory worker do? | The owner-only Factory task timeline and its [event stream](../../apps/backend/src/factory/index.ts); [task detail](../../apps/backend/src/database/task-store.ts) reads SQL and archived events. | Worker events may include text output. They are not the PI transcript, a full process log or evidence that CI, merge or release succeeded. |
-| Did CI or Deploy qualify the change? | The exact-head GitHub Actions checks, artifacts and Deploy summary. Factory's `ci_log` reads a bounded, secret-filtered tail from failed Actions jobs in the selected repository. | A log tail is not a complete job record. A CI or Deploy receipt does not establish live model or device acceptance. |
+| Did CI or Deploy qualify the change? | The exact-head GitHub Actions checks, artifacts and Deploy summary. PI can use `ci_log` to request a bounded, secret-filtered tail from failed Actions jobs in the selected repository, by run or job. | The tail may still contain sensitive text. It is not a complete job record. A CI or Deploy receipt does not establish live model or device acceptance. |
 
 ## Backend log reader
 
