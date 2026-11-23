@@ -1,4 +1,4 @@
-import type { GoogleApiClient } from '../../google/api-client.js';
+import type { GoogleApiClient, GoogleReadSession } from '../../google/api-client.js';
 import { gmailHeaders } from '../../google/tools.js';
 import type { ProactiveSource, SourceContext, SourceFact, SourceResult } from '../types.js';
 import { cleanSourceText, observedAtOrEpoch, sourceFailureReason, sourceSignal } from './shared.js';
@@ -44,10 +44,10 @@ function senderName(value: string): string | undefined {
   return cleanSourceText(withoutAddresses || domain, 120) || cleanSourceText(domain, 120);
 }
 
-function messageFact(payload: Record<string, unknown>, id: string): MailFactData | undefined {
+function messageFact(payload: Record<string, unknown>, id: string): MailFactData | null | undefined {
   const headers = gmailHeaders(payload);
   if (headers['list-unsubscribe']?.trim() ||
-      /^(?:bulk|list|junk)$/iu.test(headers.precedence?.trim() ?? '')) return undefined;
+      /^(?:bulk|list|junk)$/iu.test(headers.precedence?.trim() ?? '')) return null;
   const sender = senderName(headers.from ?? '');
   const timestamp = Date.parse(headers.date ?? '');
   if (!sender || !Number.isFinite(timestamp)) return undefined;
@@ -60,22 +60,18 @@ function messageFact(payload: Record<string, unknown>, id: string): MailFactData
 }
 
 async function readMessage(
-  google: GoogleApiClient,
+  get: GoogleReadSession['get'],
   id: string,
-  signal: AbortSignal,
-): Promise<MailFactData | undefined> {
+): Promise<MailFactData | null | undefined> {
   const query = new URLSearchParams({ format: 'metadata' });
   for (const header of METADATA_HEADERS) query.append('metadataHeaders', header);
   query.set('fields', 'id,payload(headers(name,value))');
-  const payload = await google.request(
-    'gmail',
-    `/users/me/messages/${encodeURIComponent(id)}?${query}`,
-    { method: 'GET', signal },
-  );
+  const payload = await get(`/users/me/messages/${encodeURIComponent(id)}?${query}`);
   return messageFact(payload, id);
 }
 
 export function createMailSource(google?: GoogleApiClient): ProactiveSource {
+  let previous: { key: string; entries: Map<string, MailFactData | null> } | undefined;
   return {
     id: 'mail',
     label: 'Mail',
@@ -89,7 +85,11 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
           maxResults: String(MAX_MESSAGES),
           fields: 'messages(id)',
         });
-        const listing = await google.request('gmail', `/users/me/messages?${query}`, { method: 'GET', signal });
+        const session = await google.openReadSession?.('gmail', signal);
+        const get = session?.get ?? ((path: string) => google.request('gmail', path, { method: 'GET', signal }));
+        const listing = await get(`/users/me/messages?${query}`);
+        const known = session && previous?.key === session.cacheKey ? previous.entries : undefined;
+        const next = new Map<string, MailFactData | null>();
         const items = Array.isArray(listing.messages) ? listing.messages.slice(0, MAX_MESSAGES) : [];
         if (listing.messages !== undefined && !Array.isArray(listing.messages)) throw new TypeError('Invalid Gmail response');
         const ids = items.map((item) => {
@@ -107,7 +107,10 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
           const batch = await Promise.all(ids.slice(offset, offset + MESSAGE_CONCURRENCY).map(async (id) => {
             if (!id) return undefined;
             try {
-              return await readMessage(google, id, signal);
+              const cached = known?.get(id);
+              const fact = cached === undefined ? await readMessage(get, id) : cached;
+              if (fact !== undefined) next.set(id, fact);
+              return fact;
             } catch (error) {
               failures += 1;
               const reason = sourceFailureReason(error, signal);
@@ -117,10 +120,10 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
           }));
           for (const fact of batch) {
             if (!fact) continue;
-              const identity = `gmail-message:${fact.id}`;
+            const identity = `gmail-message:${fact.id}`;
             facts.push({
-                ref: identity,
-                identity,
+              ref: identity,
+              identity,
               kind: 'mail',
               label: 'Mail',
               text: cleanSourceText(`From ${fact.sender} | ${fact.subject}`),
@@ -129,6 +132,7 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
           }
           if (fatalReason) break;
         }
+        previous = session && !fatalReason ? { key: session.cacheKey, entries: next } : undefined;
         if (fatalReason) {
           return { source: 'mail', state: 'unavailable', reason: fatalReason, facts: [], observedAt };
         }
@@ -137,6 +141,7 @@ export function createMailSource(google?: GoogleApiClient): ProactiveSource {
         }
         return { source: 'mail', state: 'ok', reason: null, facts, observedAt };
       } catch (error) {
+        previous = undefined;
         return {
           source: 'mail',
           state: 'unavailable',
