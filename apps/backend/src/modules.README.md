@@ -8,8 +8,9 @@ routes and tools. An explicit `modules` option replaces the default composition;
 include [core](core/index.ts) when the app needs health probes or tool dispatch.
 
 - [Core](core/index.ts) owns `GET /tools` and schema-validated `POST /tools/:name`.
-  The dispatcher binds calls to a message and records a tool outcome. A
-  `ToolRefusal` supplies a safe reason; a failed action can carry an unknown
+  The dispatcher returns the outcome and attempts to persist it for calls with a
+  valid message ID. Some calls, such as proactive wakes, do not have one.
+  A `ToolRefusal` supplies a safe reason; a failed action can carry an unknown
   outcome. Use the actual receipt instead of assuming a retry is safe.
 - [Factory](factory/index.ts) owns projects, tasks and the worker event stream.
   [Foundry](foundry/README.md) owns the sandbox client.

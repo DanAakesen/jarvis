@@ -10,7 +10,8 @@ retain the `daily` namespace.
 - The signed-in owner can add a manual calorie entry through
   [`POST /health/meals`](../routes/manual-meals.ts). iPhone submits the
   occurrence and an idempotency key. The server derives the Copenhagen date,
-  leaves unsupplied macros null, and reuses the saved entry on an exact retry.
+  and leaves unsupplied macros null. If the save is unconfirmed, retry with the
+  same key, occurrence and kcal; an exact retry does not add another meal.
 - `health_food` logs an explicit label or saved favourite from the verified
   current owner message. The model supplies the operation, not the food,
   amount, owner or operation key. One source message cannot log two meals.
@@ -26,9 +27,9 @@ retain the `daily` namespace.
   Apple Health. The parked [external connector](../mcp/README.md) has its own
   approval boundary.
 
-Only a matching committed receipt supports “logged” or “updated”. If commit
-is uncertain, read back the exact entry before retrying. Store changes publish
-refresh after acknowledged commit, not on replay.
+Only a matching committed receipt supports “logged” or “updated”. For an
+uncertain tool write, read back the exact entry before retrying. Store changes
+publish refresh after acknowledged commit, not on replay.
 
 ## Reads and reference data
 
