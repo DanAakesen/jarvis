@@ -34,19 +34,26 @@ it('reads the busy agenda and later trips in two requests without losing a trip 
   google.assertServed();
 });
 
-it('finishes a short provider page within the same authorization and the remaining event limit', async () => {
+it('finishes a short page with the same query and authorization, and caps processed events locally', async () => {
   let token = 'first';
-  const calls: [string | null, string | null][] = [];
+  const calls: { auth: string | null; query: Record<string, string> }[] = [];
   const google = createGoogleApiClient({ tokens: { getToken: async () => token }, fetch: async (input, options) => {
     const url = new URL(String(input));
-    calls.push([new Headers(options?.headers).get('Authorization'), url.searchParams.get('maxResults')]);
-    if (url.searchParams.get('pageToken')) return Response.json({ items: [event('b', 'B', 2, 3)] });
+    calls.push({ auth: new Headers(options?.headers).get('Authorization'), query: Object.fromEntries(url.searchParams) });
+    if (url.searchParams.get('pageToken')) return Response.json({ items: [
+      event('b', 'B', 2, 3),
+      ...Array.from({ length: 48 }, (_, i) => ({ ...event('cancelled-' + i, '', 2, 3), status: 'cancelled' })),
+      event('outside-limit', 'Outside limit', 3, 4),
+    ] });
     token = 'second';
     return Response.json({ items: [event('a', 'A', 0, 1)], nextPageToken: 'second-page' });
   } });
   const source = createCalendarSource(google);
   expect((await source.read(context())).facts.map(fact => fact.ref)).toEqual(['calendar-event:a', 'calendar-event:b']);
-  expect(calls.splice(0)).toEqual([['Bearer first', '50'], ['Bearer first', '49']]);
+  const [first, second] = calls.splice(0);
+  expect(first).toMatchObject({ auth: 'Bearer first', query: { maxResults: '50' } });
+  expect(first?.query).not.toHaveProperty('pageToken');
+  expect(second).toEqual({ auth: 'Bearer first', query: { ...first?.query, pageToken: 'second-page' } });
   await source.read(context());
-  expect(calls[0]?.[0]).toBe('Bearer second');
+  expect(calls[0]?.auth).toBe('Bearer second');
 });

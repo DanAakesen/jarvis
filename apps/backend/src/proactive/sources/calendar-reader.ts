@@ -84,7 +84,7 @@ export async function readCalendarEvents(
   let remaining = MAX_EVENTS;
   let pageToken: string | undefined;
   for (let page = 0; page < MAX_PAGES && remaining > 0; page += 1) {
-    const payload = await get(calendarViewPath(from, to, remaining, undefined, pageToken));
+    const payload = await get(calendarViewPath(from, to, MAX_EVENTS, undefined, pageToken));
     if (payload.items !== undefined && !Array.isArray(payload.items)) throw new TypeError('Invalid calendar response');
     const items = Array.isArray(payload.items) ? payload.items.slice(0, remaining) : [];
     remaining -= items.length;
