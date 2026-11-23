@@ -1,112 +1,34 @@
-# Health read models
+# Health module
 
-The area is named Health in the owner-facing workspace. Internal module and API
-identifiers, including the `/health/*` routes and `daily` source ids, remain unchanged.
+[`composeHealth`](composition.ts) is the production entry point. It registers
+nothing when the server switch is off. The checked-in
+[deployment](../../../../infra/main.bicep) sets `JARVIS_HEALTH_ENABLED` to `true`;
+the enabled module uses the existing backend SQL pool and resolves the owner
+from the authenticated request. `daily` remains the SQL schema and source-key
+namespace. `/health/*` and `health_*` are the current route and tool names.
 
-`HealthQueryService` is the shared read-only boundary for `/health/query`,
-`daily_query`, the generated-view tool and the nutrition MCP connector. It
-reuses the existing owner resolver, bounded SQL readers, 30-second timeout and
-768 KiB result budget; callers cannot select an owner.
+## Read and write boundaries
 
-Capabilities are negotiated independently from the query contract. Version 1
-keeps its original nine sources, version 2 keeps its original eleven sources,
-version 3 adds `daily.health.metric-catalog` and `daily.nutrition.days`, and
-version 4 adds the optional Gmail attention and calendar feed sources. Version 5
-adds `daily.health.training-targets` when the existing owner-bound target reader
-is composed. Feed sources appear only for the authenticated owner browser when
-the default-off feed composition exists. Versions 1–4 retain their source lists;
-clients that do not request a supported version receive version 1.
+- [`HealthQueryService`](query.ts) serves `/health/query`, `health_query` and
+  `health_show`. Health and nutrition reads use bounded SQL queries and return
+  partial data explicitly. Use `/health/capabilities` for the caller's source
+  list; capability versions are separate from the query contract. Version 6
+  advertises lifts only to the signed-in owner when the lift reader is composed.
+- `GET` and `PATCH /health/training-targets` are Settings routes for the signed-in
+  owner. Unset weekly gym/run or daily steps targets stay null. A patch changes
+  only the supplied fields; null clears a field. The `daily.health.training-targets`
+  query is read-only.
+- [Nutrition](nutrition/README.md) owns the meal ledger and its owner-facing
+  tools. [Health upload](health-upload/README.md) owns ingestion and delivery
+  receipts. See the [native contract](../../../../docs/ios/integration-contract.md)
+  for iPhone routes.
+- Calendar and Gmail are in the [Google module](../google/tools.ts), not Health.
+  The separate [nutrition MCP connector](mcp/README.md) is not composed by
+  production startup.
 
-- `daily.attention` reads retained waiting-for-you/waiting-on-others threads and
-  order attention, with business-day age and hidden state. Missing/stale Gmail
-  coverage is reported as partial, not as a successful empty result.
-- `daily.calendar` accepts an inclusive `from` and exclusive `to` ISO instant
-  with a maximum 62-day span. It filters only the retained calendar snapshot and
-  reports whether that snapshot covers the requested range. Older snapshots
-  without saved range metadata remain explicitly uncovered.
-- The owner browser can request a manual refresh, hide a thread, mark an order
-  received in Health, or restore an exact hidden key through `/health/feeds/*`.
-  These endpoints are owner-only and derive action intent from the authenticated
-  browser request; they accept no confirmation flag. The refresh retains the
-  existing 30-second cooldown.
-
-- `daily.health.metrics` and heart-rate reads optionally filter by one exact
-  `metric_name` or its readable name. Exact names take precedence; the filter is
-  applied in the read model before the bounded row limit.
-- `daily_show` keeps a measurement selection in the bounded read rather than
-  trimming an unrelated page afterward. Its `rowsReturned`, `hasMore` and
-  partial disclosures describe the filtered result; it does not fetch further
-  pages or claim that a bounded page covers the full requested period.
-- Health metric rows include typed aggregation, bounded source labels and latest
-  sample metadata. Sleep and minute heart-rate rows include up to five source
-  labels and say when the list was capped; raw `fields_json` and `source_json`
-  are not returned by these projections.
-- `daily.health.training-targets` reads the existing owner target store. Missing
-  targets stay null and appear in `missing`; the query adds no write capability.
-- `daily.health.workout` keeps its existing detail and adds normalized
-  per-workout metrics not already summarized there. The additional list is capped
-  at 100; a cap hit marks both the record and result partial without a fabricated
-  continuation cursor.
-- `daily.health.metric-catalog` pages metric names over a maximum 366-day
-  period, with sorted distinct non-null units (up to five), first/last dates,
-  day count and latest update time.
-- `daily.nutrition.days` pages only dates containing retained, non-deleted
-  meals. Totals sum recorded values; null totals are unknown, nutrients with
-  some but not all meal values are marked partial lower bounds, and empty days
-  are never fabricated.
-- `daily.sync` returns separate `feeds`, `heartbeat` and `inbox` evidence.
-  Inbox fields are `retained`, `retained_bytes`, `byte_limit`, `row_limit`,
-  `pending`, `processing`, `quarantined`, `last_accepted_at` and `last_processed_upload_at`.
-  `retained_bytes` sums stored `byte_count` across all retained rows for the
-  authenticated owner, regardless of processing status. It is zero for an
-  empty inbox. The numeric limits always report the shared upload store ceilings
-  (256 MiB and 10,000 rows), including when empty. These additive fields expose
-  no payload content and do not change ingest, processing or retention.
-
-Both new collection queries use keyset cursors and parameterized SQL bounded
-to `TOP(@limit + 1)`. Metric catalogues default to 100 (maximum 500) rows;
-nutrition days default to 50 (maximum 400). Neither requires a table or index
-migration. `docs/architecture.md` records the broader read boundary and
-version-compatibility details; `docs/archive/daily-health-read-coverage.md`
-maps retained storage through shared reads to actual tools and records the
-remaining exclusions and partial-detail bound.
-
-Run the focused contracts and backend checks with:
+Offline checks from the repository root:
 
 ```sh
 npm test --workspace @jarvis/contracts
-npm test --workspace @jarvis/backend
-```
-
-The backend suite was cut to a minimal safety set (authorization, log redaction,
-migrations, the boot smoke test and tool-outcome safety); Health behavior is no
-longer covered by dedicated backend tests.
-
-## Owner training targets (P14-45, #1132)
-
-The owner sets weekly gym sessions, weekly run sessions and steps per day in
-Settings. The target values have no defaults; every read returns `null` for an
-unset value and the server-owned bounds. Migration `0061_daily_training_targets`
-stores only nonempty, owner-keyed rows in `daily.training_targets`; a down
-migration refuses to discard any such row.
-
-`GET` and `PATCH /health/training-targets` are signed-in-owner Settings routes
-only. They reject agent, runner, connector and other identities, query strings
-and invalid or oversized patches. A clear is `null`; partial updates preserve
-the other values and commit transactionally. The assistant has no training
-target write tool. The former eight-slot catalogue rationale is superseded by
-#1204; that issue does not approve this capability. The existing `daily_query`
-reads targets through the shared store and also returns them in
-`daily_health_summary`; no new catalogue entry is needed.
-
-The web client validates the full target response and owns the Settings
-editor's load/save recovery states. `useTrainingTargets` provides a validated
-loading/settled/error read and retry contract for later Overview, Workouts and
-Health consumers; this change does not modify those views.
-
-Focused checks:
-
-```sh
-npm test --workspace @jarvis/backend -- src/health/training/targets.test.ts src/health/training/targets-store.test.ts src/health/routes/training-targets.test.ts src/health/composition.test.ts src/health/index.test.ts src/database/migrations.test.ts
-npm test --workspace @jarvis/web -- src/health/training-targets.test.ts src/health/TrainingTargetsSettings.test.tsx src/SettingsPage.test.tsx
+npm test --workspace @jarvis/backend -- src/health/routes/settings-targets.test.ts src/health/tools/source-tools.test.ts
 ```
