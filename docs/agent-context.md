@@ -10,7 +10,7 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent logs
 
-Start with a UTC window and [the log source map](reference/logs.md). Stored Chat messages and receipts show what the app committed; Foundry history and the Factory worker timeline are separate. Diagnostic streams are not part of the default PI prompt. PI can request the bounded backend log view when configured; operators use the named diagnostic sources for anything it omits. Diagnostic events are not model reasoning. Keep raw output and prompts out of PRs.
+Start with a UTC window and [the log source map](reference/logs.md). Stored Chat messages and receipts show what the app committed; Foundry history and the Factory worker timeline are separate. Logs are not injected into PI context. In Chat or delegated Voice, PI can discover `read_backend_logs` and use it on the current turn when enabled. Operators use the separate source for fields or events the reader omits. Diagnostic events are not model reasoning. Keep raw output and prompts out of PRs.
 
 ## Setup and commands
 
@@ -106,13 +106,13 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-The Apple build number is the upload workflow’s run number. Check Apple’s receipt after upload. Internal availability requires `VALID` processing, `IN_BETA_TESTING` and an unexpired build. If processing continues, recheck the same build without another archive:
+The upload job checks out the dispatch SHA; its run number is the Apple build number. The receipt checks for `VALID` processing, `IN_BETA_TESTING` and an unexpired build. A successful upload alone proves none of those. The authorised release owner can recheck the same build without another archive:
 
 ```sh
 gh workflow run ios-testflight.yml --ref main -f branch=main -f receipt_build_number=BUILD_NUMBER
 ```
 
-Report the available build and its device checks in the [plan’s](../PLAN.md) daily-core order. Keep acceptance issues open until the owner confirms the result.
+Report confirmed availability and the [plan’s](../PLAN.md) daily-core checks separately. Keep acceptance issues open until the owner confirms the result.
 
 ## Cost and safety
 
