@@ -119,7 +119,7 @@ describe('Apple Maps through the shared PI door', () => {
       if (event === 'workspace-command') {
         const { command } = data;
         commands.push(command);
-        const mapReceipt = command.operation === 'apple-maps' ? { matches: 2, spoken: channel === 'voice' } : undefined;
+        const mapReceipt = command.operation === 'apple-maps' ? { matches: 'ordinal' in command ? 1 : 2, spoken: channel === 'voice' } : undefined;
         queueMicrotask(() => {
           void post('/now/workspace/commands/' + command.commandId + '/ack', { sessionId: phone.sessionId, applied: true, mapReceipt });
         });
@@ -139,6 +139,7 @@ describe('Apple Maps through the shared PI door', () => {
     expect(result).toMatchObject({ outcome: 'ok', result: { matches: 2, spoken: channel === 'voice' } });
     expect(commands[0]).toMatchObject({ ...query, commandId: expect.any(String), operation: 'apple-maps', target: 'phone',
       ...(channel === 'voice' ? { speakResult: true } : {}) });
+    expect(result.result.lookupId).toBe(commands[0]!.commandId);
     const expectedData = { lookupId: commands[0]!.commandId, request: query };
     const blocks = app.chatBlocks.take('7');
     if (channel === 'voice') {
@@ -152,5 +153,13 @@ describe('Apple Maps through the shared PI door', () => {
         { ...view, data: { view: { ...view.data.view, renderer: 'map', data: expectedData } } } });
       expect(replay).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('apple_maps') } });
     }
+    const selected = await tool('call_tool', { turn: grant.turn, name: 'apple_maps',
+      arguments: { lookupId: result.result.lookupId, ordinal: 2 } });
+    expect(selected).toMatchObject({ outcome: 'ok', result: { matches: 1, spoken: channel === 'voice' } });
+    const selectedCommand = commands.find(command => command.ordinal === 2)!;
+    const selectedCard = channel === 'voice' ? commands.at(-1)?.view :
+      (app.chatBlocks.take('7')[0]?.data as { view?: unknown })?.view;
+    expect(selectedCard).toHaveProperty('renderer', 'map');
+    expect(selectedCard).toHaveProperty('data', { lookupId: selectedCommand.commandId });
   });
 });

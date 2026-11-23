@@ -7,13 +7,14 @@ import SwiftUI
 struct JarvisAppleMapsCard: View {
     let card: AppleMapsViewData
     @ObservedObject private var store = JarvisAppleMapsStore.shared
+    @State private var refreshedLookupId: String?
     @State private var selection: Int?
     @State private var refreshing = false
     @State private var handoffFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
-            if let result = store.result(for: card.lookupId) {
+            if let result = store.result(for: refreshedLookupId ?? card.lookupId) {
                 if !result.places.isEmpty {
                     map(for: result)
                     if result.places.count > 1 {
@@ -34,8 +35,7 @@ struct JarvisAppleMapsCard: View {
                             Text(place.name).font(.headline)
                             Text(place.address).font(.subheadline).foregroundStyle(.secondary)
                         }
-                        if let seconds = place.travelSeconds {
-                            let minutes = max(1, Int(ceil(seconds / 60)))
+                        if let seconds = place.travelSeconds, let minutes = place.travelMinutes {
                             Label("About \(minutes) min \(result.mode == "walking" ? "walking" : "driving")",
                                   systemImage: result.mode == "walking" ? "figure.walk" : "car")
                             if let arrival = result.arriveBy.flatMap(AppleMapsResult.date) {
@@ -57,12 +57,14 @@ struct JarvisAppleMapsCard: View {
                     }
                 }
                 if let reason = result.reason { Text(reason).font(.footnote).foregroundStyle(.secondary) }
-                if result.places.isEmpty {
-                    refreshButton(title: "Search again")
+                if result.places.isEmpty, let request = card.request {
+                    refreshButton(title: "Search again", request: request)
                 }
+            } else if let request = card.request {
+                Text(request.query).font(.body)
+                refreshButton(title: "Look up in Apple Maps", request: request)
             } else {
-                Text(card.request.query).font(.body)
-                refreshButton(title: "Look up in Apple Maps")
+                Text("This place selection expired. Ask for a fresh search.")
             }
             if handoffFailed {
                 Text("Apple Maps couldn’t open directions.").font(.footnote).foregroundStyle(.secondary)
@@ -70,6 +72,7 @@ struct JarvisAppleMapsCard: View {
         }
         .privacySensitive()
         .onChange(of: card.lookupId) { _, _ in
+            refreshedLookupId = nil
             selection = nil
             handoffFailed = false
         }
@@ -97,12 +100,14 @@ struct JarvisAppleMapsCard: View {
         .accessibilityLabel("Map showing \(result.places.map(\.name).joined(separator: ", "))")
     }
 
-    private func refreshButton(title: String) -> some View {
+    private func refreshButton(title: String, request: AppleMapsRequest) -> some View {
         JarvisLabelledButton(title: title, systemImage: "map", identifier: "maps.refresh",
                              isBusy: refreshing, isDisabled: refreshing) {
             refreshing = true
             Task {
-                await store.refresh(lookupId: card.lookupId, request: card.request)
+                let id = UUID().uuidString.lowercased()
+                await store.refresh(lookupId: id, request: request)
+                refreshedLookupId = id
                 selection = nil
                 refreshing = false
             }

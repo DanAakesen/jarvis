@@ -101,6 +101,12 @@ test('Apple Maps history stores the original lookup; a route or result cannot en
     assert.equal(isChatBlock({ ...block, data: { view: { ...view, data: { ...view.data, ...extra } } } }), false);
   }
   const command = { commandId: lookupId, operation: 'apple-maps', target: 'phone', ...request };
+  const choice = { commandId: lookupId, operation: 'apple-maps', target: 'phone', lookupId, ordinal: 2 };
+  assert.equal(isWorkspaceCommand(choice), true);
+  for (const invalid of [{ ordinal: 0 }, { ordinal: 4 }, { ordinal: 1.5 }, { lookupId: 'yesterday' }, { query: 'new search' }]) {
+    assert.equal(isWorkspaceCommand({ ...choice, ...invalid }), false);
+  }
+  assert.equal(isChatBlock({ ...block, data: { view: { ...view, data: { lookupId } } } }), true);
   assert.equal(isWorkspaceCommand({ ...command, speakResult: true }), true);
   assert.equal(isWorkspaceCommand({ ...command, target: 'all' }), false);
   assert.equal(isWorkspaceCommand({ ...command, bufferMinutes: -1 }), false);

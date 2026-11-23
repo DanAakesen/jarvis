@@ -102,6 +102,10 @@ describe('Apple Maps phone acknowledgements', () => {
     broker.acknowledge('owner', phone.sessionId, received[1]!, false, 'Private provider message.');
     await expect(failed).rejects.toThrow('Apple Maps was unavailable on the iPhone.');
     phone.close();
+    broker.updateSnapshot('owner', other.sessionId, { ...snapshot, device: { kind: 'phone', appleMaps: true } });
+    await expect(broker.appleMaps('owner', { lookupId: id, ordinal: 1 }, false, new AbortController().signal))
+      .resolves.toMatchObject({ matches: 0, reason: 'expired_lookup' });
+    broker.updateSnapshot('owner', other.sessionId, snapshot);
     await expect(broker.appleMaps('owner', { query: 'station' }, false, new AbortController().signal)).rejects.toThrow('Open Jarvis on an iPhone');
   });
 });

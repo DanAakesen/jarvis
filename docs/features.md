@@ -1,6 +1,6 @@
 ## Apple Maps on iPhone
 
-Ask for a nearby place, a route, or when to leave for a calendar event with an address. Apple Maps on the active iPhone supplies the estimate. The card opens Directions and Voice can read the result hands-free. Ask with a starting address when location access is unavailable.
+Ask for a nearby place, a route, or when to leave for a calendar event with an address. Apple Maps on the active iPhone supplies the estimate. The card opens Directions and Voice can read the result hands-free. For multiple matches, tap a place or say “the second one”. The choice uses the list already on the phone. If it expired, ask again. Supply a starting address for nearby searches or routes when location is unavailable.
 
 ## Foundry administration
 

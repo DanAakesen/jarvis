@@ -278,12 +278,11 @@ final class WorkspaceRuntime: ObservableObject {
                         outcome: .refused, reason: "Open Jarvis on the iPhone to search Apple Maps.")
                     return
                 }
-                guard let request = AppleMapsRequest(command: command) else {
+                guard let lookup = try await JarvisAppleMapsStore.shared.resolve(lookupId: id, command: command) else {
                     try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: false,
                         outcome: .refused, reason: "The phone could not read the Apple Maps request.")
                     return
                 }
-                let lookup = try await JarvisAppleMapsStore.shared.lookup(lookupId: id, request: request)
                 guard lookup.status != .unavailable else {
                     try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: false,
                         outcome: .error, reason: "Apple Maps is unavailable on the phone.")

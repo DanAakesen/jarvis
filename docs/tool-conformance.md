@@ -51,10 +51,10 @@ and when this file no longer matches the registry.
 | 9 | `message_dan` | 397 | 397 | 808 |
 | 10 | `health_query` | 391 | 391 | 1182 |
 | 11 | `github_read` | 325 | 325 | 627 |
-| 12 | `pc_browser_act` | 281 | 281 | 392 |
-| 13 | `update_project` | 270 | 270 | 311 |
-| 14 | `health_summary` | 268 | 268 | 460 |
-| 15 | `manage_foundry_agent` | 241 | 241 | 311 |
+| 12 | `apple_maps` | 311 | 311 | 485 |
+| 13 | `pc_browser_act` | 281 | 281 | 392 |
+| 14 | `update_project` | 270 | 270 | 311 |
+| 15 | `health_summary` | 268 | 268 | 460 |
 
 Schemas above the ceiling, each with a ratchet (they may not grow):
 
@@ -65,7 +65,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 
 | Tool | Group | Visible to | Effect | Static | Discoverable | Callable | Schema tokens | Notes |
 | --- | --- | --- | --- | --- | --- | --- | ---: | --- |
-| `apple_maps` | core | chat and voice | read | ok | "find a coffee shop near me" (en, #2) | ok | 102 |  |
+| `apple_maps` | core | chat and voice | read | ok | "find a coffee shop near me" (en, #2) | ok | 311 |  |
 | `archive_project` | factory | chat and voice | action | ok | "Archive the active Software Factory project requested by the owner wi…" (derived, #1) | ok | 41 |  |
 | `attachment_list` | core | chat and voice | unclassified | ok | "List files Dan sent in conversation history" (derived, #1) | ok | 16 |  |
 | `attachment_read` | core | chat and voice | unclassified | ok | "Read a bounded text page, search snippet, or cached image description…" (derived, #1) | ok (3 calls) | 75 |  |

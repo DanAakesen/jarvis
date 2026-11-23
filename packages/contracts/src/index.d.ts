@@ -361,10 +361,11 @@ interface GeneratedViewBase {
   actions?: GeneratedViewAction[];
 }
 
-export interface AppleMapsQuery {
+export interface AppleMapsSearch {
   query: string; origin?: string; searchOnly?: boolean; mode?: 'driving' | 'walking'; arriveBy?: string; bufferMinutes?: number;
 }
-export interface AppleMapsViewData { lookupId: string; request: AppleMapsQuery }
+export type AppleMapsQuery = AppleMapsSearch | { lookupId: string; ordinal: number };
+export interface AppleMapsViewData { lookupId: string; request?: AppleMapsSearch }
 export const appleMapsQuerySchema: Readonly<Record<string, unknown>>;
 export const appleMapsViewSchema: Readonly<Record<string, unknown>>;
 export function isAppleMapsQuery(value: unknown): value is AppleMapsQuery;

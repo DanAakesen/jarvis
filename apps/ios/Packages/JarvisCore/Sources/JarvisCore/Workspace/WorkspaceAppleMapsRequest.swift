@@ -6,6 +6,8 @@ public struct WorkspaceMapReceipt: Encodable, Equatable, Sendable {
         case needsOrigin = "needs_origin"
         case noMatches = "no_matches"
         case partial, unavailable
+        case expiredLookup = "expired_lookup"
+        case invalidChoice = "invalid_choice"
     }
     public let matches: Int
     public let spoken: Bool
@@ -18,9 +20,25 @@ public struct WorkspaceMapReceipt: Encodable, Equatable, Sendable {
     }
 }
 
+public struct AppleMapsSelection: Equatable, Sendable {
+    public let lookupId: String
+    public let ordinal: Int
+
+    public init?(command: WorkspaceCommand) {
+        guard command.operation == "apple-maps", command.fields["target"] == .string("phone"),
+              command.fields.keys.allSatisfy({ ["target", "speakResult", "lookupId", "ordinal"].contains($0) }),
+              case .string(let id)? = command.fields["lookupId"], UUID(uuidString: id) != nil,
+              case .number(let number)? = command.fields["ordinal"], let ordinal = Int(exactly: number),
+              (1...3).contains(ordinal) else { return nil }
+        self.lookupId = id
+        self.ordinal = ordinal
+    }
+}
+
 extension AppleMapsRequest {
     public init?(command: WorkspaceCommand) {
         guard command.operation == "apple-maps", command.fields["target"] == .string("phone"),
+              command.fields["lookupId"] == nil, command.fields["ordinal"] == nil,
               let data = try? JSONEncoder().encode(command.fields),
               let request = try? JSONDecoder().decode(Self.self, from: data),
               request.mode == nil || request.mode == "driving" || request.mode == "walking",
@@ -30,6 +48,10 @@ extension AppleMapsRequest {
               request.bufferMinutes.map({ (0...1440).contains($0) }) ?? true,
               request.arriveBy == nil || request.arrivalDate != nil else { return nil }
         self = request
+    }
+
+    public func canSearchDestination(hasOrigin: Bool) -> Bool {
+        searchOnly == true || hasOrigin
     }
 
     public var arrivalDate: Date? {

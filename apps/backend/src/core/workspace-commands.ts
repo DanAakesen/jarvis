@@ -63,7 +63,7 @@ interface CommandRecord {
 }
 type WorkspaceCommandOutcome = 'refused' | 'error';
 
-const mapReceiptReasons = ['needs_origin', 'no_matches', 'partial', 'unavailable'] as const;
+const mapReceiptReasons = ['needs_origin', 'no_matches', 'partial', 'unavailable', 'expired_lookup', 'invalid_choice'] as const;
 export interface AppleMapsReceipt {
   matches: number;
   spoken?: boolean;
@@ -226,14 +226,20 @@ export class WorkspaceCommandBroker {
     const target = command.target ?? 'active';
     const mapSession = command.operation === 'create' && command.view.renderer === 'map'
       ? ownerRecords.get(command.view.data.lookupId)?.sessionIds : undefined;
+    const selection = command.operation === 'apple-maps' && 'lookupId' in command ? command : undefined;
+    const prior = selection && ownerRecords.get(selection.lookupId);
+    if (selection && !(prior?.expectsMapReceipt && prior.state === 'applied')) {
+      return { matches: 0, reason: 'expired_lookup' };
+    }
     const candidates = [...ownerConnections.values()].filter((connection) =>
       command.operation === 'apple-maps'
-        ? connection.snapshot?.device?.kind === 'phone' && connection.snapshot.device.appleMaps === true
+        ? connection.snapshot?.device?.kind === 'phone' && connection.snapshot.device.appleMaps === true && (!prior || prior.sessionIds.has(connection.sessionId))
         : (!mapSession || mapSession.has(connection.sessionId)) &&
           (target === 'active' || target === 'all' || connection.snapshot?.device?.kind === target));
     const latest = this.latestConnection(candidates);
     const recipients = target === 'all' ? candidates : latest ? [latest] : [];
     if (!recipients.length) {
+      if (selection) return { matches: 0, reason: 'expired_lookup' };
       if (command.operation === 'apple-maps') throw new ToolRefusal('Open Jarvis on an iPhone with Apple Maps support, then ask again.');
       const kinds = [...new Set([...ownerConnections.values()]
         .map((connection) => connection.snapshot?.device?.kind ?? 'unknown device'))];

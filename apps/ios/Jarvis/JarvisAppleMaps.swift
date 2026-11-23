@@ -24,12 +24,10 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
                     let coordinate = item.location.coordinate
                     origin = AppleMapsOrigin(name: item.name ?? manual, latitude: coordinate.latitude, longitude: coordinate.longitude)
                 } else {
-                    status = .needsOrigin
                     reason = matches.isEmpty ? "Apple Maps could not find the starting address." : "Several starting places matched. Ask for the full starting address."
                 }
             } catch {
                 try Task.checkCancellation()
-                status = .needsOrigin
                 reason = "Apple Maps could not look up the starting address."
             }
         } else if request.searchOnly != true {
@@ -37,10 +35,13 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
                 start = MKMapItem(location: CLLocation(latitude: point.latitude, longitude: point.longitude), address: nil)
                 origin = AppleMapsOrigin(name: "Current location", latitude: point.latitude, longitude: point.longitude, isCurrentLocation: true)
             } else {
-                status = .needsOrigin
                 let denied = [.denied, .restricted].contains(locationManager.authorizationStatus)
                 reason = denied ? "Location access is off. Ask for a starting address." : "The iPhone has no recent location fix for this route. Ask for a starting address."
             }
+        }
+
+        if !request.canSearchDestination(hasOrigin: start != nil) {
+            return (AppleMapsResult(places: [], mode: request.mode ?? "driving", observedAt: Date().ISO8601Format(), reason: reason), .needsOrigin)
         }
 
         var places: [AppleMapsPlace] = []

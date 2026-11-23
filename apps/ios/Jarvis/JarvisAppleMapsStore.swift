@@ -18,17 +18,39 @@ final class JarvisAppleMapsStore: ObservableObject {
         return entry.result
     }
 
-    func lookup(lookupId: String, request: AppleMapsRequest) async throws -> (result: AppleMapsResult, status: WorkspaceMapReceipt.Reason?) {
+    typealias Lookup = (result: AppleMapsResult, status: WorkspaceMapReceipt.Reason?)
+
+    func resolve(lookupId: String, command: WorkspaceCommand) async throws -> Lookup? {
+        if let request = AppleMapsRequest(command: command) {
+            return try await lookup(lookupId: lookupId, request: request)
+        }
+        guard let selection = AppleMapsSelection(command: command) else { return nil }
+        guard let prior = result(for: selection.lookupId) else { return missingSelection(.expiredLookup) }
+        guard let chosen = prior.selecting(ordinal: selection.ordinal) else { return missingSelection(.invalidChoice) }
+        save(chosen, lookupId: lookupId)
+        return (chosen, chosen.reason == nil ? nil : .partial)
+    }
+
+    private func missingSelection(_ reason: WorkspaceMapReceipt.Reason) -> Lookup {
+        let message = reason == .expiredLookup ? "That list expired. Ask for a fresh search." : "That number was not in the list. Choose one of the listed places."
+        return (AppleMapsResult(places: [], mode: "driving", observedAt: Date().ISO8601Format(), reason: message), reason)
+    }
+
+    private func lookup(lookupId: String, request: AppleMapsRequest) async throws -> Lookup {
         let current = generation
         let lookup = try await JarvisAppleMaps().lookup(request)
         try Task.checkCancellation()
         guard current == generation else { throw CancellationError() }
+        save(lookup.result, lookupId: lookupId)
+        return lookup
+    }
+
+    private func save(_ result: AppleMapsResult, lookupId: String) {
         if entries[lookupId] == nil, entries.count >= 8, let oldest = entries.min(by: { $0.value.expiresAt < $1.value.expiresAt }) {
             entries.removeValue(forKey: oldest.key)
         }
-        entries[lookupId] = Entry(result: lookup.result, expiresAt: Date().addingTimeInterval(300))
+        entries[lookupId] = Entry(result: result, expiresAt: Date().addingTimeInterval(300))
         scheduleExpiry()
-        return lookup
     }
 
     func refresh(lookupId: String, request: AppleMapsRequest) async {

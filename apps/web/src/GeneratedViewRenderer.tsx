@@ -105,7 +105,7 @@ export function GeneratedViewRenderer({  view,
         </ul>
       );
     case 'map':
-      return <p>{view.data.request.query} · Open Jarvis on iPhone to see the Apple map.</p>;
+      return <p>{view.data.request ? `${view.data.request.query} · ` : ''}Open Jarvis on iPhone to see the Apple map.</p>;
     case 'detail':
       return (
         <>

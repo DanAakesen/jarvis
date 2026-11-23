@@ -22,7 +22,7 @@ public struct AppleMapsRequest: Codable, Equatable, Sendable {
 /// The conversation retains the owner's request. MapKit's response lives temporarily on the iPhone.
 public struct AppleMapsViewData: Codable, Equatable, Sendable {
     public let lookupId: String
-    public let request: AppleMapsRequest
+    public let request: AppleMapsRequest?
 }
 
 public struct AppleMapsPoint: Codable, Equatable, Sendable {
@@ -114,7 +114,23 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
     }
 }
 
+extension AppleMapsPlace {
+    public var travelMinutes: Int? {
+        guard let travelSeconds, travelSeconds.isFinite, travelSeconds >= 0,
+              let minutes = Int(exactly: ceil(travelSeconds / 60)) else { return nil }
+        return max(1, minutes)
+    }
+}
+
 extension AppleMapsResult {
+    public func selecting(ordinal: Int) -> AppleMapsResult? {
+        guard ordinal > 0, ordinal <= places.count else { return nil }
+        let place = places[ordinal - 1]
+        return AppleMapsResult(places: [place], mode: mode, observedAt: observedAt, origin: origin,
+                               arriveBy: arriveBy, bufferMinutes: bufferMinutes,
+                               reason: place.travelSeconds == nil && reason != nil ? "Apple Maps did not return a route for this place." : nil)
+    }
+
     public static func date(_ text: String) -> Date? {
         (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(text)) ??
         (try? Date.ISO8601FormatStyle().parse(text))

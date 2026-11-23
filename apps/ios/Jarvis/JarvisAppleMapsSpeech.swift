@@ -23,8 +23,8 @@ final class JarvisAppleMapsSpeech: NSObject, AVSpeechSynthesizerDelegate {
         if result.places.count > 1 {
             text = "Apple Maps found " + result.places.map(\.name).joined(separator: ", ") + ". Which one?"
         } else if let place = result.places.first {
-            if let seconds = place.travelSeconds, seconds.isFinite, seconds >= 0 {
-                var summary = "\(place.name) is about \(max(1, Int((seconds / 60).rounded()))) minutes away."
+            if let seconds = place.travelSeconds, let minutes = place.travelMinutes {
+                var summary = "\(place.name) is about \(minutes) minutes away."
                 if let arriveBy = result.arriveBy, let arrival = AppleMapsRequest(query: place.name, arriveBy: arriveBy, bufferMinutes: result.bufferMinutes).arrivalDate {
                     let leave = arrival.addingTimeInterval(-seconds)
                     let date = leave.formatted(date: Calendar.current.isDateInToday(leave) ? .omitted : .abbreviated, time: .shortened)

@@ -28,7 +28,7 @@ async function present(data: AppleMapsViewData, status: 'complete' | 'partial', 
 
 export const appleMapsTool: JarvisTool = {
   name: 'apple_maps',
-  description: 'Find a place, nearby business, route or travel time in Apple Maps using the connected iPhone. Ask when to leave with arriveBy and optional bufferMinutes; use driving or walking. Use searchOnly for a named place without directions or local proximity. Give origin to route from an address instead of the current location. The iPhone shows the map and speaks Voice results locally. You receive only a receipt: do not invent or repeat directions, places or travel times. Ask for an origin if needed.',
+  description: 'Find a place, nearby business, route or travel time in Apple Maps using the connected iPhone. Ask when to leave with arriveBy and optional bufferMinutes; use driving or walking. Use searchOnly for a named place without directions or local proximity. Give origin to route from an address instead of the current location. The iPhone shows the map and speaks Voice results locally. For a choice like “the second one”, send the earlier receipt’s lookupId and one-based ordinal together. If the list expired, ask for a fresh search. You receive only a receipt: do not invent or repeat directions, places or travel times. Ask for an origin if needed.',
   inputSchema: appleMapsQuerySchema,
   sensitive: true,
   execution: { defaultEffect: 'read' },
@@ -39,9 +39,9 @@ export const appleMapsTool: JarvisTool = {
     const { lookupId, ...receipt } = await request.server.workspaceCommands.appleMaps(request.server.ownerObjectId, input, voice, signal);
     let presentation = 'No places to show.';
     if (receipt.matches > 0) {
-      presentation = await present({ lookupId, request: input }, receipt.reason ? 'partial' : 'complete', voice, request, signal)
+      presentation = await present({ lookupId, ...('query' in input ? { request: input } : {}) }, receipt.reason ? 'partial' : 'complete', voice, request, signal)
         .catch(() => 'The map could not be shown.');
     }
-    return { ...receipt, presentation };
+    return { ...receipt, ...(receipt.matches > 1 ? { lookupId } : {}), presentation };
   },
 };
