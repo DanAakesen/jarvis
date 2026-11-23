@@ -22,7 +22,11 @@ const event = (id: string, summary: string | undefined, from: string, to: string
  * A Google client with a scripted calendar and mailbox: it lists and finds the events it is given, an unknown id is "not found",
  * and `fail` can make a request fail (`nth` counts the requests with that method and path).
  */
-function scriptedGoogle(options: { events?: Json[]; fail?: (call: Call, nth: number) => GoogleApiError | undefined } = {}) {
+function scriptedGoogle(options: {
+  events?: Json[];
+  calendarPage?: (query: URLSearchParams) => Json;
+  fail?: (call: Call, nth: number) => GoogleApiError | undefined;
+} = {}) {
   const events = options.events ?? [];
   const calls: Call[] = [];
   const client: GoogleApiClient = {
@@ -32,7 +36,7 @@ function scriptedGoogle(options: { events?: Json[]; fail?: (call: Call, nth: num
       const failure = options.fail?.(call, calls.filter((other) => other.method === method && other.path === call.path).length);
       if (failure) throw failure;
       if (method !== 'GET') return { id: 'written' };
-      if (call.path === '/calendars/primary/events') return { items: events };
+      if (call.path === '/calendars/primary/events') return options.calendarPage?.(new URLSearchParams(path.split('?')[1])) ?? { items: events };
       if (call.path === '/users/me/labels') return { labels: [{ id: 'Label_1', name: 'Travel' }] };
       const found = events.find((item) => call.path.endsWith(`/${String(item.id)}`));
       if (!found) throw new GoogleApiError('not-found', 404);
@@ -64,6 +68,40 @@ function tools(options: Parameters<typeof scriptedGoogle>[0] = {}) {
 
 const writes = (calls: readonly Call[]) => calls.filter((call) => call.method !== 'GET');
 const throttled = () => new GoogleApiError('throttled', 429);
+
+// Google's page token is valid only for the original query.
+function calendarPages(pages: Json[][]) {
+  let original: string;
+  return (query: URLSearchParams) => {
+    const index = Number(query.get('pageToken') ?? 0);
+    query.delete('pageToken');
+    if (index === 0) original = query.toString();
+    if (query.toString() !== original || !pages[index]) throw new GoogleApiError('rejected', 400);
+    return { items: pages[index], ...(index + 1 < pages.length ? { nextPageToken: String(index + 1) } : {}) };
+  };
+}
+
+describe('bounded calendar pagination', () => {
+  const meeting = (id: string) => event(id, id, '14:00', '15:00');
+  const declined = (id: string) => ({ ...meeting(id), attendees: [{ self: true, responseStatus: 'declined' }] });
+
+  it('lists a second-page meeting after a short first page and reports omitted meetings', async () => {
+    const { call } = tools({ calendarPage: calendarPages([[meeting('A')], [meeting('B'), meeting('C')]]) });
+    expect(await call('calendar_list_events', { start: '2026-11-23', end: '2026-11-24', maxResults: 2 }))
+      .toMatchObject({ outcome: 'ok', result: { events: [{ id: 'A' }, { id: 'B' }], truncated: true } });
+  });
+
+  it.each([true, false])('finds the next meeting within the first 100 records (100th accepted: %s)', async accepted => {
+    const { call } = tools({ calendarPage: calendarPages([
+      Array.from({ length: 49 }, (_, i) => declined('first-' + i)),
+      Array.from({ length: 50 }, (_, i) => declined('second-' + i)),
+      [accepted ? meeting('hundredth') : declined('hundredth'), meeting('beyond-limit')],
+    ]) });
+    expect(await call('calendar_next_event', {})).toMatchObject({
+      outcome: 'ok', result: { event: accepted ? { id: 'hundredth' } : null, truncated: !accepted },
+    });
+  });
+});
 
 describe('finding free time', () => {
   it('ignores events Dan declined and events that were cancelled', async () => {

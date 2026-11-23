@@ -2,7 +2,6 @@ import { calendarViewPath } from '../../google/tools.js';
 import type { GoogleApiClient } from '../../google/api-client.js';
 import { copenhagenDateStart } from '../time.js';
 
-const PAGE_SIZE = 25;
 const MAX_EVENTS = 50;
 const MAX_PAGES = 2;
 
@@ -80,21 +79,23 @@ export async function readCalendarEvents(
     throw new RangeError('Invalid calendar range');
   }
   const events: CalendarEvent[] = [];
+  const session = await google.openReadSession?.('calendar', signal);
+  const get = session?.get ?? ((path: string) => google.request('calendar', path, { method: 'GET', signal }));
+  let remaining = MAX_EVENTS;
   let pageToken: string | undefined;
-  for (let page = 0; page < MAX_PAGES && events.length < MAX_EVENTS; page += 1) {
-    const path = calendarViewPath(from, to, PAGE_SIZE, undefined, pageToken);
-    const payload = await google.request('calendar', path, { method: 'GET', signal });
+  for (let page = 0; page < MAX_PAGES && remaining > 0; page += 1) {
+    const payload = await get(calendarViewPath(from, to, MAX_EVENTS, undefined, pageToken));
     if (payload.items !== undefined && !Array.isArray(payload.items)) throw new TypeError('Invalid calendar response');
-    const items = Array.isArray(payload.items) ? payload.items : [];
+    const items = Array.isArray(payload.items) ? payload.items.slice(0, remaining) : [];
+    remaining -= items.length;
     for (const item of items) {
       const event = normalizeEvent(item);
       if (event && event.startsAt < to && event.endsAt > from) events.push(event);
-      if (events.length >= MAX_EVENTS) break;
     }
     pageToken = typeof payload.nextPageToken === 'string' && payload.nextPageToken
       ? payload.nextPageToken
       : undefined;
-    if (!pageToken || page === MAX_PAGES - 1) break;
+    if (!pageToken) break;
   }
-  return events.sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime()).slice(0, MAX_EVENTS);
+  return events.sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
 }

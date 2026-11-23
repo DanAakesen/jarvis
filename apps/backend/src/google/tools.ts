@@ -490,9 +490,9 @@ async function pagedCalendarEvents(
 ): Promise<{ events: Record<string, unknown>[]; truncated: boolean }> {
   const events: Record<string, unknown>[] = [];
   const seenTokens = new Set<string>();
+  const pageSize = Math.min(50, maxResults);
   let pageToken: string | undefined;
   for (let page = 0; page < 100; page += 1) {
-    const pageSize = Math.min(50, maxResults - events.length);
     const payload = await google.request(
       'calendar',
       calendarViewPath(start, end, pageSize, query, pageToken),
@@ -500,7 +500,7 @@ async function pagedCalendarEvents(
     );
     const rawItems = Array.isArray(payload.items) ? payload.items : undefined;
     if (!rawItems) throw new ToolFailure('Google Calendar returned an invalid response.');
-    const pageEvents = calendarEvents(payload, pageSize);
+    const pageEvents = calendarEvents(payload, Math.min(pageSize, maxResults - events.length));
     events.push(...pageEvents);
     const next = typeof payload.nextPageToken === 'string' && payload.nextPageToken
       ? payload.nextPageToken
@@ -534,15 +534,14 @@ async function findNextCalendarEvent(
   let pageToken: string | undefined;
   let inspected = 0;
   for (let page = 0; page < 100; page += 1) {
-    const pageSize = Math.min(50, 100 - inspected);
     const payload = await google.request(
       'calendar',
-      calendarViewPath(after, until, pageSize, undefined, pageToken),
+      calendarViewPath(after, until, 50, undefined, pageToken),
       { signal },
     );
     const rawItems = Array.isArray(payload.items) ? payload.items : undefined;
     if (!rawItems) throw new ToolFailure('Google Calendar returned an invalid response.');
-    const events = calendarEvents(payload, pageSize);
+    const events = calendarEvents(payload, Math.min(50, 100 - inspected));
     inspected += events.length;
     for (const event of events) {
       if (event.status === 'cancelled' || declinedByDan(event)) continue;

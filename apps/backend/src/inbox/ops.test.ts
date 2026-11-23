@@ -287,9 +287,14 @@ describe('inbox status and nudge-style tool', () => {
     state.set(AUDIT_DAY_KEY, '2026-11-14');
     spend.push({ day: '2026-11-15', kind: 'review', calls: 2, inputTokens: 100, outputTokens: 10, estimatedDkk: 0.05 },
       { day: '2026-11-10', kind: 'triage', calls: 1, inputTokens: 10, outputTokens: 5, estimatedDkk: 0.02 });
-    const files = new Map([['Inbox/2026-11-01 Padel.md', note('Padel', '11111111')]]);
+    const files = new Map([
+      ['Inbox/2026-11-01 Padel.md', note('Padel', '11111111')],
+      ['Inbox/2026-11-15 Imported.md', note('Imported', '22222222')],
+    ]);
     const { rows, store } = indexStoreFor(files);
-    rows.set('11111111', { ...rows.get('11111111')!, lastNudgedAt: new Date('2026-11-14T06:00:00Z'), lastFeedback: 'up' });
+    rows.set('11111111', { ...rows.get('11111111')!, lastNudgedAt: new Date('2026-11-14T06:00:00Z'), lastNudgeItemId: randomUUID(), lastFeedback: 'up' });
+    // The initial vault import starts this item's cooldown before any proactive card has been issued.
+    rows.set('22222222', { ...rows.get('22222222')!, lastNudgedAt: sundayEvening });
     const memory = memoryVault();
     const inbox = createInboxStore({ vault: memory.vault });
     const index = createInboxIndex({ store, inbox });
@@ -305,7 +310,7 @@ describe('inbox status and nudge-style tool', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
         nudgesEnabled: true,
-        items: { live: 1, nudgedLast7Days: 1, thumbsUp: 1, thumbsDown: 0 },
+        items: { live: 2, nudgedLast7Days: 1, thumbsUp: 1, thumbsDown: 0 },
         spend: { dailyCeiling: 1, today: 0.05, last30Days: 0.07, byKindLast30Days: { review: { calls: 2, dkk: 0.05 }, triage: { calls: 1, dkk: 0.02 } } },
         nudgeStyleSet: true, lastAuditDay: '2026-11-14', lastWeeklyReviewDay: null,
       });

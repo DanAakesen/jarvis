@@ -48,7 +48,8 @@ export function createInboxStatusRoute(options: {
           nudgesEnabled: options.nudgesEnabled,
           items: {
             live: live.length,
-            nudgedLast7Days: live.filter((row) => row.lastNudgedAt && at.getTime() - row.lastNudgedAt.getTime() < 7 * day).length,
+            nudgedLast7Days: live.filter((row) =>
+              row.lastNudgeItemId && row.lastNudgedAt && at.getTime() - row.lastNudgedAt.getTime() < 7 * day).length,
             thumbsUp: live.filter((row) => row.lastFeedback === 'up').length,
             thumbsDown: live.filter((row) => row.lastFeedback === 'down').length,
           },
