@@ -372,7 +372,7 @@ export function createPiMcpRoutes(options: {
     };
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Look up Jarvis tools using English or Danish keywords (azure resource, github issue, calendar, kalender, note, vejr), then use call_tool. Use this for weather, calendar_list_events and owner_reminders too. Exact names rank first; compact otherMatches can also be called by name. GitHub and Azure tools load only when named (github, repo, issue, azure, resource) and may need a second search. Use Danâ€™s PC tools (pc_, browser_do) when he asks you to use his PC. Pass the turn reference from the current message.',
+      description: 'Look up Jarvis tools using English or Danish keywords (azure resource, github issue, calendar, kalender, note, vejr), then use call_tool. Use this for weather, calendar_list_events and owner_reminders too. Exact names rank first; compact otherMatches can also be called by name. GitHub and Azure tools load only when named (github, repo, issue, azure, resource) and may need a second search. Use Dan’s PC tools (pc_, browser_do) when he asks you to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, ledgered<z.infer<typeof findSchema>>((input) => ({ tool: 'find_tools', question: { query: input.query } }), async (input, ctx, { grant }) => {

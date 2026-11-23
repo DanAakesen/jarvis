@@ -37,7 +37,7 @@ Backend diagnostics use a backend-only log grant. Verify production readback and
 | --- | --- | --- |
 | **A** | Legacy proactive engine removal approved. | PI owns the slots. Verify capture and a qualifying follow-up in production. |
 | **B · decided** | Manual kcal adds one meal on iPhone. | Device check: in Health → Nutrition, log 100 kcal. Meals should gain one entry and Chat should report 100 more kcal for today. |
-| **C** | How and when should PI compact context within the one ongoing conversation? | Reported tool turns carried 84K–116K input tokens; the fresh instructions baseline was about 18K. Dan confirmed compaction is needed. Verify managed-endpoint support and context retention before implementation. |
+| **C** | Keep the same stored conversation for Chat and Voice. Foundry controls context management on this endpoint. | Revisit configurable compaction when the [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview) supports it. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
 | **E** | Foundry administration is approved. | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) covers instructions, versions, activation, models and deployments. Live acceptance is open. |
 | **F** | Banking stays out of scope. | No banking implementation or money movement. |
