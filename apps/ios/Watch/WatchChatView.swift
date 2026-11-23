@@ -186,8 +186,7 @@ struct WatchChatView: View {
     }
 
     private var composer: some View {
-        let hasDraft = !model.draft.isEmpty
-        let layout = hasDraft ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        let hasDraft = !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return VStack(spacing: 4) {
             if hasStatusRow {
                 VStack(spacing: 2) { statusRows }
@@ -195,31 +194,29 @@ struct WatchChatView: View {
                     .watchGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .padding(.horizontal, 4)
             }
-            layout {
+            HStack(alignment: .bottom, spacing: 0) {
                 TextField("Message", text: $model.draft, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
-                    .lineLimit(1...4)
-                    .padding(.top, hasDraft ? 6 : 0)
-                    .frame(maxWidth: .infinity, minHeight: hasDraft ? nil : 44, alignment: .leading)
+                    .lineLimit(1...3)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .disabled(composerDisabled)
                     .accessibilityLabel("Message")
                     .accessibilityFocused($messageFocused)
-                HStack(spacing: 0) {
+                if hasDraft {
+                    Button { Task { await model.send() } } label: {
+                        Image(systemName: "arrow.up.circle.fill").frame(width: 44, height: 44)
+                    }
+                    .foregroundStyle(WatchStyle.amber)
+                    .disabled(composerDisabled)
+                    .accessibilityLabel("Send message")
+                } else {
                     Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 36, height: 44) }
                         .foregroundStyle(WatchStyle.amber)
                         .disabled(composerDisabled).accessibilityLabel("Dictate")
                     Button { Task { await model.startVoice() } } label: { WatchOrb().frame(width: 26, height: 26).frame(width: 36, height: 44) }
                         .disabled(model.busy || model.startingVoice || model.dictationState != .idle).accessibilityLabel("Start voice")
-                    if hasDraft {
-                        Spacer(minLength: 0)
-                        Button { Task { await model.send() } } label: {
-                            Image(systemName: "arrow.up.circle.fill").frame(width: 44, height: 44)
-                        }
-                        .foregroundStyle(WatchStyle.amber)
-                        .disabled(composerDisabled || model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityLabel("Send message")
-                    }
                 }
             }.buttonStyle(.plain).padding(.leading, 12).padding(.trailing, 4)
                 .watchGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
