@@ -15,7 +15,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | Delivery | State |
 | --- | --- |
 | TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). The native follow-up is **not accepted on device**. |
-| Backend | [Calendar paging and Inbox status](https://github.com/DanAakesen/jarvis/actions/runs/45105018842) passed deterministic readiness. The [midnight queue rollout](https://github.com/DanAakesen/jarvis/actions/runs/45107284356) passed backend deploy and PI provisioning; see that run for the separate readiness result. Live conversation acceptance has not run. |
+| Backend | The [midnight queue rollout](https://github.com/DanAakesen/jarvis/actions/runs/45107284356) passed deterministic readiness. It includes the Calendar paging and Inbox status fixes. Live conversation acceptance did not run. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
