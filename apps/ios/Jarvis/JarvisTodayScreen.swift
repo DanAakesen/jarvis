@@ -624,6 +624,7 @@ struct JarvisTodayScreen: View {
                 draft: $composerDraft,
                 isFocused: $composerFocused,
                 inputIdentifier: "today.input",
+                collapsesWhenUnfocused: true,
                 rimState: dictation.isListening ? .listening : (canSend ? .typing : .idle),
                 isRimAnimated: !fixtureMode,
                 waveformLevels: dictation.isListening ? dictation.levels : nil,
