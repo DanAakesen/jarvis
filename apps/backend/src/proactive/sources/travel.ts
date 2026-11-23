@@ -30,12 +30,12 @@ export function createTravelSource(google?: GoogleApiClient): ProactiveSource {
       if (!google) return { source: 'travel', state: 'unavailable', reason: 'not_connected', facts: [], observedAt };
       const signal = sourceSignal(context.signal);
       try {
+        const travelStart = context.now.getTime() + CALENDAR_WINDOW_HOURS * 60 * 60_000;
         const events = await readCalendarEvents(google, {
-          from: context.now,
+          from: new Date(travelStart),
           to: new Date(context.now.getTime() + TRAVEL_WINDOW_DAYS * 24 * 60 * 60_000),
           signal,
         });
-        const travelStart = context.now.getTime() + CALENDAR_WINDOW_HOURS * 60 * 60_000;
         const selected = events.filter((event) =>
           event.startsAt.getTime() >= travelStart && isTrip(event.title, event.location));
         return {
