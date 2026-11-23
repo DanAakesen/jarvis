@@ -3,7 +3,7 @@ import { healthQuerySources, isHealthQuery } from '@jarvis/contracts';
 import type { HealthCursor } from '../health/read-model.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
 import { dateOnly } from '../health/value.js';
-import { activeEnergyMetric } from '../nutrition/budget.js';
+import { activeEnergyMetrics } from '../nutrition/budget.js';
 import type { NutritionStore } from '../nutrition/store.js';
 import { instant as nutritionInstant, text as nutritionText } from '../nutrition/model.js';
 import { projectNutritionRecord, healthResultByteLimit } from '../query.js';
@@ -294,7 +294,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
         ...metricRows.map(row => row.metric_date instanceof Date ? row.metric_date.toISOString().slice(0, 10) : String(row.metric_date).slice(0, 10))]);
       const daily = [...dates].sort().map(date => {
         const meals = mealDays.rows.find(row => (row.meal_date instanceof Date ? row.meal_date.toISOString().slice(0, 10) : String(row.meal_date).slice(0, 10)) === date);
-        const activeKcal = metricKcal(date, [activeEnergyMetric, 'active_energy_burned']);
+        const activeKcal = metricKcal(date, activeEnergyMetrics);
         const restingKcal = metricKcal(date, ['resting_energy', 'basal_energy_burned', 'basal_energy']);
         return { date, recovery: recoveryDates.has(date), intakeKcal: meals?.energy_kcal ?? null, activeKcal, restingKcal,
           netKcal: typeof meals?.energy_kcal === 'number' && activeKcal !== null && restingKcal !== null

@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
-import type { HealthReadModel, HealthCursor } from '../health/read-model.js';
-import { activeEnergyMetric, deriveBudget, pickActiveEnergy, toCandidate, totalMeals, type ActiveEnergy } from './budget.js';
+import type { HealthReadModel } from '../health/read-model.js';
+import { activeEnergyMetrics, deriveBudget, pickActiveEnergy, toCandidate, totalMeals, type ActiveEnergy } from './budget.js';
 import { copenhagenDate, copenhagenTime, type Suggestion } from './model.js';
 import type { NutritionStore } from './store.js';
 import { presentNutritionTargets } from './targets.js';
@@ -22,7 +22,6 @@ export const maxSuggestionLimit = 10;
 
 // Every read is bounded. Running out of pages is reported as incomplete, never silently treated as complete.
 const mealPages = 3;
-const healthPages = 3;
 const favouritePages = 3;
 
 type MealCursor = { createdAt: string; id: string };
@@ -41,18 +40,11 @@ async function readMeals(nutrition: Pick<NutritionStore, 'history'>, today: stri
 
 /** A failed health read degrades to "burn unknown" with a reason; an abort or deadline is rethrown untouched. */
 async function readActiveEnergy(health: Pick<HealthReadModel, 'history'>, today: string, now: string, signal: AbortSignal): Promise<ActiveEnergy> {
-  const rows: Record<string, unknown>[] = [];
-  let after: HealthCursor | undefined;
   try {
-    for (let page = 0; page < healthPages; page += 1) {
-      const result = await health.history('metrics', { startDate: today, endDate: today, limit: 250, ...(after ? { after } : {}) }, signal);
-      rows.push(...result.items);
-      if (rows.some((row) => row.metric_name === activeEnergyMetric) || !result.truncated || result.next === null) {
-        return pickActiveEnergy(rows, { today, now, complete: !result.truncated });
-      }
-      after = result.next;
-    }
-    return pickActiveEnergy(rows, { today, now, complete: false });
+    // SQL retains one row per owner, metric name and day. Exact reads cover both aliases independently.
+    const pages = await Promise.all(activeEnergyMetrics.map(metric =>
+      health.history('metrics', { startDate: today, endDate: today, metric, limit: 1 }, signal)));
+    return pickActiveEnergy(pages.flatMap(page => page.items), { today, now, complete: pages.every(page => !page.truncated) });
   } catch {
     signal.throwIfAborted();
     return { known: false, reason: 'health_read_failed' };
@@ -78,7 +70,7 @@ async function readCandidates(nutrition: Pick<NutritionStore, 'favorites'>, sign
 }
 
 function presentBurn(burn: ActiveEnergy, today: string) {
-  const base = { source: 'apple-health', metric: activeEnergyMetric, date: today } as const;
+  const base = { source: 'apple-health', metric: burn.known ? burn.metric : null, date: today } as const;
   if (!burn.known) return { ...base, state: 'unknown', reason: burn.reason } as const;
   return {
     ...base, state: 'known', kcal: burn.kcal, unit: 'kcal', sampleCount: burn.sampleCount,
