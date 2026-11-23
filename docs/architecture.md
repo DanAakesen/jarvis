@@ -1,6 +1,6 @@
 # Jarvis architecture
 
-Current system map, checked against repository code and workflows. This is not a production readback. See [PLAN.md](../PLAN.md) for release status, [PRODUCT.md](../PRODUCT.md) for requirements and the [operator manual](agent-context.md) for commands.
+System map from code and workflows, not a production readback. See [PLAN.md](../PLAN.md) for release status, [PRODUCT.md](../PRODUCT.md) for requirements and the [operator manual](agent-context.md) for commands.
 
 ## Stack overview
 
@@ -59,7 +59,7 @@ flowchart TB
 | The repository owns | `gpt-6.1-terra`, harness, tools, MCP connection and skills in [definition.json](../agents/pi/definition.json) | `gpt-live-1`, the `live` sub-protocol, client delegation and 24 kHz PCM contract |
 | Deploy after bootstrap | Reads the serving version. For code-owned drift, carries forward its live instruction text, verifies the new version and pins it. No write when the code-owned definition matches. | Verifies the serving technical contract and model deployment; drift fails Deploy. Does not rewrite an existing voice agent. |
 
-Chat and Voice use `manage_foundry_agent` for the Foundry project. Edits copy the serving definition to a new version. Activation pins a version and reads back the selector. If verification fails, PI reports the last known write and reads back before retrying. Model roles and ARM deployments use the existing settings and deployment tools. A PI deployment deletion requires owner confirmation. Both managed PI model contracts above also apply at release. [Foundry agent API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject)
+Chat and Voice use `manage_foundry_agent`. Edits copy the serving definition to a new version. Activation pins a version and reads the selector back. If verification fails, PI reports the last known write and reads back before retrying. Model roles and ARM deployments use settings and deployment tools. A PI deployment deletion requires owner confirmation. [Foundry agent API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject)
 
 The seed files apply when the agents are created, not as later portal text updates. Preserve the entire **KEEP THIS BLOCK** in the main agent's live instructions; it contains the turn-reference contract. Do not paste the voice text into `jarvis-pi`. Avoid changing Active while Deploy provisions: it rechecks the serving version before writing and pinning.
 
@@ -83,6 +83,7 @@ flowchart LR
 - **One owner conversation for foreground PI.** Chat and delegated Voice share the persisted PI conversation (`dbo.pi_conversation`) and the gateway's FIFO claim; each turn gets its own tool grant. Waiting counts against the turn deadline (180 seconds by default; 90 for the Voice leg). Warm-up skips a busy turn. On a Foundry 404 before any reply text, the gateway tries to drop the provider binding so the next turn can create a conversation. It does not replay the failed turn or delete saved Chat history. Proactive wakes use separate conversations.
 - **Chat.** The server stores the owner message, adds [agent context](agent-context.md#agent-context) and streams text, tool activity and the terminal result. An iPhone reconnect can discover and follow an active turn or reconcile its committed reply without resending. App history, Foundry history and [diagnostic logs](reference/logs.md) are separate records.
 - **Voice.** GPT-Live can handle talk itself. When it delegates, the relay joins the full input transcript, waits for 1.5 seconds of quiet (at most 3 seconds), stores the request once and starts PI once. It does not cut the transcript at the delegation offset. It passes spoken commentary back to GPT-Live. Backchannels do not cancel PI; a new delegation can supersede it, and ending or timing out the session stops it. Voice is audio-only: camera and screen input are not supported by this backend.
+- **Watch Voice.** The paired iPhone relays audio and combines caption fragments. Watch can retry a lost playback receipt during the same call. Local playback and bridge evidence are separate from the backend relay and the stored turn.
 - **Parity is a contract, not identical presentation.** Both channels see the same PI tool effects and failure meaning. The [replay tests](../apps/backend/src/voice/chat-voice-parity.test.ts) exercise the real routes, gateway and door against stubs. Their [report helper](../apps/backend/src/voice/parity-report.testkit.ts) documents intended presentation differences. Native audio and device rendering are separate acceptance.
 
 ```mermaid
@@ -121,7 +122,7 @@ flowchart LR
 
 **Legend:** Boxes are steps or records; the diamond is a request-identity check, not an approval screen. Each completed door call also emits a safe ledger event.
 
-1. PI passes the **current** turn reference to `find_tools`, then `call_tool`. Use the returned exact name. `otherMatches` are also callable. Prefer aliases over new MCP entry points; weather, calendar and reminders use the same two names again after [#2033](https://github.com/DanAakesen/jarvis/pull/2033). GitHub and Azure bridges load on named searches, with a bounded wait, so a first search can ask PI to search again.
+1. PI passes the **current** turn reference to `find_tools` and `call_tool`. Use an exact name returned by search; `otherMatches` are callable. Prefer aliases over new MCP entry points. GitHub and Azure bridges load on named searches with a bounded wait; the first search can ask PI to try again.
 2. The door calls the normal `/tools/:name` route for Jarvis tools using the owner message bound to this turn. GitHub file reads carry the embedded source text and its resource URI. A download receipt alone points PI to `repo_read` for line ranges on the project's default branch. Read results above 24,000 serialized characters get a bounded preview, except `list_capabilities`; paging/status fields and receipts stay intact. Do not truncate action results.
 3. **Replay ledger.** Within a live turn, a known local action with the same trusted `_meta` call ID, tool and arguments may reuse the earlier successful or uncertain result. This also covers a duplicate arriving while the first attempt runs. A different call ID is a separate request. Missing or reused-for-different-work IDs disable replay recognition; JSON-RPC IDs are not used. Reads, unclassified calls and remote bridge calls are not replay-suppressed here. `pi.mcp_tool` records the evidence; do not treat the in-memory ledger as durable exactly-once delivery.
 4. **Unknown outcome is not failure to act.** If a write might already have run, say so (`outcomeUnknown`), preserve its receipts and verify before retry. A rejected or output-free rate-limited round can retry within its deadline. If a known response stream breaks, Foundry must report it cancelled with no output before the gateway replays it. A later failed round can still return recorded receipts.
@@ -164,7 +165,9 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone meal entries use the same ledger and Copenhagen day as Chat and Voice. The Today card reads the shared nutrition budget. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
+Health and workout tools use the SQL `daily` schema. The iPhone Today card, Chat and Voice use one Copenhagen-day meal ledger and nutrition calculation. It selects one eligible daily active-energy reading, not the sum of the iPhone and exporter totals. iPhone Health sync and ingestion/Shortcuts are separate from Watch display. iPhone Gym can record lifts in the Vault; `gym_lifts` reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
+
+The Home brief sends short per-request references to the model, then resolves citations back to the original source references before returning them to the client.
 
 ## Proactive wake and Inbox review
 
@@ -186,7 +189,7 @@ flowchart LR
 
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
 - Missing switch state means **Off**. The owner controls it in Settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. A successful wake is not evidence of a delivered message.
-- PI owns the 07:00 and 18:00 Copenhagen slots and Check now. At the daily turn cap, pending events stay queued until the next Copenhagen midnight check; other eligibility rules still apply. Inbox reviews each eligible slot once, even if an earlier event covered the PI turn. With no brain configured, no slot is claimed.
+- PI owns the 07:00 and 18:00 Copenhagen slots and Check now. At the daily turn cap, pending events wait until Copenhagen midnight. An event-covered slot can run its Inbox review once even at the cap, without a second PI wake. No brain configured means no slots claimed.
 - Background Calendar reads the next 48 hours; Travel queries its own days 3–7 window. Continuations keep the original Google query. Each background window reads at most two pages and 50 returned events.
 
 ## Reply push and reminders

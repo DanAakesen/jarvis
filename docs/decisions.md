@@ -37,6 +37,8 @@ Use server turn state and committed history on return to Chat; do not resend the
 
 On iPhone, one manual entry adds one meal with kcal and optional protein grams. Omitted macros remain unknown. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.
 
+Use one Copenhagen-day nutrition calculation for the Today card and the assistant. Choose one daily active-energy total so iPhone and exporter data do not count the same activity twice. [#2055](https://github.com/DanAakesen/jarvis/pull/2055).
+
 ### 23 November 2026 — Scoped Azure MCP capabilities
 
 Allow only the pinned Azure MCP leaves for inventory, scoped storage, metrics, health and workbooks. Exclude raw Log Analytics queries: the MCP identity's role union can bypass table-level controls. The separate backend identity handles bounded log reads and queue operations. See [the tool boundaries](architecture.md#tools-retries-and-failure-copy).
