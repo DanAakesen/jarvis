@@ -25,13 +25,14 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ### Chat and Voice parity
 
-- Keep one conversation and the same PI tool dispatcher, owner identity and stored evidence. Voice should sound like Jarvis, understand the entire spoken request and handle interruption, silence and reconnect. Typing in Chat while Voice works queues one request and gets one reply.
-- Chat can follow the active Voice exchange, show when it is listening, thinking or speaking, and let Dan scroll back without yanking him to the bottom. Show a chart, map or note on screen when easier to see than hear; do not force a web handoff on iPhone.
+- Keep one ongoing conversation across Chat and Voice, including through future compaction. Support asking “Where am I?” using the phone’s timestamped, approximate location when available. Keep the same PI tool dispatcher, owner identity and stored evidence. Voice should sound like Jarvis, understand the entire spoken request and handle interruption, silence and reconnect. Typing in Chat while Voice works queues one request and gets one reply.
+- Chat can follow the active Voice exchange, show when it is listening, thinking or speaking, and let Dan scroll back without yanking him to the bottom. Use Apple Maps on iPhone for nearby places, route estimates and departure times with a chosen buffer. Let Dan select an ambiguous place and open Directions. Show a chart, map or note on screen when easier to see than hear; do not force a web handoff on iPhone.
 - Explain failures in one plain sentence shared by Chat and Voice. A stop, stale history refresh, or a working reply with a failed tool is not a failed send. If an action finished but the reply did not, show or say the recorded receipt. Say to check before retrying only when the action may already have happened.
 - Push replies open the exact stored message on iPhone or Watch. An accepted reminder schedule is not proof of device delivery. Show what actually happened.
 
 ### Tools
 
+- Dan can inspect Foundry agents and model deployments, edit instructions or an agent model in a new version, and select the serving version from Chat or Voice. Preserve the protected backend tool contract.
 - Ordinary Chat and Voice use PI. `find_tools` and `call_tool` reach Jarvis tools and `gh_`/`az_` operations through the same MCP connection. Native harness work runs in Foundry; durable code changes use Factory workers. GPT-Live handles voice, not a second tool engine.
 - Find the right tool from ordinary Danish or English requests, including the daily core on the first search. Retrieve supported results and distinguish empty, stale, partial and unavailable data. Return paging and write receipts intact; never say a write happened without evidence.
 - Use model judgement for routing and answers. Keep deterministic checks where the exact result matters: access boundaries, identity, persistence, idempotency and receipts. The PI approval exception is DELETE; do not create an app-wide policy change from that product rule.
@@ -42,7 +43,7 @@ Show actual issues, PRs, worker state and releases, and surface what needs Dan's
 
 ### Notes
 
-The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not move or rename the file. A missing note can still be unpinned by path.
+The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not move or rename the file. A missing note can still be unpinned by path. See [PLAN.md](PLAN.md) for device results.
 
 ### Tasks
 
@@ -54,11 +55,11 @@ Show recorded workouts and lift history without double-counting or treating miss
 
 ### Nutrition
 
-When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal left and protein still needed, using the recorded entries and configured targets. Explain missing targets or incomplete data instead of inventing totals. Log or correct food through supported conversational tools. **Open:** manual kcal entry directly on the Nutrition screen; see [plan decision B](PLAN.md#open-decisions-af).
+When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal left and protein still needed, using the recorded entries and configured targets. Explain missing targets or incomplete data instead of inventing totals. Chat and Voice can log or correct food. On iPhone, entering kcal adds one meal for the current Copenhagen day. Unentered macros remain unknown.
 
 ### Proactive
 
-The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a product goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps are available as signals in code; they follow their source switches. Dan controls Background PI in **Settings → Proactive**. It starts off; status must say whether it ran, skipped or failed. Explicit reminders and the legacy 07:00/18:00 checks are not the same thing as a brain wake.
+The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a product goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps are available as signals in code; they follow their source switches. Dan controls Background PI in **Proactive suggestions** on the main Settings page. Background PI defaults to off and Dan enabled it. It owns the 07:00 and 18:00 Copenhagen reviews. Status shows whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
 
 ### Memory vs Vault Knowledge
 
@@ -87,7 +88,7 @@ Start dictation and Voice on the first press, recover the route when it drops, a
 
 - Multi-user or team administration.
 - A second Chat/Voice runtime, an automatic switch back to the old harness, or an unapproved legacy deletion. No silent default read-only mode or extra PI approval.
-- Manual kcal entry or Foundry admin writes before Dan settles their scope. No unapproved paid provider checks or cost increases.
+- No unapproved paid provider checks or cost increases.
 
 ## Standing rules
 

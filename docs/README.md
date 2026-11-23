@@ -29,7 +29,7 @@ Index of the documentation folders. The source of truth for which files matter a
 | [reference/](reference/README.md) | Data model, log access and current Health integration contracts. |
 | [ios/](ios/) | `integration-contract.md` (backend endpoints the iPhone app uses) and `apple-capabilities.md` (entitlements and capabilities). |
 | [pi/](pi/cutover.md) | The PI switch-on checklist and the pending decisions. |
-| [inbox-loop/](inbox-loop/acceptance.md) | Inbox loop activation, acceptance, MCP and Shortcut: built, off by default. |
+| [inbox-loop/](inbox-loop/acceptance.md) | Inbox capture, scheduled follow-ups, device acceptance, MCP and Shortcut. |
 | [ui/](ui/style-guide.md) | The UI style guide and the design references still waiting to be implemented. |
 | [archive/](archive/) | Monthly decision indexes. Full historical text stays in Git. |
 

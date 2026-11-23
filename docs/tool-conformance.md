@@ -21,20 +21,20 @@ and when this file no longer matches the registry.
 
 | What | Count |
 | --- | ---: |
-| Registered tools | 158 |
-| Visible to chat and voice | 144 |
+| Registered tools | 169 |
+| Visible to chat and voice | 155 |
 | Visible only in an activation turn (situation tools) | 4 |
 | Visible only to a background wake | 4 |
 | Legacy confirmation endpoints (HTTP only, not advertised) | 6 |
-| Static contract ok | 158 |
-| Discoverable, top 3 | 152 |
+| Static contract ok | 169 |
+| Discoverable, top 3 | 163 |
 | Discoverable, listed (callable by name) | 0 |
-| Callable: ok | 152 |
+| Callable: ok | 161 |
 | Callable: refusal | 0 |
 | Callable: failure (typed) | 0 |
 | Callable: requiresExternal | 0 |
 | Callable: not advertised (legacy) | 6 |
-| Callable: skipped | 0 |
+| Callable: skipped | 2 |
 
 ## The 15 largest schemas
 
@@ -51,10 +51,10 @@ and when this file no longer matches the registry.
 | 9 | `message_dan` | 397 | 397 | 808 |
 | 10 | `health_query` | 391 | 391 | 1182 |
 | 11 | `github_read` | 325 | 325 | 627 |
-| 12 | `pc_browser_act` | 281 | 281 | 392 |
-| 13 | `update_project` | 270 | 270 | 311 |
-| 14 | `health_summary` | 268 | 268 | 460 |
-| 15 | `gym_lifts` | 233 | 233 | 789 |
+| 12 | `apple_maps` | 311 | 311 | 485 |
+| 13 | `pc_browser_act` | 281 | 281 | 392 |
+| 14 | `update_project` | 270 | 270 | 311 |
+| 15 | `health_summary` | 268 | 268 | 460 |
 
 Schemas above the ceiling, each with a ratchet (they may not grow):
 
@@ -65,9 +65,19 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 
 | Tool | Group | Visible to | Effect | Static | Discoverable | Callable | Schema tokens | Notes |
 | --- | --- | --- | --- | --- | --- | --- | ---: | --- |
+| `apple_maps` | core | chat and voice | read | ok | "find a coffee shop near me" (en, #2) | ok | 311 |  |
 | `archive_project` | factory | chat and voice | action | ok | "Archive the active Software Factory project requested by the owner wi…" (derived, #1) | ok | 41 |  |
 | `attachment_list` | core | chat and voice | unclassified | ok | "List files Dan sent in conversation history" (derived, #1) | ok | 16 |  |
 | `attachment_read` | core | chat and voice | unclassified | ok | "Read a bounded text page, search snippet, or cached image description…" (derived, #1) | ok (3 calls) | 75 |  |
+| `azure_storage_queue_create` | pi | chat and voice | action | ok | "create a Jarvis storage queue" (en, #1) | ok | 42 |  |
+| `azure_storage_queue_delete` | pi | chat and voice | action | ok | "Use this when Dan asks to delete a Jarvis Storage queue and every mes…" (derived, #2) | skipped | 42 | skipped: Requires a live, owner-confirmed browser action. |
+| `azure_storage_queue_delete_message` | pi | chat and voice | action | ok | "delete message from the Jarvis storage queue" (en, #1) | skipped | 79 | skipped: Requires a live, owner-confirmed browser action. |
+| `azure_storage_queue_names` | pi | chat and voice | unclassified | ok | "show me the queue names in Jarvis Storage" (en, #1) | ok | 43 |  |
+| `azure_storage_queue_peek` | pi | chat and voice | unclassified | ok | "peek messages in the Jarvis Storage queue" (en, #2) | ok | 55 |  |
+| `azure_storage_queue_properties` | pi | chat and voice | unclassified | ok | "Use this when you need the properties and approximate message count f…" (derived, #1) | ok | 42 |  |
+| `azure_storage_queue_receive` | pi | chat and voice | action | ok | "receive messages from the Jarvis storage queue" (en, #1) | ok | 73 |  |
+| `azure_storage_queue_send` | pi | chat and voice | action | ok | "send a message to the Jarvis storage queue" (en, #1) | ok | 60 |  |
+| `backend_sleep` | core | chat and voice | unclassified | ok | "put the Jarvis backend to sleep" (en, #1) | ok (2 calls) | 37 |  |
 | `browser_do` | pc | chat and voice | action | ok | "go to dmi.dk and check the forecast" (en, #2) | ok (3 calls) | 64 |  |
 | `browser_do_shared` | pc | chat and voice | action | ok | "click the button on the page I am sharing" (en, #1) | ok (2 calls, 1 typed refusals or failures proven) | 49 |  |
 | `calendar_confirm_change` | google | HTTP only (legacy) | action | ok | n/a | not advertised | 39 | kept for cached clients; the door refuses it |
@@ -100,7 +110,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `get_job` | core | chat and voice | unclassified | ok | "annullér researchjobbet" (da, #2) | ok (2 calls) | 50 |  |
 | `get_pending_issue` | factory | HTTP only (legacy) | unclassified | ok | n/a | not advertised | 16 | kept for cached clients; the door refuses it |
 | `get_release` | factory | chat and voice | unclassified | ok | "what is the deployment status" (en, #2) | ok | 41 |  |
-| `get_settings` | core | chat and voice | unclassified | ok | "gå til indstillinger" (da, #3) | ok (4 calls) | 51 |  |
+| `get_settings` | core | chat and voice | unclassified | ok | "where am I" (en, #1) | ok (5 calls) | 54 |  |
 | `get_status_summary` | core | chat and voice | unclassified | ok | "is everything working" (en, #2) | ok | 16 |  |
 | `get_system_health` | core | chat and voice | unclassified | ok | "is everything working" (en, #3) | ok | 35 |  |
 | `get_task` | factory | chat and voice | read | ok | "how is the worker doing on task 5" (en, #3) | ok (2 calls) | 69 |  |
@@ -141,7 +151,8 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `mail_search` | google | chat and voice | unclassified | ok | "check my email" (en, #1) | ok (6 calls) | 49 |  |
 | `mail_send` | google | chat and voice | action | ok | "send an email to Anna" (en, #1) | ok (3 calls) | 80 |  |
 | `mail_update_draft` | google | chat and voice | action | ok | "change my draft to Anna" (en, #1) | ok (4 calls, 3 typed refusals or failures proven) | 97 |  |
-| `manage_model_deployment` | core | chat and voice | action | ok | "Create or delete a Foundry model deployment when Dan requests it, wit…" (derived, #1) | ok (2 calls) | 195 |  |
+| `manage_foundry_agent` | core | chat and voice | unclassified | ok | "show my Foundry agents" (en, #1) | ok (5 calls) | 241 |  |
+| `manage_model_deployment` | core | chat and voice | unclassified | ok | "list Foundry model deployments" (en, #1) | ok (3 calls) | 197 |  |
 | `manage_repository` | factory | chat and voice | action | ok | "Register an existing repository from the GitHub App installation usin…" (derived, #1) | ok (2 calls) | 49 |  |
 | `memory_correct` | notes | chat and voice | action | ok | "Correct an existing memory after Dan corrects or updates it" (derived, #1) | ok | 54 |  |
 | `memory_forget` | notes | chat and voice | action | ok | "forget that I like my coffee black" (en, #1) | ok | 37 |  |
@@ -172,14 +183,14 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `proactive_message_feedback` | pi | chat and voice | action | ok | "that message was useful" (en, #1) | ok | 52 |  |
 | `proactive_preferences` | notes | chat and voice | unclassified | ok | "Read current proactive preferences or capability-backed help, or chan…" (derived, #1) | ok (8 calls) | 152 |  |
 | `proactive_recent_items` | notes | chat and voice | read | ok | "that finding was not useful" (en, #3) | ok (2 calls) | 49 |  |
-| `read_backend_logs` | core | chat and voice | read | ok | "why did you fail yesterday" (en, #1) | ok (2 calls) | 85 |  |
+| `read_backend_logs` | core | chat and voice | read | ok | "why did you fail yesterday" (en, #1) | ok (2 calls) | 205 |  |
 | `read_html_view` | workspace | chat and voice | unclassified | ok | "Read an existing HTML report or app by artifactId or workspace viewId…" (derived, #1) | ok (3 calls) | 84 |  |
 | `read_window` | core | chat and voice | unclassified | ok | "Read a workspace window by viewId from the latest snapshot" (derived, #1) | ok (2 calls) | 37 |  |
 | `renew_credential` | core | chat and voice | action | ok | "Start renewal of the Jarvis Codex login when Dan requests it" (derived, #2) | ok | 33 |  |
 | `repo_issues` | factory | chat and voice | unclassified | ok | "List up to 30 issues or pull requests in the default Jarvis repository" (derived, #2) | ok (3 calls) | 56 |  |
 | `repo_list` | factory | chat and voice | unclassified | ok | "List up to 200 entries in a repository directory" (derived, #1) | ok (2 calls) | 95 |  |
 | `repo_overview` | factory | chat and voice | unclassified | ok | "Read a repository README excerpt, top-level tree, and key documentati…" (derived, #2) | ok (2 calls) | 76 |  |
-| `repo_read` | factory | chat and voice | unclassified | ok | "Read UTF-8 text from one repository file, limited to 400 lines and 40…" (derived, #1) | ok (2 calls) | 125 |  |
+| `repo_read` | factory | chat and voice | unclassified | ok | "read repository file" (en, #2) | ok (2 calls) | 125 |  |
 | `repo_search` | factory | chat and voice | unclassified | ok | "Search code in one repository and return up to 20 matching line snipp…" (derived, #1) | ok (3 calls) | 172 |  |
 | `research` | workspace | chat and voice | action | ok | "research the best noise cancelling headphones" (en, #1) | ok (2 calls) | 60 |  |
 | `resume_task` | factory | chat and voice | action | ok | "Resume a Software Factory task when its lifecycle state permits" (derived, #1) | ok | 39 |  |

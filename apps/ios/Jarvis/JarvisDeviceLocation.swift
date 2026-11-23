@@ -10,6 +10,7 @@ final class JarvisDeviceLocation: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var continuation: CheckedContinuation<CLLocation?, Never>?
     private static let lastSyncKey = "jarvis.deviceLocation.lastSync"
+    private static let lastPermissionKey = "jarvis.deviceLocation.lastPermission"
 
     override init() {
         super.init()
@@ -21,18 +22,23 @@ final class JarvisDeviceLocation: NSObject, CLLocationManagerDelegate {
     /// once per hour.
     func sync(using settings: JarvisSettingsClient) async -> Bool {
         let last = UserDefaults.standard.double(forKey: Self.lastSyncKey)
-        guard Date().timeIntervalSince1970 - last > 3600 else { return false }
+        let previous = UserDefaults.standard.object(forKey: Self.lastPermissionKey) as? Int
+        guard Int(manager.authorizationStatus.rawValue) != previous || Date().timeIntervalSince1970 - last > 3600 else { return false }
         if manager.authorizationStatus == .notDetermined {
             manager.requestWhenInUseAuthorization()
             for _ in 0..<60 where manager.authorizationStatus == .notDetermined {
-                try? await Task.sleep(for: .milliseconds(500))
+                do { try await Task.sleep(for: .milliseconds(500)) } catch { return false }
             }
         }
         let authorization = manager.authorizationStatus
+        func recordSync() {
+            UserDefaults.standard.set(Int(authorization.rawValue), forKey: Self.lastPermissionKey)
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
+        }
         if authorization == .notDetermined {
             if let patch = DeviceLocationSettings.permissionPatch("not_determined"),
                (try? await settings.saveSettings(patch)) != nil {
-                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
+                recordSync()
             }
             return false
         }
@@ -40,7 +46,7 @@ final class JarvisDeviceLocation: NSObject, CLLocationManagerDelegate {
             let value = authorization == .denied ? "denied" : "restricted"
             if let patch = DeviceLocationSettings.permissionPatch(value),
                (try? await settings.saveSettings(patch)) != nil {
-                UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
+                recordSync()
             }
             return false
         }
@@ -48,6 +54,7 @@ final class JarvisDeviceLocation: NSObject, CLLocationManagerDelegate {
                 authorization == .authorizedAlways,
               let location = await currentLocation(),
               let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first,
+              !Task.isCancelled, manager.authorizationStatus == authorization,
               let city = placemark.locality ?? placemark.administrativeArea,
               let patch = DeviceLocationSettings.patch(
                 city: city,
@@ -57,7 +64,7 @@ final class JarvisDeviceLocation: NSObject, CLLocationManagerDelegate {
               ) else { return false }
         do {
             _ = try await settings.saveSettings(patch)
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
+            recordSync()
             return true
         } catch {
             return false

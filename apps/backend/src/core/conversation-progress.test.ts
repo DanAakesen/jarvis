@@ -41,6 +41,15 @@ async function turn(chunks: ConversationAgentChunk[]) {
 }
 
 describe('chat progress events', () => {
+  it('keeps the UTF-8 reply limit exact across progress removal and a split emoji', async () => {
+    const prefix = 'x'.repeat(512 * 1024 - 4);
+    const chunks: ConversationAgentChunk[] = [' Checking.', { type: 'commentary', text: 'Checking.' }, prefix, '\ud83d', '\ude00'];
+    expect((await turn(chunks)).reply?.text).toBe(prefix + '😀');
+    const overflow = await turn([...chunks, 'x']);
+    expect(overflow.events.some(event => event.name === 'error')).toBe(true);
+    expect(overflow.reply?.text).not.toBe(prefix + '😀x');
+  });
+
   it('moves streamed progress out of the reply, and a repeated or unmatched progress line never ends the turn', async () => {
     const { events, reply } = await turn([
       'Checking.', { type: 'acknowledgment', text: 'Checking.' },

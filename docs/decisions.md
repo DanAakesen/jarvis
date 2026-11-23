@@ -6,6 +6,8 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 | Date and source | Rule |
 | --- | --- |
+| 2026-11-23 — Apple Maps | Use on-device MapKit for Chat and Voice. Keep map data temporarily on iPhone, save the owner’s lookup and hand navigation to Apple Maps. A supplied origin works with location permission denied. [Apple’s Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/). |
+| 2026-11-22 — Dan, [#2009](https://github.com/DanAakesen/jarvis/issues/2009) | Jarvis may administer Foundry instructions, versions, activation, models and deployments at Dan’s request. Preserve the protected backend tool contract. |
 | 2026-11-21 — Dan, recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012) | Do not add PI approvals, confirmations or guardrails except for DELETE actions. Prefer model judgement; use deterministic logic for exact results. Keep banking outside that ruling until Dan decides its policy. |
 | 2026-11-16 — Dan's PI migration direction, [cutover checklist](pi/cutover.md); reaffirmed in the 2026-11-22 owner handoff | Build and test the replacement, then delete the old path in an explicit final phase. No fallback, dual path or shim. A deliberate short break is acceptable if called out. |
 | 2026-11-22 — Dan's owner handoff; [engineering rules](agent-context.md#development-workflow) | No paid or live tests, including `measure_pi`, provider/model smoke, Foundry probes and benchmarks, without approval of the exact command. Ask before adding cost. |
@@ -18,6 +20,24 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 ## Decisions of the last 14 days
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
+
+### 23 November 2026 — PI can diagnose its backend requests
+
+Dan approved read-only access to sanitized backend diagnostics in Chat and Voice. A request ID links related events. Keep other apps, device logs and raw personal content outside the reader.
+
+### 23 November 2026 — iPhone entry points and Watch navigation
+
+On iPhone, one manual kcal entry adds one meal with unknown macros. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.
+
+### 23 November 2026 — Scoped Azure MCP capabilities
+
+Expose exact Azure MCP 3.0.0 leaf tools for subscription/resource inventory, supported Jarvis storage operations, Monitor metrics and resource health, and workbook management. Keep writes constrained by the existing `rg-jarvis` Contributor and the blob-data role scoped to the existing Jarvis account. Keep raw Log Analytics queries out of the MCP tool surface because the Azure MCP identity's role union can bypass table-level controls; this is tool-surface isolation, not identity-level isolation. Use the bounded backend diagnostic tool for logs. The pinned Container Apps MCP surface only lists apps. Jarvis Storage Queue operations use the backend identity, with one SDK attempt for non-idempotent sends and receives.
+
+### 22 November 2026 — One continuous conversation and direct Settings access
+
+Dan confirmed that Chat and Voice share one ongoing conversation. Future context compaction must preserve it. On iPhone, the single Proactive suggestions switch belongs directly on the Settings page.
+
+Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the old scheduled engine, and Foundry administration covering instructions, versions, activation, models and deployments. He turned on Background PI. Banking remains out of scope.
 
 ### 22 November 2026 — Qualify the exact PR tree before merge ([#2038](https://github.com/DanAakesen/jarvis/pull/2038))
 

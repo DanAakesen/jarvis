@@ -34,6 +34,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
+    private let mapSpeech = JarvisAppleMapsSpeech()
     private let liveActivity = VoiceLiveActivityController()
     @ObservationIgnored private(set) var liveActivitySessionID: UUID? {
         didSet {
@@ -340,6 +341,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     func toggleMute() async {
         try? await setMuted(!isMuted)
+    }
+
+    func speakAppleMaps(_ result: AppleMapsResult) async -> Bool {
+        guard isAudioReady, canSendAudio, voiceState != .speaking else { return false }
+        return await mapSpeech.speak(result)
     }
 
     private func setMuted(_ nextValue: Bool) async throws {
@@ -659,6 +665,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             if isCameraEnabled || photoForNextTurn != nil { inspectCameraTurn(transcript, itemID: itemID) }
             else if isScreenSharing { inspectScreenTurn() }
         case .audioDelta(_, let base64, let responseID, _):
+            mapSpeech.stop()
             do {
                 try audio.enqueuePlayback(base64, responseID: responseID)
                 if let pcm16 = try? VoiceAudioCodec.decodePCM16(base64) {
@@ -727,7 +734,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     if self.voiceState != .speaking {
                         self.liveActivity.update(state: self.voiceState, isMuted: self.isMuted, pcm16: pcm16)
                     }
-                    guard !self.isMuted, self.canSendAudio else { continue }
+                    guard !self.isMuted, !self.mapSpeech.suppressMicrophone, self.canSendAudio else { continue }
                     guard let client = self.sessionClient else { continue }
                     do {
                         try await client.sendAudio(pcm16)
@@ -774,6 +781,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func stopAudio() {
+        mapSpeech.stop()
         captureReadinessTask?.cancel()
         captureReadinessTask = nil
         captureTask?.cancel()

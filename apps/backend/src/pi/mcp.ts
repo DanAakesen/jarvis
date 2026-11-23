@@ -11,7 +11,7 @@ import {
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { compactLargeSchema } from './compact-schema.js';
-import { providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
+import { asksToReadRepositoryFile, providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import {
   noteRequest, piTurnPattern, type PiActionRun, type PiReplayCheck, type PiToolAnswer, type PiTurnGrant, type PiTurnRegistry,
 } from './turns.js';
@@ -274,6 +274,7 @@ export function createPiMcpRoutes(options: {
     if (name.startsWith('calendar_')) return ['calendar'];
     if (name.startsWith('mail_')) return ['mail'];
     if (name === 'weather') return ['weather'];
+    if (name === 'get_settings' && args.area === 'location') return ['location'];
     if (name.startsWith('memory_')) return ['memory'];
     if (name.startsWith('health_nutrition_') || name.startsWith('health_food') ||
         name.startsWith('health_meal') || name === 'health_saved_food') return ['nutrition'];
@@ -391,8 +392,17 @@ export function createPiMcpRoutes(options: {
       const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
       const named = providersNamedBy(input.query);
       const selected = bridges.filter((bridge) => (named as ReadonlySet<string>).has(bridge.prefix));
+      const visible = (name: string) => {
+        const local = grant.brain
+          ? isWakeTool(name)
+          : isCurrentAssistantTool(name) || isSituationActivationTool(name);
+        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
+      };
+      const localMatches = named.has(githubToolPrefix) && asksToReadRepositoryFile(input.query)
+        ? searchJarvisTools(app.jarvisTools, input.query, visible) : undefined;
+      const localReaderReady = localMatches?.slice(0, maxFullResults).some(tool => tool.name === 'repo_read');
       const catalogues = await Promise.all(selected.map(async (bridge) => {
-        const tools = await bridge.tools(turnSignal);
+        const tools = await bridge.tools(turnSignal, bridge.prefix === githubToolPrefix && localReaderReady ? 0 : undefined);
         return { bridge, tools, status: bridge.status() };
       }));
       const azure = catalogues.find(({ bridge }) => bridge.prefix === azureToolPrefix);
@@ -406,13 +416,7 @@ export function createPiMcpRoutes(options: {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
       };
-      const visible = (name: string) => {
-        const local = grant.brain
-          ? isWakeTool(name)
-          : isCurrentAssistantTool(name) || isSituationActivationTool(name);
-        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
-      };
-      const matches = searchJarvisTools(catalogue, input.query, visible);
+      const matches = remoteTools.length === 0 && localMatches ? localMatches : searchJarvisTools(catalogue, input.query, visible);
       // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
       // reports a server it simply has not heard from yet as "not attached".
       const notes = (noMatch: boolean) => {

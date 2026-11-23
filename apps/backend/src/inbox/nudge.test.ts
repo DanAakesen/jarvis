@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FoundryModelUsage } from '../core/usage.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
 import type { FindingInput } from '../proactive/store.js';
 import { VaultWriteConflictError, type VaultFile, type VaultTreeFile } from '../vault/github-client.js';
 import { createInboxIndex, type InboxIndexRow, type InboxIndexStore } from './item-index.js';
@@ -283,7 +283,7 @@ describe('inbox nudge hook', () => {
     expect(context.findings[0]).toMatchObject({ modelGenerated: true, itemId: 'cccccccc-0000-4000-8000-000000000003', urgency: 'normal' });
     expect(context.findings).toHaveLength(2);
     expect(context.facts).toMatchObject([{ source: 'notes', kind: 'note' }]);
-    expect(spend).toMatchObject([{ runId: 'run-1', inputTokens: 12_000, outputTokens: 1_000 }]);
+    expect(spend).toMatchObject([{ runId: 'e1', inputTokens: 12_000, outputTokens: 1_000 }]);
     expect((spend[0] as { estimatedDkk: number }).estimatedDkk).toBeGreaterThan(0);
   });
 

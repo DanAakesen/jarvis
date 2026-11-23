@@ -1,4 +1,5 @@
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
+import { WebsocketMessageAdapter } from 'microsoft-cognitiveservices-speech-sdk/distrib/lib/src/common.browser/WebsocketMessageAdapter.js';
 
 export const SPEECH_AUTH_SCOPE = 'https://cognitiveservices.azure.com/.default';
 
@@ -23,6 +24,9 @@ export function createAzureSpeechConfig(
   endpoint: URL,
   token: string,
 ): SpeechSDK.SpeechConfig {
+  // Node 22 exposes a browser WebSocket. SDK 1.52 uses it unless told otherwise, dropping the
+  // bearer header on the upgrade and hanging on a rejected handshake until our startup deadline.
+  WebsocketMessageAdapter.forceNpmWebSocket = true;
   const speechConfig = SpeechSDK.SpeechConfig.fromEndpoint(endpoint);
   speechConfig.authorizationToken = token;
   return speechConfig;

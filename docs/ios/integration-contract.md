@@ -16,7 +16,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 1. `POST /conversation/sessions` with `{channel: "chat", language: "da" or "en"}` returns 201 and `{id, ...}`.
 2. `POST /conversation/sessions/:id/turns` with `{text (1 to 20000 characters), attachmentIds (up to 5), screenContext}` answers as a server-sent event stream.
 3. Stream events: `user`, `delta {text}`, `acknowledgment`, `food_invitation`, `interrupted`, `done`, `error`.
-4. Reattach after a drop: `GET /conversation/turns/active` returns `{turns: [{sessionId, messageId, language}]}`. Keep the `sessionId` and `messageId` of each entry. Reattach with `GET /conversation/sessions/:sessionId/turns/:messageId/events` (a server-sent event stream) and cancel with `POST /conversation/sessions/:sessionId/turns/:messageId/cancel`, which answers `{cancelled: true}`. Both answer 404 when the turn is unknown or the session id does not match it. The web client retries reattaching for up to 15 minutes, 2 seconds apart.
+4. Reattach after a drop: `GET /conversation/turns/active` returns `{turns: [{sessionId, messageId, language}]}`. Keep the `sessionId` and `messageId` of the accepted turn across backgrounding. These two identifiers also suffice to reconnect to older backends. Reattach with `GET /conversation/sessions/:sessionId/turns/:messageId/events` (a server-sent event stream) and cancel with `POST /conversation/sessions/:sessionId/turns/:messageId/cancel`, which answers `{cancelled: true}`. Both answer 404 when the turn is unknown or the session id does not match it. The web client retries reattaching for up to 15 minutes, 2 seconds apart.
 5. History: `GET /conversation/history?limit=50&before=CURSOR&sessionId=ID` returns `{messages, nextCursor}`.
 6. Attachments: `POST /conversation/attachments` as multipart, one file up to 20 MB, returns `{id, name, contentType, size, status}`.
 7. `tool_activity` streams PI progress and tool outcomes. History retains tool receipts separately from the final answer.
@@ -24,13 +24,14 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 
 ## 3. Voice (WebSocket)
 
-- URL: `wss://BACKEND/voice` (English) or `wss://BACKEND/voice/da` (Danish). It is a WebSocket carrying JSON, not WebRTC.
+- iPhone and Watch use one JSON WebSocket at `wss://BACKEND/voice` for English and Danish.
 - Auth: exactly two subprotocols, `jarvis.voice.v2` and `jarvis.auth.TOKEN`.
   v1 is rejected during the upgrade and has no alias or fallback.
 - Terminal: `jarvis.session.ended` is clean completion only.
   `jarvis.session.failed` carries `retryable` and `closeCode`; clients reconnect
-  only when `retryable` is true.
-- Language: read `settings.voice.defaultLanguage` from the existing authenticated `GET /settings` route for each new session; the default is `da`.
+  only when `retryable` is true. If saving the ended session fails, the relay sends
+  a retryable failure and closes the WebSocket with code 1011.
+- The active Foundry voice agent supplies the voice and instructions.
 - Audio: base64 PCM16 little-endian, mono, 24 kHz inside JSON messages. There is no Opus.
 - The microphone is open (no push to talk). The relay owns turn boundaries;
   a partial transcript or short backchannel is not a command to stop playback or tool work.
@@ -63,7 +64,8 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 
 - Stream: authenticated SSE at `GET /now/events` with the events `workspace-ready`, `workspace-command`, `workspace-cancel`. The `workspace-ready` event carries a server-issued `sessionId` (a UUID) for this connection. Send it back in every register and acknowledge call, which answer 409 once that connection is gone.
 - Register: `POST /now/workspace/state` with the snapshot fields flat beside the id: `{sessionId, windows, contextPanelOpen}` plus optional `device`, `frame` and `view`. There is no `snapshot` wrapper, and a body that nests the fields under one is rejected with 400. `windows` holds at most 32 entries, each with a required `viewId` and `title`. `device` is `{kind, label}` where `kind` is `desktop`, `phone` or `tablet` and `label` is optional. It answers 204, 400 for an invalid snapshot and 409 when the connection is stale. The most recent snapshot marks the active client.
-- Acknowledge each command within 10 seconds (the `workspace-command` event carries `expiresAt`): `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
+- Acknowledge each command by the `expiresAt` deadline delivered in its SSE event: `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
+- A foreground iPhone advertises `device.appleMaps: true`. An `apple-maps` command returns a `mapReceipt` with the match count, whether local Voice narration finished and an optional status. Places and routes stay in iPhone memory for five minutes. Refresh reruns the saved request.
 - A command `target` is `active`, `desktop`, `phone` or `all`.
 - UNVERIFIED: replay after an SSE reconnect, which commands are desktop only, version negotiation, and how the phone and the desktop choose the active client.
 - iPhone registers as a `phone` client and acknowledges each received command by its deadline. A successful open request is not evidence that the phone was selected.
@@ -128,6 +130,7 @@ this screen.
 | Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
 | Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
 | Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
+| Log meal kcal | Owner POST /health/meals with idempotencyKey (UUID), occurredAt (ISO timestamp) and energyKcal (above 0, up to 10,000). Keep all three on retry. A receipt confirms the key, kcal and Copenhagen mealDate. |
 | Edit training/nutrition targets | `GET` and `PATCH /health/training-targets` or `/health/nutrition-targets`. A patch is a top-level object of changed values; `null` clears a target. |
 | Read Health upload credential state | `GET /api/health/upload-credential` returns state and optional expiry. Minting through `POST` requires an Entra owner token, not an owner-session token; it is separate from native HealthKit sync. |
 | Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |

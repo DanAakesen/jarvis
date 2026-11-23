@@ -1,5 +1,6 @@
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import { createConversationModule } from '../../../core/conversation.js';
+import { foundryProjectFixture } from '../../../core/foundry-agents.testkit.js';
 import { coreModule } from '../../../core/index.js';
 import { createRecipeModule } from '../../../core/recipe-management.js';
 import type { BackendModule } from '../../../modules.js';
@@ -40,7 +41,7 @@ const expectList = (result: unknown, key: string) => {
 
 /**
  * Settings, status, jobs, usage, workspace commands, theme, presence, conversation search and attachments, routines and the
- * backend log reader, plus the tool-less modules that only add routes (sleep, phone status, GitHub webhook, folder order).
+ * backend log reader and sleep switch, plus the route-only phone status, GitHub webhook and folder order modules.
  * Every store is in memory; Dan's browser tab is a fake tab that acknowledges every workspace command.
  */
 export const coreGroup: GroupFactory = (context) => {
@@ -75,12 +76,19 @@ export const coreGroup: GroupFactory = (context) => {
   const isoSecondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1_000).toISOString();
 
   const cases: Record<string, readonly ToolCase[]> = {
+    backend_sleep: [
+      { label: 'read backend minimum replicas', arguments: { operation: 'read' }, check: (result) => expectFields(result, { minimumReplicas: 1 }) },
+      { label: 'keep the backend awake', arguments: { operation: 'wake' }, check: (result) => expectFields(result, { status: 'requested', requestedMinimumReplicas: 1 }) },
+    ],
     set_theme: [
       { label: 'dark appearance', arguments: { tokens: { appearance: 'dark' } }, check: (result) => expectFields(result, { updated: true }) },
       { label: 'accent colour and glow', arguments: { tokens: { accent: '#3366ff', glow: 0.4 } } },
       { label: 'reset the colour overrides', arguments: { tokens: { reset: true } } },
     ],
     get_settings: [
+      { label: 'last observed iPhone location', arguments: { area: 'location' }, check: (result) => {
+        if (!isObject(result) || result.state !== 'ok' || !JSON.stringify(result.facts).includes('Aarhus') || !result.observedAt) throw new Error('expected a timestamped device observation');
+      } },
       { label: 'every area', arguments: {}, check: (result) => { if (!isObject(result) || !isObject(result.settings) || !isObject(result.options)) throw new Error('expected settings and options'); } },
       { label: 'roles', arguments: { area: 'roles' } },
       { label: 'appearance', arguments: { area: 'appearance' } },
@@ -97,7 +105,15 @@ export const coreGroup: GroupFactory = (context) => {
       { label: 'reasoning only', arguments: { reasoning: 'low' }, check: (result) => expectFields(result, { reasoning: 'low' }) },
       { label: 'model and reasoning', arguments: { model: 'gpt-6.1-terra', reasoning: 'medium' } },
     ],
+    manage_foundry_agent: [
+      { label: 'show project agents', arguments: { operation: 'list' }, check: (result) => expectList(result, 'entries') },
+      { label: 'list agent versions', arguments: { operation: 'list_versions', agent: 'fixture-agent' }, check: (result) => expectList(result, 'entries') },
+      { label: 'read model and instructions', arguments: { operation: 'read', agent: 'fixture-agent', version: '1' }, check: (result) => expectFields(result, { version: '1', model: 'model-a' }) },
+      { label: 'create a version using another deployment', arguments: { operation: 'create_version', agent: 'fixture-agent', expectedServingVersion: '1', expectedLatestVersion: '1', model: 'model-b' }, check: (result) => expectFields(result, { version: '2', servingVersion: '1' }) },
+      { label: 'pin the existing active version', arguments: { operation: 'activate', agent: 'fixture-agent', expectedServingVersion: '1', version: '1' }, check: (result) => expectFields(result, { servingVersion: '1', pinned: true }) },
+    ],
     manage_model_deployment: [
+      { label: 'list live models and deployments', arguments: { action: 'list' }, check: (result) => expectList(result, 'deployments') },
       {
         label: 'create a deployment of a catalogue model',
         arguments: { action: 'create', model: 'gpt-6-luna', version: '2026-10-15', sku: 'GlobalStandard', capacity: 10 },
@@ -109,6 +125,10 @@ export const coreGroup: GroupFactory = (context) => {
       label: `period ${period}`, arguments: { period },
       check: (result: unknown) => { expectFields(result, { period }); if (!isObject(result) || !isObject(result.total)) throw new Error('expected a spend total'); },
     })),
+    apple_maps: [
+      { label: 'find a nearby station on a connected iPhone', arguments: { query: 'station', mode: 'walking' },
+        check: (result) => expectFields(result, { matches: 1 }) },
+    ],
     workspace_command: [
       { label: 'navigate to a settings section', arguments: { commandId: 'nav-settings', operation: 'navigate', page: 'settings', section: 'appearance' } },
       { label: 'navigate to the home page', arguments: { commandId: 'nav-home', operation: 'navigate', page: 'home' } },
@@ -230,6 +250,7 @@ export const coreGroup: GroupFactory = (context) => {
     appOptions: {
       settingsStore,
       modelCatalogue,
+      foundryAgentAdmin: foundryProjectFixture().admin,
       modelDeploymentWorkflow: createModelDeploymentFake(modelCatalogue, settingsStore, ownerInteractions),
       credentialStatusStore,
       renewCodexCredential: createCodexRenewalFake(credentialStatusStore),
@@ -240,7 +261,13 @@ export const coreGroup: GroupFactory = (context) => {
       conversationAttachments: createAttachmentsFake(),
       conversationSummaryStore: createConversationSummaryFake(),
       attachmentVision: attachmentVisionFake,
-      ownerInteractions,
+      ownerInteractions: {
+        ...ownerInteractions,
+        async requestConfirmation(kind, ...args) {
+          if (kind === 'delete') return;
+          return ownerInteractions.requestConfirmation(kind, ...args);
+        },
+      },
       workspaceCommands,
       systemStatusReader: createSystemStatusFake(),
       systemSmokeProbes: systemSmokeProbesFake as Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>,

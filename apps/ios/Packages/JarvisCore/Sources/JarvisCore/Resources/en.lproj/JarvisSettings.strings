@@ -20,6 +20,14 @@
 "settings.noResults" = "No results";
 "settings.noItems" = "No items";
 "settings.loadFailed" = "Settings could not be loaded.";
+"settings.targets.signIn" = "Sign in to Jarvis to load your targets.";
+"settings.targets.offline" = "Couldn’t reach Jarvis. Check your connection and retry.";
+"settings.targets.timedOut" = "Loading your targets timed out. Try again.";
+"settings.targets.unavailable" = "The targets service is unavailable. Try again.";
+"settings.targets.webPage" = "Jarvis received a web page when it requested your targets.";
+"settings.targets.empty" = "Jarvis received an empty response for your targets.";
+"settings.targets.invalid" = "Jarvis couldn’t read the target data from the server.";
+"settings.targets.http" = "The targets request returned HTTP %d.";
 "settings.saveFailed" = "Could not save. Your change is kept.";
 "settings.notOwner" = "Only the account owner has access.";
 "settings.unavailable" = "Settings are temporarily unavailable.";

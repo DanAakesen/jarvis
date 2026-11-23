@@ -11,7 +11,10 @@ export interface PhraseRow {
 }
 
 export const phraseTable: readonly PhraseRow[] = [
+  { intent: 'foundry agents', en: 'show my Foundry agents', da: 'vis mine Foundry agenter', tools: ['manage_foundry_agent'] },
+  { intent: 'foundry deployments', en: 'list Foundry model deployments', da: 'vis Foundry model deployments', tools: ['manage_model_deployment'] },
   // Weather
+  { intent: 'location', en: 'where am I', da: 'hvor er jeg', tools: ['get_settings'] },
   { intent: 'weather', en: 'what is the weather in Aarhus tomorrow', da: 'hvordan er vejret i Aarhus i morgen', tools: ['weather'] },
   { intent: 'weather', en: 'will it rain this weekend', da: 'bliver det regnvejr i weekenden', tools: ['weather'] },
   // Memory
@@ -78,11 +81,18 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'nutrition', en: 'how many calories are in a banana', da: 'hvor mange kalorier er der i en banan', tools: ['health_food_review', 'health_food'] },
   { intent: 'nutrition', en: 'set my protein target to 160 grams', da: 'sæt mit proteinmål til 160 gram', tools: ['health_nutrition_targets'] },
   // GitHub and Azure (remote bridges)
+  { intent: 'azure', en: 'put the Jarvis backend to sleep', da: 'sæt Jarvis backend i dvale', tools: ['backend_sleep'] },
   { intent: 'github', en: 'list my open pull requests on github', da: 'vis mine åbne pull requests på github', tools: ['gh_list_pull_requests', 'gh_search_pull_requests'] },
   { intent: 'github', en: 'show issue 12 on github', da: 'vis issue 12 på github', tools: ['gh_issue_read', 'github_read'] },
   { intent: 'github', en: 'search github issues about the login bug', da: 'søg i github issues efter login-fejlen', tools: ['gh_search_issues', 'gh_list_issues'] },
   { intent: 'azure', en: 'list my azure resource groups', da: 'vis mine azure ressourcegrupper', tools: ['az_group_list'] },
   { intent: 'azure', en: 'what resources are running in azure', da: 'hvilke ressourcer kører der i azure', tools: ['az_group_resource_list', 'az_group_list', 'az_containerapps_list'] },
+  { intent: 'azure', en: 'show me the queue names in Jarvis Storage', da: 'vis queue names i Jarvis Storage', tools: ['azure_storage_queue_names'] },
+  { intent: 'azure', en: 'peek messages in the Jarvis Storage queue', da: 'peek messages i Jarvis Storage queue', tools: ['azure_storage_queue_peek'] },
+  { intent: 'azure', en: 'send a message to the Jarvis storage queue', da: 'send en besked til Jarvis Storage-køen', tools: ['azure_storage_queue_send'] },
+  { intent: 'azure', en: 'receive messages from the Jarvis storage queue', da: 'receive messages fra Jarvis Storage queue', tools: ['azure_storage_queue_receive'] },
+  { intent: 'azure', en: 'create a Jarvis storage queue', da: 'opret en Jarvis Storage-kø', tools: ['azure_storage_queue_create'] },
+  { intent: 'azure', en: 'delete message from the Jarvis storage queue', da: 'slet beskeden fra Jarvis Storage-køen', tools: ['azure_storage_queue_delete_message'] },
   // Research
   { intent: 'research', en: 'research the best noise cancelling headphones', da: 'undersøg de bedste støjreducerende hovedtelefoner', tools: ['research', 'web_research'] },
   { intent: 'research', en: 'search the web for the library opening hours', da: 'søg på nettet efter bibliotekets åbningstider', tools: ['web_research', 'research'] },
@@ -98,6 +108,8 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'factory', en: 'show me the pull request of the worker on task 5', da: 'vis mig pull requesten fra worker på task 5', tools: ['pr_get', 'get_work_status', 'get_task', 'github_read'] },
   // Workspace and visuals
   { intent: 'workspace', en: 'show me a chart of my spending', da: 'vis mig et diagram over mit forbrug', tools: ['show_in_chat', 'workspace_command', 'create_html_view'] },
+  { intent: 'workspace', en: 'find a coffee shop near me', da: 'find en café i nærheden', tools: ['apple_maps'] },
+  { intent: 'workspace', en: 'when should I leave for the station', da: 'hvornår skal jeg køre til stationen', tools: ['apple_maps'] },
   { intent: 'workspace', en: 'open the workspace', da: 'åbn arbejdsområdet', tools: ['workspace_command', 'workspaces_open'] },
   { intent: 'workspace', en: 'go to the settings page', da: 'gå til indstillinger', tools: ['workspace_command', 'get_settings'] },
   { intent: 'workspace', en: 'find my saved research report', da: 'find min gemte research rapport', tools: ['workspaces_search', 'folio_search'] },
@@ -144,6 +156,9 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'settings', en: 'switch the language to Danish', da: 'skift sprog til dansk', tools: ['workspace_command'] },
   { intent: 'azure', en: 'what does azure cost this month', da: 'hvad koster azure denne måned', tools: ['az_cost_query'] },
   { intent: 'github', en: 'merge the pull request', da: 'merge pull requesten', tools: ['gh_merge_pull_request', 'github_write'] },
+  { intent: 'github', en: 'read repository file', da: 'læs filen i repoet', tools: ['repo_read'] },
+  { intent: 'factory', en: 'review the source code', da: 'gennemgå kildekoden', tools: ['repo_read'] },
+  { intent: 'factory', en: 'code review', da: 'gennemgå koden', tools: ['repo_read'] },
   { intent: 'github', en: 'what changed in the repo this week', da: 'hvad er ændret i repoet i denne uge', tools: ['gh_list_commits', 'repo_issues', 'github_read'] },
   { intent: 'settings', en: 'I am leaving the house', da: 'jeg kører bil nu', tools: ['set_presence_mode', 'set_away_mode'] },
   { intent: 'settings', en: 'I am back home', da: 'jeg er hjemme igen', tools: ['set_presence_mode', 'set_away_mode'] },
@@ -155,6 +170,7 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'system', en: 'how is the research going', da: 'hvordan går det med researchen', tools: ['list_jobs', 'get_job'] },
   { intent: 'system', en: 'stop the research job', da: 'stop den research opgave', tools: ['cancel_job'] },
   { intent: 'system', en: 'why did you fail yesterday', da: 'hvorfor fejlede du i går', tools: ['read_backend_logs'] },
+  { intent: 'system', en: 'why did that request fail', da: 'hvorfor fejlede den anmodning', tools: ['read_backend_logs'] },
   { intent: 'workspace', en: 'tidy up my windows', da: 'ryd op i mine vinduer', tools: ['workspace_command'] },
   { intent: 'workspace', en: 'delete my routine', da: 'slet min rutine', tools: ['task_routines', 'task_recipes'] },
   { intent: 'workspace', en: 'what do I have pinned', da: 'hvad har jeg fastgjort', tools: ['pins_list'] },

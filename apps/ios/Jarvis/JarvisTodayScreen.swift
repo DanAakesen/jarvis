@@ -23,7 +23,6 @@ struct JarvisTodayScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var briefVersion = 0
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
     let fixtureMode: Bool
@@ -70,9 +69,6 @@ struct JarvisTodayScreen: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("today.offline")
                 }
-                JarvisSectionHeadline(copy(.quickActions))
-                    .accessibilityIdentifier("today.section.quickActions")
-                quickActions
                 JarvisSectionHeadline(copy(.upcoming))
                     .accessibilityIdentifier("today.section.upcoming")
                 agendaControls
@@ -423,6 +419,11 @@ struct JarvisTodayScreen: View {
                 .accessibilityIdentifier("today.plus.task")
             Button(copy(.newNote), systemImage: "note.text") { present(.note) }
                 .accessibilityIdentifier("today.plus.note")
+            Divider()
+            Button(copy(.logWorkout), systemImage: "figure.strengthtraining.traditional") { present(.workout) }
+                .accessibilityIdentifier("today.plus.workout")
+            Button(copy(.logLift), systemImage: "dumbbell") { present(.lift) }
+                .accessibilityIdentifier("today.plus.lift")
         }
     }
 
@@ -521,30 +522,6 @@ struct JarvisTodayScreen: View {
         }
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
         .accessibilityElement(children: .contain)
-    }
-
-    // MARK: Quick actions
-
-    private var quickActions: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
-            : AnyLayout(HStackLayout(spacing: 10))
-        return layout {
-            JarvisTileButton(
-                title: copy(.logWorkout),
-                subtitle: model.lastWorkoutText(language: language),
-                systemImage: "figure.strengthtraining.traditional",
-                identifier: "today.logWorkout"
-            ) { sheet = .workout }
-            JarvisTileButton(
-                title: copy(.logLift),
-                subtitle: model.lastLiftText(language: language),
-                systemImage: "dumbbell",
-                identifier: "today.logLift"
-            ) { sheet = .lift }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy(.quickActions))
     }
 
     // MARK: Composer

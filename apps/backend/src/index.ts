@@ -4,6 +4,7 @@ import { createBackendLogAuthorizationProbe } from './operations/backend-log-aut
 import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
+import { QueueServiceClient } from '@azure/storage-queue';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
@@ -63,6 +64,7 @@ import {
 } from './voice/live-protocol.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
+import { createFoundryAgentAdmin } from './core/foundry-agents.js';
 import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
@@ -92,7 +94,6 @@ import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
 import { alertEvent, githubEvent, workerEvent } from './proactive/events/producers.js';
 import type { ProactiveEventSink } from './proactive/events/types.js';
-import type { EventQueueStore } from './proactive/events/event-queue.js';
 import { createGitHubIssueClient } from './github/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
@@ -134,6 +135,7 @@ import { createBrainTools } from './pi/brain/tools.js';
 import { createDecisionLog } from './pi/brain/decision-log.js';
 import { createWatches } from './pi/watch/store.js';
 import { createWatchTools } from './pi/watch/tools.js';
+import { createStorageQueueTools } from './pi/storage-queue-tools.js';
 import { defaultAwayModeState } from './core/away-mode.js';
 import { createInboxStatusRoute } from './inbox/status.js';
 import { createMissedCaptureAudit } from './inbox/audit.js';
@@ -345,6 +347,11 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const storageQueueClient = archiveStorageAccount && credential
+    ? new QueueServiceClient(`https://${archiveStorageAccount}.queue.core.windows.net`, credential, {
+      retryOptions: { maxTries: 1, tryTimeoutInMs: 10_000 },
+    })
     : undefined;
   const vaultMirrorStatusReader = createVaultMirrorStatusReader(
     archiveStorageAccount && credential
@@ -1229,6 +1236,7 @@ try {
       }) : []),
       ...(brainComms && piStore ? [createProactiveMessageFeedbackTool(piStore, config.auth.ownerObjectId)] : []),
       ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
+      ...(storageQueueClient ? createStorageQueueTools(storageQueueClient) : []),
     ],
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
@@ -1566,6 +1574,15 @@ try {
       },
     }) } : {}),
     modelCatalogue,
+    ...(config.foundryProjectEndpoint && credential ? { foundryAgentAdmin: createFoundryAgentAdmin({
+      projectEndpoint: config.foundryProjectEndpoint,
+      managedAgents: [config.pi?.agentName, config.foundryVoiceAgentName].filter((name): name is string => Boolean(name)),
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry identity unavailable');
+        return token.token;
+      },
+    }) } : {}),
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(approvalInterpreter ? { approvalInterpreter } : {}),
     ...(decisionsAvailable ? { reflexClassifier } : {}),
@@ -1734,11 +1751,10 @@ try {
   if (config.proactiveEnabled) registerProactive(app, {
     ...(piSituationService ? { situation: piSituationService } : {}),
     ...(brainControl ? { background: brainControl } : {}),
-    ...(inboxNudgeHook ? { onFindingsStored: [inboxNudgeHook] } : {}),
+    ...(inboxNudgeHook ? { reviewInbox: inboxNudgeHook } : {}),
     healthEnabled: config.healthEnabled === true,
     ...(nativeProactive ? { hasNativeRecipients: nativeProactive.hasRecipients } : {}),
     ...(memoryStore ? { memoryStore } : {}),
-    vaultMirrorStatusReader,
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,
     ...(proactiveStore ? { store: proactiveStore } : {}),
@@ -1756,7 +1772,6 @@ try {
     ...(config.foundryProjectEndpoint ? { foundryProjectEndpoint: config.foundryProjectEndpoint } : {}),
     ...(usageStore ? { usageStore } : {}),
     ...(taskStore ? { taskStore } : {}),
-    backgroundJobs: app.backgroundJobs,
     ...(conversationStore ? { conversationStore } : {}),
     registerVaultPushHandler: (handler: () => void) => { vaultPushReminderHandler = handler; },
     eventsEnabled: config.proactiveEventsEnabled,
@@ -1764,9 +1779,9 @@ try {
     registerEventSink: (sink: ProactiveEventSink) => { proactiveEventSink = sink; },
     // PI reads the event queue instead of the old one-shot pipeline; the Proactive Background PI switch decides whether it wakes.
     ...(piGateway && piStore && brainComms && piArea && proactiveStore ? {
-      brain: (queue: EventQueueStore) => {
+      brain: (queue, afterScheduledWake) => {
         brainHandle = createBrain({
-          queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
+          afterScheduledWake, queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
           decisionLog: createDecisionLog({ area: piArea }), extras: watches, owner: config.auth.ownerObjectId,
           timeZone: config.googleTimeZone ?? 'Europe/Copenhagen', now: () => new Date(), logger,
         });
@@ -1778,7 +1793,6 @@ try {
     ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),
     registerReminderWakeHandler: (handler: (fireAt: Date) => void) => { scheduleOwnerReminderWake = handler; },
     pushEnabled: config.pushEnabled,
-    todoWritesEnabled: config.proactiveTodoWritesEnabled,
     alertsEnabled: config.proactiveAlertsEnabled,
     now: () => new Date(),
     logger,

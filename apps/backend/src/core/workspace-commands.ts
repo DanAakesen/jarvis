@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifySchemaValidationError } from 'fastify';
 import {
+  type AppleMapsQuery,
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
   isWorkspaceSnapshot,
@@ -14,12 +15,13 @@ import {
   type GeneratedView,
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
-import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { appleMapsGuidance, generatedViewValidationOptions } from './generated-view-validation.js';
 import { explainedArgumentsMessage, toolArgumentRefusal } from './tool-arguments.js';
 import { isJarvisToolCall } from './tool-origin.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const commandTimeoutMs = 10_000;
+const appleMapsTimeoutMs = 30_000;
 const maxPendingCommands = 8;
 const maxCachedCommands = 128;
 
@@ -44,14 +46,15 @@ interface WorkspaceConnection {
 interface CommandRecord {
   view?: { viewId: string; view: GeneratedView };
   readonly fingerprint: string;
+  readonly expectsMapReceipt: boolean;
   readonly htmlView?: { viewId: string; artifactId: string };
   /** Every tab the command was delivered to; the first tab that applies it settles the command. */
   readonly sessionIds: Set<string>;
   /** Tabs that refused, failed, or disconnected; once all have, the command is refused. */
   readonly declined: Map<string, { outcome: 'refused' | 'error'; reason: string }>;
   readonly acknowledgements: Map<string, string>;
-  readonly promise: Promise<void>;
-  readonly resolve: () => void;
+  readonly promise: Promise<AppleMapsReceipt | undefined>;
+  readonly resolve: (result?: AppleMapsReceipt) => void;
   readonly reject: (error: Error) => void;
   readonly signal: AbortSignal;
   state: 'pending' | 'applied' | 'refused' | 'error';
@@ -59,6 +62,30 @@ interface CommandRecord {
   abort?: () => void;
 }
 type WorkspaceCommandOutcome = 'refused' | 'error';
+
+const mapReceiptReasons = ['needs_origin', 'no_matches', 'partial', 'unavailable', 'expired_lookup', 'invalid_choice'] as const;
+export interface AppleMapsReceipt {
+  matches: number;
+  spoken?: boolean;
+  reason?: typeof mapReceiptReasons[number];
+}
+
+const mapReceiptSchema = {
+  type: 'object', additionalProperties: false, required: ['matches'],
+  properties: {
+    matches: { type: 'integer', minimum: 0, maximum: 3 },
+    spoken: { type: 'boolean' },
+    reason: { type: 'string', enum: mapReceiptReasons },
+  },
+};
+function isAppleMapsReceipt(value: unknown): value is AppleMapsReceipt {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const receipt = value as Record<string, unknown>;
+  return Object.keys(receipt).every(key => Object.hasOwn(mapReceiptSchema.properties, key)) &&
+    Number.isInteger(receipt.matches) && Number(receipt.matches) >= 0 && Number(receipt.matches) <= 3 &&
+    (receipt.spoken === undefined || typeof receipt.spoken === 'boolean') &&
+    (receipt.reason === undefined || mapReceiptReasons.some(reason => reason === receipt.reason));
+}
 
 function safeReason(reason: string): boolean {
   return reason.trim().length > 0 && reason.length <= 300 &&
@@ -163,6 +190,19 @@ export class WorkspaceCommandBroker {
   }
 
   async execute(ownerId: string, command: WorkspaceCommand, signal: AbortSignal): Promise<void> {
+    await this.dispatch(ownerId, command, signal);
+  }
+
+  async appleMaps(ownerId: string, query: AppleMapsQuery, speakResult: boolean, signal: AbortSignal) {
+    const lookupId = randomUUID();
+    const receipt = await this.dispatch(ownerId, {
+      ...query, operation: 'apple-maps', target: 'phone', commandId: lookupId, ...(speakResult ? { speakResult } : {}),
+    }, signal);
+    if (!receipt) throw new ToolFailure('Apple Maps did not acknowledge the lookup.');
+    return { lookupId, ...receipt };
+  }
+
+  private async dispatch(ownerId: string, command: WorkspaceCommand, signal: AbortSignal): Promise<AppleMapsReceipt | undefined> {
     if (signal.aborted) throw new ToolFailure('Workspace command was cancelled before delivery.');
     const ownerConnections = this.connections.get(ownerId);
     if (!ownerConnections || ownerConnections.size === 0) {
@@ -184,11 +224,23 @@ export class WorkspaceCommandBroker {
     }
 
     const target = command.target ?? 'active';
+    const mapSession = command.operation === 'create' && command.view.renderer === 'map'
+      ? ownerRecords.get(command.view.data.lookupId)?.sessionIds : undefined;
+    const selection = command.operation === 'apple-maps' && 'lookupId' in command ? command : undefined;
+    const prior = selection && ownerRecords.get(selection.lookupId);
+    if (selection && !(prior?.expectsMapReceipt && prior.state === 'applied')) {
+      return { matches: 0, reason: 'expired_lookup' };
+    }
     const candidates = [...ownerConnections.values()].filter((connection) =>
-      target === 'active' || target === 'all' || connection.snapshot?.device?.kind === target);
+      command.operation === 'apple-maps'
+        ? connection.snapshot?.device?.kind === 'phone' && connection.snapshot.device.appleMaps === true && (!prior || prior.sessionIds.has(connection.sessionId))
+        : (!mapSession || mapSession.has(connection.sessionId)) &&
+          (target === 'active' || target === 'all' || connection.snapshot?.device?.kind === target));
     const latest = this.latestConnection(candidates);
     const recipients = target === 'all' ? candidates : latest ? [latest] : [];
     if (!recipients.length) {
+      if (selection) return { matches: 0, reason: 'expired_lookup' };
+      if (command.operation === 'apple-maps') throw new ToolRefusal('Open Jarvis on an iPhone with Apple Maps support, then ask again.');
       const kinds = [...new Set([...ownerConnections.values()]
         .map((connection) => connection.snapshot?.device?.kind ?? 'unknown device'))];
       throw new ToolRefusal(`No ${target} workspace is connected. Connected devices: ${kinds.join(', ')}.`);
@@ -204,11 +256,12 @@ export class WorkspaceCommandBroker {
       ownerRecords.delete(oldestSettled);
     }
 
-    let resolve!: () => void;
+    let resolve!: (result?: AppleMapsReceipt) => void;
     let reject!: (error: Error) => void;
-    const promise = new Promise<void>((accept, decline) => { resolve = accept; reject = decline; });
+    const promise = new Promise<AppleMapsReceipt | undefined>((accept, decline) => { resolve = accept; reject = decline; });
     const record: CommandRecord = {
       fingerprint: digest,
+      expectsMapReceipt: command.operation === 'apple-maps',
       ...((command.operation === 'create' || command.operation === 'update') && command.view.renderer === 'html-app'
         ? { htmlView: { viewId: command.viewId, artifactId: command.view.data.artifactId.toLowerCase() } }
         : {}),
@@ -241,12 +294,15 @@ export class WorkspaceCommandBroker {
       settleError(new ToolFailure('Workspace command was cancelled; the client may already have applied it.', { outcomeUnknown: true }), 'error');
     };
 
+    const timeoutMs = record.expectsMapReceipt ? appleMapsTimeoutMs : commandTimeoutMs;
     record.timer = setTimeout(() => {
-      settleError(new ToolFailure('The workspace did not acknowledge the command within 10 seconds; it may already have been applied.', { outcomeUnknown: true }), 'error');
-    }, commandTimeoutMs);
+      const error = record.expectsMapReceipt ? new ToolFailure('Apple Maps did not return a result within 30 seconds.')
+        : new ToolFailure('The workspace did not acknowledge the command within 10 seconds; it may already have been applied.', { outcomeUnknown: true });
+      settleError(error, 'error');
+    }, timeoutMs);
     signal.addEventListener('abort', onAbort, { once: true });
 
-    const expiresAt = Date.now() + commandTimeoutMs;
+    const expiresAt = Date.now() + timeoutMs;
     const frame = JSON.stringify({ command, expiresAt });
     if (Buffer.byteLength(frame) > 300 * 1024) {
       settleError(new ToolFailure('The workspace could not accept the command for delivery.'), 'error');
@@ -270,14 +326,20 @@ export class WorkspaceCommandBroker {
     applied: boolean,
     reason?: string,
     outcome: WorkspaceCommandOutcome = 'refused',
+    mapReceipt?: AppleMapsReceipt,
   ): WorkspaceAcknowledgement {
     if (!this.connections.get(ownerId)?.has(sessionId)) return { status: 'stale' };
     const record = this.records.get(ownerId)?.get(commandId);
     if (!record) return { status: 'unknown' };
     if (!record.sessionIds.has(sessionId)) return { status: 'stale' };
-    const acknowledgement = JSON.stringify({ applied, reason: reason ?? null, outcome });
+    if (mapReceipt !== undefined && !(record.expectsMapReceipt && applied && isAppleMapsReceipt(mapReceipt))) return { status: 'unknown' };
+    if (record.expectsMapReceipt && applied && mapReceipt === undefined) return { status: 'unknown' };
+    // A phone failure may contain provider text. Only the bounded receipt crosses into Jarvis.
+    if (record.expectsMapReceipt) reason = undefined;
+    const acknowledgement = JSON.stringify({ applied, reason: reason ?? null, outcome, mapReceipt });
     const previous = record.acknowledgements.get(sessionId);
     if (previous !== undefined) return previous === acknowledgement ? { status: 'duplicate' } : { status: 'stale' };
+    if (record.expectsMapReceipt && record.state !== 'pending') return { status: 'stale' };
     if (!applied && reason !== undefined && !safeReason(reason)) {
       return { status: 'unknown' };
     }
@@ -287,7 +349,9 @@ export class WorkspaceCommandBroker {
       record.state = 'applied';
       clearTimeout(record.timer);
       if (record.abort) record.signal.removeEventListener('abort', record.abort);
-      record.resolve();
+      record.resolve(mapReceipt);
+    } else if (record.expectsMapReceipt) {
+      this.decline(record, sessionId, outcome, 'Apple Maps was unavailable on the iPhone.');
     } else {
       this.decline(record, sessionId, outcome, reason ?? (outcome === 'error'
         ? 'The workspace failed while applying the command.'
@@ -328,7 +392,7 @@ export class WorkspaceCommandBroker {
         'The active workspace disconnected before acknowledging the command; it may already have been applied.', true);
     }
   }
-  private waitFor(promise: Promise<void>, signal: AbortSignal): Promise<void> {
+  private waitFor<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
     if (signal.aborted) return Promise.reject(new ToolFailure('Workspace command was cancelled.'));
     return new Promise((resolve, reject) => {
       const onAbort = () => {
@@ -337,7 +401,7 @@ export class WorkspaceCommandBroker {
       };
       signal.addEventListener('abort', onAbort, { once: true });
       promise.then(
-        () => { signal.removeEventListener('abort', onAbort); resolve(); },
+        value => { signal.removeEventListener('abort', onAbort); resolve(value); },
         (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
       );
     });
@@ -375,6 +439,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
             properties: {
               kind: { type: 'string', enum: workspaceDeviceKinds },
               label: { type: 'string', minLength: 1, maxLength: 60 },
+              appleMaps: { type: 'boolean' },
             },
             required: ['kind'], additionalProperties: false,
           },
@@ -399,8 +464,15 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
   });
   app.post<{
     Params: { commandId: string };
-    Body: { sessionId: string; applied: boolean; outcome?: WorkspaceCommandOutcome; reason?: string };
+    Body: { sessionId: string; applied: boolean; outcome?: WorkspaceCommandOutcome; reason?: string; mapReceipt?: AppleMapsReceipt };
   }>('/now/workspace/commands/:commandId/ack', {
+    preValidation: async (request, reply) => {
+      const body = request.body;
+      if (body && typeof body === 'object' && ('mapResult' in body ||
+          ('mapReceipt' in body && !isAppleMapsReceipt(body.mapReceipt)))) {
+        return reply.code(400).send({ error: 'Expected a bounded Apple Maps receipt' });
+      }
+    },
     schema: {
       params: {
         type: 'object',
@@ -416,6 +488,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
           sessionId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$', maxLength: 36 },
           applied: { type: 'boolean' },
           outcome: { type: 'string', enum: ['refused', 'error'] },
+          mapReceipt: mapReceiptSchema,
           reason: { type: 'string', minLength: 1, maxLength: 300, pattern: '^[^\u0000-\u001f\u007f]+$' },
         },
         required: ['sessionId', 'applied'],
@@ -434,6 +507,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
       request.body.applied,
       request.body.reason,
       request.body.outcome,
+      request.body.mapReceipt,
     );
     if (result.status === 'accepted' || result.status === 'duplicate') return reply.code(204).send();
     return reply.code(result.status === 'stale' ? 409 : 404).send({
@@ -461,6 +535,8 @@ const maxExplainedProblemCharacters = 356;
  * characters explainedArgumentsMessage allows, and is undefined when nothing concrete can be named.
  */
 export function explainWorkspaceCommand(input: unknown, app: FastifyInstance): string | undefined {
+  const guidance = appleMapsGuidance(input);
+  if (guidance) return guidance;
   let text = '';
   for (const { path, problem } of workspaceCommandProblems(input, generatedViewValidationOptions(app))) {
     const fragment = `${path}: ${problem}`;
@@ -503,6 +579,8 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
         throw new ToolRefusal('A browser session can only control existing windows, the conversation, the session and the layout. Creating, updating or navigating views is done by Jarvis. Nothing was changed or shown.');
       }
     }
+    const guidance = appleMapsGuidance(input);
+    if (guidance) throw new ToolRefusal(guidance);
     if (!isWorkspaceCommand(input, generatedViewValidationOptions(request.server))) {
       if (typeof input === 'object' && input !== null && !Array.isArray(input) &&
           (input as Record<string, unknown>).operation === 'conversation') {

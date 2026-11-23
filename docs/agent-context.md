@@ -106,7 +106,13 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-The Apple build number is the workflow run number. Check the export/upload step, then confirm the exact build has finished processing in App Store Connect and is available to the intended TestFlight testers. If only Actions is accessible, report upload only; do not dispatch another build for readback. Name the available build and the [plan's](../PLAN.md) daily-core checks. A successful upload is **not accepted on device**. Reopen an acceptance issue if linking a PR closed it prematurely.
+The Apple build number is the upload workflow’s run number. Check Apple’s receipt after upload. Internal availability requires `VALID` processing, `IN_BETA_TESTING` and an unexpired build. If processing continues, recheck the same build without another archive:
+
+```sh
+gh workflow run ios-testflight.yml --ref main -f branch=main -f receipt_build_number=BUILD_NUMBER
+```
+
+Report the available build and its device checks in the [plan’s](../PLAN.md) daily-core order. Keep acceptance issues open until the owner confirms the result.
 
 ## Cost and safety
 
@@ -131,7 +137,12 @@ The repository must stay small enough for a new agent to read it. [.github/copil
 
 ## Azure
 
-Local work does not require Azure credentials. Production inspection requires the correct tenant/subscription and a scoped role from the owner; verify the target before an authorised command. Keep change delivery in the main-only Deploy workflow. Do not change Foundry versions concurrently with Deploy; instructions are portal-owned after bootstrap, and `KEEP THIS BLOCK` is not editable. See [infra](../infra/README.md) and [agent ownership](architecture.md#the-two-foundry-agents).
+Local work does not require Azure credentials. Production inspection requires the correct tenant/subscription and a scoped role from the owner; verify the target before an authorised command. Keep change delivery in the main-only Deploy workflow. Do not change Foundry versions concurrently with Deploy; Foundry owns live instructions after bootstrap. Dan can edit them through Jarvis or the portal. Preserve `KEEP THIS BLOCK`. See [infra](../infra/README.md) and [agent ownership](architecture.md#the-two-foundry-agents).
+
+Azure MCP subscription inventory Reader is granted separately with
+`infra/grant-azure-mcp-inventory-reader.ps1`; `setup-azure-mcp.ps1` handles
+the app registration and caller binding only. The MCP tool allowlist is pinned
+in `infra/main.bicep` and excludes raw Log Analytics queries.
 
 ### Verify the live agents (read-only)
 

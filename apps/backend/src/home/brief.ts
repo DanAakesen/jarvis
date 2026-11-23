@@ -26,6 +26,30 @@ export interface HomeBriefOptions {
 // Legacy health facts do not yet carry merged-daily provenance; do not quote ambiguous activity totals.
 const sourceIds = new Set(['calendar', 'todos', 'nutrition', 'weather']);
 const cacheMs = 15 * 60_000;
+const maxBriefFacts = 30;
+
+function briefFacts(rows: SourceResult[]): SourceFact[] {
+  const groups = rows.filter(row => row.state === 'ok').map(row => row.facts);
+  const all = groups.flat();
+  if (all.length <= maxBriefFacts) return all;
+  const when = (fact: SourceFact) => {
+    const timestamp = Date.parse(fact.dueAt ?? fact.startsAt ?? '');
+    return Number.isFinite(timestamp) ? timestamp : Infinity;
+  };
+  // Take the highest-priority, earliest facts from each available source before filling another round.
+  const ranked = groups.map(facts => [...facts].sort((a, b) =>
+    Number(b.highPriority === true) - Number(a.highPriority === true) || when(a) - when(b)));
+  const selected: SourceFact[] = [];
+  for (let index = 0; selected.length < maxBriefFacts; index++) {
+    for (const group of ranked) {
+      const fact = group[index];
+      if (fact) selected.push(fact);
+      if (selected.length === maxBriefFacts) break;
+    }
+  }
+  return selected;
+}
+
 function copenhagenDay(at: number): string {
   return dayKey(new Date(at));
 }
@@ -95,8 +119,7 @@ export class HomeBriefService {
     });
     // Failed commitment sources must never be silently converted into an empty/clear day.
     if (missing.includes('calendar') || missing.includes('todos')) return unavailable('sources');
-    const facts: SourceFact[] = rows.flatMap(row => row.state === 'ok' ? row.facts : [])
-      .slice(0, 30).map(fact => ({ ...fact, ref: fact.ref.slice(0, 200),
+    const facts: SourceFact[] = briefFacts(rows).map(fact => ({ ...fact, ref: fact.ref.slice(0, 200),
         label: fact.label.slice(0, 160), text: fact.text.slice(0, 600) }));
     const clock = this.now();
     const day = copenhagenDay(clock);

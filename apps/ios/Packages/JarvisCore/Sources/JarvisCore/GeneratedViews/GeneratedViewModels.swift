@@ -11,6 +11,7 @@ public enum GeneratedViewRenderer: String, CaseIterable, Codable, Equatable, Sen
     case table
     case list
     case detail
+    case map
     case text
     case timeline
     case chart
@@ -350,6 +351,7 @@ public enum GeneratedView: Codable, Equatable, Sendable {
     case table(GeneratedViewEnvelope<GeneratedTableData>)
     case list(GeneratedViewEnvelope<GeneratedListData>)
     case detail(GeneratedViewEnvelope<GeneratedDetailData>)
+    case map(GeneratedViewEnvelope<AppleMapsViewData>)
     case text(GeneratedViewEnvelope<GeneratedTextData>)
     case timeline(GeneratedViewEnvelope<GeneratedTimelineData>)
     case chart(GeneratedViewEnvelope<GeneratedChartData>)
@@ -398,6 +400,8 @@ public enum GeneratedView: Codable, Equatable, Sendable {
             self = .table(try Self.decodeEnvelope(GeneratedTableData.self, from: raw))
         case .list:
             self = .list(try Self.decodeEnvelope(GeneratedListData.self, from: raw))
+        case .map:
+            self = .map(try Self.decodeEnvelope(AppleMapsViewData.self, from: raw))
         case .detail:
             self = .detail(try Self.decodeEnvelope(GeneratedDetailData.self, from: raw))
         case .text:
@@ -427,6 +431,8 @@ public enum GeneratedView: Codable, Equatable, Sendable {
             try Self.encodeEnvelope(envelope, renderer: "table", to: encoder)
         case .list(let envelope):
             try Self.encodeEnvelope(envelope, renderer: "list", to: encoder)
+        case .map(let envelope):
+            try Self.encodeEnvelope(envelope, renderer: "map", to: encoder)
         case .detail(let envelope):
             try Self.encodeEnvelope(envelope, renderer: "detail", to: encoder)
         case .text(let envelope):
@@ -877,6 +883,21 @@ private enum GeneratedViewValidator {
                         registeredTools: registeredTools
                     )
                 }
+            }
+        case "map":
+            try checkKeys(data, path: path, allowed: ["lookupId", "request"], required: ["lookupId"])
+            let card = try JSONDecoder().decode(AppleMapsViewData.self, from: JSONEncoder().encode(value))
+            guard UUID(uuidString: card.lookupId) != nil else { throw invalid(path, "requires a lookup identifier") }
+            guard let rawQuery = data["request"] else { return }
+            guard let request = card.request else { throw invalid(path, "requires a valid map request") }
+            let query = try object(rawQuery, path: "\(path).request")
+            try checkKeys(query, path: "\(path).request", allowed: ["query", "origin", "mode", "arriveBy", "bufferMinutes", "searchOnly"], required: ["query"])
+            _ = try string(query["query"], path: "\(path).request.query", min: 1, max: 300)
+            if let origin = query["origin"] { _ = try string(origin, path: "\(path).request.origin", min: 1, max: 300) }
+            guard request.mode.map({ ["driving", "walking"].contains($0) }) ?? true,
+                  request.arriveBy.map({ AppleMapsResult.date($0) != nil }) ?? true,
+                  request.bufferMinutes.map({ (0...1_440).contains($0) }) ?? true else {
+                throw invalid(path, "contains an invalid Apple Maps request")
             }
         case "detail":
             try checkKeys(data, path: path, allowed: ["fields"], required: ["fields"])

@@ -9,7 +9,7 @@ export const chatBlockForecastSymbols = Object.freeze([
 export const chatBlockChartKinds = Object.freeze(['line', 'bar', 'area']);
 /** Generated-view renderers a `view` block may carry; each has a native inline renderer on iPhone. */
 export const chatBlockViewRenderers = Object.freeze([
-  'text', 'list', 'table', 'detail', 'timeline', 'task-card', 'status', 'image',
+  'text', 'list', 'table', 'detail', 'timeline', 'task-card', 'status', 'image', 'map',
 ]);
 export const chatBlockLimits = Object.freeze({
   blocksPerMessage: 8,

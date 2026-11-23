@@ -2,7 +2,7 @@ import type { FoundryModelUsage } from '../core/usage.js';
 import {
   budgetState, canRunWithinBudget, effectiveProactiveBudget, estimateCost,
 } from '../proactive/budget.js';
-import type { FindingsStoredContext } from '../proactive/engine.js';
+import type { FindingsStoredContext } from '../proactive/types.js';
 import type { ProactiveStore } from '../proactive/store.js';
 import { dayKey, monthKey } from '../proactive/time.js';
 import { highestFoundryTokenCosts } from '../core/usage-pricing.js';
@@ -137,7 +137,8 @@ export function createInboxNudgeHook(options: {
           dkk += cost.estimatedDkk; input += usage.inputTokens; output += usage.outputTokens;
           try {
             await options.store.spend.record({
-              runId: context.runId, month, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+              // The shared ledger charges one row per ID. The parent PI wake already has its own row.
+              runId: usage.eventId, month, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
               estimatedDkk: cost.estimatedDkk, createdAt: options.now(),
             });
           } catch { log({ outcome: 'spend_not_recorded' }); }

@@ -6,7 +6,7 @@ Current system map, checked against repository code and workflows. This is not a
 
 | Component | Where it lives | Responsibility |
 | --- | --- | --- |
-| iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and the shared `JarvisCore` package | Chat, Voice, local capture and native notifications. Watch has its own Chat and Voice views; dictation hands recorded audio to the backend transcription path. |
+| iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and the shared `JarvisCore` package | Chat, Voice, local capture and native notifications. Watch has its own Chat and Voice views; dictation sends recorded audio to Azure Speech through the backend. The Speech SDK uses its Node WebSocket transport so its upgrade carries the bearer header. |
 | Web | [apps/web](../apps/web), React, TypeScript, Vite | Browser UI, Entra sign-in, Chat and Voice. |
 | Backend | [apps/backend](../apps/backend), Node 22, TypeScript, Fastify | Auth, Chat, `/voice`, tools and their receipts, PI gateway, scheduled jobs and push. Shared schemas and failure copy live in [packages/contracts](../packages/contracts). |
 | Database | [Azure SQL schema and migrations](../db/README.md) | Chat history, owner settings, Personal Memory, Vault index, PI runs and situation, proactive queue, APNs registrations and delivery outboxes. Runs forward migrations before listening; preserve existing migration checksums and matching down batches. |
@@ -59,11 +59,13 @@ flowchart TB
 | The repository owns | `gpt-6.1-terra`, harness, tools, MCP connection and skills in [definition.json](../agents/pi/definition.json) | `gpt-live-1`, the `live` sub-protocol, client delegation and 24 kHz PCM contract |
 | Deploy after bootstrap | Reads the serving version. For code-owned drift, carries forward its live instruction text, verifies the new version and pins it. No write when the code-owned definition matches. | Verifies the serving technical contract and model deployment; drift fails Deploy. Does not rewrite an existing voice agent. |
 
+Chat and Voice use `manage_foundry_agent` for the Foundry project. Edits copy the serving definition to a new version. Activation pins a version and reads back the selector. If verification fails, PI reports the last known write and reads back before retrying. Model roles and ARM deployments use the existing settings and deployment tools. A PI deployment deletion requires owner confirmation. Both managed PI model contracts above also apply at release. [Foundry agent API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject)
+
 The seed files apply when the agents are created, not as later portal text updates. Preserve the entire **KEEP THIS BLOCK** in the main agent's live instructions; it contains the turn-reference contract. Do not paste the voice text into `jarvis-pi`. Avoid changing Active while Deploy provisions: it rechecks the serving version before writing and pinning.
 
 ```mermaid
 flowchart LR
-    PORTAL["Portal: edit and activate a version"] --> ACTIVE["Serving version"]
+    PORTAL["Portal or Jarvis: edit and activate a version"] --> ACTIVE["Serving version"]
     ACTIVE --> DEPLOY["Deploy reads the version"]
     DEPLOY -->|PI code changed| VERSION["Carry forward text, verify, pin"]
     DEPLOY -->|PI unchanged| NONE["No write"]
@@ -120,10 +122,12 @@ flowchart LR
 **Legend:** Boxes are steps or records; the diamond is a request-identity check, not an approval screen. Each completed door call also emits a safe ledger event.
 
 1. PI passes the **current** turn reference to `find_tools`, then `call_tool`. Use the returned exact name. `otherMatches` are also callable. Prefer aliases over new MCP entry points; weather, calendar and reminders use the same two names again after [#2033](https://github.com/DanAakesen/jarvis/pull/2033). GitHub and Azure bridges load on named searches, with a bounded wait, so a first search can ask PI to search again.
-2. The door calls the normal `/tools/:name` route for Jarvis tools. It uses the owner message bound to this turn, not whichever message happens to be newest. Forwarded remote tools keep their own results. Read results above 24,000 serialized characters get a bounded preview, except `list_capabilities`; paging/status fields and receipts stay intact. Do not truncate action results.
+2. The door calls the normal `/tools/:name` route for Jarvis tools using the owner message bound to this turn. GitHub file reads carry the embedded source text and its resource URI. A download receipt alone points PI to `repo_read` for line ranges on the project's default branch. Read results above 24,000 serialized characters get a bounded preview, except `list_capabilities`; paging/status fields and receipts stay intact. Do not truncate action results.
 3. **Replay ledger.** Within a live turn, a known local action with the same trusted `_meta` call ID, tool and arguments may reuse the earlier successful or uncertain result. This also covers a duplicate arriving while the first attempt runs. A different call ID is a separate request. Missing or reused-for-different-work IDs disable replay recognition; JSON-RPC IDs are not used. Reads, unclassified calls and remote bridge calls are not replay-suppressed here. `pi.mcp_tool` records the evidence; do not treat the in-memory ledger as durable exactly-once delivery.
-4. **Unknown outcome is not failure to act.** If a write might already have run, say so (`outcomeUnknown`), preserve any receipts, and verify the result before asking to retry. Never retry the whole turn after effects or infer success from a partial response. The gateway may retry a rejected or output-free rate-limited *round* within its deadline if that attempt did not reach a tool; a broken stream needs confirmed cancellation before retry. A later failed round can still return recorded receipts without claiming to have written a final reply.
+4. **Unknown outcome is not failure to act.** If a write might already have run, say so (`outcomeUnknown`), preserve its receipts and verify before retry. A rejected or output-free rate-limited round can retry within its deadline. If a known response stream breaks, Foundry must report it cancelled with no output before the gateway replays it. A later failed round can still return recorded receipts.
 5. **Plain copy.** [`failureCopy`](../packages/contracts) gives Chat and Voice the same failure meaning in writing and speech. Separate “nothing happened”, “might have happened”, and a confirmed tool outcome. A refused tool or a missing final answer is not evidence that prior work failed. See the [generated tool conformance table](tool-conformance.md).
+
+Azure MCP uses exact leaf filtering from the pinned 3.0.0 image. Subscription and resource-group inventory, Container Apps listing, scoped storage/blob operations, Monitor metrics/resource-health reads, and workbook management are exposed. Group resource inventory must be repeated per resource group. Raw workspace/resource KQL tools and web tests are excluded; the backend's dedicated `read_backend_logs` tool remains the sanitized diagnostic path. Azure MCP 3.0.0 exposes only Container Apps listing, not get/scale/revision control. Jarvis Storage Queue operations are separate PI tools backed by the backend identity and the existing account's queue service; peek is non-consuming, receive temporarily hides messages, and deletion uses owner confirmation. The queue SDK disables retries for non-idempotent send/receive operations.
 
 ```mermaid
 flowchart TB
@@ -139,7 +143,9 @@ flowchart TB
 
 **Legend:** The diamond selects how the gateway handles stream items; arrows are control flow. Foundry executes native built-ins. The backend does not run a harness shell command or sub-agent.
 
-**Limits.** [`infra/main.parameters.json`](../infra/main.parameters.json) sets GPT-6.1 Terra GlobalStandard capacity to 600K tokens/minute. Long tool turns use multiple model rounds against this shared limit. The harness can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` with `pi.mcp_tool`. See [the plan](../PLAN.md) for unresolved provider behavior.
+**Limits we hit.** [`infra/main.parameters.json`](../infra/main.parameters.json) sets GPT-6.1 Terra GlobalStandard capacity to **600** (600K tokens/minute); Bicep passes that parameter to the deployment. The [#2032](https://github.com/DanAakesen/jarvis/pull/2032) incident reported **84K–116K input tokens per request** on large tool turns; several rounds can hit a shared limit. These are historical measurements, not a local benchmark or a guarantee. The harness can also deny an MCP name in the current session policy *before* `/pi/mcp` sees it. Stick to the two established names and check `pi.stream_failed` and `pi.mcp_tool` together. Weather worked in the ongoing conversation on build 124. The actual rate-limit response and provider replay IDs remain unverified. Chat and Voice can request the coarse iPhone observation with its timestamp through get_settings (area location).
+
+Apple Maps requests use the signed-in iPhone workspace connection. MapKit searches and routes on the phone. The native card and local spoken estimate use a temporary result. PI receives a bounded status receipt. Conversation history holds the lookup request and handle so the owner can request a fresh estimate. [Apple Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/).
 
 ## Memory and Vault Knowledge
 
@@ -158,9 +164,9 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
+Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. Manual iPhone kcal entries use the same meal ledger and Copenhagen day as Chat and Voice. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
-## Proactive wake and the old engine
+## Proactive wake and Inbox review
 
 ```mermaid
 flowchart LR
@@ -169,21 +175,18 @@ flowchart LR
     SCHED["Scheduler: tick, slots and Check now"]
     BRAIN["PI brain and activation"]
     WAKE["PI gateway: scratch conversation"]
-    OLD["Old 07:00 / 18:00 engine"]
+    INBOX["Inbox review and eligible follow-up"]
     DELIVERY["message_dan: evidence, stored Chat reply and push"]
     EVENTS -->|enabled sources| QUEUE --> BRAIN
     SCHED -->|PI configured| BRAIN
-    SCHED -.->|no PI event path| OLD
+    BRAIN -->|eligible scheduled slot| INBOX
     BRAIN -->|due and permitted background wake| WAKE
     WAKE -->|if PI chooses to reach out| DELIVERY
-    LEG["Legend: cylinder = durable queue; dashed = old-engine path"]
 ```
 
-**Legend:** Solid arrows are the configured PI path; the dashed arrow is the remaining old-engine route when PI is not configured. The cylinder is durable work, not a notification.
-
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
-- Missing switch state means **Off** in the code. The owner controls it in Proactive settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. Actual production switch state or a first successful real wake was not checked here.
-- [`proactive/composition.ts`](../apps/backend/src/proactive/composition.ts) chooses the brain for the 07:00/18:00 slots and Check now if the PI event path exists. The old engine remains built for the no-PI case. Deletion is an explicit later cutover, after a proven wake and agreement about its remaining hooks; see [PI cutover](pi/cutover.md).
+- Missing switch state means **Off** in the code. The owner controls it in Proactive settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. The private decision log confirms production wakes. Device delivery has its own acceptance check.
+- PI owns the 07:00 and 18:00 Copenhagen slots and Check now. Inbox reviews each eligible slot once, including a slot PI already covered through an earlier event. With no brain configured, no slot is claimed.
 
 ## Reply push and reminders
 

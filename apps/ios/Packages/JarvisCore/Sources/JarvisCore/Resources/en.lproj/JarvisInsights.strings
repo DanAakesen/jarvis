@@ -268,6 +268,8 @@
 "insights.proactiveBackgroundOn" = "On";
 "insights.proactiveBackgroundOff" = "Off";
 "insights.proactiveTurnsToday" = "%1$d of %2$d turns used today";
+"insights.proactiveCheckSchedule" = "Checks for due work every 30 seconds. Scheduled reviews are at 07:00 and 18:00 Copenhagen time.";
+"insights.proactiveQueuedCheck" = "Queued work due %@";
 "insights.proactiveCostEstimate" = "Estimated %1$@ per day · %2$@ per 30 days";
 "insights.proactiveCostActual" = "Actual spend %1$@ · %2$@–%3$@ per completed turn (%4$@ representative) · worst-case admission %5$@";
 "insights.proactiveStateFresh" = "Situational state updated %@";

@@ -1,27 +1,8 @@
-## Backend log authorization observations (#1341)
+## Backend diagnostic access
 
-The control-discovery fallback reads only workspace metadata already visible to
-that same deploy identity in the existing subscription. A denied/unavailable
-inventory stays explicit and creates no access or substitute control.
+The backend managed identity uses **Log Analytics Data Reader** at the existing workspace, with a version 2.0 condition allowing only the backend app's rows in **ContainerAppConsoleLogs_CL**. Other apps and tables are outside this grant. Log retention stays at 30 days.
 
-The owner-approved reader remains off. Main preflight metadata is consumed only
-inside its existing infrastructure job by `backend_log_probe_parameters.py`.
-It validates the private report and prepares four nonsecret runtime target
-parameters in a mode-0600 temporary file; none is printed or uploaded, and the
-file is deleted on deployment-script exit. Empty defaults configure no probe.
-The backend's existing deployment smoke route can then return fixed aggregate
-observations as the verified backend identity. No assignment, credential,
-identity permission, access mode, retention or reader flag is changed. Missing
-foreign workspace controls stay missing. Actual resource-access review and fresh
-post-grant positive/negative proof remain mandatory before activation.
-
-## Proposed backend log access (#1341; currently disabled)
-
-The reader and activation plan documents a proposed
-workspace-scoped conditional grant for the existing backend identity. It is not
-added to Bicep, bootstrap or CI. Owner action-time approval and live schema,
-effective-grant and negative other-app checks remain required. Deployment of this
-code leaves the flag off and preserves existing retention and permissions.
+The Bicep parameter **backendLogAccess** accepts **off**, **grant** (assignment only) or **enabled** (assignment and reader). Production parameters select **enabled**. For first activation, apply the scoped assignment, read it back and verify the backend identity can read its own records and cannot read known records from other apps or tables. The existing deploy preflight reports identity and schema metadata. Empty negative controls do not establish isolation. **off** disables the tool; remove the role assignment explicitly to revoke it after an incremental deployment.
 
 # Infrastructure
 
@@ -247,3 +228,32 @@ removes the temporary Key Vault Secrets Officer assignment. It sets
 `JARVIS_GOOGLE_TIME_ZONE` as a nonsecret GitHub Actions variable; deploy `main`
 afterwards to enable the tools. Exact console steps and Google consent scopes
 are in [agent context](../docs/agent-context.md#azure).
+
+## Azure access through PI
+
+The Azure MCP app keeps its system-assigned identity and Contributor at the
+Jarvis resource group. `grant-azure-mcp-inventory-reader.ps1` assigns the
+built-in Reader role at the subscription for resource inventory, after checking
+the current subscription, the deployed app identity and inherited assignments.
+The infra setup script does not perform this independent role assignment.
+The MCP image uses an exact allowlist of pinned 3.0.0 tools: subscription and
+resource-group inventory, Container Apps inventory, existing storage account
+and blob reads, container creation, Monitor metrics and resource-health reads,
+and Monitor workbook list/show/create/update. Group resource listing takes one
+resource group, so whole-subscription inventory visits each group. Storage
+Blob Data Contributor is scoped to the existing Jarvis storage account. The
+backend's separate `read_backend_logs` diagnostic tool remains the bounded,
+sanitized log path; raw Log Analytics queries are not exposed through Azure MCP.
+This is an MCP tool-surface boundary, not identity-level log isolation: the
+Azure MCP subscription Reader and resource-group Contributor roles can include
+workspace data-read permissions under Azure's role union.
+The pinned Azure MCP Container Apps namespace has only a list tool, so it does
+not provide Container Apps get, scale or revision operations.
+
+Azure MCP 3.0.0 does not expose Azure Storage Queue tools. PI's own bounded
+Storage Queue tools use the backend identity, which receives Storage Queue Data
+Contributor at the existing account's queue service. They list one page of
+queues, inspect properties, create queues, send messages, peek, and explicitly
+receive messages. Peek never leases or changes visibility; receive temporarily
+hides messages and returns a pop receipt. Deleting a queue and its messages or
+deleting an individual message requires Dan's existing browser confirmation.

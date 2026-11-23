@@ -1,6 +1,7 @@
 import type { ModelCatalogue, ModelDeployment } from '@jarvis/contracts';
 import type { FastifyInstance } from 'fastify';
 import type { SettingsStore } from './settings.js';
+import { isPiCall } from './pi-authority.js';
 import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
 import type { ModelCatalogueReader } from './model-catalog.js';
@@ -288,13 +289,13 @@ function reportPendingOperation(
 
 export const manageModelDeploymentTool: JarvisTool = {
   name: 'manage_model_deployment',
-  description: 'Create or delete a Foundry model deployment when Dan requests it, without another approval.',
+  description: 'List live Foundry models and deployments, or create or delete a deployment when Dan requests it. After Azure accepts a change, list again to check it.',
   // Tool-facing model APIs reject combinators on the root schema (L121); execute
   // enforces the per-action requirements instead.
   inputSchema: {
     type: 'object',
     properties: {
-      action: { type: 'string', enum: ['create', 'delete'] },
+      action: { type: 'string', enum: ['list', 'create', 'delete'] },
       model: { type: 'string', minLength: 1, maxLength: 128, description: 'Model to deploy (create only).' },
       version: {
         type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$', maxLength: 128,
@@ -311,6 +312,14 @@ export const manageModelDeploymentTool: JarvisTool = {
     additionalProperties: false,
   },
   execute: async (input, request, signal) => {
+    if ((input as { action: string }).action === 'list') {
+      if (Object.keys(input as object).length !== 1) throw new ToolRefusal('Listing deployments takes only the action.');
+      const reader = request.server.modelCatalogue;
+      reader.invalidate?.();
+      const catalogue = await reader.read();
+      if (!isArmCatalogue(catalogue)) throw new ToolRefusal('The live Foundry deployment catalogue is unavailable.');
+      return { deployments: catalogue.deployments };
+    }
     const workflow = request.server.modelDeploymentWorkflow;
     if (!workflow) throw new ToolRefusal('Model deployment management is unavailable.');
     const value = input as { action: 'create' | 'delete'; model?: string; version?: string; sku?: string;
@@ -325,6 +334,11 @@ export const manageModelDeploymentTool: JarvisTool = {
       throw new ToolRefusal('Deleting a deployment needs only its name.');
     }
     try {
+      if (!create && isPiCall(request)) {
+        const owner = request.server.ownerInteractions;
+        if (!owner) throw new ToolRefusal('Owner approval for deleting this deployment is unavailable.');
+        await owner.requestConfirmation('delete', 'Delete the Foundry model deployment ' + value.name + '?', signal);
+      }
       return create
         ? await workflow.create({
           model: value.model!, version: value.version!, sku: value.sku!, capacity: value.capacity!,

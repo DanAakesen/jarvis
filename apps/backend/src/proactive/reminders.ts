@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FindingsStoredContext } from './engine.js';
+import type { FindingsStoredContext } from './types.js';
 import { deterministicDedupeKey, normaliseFactText, todosDueWithin } from './detect.js';
 import { proactiveAlertKey } from './alerts.js';
 import type { PlannedReminder, ProactiveReminderStore } from './reminder-store.js';

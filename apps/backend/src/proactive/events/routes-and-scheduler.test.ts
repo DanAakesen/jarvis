@@ -152,11 +152,11 @@ describe('scheduler event tick', () => {
 describe('scheduler failures: where they happen, what was thrown, and what still runs', () => {
   const SLOT_TIME = new Date('2026-11-15T06:00:30.000Z');
   class RequestError extends Error {}
-  const setup = (run: () => Promise<void>) => {
+  const setup = (run?: () => Promise<void>) => {
     const store = createMemoryProactiveStore(OWNER);
     const warn = vi.fn();
     const onTick = vi.fn(async () => undefined);
-    const scheduler = createProactiveScheduler({ store, now: () => SLOT_TIME, run, onTick, logger: { warn } });
+    const scheduler = createProactiveScheduler({ store, now: () => SLOT_TIME, ...(run ? { run } : {}), onTick, logger: { warn } });
     return { store, warn, onTick, scheduler };
   };
 
@@ -228,6 +228,14 @@ describe('scheduler failures: where they happen, what was thrown, and what still
     expect(onTick).toHaveBeenCalledTimes(1);
     await scheduler.tick();
     expect(onTick).toHaveBeenCalledTimes(2);
+    await scheduler.stop();
+  });
+
+  it('claims no slot when nothing is there to run it, and still ticks the events', async () => {
+    const { store, onTick, scheduler } = setup();
+    await scheduler.tick();
+    expect(onTick).toHaveBeenCalledTimes(1);
+    expect(await store.runs.latest()).toBeNull();
     await scheduler.stop();
   });
 });

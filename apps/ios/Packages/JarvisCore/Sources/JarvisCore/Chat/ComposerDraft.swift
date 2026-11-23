@@ -36,11 +36,15 @@ public struct ComposerDraft: Equatable, Sendable {
 @MainActor
 @Observable
 public final class ChatComposerDraft {
-    public var value = ComposerDraft()
+    public var value = ComposerDraft() {
+        didSet {
+            let containsText = value.text.unicodeScalars.contains { !CharacterSet.whitespacesAndNewlines.contains($0) }
+            if containsText != hasMessage { hasMessage = containsText }
+        }
+    }
+
+    // Send and the composer rim observe only transitions between empty and sendable.
+    public private(set) var hasMessage = false
 
     public init() {}
-
-    public var hasMessage: Bool {
-        !value.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
 }

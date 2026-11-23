@@ -237,9 +237,11 @@ describe('PI is the default engine on the chat turn', () => {
     });
     const result = turn({ text: 'hi' });
     await entered.promise;
+    const active = await app.inject({ method: 'GET', url: '/conversation/turns/active', headers: { authorization: 'Bearer a.b.c' } });
     const replay = app.inject({ method: 'GET', url: replayPath, headers: { authorization: 'Bearer a.b.c' } }).then(response => response);
     await replayStarted.promise;
     const [ended, reattached] = await Promise.all([result, replay, app.close()]);
+    expect(active.json()).toEqual({ turns: [{ sessionId: '7', messageId: '1', language: 'en' }] });
     expect(ended.events.at(-1)).toEqual({ name: 'reconnect', data: {} });
     expect(reattached.statusCode).toBe(200);
     expect(reattached.body).toContain(`event: error\ndata: ${JSON.stringify({ error: failureCopy.cut_off.chat })}\n\n`);

@@ -97,6 +97,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['branch*'], terms: ['github', 'branch'], provider: 'gh_' },
   { stems: ['workflow*', 'arbejdsgang*'], terms: ['github', 'workflow', 'actions'], provider: 'gh_' },
   { stems: ['repo', 'repos', 'repoet', 'repoer', 'repoerne', 'repositor*'], terms: ['repo'] },
+  { stems: ['kildekode*', 'kodegennemgang*'], phrases: ['source code', 'code review', 'review the code', 'read the code', 'gennemgå koden', 'læs koden'], terms: ['repo', 'read'] },
   { stems: ['changed', 'changes', 'ændret', 'ændringer'], light: true, terms: ['commits'] },
   { stems: ['pr', 'prs', 'pull', 'pullrequest*', 'pullanmodning*', 'request*'], phrases: ['pull request'], terms: ['pr'] },
   { stems: ['azure*', 'az', 'ressource*', 'resource*', 'subscription*', 'abonnement*', 'container*'],
@@ -116,6 +117,8 @@ export const intentAliases: readonly IntentAlias[] = [
     terms: ['presence', 'away', 'mode'] },
   { stems: ['model*', 'modeller', 'reasoning', 'tænkning*'], terms: ['model', 'settings'] },
   { stems: ['personality', 'personlighed*', 'tone', 'tonen'], phrases: ['home city', 'home location', 'hjemby'], terms: ['settings'] },
+  { stems: [], phrases: ['where am i', 'my location', 'my current location', 'device location', 'hvor er jeg', 'min placering', 'min position'], terms: ['get_settings'] },
+  { stems: ['maps', 'directions', 'rute*', 'kørselsvejledning', 'gangrute', 'eta'], phrases: ['near me', 'nearby', 'how long to drive', 'when should i leave', 'i nærheden', 'tæt på mig', 'hvornår skal jeg køre'], terms: ['apple_maps'] },
   { stems: ['pc', 'pcen', 'computer*', 'windows', 'laptop'], terms: ['pc'] },
   { stems: ['vindue*', 'window*'], terms: ['window'] },
   { stems: ['clipboard', 'udklipsholder*', 'udklip*'], terms: ['clipboard', 'pc'] },
@@ -135,7 +138,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['working', 'virker', 'fungerer', 'status', 'operational'], terms: ['status', 'system'] },
   { stems: ['backend', 'system*', 'server*', 'services', 'tjenester', 'healthy', 'broken', 'ødelagt'],
     phrases: ['something wrong', 'noget galt', 'virker ikke', 'er noget'], terms: ['system', 'status'] },
-  { stems: ['fejlede', 'fejl'], phrases: ['why did you fail', 'why did it fail', 'what went wrong', 'hvad gik galt', 'your errors', 'dine fejl', 'backend logs'], terms: ['backend', 'logs'] },
+  { stems: ['fejlede', 'fejl'], phrases: ['why did you fail', 'why did it fail', 'why did that request fail', 'what went wrong', 'hvad gik galt', 'your errors', 'dine fejl', 'backend logs'], terms: ['backend', 'logs'] },
   { stems: [], phrases: ['tidy up', 'ryd op', 'arrange windows', 'close all windows', 'side by side', 'minimise', 'minimize', 'luk alle vinduer', 'ordne vinduer'], terms: ['workspace', 'command'] },
   { stems: [], phrases: ['research going', 'how is the research', 'går det med research', 'research job', 'status of the research'], terms: ['jobs', 'job'] },
   { stems: [], phrases: ['stop research', 'cancel research', 'stop den research', 'afbryd research', 'stop the research'], terms: ['cancel', 'job'] },
@@ -264,6 +267,15 @@ const aliasesFor = (query: string): IntentAlias[] => {
   return intentAliases.filter((alias) => (holds(alias.stems) || (alias.phrases ?? []).some((phrase) => whole.includes(normalizePhrase(phrase))))
     && (alias.also === undefined || holds(alias.also)));
 };
+
+/** A request for repository contents that the local reader can answer while GitHub starts. */
+export function asksToReadRepositoryFile(query: string): boolean {
+  if (/(?:^|[^a-z0-9])gh_/iu.test(query)) return false;
+  const words = tokensOf(query);
+  return /(?:^|[^a-z0-9])repo_read(?:$|[^a-z0-9])/iu.test(query) ||
+    (words.some(word => ['read', 'show', 'inspect', 'review', 'læs', 'vis', 'gennemgå'].includes(word)) &&
+     words.some(word => ['file', 'files', 'code', 'contents', 'fil', 'filen', 'filer', 'kode', 'koden', 'kildekode', 'kildekoden'].includes(word)));
+}
 
 /** The remote providers a query names, by alias word or by a tool name such as `gh_issue_read`. */
 export function providersNamedBy(query: string): ReadonlySet<'gh_' | 'az_'> {

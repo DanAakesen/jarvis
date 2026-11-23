@@ -29,6 +29,10 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
     let client: JarvisHealthClient?
     let accessory: Accessory
 
+    let onMealSaved: () async -> Void
+    @State private var showingMeal = false
+    @State private var pendingMeal: JarvisManualMeal?
+    @State private var mealConfirmation: Double?
     @ScaledMetric(relativeTo: .body) private var heroHeight = JarvisDesignTokens.healthHeroHeight
     @State private var page: JarvisHealthHeroPage = .training
 
@@ -38,6 +42,7 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
         goals: JarvisHealthGoals,
         client: JarvisHealthClient?,
         language: JarvisAppLanguage,
+        onMealSaved: @escaping () async -> Void,
         @ViewBuilder accessory: () -> Accessory
     ) {
         self.data = data
@@ -46,6 +51,7 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
         self.client = client
         self.language = language
         self.accessory = accessory()
+        self.onMealSaved = onMealSaved
     }
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
@@ -86,6 +92,26 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
                 }
             }
             .accessibilityIdentifier("health.hero.dots")
+            if page == .nutrition, let client {
+                JarvisLabelledButton(title: "Log meal kcal", systemImage: "plus",
+                    identifier: "health.nutrition.add") {
+                    showingMeal = true
+                }
+                .sheet(isPresented: $showingMeal) {
+                    JarvisManualMealSheet(client: client, pending: $pendingMeal) { kcal in
+                        mealConfirmation = kcal
+                        await onMealSaved()
+                    }
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
+                if let mealConfirmation {
+                    Text("\(formatNumber(mealConfirmation, language: language)) kcal logged")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("health.nutrition.saved")
+                }
+            }
             // Keep variable status copy outside the fixed-height pages so their headers stay aligned.
             if page == .training,
                let issue = JarvisHealthRingsSection(data: data, period: period, language: language).activityIssue {
@@ -97,6 +123,85 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: page)
+    }
+}
+
+private struct JarvisManualMealSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let client: JarvisHealthClient
+    @Binding var pending: JarvisManualMeal?
+    let onSaved: (Double) async -> Void
+    @State private var amount = ""
+    @State private var saving = false
+    @State private var saveError: String?
+    @FocusState private var focused: Bool
+
+    private var kcal: Double? {
+        guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")),
+              value.isFinite, value > 0, value <= 10_000 else { return nil }
+        return value
+    }
+
+    var body: some View {
+        NavigationStack {
+            JarvisForm {
+                Section {
+                    LabeledContent("Energy (kcal)") {
+                        TextField("kcal", text: $amount)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focused)
+                            .disabled(saving || pending != nil)
+                            .accessibilityLabel("Meal energy in kcal")
+                            .accessibilityIdentifier("health.nutrition.amount")
+                    }
+                } footer: {
+                    if let saveError {
+                        Text(saveError)
+                    } else if pending != nil && !saving {
+                        Text("Retry to check the previous save.")
+                    } else if !amount.isEmpty && kcal == nil {
+                        Text("Enter more than 0 and at most 10,000 kcal.")
+                    }
+                }
+            }
+            .navigationTitle("Log today’s meal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                JarvisSheetToolbar(confirmTitle: pending != nil && !saving ? "Retry" : "Save",
+                    closeTitle: "Close", isWorking: saving, isConfirmDisabled: kcal == nil && pending == nil,
+                    onConfirm: { Task { await save() } }, onClose: { dismiss() })
+            }
+            .jarvisAmbientBackground(transparentNavigationBar: true)
+            .onAppear {
+                if let pending { amount = pending.energyKcal.formatted(.number.grouping(.never)) }
+                else { focused = true }
+            }
+        }
+        .interactiveDismissDisabled(saving)
+    }
+
+    private func save() async {
+        guard !saving, let submission = pending ?? kcal.map({ JarvisManualMeal(energyKcal: $0) }) else { return }
+        pending = submission
+        saving = true
+        saveError = nil
+        defer { saving = false }
+        do {
+            try await client.saveManualMeal(submission)
+            pending = nil
+            dismiss()
+            await onSaved(submission.energyKcal)
+        } catch JarvisClientError.httpStatus(400) {
+            pending = nil
+            saveError = "Check the calories and device time, then save again."
+        } catch JarvisClientError.httpStatus(409) {
+            pending = nil
+            amount = ""
+            saveError = "This meal has already changed. Check Meals before adding another."
+        } catch {
+            saveError = "Save could not be confirmed. Retry to check this same meal."
+        }
     }
 }
 

@@ -1,3 +1,11 @@
+## Apple Maps on iPhone
+
+Ask for a nearby place, a route, or when to leave for a calendar event with an address. Apple Maps on the active iPhone supplies the estimate. The card opens Directions and Voice can read the result hands-free. For multiple matches, tap a place or say “the second one”. The choice uses the list already on the phone. If it expired, ask again. Supply a starting address for nearby searches or routes when location is unavailable.
+
+## Foundry administration
+
+Ask Jarvis to show Foundry agents, read a version, prepare new instructions or select which version serves traffic. Ask for model deployments by name to inspect the live Azure catalogue.
+
 ## Watch startup connection feedback — 9 November 2026
 
 The Watch startup fix keeps transient activation/idle reachability changes quiet and history refresh failures inline. Real interrupted chat/voice actions retain feedback and draft recovery. Implementation is separate from deployment/device acceptance; primary owns delivery.

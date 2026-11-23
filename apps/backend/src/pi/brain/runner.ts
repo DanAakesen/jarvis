@@ -9,7 +9,7 @@ import type { ProactiveStore } from '../../proactive/store.js';
 import {
   copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
 } from '../../proactive/time.js';
-import { sourceIds } from '../../proactive/types.js';
+import { sourceIds, type FindingsStoredContext } from '../../proactive/types.js';
 import { proactiveSettingsRevision } from '../../proactive/preferences.js';
 import { PI_WAKE_PREFLIGHT_DKK } from '../pricing.js';
 import type { PiBrainRun } from '../turns.js';
@@ -70,6 +70,7 @@ export interface BrainOptions {
     /** After a wake: what it cost, and what woke it, so each watch looked at can be given its share. */
     afterRun(input: { runId: string; costDkk: number; events: number; run: PiBrainRun; due: readonly string[] }, signal: AbortSignal): Promise<void>;
   } | undefined;
+  readonly afterScheduledWake?: ((context: FindingsStoredContext) => Promise<void>) | undefined;
   readonly slots?: PiBackgroundSlotService | undefined;
 }
 
@@ -388,9 +389,17 @@ export function createBrain(options: BrainOptions) {
   }
 
   /** A sweep that ends without a wake: the run row says why, and so does one log line. */
-  async function finishWithoutWake(claim: SweepClaim, status: 'failed' | 'skipped', reason: BrainLogReason): Promise<void> {
-    await proactive.runs.finish(claim.run.id, claim.generation, status, reason, 0, now());
+  async function finishWithoutWake(claim: SweepClaim, status: 'failed' | 'skipped', reason: BrainLogReason): Promise<boolean> {
+    const finished = await proactive.runs.finish(claim.run.id, claim.generation, status, reason, 0, now());
     log(status === 'failed' ? 'warn' : 'info', { reason, trigger: claim.run.trigger });
+    return finished;
+  }
+
+  async function reviewInbox(claim: SweepClaim, signal: AbortSignal) {
+    if (signal.aborted || !options.afterScheduledWake) return;
+    await options.afterScheduledWake({
+      runId: claim.run.id, trigger: claim.run.trigger, now: now(), signal, facts: [], sources: [], findings: [],
+    }).catch(() => log('warn', { reason: 'inbox_review_failed' }));
   }
 
   async function runScheduledOnce(claim: SweepClaim, signal: AbortSignal = new AbortController().signal): Promise<void> {
@@ -407,7 +416,8 @@ export function createBrain(options: BrainOptions) {
       const previousSlotAt = latestSlotAtOrBefore(new Date(currentSlotAt.getTime() - 1)).at;
       if (slot.lastSatisfiedSlot === claim.run.slot &&
           Date.parse(slot.lastAt) > previousSlotAt.getTime()) {
-        await finishWithoutWake(claim, 'skipped', 'satisfied_by_event');
+        // The event already used this slot's PI turn. Its independent Inbox review is still due.
+        if (await finishWithoutWake(claim, 'skipped', 'satisfied_by_event')) await reviewInbox(claim, signal);
         return;
       }
     }
@@ -493,7 +503,8 @@ export function createBrain(options: BrainOptions) {
     }
     await flushLogs(signal);
     const failedReason: BrainLogReason = outcome.error?.code ?? (outcome.outcome === 'ok' ? 'failed' : outcome.outcome);
-    await proactive.runs.finish(claim.run.id, claim.generation, outcome.ok ? 'done' : 'failed', outcome.ok ? null : failedReason, 0, now());
+    const finished = await proactive.runs.finish(claim.run.id, claim.generation, outcome.ok ? 'done' : 'failed', outcome.ok ? null : failedReason, 0, now());
+    if (finished && outcome.ok) await reviewInbox(claim, signal);
     log(outcome.ok ? 'info' : 'warn', {
       reason: outcome.ok ? 'scheduled_done' : failedReason,
       trigger: claim.run.trigger,

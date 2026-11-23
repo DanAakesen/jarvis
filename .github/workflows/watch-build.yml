@@ -42,9 +42,9 @@ jobs:
         timeout-minutes: 12
         run: |
           set -euo pipefail
-          WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | contains("Apple Watch")) | select(.name | contains("Ultra"))][0].udid // empty')"
+          WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS-26-")) | .value[] | select(.name | contains("Apple Watch"))] | sort_by(.name | (capture("(?<mm>[0-9]+)mm").mm | tonumber) // 99) | .[0].udid // empty')"
           if [[ -z "$WATCH_ID" ]]; then
-            echo "::warning::No Ultra simulator is available; Watch screenshots were not captured."
+            echo "::warning::No Watch simulator is available; Watch screenshots were not captured."
             exit 0
           fi
           mkdir -p "$RUNNER_TEMP/watch-screenshots"

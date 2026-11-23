@@ -18,6 +18,8 @@ Use the shared orb and network, not a screen-specific effect. Chat, Voice and th
 - **Compact tool tree.** Use an icon, an action label and inline disclosure for grouped calls. While running, trace a moving highlight around the icon outline and shimmer the label; don't pulse the icon. A group shows the worst child state: running while any child runs, then failure before refusal, then success only if every child succeeded. Child status must remain readable without colour or motion. Omit counts and filler.
 - **Blocks stay in the conversation.** Generated results scroll as part of the assistant message and stay in history, not in a sheet. Keep date, place, units, source and issue time with the relevant result. Charts use one scale per unit and provide View data and Copy data. Missing values are gaps, not zeros. Unsupported content keeps a text alternative. Keep ordinary assistant prose unboxed.
 
+The Apple Maps card shows the native map with each place or route, a labelled estimate and one Directions action. Multiple matches are selectable. The owner can repeat an expired lookup. Voice can read the estimate while the phone shows the same card.
+
 ## Voice
 
 Use the established Voice screen and controls; no provider selector, engine badge or split speech settings. Connecting, Listening, Thinking, Speaking, Reconnecting and Ended reflect evidence from the session. Speaking is audio playback, not proof that the mic is off; captions have stable speaker/order and must not jump backwards on reconnect. The GPT-Live backend is audio-only: after an unsupported camera or screen response, stop capture and explain why.
@@ -36,10 +38,13 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Proactive and notification opening
 
-- **One iPhone switch**, **Proactive suggestions**. Save on change, preserve the last confirmed state while pending, and offer Retry. **Background suggestions** is detail, not another engine toggle. Keep source controls and guidance in their editor.
+- Show the single **Proactive suggestions** switch directly in the main iPhone Settings list. Save on change, preserve the last confirmed state while pending, and offer Retry. **Background suggestions** is detail, not another engine toggle. Keep source controls and guidance in their editor.
+- **Background suggestions** shows the check cadence, Copenhagen review times and the next queued check when one is due.
 - **A reply push opens existing Chat.** Show one useful preview, not an approval summary. In Chat open the exact committed message without animating away from the target; allow Jump to latest. Watch waits until an active turn, dictation or Voice is idle and keeps the pending target across refresh. Proactive items and approval actions have distinct routes. If the target cannot load, show Chat's retry state, not another message.
 
 ## Watch
+
+The dashboard opens with Chat (or Resume voice) and a labelled Menu on one row when they fit, leaving the next event visible. The system owns the clock and Back area. Whole section headings open their details. The menu groups daily, health and project destinations.
 
 Keep one Chat entry point. When reading history, collapse the composer to **Reply** only if it will not interrupt a draft, dictation or a call. **Reply** reopens the composer. At rest show Message, dictation and the Voice orb; with text, preserve editing, clear/send and keyboard access. Give transient status its own space above the action row.
 
@@ -50,7 +55,7 @@ In a focused Voice call, replace the composer and Start control with **Mute/Unmu
 - **Home** puts the brief and next action first. Keep the daily activity projection independently usable; an unavailable brief must not hide confirmed task/activity data. Use shared rows and visibly distinct stale/loading states. Widgets and Live Activities are glanceable summaries and routes back into the real screen, not alternate editors.
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
 - **Factory** makes project/task status, next action and failure visible before auxiliary diagnostics. Keep task selection and actions scoped to the project; don't show a previous task's result while a new one loads.
-- **Health and insights** describe the source, period and units in context. Distinguish logged from estimated, missing from zero, and current from stale. Make drill-down and data alternatives usable without colour. Keep capture and correction flows separate from read-only summaries. Do not infer support for a new entry action from a design board.
+- **Health and insights** describe the source, period and units in context. Distinguish logged from estimated, missing from zero, and current from stale. Make drill-down and data alternatives usable without colour. Keep capture and correction flows separate from read-only summaries. Nutrition’s **Log meal kcal** opens a one-field sheet. Save adds one meal for today, regardless of the chart period.
 - **Settings and status** show saved values, actionable errors and evidence freshness; don't repeat a row's status in a second card. Respect sign-in and lock/privacy cover; a pending response must not turn a locked view into a notification bypass.
 
 ## Acceptance

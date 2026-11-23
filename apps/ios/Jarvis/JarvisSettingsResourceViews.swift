@@ -6,7 +6,7 @@ private func settingsCacheDigest(_ value: String) -> String {
     SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
 }
 
-struct JarvisProactiveSettingsView: View {
+struct JarvisProactiveSettingsRow: View {
     let client: JarvisProactiveClient?
     let language: JarvisAppLanguage
     let readOnly: Bool
@@ -23,7 +23,7 @@ struct JarvisProactiveSettingsView: View {
     }
 
     var body: some View {
-        JarvisForm {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
             if let status, status.available {
                 JarvisSettingsSwitch(title: copy(.proactiveSuggestions), isOn: Binding(
                     get: { self.status?.allowsProactiveWakes == true },
@@ -31,6 +31,8 @@ struct JarvisProactiveSettingsView: View {
                 ))
                 .disabled(loading || saving || loadFailed || readOnly)
                 .accessibilityIdentifier("settings.proactive.enabled")
+            } else {
+                Text(copy(.proactiveSuggestions))
             }
             if loading {
                 JarvisLoadingView(title: copy(.loading))
@@ -51,8 +53,6 @@ struct JarvisProactiveSettingsView: View {
                 Text(copy(.readOnly)).foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(copy(.proactiveRow))
-        .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
 
@@ -685,6 +685,24 @@ struct JarvisTargetsSettingsView: View {
         return value.integerValue.map(String.init) ?? ""
     }
 
+    private func loadMessage(for failure: Error) -> String {
+        if (failure as? JarvisClientError) == .timedOut { return copy(.targetsTimedOut) }
+        guard let failure = failure as? JarvisSettingsClientError else { return copy(.loadFailed) }
+        switch failure {
+        case .signInRequired: return copy(.targetsSignIn)
+        case .notOwner: return copy(.notOwner)
+        case .offline: return copy(.targetsOffline)
+        case .unavailable: return copy(.targetsUnavailable)
+        case .timedOut: return copy(.targetsTimedOut)
+        case .webPageResponse: return copy(.targetsWebPage)
+        case .emptyResponse: return copy(.targetsEmpty)
+        case .invalidResponse: return copy(.targetsInvalid)
+        case .notFound: return String(format: copy(.targetsHTTP), 404)
+        case .httpStatus(let status): return String(format: copy(.targetsHTTP), status)
+        default: return copy(.loadFailed)
+        }
+    }
+
     private func load(force: Bool = true) async {
         loadGeneration += 1
         let generation = loadGeneration
@@ -718,7 +736,7 @@ struct JarvisTargetsSettingsView: View {
                 loadFailed = false
             case .refreshing: break
             case .failed(let failure, _):
-                error = copy(.loadFailed)
+                error = loadMessage(for: failure)
                 loadFailed = true
                 onFailure(failure)
             }

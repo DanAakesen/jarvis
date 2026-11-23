@@ -154,6 +154,15 @@ struct ContentView: View {
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
         .onDisappear { workspaceRuntime.resetSession() }
+        .task(id: scenePhase != .background && (navigation.currentDestination == .chat || navigation.currentDestination == .voice)) {
+            guard scenePhase != .background, navigation.currentDestination == .chat || navigation.currentDestination == .voice,
+                  !fixtureMode, let settingsClient else { return }
+            let location = JarvisDeviceLocation()
+            while !Task.isCancelled {
+                _ = await location.sync(using: settingsClient)
+                do { try await Task.sleep(for: .seconds(300)) } catch { return }
+            }
+        }
         .onAppear {
             openProactiveNotificationIfNeeded()
             openReplyNotificationIfNeeded()
@@ -241,6 +250,7 @@ struct ContentView: View {
                         loadVoicePanelFixture()
                     }
 #endif
+                    workspaceRuntime.mapVoice = voiceModel
                     await workspaceRuntime.run()
                 }
                 .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in

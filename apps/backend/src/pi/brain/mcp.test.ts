@@ -143,7 +143,7 @@ describe('a brain wake over the Jarvis MCP server', () => {
   it('finds the chat tools and its own tools, and runs one without any owner message', async () => {
     const { tool, wake } = setup();
     const grant = wake();
-    const found = await tool('find_tools', { turn: grant.turn, query: 'probe list_projects message note' });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'list projects, create an issue, message Dan' });
     const names = [...(found.result.tools as Array<{ name: string }>), ...(found.result.otherMatches as Array<{ name: string }>)].map(({ name }) => name);
     expect(names).toContain('list_projects');
     expect(names).toContain('message_dan');

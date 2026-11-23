@@ -301,7 +301,7 @@ def main() -> int:
         require(same_id(os.environ.get("SUBSCRIPTION_ID"), expected["subscription"]), "subscription_mismatch")
         report = inspect(expected, Azure(expected["subscription"]))
         private_write(root / "backend-log-preflight.private.json", report)
-        print("Backend log preflight: metadata checks passed; grant and reader remain off.")
+        print("Backend log preflight: metadata checks passed; this preflight made no changes.")
         for check in report["checks"]:
             print("Backend log preflight: " + check)
         return 0

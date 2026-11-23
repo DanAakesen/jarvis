@@ -53,8 +53,8 @@ struct JarvisChatScreen: View {
     @State private var isPreparingCamera = false
     @State private var cameraPreparationID = UUID()
     @State private var photoCaptureID = UUID()
-    @State private var isScreenSharing = false
     @State private var screenShare = ScreenShareSession()
+    private var isScreenSharing: Bool { screenShare.state == .live }
     @State private var screenSharePickerToken = 0
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var composerFocused = false
@@ -270,7 +270,6 @@ struct JarvisChatScreen: View {
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase != .active else {
-                refreshScreenSharing()
                 model.warmPiIfNeeded()
                 Task { await model.resume() }
                 return
@@ -284,16 +283,22 @@ struct JarvisChatScreen: View {
         attachmentPickers
         .jarvisAmbientBackground(transparentNavigationBar: true, stage: JarvisNeuralStage(activity: orbActivity))
         .onAppear {
-            refreshScreenSharing()
             model.warmPiIfNeeded()
         }
         .onChange(of: liveSource) { _, _ in updateLiveStream() }
-        .task {
-            // Keep observing for the whole time the screen is shown: a share that restarts, or a heartbeat that
-            // briefly lapses, must not leave the status stuck on "stopped".
+        .task(id: scenePhase) {
+            guard scenePhase != .background else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                refreshScreenSharing()
+                let previous = screenShare
+                let sharing = await screenShareBridge.readHeartbeat()
+                guard !Task.isCancelled else { return }
+                // A start or stop during the file read takes precedence over the older observation.
+                if screenShare == previous {
+                    var updated = previous
+                    updated.observe(isSharing: sharing)
+                    if updated != previous { screenShare = updated }
+                }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
         .background {
@@ -341,7 +346,6 @@ struct JarvisChatScreen: View {
     }
 
     private func activitySheetDismissed() {
-        refreshScreenSharing()
         guard let taskID = pendingActivityTaskID else { return }
         pendingActivityTaskID = nil
         navigation.openFactoryTask(taskID)
@@ -1095,12 +1099,6 @@ struct JarvisChatScreen: View {
     private func stopScreenSharing() {
         screenShareBridge.requestStop()
         screenShare.requestStop()
-        isScreenSharing = false
-    }
-
-    private func refreshScreenSharing() {
-        screenShare.observe(isSharing: screenShareBridge.isSharing)
-        isScreenSharing = screenShare.state == .live
     }
 
     private func sendMessage() {

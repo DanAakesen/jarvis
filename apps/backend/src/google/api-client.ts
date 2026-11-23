@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { GoogleOAuthError, type GoogleTokenProvider } from './oauth.js';
 
 const ORIGINS = {
@@ -15,7 +16,14 @@ export interface GoogleApiRequest {
   readonly signal: AbortSignal;
 }
 
+export interface GoogleReadSession {
+  /** Local cache generation for a single access token; changes on refresh or account switch. */
+  readonly cacheKey: string;
+  get(path: string): Promise<Record<string, unknown>>;
+}
+
 export interface GoogleApiClient {
+  openReadSession?(api: GoogleApi, signal: AbortSignal): Promise<GoogleReadSession>;
   request(api: GoogleApi, path: string, options: GoogleApiRequest): Promise<Record<string, unknown>>;
 }
 
@@ -80,62 +88,76 @@ export function createGoogleApiClient({
   tokens,
   fetch: fetcher = fetch,
 }: GoogleApiClientOptions): GoogleApiClient {
+  async function accessToken(signal: AbortSignal): Promise<string> {
+    let token: string;
+    try { token = await tokens.getToken(signal); }
+    catch (error) {
+      if (error instanceof GoogleOAuthError && error.kind === 'invalid-grant') {
+        throw new GoogleApiError('credentials-expired');
+      }
+      throw new GoogleApiError('unavailable');
+    }
+    if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
+      throw new GoogleApiError('unavailable');
+    }
+    return token;
+  }
+
+  async function request(api: GoogleApi, path: string, options: GoogleApiRequest, boundToken?: string): Promise<Record<string, unknown>> {
+    if (!Object.hasOwn(ORIGINS, api) || typeof path !== 'string' || !path.startsWith('/') ||
+        path.startsWith('//') || /[\r\n]/u.test(path)) {
+      throw new GoogleApiError('rejected');
+    }
+    const apiRoot = ORIGINS[api];
+    const url = new URL(`${apiRoot.prefix}${path}`, apiRoot.origin);
+    if (url.origin !== apiRoot.origin || !url.pathname.startsWith(`${apiRoot.prefix}/`)) {
+      throw new GoogleApiError('rejected');
+    }
+    const signal = AbortSignal.any([options.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]);
+    signal.throwIfAborted();
+    const token = boundToken ?? await accessToken(signal);
+    const method = options.method ?? 'GET';
+    const write = method !== 'GET';
+    let response: Response;
+    try {
+      response = await fetcher(url, {
+        method,
+        headers: {
+          Authorization: 'Bearer ' + token,
+          Accept: 'application/json',
+          ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+        redirect: 'error',
+        signal,
+      });
+    } catch {
+      throw new GoogleApiError(write ? 'uncertain' : 'unavailable');
+    }
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw requestError(response.status, write);
+    }
+    if (response.status === 204) {
+      await response.body?.cancel().catch(() => undefined);
+      return {};
+    }
+    try {
+      return await readJson(response);
+    } catch (error) {
+      if (write) throw new GoogleApiError('uncertain', response.status);
+      throw error;
+    }
+  }
+
   return {
-    async request(api, path, options) {
-      if (!Object.hasOwn(ORIGINS, api) || typeof path !== 'string' || !path.startsWith('/') ||
-          path.startsWith('//') || /[\r\n]/u.test(path)) {
-        throw new GoogleApiError('rejected');
-      }
-      const apiRoot = ORIGINS[api];
-      const url = new URL(`${apiRoot.prefix}${path}`, apiRoot.origin);
-      if (url.origin !== apiRoot.origin || !url.pathname.startsWith(`${apiRoot.prefix}/`)) {
-        throw new GoogleApiError('rejected');
-      }
-      const signal = AbortSignal.any([options.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]);
-      signal.throwIfAborted();
-      let token: string;
-      try { token = await tokens.getToken(signal); }
-      catch (error) {
-        if (error instanceof GoogleOAuthError && error.kind === 'invalid-grant') {
-          throw new GoogleApiError('credentials-expired');
-        }
-        throw new GoogleApiError('unavailable');
-      }
-      if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
-        throw new GoogleApiError('unavailable');
-      }
-      const method = options.method ?? 'GET';
-      const write = method !== 'GET';
-      let response: Response;
-      try {
-        response = await fetcher(url, {
-          method,
-          headers: {
-            Authorization: 'Bearer ' + token,
-            Accept: 'application/json',
-            ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-          },
-          ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-          redirect: 'error',
-          signal,
-        });
-      } catch {
-        throw new GoogleApiError(write ? 'uncertain' : 'unavailable');
-      }
-      if (!response.ok) {
-        await response.body?.cancel().catch(() => undefined);
-        throw requestError(response.status, write);
-      }
-      if (response.status === 204) {
-        await response.body?.cancel().catch(() => undefined);
-        return {};
-      }
-      try {
-        return await readJson(response);
-      } catch (error) {
-        if (write) throw new GoogleApiError('uncertain', response.status);
-        throw error;
-      }
+    request: (api, path, options) => request(api, path, options),
+    async openReadSession(api, signal) {
+      const token = await accessToken(signal);
+      return {
+        cacheKey: createHash('sha256').update(token).digest('hex'),
+        get: path => request(api, path, { method: 'GET', signal }, token),
+      };
     },
   };
 }

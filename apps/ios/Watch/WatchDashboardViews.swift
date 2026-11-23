@@ -2,6 +2,7 @@ import JarvisCore
 import SwiftUI
 
 struct WatchDashboardView: View {
+    let voiceActive: Bool
     @EnvironmentObject private var connection: WatchConnection
     @Environment(\.locale) private var locale
     @State private var loading = false
@@ -13,13 +14,16 @@ struct WatchDashboardView: View {
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Jarvis").font(.system(.headline, design: .rounded))
-                        Spacer()
-                        NavigationLink(value: WatchRoute.menu) {
-                            Image(systemName: "line.3.horizontal").foregroundStyle(WatchStyle.amber)
-                                .frame(width: 44, height: 44)
-                        }.buttonStyle(.plain).accessibilityLabel("Menu")
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            chatLink.fixedSize(horizontal: true, vertical: false)
+                            Spacer(minLength: 0)
+                            menuLink.fixedSize(horizontal: true, vertical: false)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            chatLink
+                            menuLink
+                        }
                     }
                     if loading && connection.dashboard == nil {
                         ProgressView("Loading dashboard").font(.caption)
@@ -107,6 +111,31 @@ struct WatchDashboardView: View {
         .task(id: connection.reachable) { await refreshWorkouts() }
         .refreshable { await refresh() }
     }
+    private var chatLink: some View {
+        NavigationLink(value: WatchRoute.chat) {
+            HStack(spacing: 5) {
+                WatchOrb().frame(width: 24, height: 24)
+                Text(voiceActive ? "Resume voice" : "Chat")
+                    .font(.headline)
+            }
+            .padding(.horizontal, 8)
+            .frame(minHeight: 44)
+            .watchGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var menuLink: some View {
+        NavigationLink(value: WatchRoute.menu) {
+            Text("Menu")
+                .font(.caption)
+                .padding(.horizontal, 4)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {
         NavigationLink(value: WatchRoute.agenda) {
             VStack(alignment: .leading, spacing: 9) {
@@ -116,14 +145,13 @@ struct WatchDashboardView: View {
                 HStack(alignment: .firstTextBaseline) {
                     WatchDashboardHeading(title: "Up Next")
                     Spacer(minLength: 3)
-                    if let next { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
                 if snapshot == nil {
                     missing(loading ? "Loading agenda…" : "Agenda unavailable")
                 } else if snapshot?.agenda != nil {
-                    if current {
-                        WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
-                    }
                     if let next {
                         Text(next.title).font(.system(.body, design: .rounded, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
@@ -135,6 +163,9 @@ struct WatchDashboardView: View {
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
                                                 time: .shortened))
                             .font(.caption).foregroundStyle(.secondary)
+                        if current && entries.count > 1 {
+                            WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
+                        }
                     } else if current { missing("No more events today") }
                     else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }
@@ -241,17 +272,13 @@ enum WatchBodyFatSummary {
 struct WatchDashboardHeading: View {
     let title: String
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "circle.fill").font(.system(size: 6))
-                .foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
-            Text(LocalizedStringKey(title)).font(.system(.headline, design: .rounded))
-                .accessibilityAddTraits(.isHeader)
-        }
+        Text(LocalizedStringKey(title))
+            .font(.system(.headline, design: .rounded))
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
 struct WatchDashboardSection<Content: View>: View {
-    @ScaledMetric(relativeTo: .caption2) private var seeMoreFontSize: CGFloat = 10
     let title: String
     let route: WatchRoute
     let content: Content
@@ -260,21 +287,19 @@ struct WatchDashboardSection<Content: View>: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                WatchDashboardHeading(title: title)
-                Spacer(minLength: 0)
-                NavigationLink(value: route) {
-                    Text("See more")
-                        .font(.system(size: seeMoreFontSize))
-                        .underline()
-                        .foregroundStyle(WatchStyle.amber)
-                        .frame(minHeight: 32)
-                        .contentShape(Rectangle())
+            NavigationLink(value: route) {
+                HStack {
+                    WatchDashboardHeading(title: title)
+                    Spacer()
+                    Image(systemName: "chevron.forward")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("See more \(String(localized: String.LocalizationValue(title)))")
-                    .accessibilityHint("Opens \(String(localized: String.LocalizationValue(title)))")
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             content
         }.frame(maxWidth: .infinity, alignment: .leading)
     }

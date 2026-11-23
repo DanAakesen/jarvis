@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
 import type { ProactiveStore } from './store.js';
-import type { FindingsStoredContext } from './engine.js';
+import type { FindingsStoredContext } from './types.js';
 import type { AlertClass, AlertLedgerStore } from './alert-ledger.js';
 import { dayKey, isQuietHour } from './time.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';

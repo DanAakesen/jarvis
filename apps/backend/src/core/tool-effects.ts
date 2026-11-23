@@ -16,7 +16,13 @@ const operations = (field: string, effects: Readonly<Record<string, 'read' | 'ac
   ({ defaultEffect: 'unclassified', operation: { field, effects } });
 
 export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Object.freeze({
+  azure_storage_queue_create: action,
+  azure_storage_queue_delete: action,
+  azure_storage_queue_delete_message: action,
+  azure_storage_queue_receive: action,
+  azure_storage_queue_send: action,
   archive_project: action,
+  backend_sleep: operations('operation', { read: 'read', sleep: 'action', wake: 'action' }),
   browser_do: action,
   browser_do_shared: action,
   calendar_confirm_change: action,
@@ -53,7 +59,10 @@ export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Obj
   mail_label: action,
   mail_send: action,
   mail_update_draft: action,
-  manage_model_deployment: action,
+  manage_foundry_agent: operations('operation', {
+    list: 'read', list_versions: 'read', read: 'read', create_version: 'action', activate: 'action',
+  }),
+  manage_model_deployment: operations('action', { list: 'read', create: 'action', delete: 'action' }),
   manage_repository: action,
   pause_task: action,
   pc_act: action,
@@ -94,6 +103,7 @@ export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Obj
 
 /** Tools that only read, search or show (opening a window is showing). They stay `unclassified` for the door and the legacy agent. */
 export const readOnlyTools: ReadonlySet<string> = new Set([
+  'azure_storage_queue_names', 'azure_storage_queue_peek', 'azure_storage_queue_properties',
   'attachment_list', 'attachment_read', 'calendar_find_free_slots', 'calendar_get_pending_change',
   'calendar_next_event', 'calendar_today_agenda', 'checks_list', 'ci_log', 'conversation_search', 'folio_open', 'folio_search',
   'get_deployment_status', 'get_job', 'get_pending_issue', 'get_release', 'get_settings', 'get_status_summary', 'get_usage',

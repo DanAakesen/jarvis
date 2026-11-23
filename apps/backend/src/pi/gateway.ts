@@ -421,6 +421,7 @@ type StreamFailureFields = { event?: string; code?: string; status?: number; pro
 
 /** What one attempt at a reply stream has seen so far: it explains a failure and decides whether a retry could repeat anything. */
 interface StreamPhase {
+  readonly requestId?: string | undefined;
   readonly round: number;
   readonly attempt: number;
   readonly startedAt: number;
@@ -446,6 +447,7 @@ interface StreamPhase {
 }
 
 interface ResponseTurn {
+  readonly requestId?: string | undefined;
   readonly grant: PiTurnGrant;
   readonly deadlineAt: number;
   retriesLeft: number;
@@ -453,8 +455,8 @@ interface ResponseTurn {
   phase?: StreamPhase | undefined;
 }
 
-const responseTurn = (grant: PiTurnGrant, deadlineAt: number): ResponseTurn =>
-  ({ grant, deadlineAt, retriesLeft: maxResponseRetries, unverifiedWork: false });
+const responseTurn = (grant: PiTurnGrant, deadlineAt: number, requestId?: string): ResponseTurn =>
+  ({ grant, deadlineAt, requestId, retriesLeft: maxResponseRetries, unverifiedWork: false });
 
 function actionUnverified(turn: ResponseTurn): boolean {
   const { grant, phase } = turn;
@@ -727,6 +729,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   function phaseFields(phase: StreamPhase) {
     return {
+      ...(phase.requestId ? { reqId: phase.requestId } : {}),
       elapsedMs: Math.round(performance.now() - phase.startedAt),
       ...(phase.firstEventMs !== null ? { firstEventMs: phase.firstEventMs } : {}),
       sawText: phase.sawText, sawTool: phase.sawTool, sawOutput: phase.sawOutput, previousCancelled: previousCancelled(),
@@ -974,8 +977,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     try {
       const cancelled = await call('POST', `/responses/${encodeURIComponent(responseId)}/cancel`, {}, AbortSignal.any([signal, AbortSignal.timeout(5_000)]));
       const body: unknown = await cancelled.json().catch(() => null);
-      const status = isObject(body) && typeof body.status === 'string' ? body.status : '';
-      return status !== 'in_progress' && status !== 'queued';
+      // A 2xx response can describe a turn that completed before cancellation reached it.
+      // Replaying its request could repeat work lost from the original stream.
+      return isObject(body) && body.status === 'cancelled' &&
+        Array.isArray(body.output) && body.output.length === 0;
     } catch { return false; }
   }
 
@@ -991,7 +996,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const sendsApproval = input.some(item => isObject(item) && item.type === 'mcp_approval_response');
     for (let attempt = 1; ; attempt += 1) {
       const phase: StreamPhase = {
-        round, attempt, startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
+        requestId: turn?.requestId, round, attempt, startedAt: performance.now(), firstEventMs: null, sawText: false, sawTool: false, sawOutput: false,
         responseId: null, requestSent: false, rejected: false, sendsApproval, unverifiedWork: false, sawHarnessCall: false,
         pendingDoorCalls: new Set(), failure: null, failureFields: {}, eventTypes: [], itemTypes: [], unknownItemTypes: new Set(),
       };
@@ -1276,7 +1281,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         signal: deadline,
       });
       grant = activation.grant;
-      turn = responseTurn(grant, deadlineAt);
+      turn = responseTurn(grant, deadlineAt, input.requestId);
       const activationContext = [context, activation.context].filter(Boolean).join('\n\n');
       const activationHash = contextHash(activationContext);
       const overview = overviewFor(conversationId);
@@ -1287,6 +1292,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       });
       let segment = '';
       let boundaries = 0;
+      let retainedReply = false;
       for await (const event of respond(conversationId, text, deadline, turn)) {
         spend.note(event);
         // The model has the message once the provider answers, so the overview is not sent again on the next turn.
@@ -1312,7 +1318,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
             boundaries += 1;
-          }
+          } else if (segment.trim()) retainedReply = true;
           segment = '';
         } else if (event.kind === 'round_calls') {
           nativeCalls += event.native;
@@ -1324,6 +1330,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           rounds = event.rounds ?? rounds;
           clientItems = event.answered ?? clientItems;
         }
+      }
+      // A completed HTTP response can contain just a tool call and its progress note. Its
+      // recorded receipt still belongs to Dan even when the model never writes the answer.
+      if (grant.receipts.length && !retainedReply && !segment.trim()) {
+        throw new PiGatewayError('pi_failed', 'no_reply', { detail: 'no_final_reply' });
       }
       await untilAborted(() => options.store.markWarm(options.owner, activationHash, now(), deadline), deadline)
         .catch(() => { if (!deadline.aborted) log('pi.mark_warm_failed', {}); });
@@ -1379,6 +1390,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         if (result.tool.startsWith(azureToolPrefix)) azureCalls[result.outcome] += 1;
       }
       log('pi.turn', {
+        ...(input.requestId ? { reqId: input.requestId } : {}),
         channel: input.channel ?? 'chat', configuredModel: PI_MODEL, outcome, firstTextMs, totalMs, ...(billed ?? {}),
         estimated: usage === undefined && billed !== undefined, costDkk: billed ? piCostDkk(billed) : 0,
         activationId: grant?.activation?.id ?? null,

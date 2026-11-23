@@ -8,11 +8,12 @@ import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { createLogger } from '../logging.js';
+import { repositoryTools } from '../factory/repository-tools.js';
 import { createVaultModule } from '../vault/index.js';
 import { requestIdentity } from './mcp.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
-import type { RemoteMcpBridge } from './remote-mcp.js';
+import { createRemoteMcpBridge, type RemoteMcpBridge } from './remote-mcp.js';
 import type { PiSituationService } from './situation.js';
 import { brainOnlyTools } from './brain/policy.js';
 import { createBrainTools } from './brain/tools.js';
@@ -310,6 +311,23 @@ describe('PI MCP server', () => {
       expect(github.tools).not.toHaveBeenCalled();
       expect(azure.tools).not.toHaveBeenCalled();
     });
+
+  it('returns a local repository reader while the named GitHub catalogue is blocked', async () => {
+    let finish!: (response: Response) => void;
+    const blocked = new Promise<Response>(resolve => { finish = resolve; });
+    const github = createRemoteMcpBridge({ prefix: 'gh_', label: 'GitHub', url: 'https://fixture.invalid/mcp',
+      token: async () => 'test', fetch: async () => blocked, searchWaitMs: 100 });
+    const tools = vi.spyOn(github, 'tools');
+    const { registry, tool } = setup([github], { tools: repositoryTools.filter(tool => tool.name === 'repo_read') });
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'read this GitHub repository file' });
+    expect(found.body?.result.tools.map((match: Json) => match.name)).toContain('repo_read');
+    expect(found.body?.result.note).toContain('GitHub tools are still loading');
+    expect(tools).toHaveBeenCalledWith(expect.any(AbortSignal), 0);
+    finish(new Response(null, { status: 503 }));
+    await tool('find_tools', { turn: grant.turn, query: 'gh_get_file_contents read file' });
+    expect(tools).toHaveBeenLastCalledWith(expect.any(AbortSignal), undefined);
+  });
 
   it('gives a provider the search names one bounded wait and then says to keep going and try again shortly', async () => {
     let state: ReturnType<RemoteMcpBridge['status']> = { state: 'idle' };

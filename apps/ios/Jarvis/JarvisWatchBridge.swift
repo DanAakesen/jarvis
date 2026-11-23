@@ -833,8 +833,6 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private func receiveVoice(_ message: VoiceServerMessage, id: UUID) {
         guard voiceID == id else { return }
         switch message {
-        case .sessionReady:
-            emit(.init(.voiceState, requestID: id, text: "Listening"))
         case .responseCreated(let response, _):
             voiceResponseID = response
         case .audioDelta(_, let base64, let responseID, _):

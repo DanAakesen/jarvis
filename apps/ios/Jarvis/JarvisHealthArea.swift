@@ -351,7 +351,11 @@ struct JarvisHealthArea: View {
                             period: period,
                             goals: goals,
                             client: client,
-                            language: language
+                            language: language,
+                            onMealSaved: {
+                                await JarvisAppCache.invalidateAll(.health)
+                                await loadDashboard(force: true)
+                            }
                         ) { periodMenu }
                         lastLiftsSection
                         JarvisHealthSessionsSection(

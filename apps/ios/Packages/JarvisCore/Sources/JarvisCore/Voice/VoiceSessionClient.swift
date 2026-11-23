@@ -257,7 +257,10 @@ public actor VoiceSessionClient {
     private var subprotocols: [String] = []
     private var receiveTask: Task<Void, Never>?
     private var reconnectAttempts = 0
-    private var isConnected = false
+    private var isConnected = false {
+        didSet { if !isConnected { microphoneReady = false } }
+    }
+    private var microphoneReady = false
     private var isMuted = false
     private var cameraState: Bool?
     private var endTask: Task<Void, Error>?
@@ -313,7 +316,8 @@ public actor VoiceSessionClient {
     }
 
     public func sendAudio(_ pcm16: Data) async throws {
-        guard !isMuted else { return }
+        // Watch capture starts while Foundry connects. The relay starts muted.
+        guard microphoneReady, !isMuted else { return }
         try await send(.appendAudio(VoiceAudioCodec.encodePCM16(pcm16)))
     }
 
@@ -459,8 +463,9 @@ public actor VoiceSessionClient {
         switch message {
         case .sessionReady:
             reconnectAttempts = 0
-            apply(.sessionReady)
             try await send(isMuted ? .microphoneMuted : .microphoneActive)
+            microphoneReady = true
+            apply(.sessionReady)
             apply(isMuted ? .microphoneMuted : .microphoneActive)
             if let cameraState {
                 try await send(.cameraState(on: cameraState))

@@ -16,6 +16,6 @@ export const brainLogReasons = [
   'pi_not_configured', 'pi_budget_exhausted', 'pi_unavailable', 'pi_timeout', 'pi_failed', 'pi_unsupported',
   'background_off', 'paused', 'no_sources', 'daily_cap', 'budget_exhausted', 'quiet_hours', 'policy_changed', 'spaced',
   'satisfied_by_event', 'satisfied_by_recent_activation', 'satisfied_by_active_activation', 'situation_sources_unavailable',
-  'decision_log_pending', 'budget_notice_failed', 'watches_unavailable', 'spend_record_failed', 'watch_cost_not_recorded', 'feedback_unavailable',
+  'inbox_review_failed', 'decision_log_pending', 'budget_notice_failed', 'watches_unavailable', 'spend_record_failed', 'watch_cost_not_recorded', 'feedback_unavailable',
 ] as const;
 export type BrainLogReason = (typeof brainLogReasons)[number];

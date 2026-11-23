@@ -45,6 +45,27 @@ final class ChatStreamLimitTests: XCTestCase {
         XCTAssertEqual(reply.text, "Follow-up answer")
     }
 
+    func testReturningToChatDiscoversAndReplaysTheAcceptedReplyWithoutResubmitting() async throws {
+        let request = frame("user", message(id: "430", role: "dan", text: "Hi"))
+        let reply = frame("done", message(id: "431", role: "jarvis", text: "Hello"))
+        let transport = ResumeTransport(replay: Data((request + reply).utf8))
+        let client = try JarvisChatClient(client: JarvisClient(
+            configuration: JarvisClientConfiguration(baseURL: URL(string: "https://api.example.invalid/api")!),
+            transport: transport,
+            tokenStore: FixtureTokenStore(),
+            accessTokenProvider: FixtureTokenProvider()
+        ))
+        let active = try await client.listActiveTurns()
+        let turn = try XCTUnwrap(ActiveChatTurnSelection.select(turns: active, forSessionID: "12"))
+        var replyIDs: [String] = []
+        for try await event in try await client.reattachTurn(sessionId: turn.sessionId, messageId: turn.messageId) {
+            if case .done(let saved) = event { replyIDs.append(saved.id) }
+        }
+        XCTAssertEqual(replyIDs, ["431"])
+        let calls = await transport.calls
+        XCTAssertEqual(calls, ["GET /api/conversation/turns/active", "GET /api/conversation/sessions/12/turns/430/events"])
+    }
+
     private func receive(_ body: Data) async throws -> [ChatEvent] {
         let client = try JarvisClient(
             configuration: JarvisClientConfiguration(baseURL: URL(string: "https://api.example.invalid/api")!),
@@ -78,6 +99,22 @@ private actor OneResponseTransport: HTTPTransport {
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         HTTPResponse(statusCode: 200, body: body)
+    }
+}
+
+private actor ResumeTransport: HTTPTransport {
+    let replay: Data
+    private(set) var calls: [String] = []
+
+    init(replay: Data) { self.replay = replay }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        calls.append("\(request.method.rawValue) \(request.url.path)")
+        if request.url.path.hasSuffix("/active") {
+            // Existing backends send just the two identifiers.
+            return HTTPResponse(statusCode: 200, body: Data(#"{"turns":[{"sessionId":"12","messageId":"430"}]}"#.utf8))
+        }
+        return HTTPResponse(statusCode: 200, body: replay)
     }
 }
 

@@ -54,6 +54,67 @@ final class WorkspaceCommandInterpreterTests: XCTestCase {
             return XCTFail("expected a refusal")
         }
     }
+
+    func testAppleMapsInputAndBufferedArrival() throws {
+        var fields: [String: JSONValue] = ["target": .string("phone"), "query": .string("Museum"),
+            "origin": .string("Central Station"), "mode": .string("walking"), "arriveBy": .string("2026-11-23T09:00:00.000+01:00"),
+            "bufferMinutes": .number(10)]
+        let request = try XCTUnwrap(AppleMapsRequest(command: command("apple-maps", fields)))
+        XCTAssertEqual(request.mode, "walking")
+        XCTAssertEqual(request.arrivalDate, ISO8601DateFormatter().date(from: "2026-11-23T07:50:00Z"))
+        fields["arriveBy"] = .string("tomorrow morning")
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields)))
+        fields["arriveBy"] = nil
+        fields["origin"] = nil
+        fields["searchOnly"] = .bool(true)
+        XCTAssertEqual(AppleMapsRequest(command: command("apple-maps", fields))?.searchOnly, true)
+        fields["target"] = .string("web")
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields)))
+    }
+
+    func testAppleMapsNeedsAnOriginExceptForAnExplicitNamedSearch() {
+        XCTAssertFalse(AppleMapsRequest(query: "pharmacy nearby").canSearchDestination(hasOrigin: false))
+        let route = AppleMapsRequest(query: "museum", origin: "unresolved address")
+        XCTAssertFalse(route.canSearchDestination(hasOrigin: false))
+        XCTAssertTrue(route.canSearchDestination(hasOrigin: true))
+        XCTAssertTrue(AppleMapsRequest(query: "Tivoli Copenhagen", searchOnly: true).canSearchDestination(hasOrigin: false))
+    }
+
+    func testAppleMapsSelectionUsesTheOriginalOrderAndEstimate() throws {
+        let id = UUID().uuidString.lowercased()
+        var fields: [String: JSONValue] = ["target": .string("phone"), "lookupId": .string(id), "ordinal": .number(2)]
+        let selection = try XCTUnwrap(AppleMapsSelection(command: command("apple-maps", fields)))
+        XCTAssertEqual(selection.lookupId, id)
+        let places = ["First", "Second"].map { AppleMapsPlace(name: $0, address: "", latitude: 0, longitude: 0, travelSeconds: 490) }
+        let original = AppleMapsResult(places: places, mode: "walking", observedAt: "time", bufferMinutes: 5)
+        let chosen = try XCTUnwrap(original.selecting(ordinal: selection.ordinal))
+        XCTAssertEqual(chosen.places, [places[1]])
+        XCTAssertEqual(chosen.places[0].travelMinutes, 9)
+        XCTAssertEqual(chosen.observedAt, original.observedAt)
+        XCTAssertNil(original.selecting(ordinal: 3))
+        fields["query"] = .string("changed search")
+        XCTAssertNil(AppleMapsSelection(command: command("apple-maps", fields)))
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields)))
+    }
+
+    func testAppleMapsSamplesOnlyRealIndicesAndCoarsensTheDeviceOrigin() {
+        XCTAssertEqual(AppleMapsRequest.sampleIndices(pointCount: 1), [0])
+        let samples = AppleMapsRequest.sampleIndices(pointCount: 10_000)
+        XCTAssertEqual(Set(samples).count, 64)
+        XCTAssertEqual(samples.first, 0)
+        XCTAssertEqual(samples.last, 9_999)
+        let point = AppleMapsPoint(latitude: 56.12345678, longitude: 10.12345678)
+        let coarse = AppleMapsRequest.approximate(point)
+        XCTAssertEqual(coarse.latitude, 56.123)
+        XCTAssertNotEqual(coarse.longitude, point.longitude)
+        XCTAssertEqual(coarse, AppleMapsRequest.approximate(coarse))
+    }
+
+    func testAppleMapsReceiptContainsOnlyTheCountSpeechFlagAndReason() throws {
+        let receipt = WorkspaceMapReceipt(matches: 2, spoken: true, reason: .needsOrigin)
+        let wire = try JSONDecoder().decode([String: JSONValue].self, from: JSONEncoder().encode(receipt))
+        XCTAssertEqual(wire, ["matches": .number(2), "spoken": .bool(true), "reason": .string("needs_origin")])
+    }
 }
 
 final class GeneratedViewPresentationTests: XCTestCase {

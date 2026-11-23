@@ -65,7 +65,7 @@ function setup(replies: Array<(call: Call) => Response | Promise<Response>>, ove
   const calls: Call[] = [];
   const usage: Array<{ model: string; inputTokens: number; outputTokens: number }> = [];
   let conversations = 0;
-  let cancelReply: () => Response | Promise<Response> = () => Response.json({});
+  let cancelReply: () => Response | Promise<Response> = () => Response.json({ status: 'cancelled', output: [] });
   let cleanupReply: (signal: AbortSignal) => Response | Promise<Response> = () => new Response(null, { status: 204 });
   const fetcher = (async (url: string, init: RequestInit) => {
     const call: Call = { method: init.method, url, body: init.body ? JSON.parse(init.body as string) : undefined, headers: init.headers as Record<string, string> };
@@ -80,9 +80,9 @@ function setup(replies: Array<(call: Call) => Response | Promise<Response>>, ove
     store, registry, activations, fetcher, getToken: async () => 'token', context: async () => 'CONTEXT BLOCK',
     recordUsage: async (record) => { usage.push(record); }, now: () => new Date('2026-11-15T16:00:00Z'), streamRetryDelayMs: 0, ...overrides,
   });
-  const run = async (text: string, signal = new AbortController().signal) => {
+  const run = async (text: string, signal = new AbortController().signal, requestId?: string) => {
     const chunks: ConversationAgentChunk[] = [];
-    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text }, 'Bearer x', signal)) chunks.push(chunk);
+    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text, ...(requestId ? { requestId } : {}) }, 'Bearer x', signal)) chunks.push(chunk);
     return chunks;
   };
   return {
@@ -857,6 +857,22 @@ describe('PI gateway', () => {
       expect(responsesOf(calls)).toHaveLength(1);
     });
 
+    it('returns the completed task receipt when Foundry finishes with progress and no answer', async () => {
+      const { run, calls, registry, store } = setup([call => {
+        const grant = registry.resolve(turnOf(call))!;
+        grant.results.push({ tool: 'vault_task_complete', outcome: 'ok' });
+        grant.receipts.push({ confirmation: 'Completed task: Pay rent.', action: true });
+        const item = { type: 'mcp_call', id: 'mcp_1', name: 'call_tool', server_label: 'jarvis' };
+        return sse(delta('Marking it done.'), frame({ type: 'response.output_item.added', item }),
+          frame({ type: 'response.output_item.done', item: { ...item, status: 'completed' } }), completed(100, 0, 5));
+      }]);
+      await expect(run('complete the task')).rejects.toMatchObject({
+        receipt: `Completed task: Pay rent. ${failureCopy.reply_not_written.chat}`,
+      });
+      expect(responsesOf(calls)).toHaveLength(1);
+      expect(store.turns[0]).toMatchObject({ outcome: 'failed', outputTokens: 5 });
+    });
+
     it.each([
       ['response.failed', () => sse(created, listed, failedFrame()), 'foundry_response_failed', false],
       ['error', () => sse(frame({ type: 'error', code: 'server_error', message: 'private provider text' })), 'foundry_response_failed', false],
@@ -867,7 +883,8 @@ describe('PI gateway', () => {
     ])('retries once on %s, with the same message and conversation, billing the turn once', async (_name, first, reason, cancelsFirst) => {
       const { logs, log } = capture();
       const { run, calls, store, usage, conversations } = setup([first, () => sse(created, delta('Hi'), completed(100, 0, 10))], { log });
-      expect(await run('private question')).toEqual(['Hi']);
+      const requestId = '28d1efca-d8d7-4090-8822-9105c58652ad';
+      expect(await run('private question', undefined, requestId)).toEqual(['Hi']);
       const responses = responsesOf(calls);
       expect(responses).toHaveLength(2);
       expect(responses[1]!.body).toEqual(responses[0]!.body);
@@ -876,10 +893,10 @@ describe('PI gateway', () => {
       // A response that only stopped may still run on Foundry's side, so it is cancelled before the retry; a failed one is already over.
       expect(calls.filter(call => call.url.includes('/responses/resp_1/cancel'))).toHaveLength(cancelsFirst ? 1 : 0);
       expect(logs.filter(([event]) => event === 'pi.stream_failed')).toEqual([[
-        'pi.stream_failed', expect.objectContaining({ reason, attempt: 1, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }),
+        'pi.stream_failed', expect.objectContaining({ reqId: requestId, reason, attempt: 1, sawText: false, sawTool: false, sawOutput: false, previousCancelled: false }),
       ]]);
       expect(logs.filter(([event]) => event === 'pi.stream_retry')).toEqual([[
-        'pi.stream_retry', expect.objectContaining({ reason, attempt: 1, elapsedMs: expect.any(Number) }),
+        'pi.stream_retry', expect.objectContaining({ reqId: requestId, reason, attempt: 1, elapsedMs: expect.any(Number) }),
       ]]);
       // One turn, one usage report, one cap check: the failed attempt is not billed a second time.
       expect(store.turns).toHaveLength(1);
@@ -946,6 +963,11 @@ describe('PI gateway', () => {
     it.each([
       ['a failed cancel', () => new Response('{}', { status: 500 })],
       ['a cancel that leaves the response running', () => Response.json({ status: 'in_progress' })],
+      ['a cancel without a receipt', () => new Response(null, { status: 204 })],
+      ['a cancel without a status', () => Response.json({})],
+      ['a response completed before cancellation', () => Response.json({ status: 'completed' })],
+      ['a cancelled response with missing output', () => Response.json({ status: 'cancelled' })],
+      ['a cancelled response with unseen tool work', () => Response.json({ status: 'cancelled', output: [{ type: 'mcp_call' }] })],
     ])('never retries a stream that merely stopped after %s', async (_name, cancel) => {
       const { run, calls, setCancel } = setup([() => sse(created), () => sse(delta('again'), completed(1, 0, 1))]);
       setCancel(cancel);

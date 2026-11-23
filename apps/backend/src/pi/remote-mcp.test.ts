@@ -3,7 +3,7 @@ import { createRemoteMcpBridge } from './remote-mcp.js';
 
 const signal = () => new AbortController().signal;
 
-function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
+function server(options: { sse?: boolean; expireOnce?: boolean; callResult?: Record<string, unknown> } = {}) {
   const seen: { method: string; auth: string | null; session: string | null }[] = [];
   let expired = false;
   const fetchStub = (async (_url: string, init: RequestInit) => {
@@ -15,11 +15,11 @@ function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
     const results: Record<string, unknown> = {
       initialize: { protocolVersion: '2025-06-18', capabilities: {} },
       'tools/list': { tools: [{ name: 'issue_write', description: 'Create or update an issue', inputSchema: { type: 'object' } }, { name: 'bad name!', description: 'x' }] },
-      'tools/call': body.params?.name === 'broken'
+      'tools/call': options.callResult ?? (body.params?.name === 'broken'
         ? { isError: true, content: [{ type: 'text', text: 'Not Found' }] }
         : body.params?.name === 'structured'
           ? { content: [{ type: 'text', text: 'summary text' }], structuredContent: { items: [1, 2] } }
-          : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] },
+          : { content: [{ type: 'text', text: JSON.stringify({ number: 700, title: 'Hello' }) }] }),
     };
     const message = JSON.stringify({ jsonrpc: '2.0', id: body.id, result: results[body.method] });
     return options.sse
@@ -55,6 +55,28 @@ describe('the GitHub bridge', () => {
     const { fetchStub } = server();
     const bridge = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: fetchStub });
     expect(await bridge.call('gh_structured', {}, signal())).toEqual({ outcome: 'ok', result: { items: [1, 2] } });
+  });
+
+  it.each(['const value = 7;', ''])('returns embedded GitHub file text, including an empty file', async (content) => {
+    const receipt = 'successfully downloaded text file (SHA: abc123)';
+    const uri = 'repo://owner/project/refs/heads/main/value.ts';
+    const { fetchStub } = server({ callResult: { content: [
+      { type: 'text', text: receipt }, { type: 'resource', resource: { uri, mimeType: 'text/plain', text: content } },
+    ] } });
+    const bridge = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: fetchStub });
+    expect((await bridge.call('gh_get_file_contents', { path: 'value.ts' }, signal())).result).toEqual({ receipt, uri, content });
+  });
+
+  it('finds source in the structured file blocks even when the other blocks carry a receipt and a blob', async () => {
+    const receipt = 'successfully downloaded text file (SHA: abc123)';
+    const uri = 'repo://owner/project/sha/abc123/value.ts';
+    const { fetchStub } = server({ callResult: {
+      content: [{ type: 'text', text: receipt }, { type: 'resource', resource: { uri, blob: 'AAAA' } }],
+      structuredContent: { content: [{ type: 'resource', resource: { uri, text: 'export default 42;' } }] },
+    } });
+    const bridge = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: fetchStub });
+    expect((await bridge.call('gh_get_file_contents', { path: 'value.ts', sha: 'abc123' }, signal())).result)
+      .toEqual({ receipt, uri, content: 'export default 42;' });
   });
 
   it('does not make a search wait for a stalled GitHub, and stops waiting when the turn is cancelled', async () => {

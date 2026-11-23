@@ -5,6 +5,15 @@
     "foundryNameTimestamp": {
       "value": "20261003200000"
     },
+    "backendLogAccess": {
+      "value": "enabled"
+    },
+    "inboxEnabled": {
+      "value": true
+    },
+    "inboxNudgesEnabled": {
+      "value": true
+    },
     "terraChatCapacity": {
       "value": 600
     }
