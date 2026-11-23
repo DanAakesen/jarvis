@@ -4,6 +4,58 @@ import XCTest
 
 // Minimal guard set: session token storage, auth failure mapping, and the HTTP transport contract.
 final class JarvisClientTransportTests: XCTestCase {
+    func testOwnerCanReadEditAndReopenBothTargetPages() async throws {
+        for training in [true, false] {
+            let kind = training ? "training" : "nutrition"
+            let keys = training ? ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"] : ["deficitKcal", "restingKcal", "proteinGrams"]
+            let values = training ? [(0, 21, "sessions/week"), (0, 21, "sessions/week"), (0, 100_000, "steps/day")] :
+                [(0, 2000, "kcal"), (1000, 4000, "kcal"), (30, 400, "g")]
+            let bounds: [String: [String: Any]] = Dictionary(uniqueKeysWithValues: zip(keys, values).map { key, value in
+                (key, ["label": key, "min": value.0, "max": value.1, "unit": value.2])
+            })
+            var targets: [String: Any] = Dictionary(uniqueKeysWithValues: keys.map { ($0, NSNull()) })
+            let empty = jsonResponse(status: 200, body: ["targets": targets, "bounds": bounds, "missing": keys, "updatedAt": NSNull()])
+            targets[keys[0]] = 0
+            let saved = jsonResponse(status: 200, body: ["targets": targets, "bounds": bounds, "missing": Array(keys.dropFirst()), "updatedAt": "2026-11-22T18:05:43.917Z"])
+            let transport = FakeHTTPTransport([.response(empty), .response(saved), .response(saved)])
+            let settings = JarvisSettingsClient(client: try makeClient(transport: transport, tokenStore: FakeTokenStore(token: "js.fixture")))
+            let initial = training ? try await settings.loadTrainingTargets() : try await settings.loadNutritionTargets()
+            let changes: [String: Int?] = [keys[0]: 0]
+            let written = training ? try await settings.saveTrainingTargets(changes, bounds: initial.bounds) :
+                try await settings.saveNutritionTargets(changes, bounds: initial.bounds)
+            let reopened = training ? try await settings.loadTrainingTargets() : try await settings.loadNutritionTargets()
+            XCTAssertEqual(initial.missing, keys)
+            XCTAssertEqual(written, reopened)
+            XCTAssertEqual(reopened.targets[keys[0]], .integer(0))
+            let requests = await transport.recordedRequests()
+            XCTAssertEqual(requests.map(\.method), [.get, .patch, .get])
+            XCTAssertTrue(requests.allSatisfy { $0.url.path == "/api/health/\(kind)-targets" && $0.headers["Authorization"] == authorization("js.fixture") })
+            XCTAssertEqual(try JSONDecoder().decode([String: Int].self, from: XCTUnwrap(requests[1].body)), [keys[0]: 0])
+        }
+    }
+
+    func testTargetPagesDistinguishEmptyWebAndMalformedRepliesFromRouteErrors() async throws {
+        let cases: [(HTTPResponse, JarvisSettingsClientError)] = [
+            (HTTPResponse(statusCode: 200), .emptyResponse),
+            (HTTPResponse(statusCode: 200, headers: ["content-type": "text/html; charset=utf-8"],
+                          body: Data("<!doctype html>".utf8)), .webPageResponse),
+            (jsonResponse(status: 200, body: ["targets": [:]]), .invalidResponse),
+            (HTTPResponse(statusCode: 404), .notFound),
+        ]
+        for (reply, expected) in cases {
+            let transport = FakeHTTPTransport([.response(reply), .response(reply)])
+            let settings = JarvisSettingsClient(client: try makeClient(transport: transport))
+            for isTraining in [true, false] {
+                do {
+                    _ = isTraining ? try await settings.loadTrainingTargets() : try await settings.loadNutritionTargets()
+                    XCTFail("Expected target load failure")
+                } catch {
+                    XCTAssertEqual(error as? JarvisSettingsClientError, expected)
+                }
+            }
+        }
+    }
+
     func testNoteSwipeThresholds() {
         XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 71), .none)
         XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 72), .pin)

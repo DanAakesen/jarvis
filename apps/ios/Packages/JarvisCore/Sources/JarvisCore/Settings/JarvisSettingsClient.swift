@@ -331,6 +331,9 @@ public enum JarvisSettingsClientError: Error, Equatable, Sendable {
     case notOwner
     case unavailable
     case offline
+    case timedOut
+    case emptyResponse
+    case webPageResponse
     case notFound
     case conflict
     case invalidRequest
@@ -540,6 +543,10 @@ public struct JarvisSettingsClient: Sendable {
         do {
             return try JSONDecoder().decode(Response.self, from: response.body)
         } catch {
+            if response.body.isEmpty { throw JarvisSettingsClientError.emptyResponse }
+            if response.header("Content-Type")?.lowercased().hasPrefix("text/html") == true {
+                throw JarvisSettingsClientError.webPageResponse
+            }
             throw JarvisSettingsClientError.invalidResponse
         }
     }
@@ -579,7 +586,8 @@ public struct JarvisSettingsClient: Sendable {
         case .signInRequired: return .signInRequired
         case .notOwner: return .notOwner
         case .serviceUnavailable: return .unavailable
-        case .networkFailure, .timedOut: return .offline
+        case .networkFailure: return .offline
+        case .timedOut: return .timedOut
         case .httpStatus(404): return .notFound
         case .httpStatus(409): return .conflict
         case .httpStatus(let status): return .httpStatus(status)

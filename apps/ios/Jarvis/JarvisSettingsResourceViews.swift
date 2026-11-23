@@ -685,6 +685,24 @@ struct JarvisTargetsSettingsView: View {
         return value.integerValue.map(String.init) ?? ""
     }
 
+    private func loadMessage(for failure: Error) -> String {
+        if (failure as? JarvisClientError) == .timedOut { return copy(.targetsTimedOut) }
+        guard let failure = failure as? JarvisSettingsClientError else { return copy(.loadFailed) }
+        switch failure {
+        case .signInRequired: return copy(.targetsSignIn)
+        case .notOwner: return copy(.notOwner)
+        case .offline: return copy(.targetsOffline)
+        case .unavailable: return copy(.targetsUnavailable)
+        case .timedOut: return copy(.targetsTimedOut)
+        case .webPageResponse: return copy(.targetsWebPage)
+        case .emptyResponse: return copy(.targetsEmpty)
+        case .invalidResponse: return copy(.targetsInvalid)
+        case .notFound: return String(format: copy(.targetsHTTP), 404)
+        case .httpStatus(let status): return String(format: copy(.targetsHTTP), status)
+        default: return copy(.loadFailed)
+        }
+    }
+
     private func load(force: Bool = true) async {
         loadGeneration += 1
         let generation = loadGeneration
@@ -718,7 +736,7 @@ struct JarvisTargetsSettingsView: View {
                 loadFailed = false
             case .refreshing: break
             case .failed(let failure, _):
-                error = copy(.loadFailed)
+                error = loadMessage(for: failure)
                 loadFailed = true
                 onFailure(failure)
             }

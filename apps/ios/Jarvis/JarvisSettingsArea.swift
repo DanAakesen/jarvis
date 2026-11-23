@@ -627,7 +627,7 @@ struct JarvisSettingsArea: View {
         let key: JarvisSettingsLocalizationKey = switch error {
         case .notOwner, .signInRequired: .notOwner
         case .unavailable: .unavailable
-        case .offline: .offline
+        case .offline, .timedOut: .offline
         case .httpStatus(403): .forbidden
         default: .loadFailed
         }

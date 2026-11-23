@@ -22,6 +22,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 ### Next steps and blockers
 
 1. On the next build, retest typing while Jarvis replies and ask for the iPhone location from the same conversation. Verify the single switch on the main Settings page.
+   Open Training targets and Nutrition targets. Build 124 showed a load error on both. Both server responses passed a production shape check. On iPhone, verify the fields load, save one intended change and reopen each page. Report the exact message if a page still fails.
 2. On a day with logged data, compare the iPhone Gym lift and Nutrition totals in Chat and Voice. Test Voice caption scrolling, status and Watch dictation/reconnection. Build 124 results above cover only the channels Dan reported.
 3. On iPhone, find a nearby pharmacy, select a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Check the spoken estimate against the card.
 4. Verify an ordinary Inbox follow-up and its delivery. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
