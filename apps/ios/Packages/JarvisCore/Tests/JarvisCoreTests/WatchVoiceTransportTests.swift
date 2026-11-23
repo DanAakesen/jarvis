@@ -77,8 +77,8 @@ final class WatchVoiceTransportTests: XCTestCase {
             if attempts == 1 { throw WatchFailure.unavailable }
         }, onFailure: { _, _ in
             resets += 1
-            // Like VoiceAudioEngine.stop(), a failed start resets both the ledger and the handler.
-            ledger = VoicePlaybackLedger()
+            // A stopped audio engine clears pending playback and its completion handler.
+            _ = ledger.playbackStopped()
             handler = nil
         }, onReady: {
             handler = { machine.apply(.playbackFinished(responseID: $0.responseID)) }
@@ -86,11 +86,13 @@ final class WatchVoiceTransportTests: XCTestCase {
 
         machine.apply(.responseCreated(id: "reply"))
         machine.apply(.audioDelta(responseID: "reply"))
-        ledger.bufferScheduled(responseID: "reply")
+        let sequence = ledger.bufferScheduled(responseID: "reply")
         machine.apply(.responseFinished(responseID: "reply"))
         XCTAssertNil(ledger.responseFinished(responseID: "reply"))
         XCTAssertEqual(machine.state, .speaking)
-        handler?(try XCTUnwrap(ledger.bufferPlayed(responseID: "reply")))
+        let receipts = ledger.bufferPlayed(sequence)
+        XCTAssertEqual(receipts.count, 1)
+        handler?(try XCTUnwrap(receipts.first))
         XCTAssertEqual(machine.state, .listening)
         XCTAssertEqual(attempts, 2)
         XCTAssertEqual(resets, 1)
