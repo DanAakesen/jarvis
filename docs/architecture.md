@@ -186,7 +186,7 @@ flowchart LR
 
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
 - Missing switch state means **Off**. The owner controls it in Settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. A successful wake is not evidence of a delivered message.
-- PI owns the 07:00 and 18:00 Copenhagen slots and Check now. Inbox reviews each eligible slot once, including a slot PI already covered through an earlier event. With no brain configured, no slot is claimed.
+- PI owns the 07:00 and 18:00 Copenhagen slots and Check now. When queued work reaches its daily turn allowance, its next check is due at Copenhagen midnight. Inbox reviews each eligible slot once, including a slot PI already covered through an earlier event. With no brain configured, no slot is claimed.
 
 ## Reply push and reminders
 

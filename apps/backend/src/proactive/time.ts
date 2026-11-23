@@ -148,6 +148,10 @@ function shiftDate(key: string, days: number): string {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
+export function nextCopenhagenDayStart(date: Date): Date {
+  return copenhagenDateStart(shiftDate(dayKey(date), 1));
+}
+
 function slot(date: string, time: SlotTime): ProactiveSlot {
   const key = `${date}T${time}`;
   return { key, at: localSlotInstant(key) };
