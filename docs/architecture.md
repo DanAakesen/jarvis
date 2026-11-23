@@ -83,7 +83,7 @@ flowchart LR
 - **One owner conversation for foreground PI.** Chat and delegated Voice share the persisted PI conversation (`dbo.pi_conversation`) and the gateway's FIFO claim; each turn gets its own tool grant. Waiting counts against the turn deadline (180 seconds by default; 90 for the Voice leg). Warm-up skips a busy turn. On a Foundry 404 before any reply text, the gateway tries to drop the provider binding so the next turn can create a conversation. It does not replay the failed turn or delete saved Chat history. Proactive wakes use separate conversations.
 - **Chat.** The server stores the owner message, adds [agent context](agent-context.md#agent-context) and streams text, tool activity and the terminal result. An iPhone reconnect can discover and follow an active turn or reconcile its committed reply without resending. App history, Foundry history and [diagnostic logs](reference/logs.md) are separate records.
 - **Voice.** GPT-Live can handle talk itself. When it delegates, the relay joins the full input transcript, waits for 1.5 seconds of quiet (at most 3 seconds), stores the request once and starts PI once. It does not cut the transcript at the delegation offset. It passes spoken commentary back to GPT-Live. Backchannels do not cancel PI; a new delegation can supersede it, and ending or timing out the session stops it. Voice is audio-only: camera and screen input are not supported by this backend.
-- **Watch Voice.** The paired iPhone relays audio. Reply audio can travel while its caption awaits acknowledgement. The Watch requests echo cancellation for speaker calls and reports playback completion to the iPhone. The stored turn proves neither speaker delivery nor audio continuity.
+- **Watch Voice.** The paired iPhone relays audio. With pipelined delivery, audio can move while captions await acknowledgement. Exhausted caption retries do not end the call. The Watch requests echo cancellation for speaker calls and reports playback completion. A stored turn does not prove speaker delivery.
 - **Parity is a contract, not identical presentation.** Both channels see the same PI tool effects and failure meaning. The [replay tests](../apps/backend/src/voice/chat-voice-parity.test.ts) exercise the real routes, gateway and door against stubs. Their [report helper](../apps/backend/src/voice/parity-report.testkit.ts) documents intended presentation differences. Native audio and device rendering are separate acceptance.
 
 ```mermaid
@@ -146,7 +146,7 @@ flowchart TB
 
 **Limits.** Large retained conversations can hit the shared model quota across tool rounds. Foundry controls context compaction. Session policy can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` and `pi.mcp_tool`. Live provider replay IDs remain unverified. `get_settings` with the `location` area returns the coarse iPhone observation and timestamp when available. An unsynced permission is unknown until iOS reports it.
 
-Apple Maps requests use the signed-in iPhone workspace connection. MapKit searches and routes on the phone. The native card and local spoken estimate use a temporary result. For nearby searches the iPhone checks business matches and distance before returning the match count and checked radius to PI. Place details and coordinates stay on the phone. Conversation history holds the lookup request and handle so the owner can request a fresh estimate. [Apple Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/).
+Apple Maps runs on the signed-in iPhone. Nearby requests need a capable phone and a starting location. The phone filters MapKit points of interest to 10 km and checks the name for named searches. The backend refuses positive nearby results without a checked radius. Places and routes stay on-device; Chat retains the lookup request so it can be rerun. See the [native contract](ios/integration-contract.md#5-app-control-workspace-commands).
 
 ## Memory and Vault Knowledge
 
@@ -159,9 +159,9 @@ Apple Maps requests use the signed-in iPhone workspace connection. MapKit search
 
 ### Vault note inventory and title repair
 
-[#2031](https://github.com/DanAakesen/jarvis/pull/2031) adds [`dbo.vault_notes`](../db/migrations/0103_vault_note_metadata.sql), which indexes path, blob SHA, display title and content-update time separately from search chunks. Title-only notes still have inventory rows. Normal sync marks the inventory ready before a bounded title backfill (up to 32 legacy reads by most recent edit, with a separate 20-second deadline). Repair only updates the matching SHA and does not change the content date. A write or Vault push during sync schedules one fresh-tree pass. A Git commit can succeed even if indexing fails; sync is the repair path.
+[`dbo.vault_notes`](../db/migrations/0103_vault_note_metadata.sql) indexes path, blob SHA, title and content-update time apart from search chunks, including title-only notes. Sync marks inventory ready before title backfill (up to 32 newest-first legacy reads, 20-second deadline). Repair updates only the matching SHA and leaves the content date. A write or Vault push during sync schedules a fresh-tree pass. A Git commit can succeed before its index update; sync repairs it.
 
-The owner Notes and Graph routes share the metadata title. `/notes/summaries` checks up to 50 exact paths for pins regardless of the current page or graph. Missing or stale metadata uses a readable filename; it does not require a Vault scan or embeddings. iPhone can show an account-bound warm snapshot, then revalidates with current newest-first directory pages without HTTP cache reuse. Deployed freshness and physical-device acceptance remain separate checks.
+Notes and Graph share titles. `/notes/summaries` checks up to 50 exact pin paths, outside page or graph limits. Missing or stale metadata uses a readable filename, not a scan or embedding lookup. iPhone can show an account-bound snapshot while revalidating newest-first pages without HTTP cache reuse.
 
 ### Daily integration boundary (P12-01)
 
@@ -243,7 +243,7 @@ Factory runtime sandboxes are not this repository's development environment. Cre
 
 ### Cost
 
-The PI foreground ledger separates input, cached input and output; background reserves and reconciles its own allowance. These controls do not authorise spending. Development is local; no live or paid measurement without approval of the exact command. See [cost and safety](agent-context.md#cost-and-safety).
+Foreground PI tracks input, cached input and output separately; background reserves and reconciles its own allowance. See [cost and safety](agent-context.md#cost-and-safety) for approval rules.
 
 ## Invariants to keep
 
