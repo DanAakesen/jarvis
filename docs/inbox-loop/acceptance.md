@@ -37,5 +37,5 @@ Use one test idea and its normal 07:00 or 18:00 Copenhagen review. An item recei
 - A native "Add to inbox" action in the Jarvis Watch app is not built; the Shortcut runs on the watch.
 - ChatGPT and claude.ai custom connectors need the Entra OAuth registration above (owner action).
 - The inbox spend is also visible only in `/inbox/status`, not yet on the Proactive page.
-- After an index rebuild, nudge clocks restart at the rebuild time.
+- On the first vault import or an index rebuild, existing notes begin a 48-hour cooldown. The seven-day nudge count includes a note only after Jarvis issues a follow-up card.
 - A test item exists in the private vault. Capture in Chat or Voice, an ordinary follow-up and device delivery each need their own check.
