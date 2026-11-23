@@ -39,7 +39,7 @@ Widgets and Live Activities are glanceable summaries and routes back into the re
 
 ## Web
 
-`apps/web` is the browser surface: a centred Jarvis stage for Chat and Voice, plus **Notes**, **Software Factory** (kanban, tasks, releases), **Usage** and **Status**. **Health** and **Proactive** are feature-gated areas. **Settings** has its own route; an exact Proactive item link is available when push or Proactive is enabled. The old `/daily` path redirects to Health, and `/knowledge` redirects to Notes.
+`apps/web` is the browser surface: a centred Jarvis stage for Chat and Voice, plus **Notes**, **Software Factory** (kanban, tasks, releases), **Usage**, **Status** and **Settings**. **Health** and **Proactive** are feature-gated. With push on but Proactive off, the Proactive item route opens only test items. `/daily` redirects to Health, `/knowledge` to Notes and `/tasks` to the task list in Notes.
 
 ## CarPlay
 

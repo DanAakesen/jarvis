@@ -15,7 +15,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | Delivery | State |
 | --- | --- |
 | TestFlight **126** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45194610942). Watch, iPhone Voice, location and nutrition fixes are **not accepted on device**. Build 125 passed typing, reply recovery, Settings targets and lift readback. |
-| Backend | The [covered Inbox slot rollout](https://github.com/DanAakesen/jarvis/actions/runs/45196741421) applied the backend and passed the PI revision check. See Deploy for full readiness; live conversation acceptance is separate. |
+| Backend | The [covered Inbox slot rollout](https://github.com/DanAakesen/jarvis/actions/runs/45196741421) applied the backend and passed PI revision and deterministic readiness checks. Live conversation acceptance was not run. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
