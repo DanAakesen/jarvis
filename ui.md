@@ -6,7 +6,7 @@ Update this page in the same change that adds, removes, renames or retires a scr
 
 ## iPhone
 
-The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/JarvisCore`). Shared controls, orb and page header come from `JarvisControls.swift` and `JarvisPageHeader.swift`; screens never draw their own.
+Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the header gear; Voice and Workspaces are not sidebar rows. Shared controls and the orb come from `JarvisControls.swift`; page chrome comes from `JarvisPageHeader.swift`.
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ Around the destinations: the opening screen (`JarvisOpeningView`, startup only),
 
 ## Apple Watch
 
-The Watch dashboard opens Chat or an adaptive tile Menu in one tap, above the agenda, workouts, body fat, tasks and recent notes. **Chat** has an editable draft up to three lines with dictation; Send replaces the audio controls when the draft contains text. **Voice** has a focused call with Mute and End. Other destinations are **Tasks** (list, detail, edit, new), **Health**, **Workouts**, **Lifts** and lift capture, **Factory** and new task, **Agenda**, **Body Fat**, **Notes**, **Home** brief and **Nutrition**.
+The Watch dashboard opens Chat or an adaptive tile Menu in one tap, above the agenda, workouts, body fat, tasks and recent notes. **Chat** previews up to three lines of the draft; tapping the field opens native editing and dictation appends to the draft. Send replaces the audio controls when the draft contains text. **Voice** has a focused call with Mute and End. Other destinations are **Tasks** (list, detail, edit, new), **Health**, **Workouts**, **Lifts** and lift capture, **Factory** and new task, **Agenda**, **Body Fat**, **Notes**, **Home** brief and **Nutrition**.
 
 ## Widgets and Live Activities
 

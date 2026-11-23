@@ -21,7 +21,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
-1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback in Danish and English.
+1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), test the daily core in Chat and Voice: check project status and the issue-to-worker flow for approved work; save, find and rename a note and check its iPhone folder without refreshing; create a task, check its reminder, then complete it; check workout and lift readback in Danish and English. When logging food, save one meal and verify that it counts once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed.
 2. Listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap and read the complications on the red face with wrist raised and lowered. On iPhone, verify that Voice leaves Speaking between replies.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes; a distant street does not. Check Directions for a match. In Voice, ask when to leave for an event with an address and a ten-minute buffer; compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
@@ -33,7 +33,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | | Decision | Next check |
 | --- | --- | --- |
 | **A · decided** | PI owns scheduled reviews; the legacy slot runner is gone. The separate legacy event consumer is not the PI queue path. | Verify capture and a qualifying follow-up in production. |
-| **B · decided** | Manual entry adds one meal with kcal and optional protein on iPhone. | Check that one save counts once and Today agrees with Chat for the same activity and meals. |
+| **B · decided** | Manual entry adds one meal with kcal and optional protein on iPhone. | Run the Nutrition check above. |
 | **C** | Keep the same stored conversation for Chat and Voice. Foundry controls context management on this endpoint. | Revisit configurable compaction when the [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview) supports it. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
 | **E** | Foundry administration is approved. | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) covers instructions, versions, activation, models and deployments. Live acceptance is open. |
@@ -45,7 +45,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 | Issue | What remains |
 | --- | --- |
-| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the checks above. Verify Nutrition Today’s resting target, active kcal and deficit against Chat and Voice. Full parity is **not accepted on device**. |
+| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the daily-core checks above. Full parity is **not accepted on device**. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |

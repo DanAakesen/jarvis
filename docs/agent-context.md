@@ -10,7 +10,7 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent logs
 
-Start with a UTC window and [the log source map](reference/logs.md). Logs are not injected into PI context. Stored Chat, Foundry history and the Factory timeline are separate. Chat or delegated Voice can request bounded backend events with `read_backend_logs` when enabled and authorised. For iPhone or Watch app logs, use the device's operator diagnostics; the tool cannot read them. Keep raw logs and prompts out of PRs.
+Start with a UTC window and [the log source map](reference/logs.md). PI gets no automatic log feed: Chat or delegated Voice can request bounded backend events with `read_backend_logs` when enabled and authorised. The Factory's automatic check repair can send a worker a failed-CI excerpt as untrusted diagnostic input; it does not enter PI's conversation. Stored Chat, Foundry history, the Factory timeline and device diagnostics are separate. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-For release answers, start with [the plan](../PLAN.md) and compare recent `main` TestFlight runs. Use `gh run list` and `gh run view`, or `github_read` (`workflow_runs` for `ios-testflight.yml`, then its jobs by `runId`). Uploads use the dispatch SHA and run number; **Check TestFlight build** checks the named existing build. A newer run may check an older build. Verify the build number and `appleInternalAvailabilityConfirmedAtCheck: true` before replacing the confirmed build.
+Compare recent `main` runs for `ios-testflight.yml` with `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; **Check TestFlight build** may check an older build in a newer run. In `github_read`, use `workflow_runs` and inspect the jobs by `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` means the confirmation step passed. Match it to the actual build number before updating [the plan](../PLAN.md).
 
 Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
 
