@@ -268,6 +268,15 @@ const aliasesFor = (query: string): IntentAlias[] => {
     && (alias.also === undefined || holds(alias.also)));
 };
 
+/** A request for repository contents that the local reader can answer while GitHub starts. */
+export function asksToReadRepositoryFile(query: string): boolean {
+  if (/(?:^|[^a-z0-9])gh_/iu.test(query)) return false;
+  const words = tokensOf(query);
+  return /(?:^|[^a-z0-9])repo_read(?:$|[^a-z0-9])/iu.test(query) ||
+    (words.some(word => ['read', 'show', 'inspect', 'review', 'læs', 'vis', 'gennemgå'].includes(word)) &&
+     words.some(word => ['file', 'files', 'code', 'contents', 'fil', 'filen', 'filer', 'kode', 'koden', 'kildekode', 'kildekoden'].includes(word)));
+}
+
 /** The remote providers a query names, by alias word or by a tool name such as `gh_issue_read`. */
 export function providersNamedBy(query: string): ReadonlySet<'gh_' | 'az_'> {
   const named = new Set<'gh_' | 'az_'>();

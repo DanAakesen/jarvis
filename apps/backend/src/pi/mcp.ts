@@ -11,7 +11,7 @@ import {
 } from '../core/tool-registry.js';
 import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { compactLargeSchema } from './compact-schema.js';
-import { providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
+import { asksToReadRepositoryFile, providersNamedBy, searchJarvisTools, shortenToolDescription } from './tool-search.js';
 import {
   noteRequest, piTurnPattern, type PiActionRun, type PiReplayCheck, type PiToolAnswer, type PiTurnGrant, type PiTurnRegistry,
 } from './turns.js';
@@ -372,7 +372,7 @@ export function createPiMcpRoutes(options: {
     };
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Look up Jarvis tools using English or Danish keywords (azure resource, github issue, calendar, kalender, note, vejr), then use call_tool. Use this for weather, calendar_list_events and owner_reminders too. Exact names rank first; compact otherMatches can also be called by name. GitHub and Azure tools load only when named (github, repo, issue, azure, resource) and may need a second search. Use Dan’s PC tools (pc_, browser_do) when he asks you to use his PC. Pass the turn reference from the current message.',
+      description: 'Look up Jarvis tools using English or Danish keywords (azure resource, github issue, calendar, kalender, note, vejr), then use call_tool. Use this for weather, calendar_list_events and owner_reminders too. Exact names rank first; compact otherMatches can also be called by name. GitHub and Azure tools load only when named (github, repo, issue, azure, resource) and may need a second search. Use Danâ€™s PC tools (pc_, browser_do) when he asks you to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, ledgered<z.infer<typeof findSchema>>((input) => ({ tool: 'find_tools', question: { query: input.query } }), async (input, ctx, { grant }) => {
@@ -392,8 +392,17 @@ export function createPiMcpRoutes(options: {
       const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
       const named = providersNamedBy(input.query);
       const selected = bridges.filter((bridge) => (named as ReadonlySet<string>).has(bridge.prefix));
+      const visible = (name: string) => {
+        const local = grant.brain
+          ? isWakeTool(name)
+          : isCurrentAssistantTool(name) || isSituationActivationTool(name);
+        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
+      };
+      const localMatches = named.has(githubToolPrefix) && asksToReadRepositoryFile(input.query)
+        ? searchJarvisTools(app.jarvisTools, input.query, visible) : undefined;
+      const localReaderReady = localMatches?.slice(0, maxFullResults).some(tool => tool.name === 'repo_read');
       const catalogues = await Promise.all(selected.map(async (bridge) => {
-        const tools = await bridge.tools(turnSignal);
+        const tools = await bridge.tools(turnSignal, bridge.prefix === githubToolPrefix && localReaderReady ? 0 : undefined);
         return { bridge, tools, status: bridge.status() };
       }));
       const azure = catalogues.find(({ bridge }) => bridge.prefix === azureToolPrefix);
@@ -407,13 +416,7 @@ export function createPiMcpRoutes(options: {
         list: () => [...app.jarvisTools.list(), ...remoteTools],
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
       };
-      const visible = (name: string) => {
-        const local = grant.brain
-          ? isWakeTool(name)
-          : isCurrentAssistantTool(name) || isSituationActivationTool(name);
-        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
-      };
-      const matches = searchJarvisTools(catalogue, input.query, visible);
+      const matches = remoteTools.length === 0 && localMatches ? localMatches : searchJarvisTools(catalogue, input.query, visible);
       // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
       // reports a server it simply has not heard from yet as "not attached".
       const notes = (noMatch: boolean) => {
