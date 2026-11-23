@@ -1,4 +1,5 @@
 import type { ToolEffect } from './tool-registry.js';
+import type { AppleMapsReceipt } from './workspace-commands.js';
 
 export type ToolCallOutcome = 'ok' | 'refused' | 'error';
 
@@ -28,12 +29,33 @@ export interface ToolCallStore {
   listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 
+function confirmAppleMaps(result: unknown): string {
+  const receipt = result as (AppleMapsReceipt & { presentation?: string }) | null;
+  if (receipt?.matches === 0) {
+    if (receipt.reason === 'needs_origin') return 'Apple Maps needs a starting address.';
+    if (receipt.reason === 'expired_lookup' || receipt.reason === 'invalid_choice') return 'That map selection is no longer available.';
+    if (receipt.reason === 'no_matches') {
+      const radius = receipt.nearbyRadiusMeters;
+      return radius ? `Apple Maps found no matches within ${radius / 1000} km.` : 'Apple Maps found no matches.';
+    }
+  }
+  if (!receipt || !Number.isInteger(receipt.matches) || !receipt.matches || receipt.matches < 1 || receipt.matches > 3) {
+    return 'Apple Maps could not return a place for this lookup.';
+  }
+  const found = receipt.nearest === true ? 'Apple Maps identified the closest match it returned.'
+    : receipt.matches === 1 ? 'Apple Maps found one match.' : `Apple Maps found ${receipt.matches} matches.`;
+  if (receipt.presentation === 'Map attached to the reply.') return `${found} See the attached map.`;
+  if (receipt.presentation === 'Map shown on the phone.') return `${found} See the map on your iPhone.`;
+  return `${found} The map could not be shown.`;
+}
+
 /**
  * The confirmation Jarvis relays about an action (L16). It is derived only from the
  * recorded outcome and result, never from the model's own wording.
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'apple_maps') return confirmAppleMaps(result);
     if (tool === 'get_work_status') return 'I got the work status.';
     if (tool === 'gym_lifts') {
       const saved = result as { entry?: unknown; replayed?: unknown } | null;

@@ -35,6 +35,9 @@ struct JarvisAppleMapsCard: View {
                             Text(place.name).font(.headline)
                             Text(place.address).font(.subheadline).foregroundStyle(.secondary)
                         }
+                        if result.nearest == true, let distance = place.straightLineDistanceText {
+                            Text(distance).font(.subheadline)
+                        }
                         if let seconds = place.travelSeconds, let minutes = place.travelMinutes {
                             Label("About \(minutes) min \(result.mode == "walking" ? "walking" : "driving")",
                                   systemImage: result.mode == "walking" ? "figure.walk" : "car")

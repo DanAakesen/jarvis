@@ -28,7 +28,7 @@ async function present(data: AppleMapsViewData, status: 'complete' | 'partial', 
 
 export const appleMapsTool: JarvisTool = {
   name: 'apple_maps',
-  description: 'Find a place, nearby business, route or travel time in Apple Maps on the connected iPhone. For a nearby named shop use nearby=name and the brand alone as query. For a nearby type of business use nearby=category and the category as query. A nearby result needs nearbyRadiusMeters in the phone receipt. For no_matches, report the empty result and include the radius only if returned. When reason=needs_origin, ask for a starting address. Use searchOnly for an unrestricted place lookup, or omit nearby for directions to a destination. Use origin for a manual starting address, arriveBy and optional bufferMinutes for departure estimates, and driving or walking mode. For a choice, send the earlier lookupId and one-based ordinal together. The iPhone displays the map and speaks Voice results locally. Report only the receipt; ask for an origin or a fresh search when needed.',
+  description: 'Find a place, nearby business, route or travel time in Apple Maps on the connected iPhone. For a nearby named shop use nearby=name and the brand alone as query. For a nearby type of business use nearby=category and the category as query. A nearby result needs nearbyRadiusMeters in the phone receipt. For no_matches, report the empty result and include the radius only if returned. When reason=needs_origin, ask for a starting address. When asked for the nearest named business, including after a nearby search finds none, use nearest=true with the brand alone. The iPhone compares matching businesses by straight-line distance from the origin and shows the closest returned match on the card. Use searchOnly for an unrestricted place lookup, or omit nearby for directions to a destination. Use origin for a manual starting address, arriveBy and optional bufferMinutes for departure estimates, and driving or walking mode. For a choice, send the earlier lookupId and one-based ordinal together. The iPhone displays the map and speaks Voice results locally. Report only the receipt; ask for an origin or a fresh search when needed.',
   inputSchema: appleMapsQuerySchema,
   sensitive: true,
   execution: { defaultEffect: 'read' },
@@ -39,6 +39,9 @@ export const appleMapsTool: JarvisTool = {
     const { lookupId, ...receipt } = await request.server.workspaceCommands.appleMaps(request.server.ownerObjectId, input, voice, signal);
     if ('nearby' in input && input.nearby && receipt.matches > 0 && !receipt.nearbyRadiusMeters) {
       throw new ToolRefusal('The iPhone did not verify that these places are nearby.');
+    }
+    if ('nearest' in input && input.nearest && receipt.matches > 0 && !receipt.nearest) {
+      throw new ToolRefusal('The iPhone could not verify which matching business was closest.');
     }
     let presentation = 'No places to show.';
     if (receipt.matches > 0) {

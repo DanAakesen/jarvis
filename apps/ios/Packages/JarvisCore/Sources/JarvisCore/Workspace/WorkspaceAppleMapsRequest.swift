@@ -13,12 +13,14 @@ public struct WorkspaceMapReceipt: Encodable, Equatable, Sendable {
     public let spoken: Bool
     public let reason: Reason?
     public let nearbyRadiusMeters: Int?
+    public let nearest: Bool?
 
-    public init(matches: Int, spoken: Bool, reason: Reason? = nil, nearbyRadiusMeters: Int? = nil) {
+    public init(matches: Int, spoken: Bool, reason: Reason? = nil, nearbyRadiusMeters: Int? = nil, nearest: Bool? = nil) {
         self.matches = matches
         self.spoken = spoken
         self.reason = reason
         self.nearbyRadiusMeters = nearbyRadiusMeters
+        self.nearest = nearest
     }
 }
 
@@ -44,6 +46,7 @@ extension AppleMapsRequest {
               let data = try? JSONEncoder().encode(command.fields),
               let request = try? JSONDecoder().decode(Self.self, from: data),
               request.nearby == nil || request.searchOnly != true,
+              request.nearest != true || (request.nearby == nil && request.searchOnly != true),
               request.mode == nil || request.mode == "driving" || request.mode == "walking",
               !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               request.query.count <= 300, (request.origin?.count ?? 0) <= 300,
@@ -54,22 +57,31 @@ extension AppleMapsRequest {
     }
 
     public func canSearchDestination(hasOrigin: Bool) -> Bool {
-        hasOrigin || (searchOnly == true && nearby == nil)
+        hasOrigin || (searchOnly == true && nearby == nil && nearest != true)
     }
 
     public static let nearbyRadiusMeters = 10_000
 
     /// MapKit can return an approximate name match. A branded lookup needs the requested name on the POI itself.
-    public func acceptsNearbyPlace(name: String?, distanceMeters: Double) -> Bool {
-        guard let nearby, (0...Double(Self.nearbyRadiusMeters)).contains(distanceMeters),
+    public func acceptsBusinessPlace(name: String?, distanceMeters: Double) -> Bool {
+        guard nearby != nil || nearest == true, distanceMeters.isFinite, distanceMeters >= 0,
+              nearby == nil || distanceMeters <= Double(Self.nearbyRadiusMeters),
               let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        guard nearby == .name else { return true }
+        if nearby == .category { return true }
         func normalizedName(_ text: String) -> String {
             text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
                 .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
         }
         let requested = normalizedName(query)
         return !requested.isEmpty && " \(normalizedName(name)) ".contains(" \(requested) ")
+    }
+
+    public func rankedBusinessIndices(_ candidates: [(name: String?, distanceMeters: Double)]) -> [Int] {
+        let qualified = candidates.indices.filter {
+            acceptsBusinessPlace(name: candidates[$0].name, distanceMeters: candidates[$0].distanceMeters)
+        }
+        let ranked = qualified.sorted { candidates[$0].distanceMeters < candidates[$1].distanceMeters }
+        return Array(ranked.prefix(nearest == true ? 1 : 3))
     }
 
     public var arrivalDate: Date? {

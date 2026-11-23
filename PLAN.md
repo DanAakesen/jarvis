@@ -21,7 +21,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
-The iPhone Home composer uses Chat’s folding layout locally. Verify it on device in the next build.
+Build 128 found a local shop and correctly reported an empty 10 km search. Two follow-ups need a new build: choosing the closest named match beyond 10 km and reporting a completed lookup when reply writing fails. Also check the folding Home composer and the iPhone Voice speaker control on device.
 
 1. Check the project issue-to-worker flow, renaming an existing note and task reminder delivery in the shared conversation. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
 2. Build 126 carries speech both ways on Watch, but replies break up. On the next build, listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap. On iPhone, verify that Voice leaves Speaking between replies.

@@ -482,8 +482,14 @@ function withRecordedOutcome(error: PiGatewayError, turn: ResponseTurn | undefin
   const confirmations = receipts.slice(0, 5).map(receipt => receipt.confirmation.trim()).filter(Boolean);
   if (receipts.length > 5) confirmations.push(`${receipts.length - 5} more tool results were recorded.`);
   if (confirmations.length > 0) {
-    if (uncertain) confirmations.push(failureCopy[kind].chat);
-    confirmations.push(failureCopy.reply_not_written.chat);
+    const last = turn.grant.results.at(-1);
+    if (actions.length === 0 && last?.tool === 'apple_maps' && last.outcome === 'ok') {
+      // The Maps receipt already answers the lookup even if the model never wrote its closing text.
+      if (uncertain) confirmations.push('I could not verify any other actions. Check before repeating them.');
+    } else {
+      if (uncertain) confirmations.push(failureCopy[kind].chat);
+      confirmations.push(failureCopy.reply_not_written.chat);
+    }
   }
   return new PiGatewayError(error.code, kind, {
     cause: error, detail: error.detail, ...(confirmations.length ? { receipt: confirmations.join(' ') } : {}),

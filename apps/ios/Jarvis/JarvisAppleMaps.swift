@@ -46,14 +46,15 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
 
         var places: [AppleMapsPlace] = []
         do {
-            var matches = try await search(request.query, near: start?.location.coordinate, nearby: request.nearby != nil)
-            if request.nearby != nil, let center = start?.location {
-                matches = matches.compactMap { item -> (item: MKMapItem, distance: Double)? in
-                    let distance = item.location.distance(from: center)
-                    return request.acceptsNearbyPlace(name: item.name, distanceMeters: distance) ? (item, distance) : nil
-                }.sorted { $0.distance < $1.distance }.map { $0.item }
+            let matches = try await search(request.query, near: start?.location.coordinate, business: request)
+            let indices: [Int]
+            if (request.nearby != nil || request.nearest == true), let center = start?.location {
+                indices = request.rankedBusinessIndices(matches.map { ($0.name, $0.location.distance(from: center)) })
+            } else {
+                indices = Array(matches.indices.prefix(3))
             }
-            for item in matches.prefix(3) {
+            for index in indices {
+                let item = matches[index]
                 try Task.checkCancellation()
                 let route: MKRoute?
                 if let start {
@@ -71,6 +72,7 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
                 places.append(AppleMapsPlace(name: item.name ?? request.query, address: item.address?.fullAddress ?? "",
                     latitude: coordinate.latitude, longitude: coordinate.longitude,
                     travelSeconds: route?.expectedTravelTime, distanceMeters: route?.distance,
+                    straightLineMeters: start.map { item.location.distance(from: $0.location) },
                     path: route.map { sampledPath($0.polyline, fromDevice: request.origin == nil) }))
             }
             if places.isEmpty {
@@ -87,16 +89,20 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
         }
         let result = AppleMapsResult(places: places, mode: request.mode ?? "driving", observedAt: Date().ISO8601Format(),
             origin: origin, arriveBy: request.arriveBy, bufferMinutes: request.bufferMinutes ?? 0, reason: reason,
-            nearbyRadiusMeters: request.nearby != nil && status != .unavailable ? AppleMapsRequest.nearbyRadiusMeters : nil)
+            nearbyRadiusMeters: request.nearby != nil && status != .unavailable ? AppleMapsRequest.nearbyRadiusMeters : nil,
+            nearest: request.nearest == true && !places.isEmpty ? true : nil)
         return (result, status)
     }
 
-    private func search(_ query: String, near coordinate: CLLocationCoordinate2D? = nil, nearby: Bool = false) async throws -> [MKMapItem] {
+    private func search(_ query: String, near coordinate: CLLocationCoordinate2D? = nil, business: AppleMapsRequest? = nil) async throws -> [MKMapItem] {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
-        request.resultTypes = nearby ? [.pointOfInterest] : [.address, .pointOfInterest]
+        let nearby = business?.nearby != nil
+        let nearest = business?.nearest == true
+        request.resultTypes = nearby || nearest ? [.pointOfInterest] : [.address, .pointOfInterest]
         if let coordinate {
-            let span = Double(AppleMapsRequest.nearbyRadiusMeters * 2)
+            // For nearest, bias the regional search around the origin while allowing results beyond it.
+            let span = nearest ? 500_000.0 : Double(AppleMapsRequest.nearbyRadiusMeters * 2)
             request.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: span, longitudinalMeters: span)
             if nearby { request.regionPriority = .required }
         }

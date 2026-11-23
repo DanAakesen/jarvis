@@ -10,9 +10,10 @@ public struct AppleMapsRequest: Codable, Equatable, Sendable {
     public let bufferMinutes: Int?
     public let searchOnly: Bool?
     public let nearby: Nearby?
+    public let nearest: Bool?
 
     public init(query: String, origin: String? = nil, mode: String? = nil, arriveBy: String? = nil,
-                bufferMinutes: Int? = nil, searchOnly: Bool? = nil, nearby: Nearby? = nil) {
+                bufferMinutes: Int? = nil, searchOnly: Bool? = nil, nearby: Nearby? = nil, nearest: Bool? = nil) {
         self.query = query
         self.origin = origin
         self.mode = mode
@@ -20,6 +21,7 @@ public struct AppleMapsRequest: Codable, Equatable, Sendable {
         self.bufferMinutes = bufferMinutes
         self.searchOnly = searchOnly
         self.nearby = nearby
+        self.nearest = nearest
     }
 }
 
@@ -69,6 +71,7 @@ public struct AppleMapsPlace: Codable, Equatable, Sendable {
     public let longitude: Double
     public let travelSeconds: Double?
     public let distanceMeters: Double?
+    public let straightLineMeters: Double?
     public let path: [AppleMapsPoint]?
 
     public init(
@@ -78,6 +81,7 @@ public struct AppleMapsPlace: Codable, Equatable, Sendable {
         longitude: Double,
         travelSeconds: Double? = nil,
         distanceMeters: Double? = nil,
+        straightLineMeters: Double? = nil,
         path: [AppleMapsPoint]? = nil
     ) {
         self.name = name
@@ -86,6 +90,7 @@ public struct AppleMapsPlace: Codable, Equatable, Sendable {
         self.longitude = longitude
         self.travelSeconds = travelSeconds
         self.distanceMeters = distanceMeters
+        self.straightLineMeters = straightLineMeters
         self.path = path
     }
 }
@@ -99,6 +104,7 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
     public let bufferMinutes: Int?
     public let reason: String?
     public let nearbyRadiusMeters: Int?
+    public let nearest: Bool?
 
     public init(
         places: [AppleMapsPlace],
@@ -108,7 +114,8 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
         arriveBy: String? = nil,
         bufferMinutes: Int? = nil,
         reason: String? = nil,
-        nearbyRadiusMeters: Int? = nil
+        nearbyRadiusMeters: Int? = nil,
+        nearest: Bool? = nil
     ) {
         self.places = places
         self.mode = mode
@@ -118,10 +125,18 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
         self.bufferMinutes = bufferMinutes
         self.reason = reason
         self.nearbyRadiusMeters = nearbyRadiusMeters
+        self.nearest = nearest
     }
 }
 
 extension AppleMapsPlace {
+    public var straightLineDistanceText: String? {
+        guard let meters = straightLineMeters, meters.isFinite, meters >= 0 else { return nil }
+        if meters < 100 { return "Under 0.1 km in a straight line" }
+        let km = (meters / 1000).formatted(.number.precision(.fractionLength(0...1)))
+        return "\(km) km in a straight line"
+    }
+
     public var travelMinutes: Int? {
         guard let travelSeconds, travelSeconds.isFinite, travelSeconds >= 0,
               let minutes = Int(exactly: ceil(travelSeconds / 60)) else { return nil }
@@ -136,7 +151,7 @@ extension AppleMapsResult {
         return AppleMapsResult(places: [place], mode: mode, observedAt: observedAt, origin: origin,
                                arriveBy: arriveBy, bufferMinutes: bufferMinutes,
                                reason: place.travelSeconds == nil && reason != nil ? "Apple Maps did not return a route for this place." : nil,
-                               nearbyRadiusMeters: nearbyRadiusMeters)
+                               nearbyRadiusMeters: nearbyRadiusMeters, nearest: nearest)
     }
 
     public static func date(_ text: String) -> Date? {

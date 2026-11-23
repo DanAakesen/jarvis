@@ -516,7 +516,8 @@ export const workspaceDeviceKinds = Object.freeze(['desktop', 'phone', 'tablet']
 export const workspaceCommandTargets = Object.freeze(['active', 'desktop', 'phone', 'all']);
 
 function isWorkspaceDevice(value) {
-  return isObject(value) && Object.keys(value).every((key) => ['kind', 'label', 'appleMaps', 'appleMapsNearby'].includes(key)) &&
+  return isObject(value) && Object.keys(value).every((key) => ['kind', 'label', 'appleMaps', 'appleMapsNearby', 'appleMapsNearest'].includes(key)) &&
+    (value.appleMapsNearest === undefined || (value.appleMaps === true && value.appleMapsNearest === true)) &&
     (value.appleMapsNearby === undefined || (value.appleMaps === true && value.appleMapsNearby === true)) &&
     (value.appleMaps === undefined || (value.kind === 'phone' && value.appleMaps === true)) &&
     workspaceDeviceKinds.includes(value.kind) &&

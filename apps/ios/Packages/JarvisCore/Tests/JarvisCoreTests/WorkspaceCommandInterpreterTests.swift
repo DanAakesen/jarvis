@@ -101,18 +101,33 @@ final class WorkspaceCommandInterpreterTests: XCTestCase {
         let fields: [String: JSONValue] = ["target": .string("phone"), "query": .string("North Loom"), "nearby": .string("name")]
         let shop = try XCTUnwrap(AppleMapsRequest(command: command("apple-maps", fields)))
         XCTAssertFalse(shop.canSearchDestination(hasOrigin: false))
-        XCTAssertTrue(shop.acceptsNearbyPlace(name: "NORTH-LOOM Boutique", distanceMeters: 10_000))
-        XCTAssertFalse(shop.acceptsNearbyPlace(name: "Store Road", distanceMeters: 220))
-        XCTAssertFalse(shop.acceptsNearbyPlace(name: "North Looming", distanceMeters: 220))
-        XCTAssertFalse(shop.acceptsNearbyPlace(name: "North Loom", distanceMeters: 850_000))
-        XCTAssertFalse(shop.acceptsNearbyPlace(name: nil, distanceMeters: 100))
+        XCTAssertTrue(shop.acceptsBusinessPlace(name: "NORTH-LOOM Boutique", distanceMeters: 10_000))
+        XCTAssertFalse(shop.acceptsBusinessPlace(name: "Store Road", distanceMeters: 220))
+        XCTAssertFalse(shop.acceptsBusinessPlace(name: "North Looming", distanceMeters: 220))
+        XCTAssertFalse(shop.acceptsBusinessPlace(name: "North Loom", distanceMeters: 850_000))
+        XCTAssertFalse(shop.acceptsBusinessPlace(name: nil, distanceMeters: 100))
         var invalid = fields
         invalid["searchOnly"] = .bool(true)
         XCTAssertNil(AppleMapsRequest(command: command("apple-maps", invalid)))
 
         let category = AppleMapsRequest(query: "pharmacy", nearby: .category)
-        XCTAssertTrue(category.acceptsNearbyPlace(name: "Central Apotek", distanceMeters: 100))
-        XCTAssertFalse(category.acceptsNearbyPlace(name: "Central Apotek", distanceMeters: 10_001))
+        XCTAssertTrue(category.acceptsBusinessPlace(name: "Central Apotek", distanceMeters: 100))
+        XCTAssertFalse(category.acceptsBusinessPlace(name: "Central Apotek", distanceMeters: 10_001))
+    }
+
+    func testNearestBusinessRanksAllQualifiedMatchesBeyondNearbyRadius() throws {
+        let fields: [String: JSONValue] = ["target": .string("phone"), "query": .string("North Loom"), "nearest": .bool(true)]
+        let nearest = try XCTUnwrap(AppleMapsRequest(command: command("apple-maps", fields)))
+        XCTAssertFalse(nearest.canSearchDestination(hasOrigin: false))
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields.merging(["nearby": .string("name")]) { _, value in value })))
+        XCTAssertNil(AppleMapsRequest(command: command("apple-maps", fields.merging(["searchOnly": .bool(true)]) { _, value in value })))
+
+        let candidates: [(name: String?, distanceMeters: Double)] = [
+            ("Store Road", 300), ("North Loom", 190_000), ("North Looming", 250),
+            ("North-Loom Boutique", 65_000), ("North Loom", .nan)
+        ]
+        XCTAssertEqual(nearest.rankedBusinessIndices(candidates), [3])
+        XCTAssertTrue(AppleMapsRequest(query: "North Loom", nearby: .name).rankedBusinessIndices(candidates).isEmpty)
     }
 
     func testAppleMapsSamplesOnlyRealIndicesAndCoarsensTheDeviceOrigin() {

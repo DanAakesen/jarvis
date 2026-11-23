@@ -362,7 +362,7 @@ interface GeneratedViewBase {
 }
 
 export interface AppleMapsSearch {
-  query: string; origin?: string; searchOnly?: boolean; mode?: 'driving' | 'walking'; arriveBy?: string; bufferMinutes?: number;
+  query: string; origin?: string; searchOnly?: boolean; nearest?: boolean; mode?: 'driving' | 'walking'; arriveBy?: string; bufferMinutes?: number;
   nearby?: 'name' | 'category';
 }
 export type AppleMapsQuery = AppleMapsSearch | { lookupId: string; ordinal: number };
@@ -480,6 +480,7 @@ export type WorkspaceCommandTarget = 'active' | 'desktop' | 'phone' | 'all';
 export interface WorkspaceDevice {
   appleMaps?: true;
   appleMapsNearby?: true;
+  appleMapsNearest?: true;
   kind: WorkspaceDeviceKind;
   label?: string;
 }
