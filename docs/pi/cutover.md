@@ -10,7 +10,7 @@ Use the [architecture map](../architecture.md) for current routing. Recheck this
 | --- | --- | --- | --- |
 | Chat | Use normal Chat for a day; there is no engine choice | Quality at least as good as before; first text about 1.1 to 1.3 s warm, about 3.3 s cold; honest errors and write receipts; delete confirmation and tool parity with Voice | Timing is the November trial baseline, not a new measurement. [Current Chat and Voice contract](../architecture.md#chat-and-voice) |
 | Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, say a backchannel ("mm-hm") while it works, then ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; speech alone never stops PI, and only a new delegated request (the newest one wins) or ending the session does; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
-| Brain | Enable Proactive suggestions in Settings → General. Open Proactive from the app menu for the last and next review. | Useful reach-outs without duplicates; honour the owner settings and background limits | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
+| Brain | Use **Proactive suggestions** on the main iPhone Settings page. Open Proactive for the last review and next check. | Useful reach-outs without duplicates; honour the owner settings and background limits | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, shows the estimated cost per watch and does not send duplicate messages | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
 | Reach | Verify the intended GitHub and Azure bridge configuration | Reads and actions work on real questions, or PI says plainly it does not have access | [Tool discovery](../architecture.md#tools-retries-and-failure-copy) and [configuration names](../agent-context.md#configuration-names-only) |
 | Cost | Use available status evidence; no live measurement without approval | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | Historical per-turn reference, not a new measurement. [Cost and safety](../agent-context.md#cost-and-safety) |
@@ -25,7 +25,7 @@ Use the [architecture map](../architecture.md) for current routing. Recheck this
 | --- | --- |
 | Chat | Every normal turn uses PI. Older clients may send `engine: "pi"`; `current` and unknown values are rejected. Isolated runtime-test sessions retain their own runtime |
 | Voice | `/voice` and compatibility `/voice?engine=pi` use PI. Any other engine query closes 1008 |
-| iPhone | `ChatEngine`, the saved choice, Settings selector, PI test pill and normal-client engine parameters are removed. `PiBrainStatus` stays in Proactive settings |
+| iPhone | `ChatEngine`, the saved choice, Settings selector, PI test pill and normal-client engine parameters are removed. `PiBrainStatus` still supplies background status |
 | Watch and web | Neither sends an engine. They use the same PI route; PI web voice does not support camera or screen sharing |
 | Infrastructure | Bicep receives a validated secure PI configuration captured from the old backend, rather than losing values during the infrastructure revision |
 | Readiness | `pi-agent` runs before smoke, waits for its exact backend revision and supplies the accepted release receipt |
@@ -85,7 +85,7 @@ Whole: `chat_runtime.py`, `model_client.py`, `tool_lookup.py`, `conversation_mem
 | `proactive/types.ts`, `proactive/policy.ts`, `proactive/events/rules.ts` | Split | Stores and `home/brief.ts` import the shared types; `database/proactive-store.ts` imports `findingAllowed`, `itemAllowed`; the closed source and category lists and keyword scope go only with decision A |
 | `index.ts`, `app.ts`, `config.ts` | Split | Remove the old agent construction, canary, managed runtime and reflex wiring; config: the Foundry chat agent name, Copilot agent name, version, fingerprint and compatibility settings (`JARVIS_CHAT_AGENT_NAME`, `FOUNDRY_COPILOT_*`). **Keep** the model-backed approval interpreter wiring (`approval-interpreter-foundry.ts`, `approvalInterpreter` in `index.ts`): it runs on the Foundry chat-completions model and serves the kept tools' approvals (review finding on #1909). `JARVIS_PROACTIVE_EVENTS_ENABLED` belongs to the event pipeline decision, not to this list |
 
-**Decision A, 22 November 2026.** Dan approved deleting the old slot engine and enabling Inbox capture and automatic nudges. Background PI owns 07:00, 18:00 and Check now. An eligible claimed slot reviews the Inbox once and hands nudges to alert delivery. If an earlier PI event covered the slot, Inbox still reviews it without repeating the PI turn. Exact owner reminders and planning from vault changes keep their own triggers. Legacy model-generated todos and generic slot findings have no producer.
+**[Decision A, 22 November 2026](../decisions.md#22-november-2026--one-continuous-conversation-and-direct-settings-access).** Dan approved deleting the old slot engine and enabling Inbox capture and automatic nudges. Background PI owns 07:00, 18:00 and Check now. An eligible claimed slot reviews the Inbox once and hands nudges to alert delivery. If an earlier PI event covered the slot, Inbox still reviews it without repeating the PI turn. Exact owner reminders and planning from vault changes keep their own triggers. Legacy model-generated todos and generic slot findings have no producer.
 
 ### 4.4 Tests of the deleted code
 
@@ -143,5 +143,4 @@ The owner writes his approvals as comments on #1887. This table is filled in onl
 | --- | --- | --- |
 | Phase 7: PI is the approved default for chat and voice | 18 November 2026 | [Written approval on #1887](https://github.com/DanAakesen/jarvis/issues/1887#issuecomment-6981225174) |
 | Preview risk accepted (gate check 5) | | |
-| Decision A (the 07:00 and 18:00 slots) | | |
 | Phase 8: delete exactly the list in section 4 | | |

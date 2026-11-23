@@ -14,9 +14,9 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). It includes the [native follow-up](https://github.com/DanAakesen/jarvis/pull/2043) and is **not accepted on device**. Build 124 passed project/issue lookup, Notes, task create/complete, weather in the same conversation and the Proactive switch; typing, phone location, target settings and Watch dictation/Voice failed. |
-| Backend | The [recovery Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45100763826) after the lowercase flag fix passed deterministic readiness and the release result check. Manual live conversation acceptance did not run. |
-| Background PI | Dan turned it on in build 124. The Proactive page shows the last review, next check and remaining allowance. A real GitHub workflow failure triggered a successful review on 23 November. It sent no message. Device delivery awaits verification. |
+| TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). The native follow-up is **not accepted on device**. |
+| Backend | [Calendar paging and Inbox status](https://github.com/DanAakesen/jarvis/actions/runs/45105018842) passed deterministic readiness. The [midnight queue rollout](https://github.com/DanAakesen/jarvis/actions/runs/45107284356) passed backend deploy and PI provisioning; see that run for the separate readiness result. Live conversation acceptance has not run. |
+| Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
@@ -25,7 +25,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 2. Leave Chat during a reply and return to one answer; run the typing check below during a reply. Ask for the phone's location in the same conversation. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
 3. In Settings, verify the single Proactive switch and open Training and Nutrition targets. Save one intended change and reopen each page. Report the exact error if a page still fails.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
-5. An initial Inbox index rebuild starts a 48-hour cooldown for imported notes. Verify a later follow-up by its linked card or note trail. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
+5. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for the import cooldown.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 
@@ -48,13 +48,13 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 | Issue | What remains |
 | --- | --- |
-| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Build 124 passed the project, Notes, task and weather checks. Workout, Nutrition and full Chat/Voice parity still need device checks. |
+| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the daily-core checks above on the current build. Workout, Nutrition and full Chat/Voice parity still need device checks. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Editing merged in #2028 and first-page visibility and consistent titles in #2031. Dan reports test 2 passed. Editing an existing title was outside that check. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Active reply recovery merged; verify one answer after leaving and returning during a send. |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Type a long message quickly on iPhone in a conversation with 100+ messages while Jarvis replies. No visible lag or dropped characters; scrolling stays smooth. |
-| [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Build 124 test 9 passed. Dan wants the single Proactive suggestions switch directly on the main Settings page. The inline control awaits device acceptance. Voice gesture acceptance remains open. |
+| [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | The single inline Settings switch and Voice gestures await device acceptance. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Retest dictation after the Speech handshake fix, then verify two-way Voice after Listening. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Busy Home briefs keep urgent tasks and upcoming meetings. Chat and Voice can return a local repository reader while GitHub tools load. Gmail refreshes unread membership each poll and reuses immutable message headers within the current authorization. Calendar covers the next 48 hours and Travel days 3–7. Paged reads keep one query through the result limit. Cross-poll Calendar sync remains open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Ask “show my Foundry agents”, then read the serving version and its model. Verify a version change on a test agent when authorized. |

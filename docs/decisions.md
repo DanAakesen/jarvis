@@ -21,6 +21,10 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
 
+### 23 November 2026 — Use the local day boundary for capped work
+
+Use the next Copenhagen midnight, not a fixed-hour delay, so queued work can be checked as soon as the allowance resets across daylight-saving changes.
+
 ### 23 November 2026 — PI can diagnose its backend requests
 
 Dan approved scoped backend diagnostics in Chat and Voice. A request ID links related events. Keep other apps, device logs and raw content outside the reader; use [the log reference](reference/logs.md).
