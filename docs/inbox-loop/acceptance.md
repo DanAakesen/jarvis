@@ -9,7 +9,7 @@ Dan approved capture and automatic follow-ups. Production parameters enable both
 | `inboxEnabled` | `infra/main.bicep` parameter (sets `JARVIS_INBOX_ENABLED=true`) | Chat and voice tools (`inbox_capture`, `inbox_items`, `inbox_close`, `inbox_capture_credential`, `inbox_nudge_style`), `POST /inbox/capture`, the credential routes, `/inbox/mcp`, `/inbox/status` |
 | `inboxNudgesEnabled` | same (sets `JARVIS_INBOX_NUDGES_ENABLED=true`) | Enables Inbox review in the PI slots and after a successful Check now, the daily missed-capture audit and the weekly nudge-style review. |
 
-Production overrides both template defaults in `infra/main.parameters.json`. Reviews require Background PI, an enabled Notes source and available budget. An earlier event can satisfy the PI wake for a slot while its Inbox review still runs once.
+Production overrides both template defaults in `infra/main.parameters.json`. Reviews require Background PI, an enabled Notes source and available budget. When an event covers a scheduled slot, its Inbox review still runs once, even if that event used the last daily PI turn. The review has its own spending checks.
 
 ## Deployment and acceptance
 
