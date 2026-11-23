@@ -21,10 +21,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not read inherited Azure MCP Reader assi
 $alreadyInherited = @($assignments | Where-Object {
     $_.scope -eq $scope -or $_.scope -eq '/' -or $_.scope -like '/providers/Microsoft.Management/managementGroups/*'
 }).Count -gt 0
-if (-not $alreadyInherited) {
-    az role assignment create --assignee-object-id $principalId --assignee-principal-type ServicePrincipal --role $roleId --scope $scope --subscription $subscriptionId --output none --only-show-errors
-    if ($LASTEXITCODE -ne 0) { throw 'Could not assign built-in Reader at the Jarvis subscription scope.' }
+if ($alreadyInherited) {
+    Write-Host 'Azure MCP already has subscription inventory Reader access.'
+    return
 }
+az role assignment create --assignee-object-id $principalId --assignee-principal-type ServicePrincipal --role $roleId --scope $scope --subscription $subscriptionId --output none --only-show-errors
+if ($LASTEXITCODE -ne 0) { throw 'Could not assign built-in Reader at the Jarvis subscription scope.' }
 
 $verified = @(az role assignment list --scope $scope --assignee-object-id $principalId --include-inherited --subscription $subscriptionId --query "[?roleDefinitionId=='/subscriptions/$subscriptionId/providers/Microsoft.Authorization/roleDefinitions/$roleId' && scope=='$scope']" --output json --only-show-errors | ConvertFrom-Json)
 if ($LASTEXITCODE -ne 0 -or $verified.Count -ne 1) { throw 'The exact subscription Reader assignment did not verify.' }
