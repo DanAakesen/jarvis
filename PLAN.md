@@ -10,6 +10,8 @@
 | **P1** | Proactive intelligence: Jarvis reaches out when a signal needs attention, with the context that makes it relevant. See [#2011](https://github.com/DanAakesen/jarvis/issues/2011). |
 | **P2** | Polish and everything else. |
 
+**In flight:** The [build 124 follow-up (#2043)](https://github.com/DanAakesen/jarvis/pull/2043) covers Chat resume and typing, target settings, Watch audio and PI. Build 124 does not contain those fixes; wait for an installable build that does before requesting a retest of them.
+
 These are priority ranks, not the historical phase IDs. Dan's daily core, in order: **1. Jarvis project** (issues, PRs, workers, releases), **2. Notes**, **3. Tasks**, **4. Workouts**, **5. Nutrition** when logging food (kcal logged and left today, protein still needed), **6. Banking** later (see F).
 
 | Delivery | State |
