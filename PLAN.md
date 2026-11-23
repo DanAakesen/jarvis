@@ -23,13 +23,13 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 1. On TestFlight 125, lift readback and the Home + menu passed. In Chat and Voice, check project status and the issue-to-worker flow for approved work. Save a note and confirm it appears in the right iPhone Notes folder without a manual refresh; then find and rename it. Create a task, verify its reminder, then complete it. Check nutrition after the shared budget and protein entry reach TestFlight. Check Danish and English phrasing.
 2. Typing, reply recovery, Chat/Voice continuity and caption scrolling passed on build 125. Voice stayed on Speaking after the first reply. Retest the state between spoken turns, current location after the sync fix, and Watch dictation and two-way Voice after reconnect.
-3. In Settings, verify the inline Proactive switch. Both target pages loaded and reopened on build 125.
+3. The inline Proactive settings and activity checks passed on build 125. Both target pages loaded and reopened.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 5. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for the import cooldown.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 
-Backend diagnostics use a backend-only log grant. Verify production readback and one owner request before accepting. See [log access](docs/reference/logs.md).
+Backend diagnostics passed an owner request for a Watch Voice call. Jarvis found the relay session and reported the limits of the available logs. See [log access](docs/reference/logs.md).
 
 ### Open decisions A–F
 
@@ -54,7 +54,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Returning during a reply passed on build 125. Check failed, cancelled and superseded states in the separate reply test. |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed on Dan’s iPhone on build 125. |
-| [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | The single inline Settings switch and Voice gestures await device acceptance. |
+| [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Proactive settings and caption scrolling passed on build 125. The Voice activity label still needs a device retest. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Dictation worked once on build 125. In Voice the phone saved the full turn while the Watch showed only a partial caption. Retest audible replies, a second turn and recovery of the saved conversation. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Busy Home briefs keep urgent tasks and upcoming meetings. Chat and Voice can return a local repository reader while GitHub tools load. Gmail refreshes unread membership each poll and reuses immutable message headers within the current authorization. Calendar covers the next 48 hours and Travel days 3–7. Paged reads keep one query through the result limit. Cross-poll Calendar sync remains open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Ask “show my Foundry agents”, then read the serving version and its model. Verify a version change on a test agent when authorized. |
