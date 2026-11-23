@@ -1,18 +1,8 @@
 # PI cutover checklist and deletion inventory
 
-Prepared for [#1887](https://github.com/DanAakesen/jarvis/issues/1887) (P15-176), 16 November 2026, and updated by #1966 on 19 November. **PI is the normal Chat and Voice default; #1966 removes its normal-route selector and makes infrastructure preserve the exact PI configuration. Phase 8's broader harness/resource deletion is still not approved.**
+PI serves normal Chat and Voice without an engine selector. The broader harness and resource deletion (Phase 8, [#1887](https://github.com/DanAakesen/jarvis/issues/1887), P15-176) is **not approved**.
 
 Use the [architecture map](../architecture.md) for current routing. Recheck this inventory against the code when the cutover is approved; old file names and proposed deletions below are not instructions to execute today.
-
-```mermaid
-flowchart LR
-    T["Phase 7<br/>PI normal default<br/>Current kept selectable"] --> C1["#1966\nPI-only normal clients\nexact PI config retention"]
-    C1 --> D["Daily use<br/>owner acceptance and no revert"]
-    D --> G{"Deletion gate<br/>7 checks, section 3"}
-    G -->|"owner approves in writing"| X["Phase 8<br/>delete exactly the list in section 4"]
-    G -->|"no"| R["Fix PI<br/>old code still there,<br/>no code switches to it"]
-    C1 -. "release problem" .-> B["Revert the reviewed change,<br/>redeploy the prior release"]
-```
 
 ## 1. What the owner tests in normal use
 
@@ -22,7 +12,7 @@ flowchart LR
 | Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, say a backchannel ("mm-hm") while it works, then ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; speech alone never stops PI, and only a new delegated request (the newest one wins) or ending the session does; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
 | Brain | Settings > Proactive, Proactive suggestions on | Useful reach-outs without duplicates; honour the owner settings and background limits | [Proactive flow](../architecture.md#proactive-wake-and-the-old-engine) |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, shows the estimated cost per watch and does not send duplicate messages | [Proactive flow](../architecture.md#proactive-wake-and-the-old-engine) |
-| Reach | After the owner provides `PI_GITHUB_TOKEN` (fine-grained token, see `docs/agent-context.md`) and runs `infra/setup-azure-mcp.ps1` | Reads and actions work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
+| Reach | Verify the intended GitHub and Azure bridge configuration | Reads and actions work on real questions, or PI says plainly it does not have access | [Tool discovery](../architecture.md#tools-retries-and-failure-copy) and [configuration names](../agent-context.md#configuration-names-only) |
 | Cost | Use available status evidence; no live measurement without approval | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | Historical per-turn reference, not a new measurement. [Cost and safety](../agent-context.md#cost-and-safety) |
 
 **Known limits:** Watch and web follow the same PI route. Camera and screen sharing in web voice return `not_supported`. The old harness still exists for isolated runtime tests and is not a normal fallback. The combined PI situational loop now owns the proactive slots through the persisted event/slot ledger; ordinary source policy and budget rules still apply.
@@ -43,7 +33,7 @@ flowchart LR
 
 Rollback is a reviewed revert and redeploy of the prior release. There is no runtime switch back to Current.
 
-## 3. Deletion gate (from `docs/pi/plan.md`, section 7)
+## 3. Deletion gate
 
 | # | Check | State |
 | --- | --- | --- |
@@ -95,7 +85,7 @@ Whole: `chat_runtime.py`, `model_client.py`, `tool_lookup.py`, `conversation_mem
 | `proactive/types.ts`, `proactive/policy.ts`, `proactive/events/rules.ts` | Split | Stores and `home/brief.ts` import the shared types; `database/proactive-store.ts` imports `findingAllowed`, `itemAllowed`; the closed source and category lists and keyword scope go only with decision A |
 | `index.ts`, `app.ts`, `config.ts` | Split | Remove the old agent construction, canary, managed runtime and reflex wiring; config: the Foundry chat agent name, Copilot agent name, version, fingerprint and compatibility settings (`JARVIS_CHAT_AGENT_NAME`, `FOUNDRY_COPILOT_*`). **Keep** the model-backed approval interpreter wiring (`approval-interpreter-foundry.ts`, `approvalInterpreter` in `index.ts`): it runs on the Foundry chat-completions model and serves the kept tools' approvals (review finding on #1909). `JARVIS_PROACTIVE_EVENTS_ENABLED` belongs to the event pipeline decision, not to this list |
 
-**Decision A (owner): what happens to the 07:00 and 18:00 proactive slots.** The slot engine produces the scheduled findings on the Proactive page and is the trigger of four kept features through `onFindingsStored`: the inbox nudge pass, daily audit and weekly review (`inbox/proactive-hook.ts`), todo writes (`todo-writer.ts`), reminder planning (`reminders.ts`) and alerts (`alerts.ts`). PI's brain wakes on events and watches, not on a daily schedule. Deleting the engine without a replacement removes those features. Options: (1) keep the slot engine and its hooks and delete only its model call (`model.ts`, `prompt.ts`), (2) give PI a scheduled wake (a watch or a timer producer) that does the same jobs and then delete the engine, (3) drop the features. Not decided; the inventory above leaves `engine.ts`, `detect.ts`, `composition.ts` and `scheduler.ts` out of the delete list until it is.
+**Decision A (owner): what to do with the old slot hooks.** PI already owns the 07:00 and 18:00 slots and Check now when configured, but does not call the old engine's `onFindingsStored` hooks. Decide which hooks to retain, replace or retire before deleting the engine. Until then keep `engine.ts`, `detect.ts`, `composition.ts` and `scheduler.ts`.
 
 **Input for decision A, 21 November 2026 (#1969): what the engine triggers, checked against the code.** #1969 keeps the engine and only makes its failures say where they happened. Its deletion is prepared and tested on the parked branch `danaakesen-shiny-carnival-engine-deletion` (commit `1d912cda`, no pull request). If decision A deletes the engine, these lose their trigger (`infra/main.bicep` sets push, proactive, todo writes and alerts to `true`; the inbox nudges default to `false`):
 
