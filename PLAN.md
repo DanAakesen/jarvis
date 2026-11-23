@@ -22,7 +22,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 ### Next steps and blockers
 
 1. On build 126, check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback. Check Danish and English phrasing.
-2. Verify iPhone Voice leaves Speaking between replies. On Watch, check first-tap response for Dictate, Send and Voice after the button update. Test two audible Voice turns and reconnect.
+2. Build 126 carries speech both ways on Watch, but replies break up. On the next build, listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap and read the complications on the red face with wrist raised and lowered. On iPhone, verify that Voice leaves Speaking between replies.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 

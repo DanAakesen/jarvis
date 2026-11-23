@@ -192,28 +192,27 @@ public enum WatchEventScheduling {
     }
 
     public static func isBarrier(_ event: WatchEvent) -> Bool {
-        [
-            .chatDelta,
-            .chatDone,
-            .chatError,
-            .voiceState,
-            .voiceTranscript,
-            .voiceUserTranscript,
-            .voiceUserTranscriptDelta,
-            .interrupt,
-        ].contains(event.kind)
+        event.kind != .voiceAudio && event.kind != .voiceTranscript
     }
 
-    public static func insertionIndex(for event: WatchEvent, in queue: [WatchEvent]) -> Int {
-        guard event.kind == .voiceAudio else { return queue.count }
-        var index = queue.count
-        while index > 0 {
-            let previous = queue[index - 1]
-            guard previous.requestID == event.requestID, !isBarrier(previous),
-                  previous.kind != .voiceAudio else { break }
-            index -= 1
+    public static func isCancelledFragment(_ event: WatchEvent, by interrupt: WatchEvent) -> Bool {
+        interrupt.kind == .interrupt && !isBarrier(event) && event.requestID == interrupt.requestID &&
+            (interrupt.responseID == nil || event.responseID == interrupt.responseID)
+    }
+
+    /// Audio and its own captions can travel together. Only one caption is awaiting a receipt,
+    /// so a lost receipt can be retried before the next text fragment is applied.
+    public static func nextDeliveryIndex(in queue: [WatchEvent], inFlight: [WatchEvent]) -> Int? {
+        guard !queue.isEmpty else { return nil }
+        guard let active = inFlight.first else { return 0 }
+        guard !isBarrier(active) else { return nil }
+        let sendingCaption = inFlight.contains { $0.kind == .voiceTranscript }
+        for (index, event) in queue.enumerated() {
+            guard !isBarrier(event), event.requestID == active.requestID,
+                  event.responseID == active.responseID else { break }
+            if event.kind == .voiceAudio || !sendingCaption { return index }
         }
-        return index
+        return nil
     }
 }
 
