@@ -14,7 +14,7 @@ afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm
 
 describe('committed SQL manifest', () => {
   it('finds committed migrations at the repository root without a directory override', async () => {
-    expect(defaultMigrationsDirectory).toMatch(/\/db\/migrations\/$/);
+    expect(defaultMigrationsDirectory.replaceAll('\\', '/')).toMatch(/\/db\/migrations\/$/);
     await expect(readMigrations()).resolves.toBeInstanceOf(Array);
   });
   it('orders numbered migrations and computes immutable checksums from bytes', async () => {
