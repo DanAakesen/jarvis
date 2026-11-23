@@ -4,13 +4,13 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent context
 
-- **Repository work:** start with [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs. [Factory issue starts](../apps/backend/src/factory/issues.ts) put root `AGENTS.md` in the worker prompt and quote the issue and owner comments as untrusted request data. The Jarvis `AGENTS.md` points workers to this checkout's working agreement. This prompt is not the owner's PI conversation.
-- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies settings, presence, Memory policy and known environment defaults, not the repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) adds current situation/activation context and sends the block at warm-up or when it changes. This hash controls resending, not compaction. Each turn gets its own reference and owner message; attachments and quoted content are data, not instructions. Foundry history is separate from app messages and receipts.
+- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) put root `AGENTS.md`, if present, in the worker prompt and quote the issue and owner comments as untrusted request data. Jarvis workers follow that pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and the affected docs from the checkout. This prompt is not the owner's PI conversation.
+- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies settings, presence, Memory policy and known environment defaults, not the repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) combines these with current situation context. It sends the block at warm-up and on normal turns when its hash differs from the recorded one. The hash controls resending, not provider history or compaction. The current message and reference are per turn; extracted attachments and screen context travel with that turn as data, not instructions.
 - **Proactive wakes:** fresh context, activation evidence and a tool overview go to a scratch PI conversation, not the foreground one. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Start with a UTC window and [the log source map](reference/logs.md). Use stored Chat messages and receipts for what was committed; the Factory timeline for worker progress; backend events for PI, MCP, Voice and brain outcomes; and exact-head GitHub checks for qualification. Diagnostic events are not model reasoning. Keep raw output and prompts out of PRs.
+Start with a UTC window and [the log source map](reference/logs.md). Stored Chat messages and receipts show what the app committed; Foundry history and the Factory worker timeline are separate. Diagnostic streams are not part of the default PI prompt. PI can request the bounded backend log view when configured; operators use the named diagnostic sources for anything it omits. Diagnostic events are not model reasoning. Keep raw output and prompts out of PRs.
 
 ## Setup and commands
 
