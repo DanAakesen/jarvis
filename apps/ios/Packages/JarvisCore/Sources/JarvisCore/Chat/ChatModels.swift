@@ -102,7 +102,11 @@ public enum ChatConnectionState: Equatable, Sendable {
 public struct ActiveChatTurn: Codable, Equatable, Sendable {
     public let sessionId: String
     public let messageId: String
-    public let language: ChatLanguage
+
+    public init(sessionId: String, messageId: String) {
+        self.sessionId = sessionId
+        self.messageId = messageId
+    }
 }
 
 public enum ActiveChatTurnSelection {

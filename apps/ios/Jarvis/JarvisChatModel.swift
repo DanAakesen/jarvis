@@ -163,6 +163,7 @@ final class JarvisChatModel: ObservableObject {
     private var locallyResolvedConfirmationIDs = Set<String>()
     private var sendTask: Task<Void, Never>?
     private var observationSuspended = false
+    private var suspendedTurn: ActiveChatTurn?
     private var didLoad = false
     private var fixtureTurnUsed = false
     private var activityRefreshID = UUID()
@@ -602,15 +603,16 @@ final class JarvisChatModel: ObservableObject {
             await sendTask?.value
             observationSuspended = false
         }
+        await reattachActiveTurnIfNeeded()
         await refreshHistory()
         await refreshActivity()
-        await reattachActiveTurnIfNeeded()
     }
 
     func suspendObservation() {
-        guard isSending else { return }
+        // Leave the original submission alone until the server has acknowledged it.
+        guard let sessionID, let activeMessageID, isSending else { return }
+        suspendedTurn = ActiveChatTurn(sessionId: sessionID, messageId: activeMessageID)
         observationSuspended = true
-        // This only detaches the transport; cancelTurn is an explicit user action.
         sendTask?.cancel()
     }
 
@@ -902,13 +904,18 @@ final class JarvisChatModel: ObservableObject {
     }
 
     private func reattachActiveTurnIfNeeded() async {
-        guard let client, activeMessageID == nil, !isSending else { return }
+        guard let client, activeMessageID == nil, !isSending, !observationSuspended else { return }
         do {
-            let activeTurns = try await client.listActiveTurns()
-            guard activeMessageID == nil,
-                  let turn = ActiveChatTurnSelection.select(turns: activeTurns, forSessionID: sessionID) else {
-                return
+            let turn: ActiveChatTurn?
+            if let suspendedTurn {
+                // The server replays this exact reply even if it finished while the app was away.
+                turn = suspendedTurn
+            } else {
+                let active = try await client.listActiveTurns()
+                turn = ActiveChatTurnSelection.select(turns: active, forSessionID: sessionID)
             }
+            guard let turn, !Task.isCancelled, !isSending, !observationSuspended else { return }
+            suspendedTurn = nil
             sessionID = turn.sessionId
             activeMessageID = turn.messageId
             turnMessageIDs.insert(turn.messageId)
