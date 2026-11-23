@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **126** | [Build and Apple availability](https://github.com/DanAakesen/jarvis/actions/runs/45189940037). Retest two-way Watch Voice, the three-line Watch composer, iPhone Voice state, location and the daily nutrition balance. Typing, reply recovery, Settings targets and lift readback passed on build 125. |
+| TestFlight **126** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45194610942), confirmed 23 November at 15:28 Copenhagen. Retest two-way Watch Voice, the three-line Watch composer, iPhone Voice state, location and the daily nutrition balance. Typing, reply recovery, Settings targets and lift readback passed on build 125. |
 | Backend | The [device-feedback rollout](https://github.com/DanAakesen/jarvis/actions/runs/45186616915) passed production readiness. Chat, Voice and the iPhone Today card now share the nutrition budget. Jarvis can check Apple’s TestFlight receipt when asked about a release. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
