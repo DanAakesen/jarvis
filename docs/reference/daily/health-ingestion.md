@@ -1,6 +1,6 @@
-# Daily health acceptance in the existing backend
+# Health upload contract
 
-**Status:** The checked-in contract and Daily freshness evidence were last updated on 20 October 2026. The upload routes and SQL processor are implemented behind `JARVIS_HEALTH_UPLOAD_ENABLED`. It defaults to false in code; the checked-in backend Bicep sets it to true. The deployed flag and credential state, real upload and processing, and phone acceptance were not verified for this refresh.
+The upload routes and SQL processor require `JARVIS_HEALTH_UPLOAD_ENABLED` and a configured SQL pool. The flag defaults off in code; checked-in Bicep sets it on. The deployed flag and credential state are not verified here. The Health Auto Export upload path is **not accepted on device**.
 
 Health upload reuses Jarvis's backend and SQL. For legacy input compatibility, see the [original Daily v182 source protocol in Git](https://github.com/DanAakesen/jarvis/blob/060e3eb568e2a1cb4e7aa7048841640d8a47394b/docs/reference/daily-v182/README.md). It is not a runtime dependency.
 
@@ -11,7 +11,7 @@ Health upload reuses Jarvis's backend and SQL. For legacy input compatibility, s
 - Ingest requires valid UTF-8 JSON, `automation-id` and `session-id`, with optional matching SHA-256 `checksum`/`x-payload-checksum`. Original bytes are preserved, including units/offsets/empty workouts; no measurements are normalized here.
 - Bodyless heartbeat remains supported. Only bounded `shortcut-name` provenance and checked feeds `metrics`/`workouts` are retained; a heartbeat does not prove measurements arrived.
 - A SQL transaction rechecks the hashed capability, owner, device, permission, expiry and revocation, then commits raw bytes and receipt together. Owner-local transaction locks also serialize issue/revoke/rotate and concurrent acceptance. The signed-in owner can view status and create, rotate or revoke the current upload credential through `/api/health/upload-credential`; only its SHA-256 reference is stored. A newly issued plaintext appears once in the authenticated, `no-store` response and is never logged.
-- HTTP `202` means **SQL committed**, not processed. `storage: sql`, `queue: pending` describe the SQL inbox, not an Azure Queue. There is no accepted-data dependency on an agent or second service.
+- HTTP `202` means **SQL committed**, not processed. `storage: sql`, `queue: pending` describe the SQL inbox, not an Azure Queue.
 - Exact owner/kind/automation/session, device, checksum and length retries return the original acceptance ID/time; changed bytes or device conflict (`409`). A lost response/commit acknowledgement is uncertain: retry the same identity and bytes, never invent a new session to evade the conflict.
 - SQL unavailable or inbox full returns `503`, without acceptance. The phone must retain and retry its payload. Offline-SQL acceptance from the old Blob proposal is deliberately withdrawn. Real phone retry/backoff and outage behavior remain an acceptance gate.
 
@@ -28,7 +28,7 @@ returns both limits. No payload content is returned. The Daily freshness pill's
 details panel shows these figures in a "Stored" row. See the
 Daily query reference.
 
-**This slice retains raw rows indefinitely within that ceiling and performs no age-based deletion or compaction.** Pending/quarantined evidence must not expire while processing, reconciliation or rollback needs it. A later reviewed change may compact processed raw bytes while preserving acceptance/checksum/idempotency evidence. No automatic cleanup or source-record deletion is authorized here.
+Raw rows have no age-based deletion or compaction. Preserve pending and quarantined rows for processing, reconciliation and rollback, and keep acceptance, checksum and idempotency evidence.
 
 Maintained rate guards run before the credential lookup/body/SQL work: default 60 requests/client and 120/instance per minute, 512 client buckets plus one instance bucket, eight active requests, 10-second verifier and 30-second acceptance signals. SQL lock acquisition is limited to five seconds; the existing backend pool has a 30-second acquisition bound. Cancellation cancels active queries and rolls back uncommitted work. No automatic database retry is added.
 
@@ -50,7 +50,7 @@ Existing writes reject older `accepted_at` snapshots from replacing newer per-ke
 
 No real historical replay or complete-day guarantee is claimed. Current hard limits are not permission to exceed the source-compatible contract.
 
-The pinned source identifies **Health Auto Export**. Do not substitute Health Sync or issue device setup instructions as if the apps were interchangeable. Live exporter version/payload acceptance and app-specific UI steps remain unverified.
+Use **Health Auto Export**, not Health Sync. The live exporter version, payload acceptance and app-specific setup remain unverified.
 
 ## Protected device-capability management
 
@@ -63,11 +63,11 @@ Issue is idempotent for the retained handle; revoked records never reactivate. R
 1. Use exact-head independent review, applicable CI and isolated SQL tests for changes. Deployment alone does not verify the endpoint or worker. To disable the path, revert the backend flag to `'false'` with the matching pin test and redeploy through the normal workflow. Preserve stored credential hashes and ingested data.
 2. The owner creates the credential through the owner-authenticated route after deployment. Verify endpoint origin/ingress and protected one-time credential custody; no new resource, identity, grant, SAS extraction or plaintext credential in GitHub is implied.
 3. Synthetic deployed denial/revocation/expiry, byte-exact readback, concurrent retry/conflict, SQL outage/restart, capacity and cancellation checks remain unverified, as does actual Health Auto Export/iPhone acceptance. Coding tests do not prove these.
-4. #720 processing/freshness and the historical upload path's bounded grouping/limits require verification. The owner withdrew the #717 database-export/preflight route; do not revive it or treat it as a prerequisite. This synthetic implementation does not establish complete historical replay or cutover readiness.
+4. Verify processing and freshness separately from upload acceptance. Synthetic tests do not verify complete historical replay or cutover readiness. The withdrawn database-export path is not a prerequisite.
 5. Disable upload composition on failed readiness; preserve all SQL receipts/raw/capabilities. Migration 0046 rollback refuses either nonempty table. Never delete original Daily data or automatically requeue native effects.
 
 ## Verification commands
 
-Run backend lint/build and `npm test --workspace @jarvis/backend -- src/daily/health-upload src/auth/auth.test.ts src/app.test.ts src/database/migrations.test.ts`. The normal `Database CI` workflow runs `health-upload.integration.test.ts` against disposable loopback SQL Server, covering concurrency, rollback, real persistence and backend composition. Do not point tests at production; no local SQL image is started by this slice.
+For auth, app composition and migration changes, run `npm test --workspace @jarvis/backend -- src/auth/auth.test.ts src/app.test.ts src/database/migrations.test.ts`. [Database CI](../../../.github/workflows/database-ci.yml) uses disposable loopback SQL Server. These checks do not establish end-to-end upload or processing acceptance. Never point them at production.
 
 The dedicated host and Blob/Queue design was withdrawn. The standalone host/recovery and Blob/Queue adapters are outside production wiring. Their emulator/regression tests are not SQL acceptance evidence. No old `DAILY_HEALTH_*` flag activates the new path.
