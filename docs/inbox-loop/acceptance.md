@@ -27,7 +27,7 @@ Use one test idea and its normal 07:00 or 18:00 Copenhagen review. An item recei
 - [ ] Ask Jarvis for an inbox credential, run the [Shortcut](shortcut.md) on iPhone and Watch, then verify the revoked credential no longer works.
 - [ ] Connect one [MCP assistant](mcp.md) and capture from it.
 - [ ] Open `GET /inbox/status` (owner token): live items, nudges, spend today and over 30 days by kind.
-- [ ] With nudges on: wait for 07:00 or 18:00 (or use the manual proactive check). When follow-up is warranted, check for a card and at most one eligible push. Give it a thumb on the card; after the next run the note's trail shows it and `/inbox/status` counts it.
+- [ ] With nudges on: wait for 07:00 or 18:00 (or use the manual proactive check). When follow-up is warranted, verify the linked card and the change in `/inbox/status`. Check any eligible push on the device separately. Give the card a thumb, then check for the feedback in the note's trail after the next run.
 - [ ] After a day, check `lastAuditDay`; after a Sunday, `lastWeeklyReviewDay` and "what is my nudge style?" in chat.
 - [ ] Use the private status view to verify ledger entries by day and kind. Do not publish spend or owner limits.
 
@@ -35,7 +35,6 @@ Use one test idea and its normal 07:00 or 18:00 Copenhagen review. An item recei
 
 - Thumbs on the push notification itself (iOS and web notification actions) are not built; thumbs come from the proactive card's useful and wrong buttons.
 - A native "Add to inbox" action in the Jarvis Watch app is not built; the Shortcut runs on the watch.
-- ChatGPT and claude.ai custom connectors need the Entra OAuth registration above (owner action).
+- ChatGPT and claude.ai custom connectors need [Entra OAuth setup](mcp.md) by the owner.
 - The inbox spend is also visible only in `/inbox/status`, not yet on the Proactive page.
-- On the first vault import or an index rebuild, existing notes begin a 48-hour cooldown. The seven-day nudge count includes a note only after Jarvis issues a follow-up card.
-- A test item exists in the private vault. Capture in Chat or Voice, an ordinary follow-up and device delivery each need their own check.
+- First import or index rebuild starts a 48-hour cooldown for existing notes. The seven-day count is of live notes with a recent linked follow-up card, not imports, pushes or confirmed deliveries.
