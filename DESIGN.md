@@ -49,7 +49,9 @@ The dashboard opens with Chat (or Resume voice) and a labelled Menu on one row w
 
 Keep one Chat entry point. When reading history, collapse the composer to **Reply** only if it will not interrupt a draft, dictation or a call. **Reply** reopens the composer. At rest show Message, dictation and the Voice orb. Dictation appends to the editable Chat draft. An empty composer takes one control row. The draft wraps to at most three lines. With text, Send replaces both audio controls beside the draft. Send, Dictate and Voice each use their full 44 × 44 pt tap area. Tapping the field opens native editing directly. Give transient status its own space above the action row.
 
-In a focused Voice call, replace the composer and Start control with **Mute/Unmute** and **End**, keeping state and captions visible. End returns to the same Chat and reloads the stored turn; a partial live caption is not the saved reply. Recovery keeps the draft; a new attempt must not inherit a prior capture or get stuck at Starting. Show a reconnect/error and a way back to typing. Keep complications glanceable; steps show today's evidence, never invented progress.
+In a focused Voice call, replace the composer and Start control with **Mute/Unmute** and **End**, keeping state and captions visible. End returns to the same Chat and reloads the stored turn; a partial live caption is not the saved reply. Recovery keeps the draft; a new attempt must not inherit a prior capture or get stuck at Starting. Show a reconnect/error and a way back to typing.
+
+Circular complications draw their symbols and task count on a clear background. Voice uses the orb in full colour and a waveform on tinted or dimmed faces. The steps complication shows today's measured progress.
 
 ## Home, workspaces and utility pages
 

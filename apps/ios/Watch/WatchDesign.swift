@@ -141,7 +141,6 @@ struct JarvisWatchAction: View {
 struct WatchLogLiftComplicationView: View {
     var body: some View {
         WatchGlyph(kind: .logLift).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity)
-            .modifier(WatchSurface(radius: 50)).clipShape(Circle())
             .accessibilityElement(children: .ignore).accessibilityLabel("Log lift")
     }
 }

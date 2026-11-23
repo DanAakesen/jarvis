@@ -37,11 +37,11 @@ struct JarvisWatchTasksWidget: Widget {
         StaticConfiguration(kind: "jarvis.watch.tasks", provider: WatchProvider()) { entry in
             VStack(spacing: 0) {
                 HStack(spacing: 5) {
-                    WatchGlyph(kind: .tasks).frame(width: 16, height: 20)
+                    WatchGlyph(kind: .tasks).frame(width: 16, height: 20).widgetAccentable()
                     Text(entry.health?.tasksToday.map(String.init) ?? "—").font(.system(size: 25, weight: .semibold, design: .rounded)).minimumScaleFactor(0.5)
                 }
                 if !entry.current, let health = entry.health { WatchSnapshotAge(date: health.generatedAt) }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle()).containerBackground(.black, for: .widget)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).containerBackground(.clear, for: .widget)
                 .widgetURL(WatchAppLink.tasks.url)
                 .accessibilityLabel(entry.health?.tasksToday.map { "\($0) tasks due today" } ?? "Today's tasks unavailable")
                 .accessibilityValue(!entry.current && entry.health != nil
@@ -53,8 +53,8 @@ struct JarvisWatchTasksWidget: Widget {
 struct JarvisWatchDictateWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.dictate", provider: WatchProvider()) { _ in
-            WatchGlyph(kind: .dictate).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle())
-                .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.dictate.url)
+            WatchGlyph(kind: .dictate).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .widgetAccentable().containerBackground(.clear, for: .widget).widgetURL(WatchAppLink.dictate.url)
                 .accessibilityLabel("Dictate a message")
         }.configurationDisplayName("Dictate").description("Dictate into a draft, then send manually.").supportedFamilies([.accessoryCircular])
     }
@@ -62,12 +62,26 @@ struct JarvisWatchDictateWidget: Widget {
 struct JarvisWatchVoiceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.voice", provider: WatchProvider()) { _ in
-            WatchOrb().padding(3).frame(maxWidth: .infinity, maxHeight: .infinity)
-                .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.voice.url)
+            WatchVoiceComplicationGlyph().padding(3).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .containerBackground(.clear, for: .widget).widgetURL(WatchAppLink.voice.url)
                 .accessibilityLabel("Start or resume voice")
         }.configurationDisplayName("Voice Session").description("Start or resume a spoken conversation.").supportedFamilies([.accessoryCircular])
     }
 }
+private struct WatchVoiceComplicationGlyph: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.isLuminanceReduced) private var isDimmed
+
+    var body: some View {
+        if renderingMode == .fullColor && !isDimmed {
+            WatchOrb()
+        } else {
+            Image(systemName: "waveform")
+                .resizable().scaledToFit().padding(3).widgetAccentable()
+        }
+    }
+}
+
 struct JarvisWatchNutritionWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.nutrition", provider: WatchProvider()) { entry in
@@ -118,7 +132,7 @@ struct JarvisWatchLogLiftWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.logLift", provider: WatchProvider()) { _ in
             WatchLogLiftComplicationView()
-                .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.logLift.url)
+                .widgetAccentable().containerBackground(.clear, for: .widget).widgetURL(WatchAppLink.logLift.url)
         }.configurationDisplayName("Log lift").description("Type or dictate a lift, then save explicitly.")
             .supportedFamilies([.accessoryCircular])
     }
