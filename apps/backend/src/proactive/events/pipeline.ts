@@ -3,7 +3,7 @@ import type { UsageStore } from '../../core/usage.js';
 import { canRunWithinBudget, effectiveProactiveBudget, estimateCost } from '../budget.js';
 import { automaticProactiveWorkAllowed } from '../policy.js';
 import type { ProactiveStore } from '../store.js';
-import { copenhagenDayStart, monthKey } from '../time.js';
+import { copenhagenDayStart, monthKey, nextCopenhagenDayStart } from '../time.js';
 import { sourceIds, type ProactiveSettings, type ProactiveSource, type SourceId } from '../types.js';
 import { deliverThroughChannels } from './channels.js';
 import type { FeedbackLine } from './event-prompt.js';
@@ -101,7 +101,7 @@ export function createEventPipeline(options: EventPipelineOptions) {
       return result('empty');
     }
     if (await queue.modelBatchesSince(copenhagenDayStart(current)) >= MAX_MODEL_BATCHES_PER_DAY) {
-      wake(copenhagenDayStart(new Date(copenhagenDayStart(current).getTime() + 36 * HOUR_MS)));
+      wake(nextCopenhagenDayStart(current));
       return result('daily_cap');
     }
     const worstCase = reasoner.worstCaseDkk();

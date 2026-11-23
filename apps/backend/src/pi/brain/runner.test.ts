@@ -239,18 +239,26 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     ]);
   });
 
-  it('stops at the daily number of wakes, then resumes the next day', async () => {
-    const t = setup();
+  it.each([
+    ['2026-11-16T10:00:00Z', '2026-11-16T23:00:00Z'],
+    ['2026-03-29T10:00:00Z', '2026-03-29T22:00:00Z'],
+    ['2026-10-25T10:00:00Z', '2026-10-25T23:00:00Z'],
+  ])('resumes an untouched capped queue at Copenhagen midnight after %s', async (start, midnight) => {
+    const t = setup({ start });
     for (let n = 0; n < MAX_WAKES_PER_DAY; n += 1) {
-      await t.enqueue(event(n));
+      await t.enqueue(event(n, 'github', t.now().toISOString()));
       expect((await t.tick()).outcome).toBe('done');
       t.advance(MIN_WAKE_GAP_MS);
     }
-    await t.enqueue(event(99));
+    await t.enqueue(event(99, 'github', t.now().toISOString()));
     expect((await t.tick()).outcome).toBe('daily_cap');
-    t.advance(24 * 60 * 60_000);
-    await t.enqueue(event(100, 'github', '2026-11-17T09:00:00Z'));
-    expect((await t.tick()).outcome).toBe('done');
+    expect(t.brain.nextDueAt).toEqual(new Date(midnight));
+    t.clock.t = new Date(Date.parse(midnight) - 1);
+    expect((await t.tick()).outcome).toBe('idle');
+    expect((await t.brain.status()).used).toBe(MAX_WAKES_PER_DAY);
+    t.advance(1);
+    expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: 1 });
+    expect((await t.brain.status()).used).toBe(1);
   });
 
   it('applies the budget stop before a wake, tells Dan once, and never spends past it', async () => {

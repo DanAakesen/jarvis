@@ -7,7 +7,7 @@ import { MAX_EVENT_ATTEMPTS } from '../../proactive/events/rules.js';
 import { eventSourceSwitches, type QueuedEvent } from '../../proactive/events/types.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import {
-  copenhagenDayStart, isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextSlotAfter,
+  isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextCopenhagenDayStart, nextSlotAfter,
 } from '../../proactive/time.js';
 import { sourceIds, type FindingsStoredContext } from '../../proactive/types.js';
 import { proactiveSettingsRevision } from '../../proactive/preferences.js';
@@ -255,7 +255,7 @@ export function createBrain(options: BrainOptions) {
       return result('spaced');
     }
     if (slotStatus.used >= slotStatus.allowed) {
-      wake(new Date(copenhagenDayStart(current).getTime() + 36 * HOUR_MS));
+      wake(nextCopenhagenDayStart(current));
       return result('daily_cap');
     }
     const month = monthKey(current);
