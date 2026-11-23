@@ -49,7 +49,7 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
       serveLegacyDailyAlias(app);
       if (data) {
         await app.register(healthQueryRoutes(data.query));
-        if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
+        if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets, nutritionSuggestions));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (internalNutrition) await app.register(manualMealRoutes(internalNutrition));
         if (data.lifts) await app.register(liftRoutes(data.lifts, data.liftCaptureModel));

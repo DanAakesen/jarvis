@@ -209,9 +209,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
         if (location.permission !== 'granted') {
           return {
             state: 'unavailable' as const,
-            reason: location.permission === 'denied' || location.permission === 'restricted'
-              ? `location_permission_${location.permission}`
-              : 'location_permission_not_granted',
+            reason: `location_permission_${location.permission}`,
             observedAt: location.observedAt,
           };
         }

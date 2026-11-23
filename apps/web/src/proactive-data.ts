@@ -295,6 +295,8 @@ const sourceReasons: Record<string, string> = {
   too_large: 'Too large',
   no_location: 'No home location saved',
   location_permission_not_granted: 'Location permission not granted',
+  location_permission_unknown: 'The iPhone has not reported location permission',
+  location_permission_not_determined: 'Location permission has not been decided',
   location_permission_denied: 'Location permission denied',
   location_permission_restricted: 'Location permission restricted',
   location_observation_stale: 'Location observation is stale',

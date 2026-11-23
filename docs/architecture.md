@@ -143,7 +143,7 @@ flowchart TB
 
 **Legend:** The diamond selects how the gateway handles stream items; arrows are control flow. Foundry executes native built-ins. The backend does not run a harness shell command or sub-agent.
 
-**Limits.** Large retained conversations can hit the shared model quota across tool rounds. Foundry controls context compaction. Session policy can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` and `pi.mcp_tool`. Live provider replay IDs remain unverified. `get_settings` with the `location` area returns the coarse iPhone observation and timestamp when available.
+**Limits.** Large retained conversations can hit the shared model quota across tool rounds. Foundry controls context compaction. Session policy can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` and `pi.mcp_tool`. Live provider replay IDs remain unverified. `get_settings` with the `location` area returns the coarse iPhone observation and timestamp when available. An unsynced permission is unknown until iOS reports it.
 
 Apple Maps requests use the signed-in iPhone workspace connection. MapKit searches and routes on the phone. The native card and local spoken estimate use a temporary result. PI receives a bounded status receipt. Conversation history holds the lookup request and handle so the owner can request a fresh estimate. [Apple Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/).
 
@@ -164,7 +164,7 @@ The owner Notes and Graph routes share the metadata title. `/notes/summaries` ch
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. Manual iPhone kcal entries use the same meal ledger and Copenhagen day as Chat and Voice. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
+Health and workout tools use the existing backend and SQL `daily` schema, not a second API or database. iPhone meal entries use the same ledger and Copenhagen day as Chat and Voice. The Today card reads the shared nutrition budget. iPhone Health sync and the bounded ingestion/Shortcuts paths are separate from Watch display. iPhone Gym can also record lifts in the Vault; the `gym_lifts` tool reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
 ## Proactive wake and Inbox review
 

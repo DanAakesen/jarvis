@@ -476,7 +476,7 @@ export const repositoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'repo_read',
-    description: warnedDescription('Read UTF-8 text from one repository file, limited to 400 lines and 40 KB.'),
+    description: warnedDescription('Read one UTF-8 repository file (400 lines, 40 KB max). For the latest Jarvis release or TestFlight build, read PLAN.md for the last documented Apple receipt, then compare github_read workflow_runs (workflow ios-testflight.yml, branch main) for later uploads or readbacks.'),
     inputSchema: objectSchema({
       path: { type: 'string', minLength: 1, maxLength: 1024 },
       ...projectProperty,

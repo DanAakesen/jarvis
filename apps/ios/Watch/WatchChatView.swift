@@ -6,7 +6,6 @@ struct WatchChatView: View {
     @EnvironmentObject private var connection: WatchConnection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @State private var editingDraft = false
     /// The reader reopened the composer while browsing history; any new scroll away from the end clears it.
     @State private var reopened = false
     @State private var reading = false
@@ -45,9 +44,6 @@ struct WatchChatView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $editingDraft) {
-            NavigationStack { WatchTextEditor(title: "Message", text: $model.draft) }
-        }
         .task {
             beginPendingDictation()
             await model.history()
@@ -190,39 +186,51 @@ struct WatchChatView: View {
     }
 
     private var composer: some View {
-        VStack(spacing: 4) {
+        let hasDraft = !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return VStack(spacing: 4) {
             if hasStatusRow {
                 VStack(spacing: 2) { statusRows }
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .watchGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .padding(.horizontal, 4)
             }
-            HStack(spacing: 0) {
-                Button { editingDraft = true } label: {
-                    Text(model.draft.isEmpty ? "Message" : model.draft)
-                        .foregroundStyle(model.draft.isEmpty ? Color.secondary : Color.primary)
-                        .font(.caption).lineLimit(1)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .disabled(composerDisabled)
-                .accessibilityLabel("Message")
-                .accessibilityValue(model.draft.isEmpty ? "Empty" : model.draft)
-                .accessibilityFocused($messageFocused)
-                if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            HStack(alignment: .bottom, spacing: 0) {
+                // watchOS gives its native field a full-height button. Let the visible draft size the row
+                // and put the bound editor over that exact area for direct native keyboard access.
+                Text(verbatim: model.draft.isEmpty ? "Message" : model.draft)
+                    .font(.callout)
+                    .foregroundStyle(model.draft.isEmpty ? Color.secondary : Color.primary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .accessibilityHidden(true)
+                    .overlay {
+                        TextField("Message", text: $model.draft)
+                            .textFieldStyle(.plain)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                            .opacity(0.02)
+                            .disabled(composerDisabled)
+                            .accessibilityLabel("Message")
+                            .accessibilityFocused($messageFocused)
+                    }
+                if hasDraft {
                     Button { Task { await model.send() } } label: {
-                        Image(systemName: "arrow.up.circle.fill").frame(width: 34, height: 44)
+                        Image(systemName: "arrow.up.circle.fill").frame(width: 44, height: 44)
                     }
                     .foregroundStyle(WatchStyle.amber)
-                    .disabled(composerDisabled).accessibilityLabel("Send message")
+                    .disabled(composerDisabled)
+                    .accessibilityLabel("Send message")
+                } else {
+                    Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 36, height: 44) }
+                        .foregroundStyle(WatchStyle.amber)
+                        .disabled(composerDisabled).accessibilityLabel("Dictate")
+                    Button { Task { await model.startVoice() } } label: { WatchOrb().frame(width: 26, height: 26).frame(width: 36, height: 44) }
+                        .disabled(model.busy || model.startingVoice || model.dictationState != .idle).accessibilityLabel("Start voice")
                 }
-                Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 36, height: 44) }
-                    .foregroundStyle(WatchStyle.amber)
-                    .disabled(composerDisabled).accessibilityLabel("Dictate")
-                Button { Task { await model.startVoice() } } label: { WatchOrb().frame(width: 26, height: 26).frame(width: 36, height: 44) }
-                    .disabled(model.busy || model.startingVoice || model.dictationState != .idle).accessibilityLabel("Start voice")
-            }.buttonStyle(.plain).padding(.leading, 12).padding(.trailing, 4)
-                .watchGlass(in: Capsule())
+            }.buttonStyle(.plain).padding(.leading, 8).padding(.trailing, 4)
+                .watchGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .padding(.horizontal, 4)
         }
     }

@@ -65,6 +65,25 @@ final class WatchVoiceTransportTests: XCTestCase {
     }
 
     @MainActor
+    func testPlaybackReceiptSurvivesLostAcknowledgementOnlyDuringItsCall() async {
+        let receipt = WatchRequest(action: .playbackCompleted, text: UUID().uuidString, itemID: "reply", flag: true)
+        var attempts: [WatchRequest] = []
+        await WatchVoiceRecovery.deliverPlaybackReceipt(receipt, isCurrent: { true }, send: { request in
+            attempts.append(request)
+            if attempts.count == 1 { throw WatchFailure.unavailable }
+        }, wait: {})
+        XCTAssertEqual(attempts, [receipt, receipt])
+
+        attempts.removeAll()
+        var active = true
+        await WatchVoiceRecovery.deliverPlaybackReceipt(receipt, isCurrent: { active }, send: { request in
+            attempts.append(request)
+            throw WatchFailure.unavailable
+        }, wait: { active = false })
+        XCTAssertEqual(attempts, [receipt])
+    }
+
+    @MainActor
     func testPlaybackCompletionIsDeliveredAfterCaptureRetryClearsTheHandler() async throws {
         var ledger = VoicePlaybackLedger()
         var machine = VoiceSessionStateMachine()
@@ -77,8 +96,8 @@ final class WatchVoiceTransportTests: XCTestCase {
             if attempts == 1 { throw WatchFailure.unavailable }
         }, onFailure: { _, _ in
             resets += 1
-            // Like VoiceAudioEngine.stop(), a failed start resets both the ledger and the handler.
-            ledger = VoicePlaybackLedger()
+            // A stopped audio engine clears pending playback and its completion handler.
+            _ = ledger.playbackStopped()
             handler = nil
         }, onReady: {
             handler = { machine.apply(.playbackFinished(responseID: $0.responseID)) }
@@ -86,11 +105,13 @@ final class WatchVoiceTransportTests: XCTestCase {
 
         machine.apply(.responseCreated(id: "reply"))
         machine.apply(.audioDelta(responseID: "reply"))
-        ledger.bufferScheduled(responseID: "reply")
+        let sequence = ledger.bufferScheduled(responseID: "reply")
         machine.apply(.responseFinished(responseID: "reply"))
         XCTAssertNil(ledger.responseFinished(responseID: "reply"))
         XCTAssertEqual(machine.state, .speaking)
-        handler?(try XCTUnwrap(ledger.bufferPlayed(responseID: "reply")))
+        let receipts = ledger.bufferPlayed(sequence)
+        XCTAssertEqual(receipts.count, 1)
+        handler?(try XCTUnwrap(receipts.first))
         XCTAssertEqual(machine.state, .listening)
         XCTAssertEqual(attempts, 2)
         XCTAssertEqual(resets, 1)
@@ -182,6 +203,23 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(10))), .restart)
         XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(11))), .exhausted)
         XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(14))), .restart)
+    }
+
+    func testQueuedReplyFragmentsPreserveAudioAndCaptionOrder() {
+        let session = UUID()
+        var audio = WatchEvent(.voiceAudio, requestID: session, text: Data([1, 2]).base64EncodedString(), responseID: "one")
+        let next = WatchEvent(.voiceAudio, requestID: session, text: Data([3, 4]).base64EncodedString(), responseID: "one")
+        XCTAssertTrue(WatchEventScheduling.appendVoiceFragment(next, to: &audio))
+        XCTAssertEqual(audio.text, Data([1, 2, 3, 4]).base64EncodedString())
+        var caption = WatchEvent(.voiceTranscript, requestID: session, text: "Hello", responseID: "one")
+        XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(caption, to: &audio))
+        XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(
+            .init(.voiceTranscript, requestID: session, text: " there", responseID: "two"), to: &caption))
+        XCTAssertTrue(WatchEventScheduling.appendVoiceFragment(
+            .init(.voiceTranscript, requestID: session, text: " there", responseID: "one"), to: &caption))
+        XCTAssertEqual(caption.text, "Hello there")
+        let full = WatchEvent(.voiceAudio, requestID: session, text: Data(count: 24_000).base64EncodedString(), responseID: "one")
+        XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(full, to: &audio))
     }
 
     func testPlaybackPriorityRespectsAudioOrderAndTerminalBarriers() {

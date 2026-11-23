@@ -25,6 +25,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 ## 3. Voice (WebSocket)
 
 - iPhone and Watch use one JSON WebSocket at `wss://BACKEND/voice` for English and Danish.
+- The paired iPhone batches adjacent reply audio or caption fragments for Watch delivery. When a call ends, the Watch reads the saved conversation to recover any missed captions.
 - Auth: exactly two subprotocols, `jarvis.voice.v2` and `jarvis.auth.TOKEN`.
   v1 is rejected during the upgrade and has no alias or fallback.
 - Terminal: `jarvis.session.ended` is clean completion only.
@@ -45,7 +46,9 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
   send Realtime `speech_started` / `speech_stopped` or `response.done`.
 - A response completion marks the end of its audio stream, not a saved reply.
   The client's Speaking status lasts until the matching local playback drains
-  (or is cancelled); then it reflects relay Thinking or Listening. After
+  or is cancelled, then reflects relay Thinking or Listening. A played buffer
+  also confirms all preceding buffers on the same player. The Watch retries a lost
+  playback acknowledgement with the same request ID while that call is active. After
   delegated work hands a reply to GPT-Live for speech, the relay remains at
   Thinking until audio starts or the wait expires. Chat refreshes stored rows
   on the existing `now` SSE message.
@@ -130,7 +133,8 @@ this screen.
 | Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
 | Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
 | Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
-| Log meal kcal | Owner POST /health/meals with idempotencyKey (UUID), occurredAt (ISO timestamp) and energyKcal (above 0, up to 10,000). Keep all three on retry. A receipt confirms the key, kcal and Copenhagen mealDate. |
+| Log meal | Owner POST /health/meals accepts idempotencyKey (UUID), occurredAt (ISO timestamp), energyKcal (>0–10,000) and optional proteinGrams (0–1,000). Retry the identical submission. The receipt confirms the key, energy, protein and Copenhagen mealDate. |
+| Today’s nutrition budget | Owner GET /health/nutrition-budget returns the same Copenhagen-day figures used by Chat and Voice. |
 | Edit training/nutrition targets | `GET` and `PATCH /health/training-targets` or `/health/nutrition-targets`. A patch is a top-level object of changed values; `null` clears a target. |
 | Read Health upload credential state | `GET /api/health/upload-credential` returns state and optional expiry. Minting through `POST` requires an Entra owner token, not an owner-session token; it is separate from native HealthKit sync. |
 | Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |
@@ -148,7 +152,7 @@ The dashboard calls `GET /health/capabilities` with `Accept: application/json;ve
 |---|---|
 | Gym and Run rings; recent-session rows | `POST /health/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |
 | Steps ring | `POST /health/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /health/training-targets`. |
-| Protein and calorie balance | `POST /health/query` with `source: "daily.nutrition.days"` and the selected date range; protein, resting-calorie and deficit targets come from `GET /health/nutrition-targets`. |
+| Nutrition | Today reads calories eaten, allowance and calories left from `GET /health/nutrition-budget`. Period averages and macros use `daily.nutrition.days` from `POST /health/query`. The protein target comes from `GET /health/nutrition-targets`. |
 | Sleep value and sleep-night detail | `POST /health/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
 | Open a workout | `POST /health/query` with `source: "daily.health.workout"` and the exact `workoutId`. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
 | Open meals | `POST /health/query` with `source: "daily.nutrition.meals"` and the selected date range. |

@@ -14,7 +14,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | **Chat** | The one PI conversation: resumable replies, composer with plus menu and dictation, grouped tool activity, generated blocks (including charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. The plus menu's **Test a reply** sheet uses a separate conversation; it does not test normal Chat. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |
-| **Health** | Daily dashboard, body chart, workouts and the iPhone Gym lift log and editor, goals, and HealthKit sync. Swipe to Nutrition for totals, meal history and **Log meal kcal**. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
+| **Health** | Daily dashboard, body chart, workouts and the iPhone Gym lift log and editor, goals, and HealthKit sync. Swipe to Nutrition for totals, meal history and **Log meal** (kcal and optional protein). | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
 | **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
@@ -27,7 +27,7 @@ Around the destinations: the opening screen (`JarvisOpeningView`, startup only),
 
 ## Apple Watch
 
-The Watch dashboard opens Chat or a grouped Menu in one tap. Below them are the agenda, workouts, body fat, tasks and recent notes. The app also includes: **Chat** (one entry point with an adaptive composer, dictation and the Voice orb), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**.
+The Watch dashboard opens Chat or an adaptive tile Menu in one tap. Below them are the agenda, workouts, body fat, tasks and recent notes. The app also includes: **Chat** (a three-line composer with dictation and Voice when empty, and Send when it contains text), **Voice** (focused call with Mute and End), **menu**, **Tasks** (list, detail, edit, new), **Health**, **workouts**, **lifts** and lift capture, **Factory** and new task, **Agenda**, **body fat**, **Notes**, **Home** brief and **Nutrition**.
 
 ## Widgets and Live Activities
 

@@ -75,6 +75,17 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "GET",
+                  "path": "/api/health/nutrition-budget",
+                  "response": {
+                    "statusCode": 200,
+                    "body": {
+                      "localDate": "2026-10-31",
+                      "kcal": { "eatenKcal": 1450, "allowanceKcal": 2110, "remainingKcal": 660 }
+                    }
+                  }
+                },
+                {
+                  "method": "GET",
                   "path": "/api/health/nutrition-targets",
                   "response": {
                     "statusCode": 200,

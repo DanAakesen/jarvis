@@ -213,6 +213,8 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case proactiveReasonTooLarge = "insights.proactiveReasonTooLarge"
     case proactiveReasonNoLocation = "insights.proactiveReasonNoLocation"
     case proactiveReasonLocationPermission = "insights.proactiveReasonLocationPermission"
+    case proactiveReasonLocationPermissionUnknown = "insights.proactiveReasonLocationPermissionUnknown"
+    case proactiveReasonLocationPermissionUndecided = "insights.proactiveReasonLocationPermissionUndecided"
     case proactiveReasonLocationStale = "insights.proactiveReasonLocationStale"
     case proactiveReasonTodoMissing = "insights.proactiveReasonTodoMissing"
     case proactiveReasonTodoAmbiguous = "insights.proactiveReasonTodoAmbiguous"

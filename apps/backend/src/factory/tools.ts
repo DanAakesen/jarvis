@@ -1223,7 +1223,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'list_releases',
-    description: 'List the recorded releases for an active Software Factory project. Use when Dan asks which releases a project has shipped.',
+    description: 'List the recorded releases for an active Software Factory project. Use for Factory release history. For the latest Jarvis iOS release, read PLAN.md with repo_read for the recorded TestFlight build and receipt.',
     inputSchema: {
       type: 'object',
       properties: { projectId: idSchema },

@@ -185,7 +185,17 @@ struct WatchFactoryView: View {
             if loading { ProgressView() }
             if let error { Text(error); Button("Retry") { Task { await load() } } }
             else if !loading && projects.isEmpty { Text("No projects") }
-            ForEach(projects) { project in NavigationLink(project.name) { WatchFactoryTasks(project: project) } }
+            ForEach(projects) { project in
+                NavigationLink {
+                    WatchFactoryTasks(project: project)
+                } label: {
+                    Label {
+                        Text(project.name).font(.system(.headline, design: .rounded))
+                    } icon: {
+                        Image(systemName: "folder").foregroundStyle(WatchStyle.amber)
+                    }
+                }
+            }
         }.navigationTitle("Factory").task(id: connection.reachable) { await load() }
         .sheet(item: $previewProject) { project in NavigationStack { WatchFactoryTaskEditor(project: project) {} } }
         .navigationDestination(isPresented: $previewTasks) {
@@ -213,21 +223,36 @@ struct WatchFactoryTasks: View {
     @State private var loading = true
     var body: some View {
         List {
-            HStack { Spacer(minLength: 0); WatchAddButton(title: "New task") { showCreate = true } }
+            WatchLabelledButton(title: "New task", systemName: "plus") { showCreate = true }
                 .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             if loading { ProgressView() }
             if let error { Text(error); Button("Retry") { Task { await load() } } }
             else if !loading && tasks.isEmpty { Text("No tasks") }
-            ForEach(tasks) { task in
-                NavigationLink {
-                    List {
-                        Text(task.title).font(.headline)
-                        Text(task.state)
-                        Text(task.request)
-                        if let activity = task.activity { Text(activity).foregroundStyle(.secondary) }
-                    }.navigationTitle("Task")
-                } label: {
-                    VStack(alignment: .leading) { Text(task.title); Text(task.state).font(.caption).foregroundStyle(WatchStyle.stone) }
+            let states = Dictionary(grouping: tasks, by: \.state)
+            let stateOrder = tasks.map(\.state).reduce(into: [String]()) { order, state in
+                if !order.contains(state) { order.append(state) }
+            }
+            ForEach(stateOrder, id: \.self) { state in
+                Section {
+                    ForEach(states[state] ?? []) { task in
+                        NavigationLink {
+                            List {
+                                Text(task.title).font(.headline)
+                                Text(task.state)
+                                Text(task.request)
+                                if let activity = task.activity { Text(activity).foregroundStyle(.secondary) }
+                            }.navigationTitle("Task")
+                        } label: {
+                            Text(task.title).font(.system(.body, design: .rounded)).lineLimit(2)
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text(state)
+                        Spacer()
+                        Text((states[state]?.count ?? 0).formatted())
+                            .foregroundStyle(WatchStyle.amber).monospacedDigit()
+                    }
                 }
             }
             if tasks.count == 10 { Text("Latest 10 tasks. Full board on iPhone.").font(.caption2) }

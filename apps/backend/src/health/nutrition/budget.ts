@@ -13,11 +13,8 @@
 import { nutrients, text, type Suggestion } from './model.js';
 import type { NutritionTargets } from './targets.js';
 
-/**
- * The exact exporter name for the day's ACTIVE energy. Resting (basal) and total energy are never read, so
- * the resting target is never counted twice. The name is trusted as stored; it is not verified against a live export.
- */
-export const activeEnergyMetric = 'active_energy';
+export const activeEnergyMetrics = ['active_energy_burned', 'active_energy'] as const;
+type ActiveEnergyMetric = typeof activeEnergyMetrics[number];
 
 // "+ 0" turns a rounded -0 into 0, so JSON output and equality checks agree.
 export const round1 = (value: number): number => Math.round(value * 10) / 10 + 0;
@@ -43,6 +40,7 @@ export type ActiveEnergyReason =
 export type ActiveEnergy =
   | {
     readonly known: true;
+    readonly metric: ActiveEnergyMetric;
     readonly kcal: number;
     readonly sampleCount: number | null;
     /** Verbatim source range; a day-level export may carry a bucket time rather than the last sample. */
@@ -62,23 +60,36 @@ export function pickActiveEnergy(
   rows: readonly Record<string, unknown>[],
   context: { readonly today: string; readonly now: string; readonly complete: boolean },
 ): ActiveEnergy {
-  const matches = rows.filter((row) => row.metric_name === activeEnergyMetric && dateKey(row.metric_date) === context.today);
-  if (matches.length === 0) return { known: false, reason: context.complete ? 'health_no_row_today' : 'health_scan_incomplete' };
-  const row = matches[0]!;
-  const kcal = finite(row.value);
-  if (matches.length > 1 || kcal === null || kcal < 0) return { known: false, reason: 'active_energy_invalid' };
-  if (row.unit !== 'kcal') return { known: false, reason: 'active_energy_unit_unknown' };
-  const storedAt = optionalText(row.updated_at);
-  const stored = storedAt === null ? Number.NaN : Date.parse(storedAt);
-  return {
-    known: true,
-    kcal: round1(kcal),
-    sampleCount: count(row.sample_count),
-    sourceStartAt: optionalText(row.start_at),
-    sourceEndAt: optionalText(row.end_at),
-    storedAt,
-    ageMinutes: Number.isFinite(stored) ? Math.max(0, Math.floor((Date.parse(context.now) - stored) / 60_000)) : null,
-  };
+  if (!context.complete) return { known: false, reason: 'health_scan_incomplete' };
+  let selected: Extract<ActiveEnergy, { known: true }> | undefined;
+  let latest = -Infinity;
+  let reason: ActiveEnergyReason = 'health_no_row_today';
+  for (const metric of activeEnergyMetrics) {
+    const row = rows.find(item => item.metric_name === metric && dateKey(item.metric_date) === context.today);
+    if (!row) continue;
+    const merged = (row.fields as { mergedDailyTotal?: unknown } | null)?.mergedDailyTotal === true;
+    // Exporters aggregate energy per day. An unmarked iOS batch may contain only recent intervals.
+    if (!merged && optionalText(row.ingestion_id)?.startsWith('ios-')) {
+      reason = 'active_energy_invalid';
+      continue;
+    }
+    const kcal = finite(row.value);
+    if (kcal === null || kcal < 0) { reason = 'active_energy_invalid'; continue; }
+    if (row.unit !== 'kcal') { reason = 'active_energy_unit_unknown'; continue; }
+    const storedAt = optionalText(row.updated_at);
+    const sourceEndAt = optionalText(row.end_at);
+    // A native total has an explicit coverage end. Exporter bucket times may denote midnight.
+    const observedAt = Date.parse((merged ? sourceEndAt : null) ?? storedAt ?? '');
+    const rank = Number.isFinite(observedAt) ? observedAt : -Infinity;
+    if (selected && rank <= latest) continue;
+    latest = rank;
+    selected = {
+      known: true, metric, kcal: round1(kcal), sampleCount: count(row.sample_count),
+      sourceStartAt: optionalText(row.start_at), sourceEndAt, storedAt,
+      ageMinutes: Number.isFinite(observedAt) ? Math.max(0, Math.floor((Date.parse(context.now) - observedAt) / 60_000)) : null,
+    };
+  }
+  return selected ?? { known: false, reason };
 }
 
 export interface MealTotals {

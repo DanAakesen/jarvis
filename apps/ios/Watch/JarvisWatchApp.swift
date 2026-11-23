@@ -203,30 +203,52 @@ struct WatchRoot: View {
     }
 
     private var menu: some View {
-        List {
-            menuLink("Factory", "chevron.left.forwardslash.chevron.right", .factory)
-            Section("Daily") {
-                menuLink("Agenda", "calendar", .agenda)
-                menuLink("Tasks", "checklist", .tasks)
-                menuLink("Notes", "note.text", .notes)
-                menuLink("Home brief", "sunrise", .home)
-            }
-            Section("Health") {
-                menuLink("Log lift", "plus.circle", .logLift)
-                menuLink("Workouts", "figure.run", .workouts)
-                menuLink("Manage lifts", "dumbbell", .lifts)
-                menuLink("Nutrition", "fork.knife", .nutrition)
-                menuLink("Body Fat", "chart.line.uptrend.xyaxis", .bodyFat)
-                menuLink("Health summary", "heart", .health)
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                menuGroup("Daily") {
+                    menuLink("Agenda", "calendar", .agenda)
+                    menuLink("Tasks", "checklist", .tasks)
+                    menuLink("Notes", "note.text", .notes)
+                    menuLink("Home brief", "sunrise", .home)
+                }
+                menuGroup("Health") {
+                    menuLink("Log lift", "plus.circle", .logLift)
+                    menuLink("Workouts", "figure.run", .workouts)
+                    menuLink("Manage lifts", "dumbbell", .lifts)
+                    menuLink("Nutrition", "fork.knife", .nutrition)
+                    menuLink("Body Fat", "chart.line.uptrend.xyaxis", .bodyFat)
+                    menuLink("Health summary", "heart", .health)
+                }
+                menuLink("Factory", "chevron.left.forwardslash.chevron.right", .factory)
+            }.padding(.horizontal, 3)
         }
         .navigationTitle("Menu")
     }
 
+    @Environment(\.dynamicTypeSize) private var menuTypeSize
+
+    private func menuGroup<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 6, alignment: .topLeading),
+                                     count: menuTypeSize.isAccessibilitySize ? 1 : 2), spacing: 6) {
+                content()
+            }
+        }
+    }
+
     private func menuLink(_ title: LocalizedStringKey, _ symbol: String, _ route: WatchRoute) -> some View {
         NavigationLink(value: route) {
-            Label(title, systemImage: symbol)
-        }
+            VStack(alignment: .leading, spacing: 5) {
+                Image(systemName: symbol)
+                    .foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+                Text(title).font(.system(.caption, design: .rounded, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(6)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+            .modifier(WatchSurface(radius: 14))
+        }.buttonStyle(.plain)
     }
 
     private func dictate() {

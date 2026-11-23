@@ -125,13 +125,15 @@ struct JarvisHealthDashboardData {
     var bodyMetrics: [JarvisHealthMetricSeries] = []
     var trainingTargets: JarvisHealthTargets?
     var nutritionTargets: JarvisNutritionTargets?
+    var todayBudget: JarvisTodayNutritionBudget?
+    var budgetFailure: JarvisHealthFailure?
     var trainingTargetFailure: JarvisHealthFailure?
     var nutritionTargetFailure: JarvisHealthFailure?
     var loading = true
     var failure: JarvisHealthFailure?
 
     var hasFailure: Bool {
-        failure != nil || trainingTargetFailure != nil || nutritionTargetFailure != nil ||
+        failure != nil || trainingTargetFailure != nil || nutritionTargetFailure != nil || budgetFailure != nil ||
             [workouts, steps, activeEnergy, exerciseTime, nutritionDays, meals, sleep, metricCatalog, sync]
             .contains { $0.failure != nil } || bodyMetrics.contains { $0.read.failure != nil }
     }
@@ -936,7 +938,7 @@ struct JarvisHealthArea: View {
     }
 
     private func firstFailure(in data: JarvisHealthDashboardData) -> JarvisHealthFailure {
-        data.trainingTargetFailure ?? data.nutritionTargetFailure ??
+        data.trainingTargetFailure ?? data.nutritionTargetFailure ?? data.budgetFailure ??
             [data.workouts, data.steps, data.activeEnergy, data.exerciseTime, data.nutritionDays,
              data.meals, data.sleep, data.metricCatalog, data.sync]
             .compactMap(\.failure).first ?? data.bodyMetrics.compactMap(\.read.failure).first ?? .failed
@@ -981,8 +983,9 @@ struct JarvisHealthArea: View {
 
         async let training: Void = loadTrainingTargets(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
         async let nutrition: Void = loadNutritionTargets(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
+        async let budget: Void = loadTodayBudget(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
         await loadDashboardReads(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
-        _ = await (training, nutrition)
+        _ = await (training, nutrition, budget)
         guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
         dashboard?.loading = false
     }
@@ -1041,6 +1044,19 @@ struct JarvisHealthArea: View {
             client: client, mode: mode, period: selectedPeriod, loadID: loadID
         )
         _ = await (workouts, steps, energy, exercise, nutrition, meals, sleep, catalog, sync)
+    }
+
+    @MainActor
+    private func loadTodayBudget(
+        client: JarvisHealthClient, mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID
+    ) async {
+        guard selectedPeriod.dayCount == 1 else { return }
+        let result: (value: JarvisTodayNutritionBudget?, failure: JarvisHealthFailure?) = await resolved(
+            .health, scope: "nutrition-budget:\(selectedPeriod.endDate)", mode: mode
+        ) { try await client.fetchTodayNutritionBudget(validator: $0) }
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        dashboard?.budgetFailure = result.failure
+        dashboard?.todayBudget = result.failure == nil && result.value?.localDate == selectedPeriod.endDate ? result.value : nil
     }
 
     @MainActor

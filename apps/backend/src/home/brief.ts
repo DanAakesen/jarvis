@@ -119,7 +119,7 @@ export class HomeBriefService {
     });
     // Failed commitment sources must never be silently converted into an empty/clear day.
     if (missing.includes('calendar') || missing.includes('todos')) return unavailable('sources');
-    const facts: SourceFact[] = briefFacts(rows).map(fact => ({ ...fact, ref: fact.ref.slice(0, 200),
+    const facts = briefFacts(rows).map(fact => ({ ...fact,
         label: fact.label.slice(0, 160), text: fact.text.slice(0, 600) }));
     const clock = this.now();
     const day = copenhagenDay(clock);
@@ -147,10 +147,17 @@ export class HomeBriefService {
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
     const work = (async () => {
       try {
+        // Calendar identities can be long and share a prefix. Only the service needs them to resolve citations.
+        const sourceRefs = new Map<string, string>();
+        const promptFacts = facts.map((fact, index) => {
+          const ref = `f${index + 1}`;
+          sourceRefs.set(ref, fact.ref);
+          return { ...fact, ref, identity: undefined };
+        });
         const raw = await bounded(this.options.model!({ system, user: JSON.stringify({
           day, now: new Date(clock).toISOString(), timeZone: 'Europe/Copenhagen',
           maxVisibleLines: settings.homeBrief.maxVisibleLines,
-          instruction: settings.homeBrief.instruction, unavailableSources: missing, facts,
+          instruction: settings.homeBrief.instruction, unavailableSources: missing, facts: promptFacts,
         }) }, signal), signal);
         if (!raw) return unavailable('model');
         const value: unknown = JSON.parse(raw);
@@ -163,13 +170,13 @@ export class HomeBriefService {
               return code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13);
             }) ||
             !Array.isArray(result.evidenceRefs) || result.evidenceRefs.length > 12 ||
-            !result.evidenceRefs.every(ref => typeof ref === 'string' && facts.some(fact => fact.ref === ref)) ||
+            !result.evidenceRefs.every(ref => typeof ref === 'string' && sourceRefs.has(ref)) ||
             (facts.length > 0 && result.evidenceRefs.length === 0)) return unavailable('model');
-        const refs = result.evidenceRefs as string[];
+        const refs = (result.evidenceRefs as string[]).map(ref => sourceRefs.get(ref)!);
         const text = result.text;
         const brief: HomeBrief = { text: text.trim(), state: 'generated',
           maxVisibleLines: settings.homeBrief.maxVisibleLines, generatedAt: new Date(this.now()).toISOString(),
-          evidenceRefs: result.evidenceRefs as string[], unavailableSources: missing,
+          evidenceRefs: refs, unavailableSources: missing,
           highlights: facts.filter(fact => refs.includes(fact.ref) && text.includes(fact.label))
             .map(fact => fact.label).filter(Boolean).slice(0, 5) };
         this.cache.set(key, { at: this.now(), value: brief });

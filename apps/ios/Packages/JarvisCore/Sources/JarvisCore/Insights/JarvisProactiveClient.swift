@@ -555,6 +555,8 @@ public enum JarvisProactiveLogic {
         case "no_location": .proactiveReasonNoLocation
         case "location_permission_not_granted", "location_permission_denied",
             "location_permission_restricted": .proactiveReasonLocationPermission
+        case "location_permission_unknown": .proactiveReasonLocationPermissionUnknown
+        case "location_permission_not_determined": .proactiveReasonLocationPermissionUndecided
         case "location_observation_stale": .proactiveReasonLocationStale
         case "todo_file_missing": .proactiveReasonTodoMissing
         case "todo_file_ambiguous": .proactiveReasonTodoAmbiguous

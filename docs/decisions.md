@@ -35,7 +35,7 @@ Use server turn state and committed history on return to Chat; do not resend the
 
 ### 23 November 2026 — iPhone entry points and Watch navigation
 
-On iPhone, one manual kcal entry adds one meal with unknown macros. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.
+On iPhone, one manual entry adds one meal with kcal and optional protein grams. Omitted macros remain unknown. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.
 
 ### 23 November 2026 — Scoped Azure MCP capabilities
 

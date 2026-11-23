@@ -37,6 +37,26 @@ public enum WatchVoiceRecovery {
         return attempt < startAttempts && elapsed < startRetryWindowSeconds
     }
 
+    /// A lost WatchConnectivity acknowledgement can leave the phone waiting for audio that already played.
+    @MainActor
+    public static func deliverPlaybackReceipt(
+        _ receipt: WatchRequest,
+        isCurrent: @MainActor () -> Bool,
+        send: @MainActor (WatchRequest) async throws -> Void,
+        wait: @MainActor () async throws -> Void = { try await Task.sleep(for: .seconds(2)) }
+    ) async {
+        while !Task.isCancelled, isCurrent() {
+            do {
+                try await send(receipt)
+                return
+            } catch let failure as WatchFailure where failure == .unavailable || failure == .busy || failure == .network {
+                do { try await wait() } catch { return }
+            } catch {
+                return
+            }
+        }
+    }
+
     /// Resetting a failed capture can also clear playback's handler. Install it only on the ready graph.
     @MainActor
     public static func startCapture<Capture>(

@@ -54,7 +54,7 @@ first/last dates, distinct day count and latest update time. Catalogue pages
 default to 100 and cap at 500 rows. Both reads use the existing owner-scoped SQL
 boundary; capability versions 1 and 2 do not advertise the version-3 source.
 
-The inactive nutrition suggestion adapter reads only today's `active_energy` metric through `history('metrics', ...)` and takes freshness from `updated_at`; `start_at`/`end_at` are not a reliable last-sample time. It never reads resting, basal or total energy, and the exact metric name and health-total semantics are not verified against a live export.
+The iPhone, Chat and Voice daily budget uses one Copenhagen-day total from `active_energy_burned` or `active_energy`. Native HealthKit totals use their coverage end time. Exported totals use their update time. The latest valid total wins, with `active_energy_burned` first for a tie. Native interval batches do not establish a daily total.
 
 ## Checks and remaining gates
 

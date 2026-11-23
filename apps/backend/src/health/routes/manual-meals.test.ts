@@ -17,14 +17,14 @@ describe('direct manual meal', () => {
     await app.register(manualMealRoutes(() => ({ log })));
   });
   afterAll(() => app.close());
-  const save = (payload: typeof body, authorization = 'owner') => app.inject({
+  const save = (payload: typeof body & { proteinGrams?: unknown }, authorization = 'owner') => app.inject({
     method: 'POST', url: '/health/meals', payload, headers: { authorization },
   });
 
   it('builds the identical meal on retry, using exact kcal, unknown macros and the original Copenhagen date', async () => {
     const first = await save(body);
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toEqual({ idempotencyKey: body.idempotencyKey, energyKcal: 275.5, mealDate: '2025-12-10' });
+    expect(first.json()).toEqual({ idempotencyKey: body.idempotencyKey, energyKcal: 275.5, proteinGrams: null, mealDate: '2025-12-10' });
     expect((await save(body)).statusCode).toBe(200);
     const [original, retry] = log.mock.calls.map(([meal]) => meal);
     expect(retry).toEqual(original);
@@ -35,9 +35,17 @@ describe('direct manual meal', () => {
     expect(log.mock.lastCall?.[0].idempotencyKey).not.toBe(original?.idempotencyKey);
   });
 
+  it.each([0, 24.5, 1000])('stores %s g as exact protein on the same meal and confirms it', async proteinGrams => {
+    const response = await save({ ...body, proteinGrams });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().proteinGrams).toBe(proteinGrams);
+    expect(log.mock.lastCall?.[0]).toMatchObject({ energyKcal: body.energyKcal, proteinGrams,
+      carbohydratesGrams: null, provenance: { proteinGrams: { source: 'user-exact', unit: 'g' } } });
+  });
+
   it('rejects non-owner, invalid and extra fields before storage', async () => {
     expect((await save(body, 'anonymous')).statusCode).toBe(403);
-    for (const change of [{ energyKcal: 0 }, { energyKcal: 10001 }, { proteinGrams: 1 }, { occurredAt: 'tomorrow' }, { idempotencyKey: 'abc' }]) {
+    for (const change of [{ energyKcal: 0 }, { energyKcal: 10001 }, { proteinGrams: -1 }, { proteinGrams: 1001 }, { proteinGrams: '25' }, { fatGrams: 1 }, { occurredAt: 'tomorrow' }, { idempotencyKey: 'abc' }]) {
       expect((await save({ ...body, ...change })).statusCode).toBe(400);
     }
     expect(log).not.toHaveBeenCalled();
