@@ -9,6 +9,7 @@ import { chatBlockLimits, type ConversationSearchPage } from '@jarvis/contracts'
 import type { BackendModule } from '../modules.js';
 import type {
   ConversationChannel,
+  ConversationLanguage,
   ConversationRole,
   ConversationSteeringMessage,
 } from './conversation-store.js';
@@ -214,6 +215,7 @@ const steeringMessagesSchema = {
 
 interface ActiveChatTurn {
   readonly sessionId: string;
+  readonly language: ConversationLanguage;
   readonly runtimeTest?: 'current' | 'copilot';
   rootMessageId: string;
   phase: 'model' | 'tools' | 'finishing';
@@ -422,7 +424,7 @@ return {
     app.get('/conversation/turns/active', async () => ({
       turns: [...activeTurns.values()].filter(active => active.runtimeTest === undefined).flatMap(active => {
         const turn = recoverableTurns.get(active.rootMessageId);
-        return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId }] : [];
+        return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId, language: active.language }] : [];
       }),
     }));
     app.get<{ Params: { sessionId: string; messageId: string } }>(
@@ -702,6 +704,7 @@ return {
         : `screen:chat:${createHash('sha256').update(`${sessionId}:${visualTurnKey}`).digest('hex')}`;
       const activeTurn: ActiveChatTurn = {
         sessionId,
+        language: session.language,
         ...(session.runtimeTest ? { runtimeTest: session.runtimeTest } : {}),
         rootMessageId: '',
         phase: 'model',

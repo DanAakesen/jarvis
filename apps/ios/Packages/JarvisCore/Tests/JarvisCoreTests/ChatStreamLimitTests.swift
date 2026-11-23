@@ -111,7 +111,7 @@ private actor ResumeTransport: HTTPTransport {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         calls.append("\(request.method.rawValue) \(request.url.path)")
         if request.url.path.hasSuffix("/active") {
-            // Same two identifiers as GET /conversation/turns/active in the backend.
+            // Existing backends send just the two identifiers.
             return HTTPResponse(statusCode: 200, body: Data(#"{"turns":[{"sessionId":"12","messageId":"430"}]}"#.utf8))
         }
         return HTTPResponse(statusCode: 200, body: replay)
