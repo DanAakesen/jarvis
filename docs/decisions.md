@@ -23,7 +23,11 @@ Add confirmed decisions here, newest first. When an entry is older than 14 days,
 
 ### 23 November 2026 — PI can diagnose its backend requests
 
-Dan approved read-only access to sanitized backend diagnostics in Chat and Voice. A request ID links related events. Keep other apps, device logs and raw personal content outside the reader.
+Dan approved scoped backend diagnostics in Chat and Voice. A request ID links related events. Keep other apps, device logs and raw content outside the reader; use [the log reference](reference/logs.md).
+
+### 23 November 2026 — Resume the accepted Chat turn and verify internal TestFlight availability
+
+Use server turn state and committed history on return to Chat; do not resend the owner message. After upload, read Apple's processing and internal beta state for the same build instead of inferring availability. [#2043](https://github.com/DanAakesen/jarvis/pull/2043).
 
 ### 23 November 2026 — iPhone entry points and Watch navigation
 
@@ -31,7 +35,7 @@ On iPhone, one manual kcal entry adds one meal with unknown macros. Log workout 
 
 ### 23 November 2026 — Scoped Azure MCP capabilities
 
-Expose exact Azure MCP 3.0.0 leaf tools for subscription/resource inventory, supported Jarvis storage operations, Monitor metrics and resource health, and workbook management. Keep writes constrained by the existing `rg-jarvis` Contributor and the blob-data role scoped to the existing Jarvis account. Keep raw Log Analytics queries out of the MCP tool surface because the Azure MCP identity's role union can bypass table-level controls; this is tool-surface isolation, not identity-level isolation. Use the bounded backend diagnostic tool for logs. The pinned Container Apps MCP surface only lists apps. Jarvis Storage Queue operations use the backend identity, with one SDK attempt for non-idempotent sends and receives.
+Allow only the pinned Azure MCP leaves for inventory, scoped storage, metrics, health and workbooks. Exclude raw Log Analytics queries: the MCP identity's role union can bypass table-level controls. The separate backend identity handles bounded log reads and queue operations. See [the tool boundaries](architecture.md#tools-retries-and-failure-copy).
 
 ### 22 November 2026 — One continuous conversation and direct Settings access
 
@@ -55,10 +59,7 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 
 ### 22 November 2026 — Keep the established PI tool names and never replay an uncertain effect ([#2033](https://github.com/DanAakesen/jarvis/pull/2033), [#2032](https://github.com/DanAakesen/jarvis/pull/2032), [#2030](https://github.com/DanAakesen/jarvis/pull/2030))
 
-- **Decision:** Use `find_tools`/`call_tool` for weather, calendar and reminders. Drop #2030's three direct names; keep paging, the 24,000-character read cap, receipts, effect metadata and Danish aliases. Keep `list_capabilities` whole (not paged).
-- **Why:** Build 122 reported a weather session-policy denial before any tool call reached the door. A stale Foundry catalogue is plausible, not proven. Send the corrected tool overview to the existing conversation without reset, rebind or compaction.
-- **Decision:** Retry rate-limited requests only when safe and within the turn deadline, using the same request and results. Never replay accepted native work with tool/output evidence. Return the completed-tool receipt if the reply fails. Include iPhone Gym notes on the first `gym_lifts list` page without moving or duplicating them.
-- **Evidence:** [Gateway fixtures](../apps/backend/src/pi/gateway.test.ts) cover safe retry and the accepted-stream boundary; [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) covers Notes, Tasks and iPhone Gym. [Infrastructure](../infra/main.parameters.json) sets Terra to 600K tokens/min. Existing-conversation tool access is unverified.
+Use only `find_tools` and `call_tool` for weather, calendar and reminders. Refresh the overview in the existing conversation rather than resetting it. Keep receipts and don't replay accepted work with tool/output evidence; a retry has to fit the turn deadline.
 
 ### 22 November 2026 — Show iPhone Voice and Chat state from what actually happened ([#2034](https://github.com/DanAakesen/jarvis/pull/2034), [#2027](https://github.com/DanAakesen/jarvis/pull/2027), [#2028](https://github.com/DanAakesen/jarvis/pull/2028))
 
@@ -82,14 +83,11 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 
 ### 22 November 2026 — Prove tool reach and stream contracts offline ([#2022](https://github.com/DanAakesen/jarvis/pull/2022), [#2021](https://github.com/DanAakesen/jarvis/pull/2021), [#2020](https://github.com/DanAakesen/jarvis/pull/2020), [#2004](https://github.com/DanAakesen/jarvis/pull/2004))
 
-- **Decision:** Check the registered Jarvis surface with [tool conformance](../apps/backend/src/pi/tool-conformance.test.ts); [parity replay](../apps/backend/src/voice/chat-voice-parity.test.ts) flags undeclared channel differences. Separate fixtures only where interfaces differ.
-- **Evidence:** Gateway fixtures fragment streams by byte. Native harness work needs the full stream, not a second response. Answer only completed client-owned calls and recover terminal-only text. Live event shapes and non-DELETE gates outside ordinary PI Chat/Voice were not re-audited.
+- Qualify registered tools and channel differences offline. Read the full Foundry stream; answer only completed client-owned calls and preserve terminal-only text.
 
 ### 22 November 2026 — Make brain work and follow-ups observable ([#2025](https://github.com/DanAakesen/jarvis/pull/2025), [#2019](https://github.com/DanAakesen/jarvis/pull/2019), [#2018](https://github.com/DanAakesen/jarvis/pull/2018), [#2014](https://github.com/DanAakesen/jarvis/pull/2014))
 
-- **Decision:** Queue verified GitHub releases/issues/comments/PRs/default-branch failures, failed reminder delivery and timed calendar clashes. Producers record and dedupe; the model judges interruption. Wakes get the Chat tool overview plus wake-only tools. Keep the existing source switches and leave the legacy slot engine in place.
-- **Why/evidence:** [Signal fixtures](../apps/backend/src/pi/brain/signals.test.ts) pin producer scope; `pi.brain_tick`/`pi.brain_state`, `/pi/brain` and `/pi/status` describe skip reason and turn kind. The old claim of no wakes was not reliable before events were registered. Background PI remains off by default.
-- **Decision:** Price cache reads once, keep foreground/proactive accounting separate, and clean up only scratch wake/smoke conversations. Preview the first sentence without breaking Danish/English abbreviations or emoji, link the exact message and feed `useful`/`wrong` to the next otherwise due wake. Offline wake and receipt fixtures support the contract. Live signal delivery, judgement and cleanup were not exercised here.
+Verified GitHub, failed-reminder and timed calendar events queue through source switches; code dedupes and the model judges interruption. Background PI defaults to off. Keep foreground and wake accounting separate, clean up only scratch conversations, and link a notification to its exact stored message. Feedback goes to the next otherwise due wake. [Architecture](architecture.md#proactive-wake-and-inbox-review) owns the active scheduler.
 
 ### 21 November 2026 — Delegate the whole spoken request ([#2001](https://github.com/DanAakesen/jarvis/pull/2001), [#2000](https://github.com/DanAakesen/jarvis/pull/2000), [#1997](https://github.com/DanAakesen/jarvis/pull/1997), [#1993](https://github.com/DanAakesen/jarvis/pull/1993))
 
@@ -137,7 +135,7 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 
 ## Open questions and proposals
 
-[A–F in the plan](../PLAN.md#open-decisions-af): legacy deletion, direct manual kcal entry, context compaction, Foundry instruction reduction, Foundry administration, and banking approvals. None is standing authorization. Provider call-ID support, catalogue refresh in an existing conversation, and live/device behavior are verification questions, not design decisions.
+The [plan](../PLAN.md#open-decisions-af) owns unresolved choices and acceptance. Provider call-ID support and live/device behavior are verification questions, not design decisions.
 
 ## Index of older decisions
 

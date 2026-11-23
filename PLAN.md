@@ -10,26 +10,24 @@
 | **P1** | Proactive intelligence: Jarvis reaches out when a signal needs attention, with the context that makes it relevant. See [#2011](https://github.com/DanAakesen/jarvis/issues/2011). |
 | **P2** | Polish and everything else. |
 
-**In flight:** The [build 124 follow-up (#2043)](https://github.com/DanAakesen/jarvis/pull/2043) covers Chat resume and typing, target settings, Watch audio and PI. Build 124 does not contain those fixes; wait for an installable build that does before requesting a retest of them.
-
 These are priority ranks, not the historical phase IDs. Dan's daily core, in order: **1. Jarvis project** (issues, PRs, workers, releases), **2. Notes**, **3. Tasks**, **4. Workouts**, **5. Nutrition** when logging food (kcal logged and left today, protein still needed), **6. Banking** later (see F).
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **124** | [Upload](https://github.com/DanAakesen/jarvis/actions/runs/45071501953) from `ee34f2c3e`. Dan passed project and issue lookup, Notes, task create/complete, weather in the ongoing conversation and the single Proactive switch (tests 1–3, 6 and 9). iPhone typing lag, phone location, both target settings pages, Watch dictation and Watch Voice failed. Gym, Nutrition totals and Voice caption scrolling still need device checks. Channel parity remains open. |
-| Backend | The [latest main Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45078026398) has an accepted release receipt and passed deterministic runtime readiness. Its source includes the [Notes release](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) with migration `0103`, the PI rate-limit and tool-access fixes, and `gym_lifts` discovery of iPhone Gym records. The manual live acceptance job did not run. |
+| TestFlight **124** | Latest confirmed upload. Dan passed project/issue lookup, Notes, task create/complete, weather in the same conversation and the Proactive switch. Typing, phone location, target settings and Watch dictation/Voice failed. The [follow-up's](https://github.com/DanAakesen/jarvis/pull/2043) native fixes are not in build 124 and are **not accepted on device**. Current Apple tester availability was not read back. |
+| Backend | The [recovery Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45100763826) after the lowercase flag fix passed backend startup and Foundry host checks. Check its release receipt for full readiness; those checks are not manual live conversation acceptance. |
 | Background PI | Dan turned it on in build 124. The Proactive page shows turns used, allowance and last activation. A real GitHub workflow failure triggered a successful review on 23 November. It sent no message. Device delivery awaits verification. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. On the next build, retest typing while Jarvis replies and ask for the iPhone location from the same conversation. Verify the single switch on the main Settings page.
-   Open Training targets and Nutrition targets. Build 124 showed a load error on both. Both server responses passed a production shape check. On iPhone, verify the fields load, save one intended change and reopen each page. Report the exact message if a page still fails.
-2. On a day with logged data, compare the iPhone Gym lift and Nutrition totals in Chat and Voice. Test Voice caption scrolling, status and Watch dictation/reconnection. Build 124 results above cover only the channels Dan reported.
-3. On iPhone, find a nearby pharmacy, select a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Check the spoken estimate against the card.
-4. Verify an ordinary Inbox follow-up and its delivery. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
+1. Confirm Deploy readiness and internal Apple availability for a build with the follow-up before asking Dan to retest. Start with project lookup, finding/renaming a note and creating/completing a task in Chat and Voice. With logged data, compare a Gym lift and today's Nutrition totals across both channels.
+2. Leave Chat during a reply and return to one answer; type and scroll during streaming. Ask for the phone's location in the same conversation. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
+3. In Settings, verify the single Proactive switch and open Training and Nutrition targets. Save one intended change and reopen each page. Report the exact error if a page still fails.
+4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
+5. Verify an ordinary Inbox follow-up and its delivery. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
 
-**Unverified:** whether Foundry sends a usable `_meta` call ID (the ledger still works without one); real provider rate-limit message and cause (reported error code and offline fixtures are evidence, not a new live trace); iPhone follow/Voice label and Watch recovery on physical devices; Background PI message delivery. Do not treat an offline replay or a merged fix as device acceptance.
+**Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 
 Backend diagnostics use a backend-only log grant. Verify production readback and one owner request before accepting. See [log access](docs/reference/logs.md).
 
@@ -37,7 +35,7 @@ Backend diagnostics use a backend-only log grant. Verify production readback and
 
 | | Decision | Next check |
 | --- | --- | --- |
-| **A** | Legacy proactive engine removal approved. | PI owns the slots. Verify capture and a qualifying follow-up in production. |
+| **A · decided** | PI owns scheduled reviews; the legacy engine is removed from source. | Verify capture and a qualifying follow-up in production. |
 | **B · decided** | Manual kcal adds one meal on iPhone. | Device check: in Health → Nutrition, log 100 kcal. Meals should gain one entry and Chat should report 100 more kcal for today. |
 | **C** | Keep the same stored conversation for Chat and Voice. Foundry controls context management on this endpoint. | Revisit configurable compaction when the [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview) supports it. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
@@ -54,10 +52,10 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Editing merged in #2028 and first-page visibility and consistent titles in #2031. Dan reports test 2 passed. Editing an existing title was outside that check. |
-| [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Build 124 showed a false failure after app switching. The server and iPhone now agree on active replies. Retest leaving during a send, returning and receiving one answer. |
-| [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Build 124 still lagged after #2027 and #2034. The editor now observes drafts locally and avoids repeated layout. Retest fast typing and scrolling with 100+ messages while Jarvis replies. |
+| [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Active reply recovery merged; verify one answer after leaving and returning during a send. |
+| [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Local draft observation merged; retest fast typing and scrolling with a long history while Jarvis replies. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Build 124 test 9 passed. Dan wants the single Proactive suggestions switch directly on the main Settings page. The inline control awaits device acceptance. Voice gesture acceptance remains open. |
-| [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Build 124 failed dictation and Voice. Both dictation uploads reached the backend. Retest the Speech handshake fix, then start Voice and verify two-way audio after Listening. |
+| [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Retest dictation after the Speech handshake fix, then verify two-way Voice after Listening. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Busy Home briefs keep urgent tasks and upcoming meetings. Chat and Voice can return a local repository reader while GitHub tools load. Gmail refreshes unread membership each poll and reuses immutable message headers within the current authorization. Calendar sync remains open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Ask “show my Foundry agents”, then read the serving version and its model. Verify a version change on a test agent when authorized. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |

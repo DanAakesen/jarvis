@@ -16,6 +16,7 @@ Use [diagnostic sources](reference/logs.md) and a narrow UTC window. Investigate
 | Symptom | Check first |
 | --- | --- |
 | Deploy reports `exact_qualification_missing` | Compare the merged tree with the CI receipt's PR/head and tested tree. Use a qualified PR to reconcile source; do not rerun an unqualified commit or bypass evidence. |
+| New backend revision rejects a boolean at startup | Check that Bicep renders `JARVIS_BACKEND_LOGS_ENABLED` and `JARVIS_PROACTIVE_EVENTS_ENABLED` as literal lowercase `true`/`false`, not ARM's `True`/`False`. The log flag rejects other values at startup; the events flag enables only on `true`. Verify the new revision's readiness, not just the previous revision's health. |
 | Tool result is missing or uncertain | Compare `pi.stream_failed` with `pi.mcp_tool` and the stored receipt. The harness can refuse a name before the door sees it. Read back the intended result before retrying a possible write. |
 | Voice never starts or does not end | Follow `voice.session_stage` to `jarvis.session.ready`; a WebSocket open is not service readiness. `voice.session_summary` names the closer and safe outcome. An interrupted close or missing upstream acknowledgement is a failure, not Ended. For a spoken request, correlate lifecycle/length events with the stored owner turn, not raw audio. |
 | Brain appears idle | Inspect the retained status and `pi.brain_tick`/`pi.brain_run`: distinguish off, paused, no eligible sources, no due work and a failed wake. Do not enable the brain to diagnose it. |
