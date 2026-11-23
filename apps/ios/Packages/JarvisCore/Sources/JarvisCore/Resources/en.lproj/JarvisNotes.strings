@@ -126,6 +126,8 @@
 "voice.reconnect" = "Reconnect";
 "voice.mute" = "Mute microphone";
 "voice.unmute" = "Unmute microphone";
+"voice.speaker" = "Speaker";
+"voice.outputUnavailable" = "Couldn’t switch audio output. Try Speaker again.";
 "voice.end" = "End voice";
 "voice.minimize" = "Minimize voice";
 "voice.restore" = "Restore voice screen";

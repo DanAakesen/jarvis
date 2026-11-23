@@ -2,7 +2,7 @@ import Foundation
 
 public enum JarvisVoiceLocalizationKey: String, CaseIterable, Sendable {
     case connecting, reconnecting, offline, muted, listening, thinking, speaking, ended
-    case openSettings, signInRequired, reconnect, mute, unmute, end, minimize, restore, orb
+    case openSettings, signInRequired, reconnect, mute, unmute, speaker, outputUnavailable, end, minimize, restore, orb
     case enableVideo
     case camera, stopCamera, cameraSettings, viewfinder, add, photoReady, takePhoto, close
     case shareScreen, stopSharing, sharingScreen, stop, broadcastPicker

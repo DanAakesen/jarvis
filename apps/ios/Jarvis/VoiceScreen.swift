@@ -457,6 +457,15 @@ struct VoiceScreenView: View {
                 ) {
                     Task { await model.toggleMute() }
                 }
+
+                VoiceControlButton(
+                    symbol: model.isOnSpeaker ? "speaker.wave.3.fill" : "speaker.wave.1",
+                    label: JarvisVoiceLocalization.string(.speaker),
+                    isSelected: model.isOnSpeaker,
+                    disabled: !model.isAudioReady || !model.canUseControls,
+                    identifier: "voice.speaker",
+                    action: model.toggleSpeaker
+                )
             }
 
             JarvisMenuButton(
