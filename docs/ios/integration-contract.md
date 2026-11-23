@@ -25,6 +25,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 ## 3. Voice (WebSocket)
 
 - iPhone and Watch use one JSON WebSocket at `wss://BACKEND/voice` for English and Danish.
+- The paired iPhone batches adjacent reply audio or caption fragments for Watch delivery. When a call ends, the Watch reads the saved conversation to recover any missed captions.
 - Auth: exactly two subprotocols, `jarvis.voice.v2` and `jarvis.auth.TOKEN`.
   v1 is rejected during the upgrade and has no alias or fallback.
 - Terminal: `jarvis.session.ended` is clean completion only.

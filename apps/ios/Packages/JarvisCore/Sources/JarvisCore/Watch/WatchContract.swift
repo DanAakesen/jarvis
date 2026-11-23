@@ -172,6 +172,25 @@ public struct WatchEvent: Codable, Sendable {
 }
 
 public enum WatchEventScheduling {
+    /// Pack adjacent unsent fragments without crossing a response, caption or playback boundary.
+    public static func appendVoiceFragment(_ next: WatchEvent, to last: inout WatchEvent) -> Bool {
+        guard last.kind == next.kind, last.requestID == next.requestID, last.responseID == next.responseID,
+              let first = last.text, let second = next.text else { return false }
+        switch next.kind {
+        case .voiceAudio:
+            guard var pcm = Data(base64Encoded: first), let more = Data(base64Encoded: second),
+                  pcm.count + more.count <= 24_000 else { return false }
+            pcm.append(more)
+            last.text = pcm.base64EncodedString()
+        case .voiceTranscript, .voiceUserTranscriptDelta:
+            guard next.responseID != nil, first.utf8.count + second.utf8.count <= 4_000 else { return false }
+            last.text = first + second
+        default:
+            return false
+        }
+        return true
+    }
+
     public static func isBarrier(_ event: WatchEvent) -> Bool {
         [
             .chatDelta,

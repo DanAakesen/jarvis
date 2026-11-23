@@ -671,7 +671,8 @@ final class WatchModel: ObservableObject {
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
         audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
-        Task { await routePendingReplyIfPossible() }
+        // The shared conversation can already contain the complete turn when the live link ends mid-caption.
+        Task { await history() }
     }
     private func beginLocalVoiceEnd(captureEndReason: String) {
         voiceRecovery?.cancel(); voiceRecovery = nil

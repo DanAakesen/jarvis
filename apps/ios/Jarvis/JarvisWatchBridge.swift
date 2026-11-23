@@ -242,15 +242,26 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard WCSession.default.isReachable ||
                 [.chatDelta, .chatDone, .chatError].contains(event.kind) ||
                 recoverableText else { return }
-        guard eventQueue.count < 128 else {
+        if var last = eventQueue.last, eventDeliveryAttempts[last.deliveryID] == nil,
+           WatchEventScheduling.appendVoiceFragment(event, to: &last) {
+            eventQueue[eventQueue.count - 1] = last
+            deliverEvents()
+            return
+        }
+        if eventQueue.count >= 128 {
             if event.kind == .voiceAudio {
                 playbackDrops += 1
                 return
             }
-            eventQueue.removeAll()
-            eventQueue.append(.init(.chatError, requestID: event.requestID, text: "Connection too slow. Reopen history on iPhone."))
-            Task { await self.stopVoice() }
-            return
+            if let audio = eventQueue.lastIndex(where: { $0.kind == .voiceAudio && $0.requestID == event.requestID }) {
+                eventQueue.remove(at: audio)
+                playbackDrops += 1
+            } else {
+                eventQueue.removeAll()
+                eventQueue.append(.init(.chatError, requestID: event.requestID, text: "Connection too slow. Reopen history on iPhone."))
+                Task { await self.stopVoice() }
+                return
+            }
         }
         let index = WatchEventScheduling.insertionIndex(for: event, in: eventQueue)
         eventQueue.insert(event, at: index)
@@ -262,13 +273,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             if eventInFlight.values.contains(where: { WatchEventScheduling.isBarrier($0.event) }) { return }
             if WatchEventScheduling.isBarrier(eventQueue[0]), !eventInFlight.isEmpty { return }
             var next = eventQueue.removeFirst()
-            if next.kind == .voiceAudio, var pcm = Data(base64Encoded: next.text ?? "") {
-                while let following = eventQueue.first, following.kind == .voiceAudio,
-                      following.requestID == next.requestID, following.responseID == next.responseID,
-                      let more = Data(base64Encoded: following.text ?? ""), pcm.count + more.count <= 24_000 {
-                    pcm.append(more); eventQueue.removeFirst()
-                }
-                next.text = pcm.base64EncodedString()
+            while next.kind == .voiceAudio, let following = eventQueue.first,
+                  WatchEventScheduling.appendVoiceFragment(following, to: &next) {
+                eventQueue.removeFirst()
             }
             guard let data = try? encode(WatchWire.event(next)) else { continue }
             let token = UUID()
@@ -312,8 +319,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 deliverEvents()
                 return
             }
-            if voiceID != nil { Task { await self.stopVoice(audioLinkStalled: true) } }
-            return
+            eventDeliveryAttempts.removeValue(forKey: item.event.deliveryID)
+            if let id = voiceID, item.event.requestID == id {
+                Task { if self.voiceID == id { await self.stopVoice(audioLinkStalled: true) } }
+            }
         } else if item.event.kind == .voiceAudio, item.event.requestID == voiceID {
             playbackDrops += 1
             if playbackFailureSince == nil || Date().timeIntervalSince(lastPlaybackFailure ?? Date()) > 5 {

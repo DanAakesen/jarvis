@@ -184,6 +184,23 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(14))), .restart)
     }
 
+    func testQueuedReplyFragmentsPreserveAudioAndCaptionOrder() {
+        let session = UUID()
+        var audio = WatchEvent(.voiceAudio, requestID: session, text: Data([1, 2]).base64EncodedString(), responseID: "one")
+        let next = WatchEvent(.voiceAudio, requestID: session, text: Data([3, 4]).base64EncodedString(), responseID: "one")
+        XCTAssertTrue(WatchEventScheduling.appendVoiceFragment(next, to: &audio))
+        XCTAssertEqual(audio.text, Data([1, 2, 3, 4]).base64EncodedString())
+        var caption = WatchEvent(.voiceTranscript, requestID: session, text: "Hello", responseID: "one")
+        XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(caption, to: &audio))
+        XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(
+            .init(.voiceTranscript, requestID: session, text: " there", responseID: "two"), to: &caption))
+        XCTAssertTrue(WatchEventScheduling.appendVoiceFragment(
+            .init(.voiceTranscript, requestID: session, text: " there", responseID: "one"), to: &caption))
+        XCTAssertEqual(caption.text, "Hello there")
+        let full = WatchEvent(.voiceAudio, requestID: session, text: Data(count: 24_000).base64EncodedString(), responseID: "one")
+        XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(full, to: &audio))
+    }
+
     func testPlaybackPriorityRespectsAudioOrderAndTerminalBarriers() {
         let id = UUID()
         let audio = WatchEvent(.voiceAudio, requestID: id)
