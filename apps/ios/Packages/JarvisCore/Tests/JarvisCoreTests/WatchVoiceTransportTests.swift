@@ -65,6 +65,25 @@ final class WatchVoiceTransportTests: XCTestCase {
     }
 
     @MainActor
+    func testPlaybackReceiptSurvivesLostAcknowledgementOnlyDuringItsCall() async {
+        let receipt = WatchRequest(action: .playbackCompleted, text: UUID().uuidString, itemID: "reply", flag: true)
+        var attempts: [WatchRequest] = []
+        await WatchVoiceRecovery.deliverPlaybackReceipt(receipt, isCurrent: { true }, send: { request in
+            attempts.append(request)
+            if attempts.count == 1 { throw WatchFailure.unavailable }
+        }, wait: {})
+        XCTAssertEqual(attempts, [receipt, receipt])
+
+        attempts.removeAll()
+        var active = true
+        await WatchVoiceRecovery.deliverPlaybackReceipt(receipt, isCurrent: { active }, send: { request in
+            attempts.append(request)
+            throw WatchFailure.unavailable
+        }, wait: { active = false })
+        XCTAssertEqual(attempts, [receipt])
+    }
+
+    @MainActor
     func testPlaybackCompletionIsDeliveredAfterCaptureRetryClearsTheHandler() async throws {
         var ledger = VoicePlaybackLedger()
         var machine = VoiceSessionStateMachine()

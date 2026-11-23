@@ -690,7 +690,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard r.itemID == voiceID?.uuidString, let voice else { throw WatchFailure.invalidRequest }
             try await performLiveActivityCommand(.setMuted(r.flag ?? true)); return nil
         case .playbackCompleted:
-            guard let voice, r.text == voiceID?.uuidString, let id = r.itemID else { throw WatchFailure.invalidRequest }
+            guard let voice, let voiceID, r.text == voiceID.uuidString, let id = r.itemID else { throw WatchFailure.invalidRequest }
+            lastVoiceContact = Date()
             try await voice.playbackCompleted(responseID: id, audible: r.flag ?? false); return nil
         case .endVoice:
             if startingVoice, voiceID == nil, let value = r.itemID.flatMap(UUID.init(uuidString:)) {

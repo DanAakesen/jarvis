@@ -47,7 +47,8 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 - A response completion marks the end of its audio stream, not a saved reply.
   The client's Speaking status lasts until the matching local playback drains
   or is cancelled, then reflects relay Thinking or Listening. A played buffer
-  also confirms all preceding buffers on the same player. After
+  also confirms all preceding buffers on the same player. The Watch retries a lost
+  playback acknowledgement with the same request ID while that call is active. After
   delegated work hands a reply to GPT-Live for speech, the relay remains at
   Thinking until audio starts or the wait expires. Chat refreshes stored rows
   on the existing `now` SSE message.

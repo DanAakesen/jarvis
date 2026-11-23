@@ -130,7 +130,12 @@ final class WatchModel: ObservableObject {
         audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
             Task { @MainActor in
                 guard let self, self.voiceGeneration == epoch, !self.endingVoice, let id = self.voiceID else { return }
-                _ = try? await self.connection.request(.init(action: .playbackCompleted, text: id.uuidString, itemID: responseID, flag: audible))
+                let receipt = WatchRequest(action: .playbackCompleted, text: id.uuidString, itemID: responseID, flag: audible)
+                await WatchVoiceRecovery.deliverPlaybackReceipt(receipt, isCurrent: {
+                    self.voiceGeneration == epoch && self.voiceID == id && !self.endingVoice
+                }, send: { request in
+                    _ = try await self.connection.request(request, waitForReadiness: false, timeout: .seconds(3))
+                })
             }
         }
     }
