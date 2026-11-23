@@ -25,7 +25,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 2. Leave Chat during a reply and return to one answer; run the typing check below during a reply. Ask for the phone's location in the same conversation. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
 3. In Settings, verify the single Proactive switch and open Training and Nutrition targets. Save one intended change and reopen each page. Report the exact error if a page still fails.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
-5. At the first ordinary Inbox review, an existing vault starts its 48-hour cooldown. Verify a later follow-up by its linked card or note trail. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
+5. An initial Inbox index rebuild starts a 48-hour cooldown for imported notes. Verify a later follow-up by its linked card or note trail. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 
