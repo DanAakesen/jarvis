@@ -54,7 +54,7 @@ first/last dates, distinct day count and latest update time. Catalogue pages
 default to 100 and cap at 500 rows. Both reads use the existing owner-scoped SQL
 boundary; capability versions 1 and 2 do not advertise the version-3 source.
 
-The inactive nutrition suggestion adapter reads only today's `active_energy` metric through `history('metrics', ...)` and takes freshness from `updated_at`; `start_at`/`end_at` are not a reliable last-sample time. It never reads resting, basal or total energy, and the exact metric name and health-total semantics are not verified against a live export.
+The daily budget shared by iPhone, Chat and Voice reads today's `active_energy` metric through `history('metrics', ...)`. It measures freshness from `updated_at` because the sample interval can span the day. Live export verification of the metric name and total is still pending.
 
 ## Checks and remaining gates
 

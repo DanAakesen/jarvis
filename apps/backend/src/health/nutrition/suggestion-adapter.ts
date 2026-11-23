@@ -7,8 +7,8 @@ import { presentNutritionTargets } from './targets.js';
 import type { NutritionTargetsAccess } from './targets-store.js';
 
 /**
- * Read boundaries for the personalised suggestion budget (P12-09, #724). Each is resolved per request, so the
- * existing stores keep their own fail-closed owner resolution. No production caller exists until Health is composed.
+ * Sources for the iPhone daily budget and Chat/Voice meal suggestions. Each is resolved per request, so the
+ * existing stores retain their own owner checks.
  */
 export interface NutritionSuggestionSources {
   readonly nutrition: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'favorites' | 'suggestions'>;
