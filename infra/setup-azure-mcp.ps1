@@ -8,7 +8,7 @@
 
     1. App registration 'jarvis-azure-mcp' with the identifier URI api://<appId> and the application role
        Mcp.Tools.ReadWrite.All (the role name the Azure MCP server checks). The Deploy gives the server's own identity the
-       Contributor role on the Jarvis resource group; widening beyond that is the owner's call.
+       Contributor role on the Jarvis resource group. Subscription inventory Reader is managed separately.
     2. Its service principal, and the role assigned to the Jarvis backend's managed identity, so only the backend can call
        the server (it offers the server's tools to PI through its own MCP door). Any other holder of the role, such as the
        Foundry project identity from the earlier harness-tool design, is removed.
@@ -108,4 +108,5 @@ foreach ($other in @($holders | Where-Object { $_.principalId -ne $BackendPrinci
 Write-Host "Repository variable JARVIS_AZURE_MCP_CLIENT_ID on $GitHubRepo"
 Invoke-Native { & gh variable set JARVIS_AZURE_MCP_CLIENT_ID --repo $GitHubRepo --body $app.appId }
 if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI could not set JARVIS_AZURE_MCP_CLIENT_ID.' }
-Write-Host 'Done. Run the Deploy workflow: it creates the container (scale to zero, Contributor on the Jarvis resource group) and makes its tools available to PI.'
+
+Write-Host 'Done. Deploy creates the Azure MCP container with Contributor on rg-jarvis.'

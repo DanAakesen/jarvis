@@ -127,6 +127,8 @@ flowchart LR
 4. **Unknown outcome is not failure to act.** If a write might already have run, say so (`outcomeUnknown`), preserve its receipts and verify before retry. A rejected or output-free rate-limited round can retry within its deadline. If a known response stream breaks, Foundry must report it cancelled with no output before the gateway replays it. A later failed round can still return recorded receipts.
 5. **Plain copy.** [`failureCopy`](../packages/contracts) gives Chat and Voice the same failure meaning in writing and speech. Separate “nothing happened”, “might have happened”, and a confirmed tool outcome. A refused tool or a missing final answer is not evidence that prior work failed. See the [generated tool conformance table](tool-conformance.md).
 
+Azure MCP uses exact leaf filtering from the pinned 3.0.0 image. Subscription and resource-group inventory, Container Apps listing, scoped storage/blob operations, Monitor metrics/resource-health reads, and workbook management are exposed. Group resource inventory must be repeated per resource group. Raw workspace/resource KQL tools and web tests are excluded; the backend's dedicated `read_backend_logs` tool remains the sanitized diagnostic path. Azure MCP 3.0.0 exposes only Container Apps listing, not get/scale/revision control. Jarvis Storage Queue operations are separate PI tools backed by the backend identity and the existing account's queue service; peek is non-consuming, receive temporarily hides messages, and deletion uses owner confirmation. The queue SDK disables retries for non-idempotent send/receive operations.
+
 ```mermaid
 flowchart TB
     STREAM["Foundry response stream"] --> ITEM{"Output item"}

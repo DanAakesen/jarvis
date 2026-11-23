@@ -4,6 +4,7 @@ import { createBackendLogAuthorizationProbe } from './operations/backend-log-aut
 import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
+import { QueueServiceClient } from '@azure/storage-queue';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
@@ -134,6 +135,7 @@ import { createBrainTools } from './pi/brain/tools.js';
 import { createDecisionLog } from './pi/brain/decision-log.js';
 import { createWatches } from './pi/watch/store.js';
 import { createWatchTools } from './pi/watch/tools.js';
+import { createStorageQueueTools } from './pi/storage-queue-tools.js';
 import { defaultAwayModeState } from './core/away-mode.js';
 import { createInboxStatusRoute } from './inbox/status.js';
 import { createMissedCaptureAudit } from './inbox/audit.js';
@@ -345,6 +347,11 @@ try {
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
+    : undefined;
+  const storageQueueClient = archiveStorageAccount && credential
+    ? new QueueServiceClient(`https://${archiveStorageAccount}.queue.core.windows.net`, credential, {
+      retryOptions: { maxTries: 1, tryTimeoutInMs: 10_000 },
+    })
     : undefined;
   const vaultMirrorStatusReader = createVaultMirrorStatusReader(
     archiveStorageAccount && credential
@@ -1229,6 +1236,7 @@ try {
       }) : []),
       ...(brainComms && piStore ? [createProactiveMessageFeedbackTool(piStore, config.auth.ownerObjectId)] : []),
       ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
+      ...(storageQueueClient ? createStorageQueueTools(storageQueueClient) : []),
     ],
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,

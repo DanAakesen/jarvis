@@ -52,9 +52,26 @@ param azureMcpClientId string = ''
 @description('Azure MCP Server image. Pinned, so an update is a reviewed change.')
 param azureMcpImage string = 'mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0'
 
-@description('Azure MCP namespaces to expose; the server advises at most three.')
-@maxLength(3)
-param azureMcpNamespaces array = ['group', 'monitor', 'containerapps']
+// Exact Azure MCP 3.0.0 tools exposed by the Jarvis server. Keep this list reviewed against the pinned image.
+var azureMcpTools = [
+  'subscription_list'
+  'group_list'
+  'group_resource_list'
+  'containerapps_list'
+  'storage_account_get'
+  'storage_blob_container_get'
+  'storage_blob_get'
+  'storage_blob_container_create'
+  'monitor_metrics_query'
+  'monitor_metrics_batchquery'
+  'monitor_metrics_definitions'
+  'resourcehealth_availability-status_get'
+  'resourcehealth_health-events_list'
+  'workbooks_list'
+  'workbooks_show'
+  'workbooks_create'
+  'workbooks_update'
+]
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
 param jarvisGoogleTimeZone string = ''
 
@@ -118,6 +135,7 @@ param foundryNameTimestamp string
 var suffix = uniqueString(resourceGroup().id)
 var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
 var blobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+var queueDataContributorRoleId = '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
 var blobUserDelegatorRoleId = 'db58b8e5-c6ad-4a2a-8342-4190687cbf4a'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var monitoringMetricsPublisherRoleId = '3913510d-42f4-4e42-8a64-420c390055eb'
@@ -134,17 +152,15 @@ var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
 var deployAzureMcp = !empty(azureMcpClientId)
 var azureMcpAppName = 'ca-jarvis-azmcp-${suffix}'
-var azureMcpNamespaceArgs = [for namespace in azureMcpNamespaces: ['--namespace', namespace]]
+var azureMcpToolArgs = [for tool in azureMcpTools: ['--tool', tool]]
 var azureMcpArgs = flatten(concat([
   [
     '--transport'
     'http'
     '--outgoing-auth-strategy'
     'UseHostingEnvironmentIdentity'
-    '--mode'
-    'all'
   ]
-], azureMcpNamespaceArgs))
+], azureMcpToolArgs))
 var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
 var piAgentConfigured = !empty(piAgentConfiguration.agentName) && !empty(piAgentConfiguration.mcpSecret)
 var piGithubConfigured = !empty(piAgentConfiguration.githubToken) && !empty(piAgentConfiguration.githubFingerprint)
@@ -286,6 +302,11 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
   name: 'default'
 }
 
+resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2023-05-01' = {
+  parent: storage
+  name: 'default'
+}
+
 resource artifactsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
   name: 'artifacts'
@@ -331,6 +352,16 @@ resource blobDataAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
   scope: storage
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobDataContributorRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backendQueueDataAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(queueService.id, backendIdentity.id, queueDataContributorRoleId)
+  scope: queueService
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', queueDataContributorRoleId)
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -1283,6 +1314,16 @@ resource azureMcpContributorAssignment 'Microsoft.Authorization/roleAssignments@
   }
 }
 
+resource azureMcpBlobDataAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployAzureMcp) {
+  name: guid(storage.id, azureMcpApp!.id, blobDataContributorRoleId)
+  scope: storage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', blobDataContributorRoleId)
+    principalId: azureMcpApp!.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource vaultMirrorJob 'Microsoft.App/jobs@2024-03-01' = if (deployVaultMirror) {
   name: 'job-jarvis-vault-mirror'
   location: resourceGroup().location
@@ -1420,6 +1461,7 @@ output applicationInsightsConnectionString string = appInsights.properties.Conne
 output containerRegistryName string = registry.name
 output containerRegistryLoginServer string = registry.properties.loginServer
 output azureMcpUrl string = deployAzureMcp ? 'https://${azureMcpApp!.properties.configuration.ingress.fqdn}' : ''
+output azureMcpPrincipalId string = deployAzureMcp ? azureMcpApp!.identity.principalId : ''
 output foundryProjectPrincipalId string = foundryProject.identity.principalId
 // The backend calls the Azure MCP server with this identity (setup-azure-mcp.ps1 grants it the server's app role).
 output backendIdentityPrincipalId string = backendIdentity.properties.principalId

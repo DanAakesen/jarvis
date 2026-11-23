@@ -86,6 +86,12 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'github', en: 'search github issues about the login bug', da: 'søg i github issues efter login-fejlen', tools: ['gh_search_issues', 'gh_list_issues'] },
   { intent: 'azure', en: 'list my azure resource groups', da: 'vis mine azure ressourcegrupper', tools: ['az_group_list'] },
   { intent: 'azure', en: 'what resources are running in azure', da: 'hvilke ressourcer kører der i azure', tools: ['az_group_resource_list', 'az_group_list', 'az_containerapps_list'] },
+  { intent: 'azure', en: 'show me the queue names in Jarvis Storage', da: 'vis queue names i Jarvis Storage', tools: ['azure_storage_queue_names'] },
+  { intent: 'azure', en: 'peek messages in the Jarvis Storage queue', da: 'peek messages i Jarvis Storage queue', tools: ['azure_storage_queue_peek'] },
+  { intent: 'azure', en: 'send a message to the Jarvis storage queue', da: 'send en besked til Jarvis Storage-køen', tools: ['azure_storage_queue_send'] },
+  { intent: 'azure', en: 'receive messages from the Jarvis storage queue', da: 'receive messages fra Jarvis Storage queue', tools: ['azure_storage_queue_receive'] },
+  { intent: 'azure', en: 'create a Jarvis storage queue', da: 'opret en Jarvis Storage-kø', tools: ['azure_storage_queue_create'] },
+  { intent: 'azure', en: 'delete message from the Jarvis storage queue', da: 'slet beskeden fra Jarvis Storage-køen', tools: ['azure_storage_queue_delete_message'] },
   // Research
   { intent: 'research', en: 'research the best noise cancelling headphones', da: 'undersøg de bedste støjreducerende hovedtelefoner', tools: ['research', 'web_research'] },
   { intent: 'research', en: 'search the web for the library opening hours', da: 'søg på nettet efter bibliotekets åbningstider', tools: ['web_research', 'research'] },

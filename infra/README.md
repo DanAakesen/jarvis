@@ -228,3 +228,32 @@ removes the temporary Key Vault Secrets Officer assignment. It sets
 `JARVIS_GOOGLE_TIME_ZONE` as a nonsecret GitHub Actions variable; deploy `main`
 afterwards to enable the tools. Exact console steps and Google consent scopes
 are in [agent context](../docs/agent-context.md#azure).
+
+## Azure access through PI
+
+The Azure MCP app keeps its system-assigned identity and Contributor at the
+Jarvis resource group. `grant-azure-mcp-inventory-reader.ps1` assigns the
+built-in Reader role at the subscription for resource inventory, after checking
+the current subscription, the deployed app identity and inherited assignments.
+The infra setup script does not perform this independent role assignment.
+The MCP image uses an exact allowlist of pinned 3.0.0 tools: subscription and
+resource-group inventory, Container Apps inventory, existing storage account
+and blob reads, container creation, Monitor metrics and resource-health reads,
+and Monitor workbook list/show/create/update. Group resource listing takes one
+resource group, so whole-subscription inventory visits each group. Storage
+Blob Data Contributor is scoped to the existing Jarvis storage account. The
+backend's separate `read_backend_logs` diagnostic tool remains the bounded,
+sanitized log path; raw Log Analytics queries are not exposed through Azure MCP.
+This is an MCP tool-surface boundary, not identity-level log isolation: the
+Azure MCP subscription Reader and resource-group Contributor roles can include
+workspace data-read permissions under Azure's role union.
+The pinned Azure MCP Container Apps namespace has only a list tool, so it does
+not provide Container Apps get, scale or revision operations.
+
+Azure MCP 3.0.0 does not expose Azure Storage Queue tools. PI's own bounded
+Storage Queue tools use the backend identity, which receives Storage Queue Data
+Contributor at the existing account's queue service. They list one page of
+queues, inspect properties, create queues, send messages, peek, and explicitly
+receive messages. Peek never leases or changes visibility; receive temporarily
+hides messages and returns a pop receipt. Deleting a queue and its messages or
+deleting an individual message requires Dan's existing browser confirmation.

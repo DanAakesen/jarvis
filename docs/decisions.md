@@ -29,6 +29,10 @@ Dan approved read-only access to sanitized backend diagnostics in Chat and Voice
 
 On iPhone, one manual kcal entry adds one meal with unknown macros. Log workout and Log lift belong in Home’s + menu beside Upcoming. Watch keeps its existing destinations and uses the native clock and Back area.
 
+### 23 November 2026 — Scoped Azure MCP capabilities
+
+Expose exact Azure MCP 3.0.0 leaf tools for subscription/resource inventory, supported Jarvis storage operations, Monitor metrics and resource health, and workbook management. Keep writes constrained by the existing `rg-jarvis` Contributor and the blob-data role scoped to the existing Jarvis account. Keep raw Log Analytics queries out of the MCP tool surface because the Azure MCP identity's role union can bypass table-level controls; this is tool-surface isolation, not identity-level isolation. Use the bounded backend diagnostic tool for logs. The pinned Container Apps MCP surface only lists apps. Jarvis Storage Queue operations use the backend identity, with one SDK attempt for non-idempotent sends and receives.
+
 ### 22 November 2026 — One continuous conversation and direct Settings access
 
 Dan confirmed that Chat and Voice share one ongoing conversation. Future context compaction must preserve it. On iPhone, the single Proactive suggestions switch belongs directly on the Settings page.

@@ -4,6 +4,7 @@ import { createBrainTools } from '../../brain/tools.js';
 import { createSituationTools } from '../../situation-tools.js';
 import { createMemoryPiStore } from '../../store.js';
 import { createWatchTools } from '../../watch/tools.js';
+import { createStorageQueueTools } from '../../storage-queue-tools.js';
 import { ownerMessageSource } from '../shared.testkit.js';
 import type { ConformanceContext, ConformanceGroup, GroupFactory, ToolCase } from '../types.testkit.js';
 import { createBrainFixture, seededInboxItemId, seededWatches } from './pi-brain.testkit.js';
@@ -31,6 +32,20 @@ export function createPiGroup(context: ConformanceContext) {
   const brain = createBrainFixture(context);
   const now = () => piClock;
   const feedbackStore = createMemoryPiStore(now);
+  const storageQueueService = {
+    listQueues: () => ({ byPage: () => ({ [Symbol.asyncIterator]: async function* () {
+      yield { queueItems: [{ name: 'events' }], continuationToken: undefined };
+    } }) }),
+    getQueueClient: () => ({
+      getProperties: async () => ({ approximateMessagesCount: 1 }),
+      createIfNotExists: async () => ({ succeeded: true }),
+      delete: async () => ({}),
+      deleteMessage: async () => ({}),
+      sendMessage: async () => ({ messageId: 'queue-message-1' }),
+      peekMessages: async () => ({ peekedMessageItems: [{ messageId: 'queue-message-1', messageText: 'status' }] }),
+      receiveMessages: async () => ({ receivedMessageItems: [{ messageId: 'queue-message-1', popReceipt: 'receipt-1', messageText: 'status' }] }),
+    }),
+  };
   const proactiveMessageId = '43';
   void feedbackStore.recordMessage({
     ownerObjectId: context.owner, runId: 'fixture-wake', sessionId: context.ownerMessage.sessionId,
@@ -50,6 +65,12 @@ export function createPiGroup(context: ConformanceContext) {
   });
 
   const cases: Record<string, readonly ToolCase[]> = {
+    azure_storage_queue_names: [{ label: 'one bounded page of Jarvis queues', arguments: {}, check: (result) => expect(result).toMatchObject({ queues: ['events'] }) }],
+    azure_storage_queue_properties: [{ label: 'queue count', arguments: { queue: 'events' }, check: (result) => expect(result).toMatchObject({ approximateMessagesCount: 1 }) }],
+    azure_storage_queue_create: [{ label: 'create a Jarvis queue', arguments: { queue: 'events' }, check: (result) => expect(result).toMatchObject({ created: true }) }],
+    azure_storage_queue_send: [{ label: 'send a short message', arguments: { queue: 'events', message: 'status' }, check: (result) => expect(result).toMatchObject({ queued: true, messageId: expect.any(String) }) }],
+    azure_storage_queue_peek: [{ label: 'peek without consuming', arguments: { queue: 'events' }, check: (result) => expect(result).toMatchObject({ messages: [{ messageText: 'status' }] }) }],
+    azure_storage_queue_receive: [{ label: 'explicitly receive and temporarily hide a message', arguments: { queue: 'events' }, check: (result) => expect(result).toMatchObject({ messages: [{ messageId: 'queue-message-1', popReceipt: 'receipt-1' }] }) }],
     situation_read: [
       { label: 'the current situational state', arguments: {}, check: (result) => expect(result).toMatchObject({ revision: expect.any(Number), hash: expect.any(String), state: expect.objectContaining({ version: 1 }) }) },
     ],
@@ -167,9 +188,14 @@ export function createPiGroup(context: ConformanceContext) {
         }),
         createProactiveMessageFeedbackTool(feedbackStore, context.owner, now),
         ...createWatchTools({ watches: brain.watches, registry, memoryStore: ownerMessageSource(context) as never }),
+        ...createStorageQueueTools(storageQueueService as never),
       ],
     }],
     cases,
+    skipped: {
+      azure_storage_queue_delete: 'Requires a live, owner-confirmed browser action.',
+      azure_storage_queue_delete_message: 'Requires a live, owner-confirmed browser action.',
+    },
   };
   return { group, probes, situation, wakeSituation, brain };
 }
