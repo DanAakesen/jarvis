@@ -19,7 +19,10 @@ struct WatchGlass<S: Shape>: ViewModifier {
                 shape.fill(Color.black.opacity(0.4)).background(.ultraThinMaterial, in: shape)
             }
         }
-        .overlay { shape.stroke(.white.opacity(reduceTransparency ? 0.3 : 0.18), lineWidth: 0.5) }
+        .overlay {
+            shape.stroke(.white.opacity(reduceTransparency ? 0.3 : 0.18), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
     }
 }
 extension View {

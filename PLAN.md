@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **126** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45194610942). Nutrition and location lookup passed on device. Nearby store search returned a distant street. Watch and iPhone Voice checks remain open. Build 125 passed typing, reply recovery, Settings targets and lift readback. |
+| TestFlight **126** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45194610942). Nutrition, location lookup and Watch dictation passed on device. Nearby store search returned a distant street. Watch and iPhone Voice checks remain open. Build 125 passed typing, reply recovery, Settings targets and lift readback. |
 | Backend | The [covered Inbox slot rollout](https://github.com/DanAakesen/jarvis/actions/runs/45196741421) applied the backend and passed the PI revision check. See Deploy for full readiness; live conversation acceptance is separate. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
@@ -22,7 +22,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 ### Next steps and blockers
 
 1. On build 126, check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback. Check Danish and English phrasing.
-2. Verify iPhone Voice leaves Speaking between replies. On Watch, edit dictation before sending, test two audible Voice turns and reconnect, then check the saved turn in Chat.
+2. Verify iPhone Voice leaves Speaking between replies. On Watch, check first-tap response for Dictate, Send and Voice after the button update. Test two audible Voice turns and reconnect.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 
@@ -52,7 +52,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Returning during a reply passed on build 125. Check failed, cancelled and superseded states in the separate reply test. |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed on Dan’s iPhone on build 125. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Proactive settings and caption scrolling passed on build 125. The Voice activity label still needs a device retest. |
-| [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | The editable draft, playback receipts and saved-turn recovery are in build 126; **not accepted on device**. |
+| [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Dictation works on build 126. Single-tap composer actions, audible replies and saved-turn recovery still need device verification. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Busy Home briefs keep urgent tasks and upcoming meetings. Short citations preserve full Calendar event IDs within the existing model limits. Chat and Voice can return a local repository reader while GitHub tools load. Gmail refreshes unread membership each poll and reuses immutable message headers within the current authorization. Calendar covers the next 48 hours and Travel days 3–7. Paged reads keep one query through the result limit. Cross-poll Calendar sync remains open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Ask “show my Foundry agents”, then read the serving version and its model. Verify a version change on a test agent when authorized. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |
