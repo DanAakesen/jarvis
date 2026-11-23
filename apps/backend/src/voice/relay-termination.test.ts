@@ -451,6 +451,7 @@ describe('GPT-Live graceful termination', () => {
       () => upstreamEvents.some(event => event.type === 'session.close'),
       'native close before cleanup failure',
     );
+    const closed = new Promise<number>(resolve => browser.once('close', resolve));
     sockets[0]!.send(JSON.stringify({
       type: 'session.closed',
       event_id: 'closed-cleanup-failure',
@@ -462,6 +463,9 @@ describe('GPT-Live graceful termination', () => {
           event.closeCode === 1011 && event.retryable === true),
       'cleanup failure acknowledgement',
     );
+    expect(await closed).toBe(1011);
+    // Both peers must finish closing before the fixture starts a separate service shutdown.
+    await until(() => app.websocketServer.clients.size === 0, 'relay close handshake');
     expect(received.some(event => event.type === 'jarvis.session.ended')).toBe(false);
     expect(cleanupUsage).toEqual({ providerVoiceSeconds: 4, allowWallClockFallback: true });
   });

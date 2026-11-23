@@ -29,7 +29,8 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
   v1 is rejected during the upgrade and has no alias or fallback.
 - Terminal: `jarvis.session.ended` is clean completion only.
   `jarvis.session.failed` carries `retryable` and `closeCode`; clients reconnect
-  only when `retryable` is true.
+  only when `retryable` is true. If saving the ended session fails, the relay sends
+  a retryable failure and closes the WebSocket with code 1011.
 - Language: read `settings.voice.defaultLanguage` from the existing authenticated `GET /settings` route for each new session; the default is `da`.
 - Audio: base64 PCM16 little-endian, mono, 24 kHz inside JSON messages. There is no Opus.
 - The microphone is open (no push to talk). The relay owns turn boundaries;
