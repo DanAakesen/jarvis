@@ -23,7 +23,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 1. On the next build, retest typing while Jarvis replies and ask for the iPhone location from the same conversation. Verify the single switch on the main Settings page.
 2. On a day with logged data, compare the iPhone Gym lift and Nutrition totals in Chat and Voice. Test Voice caption scrolling, status and Watch dictation/reconnection. Build 124 results above cover only the channels Dan reported.
-3. Verify an ordinary Inbox follow-up and its delivery. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
+3. On iPhone, find a nearby pharmacy, select a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Check the spoken estimate against the card.
+4. Verify an ordinary Inbox follow-up and its delivery. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
 
 **Unverified:** whether Foundry sends a usable `_meta` call ID (the ledger still works without one); real provider rate-limit message and cause (reported error code and offline fixtures are evidence, not a new live trace); iPhone follow/Voice label and Watch recovery on physical devices; Background PI message delivery. Do not treat an offline replay or a merged fix as device acceptance.
 

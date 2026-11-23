@@ -26,7 +26,7 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 ### Chat and Voice parity
 
 - Keep one ongoing conversation across Chat and Voice, including through future compaction. Support asking “Where am I?” using the phone’s timestamped, approximate location when available. Keep the same PI tool dispatcher, owner identity and stored evidence. Voice should sound like Jarvis, understand the entire spoken request and handle interruption, silence and reconnect. Typing in Chat while Voice works queues one request and gets one reply.
-- Chat can follow the active Voice exchange, show when it is listening, thinking or speaking, and let Dan scroll back without yanking him to the bottom. Show a chart, map or note on screen when easier to see than hear; do not force a web handoff on iPhone.
+- Chat can follow the active Voice exchange, show when it is listening, thinking or speaking, and let Dan scroll back without yanking him to the bottom. Use Apple Maps on iPhone for nearby places, route estimates and departure times with a chosen buffer. Let Dan select an ambiguous place and open Directions. Show a chart, map or note on screen when easier to see than hear; do not force a web handoff on iPhone.
 - Explain failures in one plain sentence shared by Chat and Voice. A stop, stale history refresh, or a working reply with a failed tool is not a failed send. If an action finished but the reply did not, show or say the recorded receipt. Say to check before retrying only when the action may already have happened.
 - Push replies open the exact stored message on iPhone or Watch. An accepted reminder schedule is not proof of device delivery. Show what actually happened.
 

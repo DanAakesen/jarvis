@@ -31,7 +31,7 @@ These files describe the project **as it is now**, not its history (Git and `doc
 Start with `README.md` (what the repo is and how to run it) and `docs/README.md` (index of the `docs/` folders).
 
 - **Contracts and reference:** `docs/ios/integration-contract.md` (native backend endpoints), `docs/ios/apple-capabilities.md` (entitlements), `docs/reference/README.md` (reference index), `docs/reference/data-model.md` (SQL ownership), `docs/reference/daily/*.md` (Health upload and SQL mapping), `docs/reference/daily-v182/README.md` (pinned source contract).
-- **Switch-on and parked work:** `docs/pi/cutover.md` (PI switch-on and open decisions), `docs/inbox-loop/*.md` (Inbox capture, scheduled follow-ups, MCP and Shortcut), `docs/ui/map-route-card/brief.md` (unbuilt design).
+- **Switch-on and parked work:** `docs/pi/cutover.md` (PI switch-on and open decisions), `docs/inbox-loop/*.md` (Inbox capture, scheduled follow-ups, MCP and Shortcut).
 - **Decision history:** `docs/archive/decisions-index-*.md` points to dated decisions in Git history. Do not copy the full text into the archive.
 - **Component READMEs:** `db/README.md` and `db/migrations/README.md` (SQL), `infra/README.md` (Bicep), `runner/README.md` (coding runner), `apps/vault-mirror/README.md` (mirror), `agents/jarvis/README.md` (legacy hosted Python agent), `apps/backend/src/modules.README.md` (module index) and `apps/backend/src/**/README.md` (module contracts).
 - **Skills:** `.agents/skills/engineering/SKILL.md` and `.agents/skills/product-ui/SKILL.md`.
