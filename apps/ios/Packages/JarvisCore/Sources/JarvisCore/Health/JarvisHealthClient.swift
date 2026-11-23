@@ -15,6 +15,9 @@ public enum JarvisHealthSource: String, CaseIterable, Codable, Sendable {
 
 public struct JarvisTodayNutritionBudget: Codable, Equatable, Sendable {
     public struct Calories: Codable, Equatable, Sendable {
+        public let restingKcal: Double?
+        public let activeKcal: Double?
+        public let deficitKcal: Double?
         public let eatenKcal: Double?
         public let allowanceKcal: Double?
         public let remainingKcal: Double?

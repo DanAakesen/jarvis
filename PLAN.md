@@ -14,16 +14,16 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **126** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45194610942). Watch, iPhone Voice, location and nutrition fixes are **not accepted on device**. Build 125 passed typing, reply recovery, Settings targets and lift readback. |
+| TestFlight **126** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45194610942). Nutrition and location lookup passed on device. Nearby store search returned a distant street. Watch and iPhone Voice checks remain open. Build 125 passed typing, reply recovery, Settings targets and lift readback. |
 | Backend | The [covered Inbox slot rollout](https://github.com/DanAakesen/jarvis/actions/runs/45196741421) applied the backend and passed the PI revision check. See Deploy for full readiness; live conversation acceptance is separate. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. On build 126, check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback. Log one meal with kcal and optional protein; compare today's totals and remaining kcal in Nutrition, Chat and Voice. Check Danish and English phrasing.
-2. Verify iPhone Voice leaves Speaking between replies, and check current location with permission on and off. On Watch, edit dictation before sending, test two audible Voice turns and reconnect, then check the saved turn in Chat.
-3. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
+1. On build 126, check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback. Check Danish and English phrasing.
+2. Verify iPhone Voice leaves Speaking between replies. On Watch, edit dictation before sending, test two audible Voice turns and reconnect, then check the saved turn in Chat.
+3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
@@ -45,7 +45,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 | Issue | What remains |
 | --- | --- |
-| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the daily-core checks above on the current build. Lift readback passed on iPhone. Nutrition and full Chat/Voice parity still need device checks. |
+| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the daily-core checks above on build 126. For the next iPhone build, verify Today’s resting target, active kcal and deficit against the shared budget. Full Chat/Voice parity still needs device checks. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |

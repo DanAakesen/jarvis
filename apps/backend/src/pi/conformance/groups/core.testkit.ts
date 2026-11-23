@@ -126,8 +126,8 @@ export const coreGroup: GroupFactory = (context) => {
       check: (result: unknown) => { expectFields(result, { period }); if (!isObject(result) || !isObject(result.total)) throw new Error('expected a spend total'); },
     })),
     apple_maps: [
-      { label: 'find a nearby station on a connected iPhone', arguments: { query: 'station', mode: 'walking' },
-        check: (result) => expectFields(result, { matches: 1 }) },
+      { label: 'find a nearby station on a connected iPhone', arguments: { query: 'station', nearby: 'category', mode: 'walking' },
+        check: (result) => expectFields(result, { matches: 1, nearbyRadiusMeters: 10_000 }) },
     ],
     workspace_command: [
       { label: 'navigate to a settings section', arguments: { commandId: 'nav-settings', operation: 'navigate', page: 'settings', section: 'appearance' } },

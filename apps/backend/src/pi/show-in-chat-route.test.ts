@@ -112,6 +112,7 @@ describe('Apple Maps through the shared PI door', () => {
       stateHash: null, policyRevision: '1', staleSources: 0, disabledSources: [] } as const;
     const grant = registry.open({ ownerObjectId: owner, sessionId: '7', messageId: '42', signal: new AbortController().signal, activation });
     const commands: Json[] = [];
+    let searchReceipt: { matches: number; nearbyRadiusMeters?: number; reason?: 'no_matches' } = { matches: 2, nearbyRadiusMeters: 10_000 };
     const post = (url: string, payload: Record<string, unknown>) => app.inject({
       method: 'POST', url, headers: { authorization: 'Bearer a.b.c', 'content-type': 'application/json' }, payload,
     });
@@ -119,7 +120,8 @@ describe('Apple Maps through the shared PI door', () => {
       if (event === 'workspace-command') {
         const { command } = data;
         commands.push(command);
-        const mapReceipt = command.operation === 'apple-maps' ? { matches: 'ordinal' in command ? 1 : 2, spoken: channel === 'voice' } : undefined;
+        const mapReceipt = command.operation === 'apple-maps'
+          ? { ...searchReceipt, matches: 'ordinal' in command ? 1 : searchReceipt.matches, spoken: channel === 'voice' } : undefined;
         queueMicrotask(() => {
           void post('/now/workspace/commands/' + command.commandId + '/ack', { sessionId: phone.sessionId, applied: true, mapReceipt });
         });
@@ -134,9 +136,15 @@ describe('Apple Maps through the shared PI door', () => {
       sessionId: phone.sessionId, applied: true, mapReceipt: { matches: 1, address: 'private provider content' },
     })).statusCode).toBe(400);
     await tool('find_tools', { turn: grant.turn, query: 'apple maps' });
-    const query = { query: 'station', mode: 'walking' };
+    const query = { query: 'North Loom', nearby: 'name', mode: 'walking' };
+    const oldClient = await tool('call_tool', { turn: grant.turn, name: 'apple_maps', arguments: query });
+    expect(oldClient).toMatchObject({ outcome: 'refused' });
+    expect(commands).toHaveLength(0);
+    expect((await post('/now/workspace/state', {
+      sessionId: phone.sessionId, windows: [], contextPanelOpen: false, device: { kind: 'phone', appleMaps: true, appleMapsNearby: true },
+    })).statusCode).toBe(204);
     const result = await tool('call_tool', { turn: grant.turn, name: 'apple_maps', arguments: query });
-    expect(result).toMatchObject({ outcome: 'ok', result: { matches: 2, spoken: channel === 'voice' } });
+    expect(result).toMatchObject({ outcome: 'ok', result: { matches: 2, nearbyRadiusMeters: 10_000, spoken: channel === 'voice' } });
     expect(commands[0]).toMatchObject({ ...query, commandId: expect.any(String), operation: 'apple-maps', target: 'phone',
       ...(channel === 'voice' ? { speakResult: true } : {}) });
     expect(result.result.lookupId).toBe(commands[0]!.commandId);
@@ -161,5 +169,15 @@ describe('Apple Maps through the shared PI door', () => {
       (app.chatBlocks.take('7')[0]?.data as { view?: unknown })?.view;
     expect(selectedCard).toHaveProperty('renderer', 'map');
     expect(selectedCard).toHaveProperty('data', { lookupId: selectedCommand.commandId });
+
+    searchReceipt = { matches: 0, reason: 'no_matches', nearbyRadiusMeters: 10_000 };
+    const noPlaces = await tool('call_tool', { turn: grant.turn, name: 'apple_maps', arguments: { query: 'Unlisted Shop', nearby: 'name' } });
+    expect(noPlaces).toMatchObject({ outcome: 'ok', result: { ...searchReceipt, presentation: 'No places to show.' } });
+    expect(app.chatBlocks.take('7')).toEqual([]);
+
+    searchReceipt = { matches: 1 };
+    const unverified = await tool('call_tool', { turn: grant.turn, name: 'apple_maps', arguments: { query: 'Missing Evidence', nearby: 'name' } });
+    expect(unverified).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('did not verify') } });
+    expect(app.chatBlocks.take('7')).toEqual([]);
   });
 });

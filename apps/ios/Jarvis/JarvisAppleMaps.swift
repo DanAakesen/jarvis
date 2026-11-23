@@ -46,7 +46,13 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
 
         var places: [AppleMapsPlace] = []
         do {
-            let matches = try await search(request.query, near: start?.location.coordinate)
+            var matches = try await search(request.query, near: start?.location.coordinate, nearby: request.nearby != nil)
+            if request.nearby != nil, let center = start?.location {
+                matches = matches.compactMap { item -> (item: MKMapItem, distance: Double)? in
+                    let distance = item.location.distance(from: center)
+                    return request.acceptsNearbyPlace(name: item.name, distanceMeters: distance) ? (item, distance) : nil
+                }.sorted { $0.distance < $1.distance }.map { $0.item }
+            }
             for item in matches.prefix(3) {
                 try Task.checkCancellation()
                 let route: MKRoute?
@@ -69,7 +75,7 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
             }
             if places.isEmpty {
                 status = .noMatches
-                reason = "Apple Maps found no matching destination."
+                reason = request.nearby == nil ? "Apple Maps found no matching destination." : "Apple Maps found no matching place within \(AppleMapsRequest.nearbyRadiusMeters / 1000) km."
             } else if start != nil && places.contains(where: { $0.travelSeconds == nil }) {
                 status = .partial
                 reason = "Apple Maps did not return a route for every destination."
@@ -80,16 +86,19 @@ final class JarvisAppleMaps: NSObject, CLLocationManagerDelegate {
             reason = "Apple Maps could not search for the destination."
         }
         let result = AppleMapsResult(places: places, mode: request.mode ?? "driving", observedAt: Date().ISO8601Format(),
-            origin: origin, arriveBy: request.arriveBy, bufferMinutes: request.bufferMinutes ?? 0, reason: reason)
+            origin: origin, arriveBy: request.arriveBy, bufferMinutes: request.bufferMinutes ?? 0, reason: reason,
+            nearbyRadiusMeters: request.nearby != nil && status != .unavailable ? AppleMapsRequest.nearbyRadiusMeters : nil)
         return (result, status)
     }
 
-    private func search(_ query: String, near coordinate: CLLocationCoordinate2D? = nil) async throws -> [MKMapItem] {
+    private func search(_ query: String, near coordinate: CLLocationCoordinate2D? = nil, nearby: Bool = false) async throws -> [MKMapItem] {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
-        request.resultTypes = [.address, .pointOfInterest]
+        request.resultTypes = nearby ? [.pointOfInterest] : [.address, .pointOfInterest]
         if let coordinate {
-            request.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: 20_000, longitudinalMeters: 20_000)
+            let span = Double(AppleMapsRequest.nearbyRadiusMeters * 2)
+            request.region = MKCoordinateRegion(center: coordinate, latitudinalMeters: span, longitudinalMeters: span)
+            if nearby { request.regionPriority = .required }
         }
         do {
             return try await MKLocalSearch(request: request).start().mapItems

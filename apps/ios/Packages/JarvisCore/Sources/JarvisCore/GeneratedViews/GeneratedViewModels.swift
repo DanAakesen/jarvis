@@ -891,10 +891,11 @@ private enum GeneratedViewValidator {
             guard let rawQuery = data["request"] else { return }
             guard let request = card.request else { throw invalid(path, "requires a valid map request") }
             let query = try object(rawQuery, path: "\(path).request")
-            try checkKeys(query, path: "\(path).request", allowed: ["query", "origin", "mode", "arriveBy", "bufferMinutes", "searchOnly"], required: ["query"])
+            try checkKeys(query, path: "\(path).request", allowed: ["query", "origin", "mode", "arriveBy", "bufferMinutes", "searchOnly", "nearby"], required: ["query"])
             _ = try string(query["query"], path: "\(path).request.query", min: 1, max: 300)
             if let origin = query["origin"] { _ = try string(origin, path: "\(path).request.origin", min: 1, max: 300) }
-            guard request.mode.map({ ["driving", "walking"].contains($0) }) ?? true,
+            guard request.nearby == nil || request.searchOnly != true,
+                  request.mode.map({ ["driving", "walking"].contains($0) }) ?? true,
                   request.arriveBy.map({ AppleMapsResult.date($0) != nil }) ?? true,
                   request.bufferMinutes.map({ (0...1_440).contains($0) }) ?? true else {
                 throw invalid(path, "contains an invalid Apple Maps request")

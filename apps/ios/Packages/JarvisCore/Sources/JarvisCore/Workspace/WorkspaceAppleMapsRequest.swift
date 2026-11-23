@@ -12,11 +12,13 @@ public struct WorkspaceMapReceipt: Encodable, Equatable, Sendable {
     public let matches: Int
     public let spoken: Bool
     public let reason: Reason?
+    public let nearbyRadiusMeters: Int?
 
-    public init(matches: Int, spoken: Bool, reason: Reason? = nil) {
+    public init(matches: Int, spoken: Bool, reason: Reason? = nil, nearbyRadiusMeters: Int? = nil) {
         self.matches = matches
         self.spoken = spoken
         self.reason = reason
+        self.nearbyRadiusMeters = nearbyRadiusMeters
     }
 }
 
@@ -41,6 +43,7 @@ extension AppleMapsRequest {
               command.fields["lookupId"] == nil, command.fields["ordinal"] == nil,
               let data = try? JSONEncoder().encode(command.fields),
               let request = try? JSONDecoder().decode(Self.self, from: data),
+              request.nearby == nil || request.searchOnly != true,
               request.mode == nil || request.mode == "driving" || request.mode == "walking",
               !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               request.query.count <= 300, (request.origin?.count ?? 0) <= 300,
@@ -51,7 +54,22 @@ extension AppleMapsRequest {
     }
 
     public func canSearchDestination(hasOrigin: Bool) -> Bool {
-        searchOnly == true || hasOrigin
+        hasOrigin || (searchOnly == true && nearby == nil)
+    }
+
+    public static let nearbyRadiusMeters = 10_000
+
+    /// MapKit can return an approximate name match. A branded lookup needs the requested name on the POI itself.
+    public func acceptsNearbyPlace(name: String?, distanceMeters: Double) -> Bool {
+        guard let nearby, (0...Double(Self.nearbyRadiusMeters)).contains(distanceMeters),
+              let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        guard nearby == .name else { return true }
+        func normalizedName(_ text: String) -> String {
+            text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+                .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        let requested = normalizedName(query)
+        return !requested.isEmpty && " \(normalizedName(name)) ".contains(" \(requested) ")
     }
 
     public var arrivalDate: Date? {
