@@ -4,7 +4,7 @@ import SwiftUI
 struct WatchDashboardView: View {
     let voiceActive: Bool
     @EnvironmentObject private var connection: WatchConnection
-    @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var loading = false
     @State private var workoutRows: [[String: JSONValue]]?
     @State private var workoutReadAt: Date?
@@ -14,16 +14,10 @@ struct WatchDashboardView: View {
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 6) {
-                            chatLink.fixedSize(horizontal: true, vertical: false)
-                            Spacer(minLength: 0)
-                            menuLink.fixedSize(horizontal: true, vertical: false)
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            chatLink
-                            menuLink
-                        }
+                    HStack(spacing: 6) {
+                        chatLink
+                        Spacer(minLength: 0)
+                        menuLink
                     }
                     if loading && connection.dashboard == nil {
                         ProgressView("Loading dashboard").font(.caption)
@@ -100,28 +94,34 @@ struct WatchDashboardView: View {
     }
     private var chatLink: some View {
         NavigationLink(value: WatchRoute.chat) {
-            HStack(spacing: 5) {
-                WatchOrb().frame(width: 24, height: 24)
-                Text(voiceActive ? "Resume voice" : "Chat")
-                    .font(.headline)
+            HStack(spacing: 4) {
+                WatchOrb().frame(width: 22, height: 22)
+                if !typeSize.isAccessibilitySize {
+                    Text(voiceActive ? "Resume" : "Chat")
+                        .font(.subheadline.weight(.semibold)).lineLimit(1)
+                }
             }
-            .padding(.horizontal, 8)
-            .frame(minHeight: 44)
+            .padding(.horizontal, 6)
+            .frame(minWidth: 44, minHeight: 44)
             .watchGlass(in: Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(voiceActive ? "Resume voice" : "Chat")
     }
 
     private var menuLink: some View {
         NavigationLink(value: WatchRoute.menu) {
-            Label("Menu", systemImage: "square.grid.2x2")
-                .foregroundStyle(WatchStyle.amber)
-                .font(.caption)
-                .padding(.horizontal, 4)
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
+            HStack(spacing: 4) {
+                Image(systemName: "square.grid.2x2")
+                if !typeSize.isAccessibilitySize { Text("Menu").lineLimit(1) }
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(WatchStyle.amber)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Menu")
     }
 
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {

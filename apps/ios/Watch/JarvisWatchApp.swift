@@ -225,12 +225,13 @@ struct WatchRoot: View {
         .navigationTitle("Menu")
     }
 
-    @ScaledMetric(relativeTo: .caption) private var menuTileWidth: CGFloat = 74
+    @Environment(\.dynamicTypeSize) private var menuTypeSize
 
     private func menuGroup<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: menuTileWidth), spacing: 6)], spacing: 6) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 44), spacing: 6, alignment: .topLeading),
+                                     count: menuTypeSize.isAccessibilitySize ? 1 : 2), spacing: 6) {
                 content()
             }
         }
@@ -244,7 +245,7 @@ struct WatchRoot: View {
                 Text(title).font(.system(.caption, design: .rounded, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(8)
+            .padding(6)
             .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
             .modifier(WatchSurface(radius: 14))
         }.buttonStyle(.plain)
