@@ -14,16 +14,16 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **126** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45194610942). Nutrition, location lookup and Watch dictation passed on device. Nearby store search returned a distant street. Watch and iPhone Voice checks remain open. Build 125 passed typing, reply recovery, Settings targets and lift readback. |
-| Backend | The [covered Inbox slot rollout](https://github.com/DanAakesen/jarvis/actions/runs/45196741421) applied the backend and passed PI revision and deterministic readiness checks. Live conversation acceptance was not run. |
+| TestFlight | **126** is Apple-confirmed for internal testing; nutrition balance, location lookup and Watch dictation passed on that build. Upload **128** is in progress, not yet Apple-confirmed. Its Maps, Watch, Nutrition and composer changes are **not accepted on device**. |
+| Backend and web | Deploy for the Watch, Maps, Nutrition and composer release applied the backend and web; the PI-configured revision and deterministic readiness passed. Live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-1. On build 126, check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback. Check Danish and English phrasing.
-2. Build 126 carries speech both ways on Watch, but replies break up. On the next build, listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap and read the complications on the red face with wrist raised and lowered. On iPhone, verify that Voice leaves Speaking between replies.
-3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
+1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback in Danish and English.
+2. Watch replies broke up in the last device check. Once the new build is available, listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap and read the complications on the red face with wrist raised and lowered. On iPhone, verify that Voice leaves Speaking between replies.
+3. On the new iPhone build, ask for a named store nearby. A matching local business or an explicit no-match result passes; a distant street does not. Check Directions for a match. In Voice, ask when to leave for an event with an address and a ten-minute buffer; compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
@@ -45,12 +45,12 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 | Issue | What remains |
 | --- | --- |
-| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the daily-core checks above on build 126. For the next iPhone build, verify Today’s resting target, active kcal and deficit against the shared budget. Full Chat/Voice parity still needs device checks. |
+| [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the checks above. Verify Nutrition Today’s resting target, active kcal and deficit against Chat and Voice. Full parity is **not accepted on device**. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Returning during a reply passed on build 125. Check failed, cancelled and superseded states in the separate reply test. |
-| [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed on build 125. The composer now folds between edits locally. Check focus, keyboard dismissal and draft retention on the next build. |
+| [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed. Check rapid typing in a conversation with 100+ messages, focus, keyboard dismissal and draft retention. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Proactive settings and caption scrolling passed on build 125. The Voice activity label still needs a device retest. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Dictation works on build 126. Single-tap composer actions, audible replies and saved-turn recovery still need device verification. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Busy Home briefs keep urgent tasks and upcoming meetings. Short citations preserve full Calendar event IDs within the existing model limits. Chat and Voice can return a local repository reader while GitHub tools load. Gmail refreshes unread membership each poll and reuses immutable message headers within the current authorization. Calendar covers the next 48 hours and Travel days 3–7. Paged reads keep one query through the result limit. Cross-poll Calendar sync remains open. |
