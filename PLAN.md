@@ -14,8 +14,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). Its source predates the Calendar, Inbox and midnight backend fixes below. On iPhone, typing, reply recovery, target loading and lift readback passed. Nutrition and location failed. Watch layout feedback is partial. |
-| Backend | The [midnight queue rollout](https://github.com/DanAakesen/jarvis/actions/runs/45107284356) passed deterministic readiness. It includes the Calendar paging and Inbox status fixes. Live conversation acceptance did not run. |
+| TestFlight **126** | [Build and Apple availability](https://github.com/DanAakesen/jarvis/actions/runs/45189940037). Retest two-way Watch Voice, the three-line Watch composer, iPhone Voice state, location and the daily nutrition balance. Typing, reply recovery, Settings targets and lift readback passed on build 125. |
+| Backend | The [device-feedback rollout](https://github.com/DanAakesen/jarvis/actions/runs/45186616915) passed production readiness. Chat, Voice and the iPhone Today card now share the nutrition budget. Jarvis can check Apple’s TestFlight receipt when asked about a release. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
@@ -25,7 +25,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 2. Typing, reply recovery, Chat/Voice continuity and caption scrolling passed on build 125. Voice stayed on Speaking after the first reply. Retest the state between spoken turns, current location after the sync fix, and Watch dictation and two-way Voice after reconnect.
 3. The inline Proactive settings and activity checks passed on build 125. Both target pages loaded and reopened.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
-5. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for the import cooldown.
+5. Verify an ordinary Inbox follow-up against its linked card, then check device delivery. An event can cover a scheduled slot even when it uses the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 
@@ -36,7 +36,7 @@ Backend diagnostics passed an owner request for a Watch Voice call. Jarvis found
 | | Decision | Next check |
 | --- | --- | --- |
 | **A · decided** | PI owns scheduled reviews; the legacy slot runner is gone. The separate legacy event consumer is not the PI queue path. | Verify capture and a qualifying follow-up in production. |
-| **B · decided** | Manual entry adds one meal with kcal and optional protein on iPhone. | Build 125 saved the meal but the Today card used a fixed calorie goal. Retest the shared budget and protein entry together on the next build. |
+| **B · decided** | Manual entry adds one meal with kcal and optional protein on iPhone. | On build 126, compare Today with Chat using the same activity reading and meal intake. |
 | **C** | Keep the same stored conversation for Chat and Voice. Foundry controls context management on this endpoint. | Revisit configurable compaction when the [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview) supports it. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
 | **E** | Foundry administration is approved. | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) covers instructions, versions, activation, models and deployments. Live acceptance is open. |
