@@ -14,6 +14,7 @@ struct JarvisComposerTextInput: UIViewRepresentable {
     let identifier: String
     let hint: String
     let isDisabled: Bool
+    let isCompact: Bool
     let onSubmit: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -37,6 +38,7 @@ struct JarvisComposerTextInput: UIViewRepresentable {
 
         let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: view.traitCollection)
         if view.font != font { view.font = font }
+        view.updatePresentation(compact: isCompact)
         if view.placeholderLabel.font != font { view.placeholderLabel.font = font }
         if view.placeholderLabel.text != placeholder { view.placeholderLabel.text = placeholder }
         if view.accessibilityLabel != placeholder { view.accessibilityLabel = placeholder }
@@ -172,6 +174,7 @@ final class JarvisComposerTextView: UITextView {
     let placeholderLabel = UILabel()
     var onWindowReady: ((JarvisComposerTextView) -> Void)?
     private(set) var isPasting = false
+    private var isCompact = false
     private var measured: (width: CGFloat, font: UIFont?, height: CGFloat)?
 
     init() {
@@ -197,6 +200,22 @@ final class JarvisComposerTextView: UITextView {
 
     required init?(coder: NSCoder) { return nil }
 
+    func updatePresentation(compact: Bool) {
+        let inset = compact ? max(0, (JarvisDesignTokens.chatMinimumTapTarget - minimumHeight) / 2) : 0
+        guard compact != isCompact || textContainerInset.top != inset else { return }
+        isCompact = compact
+        textContainer.maximumNumberOfLines = compact ? 1 : 0
+        textContainer.lineBreakMode = compact ? .byTruncatingTail : .byWordWrapping
+        textContainerInset = UIEdgeInsets(top: inset, left: 0, bottom: inset, right: 0)
+        if compact {
+            isScrollEnabled = false
+            setContentOffset(.zero, animated: false)
+        }
+        measured = nil
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+    }
+
     override func paste(_ sender: Any?) {
         // A pasted newline is content, even when it is the entire pasteboard string.
         isPasting = true
@@ -211,14 +230,15 @@ final class JarvisComposerTextView: UITextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        placeholderLabel.frame = CGRect(x: 0, y: 0, width: bounds.width, height: minimumHeight)
+        placeholderLabel.frame = CGRect(x: 0, y: textContainerInset.top, width: bounds.width, height: minimumHeight)
         guard bounds.width > 0 else { return }
-        let needsScrolling = naturalHeight(for: bounds.width) > maximumHeight
+        let needsScrolling = !isCompact && naturalHeight(for: bounds.width) > maximumHeight
         if isScrollEnabled != needsScrolling { isScrollEnabled = needsScrolling }
     }
 
     func refreshPlaceholderAndSize() {
         placeholderLabel.isHidden = !text.isEmpty
+        guard !isCompact else { return }
         let previous = measured
         measured = nil
         if let previous, bounds.width > 0, previous.width == bounds.width, previous.font == font {
@@ -231,7 +251,8 @@ final class JarvisComposerTextView: UITextView {
     }
 
     func composerSize(for width: CGFloat) -> CGSize {
-        CGSize(width: width, height: editorHeight(for: naturalHeight(for: width)))
+        let height = isCompact ? max(minimumHeight, JarvisDesignTokens.chatMinimumTapTarget) : editorHeight(for: naturalHeight(for: width))
+        return CGSize(width: width, height: height)
     }
 
     private func editorHeight(for height: CGFloat) -> CGFloat { min(maximumHeight, max(minimumHeight, height)) }

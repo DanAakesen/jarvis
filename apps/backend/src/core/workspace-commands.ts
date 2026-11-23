@@ -67,6 +67,7 @@ const mapReceiptReasons = ['needs_origin', 'no_matches', 'partial', 'unavailable
 export interface AppleMapsReceipt {
   matches: number;
   spoken?: boolean;
+  nearbyRadiusMeters?: number;
   reason?: typeof mapReceiptReasons[number];
 }
 
@@ -75,6 +76,7 @@ const mapReceiptSchema = {
   properties: {
     matches: { type: 'integer', minimum: 0, maximum: 3 },
     spoken: { type: 'boolean' },
+    nearbyRadiusMeters: { type: 'integer', minimum: 1, maximum: 100_000 },
     reason: { type: 'string', enum: mapReceiptReasons },
   },
 };
@@ -84,6 +86,8 @@ function isAppleMapsReceipt(value: unknown): value is AppleMapsReceipt {
   return Object.keys(receipt).every(key => Object.hasOwn(mapReceiptSchema.properties, key)) &&
     Number.isInteger(receipt.matches) && Number(receipt.matches) >= 0 && Number(receipt.matches) <= 3 &&
     (receipt.spoken === undefined || typeof receipt.spoken === 'boolean') &&
+    (receipt.nearbyRadiusMeters === undefined || (Number.isInteger(receipt.nearbyRadiusMeters) &&
+      Number(receipt.nearbyRadiusMeters) >= 1 && Number(receipt.nearbyRadiusMeters) <= 100_000)) &&
     (receipt.reason === undefined || mapReceiptReasons.some(reason => reason === receipt.reason));
 }
 
@@ -231,15 +235,18 @@ export class WorkspaceCommandBroker {
     if (selection && !(prior?.expectsMapReceipt && prior.state === 'applied')) {
       return { matches: 0, reason: 'expired_lookup' };
     }
+    const needsNearby = command.operation === 'apple-maps' && 'nearby' in command && command.nearby !== undefined;
     const candidates = [...ownerConnections.values()].filter((connection) =>
       command.operation === 'apple-maps'
-        ? connection.snapshot?.device?.kind === 'phone' && connection.snapshot.device.appleMaps === true && (!prior || prior.sessionIds.has(connection.sessionId))
+        ? connection.snapshot?.device?.kind === 'phone' && connection.snapshot.device.appleMaps === true &&
+          (!needsNearby || connection.snapshot.device.appleMapsNearby === true) && (!prior || prior.sessionIds.has(connection.sessionId))
         : (!mapSession || mapSession.has(connection.sessionId)) &&
           (target === 'active' || target === 'all' || connection.snapshot?.device?.kind === target));
     const latest = this.latestConnection(candidates);
     const recipients = target === 'all' ? candidates : latest ? [latest] : [];
     if (!recipients.length) {
       if (selection) return { matches: 0, reason: 'expired_lookup' };
+      if (needsNearby) throw new ToolRefusal('Open an updated Jarvis iPhone app to check nearby places.');
       if (command.operation === 'apple-maps') throw new ToolRefusal('Open Jarvis on an iPhone with Apple Maps support, then ask again.');
       const kinds = [...new Set([...ownerConnections.values()]
         .map((connection) => connection.snapshot?.device?.kind ?? 'unknown device'))];
@@ -440,6 +447,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
               kind: { type: 'string', enum: workspaceDeviceKinds },
               label: { type: 'string', minLength: 1, maxLength: 60 },
               appleMaps: { type: 'boolean' },
+              appleMapsNearby: { type: 'boolean' },
             },
             required: ['kind'], additionalProperties: false,
           },

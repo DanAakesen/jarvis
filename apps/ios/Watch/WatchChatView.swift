@@ -200,7 +200,8 @@ struct WatchChatView: View {
                 Text(verbatim: model.draft.isEmpty ? "Message" : model.draft)
                     .font(.callout)
                     .foregroundStyle(model.draft.isEmpty ? Color.secondary : Color.primary)
-                    .lineLimit(3)
+                    .lineLimit(model.draft.isEmpty ? 1 : 3)
+                    .minimumScaleFactor(model.draft.isEmpty ? 0.8 : 1)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 4)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -217,19 +218,29 @@ struct WatchChatView: View {
                     }
                 if hasDraft {
                     Button { Task { await model.send() } } label: {
-                        Image(systemName: "arrow.up.circle.fill").frame(width: 44, height: 44)
+                        Image(systemName: "arrow.up.circle.fill")
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .foregroundStyle(WatchStyle.amber)
                     .disabled(composerDisabled)
                     .accessibilityLabel("Send message")
                 } else {
-                    Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 36, height: 44) }
-                        .foregroundStyle(WatchStyle.amber)
-                        .disabled(composerDisabled).accessibilityLabel("Dictate")
-                    Button { Task { await model.startVoice() } } label: { WatchOrb().frame(width: 26, height: 26).frame(width: 36, height: 44) }
-                        .disabled(model.busy || model.startingVoice || model.dictationState != .idle).accessibilityLabel("Start voice")
+                    Button(action: dictate) {
+                        Image(systemName: "mic.fill")
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .foregroundStyle(WatchStyle.amber)
+                    .disabled(composerDisabled).accessibilityLabel("Dictate")
+                    Button { Task { await model.startVoice() } } label: {
+                        WatchOrb().frame(width: 26, height: 26)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(composerDisabled).accessibilityLabel("Start voice")
                 }
-            }.buttonStyle(.plain).padding(.leading, 8).padding(.trailing, 4)
+            }.buttonStyle(.plain).padding(.leading, 6)
                 .watchGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .padding(.horizontal, 4)
         }

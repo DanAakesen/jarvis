@@ -715,6 +715,7 @@ struct JarvisChatScreen: View {
                     inputIdentifier: "chat.input",
                     inputHint: model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "",
                     isInputDisabled: model.fixtureTurnUnavailable,
+                    collapsesWhenUnfocused: true,
                     rimState: rimState,
                     isRimAnimated: !model.fixtureMode,
                     waveformLevels: dictation.isListening ? dictation.levels : nil,

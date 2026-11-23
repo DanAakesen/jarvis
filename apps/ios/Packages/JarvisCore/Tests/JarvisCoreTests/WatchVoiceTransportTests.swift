@@ -222,22 +222,48 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertFalse(WatchEventScheduling.appendVoiceFragment(full, to: &audio))
     }
 
-    func testPlaybackPriorityRespectsAudioOrderAndTerminalBarriers() {
+    func testSlowCaptionReceiptDoesNotStarveReplyAudioOrReorderCaptions() {
+        let call = UUID()
+        let caption = WatchEvent(.voiceTranscript, requestID: call, text: "One", responseID: "reply")
+        let nextCaption = WatchEvent(.voiceTranscript, requestID: call, text: " two", responseID: "reply")
+        let audio = WatchEvent(.voiceAudio, requestID: call, responseID: "reply")
+        let otherCall = WatchEvent(.voiceAudio, requestID: UUID(), responseID: "reply")
+        let otherReply = WatchEvent(.voiceAudio, requestID: call, responseID: "another")
+        XCTAssertEqual(WatchEventScheduling.nextDeliveryIndex(in: [caption, audio], inFlight: [audio]), 0)
+        XCTAssertEqual(WatchEventScheduling.nextDeliveryIndex(in: [nextCaption, audio, audio], inFlight: [caption]), 1)
+        XCTAssertNil(WatchEventScheduling.nextDeliveryIndex(in: [nextCaption], inFlight: [caption, audio]))
+        XCTAssertEqual(WatchEventScheduling.nextDeliveryIndex(in: [nextCaption], inFlight: [audio]), 0)
+        XCTAssertNil(WatchEventScheduling.nextDeliveryIndex(in: [otherReply, audio], inFlight: [caption]))
+        XCTAssertNil(WatchEventScheduling.nextDeliveryIndex(in: [otherCall, audio], inFlight: [caption]))
+    }
+
+    func testInterruptDiscardsOnlyTheCancelledReplyFragments() {
+        let call = UUID()
+        let interrupt = WatchEvent(.interrupt, requestID: call, responseID: "reply")
+        let sessionInterrupt = WatchEvent(.interrupt, requestID: call)
+        for kind in [WatchEvent.Kind.voiceAudio, .voiceTranscript] {
+            XCTAssertTrue(WatchEventScheduling.isCancelledFragment(.init(kind, requestID: call, responseID: "reply"), by: interrupt))
+            XCTAssertFalse(WatchEventScheduling.isCancelledFragment(.init(kind, requestID: call, responseID: "other"), by: interrupt))
+            XCTAssertTrue(WatchEventScheduling.isCancelledFragment(.init(kind, requestID: call, responseID: "other"), by: sessionInterrupt))
+            XCTAssertFalse(WatchEventScheduling.isCancelledFragment(.init(kind, requestID: UUID(), responseID: "reply"), by: sessionInterrupt))
+        }
+        XCTAssertFalse(WatchEventScheduling.isCancelledFragment(.init(.voiceUserTranscript, requestID: call), by: sessionInterrupt))
+    }
+
+    func testPlaybackAndCaptionDeliveryRespectTurnBoundaries() {
         let id = UUID()
         let audio = WatchEvent(.voiceAudio, requestID: id)
         let state = WatchEvent(.voiceState, requestID: id, text: "Listening")
         let finished = WatchEvent(.voiceState, requestID: id, text: "Playback finished")
         let endFailed = WatchEvent(.voiceState, requestID: id, text: "End failed")
         let interrupted = WatchEvent(.interrupt, requestID: id)
-        XCTAssertEqual(WatchEventScheduling.insertionIndex(for: audio, in: [audio, state]), 2)
-        XCTAssertEqual(WatchEventScheduling.insertionIndex(for: audio, in: [audio, finished, state]), 3)
-        XCTAssertEqual(WatchEventScheduling.insertionIndex(for: audio, in: [interrupted]), 1)
-        XCTAssertTrue(WatchEventScheduling.isBarrier(finished))
-        XCTAssertTrue(WatchEventScheduling.isBarrier(endFailed))
-        XCTAssertTrue(WatchEventScheduling.isBarrier(interrupted))
-        XCTAssertTrue(WatchEventScheduling.isBarrier(state))
-        XCTAssertTrue(WatchEventScheduling.isBarrier(
-            WatchEvent(.voiceTranscript, requestID: id, text: "Jarvis")
-        ))
+        let caption = WatchEvent(.voiceTranscript, requestID: id)
+        let userTurn = WatchEvent(.voiceUserTranscript, requestID: id)
+        for boundary in [state, finished, endFailed, interrupted, userTurn] {
+            XCTAssertNil(WatchEventScheduling.nextDeliveryIndex(in: [caption, boundary, audio], inFlight: [caption]))
+            XCTAssertNil(WatchEventScheduling.nextDeliveryIndex(in: [boundary], inFlight: [audio]))
+            XCTAssertNil(WatchEventScheduling.nextDeliveryIndex(in: [audio], inFlight: [boundary]))
+            XCTAssertEqual(WatchEventScheduling.nextDeliveryIndex(in: [boundary, audio], inFlight: []), 0)
+        }
     }
 }

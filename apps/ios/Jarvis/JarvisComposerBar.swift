@@ -1,16 +1,16 @@
 import JarvisCore
 import SwiftUI
 
-/// The one composer, used by Chat and Home: a text field above one row (a leading control, the live dictation line
-/// while listening, then the trailing actions) inside the glass surface with the animated rim. Chat and Home differ
-/// only in what they put in `header`, `leading` and `actions`, and in the space around it.
+/// Chat folds the editor and controls into one row between edits.
 struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let placeholder: String
     @Binding var draft: ComposerDraft
     let isFocused: Binding<Bool>
     let inputIdentifier: String
     let inputHint: String
     let isInputDisabled: Bool
+    let collapsesWhenUnfocused: Bool
     let rimState: JarvisRimState
     let isRimAnimated: Bool
     let waveformLevels: [Float]?
@@ -26,6 +26,7 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
         inputIdentifier: String,
         inputHint: String = "",
         isInputDisabled: Bool = false,
+        collapsesWhenUnfocused: Bool = false,
         rimState: JarvisRimState,
         isRimAnimated: Bool,
         waveformLevels: [Float]? = nil,
@@ -40,6 +41,7 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
         self.inputIdentifier = inputIdentifier
         self.inputHint = inputHint
         self.isInputDisabled = isInputDisabled
+        self.collapsesWhenUnfocused = collapsesWhenUnfocused
         self.rimState = rimState
         self.isRimAnimated = isRimAnimated
         self.waveformLevels = waveformLevels
@@ -50,33 +52,45 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
     }
 
     var body: some View {
+        let compact = collapsesWhenUnfocused && !isFocused.wrappedValue && waveformLevels == nil
+        // AnyLayout repositions the same native editor, preserving first responder and selection.
+        let layout = compact ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
         VStack(spacing: 0) {
             header
-            JarvisComposerTextInput(
-                draft: $draft,
-                isFocused: isFocused,
-                placeholder: placeholder,
-                identifier: inputIdentifier,
-                hint: inputHint,
-                isDisabled: isInputDisabled,
-                onSubmit: onSubmit
-            )
-                .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
-                .padding(.top, JarvisDesignTokens.chatComposerTextInset)
-                .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
-
-            HStack(spacing: 0) {
-                leading
-                if let waveformLevels {
-                    JarvisWaveform(levels: waveformLevels)
-                        .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
-                        .accessibilityIdentifier("\(inputIdentifier).waveform")
-                } else {
-                    Spacer(minLength: 0)
+            layout {
+                HStack(spacing: 0) {
+                    if compact { leading }
+                    JarvisComposerTextInput(
+                        draft: $draft,
+                        isFocused: isFocused,
+                        placeholder: placeholder,
+                        identifier: inputIdentifier,
+                        hint: inputHint,
+                        isDisabled: isInputDisabled,
+                        isCompact: compact,
+                        onSubmit: onSubmit
+                    )
+                    .padding(.horizontal, compact ? JarvisDesignTokens.chatComposerSpacing / 2 : JarvisDesignTokens.chatComposerTextInset)
+                    .padding(.top, compact ? 0 : JarvisDesignTokens.chatComposerTextInset)
+                    .padding(.bottom, compact ? 0 : JarvisDesignTokens.chatComposerSpacing / 2)
+                    .frame(maxWidth: .infinity)
                 }
-                actions
+                HStack(spacing: 0) {
+                    if !compact {
+                        leading
+                        if let waveformLevels {
+                            JarvisWaveform(levels: waveformLevels)
+                                .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
+                                .accessibilityIdentifier("\(inputIdentifier).waveform")
+                        } else {
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    actions
+                }
             }
         }
+        .padding(.top, compact ? JarvisDesignTokens.chatComposerSpacing / 2 : 0)
         .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
         .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
         .background {
@@ -87,6 +101,7 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
                 .accessibilityHidden(true)
         }
         .jarvisCarryOver(.composer)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: compact)
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
         .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
     }

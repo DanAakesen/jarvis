@@ -1,21 +1,25 @@
 import Foundation
 
 public struct AppleMapsRequest: Codable, Equatable, Sendable {
+    public enum Nearby: String, Codable, Sendable { case name, category }
+
     public let query: String
     public let origin: String?
     public let mode: String?
     public let arriveBy: String?
     public let bufferMinutes: Int?
     public let searchOnly: Bool?
+    public let nearby: Nearby?
 
     public init(query: String, origin: String? = nil, mode: String? = nil, arriveBy: String? = nil,
-                bufferMinutes: Int? = nil, searchOnly: Bool? = nil) {
+                bufferMinutes: Int? = nil, searchOnly: Bool? = nil, nearby: Nearby? = nil) {
         self.query = query
         self.origin = origin
         self.mode = mode
         self.arriveBy = arriveBy
         self.bufferMinutes = bufferMinutes
         self.searchOnly = searchOnly
+        self.nearby = nearby
     }
 }
 
@@ -94,6 +98,7 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
     public let arriveBy: String?
     public let bufferMinutes: Int?
     public let reason: String?
+    public let nearbyRadiusMeters: Int?
 
     public init(
         places: [AppleMapsPlace],
@@ -102,7 +107,8 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
         origin: AppleMapsOrigin? = nil,
         arriveBy: String? = nil,
         bufferMinutes: Int? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        nearbyRadiusMeters: Int? = nil
     ) {
         self.places = places
         self.mode = mode
@@ -111,6 +117,7 @@ public struct AppleMapsResult: Codable, Equatable, Sendable {
         self.arriveBy = arriveBy
         self.bufferMinutes = bufferMinutes
         self.reason = reason
+        self.nearbyRadiusMeters = nearbyRadiusMeters
     }
 }
 
@@ -128,7 +135,8 @@ extension AppleMapsResult {
         let place = places[ordinal - 1]
         return AppleMapsResult(places: [place], mode: mode, observedAt: observedAt, origin: origin,
                                arriveBy: arriveBy, bufferMinutes: bufferMinutes,
-                               reason: place.travelSeconds == nil && reason != nil ? "Apple Maps did not return a route for this place." : nil)
+                               reason: place.travelSeconds == nil && reason != nil ? "Apple Maps did not return a route for this place." : nil,
+                               nearbyRadiusMeters: nearbyRadiusMeters)
     }
 
     public static func date(_ text: String) -> Date? {

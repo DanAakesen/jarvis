@@ -33,6 +33,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var monoScratch: AVAudioPCMBuffer?
     #if os(watchOS)
     private var captureRoute: Route?
+    private var requestsVoiceProcessing = false
+
+    var isVoiceProcessingEnabled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return stats.voiceProcessing
+    }
 
     private struct Route: Equatable {
         let inputs: [String]
@@ -53,6 +60,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         var channels = 0
         var sampleRate = 0.0
         var peak: Float = 0
+        var voiceProcessing = false
     }
 
     static func requestMicrophonePermission() async -> Bool {
@@ -64,7 +72,8 @@ final class VoiceAudioEngine: @unchecked Sendable {
     /// `mode` is tried first. With `alternateMode`, a microphone that delivers exact digital silence for the first
     /// seconds is restarted once in that mode, because a session mode can leave the input dead without any error.
     func startCapture(
-        tolerateDrops: Bool = false, mode: AVAudioSession.Mode = .voiceChat, alternateMode: AVAudioSession.Mode? = nil
+        tolerateDrops: Bool = false, mode: AVAudioSession.Mode = .voiceChat, alternateMode: AVAudioSession.Mode? = nil,
+        useVoiceProcessing: Bool = false
     ) throws -> AsyncStream<Data> {
         controlLock.lock()
         defer { controlLock.unlock() }
@@ -79,6 +88,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
             lock.unlock()
         }
         activeTolerateDrops = tolerateDrops
+        #if os(watchOS)
+        requestsVoiceProcessing = useVoiceProcessing
+        #endif
         do {
             try attachInput(mode: mode)
         } catch {
@@ -101,6 +113,11 @@ final class VoiceAudioEngine: @unchecked Sendable {
         try configureSession(mode: mode)
         #if os(watchOS)
         guard AVAudioSession.sharedInstance().isInputAvailable else { throw VoiceAudioEngineError.captureUnavailable }
+        if requestsVoiceProcessing && mode == .voiceChat {
+            // Switch the stopped I/O graph before connecting the speaker or negotiating the microphone format.
+            do { try engine.inputNode.setVoiceProcessingEnabled(true) }
+            catch { log.notice("Voice processing unavailable on this audio route: \(String(describing: error), privacy: .public)") }
+        }
         #endif
         if !hasPlaybackGraph {
             engine.attach(player)
@@ -116,6 +133,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         // Use the negotiated tap format and build the converter from the actual (possibly downmixed) buffer.
         let tapFormat: AVAudioFormat? = nil
         let converter: AVAudioConverter? = nil
+        let voiceProcessing = input.isVoiceProcessingEnabled
         #else
         let tapFormat = inputFormat
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
@@ -126,6 +144,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
         activeMode = mode
         self.converter = converter
         stats = CaptureStats()
+        #if os(watchOS)
+        stats.voiceProcessing = voiceProcessing
+        #endif
         lock.unlock()
         input.installTap(onBus: 0, bufferSize: 1_024, format: tapFormat) { [weak self] buffer, _ in
             guard let self else { return }
@@ -226,7 +247,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         let mode = activeMode
         let recovered = silenceRecovered
         lock.unlock()
-        return "mode=\(mode.rawValue) buffers=\(value.buffers) input_channels=\(value.channels) input_rate=\(Int(value.sampleRate)) input_peak=\(String(format: "%.5f", value.peak)) recovered=\(recovered)"
+        return "mode=\(mode.rawValue) voice_processing=\(value.voiceProcessing) buffers=\(value.buffers) input_channels=\(value.channels) input_rate=\(Int(value.sampleRate)) input_peak=\(String(format: "%.5f", value.peak)) recovered=\(recovered)"
     }
 
     private func sessionDescription(inputFormat: AVAudioFormat) -> String {
@@ -250,9 +271,10 @@ final class VoiceAudioEngine: @unchecked Sendable {
         lock.lock()
         let live = captureContinuation != nil
         let silent = stats.peak < 0.000_001
+        let processedSilence = stats.buffers > 0 && stats.voiceProcessing
         let already = silenceRecovered
         lock.unlock()
-        guard live, hasCaptureTap, silent, !already, activeMode != alternate else { return }
+        guard live, hasCaptureTap, silent, !processedSilence, !already, activeMode != alternate else { return }
         log.error("Microphone delivered no signal in mode \(self.activeMode.rawValue, privacy: .public): \(self.captureSummary, privacy: .public). Restarting in \(alternate.rawValue, privacy: .public)")
         lock.lock(); silenceRecovered = true; lock.unlock()
         do { try restartInput(mode: alternate) }

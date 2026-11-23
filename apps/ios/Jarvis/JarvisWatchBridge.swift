@@ -242,6 +242,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard WCSession.default.isReachable ||
                 [.chatDelta, .chatDone, .chatError].contains(event.kind) ||
                 recoverableText else { return }
+        let interruptIndex = event.kind == .interrupt ? discardCancelledFragments(for: event) : nil
         if var last = eventQueue.last, eventDeliveryAttempts[last.deliveryID] == nil,
            WatchEventScheduling.appendVoiceFragment(event, to: &last) {
             eventQueue[eventQueue.count - 1] = last
@@ -263,19 +264,35 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 return
             }
         }
-        let index = WatchEventScheduling.insertionIndex(for: event, in: eventQueue)
-        eventQueue.insert(event, at: index)
+        eventQueue.insert(event, at: min(interruptIndex ?? eventQueue.endIndex, eventQueue.endIndex))
         deliverEvents()
+    }
+
+    private func discardCancelledFragments(for interrupt: WatchEvent) -> Int {
+        // WCSession delivers in send order. The interrupt can follow already-sent fragments
+        // without waiting for their acknowledgements or replaying stale captions.
+        let cancelled = { (event: WatchEvent) in WatchEventScheduling.isCancelledFragment(event, by: interrupt) }
+        let index = eventQueue.firstIndex(where: cancelled) ?? eventQueue.endIndex
+        eventQueue.removeAll {
+            guard cancelled($0) else { return false }
+            eventDeliveryAttempts.removeValue(forKey: $0.deliveryID)
+            return true
+        }
+        for (token, item) in eventInFlight.filter({ cancelled($0.value.event) }) {
+            item.timeout.cancel()
+            eventDeliveryAttempts.removeValue(forKey: item.event.deliveryID)
+            eventInFlight.removeValue(forKey: token)
+        }
+        return index
     }
     private func deliverEvents() {
         guard WCSession.default.isReachable else { return }
-        while !eventQueue.isEmpty, eventInFlight.count < (voicePlaybackPipelined ? 4 : 1) {
-            if eventInFlight.values.contains(where: { WatchEventScheduling.isBarrier($0.event) }) { return }
-            if WatchEventScheduling.isBarrier(eventQueue[0]), !eventInFlight.isEmpty { return }
-            var next = eventQueue.removeFirst()
-            while next.kind == .voiceAudio, let following = eventQueue.first,
-                  WatchEventScheduling.appendVoiceFragment(following, to: &next) {
-                eventQueue.removeFirst()
+        while eventInFlight.count < (voicePlaybackPipelined ? 4 : 1),
+              let index = WatchEventScheduling.nextDeliveryIndex(in: eventQueue, inFlight: eventInFlight.values.map(\.event)) {
+            var next = eventQueue.remove(at: index)
+            while next.kind == .voiceAudio, index < eventQueue.count,
+                  WatchEventScheduling.appendVoiceFragment(eventQueue[index], to: &next) {
+                eventQueue.remove(at: index)
             }
             guard let data = try? encode(WatchWire.event(next)) else { continue }
             let token = UUID()
@@ -320,8 +337,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 return
             }
             eventDeliveryAttempts.removeValue(forKey: item.event.deliveryID)
-            if let id = voiceID, item.event.requestID == id {
+            if item.event.kind == .voiceState, let id = voiceID, item.event.requestID == id {
                 Task { if self.voiceID == id { await self.stopVoice(audioLinkStalled: true) } }
+            } else if item.event.kind != .voiceState {
+                // The saved turn replaces partial captions when the Watch reloads history.
+                voiceLogger.notice("Voice caption delivery exhausted retries")
             }
         } else if item.event.kind == .voiceAudio, item.event.requestID == voiceID {
             playbackDrops += 1

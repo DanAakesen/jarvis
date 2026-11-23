@@ -22,6 +22,8 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case sevenDays = "health.period.sevenDays"
     case fourteenDays = "health.period.fourteenDays"
     case activeKcal = "health.activeKcal"
+    case restingTarget = "health.restingTarget"
+    case calorieDeficit = "health.calorieDeficit"
     case activityUnavailable = "health.activityUnavailable"
     case activityPartial = "health.activityPartial"
     case activityStale = "health.activityStale"

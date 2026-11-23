@@ -34,6 +34,7 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
     @State private var pendingMeal: JarvisManualMeal?
     @State private var mealConfirmation: JarvisManualMeal?
     @ScaledMetric(relativeTo: .body) private var heroHeight = JarvisDesignTokens.healthHeroHeight
+    @ScaledMetric(relativeTo: .subheadline) private var budgetBreakdownHeight: CGFloat = 88
     @State private var page: JarvisHealthHeroPage = .training
 
     init(
@@ -77,7 +78,7 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
                     .accessibilityIdentifier(JarvisHealthHeroPage.nutrition.identifier)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: heroHeight)
+            .frame(height: heroHeight + (page == .nutrition && period.dayCount == 1 ? budgetBreakdownHeight : 0))
             HStack(spacing: JarvisDesignTokens.healthMenuSpacing) {
                 ForEach(JarvisHealthHeroPage.allCases) { item in
                     Circle()
@@ -416,7 +417,7 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
                 } label: {
                     JarvisHealthHeroRing(
                         progress: JarvisHealthLogic.ringProgress(value: kcal, target: target),
-                        text: kcal.map { formatNumber($0, language: language) } ?? "—",
+                        text: kcal.map { today ? budgetNumber($0) : formatNumber($0, language: language) } ?? "—",
                         unit: "kcal",
                         tint: JarvisDesignTokens.healthAccent
                     )
@@ -435,7 +436,7 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
             }
             Divider()
             HStack(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing) {
-                JarvisHealthHeroStat(value: stat.map { "\(formatNumber($0, language: language)) kcal" } ?? "—",
+                JarvisHealthHeroStat(value: stat.map { "\(today ? budgetNumber($0) : formatNumber($0, language: language)) kcal" } ?? "—",
                     title: copy.text(today ? .caloriesLeft : .dailyAverage))
                 Divider()
                 JarvisHealthHeroStat(value: data.nutritionDays.state == .available || data.nutritionDays.state == .empty
@@ -444,6 +445,14 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("health.nutrition.summary")
+            if today {
+                VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                    budgetRow(.restingTarget, data.todayBudget?.kcal.restingKcal)
+                    budgetRow(.activeKcal, data.todayBudget?.kcal.activeKcal)
+                    budgetRow(.calorieDeficit, data.todayBudget?.kcal.deficitKcal.map { 0 - $0 })
+                }
+                .font(.subheadline)
+            }
             JarvisHealthBarChart(
                 values: JarvisHealthChartValues(
                     values: values(.protein), endingOn: period.endDate, count: max(period.dayCount, 7), target: proteinTarget
@@ -455,6 +464,20 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
                 state: data.nutritionDays.state,
                 format: { formatNumber($0, language: language) }
             )
+        }
+    }
+
+    private func budgetNumber(_ value: Double) -> String {
+        value.formatted(.number.locale(language.locale).precision(.fractionLength(0...1)))
+    }
+
+    private func budgetRow(_ key: JarvisHealthLocalizationKey, _ kcal: Double?) -> some View {
+        LabeledContent {
+            Text(kcal.map { "\(budgetNumber($0)) kcal" } ?? "—")
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+        } label: {
+            Text(copy.text(key)).foregroundStyle(.secondary)
         }
     }
 

@@ -14,15 +14,17 @@ public struct WorkspaceDevice: Codable, Equatable, Sendable {
     public let kind: Kind
     public let label: String?
     public let appleMaps: Bool?
+    public let appleMapsNearby: Bool?
 
     public enum Kind: String, Codable, Equatable, Sendable {
         case phone
     }
 
-    public init(kind: Kind = .phone, label: String? = nil, appleMaps: Bool? = nil) {
+    public init(kind: Kind = .phone, label: String? = nil, appleMaps: Bool? = nil, appleMapsNearby: Bool? = nil) {
         self.kind = kind
         self.label = label
         self.appleMaps = appleMaps
+        self.appleMapsNearby = appleMapsNearby
     }
 }
 

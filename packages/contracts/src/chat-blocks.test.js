@@ -108,6 +108,10 @@ test('Apple Maps history stores the original lookup; a route or result cannot en
   }
   assert.equal(isChatBlock({ ...block, data: { view: { ...view, data: { lookupId } } } }), true);
   assert.equal(isWorkspaceCommand({ ...command, speakResult: true }), true);
+  assert.equal(isWorkspaceCommand({ ...command, nearby: 'category' }), true);
+  assert.equal(isWorkspaceCommand({ ...command, nearby: 'name', searchOnly: true }), false);
+  assert.equal(isWorkspaceCommand({ ...command, nearby: 'anything' }), false);
+  assert.equal(isChatBlock({ ...block, data: { view: { ...view, data: { lookupId, request: { query: 'North Loom', nearby: 'name' } } } } }), true);
   assert.equal(isWorkspaceCommand({ ...command, target: 'all' }), false);
   assert.equal(isWorkspaceCommand({ ...command, bufferMinutes: -1 }), false);
   assert.equal(isWorkspaceSnapshot({ windows: [], contextPanelOpen: false, device: { kind: 'phone', appleMaps: true } }), true);
