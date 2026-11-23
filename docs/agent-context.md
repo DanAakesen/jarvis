@@ -5,8 +5,8 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 ## Agent context
 
 - **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) put root `AGENTS.md`, if present, in the worker prompt and quote the issue and owner comments as untrusted request data. Jarvis workers follow that pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and the affected docs from the checkout. This prompt is not the owner's PI conversation.
-- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies persona, presence, Memory policy and environment defaults, not repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) adds the current situation. Warm-up can send this block; later turns omit it when its stored hash matches. Each turn still supplies local time, its own tool reference, the owner request and any turn-specific notes. The hash does not control Foundry history or compaction. Preferences are not permission; attachments and screen context are data, not instructions.
-- **Proactive wakes:** fresh context, activation evidence and a tool overview go to a scratch PI conversation, not the foreground one. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
+- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies persona, presence, Memory policy and environment defaults, not repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) adds the current situation. Warm-up can send this block without an owner request; later turns omit it when its stored hash matches. This does not control Foundry history or compaction. Each turn sends local time, its own tool reference, the owner request and any turn-specific notes. The tool overview, when configured, is sent separately on a new conversation or when its signature changes. Preferences are not permission; attachments and screen context are data, not instructions.
+- **Proactive wakes:** fresh context, activation evidence and any configured tool overview go to a scratch PI conversation. The gateway attempts to clean it up after the wake, even when the wake fails. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
@@ -172,7 +172,7 @@ Normal Chat and Voice use PI. The [legacy hosted agent](../agents/jarvis/README.
 
 ## Troubleshooting
 
-**Saved note not visible:** Check the exact Vault path, current folder and index state separately. A Vault commit is not proof that the index update succeeded. `vault.title_backfill` reports a failed-attempt count without logging note paths or content. Deploy the backend with [migration 0103](../db/migrations/0103_vault_note_metadata.sql) before shipping the iPhone client that uses owner-only `/notes/summaries` and `sort=updated`.
+**Saved note not visible:** Check the exact Vault path, current folder and index state separately. A Vault commit is not proof that the index update succeeded. `vault.title_backfill` reports failures without logging note paths or content. See the [note inventory and title repair](architecture.md#vault-note-inventory-and-title-repair) for the read and repair paths.
 
 | Symptom | Check |
 | --- | --- |
