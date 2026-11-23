@@ -44,7 +44,7 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Watch
 
-The dashboard opens with Chat (or Resume voice) and a labelled Menu in the scrolling content. The system owns the clock and Back area. Whole section headings open their details. The menu groups daily, health and project destinations.
+The dashboard opens with Chat (or Resume voice) and a labelled Menu on one row when they fit, leaving the next event visible. The system owns the clock and Back area. Whole section headings open their details. The menu groups daily, health and project destinations.
 
 Keep one Chat entry point. When reading history, collapse the composer to **Reply** only if it will not interrupt a draft, dictation or a call. **Reply** reopens the composer. At rest show Message, dictation and the Voice orb; with text, preserve editing, clear/send and keyboard access. Give transient status its own space above the action row.
 

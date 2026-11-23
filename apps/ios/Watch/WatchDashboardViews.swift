@@ -17,6 +17,7 @@ struct WatchDashboardView: View {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 6) {
                             chatLink.fixedSize(horizontal: true, vertical: false)
+                            Spacer(minLength: 0)
                             menuLink.fixedSize(horizontal: true, vertical: false)
                         }
                         VStack(alignment: .leading, spacing: 4) {
@@ -126,10 +127,10 @@ struct WatchDashboardView: View {
 
     private var menuLink: some View {
         NavigationLink(value: WatchRoute.menu) {
-            Label("Menu", systemImage: "list.bullet")
+            Text("Menu")
                 .font(.caption)
-                .padding(.horizontal, 8)
-                .frame(minHeight: 44)
+                .padding(.horizontal, 4)
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
