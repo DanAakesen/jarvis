@@ -5,7 +5,7 @@ For the owner or an authorised operator. Look up the intended resources in the i
 ## Deploy
 
 1. Follow [exact-tree PR qualification](agent-context.md#merge-and-release-procedure). [Deploy](../.github/workflows/deploy.yml) runs on `main` for production inputs, including `docs/features.md`, but not for ordinary docs. Do not trigger it to validate a docs PR.
-2. Inspect the plan, component jobs, deterministic readiness and release result. A missing qualification receipt blocks Azure access; a skipped component may reuse compatible evidence. A green image build is not a ready revision.
+2. Find the latest `main` run with `gh run list --workflow Deploy --branch main`. Inspect the plan, selected components, deterministic readiness and release receipt. A missing qualification receipt blocks Azure access; a skipped component may reuse compatible evidence. A docs-only merge does not replace the last production receipt. A green image build is not a ready revision.
 3. [Runner deploy](../.github/workflows/runner-deploy.yml) is separate and uses the configured successful infrastructure deployment. It shares production deployment concurrency; do not start a competing out-of-band release.
 4. Use [PLAN.md](../PLAN.md) for delivery state and the [TestFlight procedure](agent-context.md#testflight-build) for a signed build. Readiness, signed upload, Apple processing and device acceptance are separate. Live provider or notification probes require explicit approval.
 
@@ -20,6 +20,7 @@ Use [diagnostic sources](reference/logs.md) and a narrow UTC window. Investigate
 | Voice never starts or does not end | Follow `voice.session_stage` to `jarvis.session.ready`; a WebSocket open is not service readiness. `voice.session_summary` names the closer and safe outcome. An interrupted close or missing upstream acknowledgement is a failure, not Ended. For a spoken request, correlate lifecycle/length events with the stored owner turn, not raw audio. |
 | Brain appears idle | Inspect the retained status and `pi.brain_tick`/`pi.brain_run`: distinguish off, paused, no eligible sources, no due work and a failed wake. Do not enable the brain to diagnose it. |
 | Status smoke is degraded | Read authenticated `GET /status` for retained results and `system.smoke_check` for the final allowlisted reason. `GET /status/smoke` runs checks; do not invoke it for routine diagnosis. Check discovery, tool receipt and reply assertions separately. |
+| TestFlight upload succeeded but the fix isn't visible | Match the build number to App Store Connect, tester availability and the installed version before debugging the app. Follow the [TestFlight procedure](agent-context.md#testflight-build); do not treat upload as installation or acceptance. |
 
 ## Owner session switch
 

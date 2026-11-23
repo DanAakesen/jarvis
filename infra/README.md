@@ -33,33 +33,16 @@ readiness and release receipts are unchanged. Failed login or metadata resolutio
 stops the job before image deployment. There is no automatic build/write retry,
 admin credential fallback or new secret.
 
-On 6 November, normal Deploy
-[42219180536](https://github.com/DanAakesen/jarvis/actions/runs/42219180536), backend
-job `127902277829`, successfully pushed ACR run `dtrq` at 13:03:14 UTC. Manifest
-lookup failed four seconds later with the generic non-interactive authentication
-error, more than eleven minutes after login. Container Apps was not updated by
-that job. The already-queued manual deployment used its own fresh login; its
-outcome must be checked separately rather than inferred from this correction.
-
-The original failure's underlying cause is unproven. Azure CLI's
-[ACR authentication code](https://github.com/Azure/azure-cli/blob/dev/src/azure-cli/azure/cli/command_modules/acr/_docker_utils.py)
-requests an access token for the registry audience and logs underlying token
-failures as warnings before the generic final error; `--only-show-errors` hides
-those warnings. A stale federated assertion is consistent with the timing, but
-the retained message does not distinguish expiry, authorization or connectivity.
-The [Azure CLI federation issue](https://github.com/Azure/azure-cli/issues/28708)
-documents the passed-assertion refresh limitation. The pinned login action's
-[OIDC flow](https://github.com/Azure/login/blob/a641126d1b8aa4d1fa005f4f92df94a3a4c4c906/src/Cli/AzureCliLogin.ts)
-requests a new GitHub assertion on each invocation, avoiding dependence on the
-pre-build assertion when acquiring the registry token. No raw tokens or debug
-authentication logs are added to deployment output.
+The [OIDC flow](https://github.com/Azure/login/blob/a641126d1b8aa4d1fa005f4f92df94a3a4c4c906/src/Cli/AzureCliLogin.ts)
+does not depend on refreshing the pre-build assertion. A generic registry
+authentication error does not distinguish expiry, authorization or connectivity.
+Keep raw tokens and debug authentication logs out of deployment evidence.
 
 ## Application alerts
 
-The three `jarvis.alert` log-alert rules (credential expiry, deployment failure,
-sandbox crash) were removed on 11 November 2026 to save about 25 DKK a month.
-Only the email action group and the budget notifications remain; the backend
-still writes `jarvis.alert` traces to the logs.
+The email action group and budget notifications remain. The backend still writes
+`jarvis.alert` traces, but Bicep does not create log-alert rules for credential
+expiry, deployment failures or sandbox crashes.
 
 ## Required deployment inputs
 
@@ -67,82 +50,32 @@ still writes `jarvis.alert` traces to the logs.
 `foundryNameTimestamp`, `budgetContactEmails`, and `terraChatCapacity`. The Deploy workflow reads
 the comma-separated addresses from the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub
 secret and writes a protected temporary parameters file; do not put addresses
-in the repository. This configures the email-only Azure Monitor action group
-used by both app alert rules and budget thresholds. `backendImage` is optional: empty skips the backend app,
+in the repository. These addresses are used for budget notifications.
+`backendImage` is optional: empty skips the backend app,
 which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.
 
 ### Terra main-chat rollout (#1337)
 
-`terraChatCapacity` is a required positive integer. The committed parameters now
-request 600 (600K TPM and 600 requests per minute). It was 150, matching the
-repository's earlier chat allocation. That limit began to fail on 22 November
-2026: each PI request now carries 84K–116K input tokens (cached tokens count
-against the limit), so one turn that calls a tool makes two or more requests
-and exceeded 150K tokens in the same minute. The model answered
-`rate_limit_exceeded` after the tool had already run. The live deployment was
-raised to 600 on 22 November with Dan's approval and this file now matches it.
-The region quota for GlobalStandard `gpt-6.1-terra` is 4,000, so 600 leaves
-room. This is a requested throughput limit, not a claim of available live
-quota. Capacity 1 was too small for a Jarvis turn; 50K TPM also throttled the
-recorded 57K–66K/minute acceptance workload (#1232/L91). Lower the number
-again only after the per-request context has shrunk (see the log line
-`pi.turn` `inputTokens`).
+[`main.bicep`](main.bicep) deploys `gpt-6.1-terra` version `2026-10-26` as
+GlobalStandard. [`main.parameters.json`](main.parameters.json) requests 600
+capacity units (600K TPM) via `terraChatCapacity`. The
+[deployment automation guide](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/automate-quota-deployments)
+defines the unit; the [region matrix](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability)
+does not prove available subscription quota. Measure context via `pi.turn`
+`inputTokens` before proposing a lower limit. Deploy, not offline Bicep CI,
+validates Azure's current limits. If Azure rejects an allocation, do not change
+quota, region, SKU or permissions without approval.
 
-Microsoft's [deployment automation guide](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/automate-quota-deployments)
-defines one capacity unit as 1,000 TPM. A Terra-specific live minimum/maximum or
-remaining allocation has not been read here. GlobalStandard is
-[pay-per-token](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types),
-with no reserved PTU purchase introduced by this allocation.
+Normal Chat uses the serving [PI agent definition](../docs/architecture.md#the-two-foundry-agents),
+not the legacy hosted-agent Chat setting. A Bicep parameter is not proof of the
+serving version. Use the owner [readback procedure](../docs/agent-context.md#verify-the-live-agents-read-only)
+when explicitly authorised.
 
-PR CI builds/lints Bicep offline; it cannot prove current Azure availability. The
-existing main-only Deploy authenticates with its existing OIDC identity and
-submits the template, where Azure validates model/SKU limits, quota and capacity.
-A separate owner sign-in or live quota read is not a prerequisite for preparing
-this ordinary deployment request. Normal qualification/review still precedes
-merge; no worker merges or directly deploys. If Azure rejects the allocation,
-report the exact failure and stop: do not silently increase quota, change region
-or SKU, create access, or claim success. No deployment is performed here.
-The template adds `gpt-6.1-terra` / `2026-10-26`, GlobalStandard, after Sol in the
-existing Foundry account's serialized model deployment chain.
-
-After the normal infrastructure/backend/agent release, verify Terra in the live
-catalogue. Read authenticated `GET /settings` to observe the effective chat model
-and reasoning; a source-code default is not evidence of Dan's active selection.
-If needed, use the existing Settings update with only
-`{"settings":{"roles":{"chat":{"model":"gpt-6.1-terra"}}}}` to retain the
-existing valid reasoning and all unrelated settings. Verify the returned
-effective model with owner `GET /settings`; a new hosted-agent session must
-resolve Terra through its normal agent-only `GET /agent/settings` read. The
-existing owner `set_jarvis_model` tool uses the same
-validated settings write path and returns the saved model for the next session.
-The regression test covers the persisted model-only update and both readbacks;
-the hosted-agent regression preserves an explicit session model. Do not claim
-activation from the code fallback alone. Do not rewrite stored settings globally
-or replace explicit session models. English and Danish speech use the same
-authenticated `/voice` route and realtime voice role; the spoken language does
-not select a model or route.
-If the saved effort is `minimal`, the model-only update is refused: resolve a
-supported effort with the owner rather than silently changing it.
-Existing approval interpretation and proactive summarization also read the chat
-setting. Account for those shared consumers in the spending decision. No new
-background model role or Terra price estimate is introduced here. The inactive
-semantic-mail adapter requires known pricing and therefore refuses an unpriced model.
-The proactive unknown-model estimate uses existing known rates; it is not a
-verified Terra spending bound.
-Dan approved a USD 20/month Terra budget and accepted the existing alert-based
-controls. Keep those alerts unchanged; no new spending guard is required or
-implemented, and the alerts are not an enforced hard cap. The ordinary metered
-model deployment does not authorize unlimited spending or reserved capacity.
-
-Discovery on 27 October: this executor has no Azure CLI, Azure identity
-configuration or existing Azure login, and no authorized owner-settings route.
-Actual quota/capacity and the saved model could not be observed. Microsoft's
-[availability matrix](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability)
-lists Terra in Sweden Central; it does not prove subscription quota or capacity.
-The [Azure pricing page](https://azure.microsoft.com/en-us/pricing/details/azure-openai/)
-timed out, and the public Retail Prices API request returned proxy HTTP 403.
+GlobalStandard is [metered per token](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types),
+not reserved capacity. Budget notifications are not a hard cap or permission
+to increase spend.
 
 Microsoft's 26 October [Terra announcement](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/gpt-6-1-terra-now-generally-available-in-microsoft-foundry-build-agents-that-see/4567769)
 publishes these Global Standard list rates in USD per million tokens:
@@ -152,16 +85,9 @@ publishes these Global Standard list rates in USD per million tokens:
 | Short | $1.00 | $0.05 | $1.25 | $5.00 |
 | Long | $2.00 | $0.10 | $2.50 | $7.50 |
 
-The canonical article returned HTTP 403 here; the complete table was verified in
-Microsoft's indexed [model catalog tag page](https://techcommunity.microsoft.com/tag/model%20catalog).
-These are public list prices, not verified account-specific rates. Azure's
-short/long context threshold and whether a threshold changes billing for the
-whole request were not verified; do not import OpenAI's billing rules into this
-Azure rollout. Actual quota/capacity and account-specific rates remain
-unobserved; the normal authenticated Deploy determines whether Azure accepts the
-requested allocation. Runtime pricing tables and currency conversion remain
-unchanged. USD 20/month and existing alerts are the owner's accepted budget
-direction; no new budget subsystem or login handoff is introduced.
+See [Azure pricing](https://azure.microsoft.com/en-us/pricing/details/azure-openai/)
+for public rates. Account pricing and the context-tier billing threshold are not
+verified here.
 
 The optional `codexToolModel` parameter defaults to `gpt-5.5` and sets the
 backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14 web research and P7-15 image

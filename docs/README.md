@@ -6,7 +6,7 @@ Index of the documentation folders. The source of truth for which files matter a
 
 | Doc | What it tells you |
 | --- | --- |
-| [../p0.md](../p0.md) | Dan's current priorities, short. He edits it freely and Jarvis reads it. |
+| [../p0.md](../p0.md) | Dan's current priorities, short. Read first when working on Jarvis. |
 | [../PRODUCT.md](../PRODUCT.md) | What Jarvis is for, the daily core, priorities P0/P1/P2, Dan's standing rules. |
 | [../PLAN.md](../PLAN.md) | Current state, what is in flight, next steps, open decisions. Its task tables are read by the plan-status bot. |
 | [architecture.md](architecture.md) | Components, data flows, deployment, invariants and known limits. |
@@ -26,7 +26,7 @@ Index of the documentation folders. The source of truth for which files matter a
 
 | Folder | Contents |
 | --- | --- |
-| [reference/](reference/README.md) | Data model, log access, the Daily health contract and the pinned Daily v182 source snapshot. |
+| [reference/](reference/README.md) | Data model, log access and current Health integration contracts. |
 | [ios/](ios/) | `integration-contract.md` (backend endpoints the iPhone app uses) and `apple-capabilities.md` (entitlements and capabilities). |
 | [pi/](pi/cutover.md) | The PI switch-on checklist and the pending decisions. |
 | [inbox-loop/](inbox-loop/acceptance.md) | Inbox capture, scheduled follow-ups, device acceptance, MCP and Shortcut. |

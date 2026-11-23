@@ -1,6 +1,6 @@
 # Project plan
 
-## Current state (2026-11-22)
+## Current state
 
 ### Current focus
 
@@ -14,8 +14,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **124** | Uploaded from `ee34f2c3e` by [run #124](https://github.com/DanAakesen/jarvis/actions/runs/45071501953). Dan reports tests 1 (project status and issue lookup), 2 (Notes), 3 (creating and completing a task), 6 (weather in the ongoing conversation) and 9 (one Proactive switch) passed. Watch dictation failed and Voice ended its connection to the iPhone (test 8). A separate request for the phone’s location failed. The channels were unspecified. Test 7 failed for iPhone Chat typing lag ([#2026](https://github.com/DanAakesen/jarvis/issues/2026)). The other checks, including the Voice part of test 7, await feedback. |
-| Backend | The [latest main Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45078026398) passed exact-tree qualification and deterministic runtime readiness. The [Notes Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) delivered migration `0103` alongside the PI rate-limit and tool-access fixes and server-side `gym_lifts` discovery of iPhone Gym records. Readiness is not live provider acceptance. |
+| TestFlight **124** | [Upload](https://github.com/DanAakesen/jarvis/actions/runs/45071501953) from `ee34f2c3e`. Dan passed project and issue lookup, Notes, task create/complete, weather in the ongoing conversation and the single Proactive switch (tests 1–3, 6 and 9). iPhone typing lag, phone location, both target settings pages, Watch dictation and Watch Voice failed. Gym, Nutrition totals and Voice caption scrolling still need device checks. Channel parity remains open. |
+| Backend | The [latest main Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45078026398) has an accepted release receipt and passed deterministic runtime readiness. Its source includes the [Notes release](https://github.com/DanAakesen/jarvis/actions/runs/45069151013) with migration `0103`, the PI rate-limit and tool-access fixes, and `gym_lifts` discovery of iPhone Gym records. The manual live acceptance job did not run. |
 | Background PI | Dan turned it on in build 124. The Proactive page shows turns used, allowance and last activation. Wakes are recorded in the private decision log. Device delivery awaits verification. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
