@@ -175,6 +175,28 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(review).toHaveBeenCalledWith(expect.objectContaining({ runId: evening!.run.id, trigger: 'scheduled' }));
   });
 
+  it('reviews the slot covered by the last allowed event and keeps the next uncovered slot capped', async () => {
+    const review = vi.fn(async () => {});
+    const t = setup({ start: '2026-11-16T05:30:00Z', afterScheduledWake: review });
+    await t.ready;
+    await t.proactive.settings.patch({ backgroundTurnsPerDay: 1 });
+    await t.enqueue(event(1, 'github', t.now().toISOString()));
+    expect((await t.tick()).outcome).toBe('done');
+
+    for (const [slot, at, reason] of [
+      ['2026-11-16T07:00', '2026-11-16T06:00:00Z', 'satisfied_by_event'],
+      ['2026-11-16T18:00', '2026-11-16T17:00:00Z', 'daily_cap'],
+    ] as const) {
+      t.clock.t = new Date(at);
+      const claim = await t.proactive.runs.claim({ trigger: 'scheduled', slot, now: t.now() });
+      await t.brain.runScheduled(claim!, signal());
+      expect((await t.proactive.runs.latest())?.reason).toBe(reason);
+    }
+    expect(review).toHaveBeenCalledTimes(1);
+    expect(t.gateway.wakes).toHaveLength(1);
+    expect((await t.brain.status()).remaining).toBe(0);
+  });
+
   it('turns the model\'s decision to speak into one chat message that pushes once, and logs what was sent', async () => {
     const t = setup({ decide: async ({ run }) => {
       await t.comms.send({ text: 'The Deploy of main failed. The PI smoke check streaming is the cause.' }, run, signal());

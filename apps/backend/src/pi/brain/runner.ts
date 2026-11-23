@@ -410,7 +410,6 @@ export function createBrain(options: BrainOptions) {
     if (!Object.values(settings.sources).some(Boolean)) { await finishWithoutWake(claim, 'skipped', 'no_sources'); return; }
     const current = now();
     const slot = await slots.status();
-    if (slot.used >= slot.allowed) { await finishWithoutWake(claim, 'skipped', 'daily_cap'); return; }
     if (claim.run.slot && slot.lastAt && slot.lastActivationType === 'event') {
       const currentSlotAt = localSlotInstant(claim.run.slot);
       const previousSlotAt = latestSlotAtOrBefore(new Date(currentSlotAt.getTime() - 1)).at;
@@ -421,6 +420,7 @@ export function createBrain(options: BrainOptions) {
         return;
       }
     }
+    if (slot.used >= slot.allowed) { await finishWithoutWake(claim, 'skipped', 'daily_cap'); return; }
     if (slot.lastAt && current.getTime() - Date.parse(slot.lastAt) < MIN_WAKE_GAP_MS) {
       await finishWithoutWake(claim, 'skipped', 'satisfied_by_recent_activation');
       return;
