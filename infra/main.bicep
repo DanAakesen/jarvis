@@ -947,7 +947,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'JARVIS_PROACTIVE_EVENTS_ENABLED'
-              value: string(proactiveEventsEnabled)
+              value: proactiveEventsEnabled ? 'true' : 'false'
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -963,7 +963,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'JARVIS_BACKEND_LOGS_ENABLED'
-              value: string(backendLogAccess == 'enabled')
+              value: backendLogAccess == 'enabled' ? 'true' : 'false'
             }
             {
               name: 'JARVIS_BACKEND_LOGS_WORKSPACE_ID'
