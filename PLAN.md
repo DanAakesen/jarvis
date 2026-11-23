@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight | **126** is Apple-confirmed for internal testing; nutrition balance, location lookup and Watch dictation passed on that build. **128** is not yet Apple-confirmed; its Maps, Watch, Nutrition and composer changes are **not accepted on device**. |
+| TestFlight | Apple confirmed **128** for internal testing. Its Maps, Watch, Nutrition and composer changes are **not accepted on device**. |
 | Backend and web | Deploy for the Watch, Maps, Nutrition and composer release applied the backend and web; the PI-configured revision and deterministic readiness passed. Live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
@@ -22,8 +22,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 ### Next steps and blockers
 
 1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), check project status and the issue-to-worker flow for approved work in Chat and Voice. Save, find and rename a note; check its iPhone folder without refreshing. Create a task, check its reminder, then complete it. Check workout and lift readback in Danish and English.
-2. Watch replies broke up in the last device check. Once the new build is available, listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap and read the complications on the red face with wrist raised and lowered. On iPhone, verify that Voice leaves Speaking between replies.
-3. On the new iPhone build, ask for a named store nearby. A matching local business or an explicit no-match result passes; a distant street does not. Check Directions for a match. In Voice, ask when to leave for an event with an address and a ten-minute buffer; compare the spoken estimate with the map card.
+2. Listen to two complete replies on the Watch speaker, then interrupt a third. Check Dictate, Send and Voice on the first tap and read the complications on the red face with wrist raised and lowered. On iPhone, verify that Voice leaves Speaking between replies.
+3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes; a distant street does not. Check Directions for a match. In Voice, ask when to leave for an event with an address and a ten-minute buffer; compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.

@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-For release answers, Chat and Voice start with [the plan](../PLAN.md), then look for newer `main` runs with `github_read` (`workflow_runs` for `ios-testflight.yml`). Inspect a newer run by `runId` for `appleInternalAvailabilityConfirmedAtCheck: true` in its jobs. Operators can use `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; **Check TestFlight build** checks an existing build without uploading again.
+For release answers, start with [the plan](../PLAN.md) and compare recent `main` TestFlight runs. Use `gh run list` and `gh run view`, or `github_read` (`workflow_runs` for `ios-testflight.yml`, then its jobs by `runId`). Uploads use the dispatch SHA and run number; **Check TestFlight build** checks the named existing build. A newer run may check an older build. Verify the build number and `appleInternalAvailabilityConfirmedAtCheck: true` before replacing the confirmed build.
 
 Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
 
