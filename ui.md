@@ -11,7 +11,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | Destination | What it shows | Main code |
 | --- | --- | --- |
 | **Home** | The brief and next action, today's activity card, tasks and the iPhone Gym sheet. The activity stays usable when the brief is unavailable. The + menu beside Upcoming opens New task, New note, Log workout and Log lift. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
-| **Chat** | The one PI conversation: streaming replies, composer with plus menu and dictation, grouped tool activity, generated blocks and charts, photos, reply targets from pushes, follow-latest, and the live Voice state when Voice is active. | `JarvisChatScreen`, `JarvisComposerBar`, `JarvisChatToolActivityList`, `JarvisChatBlockView`, `JarvisChatFollowLatest` |
+| **Chat** | The one PI conversation: resumable replies, composer with plus menu and dictation, grouped tool activity, generated blocks (including charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |
 | **Health** | Daily dashboard, body chart, workouts and the iPhone Gym lift log and editor, goals, and HealthKit sync. Swipe to Nutrition for totals, meal history and **Log meal kcal**. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
@@ -20,7 +20,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
 | **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
 | **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
-| **Settings** | The **Proactive suggestions** switch, saved values, editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
+| **Settings** | The **Proactive suggestions** switch, Training and Nutrition target editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
 | **Banking** | Listed in the sidebar but not navigable. Out of scope until Dan sets its approval rules ([PLAN decision F](PLAN.md#open-decisions-af)). | `JarvisDestination.banking` |
 
 Around the destinations: the opening screen (`JarvisOpeningView`, startup only), the lock and sign-in gate (`JarvisGateRootView`), the activity sheet, approval notifications and the shared task row (`JarvisTaskListRow`, used in Notes and Home).
@@ -45,9 +45,9 @@ Widgets and Live Activities are glanceable summaries and routes back into the re
 
 No CarPlay scene in source; **not accepted on device**. See [Apple capabilities](docs/ios/apple-capabilities.md) for the grant and [PRODUCT.md](PRODUCT.md#carplay) for the voice-first requirement.
 
-## Open UI items
+## Device acceptance
 
 | Item | State |
 | --- | --- |
-| Apple Maps in Chat and Voice | The iPhone shows matching places on a map, estimated travel time and Directions. Reopen an expired lookup to get current results. |
-| Device acceptance of Chat typing, follow-latest, Voice state labels, Notes titles and Watch recovery | Build 124 testing is underway. [PLAN.md](PLAN.md) tracks the results of each check. |
+| Apple Maps in Chat and Voice | Place choice, spoken estimates and Directions are in source, **not accepted on device**. |
+| Chat resume and typing, target settings, Voice gestures and Watch recovery | **Not accepted on device.** [PLAN.md](PLAN.md) owns the build and retest status. |

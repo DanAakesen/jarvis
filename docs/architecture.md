@@ -14,7 +14,7 @@ Current system map, checked against repository code and workflows. This is not a
 | `jarvis-pi` | [agents/pi](../agents/pi), managed Copilot harness in Azure Foundry | Foreground reasoning and tool use; background wakes use the same agent in scratch conversations. |
 | `jarvis-pi-live` | [Voice definition](../agents/pi/voice-definition.json), GPT-Live in Azure Foundry | Listens and speaks. It does not run Jarvis tools; native client delegation sends work to the relay, which calls PI. |
 | Tool dispatcher | [PI MCP door](../apps/backend/src/pi/mcp.ts), [core routes](../apps/backend/src/core/index.ts) | Turn-scoped discovery and execution. GitHub (`gh_`) and Azure (`az_`) are backend bridges; the managed harness runs its own built-ins. |
-| Proactive and push | [PI brain](../apps/backend/src/pi/brain), [scheduler and engine](../apps/backend/src/proactive), [push](../apps/backend/src/push) | Ingest signals, wake PI, and durably send owner-visible outcomes via APNs. Not every event should wake the brain or send a push. |
+| Proactive and push | [PI brain](../apps/backend/src/pi/brain), [scheduler](../apps/backend/src/proactive), [push](../apps/backend/src/push) | Ingest signals, wake PI, and durably send owner-visible outcomes via APNs. Not every event should wake the brain or send a push. |
 | Software Factory | [Backend Factory](../apps/backend/src/factory), [runner](../runner), [PC bridge](../pc-bridge) | Durable coding work, GitHub status and worker events. PC actions run through the separately authenticated bridge, not in the Foundry session. |
 
 ```mermaid
@@ -81,7 +81,7 @@ flowchart LR
 ## Chat and Voice
 
 - **One owner conversation for foreground PI.** Chat and delegated Voice share the persisted PI conversation (`dbo.pi_conversation`), the gateway's FIFO claim and the same per-turn tool grant. The waiting time counts against the turn deadline. The gateway defaults to 180 seconds; the Voice leg stops at 90 seconds. Warm-up skips a busy turn rather than taking its place. A proactive wake never writes model messages into that Foundry conversation.
-- **Chat.** The authenticated server stores the owner message, adds [agent context](agent-context.md#agent-context) and streams PI text, tool activity and the terminal result. Client-visible history, the Foundry conversation and [diagnostic logs](reference/logs.md) are separate records.
+- **Chat.** The server stores the owner message, adds [agent context](agent-context.md#agent-context) and streams text, tool activity and the terminal result. An iPhone reconnect can discover and follow an active turn or reconcile its committed reply without resending. App history, Foundry history and [diagnostic logs](reference/logs.md) are separate records.
 - **Voice.** GPT-Live can handle talk itself. When it delegates, the relay joins the full input transcript, waits for 1.5 seconds of quiet (at most 3 seconds), stores the request once and starts PI once. It does not cut the transcript at the delegation offset. It passes spoken commentary back to GPT-Live. Backchannels do not cancel PI; a new delegation can supersede it, and ending or timing out the session stops it. Voice is audio-only: camera and screen input are not supported by this backend.
 - **Parity is a contract, not identical presentation.** Both channels see the same PI tool effects and failure meaning. The [replay tests](../apps/backend/src/voice/chat-voice-parity.test.ts) exercise the real routes, gateway and door against stubs. Their [report helper](../apps/backend/src/voice/parity-report.testkit.ts) documents intended presentation differences. Native audio and device rendering are separate acceptance.
 
@@ -143,7 +143,7 @@ flowchart TB
 
 **Legend:** The diamond selects how the gateway handles stream items; arrows are control flow. Foundry executes native built-ins. The backend does not run a harness shell command or sub-agent.
 
-**Limits we hit.** [`infra/main.parameters.json`](../infra/main.parameters.json) sets GPT-6.1 Terra GlobalStandard capacity to **600** (600K tokens/minute); Bicep passes that parameter to the deployment. The [#2032](https://github.com/DanAakesen/jarvis/pull/2032) incident reported **84K–116K input tokens per request** on large tool turns; several rounds can hit a shared limit. These are historical measurements, not a local benchmark or a guarantee. The harness can also deny an MCP name in the current session policy *before* `/pi/mcp` sees it. Stick to the two established names and check `pi.stream_failed` and `pi.mcp_tool` together. Weather worked in the ongoing conversation on build 124. The actual rate-limit response and provider replay IDs remain unverified. Chat and Voice can request the coarse iPhone observation with its timestamp through get_settings (area location).
+**Limits.** Large retained conversations can hit the shared model quota across tool rounds. Foundry controls context compaction. Session policy can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` and `pi.mcp_tool`. Live provider replay IDs remain unverified. `get_settings` with the `location` area returns the coarse iPhone observation and timestamp when available.
 
 Apple Maps requests use the signed-in iPhone workspace connection. MapKit searches and routes on the phone. The native card and local spoken estimate use a temporary result. PI receives a bounded status receipt. Conversation history holds the lookup request and handle so the owner can request a fresh estimate. [Apple Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/).
 
@@ -185,7 +185,7 @@ flowchart LR
 ```
 
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
-- Missing switch state means **Off** in the code. The owner controls it in Proactive settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. The private decision log confirms production wakes. Device delivery has its own acceptance check.
+- Missing switch state means **Off**. The owner controls it in Settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. A successful wake is not evidence of a delivered message.
 - PI owns the 07:00 and 18:00 Copenhagen slots and Check now. Inbox reviews each eligible slot once, including a slot PI already covered through an earlier event. With no brain configured, no slot is claimed.
 
 ## Reply push and reminders
@@ -229,7 +229,7 @@ flowchart LR
 
 - [Bicep](../infra/README.md) owns Azure SQL, Key Vault, Storage, ACR, Container Apps, Foundry and Static Web Apps. A Container Apps image runs the backend; managed identity gives it scoped Azure access. The mirror is a separate job. Client sign-in is Entra; keys and server credentials do not go to clients.
 - [CI](../.github/workflows/ci.yml) qualifies the ready PR, not whatever later happens to be on the branch. [Deploy](../.github/workflows/deploy.yml) selects affected components, verifies the merged Git tree equals the qualified tree, and retains [deployment evidence](../.github/scripts/release_state.py). A no-op or superseded run is not fresh provider acceptance. An unchanged tree need not rerun a component; changed inputs need matching evidence.
-- Backend readiness includes PI provisioning/readback and the exact applied revision. Readiness is not a live conversation test. [TestFlight](../.github/workflows/ios-testflight.yml) signs and uploads from the chosen ref; a normal release uses `main` after the relevant Deploy is green. Apple processing, tester availability and device acceptance happen outside that workflow.
+- Backend readiness includes PI provisioning/readback and the exact applied revision, not a live conversation test. [TestFlight](../.github/workflows/ios-testflight.yml) signs and uploads the dispatch SHA and reads back Apple processing and internal beta state. A normal release uses `main` after Deploy is green. A receipt is not device acceptance.
 
 <a name="sandbox-credentials"></a>
 
