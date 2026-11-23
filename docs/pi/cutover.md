@@ -1,18 +1,8 @@
 # PI cutover checklist and deletion inventory
 
-Prepared for [#1887](https://github.com/DanAakesen/jarvis/issues/1887) (P15-176), 16 November 2026, and updated by #1966 on 19 November. **PI is the normal Chat and Voice default; #1966 removes its normal-route selector and makes infrastructure preserve the exact PI configuration. Phase 8's broader harness/resource deletion is still not approved.**
+PI serves normal Chat and Voice without an engine selector. The broader harness and resource deletion (Phase 8, [#1887](https://github.com/DanAakesen/jarvis/issues/1887), P15-176) is **not approved**.
 
 Use the [architecture map](../architecture.md) for current routing. Recheck this inventory against the code when the cutover is approved; old file names and proposed deletions below are not instructions to execute today.
-
-```mermaid
-flowchart LR
-    T["Phase 7<br/>PI normal default<br/>Current kept selectable"] --> C1["#1966\nPI-only normal clients\nexact PI config retention"]
-    C1 --> D["Daily use<br/>owner acceptance and no revert"]
-    D --> G{"Deletion gate<br/>7 checks, section 3"}
-    G -->|"owner approves in writing"| X["Phase 8<br/>delete exactly the list in section 4"]
-    G -->|"no"| R["Fix PI<br/>old code still there,<br/>no code switches to it"]
-    C1 -. "release problem" .-> B["Revert the reviewed change,<br/>redeploy the prior release"]
-```
 
 ## 1. What the owner tests in normal use
 
@@ -22,7 +12,7 @@ flowchart LR
 | Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, say a backchannel ("mm-hm") while it works, then ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; speech alone never stops PI, and only a new delegated request (the newest one wins) or ending the session does; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
 | Brain | Settings > Proactive, Proactive suggestions on | Useful reach-outs without duplicates; honour the owner settings and background limits | [Proactive flow](../architecture.md#proactive-wake-and-the-old-engine) |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, shows the estimated cost per watch and does not send duplicate messages | [Proactive flow](../architecture.md#proactive-wake-and-the-old-engine) |
-| Reach | After the owner provides `PI_GITHUB_TOKEN` (fine-grained token, see `docs/agent-context.md`) and runs `infra/setup-azure-mcp.ps1` | Reads and actions work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
+| Reach | Verify the intended GitHub and Azure bridge configuration | Reads and actions work on real questions, or PI says plainly it does not have access | [Tool discovery](../architecture.md#tools-retries-and-failure-copy) and [configuration names](../agent-context.md#configuration-names-only) |
 | Cost | Use available status evidence; no live measurement without approval | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | Historical per-turn reference, not a new measurement. [Cost and safety](../agent-context.md#cost-and-safety) |
 
 **Known limits:** Watch and web follow the same PI route. Camera and screen sharing in web voice return `not_supported`. The old harness still exists for isolated runtime tests and is not a normal fallback. The combined PI situational loop now owns the proactive slots through the persisted event/slot ledger; ordinary source policy and budget rules still apply.
@@ -43,7 +33,7 @@ flowchart LR
 
 Rollback is a reviewed revert and redeploy of the prior release. There is no runtime switch back to Current.
 
-## 3. Deletion gate (from `docs/pi/plan.md`, section 7)
+## 3. Deletion gate
 
 | # | Check | State |
 | --- | --- | --- |

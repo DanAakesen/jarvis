@@ -124,7 +124,7 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 ### 18–19 November 2026 — PI is the normal runtime; situational state is not the source archive ([#1910](https://github.com/DanAakesen/jarvis/pull/1910), [#1964](https://github.com/DanAakesen/jarvis/pull/1964))
 
 - **Decision:** Make PI the default for Chat and Voice. Use one compact, model-maintained, revisioned situational state grounded in canonical source records. Keep isolated runtime tests separate. Require a distinct acceptance gate before deleting legacy paths.
-- **Why/evidence:** One engine prevents drift; a compact working state can go stale and cannot replace the Vault, SQL or provider as source of truth. See the [cutover checklist](pi/cutover.md) and archived rollout notes.
+- **Why/evidence:** One engine prevents drift; a compact working state can go stale and cannot replace the Vault, SQL or provider as source of truth. See the [cutover checklist](pi/cutover.md).
 
 ### 15–17 November 2026 — Use the Vault for Loose Ends and keep the harness built-ins
 
