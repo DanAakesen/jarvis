@@ -22,7 +22,7 @@ The Apple Maps card shows the native map with each place or route, a labelled es
 
 ## Voice
 
-Use the established Voice screen and controls; no provider selector, engine badge or split speech settings. Connecting, Listening, Thinking, Speaking, Reconnecting and Ended reflect evidence from the session. Speaking is audio playback, not proof that the mic is off; captions have stable speaker/order and must not jump backwards on reconnect. The GPT-Live backend is audio-only: after an unsupported camera or screen response, stop capture and explain why.
+Use the established Voice screen and controls; no provider selector, engine badge or split speech settings. Connecting, Listening, Thinking, Speaking, Reconnecting and Ended reflect evidence from the session. Speaking tracks playback, not whether the mic is off. An old reply must not keep Speaking on during a later turn. Keep caption order stable on reconnect. The GPT-Live backend is audio-only: after an unsupported camera or screen response, stop capture and explain why.
 
 **Voice only:** generated visuals open in the bottom panel, between the captions and call controls. There is no panel without content. The newest visual takes focus and earlier ones remain to its left. Use the panel grabber to expand/collapse; make it operable in VoiceOver and keep Close at top right. Keep the mic and End reachable. A downward gesture in the orb/status region minimises Voice; a gesture in captions or content only scrolls it. Reduce Motion removes the transition, not the affordance. Speech, capture recovery and gestures on a real device are not verified by this guide.
 
@@ -48,7 +48,7 @@ The dashboard opens with Chat (or Resume voice) and a labelled Menu on one row w
 
 Keep one Chat entry point. When reading history, collapse the composer to **Reply** only if it will not interrupt a draft, dictation or a call. **Reply** reopens the composer. At rest show Message, dictation and the Voice orb. Dictation appends to the editable Chat draft. An empty composer takes one control row. The draft wraps to at most three lines. With text, Send replaces both audio controls beside the draft. Tapping the field opens native editing directly. Give transient status its own space above the action row.
 
-In a focused Voice call, replace the composer and Start control with **Mute/Unmute** and **End**, keeping state and captions visible. End returns to the same Chat session, not a parallel transcript. Recovery keeps the draft; a new attempt must not inherit a prior capture or get stuck at Starting. Show a reconnect/error and a way back to typing. Keep complications glanceable; steps show today's evidence, never invented progress.
+In a focused Voice call, replace the composer and Start control with **Mute/Unmute** and **End**, keeping state and captions visible. End returns to the same Chat and reloads the stored turn; a partial live caption is not the saved reply. Recovery keeps the draft; a new attempt must not inherit a prior capture or get stuck at Starting. Show a reconnect/error and a way back to typing. Keep complications glanceable; steps show today's evidence, never invented progress.
 
 ## Home, workspaces and utility pages
 

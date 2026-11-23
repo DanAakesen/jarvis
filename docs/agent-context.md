@@ -4,13 +4,13 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent context
 
-- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) put root `AGENTS.md`, if present, in the worker prompt and quote the issue and owner comments as untrusted request data. Jarvis workers follow that pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and the affected docs from the checkout. This prompt is not the owner's PI conversation.
+- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` if present, and quote the issue and owner comments as untrusted data. Jarvis workers follow the pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and affected docs from the checkout. This is separate from PI's conversation.
 - **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies persona, presence, Memory policy and environment defaults, not repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) adds the current situation. Warm-up can send this block without an owner request; later turns omit it when its stored hash matches. This does not control Foundry history or compaction. Each turn sends local time, its own tool reference, the owner request and any turn-specific notes. The tool overview, when configured, is sent separately on a new conversation or when its signature changes. Preferences are not permission; attachments and screen context are data, not instructions.
 - **Proactive wakes:** fresh context, activation evidence and any configured tool overview go to a scratch PI conversation. The gateway attempts to clean it up after the wake, even when the wake fails. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Start with a UTC window and [the log source map](reference/logs.md). Stored Chat messages and receipts show what the app committed; Foundry history and the Factory worker timeline are separate. Logs are not automatically injected into PI context. In Chat or delegated Voice, PI can request bounded backend events with `read_backend_logs` when enabled and authorised. Use the relevant operator source for omitted events or fields. Keep raw logs and prompts out of PRs.
+Start with a UTC window and [the log source map](reference/logs.md). Logs are not injected into PI context: stored Chat, Foundry history and Factory timelines are separate. Chat or delegated Voice can request bounded backend events with `read_backend_logs` when enabled and authorised. It cannot read on-device Watch logs. Use the relevant operator source for omitted evidence; keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
@@ -106,9 +106,9 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-Chat and Voice read the latest documented TestFlight receipt from [the plan](../PLAN.md) and check newer main-branch runs with `github_read` (`workflow_runs`, workflow `ios-testflight.yml`). Uploads and readbacks name their target build. A successful “Apple confirmed availability for internal testing” step records availability at that check.
+For release answers, Chat and Voice start with the Apple receipt in [the plan](../PLAN.md), then look for newer `main` runs with `github_read` (`workflow_runs` for `ios-testflight.yml`). Operators can use `gh run list`. Uploads use the dispatch SHA and run number; **Check TestFlight build** is a receipt, not a new build.
 
-The upload job uses the dispatch SHA and its run number as the Apple build number. In the run summary, confirm the [receipt](../.github/scripts/testflight_receipt.rb) says `available_to_internal_testing: true` for that build (`VALID`, `IN_BETA_TESTING`, unexpired). The workflow can succeed without internal availability. The authorised release owner can recheck the same build without another archive:
+Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
 
 ```sh
 gh workflow run ios-testflight.yml --ref main -f branch=main -f receipt_build_number=BUILD_NUMBER
