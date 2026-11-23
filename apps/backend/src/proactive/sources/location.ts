@@ -24,9 +24,7 @@ export async function readDeviceLocation(settingsStore: SettingsStore | undefine
     return {
       source: 'location',
       state: 'unavailable',
-      reason: settings.permission === 'denied' || settings.permission === 'restricted'
-        ? `location_permission_${settings.permission}`
-        : 'location_permission_not_granted',
+      reason: `location_permission_${settings.permission}`,
       facts: [],
       observedAt: settings.observedAt ?? now.toISOString(),
     };

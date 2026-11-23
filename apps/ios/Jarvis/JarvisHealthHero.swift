@@ -32,7 +32,7 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
     let onMealSaved: () async -> Void
     @State private var showingMeal = false
     @State private var pendingMeal: JarvisManualMeal?
-    @State private var mealConfirmation: Double?
+    @State private var mealConfirmation: JarvisManualMeal?
     @ScaledMetric(relativeTo: .body) private var heroHeight = JarvisDesignTokens.healthHeroHeight
     @State private var page: JarvisHealthHeroPage = .training
 
@@ -52,6 +52,12 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
         self.language = language
         self.accessory = accessory()
         self.onMealSaved = onMealSaved
+    }
+
+    private func mealConfirmationText(_ meal: JarvisManualMeal) -> String {
+        let energy = "\(formatNumber(meal.energyKcal, language: language)) kcal"
+        guard let protein = meal.proteinGrams else { return "\(energy) logged" }
+        return "\(energy) and \(formatNumber(protein, language: language)) g protein logged"
     }
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
@@ -93,20 +99,20 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
             }
             .accessibilityIdentifier("health.hero.dots")
             if page == .nutrition, let client {
-                JarvisLabelledButton(title: "Log meal kcal", systemImage: "plus",
+                JarvisLabelledButton(title: "Log meal", systemImage: "plus",
                     identifier: "health.nutrition.add") {
                     showingMeal = true
                 }
                 .sheet(isPresented: $showingMeal) {
-                    JarvisManualMealSheet(client: client, pending: $pendingMeal) { kcal in
-                        mealConfirmation = kcal
+                    JarvisManualMealSheet(client: client, pending: $pendingMeal) { meal in
+                        mealConfirmation = meal
                         await onMealSaved()
                     }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
                 if let mealConfirmation {
-                    Text("\(formatNumber(mealConfirmation, language: language)) kcal logged")
+                    Text(mealConfirmationText(mealConfirmation))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("health.nutrition.saved")
@@ -130,8 +136,9 @@ private struct JarvisManualMealSheet: View {
     @Environment(\.dismiss) private var dismiss
     let client: JarvisHealthClient
     @Binding var pending: JarvisManualMeal?
-    let onSaved: (Double) async -> Void
+    let onSaved: (JarvisManualMeal) async -> Void
     @State private var amount = ""
+    @State private var protein = ""
     @State private var saving = false
     @State private var saveError: String?
     @FocusState private var focused: Bool
@@ -141,6 +148,14 @@ private struct JarvisManualMealSheet: View {
               value.isFinite, value > 0, value <= 10_000 else { return nil }
         return value
     }
+
+    private var proteinGrams: Double? {
+        guard let value = Double(protein.replacingOccurrences(of: ",", with: ".")),
+              (0...1000).contains(value) else { return nil }
+        return value
+    }
+
+    private var invalidProtein: Bool { !protein.isEmpty && proteinGrams == nil }
 
     var body: some View {
         NavigationStack {
@@ -155,6 +170,14 @@ private struct JarvisManualMealSheet: View {
                             .accessibilityLabel("Meal energy in kcal")
                             .accessibilityIdentifier("health.nutrition.amount")
                     }
+                    LabeledContent("Protein (g)") {
+                        TextField("Optional", text: $protein)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .disabled(saving || pending != nil)
+                            .accessibilityLabel("Meal protein in grams, optional")
+                            .accessibilityIdentifier("health.nutrition.protein")
+                    }
                 } footer: {
                     if let saveError {
                         Text(saveError)
@@ -162,6 +185,8 @@ private struct JarvisManualMealSheet: View {
                         Text("Retry to check the previous save.")
                     } else if !amount.isEmpty && kcal == nil {
                         Text("Enter more than 0 and at most 10,000 kcal.")
+                    } else if invalidProtein {
+                        Text("Enter 0 to 1,000 g of protein or leave it blank.")
                     }
                 }
             }
@@ -169,20 +194,30 @@ private struct JarvisManualMealSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 JarvisSheetToolbar(confirmTitle: pending != nil && !saving ? "Retry" : "Save",
-                    closeTitle: "Close", isWorking: saving, isConfirmDisabled: kcal == nil && pending == nil,
+                    closeTitle: "Close", isWorking: saving, isConfirmDisabled: pending == nil && (kcal == nil || invalidProtein),
                     onConfirm: { Task { await save() } }, onClose: { dismiss() })
             }
             .jarvisAmbientBackground(transparentNavigationBar: true)
             .onAppear {
-                if let pending { amount = pending.energyKcal.formatted(.number.grouping(.never)) }
-                else { focused = true }
+                if let pending {
+                    amount = pending.energyKcal.formatted(.number.grouping(.never))
+                    protein = pending.proteinGrams?.formatted(.number.grouping(.never)) ?? ""
+                } else { focused = true }
             }
         }
         .interactiveDismissDisabled(saving)
     }
 
     private func save() async {
-        guard !saving, let submission = pending ?? kcal.map({ JarvisManualMeal(energyKcal: $0) }) else { return }
+        guard !saving else { return }
+        let submission: JarvisManualMeal
+        if let pending {
+            submission = pending
+        } else if let kcal, !invalidProtein {
+            submission = JarvisManualMeal(energyKcal: kcal, proteinGrams: proteinGrams)
+        } else {
+            return
+        }
         pending = submission
         saving = true
         saveError = nil
@@ -191,13 +226,14 @@ private struct JarvisManualMealSheet: View {
             try await client.saveManualMeal(submission)
             pending = nil
             dismiss()
-            await onSaved(submission.energyKcal)
+            await onSaved(submission)
         } catch JarvisClientError.httpStatus(400) {
             pending = nil
-            saveError = "Check the calories and device time, then save again."
+            saveError = "Check the meal values and device time, then save again."
         } catch JarvisClientError.httpStatus(409) {
             pending = nil
             amount = ""
+            protein = ""
             saveError = "This meal has already changed. Check Meals before adding another."
         } catch {
             saveError = "Save could not be confirmed. Retry to check this same meal."
@@ -368,7 +404,10 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
     }
 
     private var content: some View {
-        let kcal = summary.average(.kcal)
+        let today = period.dayCount == 1
+        let kcal = today ? data.todayBudget?.kcal.eatenKcal : summary.average(.kcal)
+        let target = today ? data.todayBudget?.kcal.allowanceKcal : goals.kcal
+        let stat = today ? data.todayBudget?.kcal.remainingKcal : kcal
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
             HStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
                 NavigationLink {
@@ -376,7 +415,7 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
                         kind: .meals(period), language: language)
                 } label: {
                     JarvisHealthHeroRing(
-                        progress: JarvisHealthLogic.ringProgress(value: kcal, target: goals.kcal),
+                        progress: JarvisHealthLogic.ringProgress(value: kcal, target: target),
                         text: kcal.map { formatNumber($0, language: language) } ?? "—",
                         unit: "kcal",
                         tint: JarvisDesignTokens.healthAccent
@@ -396,8 +435,8 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
             }
             Divider()
             HStack(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing) {
-                JarvisHealthHeroStat(value: kcal.map { "\(formatNumber(period.dayCount == 1 ? max(0, goals.kcal - $0) : $0, language: language)) kcal" } ?? "—",
-                    title: copy.text(period.dayCount == 1 ? .caloriesLeft : .dailyAverage))
+                JarvisHealthHeroStat(value: stat.map { "\(formatNumber($0, language: language)) kcal" } ?? "—",
+                    title: copy.text(today ? .caloriesLeft : .dailyAverage))
                 Divider()
                 JarvisHealthHeroStat(value: data.nutritionDays.state == .available || data.nutritionDays.state == .empty
                     ? formatNumber(Double(summary.mealCount), language: language) : "—",

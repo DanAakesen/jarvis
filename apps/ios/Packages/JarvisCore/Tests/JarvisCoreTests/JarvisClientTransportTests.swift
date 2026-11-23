@@ -4,6 +4,24 @@ import XCTest
 
 // Minimal guard set: session token storage, auth failure mapping, and the HTTP transport contract.
 final class JarvisClientTransportTests: XCTestCase {
+    func testLocationObservationsAndPermissionUpdatesReachSettingsTransport() async throws {
+        let fix = try XCTUnwrap(DeviceLocationSettings.patch(city: "Copenhagen", latitude: 55.676, longitude: 12.568))
+        let patches = try [fix] + ["not_determined", "denied", "restricted"].map {
+            try XCTUnwrap(DeviceLocationSettings.permissionPatch($0))
+        }
+        let response = jsonResponse(status: 200, body: ["settings": [:], "options": [:], "credentials": []])
+        let transport = FakeHTTPTransport(patches.map { _ in .response(response) })
+        let settings = JarvisSettingsClient(client: try makeClient(transport: transport, tokenStore: FakeTokenStore(token: "js.fixture")))
+        for patch in patches { _ = try await settings.saveSettings(patch) }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, patches.count)
+        for (request, patch) in zip(requests, patches) {
+            XCTAssertEqual(request.method, .patch)
+            XCTAssertEqual(request.url.path, "/api/settings")
+            XCTAssertEqual(try JSONDecoder().decode(JarvisSettingsPatch.self, from: XCTUnwrap(request.body)), patch)
+        }
+    }
+
     func testOwnerCanReadEditAndReopenBothTargetPages() async throws {
         for training in [true, false] {
             let kind = training ? "training" : "nutrition"

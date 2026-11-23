@@ -44,17 +44,16 @@ struct WatchDashboardView: View {
                             WatchSnapshotAge(date: snapshot.generatedAt)
                         }
                         upNext(snapshot, now: context.date)
-                        Divider()
-                        WatchDashboardSection(title: "Workouts", route: .workouts) {
+                        WatchDashboardSection(title: "Workouts", symbol: "figure.run", route: .workouts) {
                             workouts(now: context.date)
                             WatchLogLiftShortcut()
                         }.id("workouts")
                         Divider()
-                        WatchDashboardSection(title: "Body Fat", route: .bodyFat) {
+                        WatchDashboardSection(title: "Body Fat", symbol: "chart.line.uptrend.xyaxis", route: .bodyFat) {
                             bodyFat(snapshot?.bodyFat)
                         }.id("body-fat")
                         Divider()
-                        WatchDashboardSection(title: "Tasks", route: .tasks) {
+                        WatchDashboardSection(title: "Tasks", symbol: "checklist", route: .tasks) {
                             if let preview = snapshot?.todayTasks {
                                 if snapshot?.isCurrent(at: context.date) != true {
                                     missing("Saved tasks · open the full list to refresh")
@@ -72,22 +71,10 @@ struct WatchDashboardView: View {
                             } else { missing(loading ? "Loading today's tasks…" : "Today's tasks unavailable") }
                         }.id("tasks")
                         Divider()
-                        WatchDashboardSection(title: "Recent Notes", route: .notes) {
+                        WatchDashboardSection(title: "Recent Notes", symbol: "note.text", route: .notes) {
                             if let notes = snapshot?.notes {
                                 if notes.isEmpty { missing("No recent notes") }
-                                ForEach(notes.prefix(3)) { note in
-                                    NavigationLink {
-                                        WatchNoteReaderView(note: note)
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(note.title).font(.system(.body, design: .rounded)).lineLimit(2)
-                                            if let date = WatchDashboardDates.instant(note.updatedAt) {
-                                                Text(date, format: .dateTime.month(.abbreviated).day())
-                                                    .font(.caption2).foregroundStyle(.secondary)
-                                            }
-                                        }.frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                                    }.buttonStyle(.plain)
-                                }
+                                WatchNoteLinks(notes: Array(notes.prefix(3)))
                             } else { missing(loading ? "Loading recent notes…" : "Recent notes unavailable") }
                         }.id("notes")
                     }
@@ -127,7 +114,8 @@ struct WatchDashboardView: View {
 
     private var menuLink: some View {
         NavigationLink(value: WatchRoute.menu) {
-            Text("Menu")
+            Label("Menu", systemImage: "square.grid.2x2")
+                .foregroundStyle(WatchStyle.amber)
                 .font(.caption)
                 .padding(.horizontal, 4)
                 .frame(minWidth: 44, minHeight: 44)
@@ -143,7 +131,9 @@ struct WatchDashboardView: View {
                 let entries = current ? (snapshot?.agenda?.filter { $0.end > now } ?? []) : (snapshot?.agenda ?? [])
                 let next = entries.first
                 HStack(alignment: .firstTextBaseline) {
-                    WatchDashboardHeading(title: "Up Next")
+                    Label { WatchDashboardHeading(title: "Up Next") } icon: {
+                        Image(systemName: "calendar").foregroundStyle(WatchStyle.amber)
+                    }
                     Spacer(minLength: 3)
                     Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -169,7 +159,11 @@ struct WatchDashboardView: View {
                     } else if current { missing("No more events today") }
                     else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }
-            }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }
+            .padding(9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(WatchSurface(radius: 16))
+            .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityHint("Opens your agenda")
     }
     private func workouts(now: Date) -> some View {
@@ -189,23 +183,31 @@ struct WatchDashboardView: View {
                 if workoutFailed || workoutReadAt.map({ now.timeIntervalSince($0) >= 900 }) != false {
                     Text("Saved workouts · not current").font(.caption2).foregroundStyle(.secondary)
                 }
-                if rows.isEmpty {
-                    Text("No workouts in the last 7 days").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(rows.prefix(2).enumerated()), id: \.offset) { _, row in
-                        Text(JarvisHealthLocalization.workoutName(
-                            row["workout_type"]?.stringValue,
-                            language: .en
-                        )).font(.caption)
+                if let row = rows.max(by: { workoutDate($0) < workoutDate($1) }) {
+                    Text(JarvisHealthLocalization.workoutName(row["workout_type"]?.stringValue, language: .en))
+                        .font(.system(.title3, design: .rounded, weight: .semibold))
+                    if let stamp = row["start_at"]?.stringValue, let date = WatchDashboardDates.instant(stamp) {
+                        Text(date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute())
+                            .font(.caption).foregroundStyle(.secondary)
                     }
+                    if let duration = row["duration_seconds"]?.numberValue {
+                        Label("\((duration / 60).formatted(.number.precision(.fractionLength(0)))) min", systemImage: "stopwatch")
+                            .font(.caption).foregroundStyle(WatchStyle.amber)
+                    }
+                } else {
+                    Text("No workouts in the last 7 days").font(.caption).foregroundStyle(.secondary)
                 }
-                Text("Last 7 days").font(.caption2).foregroundStyle(.secondary)
             } else if workoutFailed || (!connection.reachable && !connection.connecting) {
                 Text("Workouts unavailable").font(.caption).foregroundStyle(.secondary)
             } else {
                 Text("Loading workouts…").font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+    private func workoutDate(_ row: [String: JSONValue]) -> Date {
+        if let stamp = row["start_at"]?.stringValue, let date = WatchDashboardDates.instant(stamp) { return date }
+        if let day = row["workout_date"]?.stringValue, let date = WatchDashboardFormatting.day(day) { return date }
+        return .distantPast
     }
     private func workoutCount(_ title: String, count: Int?, goal: Int?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -280,15 +282,17 @@ struct WatchDashboardHeading: View {
 
 struct WatchDashboardSection<Content: View>: View {
     let title: String
+    let symbol: String
     let route: WatchRoute
     let content: Content
-    init(title: String, route: WatchRoute, @ViewBuilder content: () -> Content) {
-        self.title = title; self.route = route; self.content = content()
+    init(title: String, symbol: String, route: WatchRoute, @ViewBuilder content: () -> Content) {
+        self.title = title; self.symbol = symbol; self.route = route; self.content = content()
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             NavigationLink(value: route) {
                 HStack {
+                    Image(systemName: symbol).foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
                     WatchDashboardHeading(title: title)
                     Spacer()
                     Image(systemName: "chevron.forward")

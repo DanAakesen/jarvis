@@ -198,6 +198,8 @@
 "insights.proactiveReasonTooLarge" = "Too large";
 "insights.proactiveReasonNoLocation" = "No home location saved";
 "insights.proactiveReasonLocationPermission" = "Location permission is not granted";
+"insights.proactiveReasonLocationPermissionUnknown" = "The iPhone has not reported location permission";
+"insights.proactiveReasonLocationPermissionUndecided" = "Location permission has not been decided";
 "insights.proactiveReasonLocationStale" = "The last location is stale";
 "insights.proactiveReasonTodoMissing" = "Todo file not found";
 "insights.proactiveReasonTodoAmbiguous" = "More than one todo file";

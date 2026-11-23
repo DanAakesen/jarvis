@@ -13,6 +13,17 @@ public enum JarvisHealthSource: String, CaseIterable, Codable, Sendable {
     case lifts = "daily.health.lifts"
 }
 
+public struct JarvisTodayNutritionBudget: Codable, Equatable, Sendable {
+    public struct Calories: Codable, Equatable, Sendable {
+        public let eatenKcal: Double?
+        public let allowanceKcal: Double?
+        public let remainingKcal: Double?
+    }
+
+    public let localDate: String
+    public let kcal: Calories
+}
+
 public struct JarvisHealthCapabilities: Codable, Equatable, Sendable {
     public let version: Int
     public let sources: [String]
@@ -132,11 +143,13 @@ public struct JarvisManualMeal: Codable, Equatable, Sendable {
     public let idempotencyKey: UUID
     public let occurredAt: String
     public let energyKcal: Double
+    public let proteinGrams: Double?
 
-    public init(energyKcal: Double, now: Date = Date()) {
+    public init(energyKcal: Double, proteinGrams: Double? = nil, now: Date = Date()) {
         self.idempotencyKey = UUID()
         self.occurredAt = ISO8601DateFormatter().string(from: now)
         self.energyKcal = energyKcal
+        self.proteinGrams = proteinGrams
     }
 }
 
@@ -187,6 +200,13 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
         }
     }
 
+    public func fetchTodayNutritionBudget(validator: String?) async throws -> JarvisFetchResult<JarvisTodayNutritionBudget> {
+        try await client.conditionalGet(path: ["health", "nutrition-budget"], validator: validator) {
+            guard $0.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
+            return try self.decode($0.body)
+        }
+    }
+
     public func fetchNutritionTargets(validator: String?) async throws -> JarvisFetchResult<JarvisNutritionTargets> {
         try await client.conditionalGet(path: ["health", "nutrition-targets"], validator: validator) {
             guard $0.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
@@ -210,13 +230,21 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
         guard meal.energyKcal.isFinite, meal.energyKcal > 0, meal.energyKcal <= 10_000 else {
             throw JarvisClientError.invalidRequest
         }
+        if let protein = meal.proteinGrams, !(0...1000).contains(protein) {
+            throw JarvisClientError.invalidRequest
+        }
         let response = try await client.performAuthenticatedRequest(
             method: .post, path: ["health", "meals"], body: try JSONEncoder().encode(meal), idempotent: true
         )
-        struct Receipt: Decodable { let idempotencyKey: UUID; let energyKcal: Double }
+        struct Receipt: Decodable {
+            let idempotencyKey: UUID
+            let energyKcal: Double
+            let proteinGrams: Double?
+        }
         guard response.statusCode == 200,
               let receipt: Receipt = try? decode(response.body),
-              receipt.idempotencyKey == meal.idempotencyKey, receipt.energyKcal == meal.energyKcal else {
+              receipt.idempotencyKey == meal.idempotencyKey, receipt.energyKcal == meal.energyKcal,
+              receipt.proteinGrams == meal.proteinGrams else {
             throw JarvisHealthClientError.invalidResponse
         }
     }

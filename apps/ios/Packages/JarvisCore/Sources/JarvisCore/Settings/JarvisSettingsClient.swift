@@ -789,6 +789,10 @@ public enum JarvisSettingsLogic {
                     valid = value == .null || validSettingsFieldValue(value, numericBounds: -90...90)
                 case ("location", "longitude"):
                     valid = value == .null || validSettingsFieldValue(value, numericBounds: -180...180)
+                case ("location", "permission"):
+                    valid = validSettingsFieldValue(value, options: ["unknown", "not_determined", "granted", "denied", "restricted"])
+                case ("location", "observedAt"):
+                    valid = value == .null || value.stringValue.map { $0.utf8.count <= 40 && validISO8601Date($0) } == true
                 case ("research", "depth"):
                     valid = validSettingsFieldValue(value, options: ["quick", "standard", "deep"])
                 case ("homeBrief", "maxVisibleLines"), ("research", "maxSources"),

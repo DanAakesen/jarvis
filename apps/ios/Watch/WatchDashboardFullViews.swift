@@ -45,20 +45,30 @@ struct WatchAgendaView: View {
         List {
             WatchReadState(loading: loading, failure: failure, empty: entries.isEmpty,
                            emptyText: "No events in the next 7 days") { Task { await load(reset: retryReset) } }
-            ForEach(entries) { entry in
-                NavigationLink {
-                    List {
-                        Text(entry.title).font(.system(.headline, design: .rounded))
-                        Text(entry.start, format: .dateTime.weekday().month(.abbreviated).day().hour().minute())
-                        Text("Until \(entry.end.formatted(.dateTime.hour().minute()))").foregroundStyle(.secondary)
-                        if let location = entry.location, !location.isEmpty { Text(location) }
-                    }.navigationTitle("Event")
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.title).font(.system(.body, design: .rounded)).fixedSize(horizontal: false, vertical: true)
-                        Text(entry.start, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
-                            .font(.caption2).foregroundStyle(.secondary)
+            let days = Dictionary(grouping: entries) { Calendar.current.startOfDay(for: $0.start) }
+            ForEach(days.keys.sorted(), id: \.self) { day in
+                Section {
+                    ForEach(days[day] ?? []) { entry in
+                        NavigationLink {
+                            List {
+                                Text(entry.title).font(.system(.headline, design: .rounded))
+                                Text(entry.start, format: .dateTime.weekday().month(.abbreviated).day().hour().minute())
+                                Text("Until \(entry.end.formatted(date: Calendar.current.isDate(entry.start, inSameDayAs: entry.end) ? .omitted : .abbreviated, time: .shortened))")
+                                    .foregroundStyle(.secondary)
+                                if let location = entry.location, !location.isEmpty { Text(location) }
+                            }.navigationTitle("Event")
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(entry.start, format: .dateTime.hour().minute())
+                                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                                    .monospacedDigit().foregroundStyle(WatchStyle.amber)
+                                Text(entry.title).font(.system(.body, design: .rounded, weight: .semibold))
+                                    .lineLimit(2)
+                            }
+                        }
                     }
+                } header: {
+                    Text(day, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
                 }
             }
             if nextOffset != nil {
@@ -135,6 +145,35 @@ struct WatchBodyFatView: View {
     }
 }
 
+struct WatchNoteLinks: View {
+    let notes: [VaultNoteSummary]
+    var showsDetails = false
+
+    var body: some View {
+        ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
+            let date = WatchDashboardDates.instant(note.updatedAt)
+            let previous = index > 0 ? WatchDashboardDates.instant(notes[index - 1].updatedAt) : nil
+            if let date, previous.map({ !Calendar.current.isDate($0, inSameDayAs: date) }) ?? true {
+                Text(date, format: .dateTime.month(.abbreviated).day())
+                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                    .foregroundStyle(WatchStyle.stone).accessibilityAddTraits(.isHeader)
+                    .listRowBackground(Color.clear)
+            }
+            NavigationLink {
+                WatchNoteReaderView(note: note)
+            } label: {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(note.title).font(.system(.body, design: .rounded, weight: .medium)).lineLimit(2)
+                    if showsDetails {
+                        if !note.folder.isEmpty { Text(note.folder).font(.caption2).foregroundStyle(.secondary) }
+                        if let date { Text(date, style: .time).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+        }
+    }
+}
+
 struct WatchNotesView: View {
     @EnvironmentObject private var connection: WatchConnection
     @State private var notes: [VaultNoteSummary] = []
@@ -147,20 +186,7 @@ struct WatchNotesView: View {
         List {
             WatchReadState(loading: loading, failure: failure, empty: notes.isEmpty,
                            emptyText: "No recent notes") { Task { await load(reset: retryReset) } }
-            ForEach(notes) { note in
-                NavigationLink {
-                    WatchNoteReaderView(note: note)
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(note.title).font(.system(.body, design: .rounded))
-                        if let date = WatchDashboardDates.instant(note.updatedAt) {
-                            Text(date, format: .dateTime.month(.abbreviated).day().hour().minute())
-                                .font(.caption2).foregroundStyle(.secondary)
-                        }
-                        if !note.folder.isEmpty { Text(note.folder).font(.caption2).foregroundStyle(.secondary) }
-                    }
-                }
-            }
+            WatchNoteLinks(notes: notes, showsDetails: true)
             if nextOffset != nil {
                 Button("Load more") { Task { await load(reset: false) } }.disabled(loading)
             }
@@ -250,9 +276,11 @@ struct WatchHomeBriefView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                WatchReadState(loading: loading, failure: failure, empty: connection.dashboard?.brief == nil,
+                let brief = connection.dashboard?.brief
+                let unavailable = brief?.state == "unavailable"
+                WatchReadState(loading: loading, failure: failure ?? (unavailable ? brief?.text : nil), empty: brief == nil,
                                emptyText: "Your Home brief is unavailable") { Task { await load() } }
-                if let brief = connection.dashboard?.brief {
+                if let brief, !unavailable {
                     WatchBriefText(
                         text: brief.fullText ?? brief.text,
                         highlightedTerms: brief.fullText == nil ? brief.highlights : (brief.fullHighlights ?? brief.highlights),

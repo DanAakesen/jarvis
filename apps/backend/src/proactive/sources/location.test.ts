@@ -49,7 +49,7 @@ describe('independent coarse location source', () => {
       state: 'unavailable', reason: 'location_permission_denied', facts: [],
     });
     await expect(missing.read(context)).resolves.toMatchObject({
-      state: 'unavailable', reason: 'location_permission_not_granted', facts: [],
+      state: 'unavailable', reason: 'location_permission_unknown', facts: [],
     });
   });
 
@@ -65,7 +65,7 @@ describe('independent coarse location source', () => {
     const stale = createLocationSource(settingsStore({ ...values, 'location.permission': 'granted' }));
     const context = { now: new Date(at), signal: new AbortController().signal, settings: {} as never };
     await expect(unknown.read(context)).resolves.toMatchObject({
-      state: 'unavailable', reason: 'location_permission_not_granted', facts: [],
+      state: 'unavailable', reason: 'location_permission_unknown', facts: [],
     });
     await expect(stale.read(context)).resolves.toMatchObject({
       state: 'unavailable', reason: 'location_observation_stale', facts: [],

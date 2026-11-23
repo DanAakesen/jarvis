@@ -86,6 +86,42 @@ function presentBurn(burn: ActiveEnergy, today: string) {
   } as const;
 }
 
+/** Shared Copenhagen-day budget for Chat, Voice and the signed-in Nutrition card. */
+export async function readTodayNutritionBudget(
+  sources: NutritionSuggestionSources,
+  targets: NutritionTargetsAccess,
+  request: FastifyRequest,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted();
+  const now = (sources.now ?? (() => new Date().toISOString()))();
+  const today = copenhagenDate(now);
+  const localTime = copenhagenTime(now);
+
+  const stored = await targets(request).read(signal);
+  const nutrition = sources.nutrition(request);
+  const [meals, burn] = await Promise.all([
+    readMeals(nutrition, today, signal),
+    readActiveEnergy(sources.health(request), today, now, signal),
+  ]);
+  const totals = totalMeals(meals.rows, meals.complete);
+  const figures = deriveBudget({ targets: stored.targets, burn, meals: totals });
+  return {
+    asOf: now,
+    localDate: today,
+    localTime,
+    missingTargets: presentNutritionTargets(stored).missing,
+    kcal: figures.kcal,
+    protein: figures.protein,
+    burn: presentBurn(burn, today),
+    eaten: { source: 'jarvis-meal-log', date: today, meals: totals.meals, complete: totals.complete, invalidEnergyMeals: totals.invalidEnergyMeals },
+    provenance: {
+      targets: { store: 'health-settings', enteredBy: 'owner', updatedAt: stored.updatedAt },
+      formula: 'resting target plus active energy burned so far today, minus the deficit target, minus energy eaten so far; the rest of the day is not projected',
+    },
+  } as const;
+}
+
 /**
  * What is left of today's owner-configured food budget, and which saved favourites fit it. Read-only: it writes
  * nothing, projects nothing and estimates nothing. Every unknown (an unset target, no burn reading, an unread
@@ -100,31 +136,16 @@ export async function readNutritionSuggestions(
 ) {
   if (!Number.isInteger(limit) || limit < 1 || limit > maxSuggestionLimit) throw new TypeError('Invalid suggestion limit');
   signal.throwIfAborted();
-  const now = (sources.now ?? (() => new Date().toISOString()))();
-  const today = copenhagenDate(now);
-  const localTime = copenhagenTime(now);
-
-  const stored = await targets(request).read(signal);
+  const budget = await readTodayNutritionBudget(sources, targets, request, signal);
   const nutrition = sources.nutrition(request);
-  const meals = await readMeals(nutrition, today, signal);
-  const burn = await readActiveEnergy(sources.health(request), today, now, signal);
-  const totals = totalMeals(meals.rows, meals.complete);
-  const figures = deriveBudget({ targets: stored.targets, burn, meals: totals });
   const pool = await readCandidates(nutrition, signal);
   const matches = await nutrition.suggestions(pool.candidates, {
-    now, localTime, remainingKcal: figures.kcal.remainingKcal, remainingProteinGrams: figures.protein.remainingGrams,
+    now: budget.asOf, localTime: budget.localTime, remainingKcal: budget.kcal.remainingKcal, remainingProteinGrams: budget.protein.remainingGrams,
   }, signal);
 
   return {
-    status: figures.kcal.state === 'ready' && figures.protein.state === 'ready' && !pool.truncated && pool.skippedInvalid === 0 ? 'ready' : 'partial',
-    asOf: now,
-    localDate: today,
-    localTime,
-    missingTargets: presentNutritionTargets(stored).missing,
-    kcal: figures.kcal,
-    protein: figures.protein,
-    burn: presentBurn(burn, today),
-    eaten: { source: 'jarvis-meal-log', date: today, meals: totals.meals, complete: totals.complete, invalidEnergyMeals: totals.invalidEnergyMeals },
+    status: budget.kcal.state === 'ready' && budget.protein.state === 'ready' && !pool.truncated && pool.skippedInvalid === 0 ? 'ready' : 'partial',
+    ...budget,
     candidates: { source: 'favourites', considered: pool.considered, skippedInvalid: pool.skippedInvalid, truncated: pool.truncated },
     suggestions: matches.slice(0, limit).map((match) => ({
       favoriteId: match.mealKey, name: match.name, energyKcal: match.energyKcal, proteinGrams: match.proteinGrams,
@@ -132,13 +153,9 @@ export async function readNutritionSuggestions(
     })),
     totalMatches: matches.length,
     filters: {
-      kcalFilterApplied: figures.kcal.remainingKcal !== null,
-      proteinOrderingApplied: figures.protein.remainingGrams !== null,
+      kcalFilterApplied: budget.kcal.remainingKcal !== null,
+      proteinOrderingApplied: budget.protein.remainingGrams !== null,
       dislikesApplied: true,
-    },
-    provenance: {
-      targets: { store: 'health-settings', enteredBy: 'owner', updatedAt: stored.updatedAt },
-      formula: 'resting target plus active energy burned so far today, minus the deficit target, minus energy eaten so far; the rest of the day is not projected',
     },
   } as const;
 }

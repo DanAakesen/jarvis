@@ -7,11 +7,11 @@ retain the `daily` namespace.
 
 ## Logging and edits
 
-- The signed-in owner can add a manual calorie entry through
+- The signed-in owner can add a meal with exact kcal and optional protein grams through
   [`POST /health/meals`](../routes/manual-meals.ts). iPhone submits the
   occurrence and an idempotency key. The server derives the Copenhagen date,
   and leaves unsupplied macros null. If the save is unconfirmed, retry with the
-  same key, occurrence and kcal; an exact retry does not add another meal.
+  same key, occurrence and nutrient values; an exact retry does not add another meal.
 - `health_food` logs an explicit label or saved favourite from the verified
   current owner message. The model supplies the operation, not the food,
   amount, owner or operation key. One source message cannot log two meals.

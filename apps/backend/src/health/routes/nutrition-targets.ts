@@ -3,6 +3,7 @@ import { AuthenticationDenied } from '../../auth/verify.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { parseNutritionTargetsPatch, presentNutritionTargets } from '../nutrition/targets.js';
 import type { NutritionTargetsAccess } from '../nutrition/targets-store.js';
+import { readTodayNutritionBudget, type NutritionSuggestionSources } from '../nutrition/suggestion-adapter.js';
 import { resolveHealthOwner } from '../owner.js';
 
 /**
@@ -10,7 +11,7 @@ import { resolveHealthOwner } from '../owner.js';
  * It carries no `jarvisAgent` marker: the hosted agent changes targets through the approved
  * chat/voice tool instead, and a direct write here is the signed-in owner's own edit.
  */
-export function nutritionTargetsRoutes(access: NutritionTargetsAccess): FastifyPluginAsync {
+export function nutritionTargetsRoutes(access: NutritionTargetsAccess, sources?: NutritionSuggestionSources): FastifyPluginAsync {
   return async app => {
     const guard = async (request: FastifyRequest, reply: FastifyReply) => {
       resolveHealthOwner(request);
@@ -35,6 +36,13 @@ export function nutritionTargetsRoutes(access: NutritionTargetsAccess): FastifyP
       }
     };
 
+    if (sources) {
+      app.get('/health/nutrition-budget', { onRequest: guard }, async (request, reply) =>
+        bounded(request, reply, async signal => {
+          const budget = await readTodayNutritionBudget(sources, access, request, AbortSignal.any([signal, AbortSignal.timeout(20_000)]));
+          return { localDate: budget.localDate, kcal: budget.kcal };
+        }));
+    }
     app.get('/health/nutrition-targets', { onRequest: guard }, async (request, reply) =>
       bounded(request, reply, async signal => presentNutritionTargets(await access(request).read(signal))));
 

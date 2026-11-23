@@ -21,6 +21,11 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertEqual(location["latitude"] as? Double, 55.68)
         XCTAssertEqual(location["longitude"] as? Double, 12.57)
         XCTAssertNil(DeviceLocationSettings.permissionPatch("authorized_when_in_use"))
+        for (key, value) in [("permission", "always"), ("observedAt", "yesterday")] {
+            XCTAssertThrowsError(try JarvisSettingsLogic.validateSettingsPatch(
+                JarvisSettingsPatch(area: "location", key: key, value: .string(value))
+            ))
+        }
     }
 
     func testProactiveEditorPatchesTheCombinedBackgroundTurnAllowance() throws {

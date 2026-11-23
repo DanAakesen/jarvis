@@ -55,7 +55,7 @@ Show recorded workouts and lift history without double-counting or treating miss
 
 ### Nutrition
 
-When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal left and protein still needed, using the recorded entries and configured targets. Explain missing targets or incomplete data instead of inventing totals. Chat and Voice can log or correct food. On iPhone, entering kcal adds one meal for the current Copenhagen day. Unentered macros remain unknown.
+When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal left and protein still needed, using the recorded entries and configured targets. Explain missing targets or incomplete data instead of inventing totals. Chat and Voice can log or correct food. On iPhone, kcal and optional protein grams add one meal for the current Copenhagen day. Today’s remaining kcal are resting target + active energy − deficit − logged intake across Nutrition, Chat and Voice. Unentered macros remain unknown.
 
 ### Proactive
 
