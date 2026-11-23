@@ -91,6 +91,9 @@ final class WatchModel: ObservableObject {
                     ),
                 ]
             }
+            if ProcessInfo.processInfo.arguments.contains("--watch-chat-draft") {
+                draft = "Please remind me to bring my notes to the morning meeting."
+            }
             if ProcessInfo.processInfo.arguments.contains("--watch-chat-long") {
                 messages = [
                     .init(role: .jarvis, text: "Hello Dan, nice to be talking with you."),

@@ -195,15 +195,26 @@ struct WatchChatView: View {
                     .padding(.horizontal, 4)
             }
             HStack(alignment: .bottom, spacing: 0) {
-                TextField("Message", text: $model.draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .lineLimit(1...3)
+                // watchOS gives its native field a full-height button. Let the visible draft size the row
+                // and put the bound editor over that exact area for direct native keyboard access.
+                Text(verbatim: model.draft.isEmpty ? "Message" : model.draft)
+                    .font(.callout)
+                    .foregroundStyle(model.draft.isEmpty ? Color.secondary : Color.primary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.vertical, 4)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .disabled(composerDisabled)
-                    .accessibilityLabel("Message")
-                    .accessibilityFocused($messageFocused)
+                    .accessibilityHidden(true)
+                    .overlay {
+                        TextField("Message", text: $model.draft)
+                            .textFieldStyle(.plain)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                            .opacity(0.02)
+                            .disabled(composerDisabled)
+                            .accessibilityLabel("Message")
+                            .accessibilityFocused($messageFocused)
+                    }
                 if hasDraft {
                     Button { Task { await model.send() } } label: {
                         Image(systemName: "arrow.up.circle.fill").frame(width: 44, height: 44)
@@ -218,7 +229,7 @@ struct WatchChatView: View {
                     Button { Task { await model.startVoice() } } label: { WatchOrb().frame(width: 26, height: 26).frame(width: 36, height: 44) }
                         .disabled(model.busy || model.startingVoice || model.dictationState != .idle).accessibilityLabel("Start voice")
                 }
-            }.buttonStyle(.plain).padding(.leading, 12).padding(.trailing, 4)
+            }.buttonStyle(.plain).padding(.leading, 8).padding(.trailing, 4)
                 .watchGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .padding(.horizontal, 4)
         }
