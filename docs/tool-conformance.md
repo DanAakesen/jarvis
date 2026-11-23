@@ -50,7 +50,7 @@ and when this file no longer matches the registry.
 | 8 | `health_nutrition_history` | 447 | 447 | 660 |
 | 9 | `message_dan` | 397 | 397 | 808 |
 | 10 | `health_query` | 391 | 391 | 1182 |
-| 11 | `github_read` | 325 | 325 | 627 |
+| 11 | `github_read` | 337 | 337 | 657 |
 | 12 | `apple_maps` | 311 | 311 | 485 |
 | 13 | `pc_browser_act` | 281 | 281 | 392 |
 | 14 | `update_project` | 270 | 270 | 311 |
@@ -117,7 +117,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `get_usage` | core | chat and voice | unclassified | ok | "how much have I spent on you this month" (en, #1) | ok (5 calls) | 38 |  |
 | `get_work_status` | factory | chat and voice | unclassified | ok | "what is the status of my work" (en, #1) | ok (4 calls) | 118 |  |
 | `github_capabilities` | factory | chat and voice | unclassified | ok | "Read my GitHub App installation permission map and the operations tho…" (derived, #1) | ok (2 calls) | 96 |  |
-| `github_read` | factory | chat and voice | unclassified | ok | "show issue 12 on github" (en, #1) | ok (14 calls) | 325 |  |
+| `github_read` | factory | chat and voice | unclassified | ok | "show issue 12 on github" (en, #1) | ok (17 calls) | 337 |  |
 | `github_write` | factory | chat and voice | action | ok | "merge pull requesten" (da, #2) | ok (13 calls) | 590 |  |
 | `gym_lifts` | health | chat and voice | action | ok | "log a bench press of 80 kg for 5 reps" (en, #1) | ok (10 calls, 3 typed refusals or failures proven) | 233 |  |
 | `gym_sessions` | health | chat and voice | action | ok | "log a 45 minute running workout" (en, #1) | ok (8 calls, 2 typed refusals or failures proven) | 188 |  |

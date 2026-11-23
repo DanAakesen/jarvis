@@ -54,10 +54,10 @@ export interface FakeItem {
 
 export interface FakeCheckRun { id: number; name: string; status: string; conclusion: string | null; suiteId: number }
 export interface FakeRun {
-  id: number; name: string; displayTitle: string; path: string; status: string; conclusion: string | null;
+  id: number; runNumber?: number; name: string; displayTitle: string; path: string; status: string; conclusion: string | null;
   branch: string; sha: string; suiteId: number; createdAt: string; updatedAt: string;
 }
-export interface FakeJob { id: number; runId: number; name: string; status: string; conclusion: string | null; log: string }
+export interface FakeJob { id: number; runId: number; name: string; status: string; conclusion: string | null; log: string; steps?: { name: string; conclusion: string }[] }
 export interface FakeCommit { sha: string; message: string; author: string; date: string; files: { filename: string; status: string; additions: number; deletions: number }[] }
 
 export interface FakeRepo {
@@ -177,13 +177,13 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
   });
 
   const runJson = (name: string, run: FakeRun): Json => ({
-    id: run.id, name: run.name, display_title: run.displayTitle, path: run.path, status: run.status, conclusion: run.conclusion,
+    id: run.id, run_number: run.runNumber ?? 1, name: run.name, display_title: run.displayTitle, path: run.path, status: run.status, conclusion: run.conclusion,
     head_branch: run.branch, head_sha: run.sha, check_suite_id: run.suiteId, workflow_id: 300 + (run.id % 10),
     created_at: run.createdAt, updated_at: run.updatedAt, html_url: `https://github.com/${name}/actions/runs/${run.id}`,
   });
 
   const jobJson = (name: string, job: FakeJob): Json => ({
-    id: job.id, run_id: job.runId, name: job.name, status: job.status, conclusion: job.conclusion,
+    id: job.id, run_id: job.runId, steps: job.steps ?? [], name: job.name, status: job.status, conclusion: job.conclusion,
     html_url: `https://github.com/${name}/actions/runs/${job.runId}/job/${job.id}`,
   });
 
@@ -524,11 +524,12 @@ export function createFakeGitHub(options: { readonly delegate: () => typeof fetc
       }
     }
     // GitHub Actions
-    if (method === 'GET' && rest === '/actions/runs') {
+    if (method === 'GET' && (match = /^\/actions(?:\/workflows\/([^/]+))?\/runs$/u.exec(rest))) {
+      const workflow = match[1];
       const branch = url.searchParams.get('branch');
       const head = url.searchParams.get('head_sha');
       const status = url.searchParams.get('status');
-      const runs = repo.runs.filter((run) => (!branch || run.branch === branch) && (!head || run.sha === head) && (!status || run.status === status || run.conclusion === status));
+      const runs = repo.runs.filter((run) => (!workflow || run.path === `.github/workflows/${workflow}`) && (!branch || run.branch === branch) && (!head || run.sha === head) && (!status || run.status === status || run.conclusion === status));
       return json(200, { total_count: runs.length, workflow_runs: page(runs, url).map((run) => runJson(name, run)) });
     }
     if ((match = /^\/actions\/runs\/(\d+)(\/jobs|\/rerun)?$/u.exec(rest))) {

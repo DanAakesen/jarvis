@@ -231,7 +231,12 @@ export const factoryCases: Readonly<Record<string, readonly ToolCase[]>> = {
     ok('pull request search', { operation: 'pr_search', query: 'Now view', state: 'all' }, (result) => expect(as<{ results: { number: number }[] }>(result).results.map((row) => row.number)).toEqual([705])),
     ok('open pull requests', { operation: 'pr_list' }, (result) => expect(as<{ pullRequests: unknown[] }>(result).pullRequests.length).toBeGreaterThan(3)),
     ok('pull request comments', { operation: 'pr_comments', number: 705 }),
-    ok('workflow runs', { operation: 'workflow_runs' }, (result) => expect(as<{ runs: unknown[] }>(result).runs).toHaveLength(3)),
+    ok('workflow runs', { operation: 'workflow_runs' }, (result) => expect(as<{ runs: unknown[] }>(result).runs).toHaveLength(5)),
+    ok('only TestFlight runs, including a newer readback for the same build', { operation: 'workflow_runs', workflow: 'ios-testflight.yml', branch: 'main' }, result => {
+      expect(as<{ runs: unknown[] }>(result).runs).toMatchObject([{ runNumber: 44, displayTitle: 'Check TestFlight build 43' }, { runNumber: 43, displayTitle: 'Upload TestFlight build 43' }]);
+    }),
+    ok('successful upload with no Apple availability confirmation', { operation: 'workflow_runs', runId: 9043 }, result => expect(as<{ jobs: unknown[] }>(result).jobs).toMatchObject([{ appleInternalAvailabilityConfirmedAtCheck: false }])),
+    ok('Apple confirmed the build on readback', { operation: 'workflow_runs', runId: 9044 }, result => expect(as<{ jobs: unknown[] }>(result).jobs).toMatchObject([{ appleInternalAvailabilityConfirmedAtCheck: true }])),
     ok('one workflow run with its jobs', { operation: 'workflow_runs', runId: 9001 }, (result) => expect(as<{ jobs: unknown[] }>(result).jobs).toHaveLength(2)),
     ok('branches', { operation: 'repo_branches' }, (result) => expect(as<{ branches: { name: string }[] }>(result).branches.map((branch) => branch.name)).toContain('main')),
     ok('commits', { operation: 'repo_commits' }),
@@ -299,6 +304,14 @@ const scenario: Scenario = {
     {
       say: { en: 'what is the status of my work on Jarvis', da: 'hvad er status på mit arbejde i Jarvis' }, tool: 'get_work_status',
       call: ok('status of the work on an issue', { project: 'Jarvis', issueNumber: 701 }, (result) => expect(as<{ verdict: string }>(result).verdict).toBe('in_progress')),
+    },
+    {
+      say: { en: 'Can you give me a status on the latest release?', da: 'Hvad er status på den seneste udgivelse?' }, tool: 'repo_read',
+      call: ok('the documented iOS build with its Apple receipt', { path: 'PLAN.md' }, (result) => {
+        const { content } = as<{ content: string }>(result);
+        expect(content).toContain('TestFlight 42 is available for internal testing');
+        expect(content).toContain('https://github.com/DanAakesen/jarvis/actions/runs/9042');
+      }),
     },
     {
       say: { en: 'which tasks are running right now', da: 'hvilke opgaver kører lige nu' }, tool: 'list_tasks',

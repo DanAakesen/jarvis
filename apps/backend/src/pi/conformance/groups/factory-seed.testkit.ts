@@ -49,7 +49,7 @@ const jarvisFiles: Record<string, string> = {
   'README.md': '# Jarvis\n\nJarvis is Dan’s personal assistant. This repository holds its backend, web app and iOS app.\n\n## Where things live\n\n- apps/backend: the Fastify backend and the tool registry\n- apps/web: the web app\n- docs: architecture, features and decisions\n',
   'AGENTS.md': '# Agent rules\n\nRun the checks before opening a pull request.\n',
   'PRODUCT.md': '# Product\n\n## Purpose\n\nA personal assistant for Dan.\n',
-  'PLAN.md': '# Plan\n\n## Current focus\n\nSoftware Factory tool conformance.\n',
+  'PLAN.md': '# Plan\n\nTestFlight 42 is available for internal testing. [Apple readback](https://github.com/DanAakesen/jarvis/actions/runs/9042).\n\n## Current focus\n\nSoftware Factory tool conformance.\n',
   'DESIGN.md': '# Design\n\n## Look\n\nCalm glass surfaces.\n',
   'docs/features.md': '# Features\n\n## Software Factory\n\n| Feature | Status |\n| --- | --- |\n| Projects | Done |\n| Tasks | Done |\n| Pull request review | Planned |\n',
   'docs/architecture.md': '# Architecture\n\n## Backend\n\nA Fastify backend with a tool registry.\n',
@@ -118,7 +118,13 @@ export function seedGitHub(github: FakeGitHub): void {
   run(9_000, 'CI', '.github/workflows/ci.yml', 'jarvis/p11-02', sha(0xb05), 'success', 7_705);
   run(9_001, 'CI', '.github/workflows/ci.yml', 'jarvis/p11-09', sha(0xb09), 'failure', 7_709);
   run(9_002, 'Deploy', '.github/workflows/deploy.yml', 'main', mainHead, 'success', 7_003);
+  jarvis.runs.unshift(
+    { id: 9_044, runNumber: 44, name: 'iOS TestFlight', displayTitle: 'Check TestFlight build 43', path: '.github/workflows/ios-testflight.yml', status: 'completed', conclusion: 'success', branch: 'main', sha: mainHead, suiteId: 7_044, createdAt: timestamps.late, updatedAt: timestamps.late },
+    { id: 9_043, runNumber: 43, name: 'iOS TestFlight', displayTitle: 'Upload TestFlight build 43', path: '.github/workflows/ios-testflight.yml', status: 'completed', conclusion: 'success', branch: 'main', sha: mainHead, suiteId: 7_043, createdAt: timestamps.late, updatedAt: timestamps.late },
+  );
   jarvis.jobs.push(
+    { id: 9_143, runId: 9_043, name: 'Archive and upload to TestFlight', status: 'completed', conclusion: 'success', log: '', steps: [{ name: 'Apple confirmed availability for internal testing', conclusion: 'skipped' }] },
+    { id: 9_144, runId: 9_044, name: 'Read-only TestFlight receipt', status: 'completed', conclusion: 'success', log: '', steps: [{ name: 'Apple confirmed availability for internal testing', conclusion: 'success' }] },
     { id: 9_100, runId: 9_000, name: 'build', status: 'completed', conclusion: 'success', log: 'Build finished.' },
     { id: 9_101, runId: 9_001, name: 'backend tests', status: 'completed', conclusion: 'failure', log: failingLog },
     { id: 9_102, runId: 9_001, name: 'lint', status: 'completed', conclusion: 'success', log: 'No lint problems.' },

@@ -106,6 +106,8 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
+Chat and Voice read the latest documented TestFlight receipt from [the plan](../PLAN.md) and check newer main-branch runs with `github_read` (`workflow_runs`, workflow `ios-testflight.yml`). Uploads and readbacks name their target build. A successful “Apple confirmed availability for internal testing” step records availability at that check.
+
 The upload job uses the dispatch SHA and its run number as the Apple build number. In the run summary, confirm the [receipt](../.github/scripts/testflight_receipt.rb) says `available_to_internal_testing: true` for that build (`VALID`, `IN_BETA_TESTING`, unexpired). The workflow can succeed without internal availability. The authorised release owner can recheck the same build without another archive:
 
 ```sh

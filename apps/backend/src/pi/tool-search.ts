@@ -160,6 +160,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['worker*', 'workers', 'arbejder*'], terms: ['task', 'work', 'status'] },
   { stems: [], phrases: ['status på mit arbejde', 'status of my work', 'my work', 'mit arbejde', 'arbejdsstatus', 'work status'], terms: ['work', 'status'] },
   { stems: ['release*', 'deploy*', 'udgivelse*'], terms: ['release', 'deployment'] },
+  { stems: ['testflight'], phrases: ['latest release', 'seneste release', 'seneste udgivelse'], terms: ['repo', 'read', 'testflight'] },
   // How Dan asks for his daily-core things, in wording one stem cannot carry. A row with `also` counts only next to its noun, so a
   // verb that edits a note does not drag in the task tools, and "tick off" means a task only when a task is named.
   // Memory

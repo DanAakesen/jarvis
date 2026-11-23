@@ -72,6 +72,7 @@ if $PROGRAM_NAME == __FILE__
     end
     json = JSON.pretty_generate(result)
     puts json
+    File.open(ENV['GITHUB_OUTPUT'], 'a:UTF-8') { |out| out.puts "available_to_internal_testing=#{result.fetch(:available_to_internal_testing)}" } if ENV['GITHUB_OUTPUT']
     File.open(ENV['GITHUB_STEP_SUMMARY'], 'a:UTF-8') { |summary| summary.puts "## TestFlight read-only receipt\n\n```json\n#{json}\n```" } if ENV['GITHUB_STEP_SUMMARY']
   rescue StandardError
     warn '::error::TestFlight readback failed; no credentials, Apple response body, or tester identities are logged.'
