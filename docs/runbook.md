@@ -5,7 +5,7 @@ For the owner or an authorised operator. Look up the intended resources in the i
 ## Deploy
 
 1. Follow [exact-tree PR qualification](agent-context.md#merge-and-release-procedure). [Deploy](../.github/workflows/deploy.yml) runs on `main` for production inputs, including `docs/features.md`, but not for ordinary docs. Do not trigger it to validate a docs PR.
-2. List `main` runs with `gh run list --workflow deploy.yml --branch main`. Check the plan and release receipt to distinguish an applied change from a manual diagnostic or a superseded run. A missing qualification receipt blocks Azure access; a skipped component may reuse compatible evidence. A docs-only merge does not replace the last production receipt. Match readiness to the applied revision, not just a successful image build or a healthy previous revision.
+2. List `main` runs with `gh run list --workflow deploy.yml --branch main`. In the `release-evidence` artifact, check `superseded` and which components are `applied` or `reused`. Match readiness to the applied revision. `accepted: true` does not mean a live conversation test ran; check `checks.acceptance` separately. A docs-only merge does not replace the production receipt.
 3. [Runner deploy](../.github/workflows/runner-deploy.yml) is separate and uses the configured successful infrastructure deployment. It shares production deployment concurrency; do not start a competing out-of-band release.
 4. Use [PLAN.md](../PLAN.md) for delivery state and the [TestFlight procedure](agent-context.md#testflight-build) for a signed build. Readiness, signed upload, Apple processing and device acceptance are separate. Live provider or notification probes require explicit approval.
 
@@ -35,7 +35,9 @@ The checked-in `JARVIS_OWNER_SESSION_ENABLED` pin is **true** in [Bicep](../infr
 
 ### Backend Container Apps revision
 
-Failed readiness should leave the previous revision serving. If an unhealthy revision is already serving, use the backend app from the infrastructure outputs and activate the last known-good revision in **Revisions and replicas**. Verify health and the affected path within the authorised scope. Retain the failed revision and run evidence until triage, then reconcile through an authorised revert PR. Portal-only rollback is temporary.
+In single-revision mode, Container Apps keeps the previous revision serving until the new one is ready. A later Deploy check can fail after traffic moves; check which revision is serving before rolling back.
+
+If an unhealthy revision is serving, look up the backend app in the infrastructure outputs. Confirm that the last known-good revision is compatible with the applied schema, then [copy it into a new revision](https://learn.microsoft.com/en-us/azure/container-apps/revisions-manage#revision-copy). Verify health and the affected path within the authorised scope. Retain the failed revision and run evidence until triage, then reconcile through an authorised revert PR. Portal-only rollback is temporary.
 
 ### Foundry version
 
