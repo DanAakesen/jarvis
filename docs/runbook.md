@@ -5,7 +5,7 @@ For the owner or an authorised operator. Look up the intended resources in the i
 ## Deploy
 
 1. Follow [exact-tree PR qualification](agent-context.md#merge-and-release-procedure). [Deploy](../.github/workflows/deploy.yml) runs on `main` for production inputs, including `docs/features.md`, but not for ordinary docs. Do not trigger it to validate a docs PR.
-2. Find the latest `main` run with `gh run list --workflow Deploy --branch main`. Inspect the plan, selected components, deterministic readiness and release receipt. A missing qualification receipt blocks Azure access; a skipped component may reuse compatible evidence. A docs-only merge does not replace the last production receipt. A green image build is not a ready revision.
+2. List `main` runs with `gh run list --workflow deploy.yml --branch main`. Check the plan and release receipt to distinguish an applied change from a manual diagnostic or a superseded run. A missing qualification receipt blocks Azure access; a skipped component may reuse compatible evidence. A docs-only merge does not replace the last production receipt. Match readiness to the applied revision, not just a successful image build or a healthy previous revision.
 3. [Runner deploy](../.github/workflows/runner-deploy.yml) is separate and uses the configured successful infrastructure deployment. It shares production deployment concurrency; do not start a competing out-of-band release.
 4. Use [PLAN.md](../PLAN.md) for delivery state and the [TestFlight procedure](agent-context.md#testflight-build) for a signed build. Readiness, signed upload, Apple processing and device acceptance are separate. Live provider or notification probes require explicit approval.
 

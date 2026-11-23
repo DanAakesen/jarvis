@@ -21,8 +21,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
-1. Install TestFlight 125. Start with project lookup, finding/renaming a note and creating/completing a task in Chat and Voice. With logged data, compare a Gym lift and today's Nutrition totals across both channels.
-2. Leave Chat during a reply and return to one answer; run the typing check below during a reply. Ask for the phone's location in the same conversation. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
+1. Install TestFlight 125. In Chat and Voice, check project status and the issue-to-worker flow for approved work; save, find and rename a note; create and complete a task and verify a reminder. Log a lift and a meal, then compare lift history, kcal logged and left, and protein still needed across both channels. Check Danish and English phrasing.
+2. Leave Chat during a reply and return to one answer; run the typing check below during a reply. Check **Test a reply** separately from normal Chat. Ask for the phone's location in the same conversation. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
 3. In Settings, verify the single Proactive switch and open Training and Nutrition targets. Save one intended change and reopen each page. Report the exact error if a page still fails.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 5. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for the import cooldown.
@@ -52,7 +52,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
-| [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Active reply recovery merged; verify one answer after leaving and returning during a send. |
+| [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Reply recovery merged. Verify one answer after leaving and returning during a send, truthful failed/cancelled/superseded states, and accurate outcomes in the separate reply test. **Not accepted on device.** |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Type a long message quickly on iPhone in a conversation with 100+ messages while Jarvis replies. No visible lag or dropped characters; scrolling stays smooth. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | The single inline Settings switch and Voice gestures await device acceptance. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Retest dictation after the Speech handshake fix, then verify two-way Voice after Listening. |
