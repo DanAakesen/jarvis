@@ -13,52 +13,55 @@ public struct VoicePlaybackLedger: Sendable {
     }
 
     private struct Progress {
-        var pending = 0
+        var lastBuffer = 0
         var finished = false
-        var scheduled = false
     }
 
     private var responses: [String: Progress] = [:]
+    private var lastScheduled = 0
+    private var playedThrough = 0
 
     public init() {}
 
     /// One more buffer of this response is queued on the player.
-    public mutating func bufferScheduled(responseID: String) {
-        var progress = responses[responseID, default: Progress()]
-        progress.pending += 1
-        progress.scheduled = true
-        responses[responseID] = progress
+    @discardableResult
+    public mutating func bufferScheduled(responseID: String) -> Int {
+        lastScheduled += 1
+        responses[responseID, default: Progress()].lastBuffer = lastScheduled
+        return lastScheduled
     }
 
     /// A queued buffer of this response has played.
-    public mutating func bufferPlayed(responseID: String) -> Receipt? {
-        guard var progress = responses[responseID] else { return nil }
-        progress.pending = max(0, progress.pending - 1)
-        return settle(responseID, progress)
+    public mutating func bufferPlayed(_ sequence: Int) -> [Receipt] {
+        // Buffers play in schedule order on this player. A later callback also confirms earlier buffers.
+        guard sequence > playedThrough, sequence <= lastScheduled else { return [] }
+        playedThrough = sequence
+        let finished = responses.filter { $0.value.finished && $0.value.lastBuffer <= playedThrough }
+        return finished.sorted { $0.value.lastBuffer < $1.value.lastBuffer }.map { id, _ in
+            responses.removeValue(forKey: id)
+            return Receipt(responseID: id, audible: true)
+        }
     }
 
     /// The backend has sent all the audio of this response.
     public mutating func responseFinished(responseID: String) -> Receipt? {
         var progress = responses[responseID, default: Progress()]
         progress.finished = true
-        return settle(responseID, progress)
+        if progress.lastBuffer <= playedThrough {
+            responses.removeValue(forKey: responseID)
+            return Receipt(responseID: responseID, audible: progress.lastBuffer != 0)
+        }
+        responses[responseID] = progress
+        return nil
     }
 
     /// The player was stopped, so nothing queued will play: every response it held is over.
     public mutating func playbackStopped() -> [Receipt] {
         let receipts = responses
-            .map { Receipt(responseID: $0.key, audible: $0.value.scheduled) }
+            .map { Receipt(responseID: $0.key, audible: $0.value.lastBuffer != 0) }
             .sorted { $0.responseID < $1.responseID }
         responses.removeAll()
+        playedThrough = lastScheduled
         return receipts
-    }
-
-    private mutating func settle(_ responseID: String, _ progress: Progress) -> Receipt? {
-        guard progress.finished, progress.pending == 0 else {
-            responses[responseID] = progress
-            return nil
-        }
-        responses.removeValue(forKey: responseID)
-        return Receipt(responseID: responseID, audible: progress.scheduled)
     }
 }

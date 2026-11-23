@@ -302,14 +302,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
             let sample = UInt16(bytes[offset]) | UInt16(bytes[offset + 1]) << 8
             channel[frame] = Float(Int16(bitPattern: sample)) / Float(Int16.max)
         }
-        if let responseID {
+        let sequence = responseID.map { responseID in
             lock.lock()
-            playbackLedger.bufferScheduled(responseID: responseID)
-            lock.unlock()
+            defer { lock.unlock() }
+            return playbackLedger.bufferScheduled(responseID: responseID)
         }
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
-            guard let self, let responseID else { return }
-            self.bufferPlayed(responseID)
+            if let sequence { self?.bufferPlayed(sequence) }
         }
         if !player.isPlaying { player.play() }
     }
@@ -351,7 +350,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         lock.lock()
         captureContinuation?.finish()
         captureContinuation = nil
-        playbackLedger = VoicePlaybackLedger()
+        _ = playbackLedger.playbackStopped()
         playbackFinished = nil
         converter = nil
         lock.unlock()
@@ -444,12 +443,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return data
     }
 
-    private func bufferPlayed(_ responseID: String) {
+    private func bufferPlayed(_ sequence: Int) {
         lock.lock()
-        let receipt = playbackLedger.bufferPlayed(responseID: responseID)
+        let receipts = playbackLedger.bufferPlayed(sequence)
         let handler = playbackFinished
         lock.unlock()
-        if let receipt { handler?(receipt.responseID, receipt.audible) }
+        for receipt in receipts { handler?(receipt.responseID, receipt.audible) }
     }
 }
 

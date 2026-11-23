@@ -4,13 +4,35 @@ import XCTest
 final class VoicePlaybackLedgerTests: XCTestCase {
     func testAFinishedResponseIsReportedOnceWhenItsLastBufferHasPlayed() {
         var ledger = VoicePlaybackLedger()
-        ledger.bufferScheduled(responseID: "a")
-        ledger.bufferScheduled(responseID: "a")
+        let first = ledger.bufferScheduled(responseID: "a")
+        let last = ledger.bufferScheduled(responseID: "a")
 
         XCTAssertNil(ledger.responseFinished(responseID: "a"))
-        XCTAssertNil(ledger.bufferPlayed(responseID: "a"))
-        XCTAssertEqual(ledger.bufferPlayed(responseID: "a"), .init(responseID: "a", audible: true))
-        XCTAssertNil(ledger.bufferPlayed(responseID: "a"))
+        XCTAssertEqual(ledger.bufferPlayed(first), [])
+        XCTAssertEqual(ledger.bufferPlayed(last), [.init(responseID: "a", audible: true)])
+        XCTAssertEqual(ledger.bufferPlayed(last), [])
+    }
+
+    func testLaterPlaybackReleasesSpeakingWhenAnEarlierCallbackIsMissing() {
+        var machine = VoiceSessionStateMachine()
+        var ledger = VoicePlaybackLedger()
+        machine.apply(.start)
+        machine.apply(.sessionReady)
+        var last = 0
+        for id in ["first", "second"] {
+            machine.apply(.responseCreated(id: id))
+            machine.apply(.audioDelta(responseID: id))
+            last = ledger.bufferScheduled(responseID: id)
+            machine.apply(.responseFinished(responseID: id))
+            XCTAssertNil(ledger.responseFinished(responseID: id))
+        }
+        machine.apply(.activity(.listening))
+        XCTAssertEqual(machine.state, .speaking)
+        let receipts = ledger.bufferPlayed(last)
+        XCTAssertEqual(receipts.map(\.responseID), ["first", "second"])
+        for receipt in receipts { machine.apply(.playbackFinished(responseID: receipt.responseID)) }
+        XCTAssertEqual(machine.state, .listening)
+        XCTAssertTrue(ledger.bufferPlayed(last - 1).isEmpty)
     }
 
     func testAFinishedResponseWithoutAudioIsReportedAsSilent() {
@@ -21,7 +43,7 @@ final class VoicePlaybackLedgerTests: XCTestCase {
 
     func testStoppingPlaybackReportsEveryResponseItHeldExactlyOnce() {
         var ledger = VoicePlaybackLedger()
-        ledger.bufferScheduled(responseID: "a")
+        let first = ledger.bufferScheduled(responseID: "a")
         XCTAssertNil(ledger.responseFinished(responseID: "a"))
         ledger.bufferScheduled(responseID: "b")
 
@@ -29,7 +51,7 @@ final class VoicePlaybackLedgerTests: XCTestCase {
             .init(responseID: "a", audible: true),
             .init(responseID: "b", audible: true),
         ])
-        XCTAssertNil(ledger.bufferPlayed(responseID: "a"))
+        XCTAssertTrue(ledger.bufferPlayed(first).isEmpty)
         XCTAssertEqual(ledger.playbackStopped(), [])
     }
 

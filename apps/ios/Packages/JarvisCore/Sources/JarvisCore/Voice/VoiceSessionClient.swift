@@ -632,8 +632,9 @@ public actor VoiceSessionClient {
     }
 
     private func apply(_ event: VoiceSessionEvent) {
+        let previous = machine.state
         machine.apply(event)
-        onStateChange(machine.state)
+        if machine.state != previous { onStateChange(machine.state) }
     }
 
     private var isLive: Bool {

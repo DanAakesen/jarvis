@@ -22,7 +22,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 ### Next steps and blockers
 
 1. On TestFlight 125, lift readback and the Home + menu passed. In Chat and Voice, check project status and the issue-to-worker flow for approved work. Save a note and confirm it appears in the right iPhone Notes folder without a manual refresh; then find and rename it. Create a task, verify its reminder, then complete it. Check nutrition after the shared budget and protein entry reach TestFlight. Check Danish and English phrasing.
-2. Typing and returning to an in-flight reply passed on build 125. Check **Test a reply** separately from normal Chat. Current location failed on build 125. Retest in the same conversation after the sync fix. Check Voice caption scrolling, status, Watch dictation and two-way Voice after reconnect.
+2. Typing, reply recovery, Chat/Voice continuity and caption scrolling passed on build 125. Voice stayed on Speaking after the first reply. Retest the state between spoken turns, current location after the sync fix, and Watch dictation and two-way Voice after reconnect.
 3. In Settings, verify the inline Proactive switch. Both target pages loaded and reopened on build 125.
 4. On iPhone, find a nearby pharmacy, pick a match and open Directions. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 5. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for the import cooldown.
