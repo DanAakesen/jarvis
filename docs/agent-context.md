@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-The upload job checks out the dispatch SHA; its run number is the Apple build number. The receipt checks for `VALID` processing, `IN_BETA_TESTING` and an unexpired build. A successful upload alone proves none of those. The authorised release owner can recheck the same build without another archive:
+The upload job uses the dispatch SHA and its run number as the Apple build number. In the run summary, confirm the [receipt](../.github/scripts/testflight_receipt.rb) says `available_to_internal_testing: true` for that build (`VALID`, `IN_BETA_TESTING`, unexpired). The workflow can succeed without internal availability. The authorised release owner can recheck the same build without another archive:
 
 ```sh
 gh workflow run ios-testflight.yml --ref main -f branch=main -f receipt_build_number=BUILD_NUMBER
