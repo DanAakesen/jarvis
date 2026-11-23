@@ -12,6 +12,7 @@ Use the shared orb and network, not a screen-specific effect. Chat, Voice and th
 
 ## Chat
 
+- **iPhone composer.** At rest, the draft and controls share one row. Focus moves the editor above the controls. Dismissing the keyboard folds the draft back to one line. Dictation keeps the waveform visible, and Reduce Motion skips the transition.
 - **Turn first.** Keep draft edits local to the composer; typing should not re-layout the transcript. On return from the background, show the active reply or the saved answer, without a second send. Follow the latest content when already at the end. Reading earlier text pauses following; show **Jump to latest**, and never pull an exact notification target away from the reader. A queued typed turn during Voice is still one message, not a second speculative answer.
 - **Follow Voice without replaying it.** iPhone Chat displays the current Voice state when relevant and follows new Voice transcript/reply content using the same follow-latest rules. Show real work rather than a lingering Speaking label.
 - **Make status truthful.** Name a known step. Don't infer an error from a slow stream or infer success from a click. Use the shared failure sentence; distinguish a failed tool, an interrupted response and a write that may have completed.
