@@ -118,6 +118,7 @@ export const intentAliases: readonly IntentAlias[] = [
   { stems: ['model*', 'modeller', 'reasoning', 'tænkning*'], terms: ['model', 'settings'] },
   { stems: ['personality', 'personlighed*', 'tone', 'tonen'], phrases: ['home city', 'home location', 'hjemby'], terms: ['settings'] },
   { stems: [], phrases: ['where am i', 'my location', 'my current location', 'device location', 'hvor er jeg', 'min placering', 'min position'], terms: ['get_settings'] },
+  { stems: ['maps', 'directions', 'rute*', 'kørselsvejledning', 'gangrute', 'eta'], phrases: ['near me', 'nearby', 'how long to drive', 'when should i leave', 'i nærheden', 'tæt på mig', 'hvornår skal jeg køre'], terms: ['apple_maps'] },
   { stems: ['pc', 'pcen', 'computer*', 'windows', 'laptop'], terms: ['pc'] },
   { stems: ['vindue*', 'window*'], terms: ['window'] },
   { stems: ['clipboard', 'udklipsholder*', 'udklip*'], terms: ['clipboard', 'pc'] },

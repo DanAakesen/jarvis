@@ -103,3 +103,54 @@ describe('show_in_chat through the PI door', () => {
     expect(app.chatBlocks.take('7')).toEqual([]);
   });
 });
+
+describe('Apple Maps through the shared PI door', () => {
+  it.each(['chat', 'voice'] as const)('shows the phone lookup in %s and returns only the receipt', async channel => {
+    const { app, registry, tool } = setup(channel);
+    const owner = config.auth.ownerObjectId;
+    const activation = { id: 'a1', type: channel, source: null, slotKey: null, stateRevision: 1,
+      stateHash: null, policyRevision: '1', staleSources: 0, disabledSources: [] } as const;
+    const grant = registry.open({ ownerObjectId: owner, sessionId: '7', messageId: '42', signal: new AbortController().signal, activation });
+    const commands: Json[] = [];
+    const post = (url: string, payload: Record<string, unknown>) => app.inject({
+      method: 'POST', url, headers: { authorization: 'Bearer a.b.c', 'content-type': 'application/json' }, payload,
+    });
+    const phone = app.workspaceCommands.connect(owner, (event, data) => {
+      if (event === 'workspace-command') {
+        const { command } = data;
+        commands.push(command);
+        const mapReceipt = command.operation === 'apple-maps' ? { matches: 2, spoken: channel === 'voice' } : undefined;
+        queueMicrotask(() => {
+          void post('/now/workspace/commands/' + command.commandId + '/ack', { sessionId: phone.sessionId, applied: true, mapReceipt });
+        });
+      }
+      return true;
+    });
+    const state = await post('/now/workspace/state', {
+      sessionId: phone.sessionId, windows: [], contextPanelOpen: false, device: { kind: 'phone', appleMaps: true },
+    });
+    expect(state.statusCode).toBe(204);
+    expect((await post('/now/workspace/commands/pending/ack', {
+      sessionId: phone.sessionId, applied: true, mapReceipt: { matches: 1, address: 'private provider content' },
+    })).statusCode).toBe(400);
+    await tool('find_tools', { turn: grant.turn, query: 'apple maps' });
+    const query = { query: 'station', mode: 'walking' };
+    const result = await tool('call_tool', { turn: grant.turn, name: 'apple_maps', arguments: query });
+    expect(result).toMatchObject({ outcome: 'ok', result: { matches: 2, spoken: channel === 'voice' } });
+    expect(commands[0]).toMatchObject({ ...query, commandId: expect.any(String), operation: 'apple-maps', target: 'phone',
+      ...(channel === 'voice' ? { speakResult: true } : {}) });
+    const expectedData = { lookupId: commands[0]!.commandId, request: query };
+    const blocks = app.chatBlocks.take('7');
+    if (channel === 'voice') {
+      expect(commands[1]).toMatchObject({ operation: 'create', target: 'phone', view: { renderer: 'map', data: expectedData } });
+      expect(blocks).toEqual([]);
+    } else {
+      expect(blocks).toMatchObject([{ type: 'view', data: { view: { renderer: 'map', data: expectedData } } }]);
+      expect(commands).toHaveLength(1);
+      await tool('find_tools', { turn: grant.turn, query: 'show in chat' });
+      const replay = await tool('call_tool', { turn: grant.turn, name: 'show_in_chat', arguments:
+        { ...view, data: { view: { ...view.data.view, renderer: 'map', data: expectedData } } } });
+      expect(replay).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('apple_maps') } });
+    }
+  });
+});

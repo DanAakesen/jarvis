@@ -592,6 +592,15 @@ export function createWorkspaceTabFake(context: ConformanceContext): WorkspaceCo
     contextPanelOpen: false,
     device: { kind: 'desktop', label: 'Dan’s desktop' },
   };
+  const phone = broker.connect(context.owner, (event, data) => {
+    if (event === 'workspace-command') {
+      const { command } = data;
+      const map = command.operation === 'apple-maps' ? { matches: 1 } : undefined;
+      queueMicrotask(() => { broker.acknowledge(context.owner, phone.sessionId, command.commandId, true, undefined, undefined, map); });
+    }
+    return true;
+  });
+  broker.updateSnapshot(context.owner, phone.sessionId, { windows: [], contextPanelOpen: false, device: { kind: 'phone', appleMaps: true } });
   broker.updateSnapshot(context.owner, connection.sessionId, snapshot);
   return broker;
 }

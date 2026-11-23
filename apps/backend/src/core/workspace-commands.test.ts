@@ -71,3 +71,37 @@ describe('session commands', () => {
     expect(value!.enum).not.toContain('en');
   });
 });
+
+describe('Apple Maps phone acknowledgements', () => {
+  it('selects only a capable phone and accepts only its bounded receipt for the matching lookup', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const received: string[] = [];
+    const phone = broker.connect('owner', (event, data) => {
+      if (event === 'workspace-command') {
+        expect(data.expiresAt - Date.now()).toBeGreaterThan(25_000);
+        received.push(data.command.commandId);
+      }
+      return true;
+    });
+    const other = broker.connect('owner', () => { throw new Error('sent to a non-capable phone'); });
+    const snapshot = { windows: [], contextPanelOpen: false, device: { kind: 'phone' as const } };
+    broker.updateSnapshot('owner', phone.sessionId, { ...snapshot, device: { kind: 'phone', appleMaps: true } });
+    broker.updateSnapshot('owner', other.sessionId, snapshot);
+    const answer = broker.appleMaps('owner', { query: 'station' }, false, new AbortController().signal);
+    const id = received[0]!;
+    expect(broker.acknowledge('owner', other.sessionId, id, true, undefined, undefined, { matches: 1 })).toEqual({ status: 'stale' });
+    expect(broker.acknowledge('owner', phone.sessionId, id, true)).toEqual({ status: 'unknown' });
+    const unbounded = { matches: 1, address: 'private provider content' };
+    expect(broker.acknowledge('owner', phone.sessionId, id, true, undefined, undefined, unbounded)).toEqual({ status: 'unknown' });
+    expect(broker.acknowledge('owner', phone.sessionId, id, true, undefined, undefined, { matches: 4 })).toEqual({ status: 'unknown' });
+    expect(broker.acknowledge('owner', phone.sessionId, id, false, undefined, undefined, { matches: 1 })).toEqual({ status: 'unknown' });
+    expect(broker.acknowledge('owner', phone.sessionId, id, true, undefined, undefined, { matches: 0, reason: 'needs_origin' })).toEqual({ status: 'accepted' });
+    await expect(answer).resolves.toEqual({ lookupId: id, matches: 0, reason: 'needs_origin' });
+
+    const failed = broker.appleMaps('owner', { query: 'station' }, false, new AbortController().signal);
+    broker.acknowledge('owner', phone.sessionId, received[1]!, false, 'Private provider message.');
+    await expect(failed).rejects.toThrow('Apple Maps was unavailable on the iPhone.');
+    phone.close();
+    await expect(broker.appleMaps('owner', { query: 'station' }, false, new AbortController().signal)).rejects.toThrow('Open Jarvis on an iPhone');
+  });
+});

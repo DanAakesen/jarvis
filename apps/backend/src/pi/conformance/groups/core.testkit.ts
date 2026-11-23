@@ -121,6 +121,10 @@ export const coreGroup: GroupFactory = (context) => {
       label: `period ${period}`, arguments: { period },
       check: (result: unknown) => { expectFields(result, { period }); if (!isObject(result) || !isObject(result.total)) throw new Error('expected a spend total'); },
     })),
+    apple_maps: [
+      { label: 'find a nearby station on a connected iPhone', arguments: { query: 'station', mode: 'walking' },
+        check: (result) => expectFields(result, { matches: 1 }) },
+    ],
     workspace_command: [
       { label: 'navigate to a settings section', arguments: { commandId: 'nav-settings', operation: 'navigate', page: 'settings', section: 'appearance' } },
       { label: 'navigate to the home page', arguments: { commandId: 'nav-home', operation: 'navigate', page: 'home' } },

@@ -21,15 +21,15 @@ and when this file no longer matches the registry.
 
 | What | Count |
 | --- | ---: |
-| Registered tools | 159 |
-| Visible to chat and voice | 145 |
+| Registered tools | 160 |
+| Visible to chat and voice | 146 |
 | Visible only in an activation turn (situation tools) | 4 |
 | Visible only to a background wake | 4 |
 | Legacy confirmation endpoints (HTTP only, not advertised) | 6 |
-| Static contract ok | 159 |
-| Discoverable, top 3 | 153 |
+| Static contract ok | 160 |
+| Discoverable, top 3 | 154 |
 | Discoverable, listed (callable by name) | 0 |
-| Callable: ok | 153 |
+| Callable: ok | 154 |
 | Callable: refusal | 0 |
 | Callable: failure (typed) | 0 |
 | Callable: requiresExternal | 0 |
@@ -65,6 +65,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 
 | Tool | Group | Visible to | Effect | Static | Discoverable | Callable | Schema tokens | Notes |
 | --- | --- | --- | --- | --- | --- | --- | ---: | --- |
+| `apple_maps` | core | chat and voice | read | ok | "find a coffee shop near me" (en, #2) | ok | 102 |  |
 | `archive_project` | factory | chat and voice | action | ok | "Archive the active Software Factory project requested by the owner wi…" (derived, #1) | ok | 41 |  |
 | `attachment_list` | core | chat and voice | unclassified | ok | "List files Dan sent in conversation history" (derived, #1) | ok | 16 |  |
 | `attachment_read` | core | chat and voice | unclassified | ok | "Read a bounded text page, search snippet, or cached image description…" (derived, #1) | ok (3 calls) | 75 |  |

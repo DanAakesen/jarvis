@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   chatBlockInputSchema, chatBlockLimits, isChatBlock, type ChatBlock, type ChatBlockInput,
 } from '@jarvis/contracts';
-import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { appleMapsGuidance, generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 const pendingTtlMs = 15 * 60 * 1000;
@@ -67,7 +67,10 @@ export const showInChatTool: JarvisTool = {
   inputSchema: chatBlockInputSchema as JarvisTool['inputSchema'],
   execution: { defaultEffect: 'read' },
   sensitive: true,
+  explainInvalidInput: appleMapsGuidance,
   async execute(input, request) {
+    const guidance = appleMapsGuidance(input);
+    if (guidance) throw new ToolRefusal(guidance);
     const app: FastifyInstance = request.server;
     const messageId = request.headers['x-jarvis-message-id'] ?? request.jarvisMemorySourceMessageId;
     const store = app.conversationStore;

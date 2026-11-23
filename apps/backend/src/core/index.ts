@@ -18,6 +18,7 @@ import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { getSystemHealthTool } from './system-health.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { appleMapsTool } from './apple-maps.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
 import { readWindowTool } from './read-window.js';
 import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
@@ -78,7 +79,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, getSettingsTool, updateSettingsTool, renewCredentialTool, setJarvisModelTool, manageModelDeploymentTool, manageFoundryAgentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, getSystemHealthTool, workspaceCommandTool, readWindowTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
+  tools: [setThemeTool, getSettingsTool, updateSettingsTool, renewCredentialTool, setJarvisModelTool, manageModelDeploymentTool, manageFoundryAgentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, getSystemHealthTool, workspaceCommandTool, appleMapsTool, readWindowTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerModelDeploymentRoutes(app);

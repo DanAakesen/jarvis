@@ -38,7 +38,7 @@ const categories: readonly Category[] = [
   { label: 'PC and browser', matches: prefix('pc_', 'browser_do', 'codex_prompt', 'read_window'),
     examples: ['pc_open', 'pc_media', 'browser_do', 'pc_act'] },
   { label: 'Workspace and views',
-    matches: prefix('workspace', 'pin', 'create_html_view', 'read_html_view', 'update_html_view', 'set_theme', 'show_in_chat'),
+    matches: prefix('workspace', 'pin', 'create_html_view', 'read_html_view', 'update_html_view', 'set_theme', 'show_in_chat', 'apple_maps'),
     examples: ['workspace_command', 'show_in_chat', 'workspaces_open', 'create_html_view'] },
   { label: 'Memory and conversation', matches: prefix('memory_', 'conversation_', 'attachment_'),
     examples: ['memory_search', 'memory_remember', 'conversation_search', 'attachment_read'] },
