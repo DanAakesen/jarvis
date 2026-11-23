@@ -10,8 +10,8 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 | 2026-11-22 — Dan, [#2009](https://github.com/DanAakesen/jarvis/issues/2009) | Jarvis may administer Foundry instructions, versions, activation, models and deployments at Dan’s request. Preserve the protected backend tool contract. |
 | 2026-11-21 — Dan, recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012) | Do not add PI approvals, confirmations or guardrails except for DELETE actions. Prefer model judgement; use deterministic logic for exact results. Keep banking outside that ruling until Dan decides its policy. |
 | 2026-11-16 — Dan's PI migration direction, [cutover checklist](pi/cutover.md); reaffirmed in the 2026-11-22 owner handoff | Build and test the replacement, then delete the old path in an explicit final phase. No fallback, dual path or shim. A deliberate short break is acceptable if called out. |
-| 2026-11-22 — Dan's owner handoff; [engineering rules](agent-context.md#development-workflow) | No paid or live tests, including `measure_pi`, provider/model smoke, Foundry probes and benchmarks, without approval of the exact command. Ask before adding cost. |
-| 2026-11-22 — Dan's owner handoff; [merge workflow](agent-context.md#development-workflow) and [CI](../.github/workflows/ci.yml) | Keep related work in fewer, larger issues and PRs. Open only review-ready PRs, not placeholders. Require independent exact-head review and green exact-head CI. High findings block; Mediums become fixes or tracked follow-ups. |
+| 2026-11-22 — Dan's owner handoff; [cost and safety](agent-context.md#cost-and-safety) | No paid or live tests, including `measure_pi`, provider/model smoke, Foundry probes and benchmarks, without approval of the exact command. Ask before adding cost. |
+| 2026-11-22 — Dan's owner handoff; [merge procedure](agent-context.md#merge-and-release-procedure) and [CI](../.github/workflows/ci.yml) | Keep related work in fewer, larger issues and PRs. Open only review-ready PRs, not placeholders. Require independent exact-head review and green exact-head CI. High findings block; Mediums become fixes or tracked follow-ups. |
 | 2026-11-22 — Dan's owner handoff | Work locally. Cloud sandboxes are billed; do not open one unless Dan approves. Workers use `gpt-6.2-sol` at the highest reasoning effort. |
 | 2026-11-22 — Dan's owner handoff | Consult Astra on real decisions. `CopilotAndCodex.md`, Astra's advice file, exists only on Dan's machine. Never commit it. |
 | 2026-11-22 — Dan's owner handoff | Do not ask Dan to test before the build lands or retest a fix in flight. Once shipped, name the build and give exact checks in daily-core order. |
@@ -27,7 +27,7 @@ Use the next Copenhagen midnight, not a fixed-hour delay, so queued work can be 
 
 ### 23 November 2026 — PI can diagnose its backend requests
 
-Dan approved scoped backend diagnostics in Chat and Voice. A request ID links related events. Keep other apps, device logs and raw content outside the reader; use [the log reference](reference/logs.md).
+Dan approved scoped backend diagnostics in Chat and Voice. Keep other apps, device logs and raw content outside the reader; use [the log reference](reference/logs.md) for what can be correlated.
 
 ### 23 November 2026 — Resume the accepted Chat turn and verify internal TestFlight availability
 
@@ -131,11 +131,6 @@ Verified GitHub, failed-reminder and timed calendar events queue through source 
 ### 15–17 November 2026 — Use the Vault for Loose Ends and keep the harness built-ins
 
 - **Decision:** Keep durable Loose Ends notes in one Vault layout; capture, nudge and the rebuildable index are not new sources ([#1848](https://github.com/DanAakesen/jarvis/pull/1848), [#1896](https://github.com/DanAakesen/jarvis/pull/1896)). Keep harness built-ins; route GitHub and Azure through Jarvis MCP ([#1917](https://github.com/DanAakesen/jarvis/pull/1917), [#1915](https://github.com/DanAakesen/jarvis/pull/1915), [#1918](https://github.com/DanAakesen/jarvis/pull/1918)). A tool change needs its own evidence.
-
-### 9–14 November 2026 — Keep earlier delivery decisions as history
-
-- **Decision:** Explicit reminders are distinct from proactive suggestions; preserve honest scheduled and delivered states ([#1706](https://github.com/DanAakesen/jarvis/issues/1706), later #1995). Native Watch capture and Live Activity depend on the actual voice session and transport, not a screen flag ([#1796](https://github.com/DanAakesen/jarvis/issues/1796), [#1798](https://github.com/DanAakesen/jarvis/issues/1798), [#1807](https://github.com/DanAakesen/jarvis/issues/1807)).
-- **Status:** These decisions predate the PI and GPT-Live cutovers; they do not establish a second path.
 
 ## Open questions and proposals
 
