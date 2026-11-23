@@ -22,6 +22,7 @@ export const writingTools: Readonly<Record<string, ToolExecutionMetadata>> = Obj
   azure_storage_queue_receive: action,
   azure_storage_queue_send: action,
   archive_project: action,
+  backend_sleep: operations('operation', { read: 'read', sleep: 'action', wake: 'action' }),
   browser_do: action,
   browser_do_shared: action,
   calendar_confirm_change: action,

@@ -41,7 +41,7 @@ const expectList = (result: unknown, key: string) => {
 
 /**
  * Settings, status, jobs, usage, workspace commands, theme, presence, conversation search and attachments, routines and the
- * backend log reader, plus the tool-less modules that only add routes (sleep, phone status, GitHub webhook, folder order).
+ * backend log reader and sleep switch, plus the route-only phone status, GitHub webhook and folder order modules.
  * Every store is in memory; Dan's browser tab is a fake tab that acknowledges every workspace command.
  */
 export const coreGroup: GroupFactory = (context) => {
@@ -76,6 +76,10 @@ export const coreGroup: GroupFactory = (context) => {
   const isoSecondsAgo = (seconds: number) => new Date(Date.now() - seconds * 1_000).toISOString();
 
   const cases: Record<string, readonly ToolCase[]> = {
+    backend_sleep: [
+      { label: 'read backend minimum replicas', arguments: { operation: 'read' }, check: (result) => expectFields(result, { minimumReplicas: 1 }) },
+      { label: 'keep the backend awake', arguments: { operation: 'wake' }, check: (result) => expectFields(result, { status: 'requested', requestedMinimumReplicas: 1 }) },
+    ],
     set_theme: [
       { label: 'dark appearance', arguments: { tokens: { appearance: 'dark' } }, check: (result) => expectFields(result, { updated: true }) },
       { label: 'accent colour and glow', arguments: { tokens: { accent: '#3366ff', glow: 0.4 } } },

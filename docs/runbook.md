@@ -54,6 +54,8 @@ Wait for **Needs attention** and inspect the Factory timeline and task branch. *
 
 ## Use the sleep switch
 
+Chat and Voice can read, sleep or wake the Jarvis backend with `backend_sleep`. Sleep sets the minimum to zero so idle replicas can scale down. Wake keeps one replica warm and can incur costs. Read the switch to verify the setting. Revision restart and rollback use the existing operator and release procedures.
+
 Sleep is refused while tasks are Ready, Running or PauseRequested. Finish or cancel via the supported control. On wake, wait for backend and SQL readiness instead of repeating a write. Do not scale the backend directly while using the switch.
 
 ## Temporary SQL firewall access for an operator

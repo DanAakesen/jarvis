@@ -21,15 +21,15 @@ and when this file no longer matches the registry.
 
 | What | Count |
 | --- | ---: |
-| Registered tools | 160 |
-| Visible to chat and voice | 146 |
+| Registered tools | 161 |
+| Visible to chat and voice | 147 |
 | Visible only in an activation turn (situation tools) | 4 |
 | Visible only to a background wake | 4 |
 | Legacy confirmation endpoints (HTTP only, not advertised) | 6 |
-| Static contract ok | 160 |
-| Discoverable, top 3 | 154 |
+| Static contract ok | 161 |
+| Discoverable, top 3 | 155 |
 | Discoverable, listed (callable by name) | 0 |
-| Callable: ok | 154 |
+| Callable: ok | 155 |
 | Callable: refusal | 0 |
 | Callable: failure (typed) | 0 |
 | Callable: requiresExternal | 0 |
@@ -69,6 +69,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `archive_project` | factory | chat and voice | action | ok | "Archive the active Software Factory project requested by the owner wi…" (derived, #1) | ok | 41 |  |
 | `attachment_list` | core | chat and voice | unclassified | ok | "List files Dan sent in conversation history" (derived, #1) | ok | 16 |  |
 | `attachment_read` | core | chat and voice | unclassified | ok | "Read a bounded text page, search snippet, or cached image description…" (derived, #1) | ok (3 calls) | 75 |  |
+| `backend_sleep` | core | chat and voice | unclassified | ok | "put the Jarvis backend to sleep" (en, #1) | ok (2 calls) | 37 |  |
 | `browser_do` | pc | chat and voice | action | ok | "go to dmi.dk and check the forecast" (en, #2) | ok (3 calls) | 64 |  |
 | `browser_do_shared` | pc | chat and voice | action | ok | "click the button on the page I am sharing" (en, #1) | ok (2 calls, 1 typed refusals or failures proven) | 49 |  |
 | `calendar_confirm_change` | google | HTTP only (legacy) | action | ok | n/a | not advertised | 39 | kept for cached clients; the door refuses it |

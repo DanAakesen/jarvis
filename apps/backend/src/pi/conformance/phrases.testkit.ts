@@ -81,6 +81,7 @@ export const phraseTable: readonly PhraseRow[] = [
   { intent: 'nutrition', en: 'how many calories are in a banana', da: 'hvor mange kalorier er der i en banan', tools: ['health_food_review', 'health_food'] },
   { intent: 'nutrition', en: 'set my protein target to 160 grams', da: 'sæt mit proteinmål til 160 gram', tools: ['health_nutrition_targets'] },
   // GitHub and Azure (remote bridges)
+  { intent: 'azure', en: 'put the Jarvis backend to sleep', da: 'sæt Jarvis backend i dvale', tools: ['backend_sleep'] },
   { intent: 'github', en: 'list my open pull requests on github', da: 'vis mine åbne pull requests på github', tools: ['gh_list_pull_requests', 'gh_search_pull_requests'] },
   { intent: 'github', en: 'show issue 12 on github', da: 'vis issue 12 på github', tools: ['gh_issue_read', 'github_read'] },
   { intent: 'github', en: 'search github issues about the login bug', da: 'søg i github issues efter login-fejlen', tools: ['gh_search_issues', 'gh_list_issues'] },
