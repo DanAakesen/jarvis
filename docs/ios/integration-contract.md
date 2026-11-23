@@ -151,7 +151,7 @@ The dashboard calls `GET /health/capabilities` with `Accept: application/json;ve
 |---|---|
 | Gym and Run rings; recent-session rows | `POST /health/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |
 | Steps ring | `POST /health/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /health/training-targets`. |
-| Protein and calorie balance | `POST /health/query` with `source: "daily.nutrition.days"` and the selected date range; protein, resting-calorie and deficit targets come from `GET /health/nutrition-targets`. |
+| Nutrition | Today reads calories eaten, allowance and calories left from `GET /health/nutrition-budget`. Period averages and macros use `daily.nutrition.days` from `POST /health/query`. The protein target comes from `GET /health/nutrition-targets`. |
 | Sleep value and sleep-night detail | `POST /health/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
 | Open a workout | `POST /health/query` with `source: "daily.health.workout"` and the exact `workoutId`. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
 | Open meals | `POST /health/query` with `source: "daily.nutrition.meals"` and the selected date range. |
