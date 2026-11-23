@@ -28,9 +28,9 @@ Index of the documentation folders. The source of truth for which files matter a
 | --- | --- |
 | [reference/](reference/README.md) | Data model, log access and current Health integration contracts. |
 | [ios/](ios/) | `integration-contract.md` (backend endpoints the iPhone app uses) and `apple-capabilities.md` (entitlements and capabilities). |
-| [pi/](pi/cutover.md) | The PI switch-on checklist and the pending decisions. |
+| [pi/](pi/cutover.md) | PI acceptance and the gates for retiring the parked runtime. |
 | [inbox-loop/](inbox-loop/acceptance.md) | Inbox capture, scheduled follow-ups, device acceptance, MCP and Shortcut. |
-| [ui/](ui/style-guide.md) | The UI style guide and the design references still waiting to be implemented. |
+| [ui/](ui/style-guide.md) | The UI style guide. |
 | [archive/](archive/) | Monthly decision indexes. Full historical text stays in Git. |
 
 Design direction lives in [../DESIGN.md](../DESIGN.md) and the screen map in [../ui.md](../ui.md). Module READMEs sit next to their code: `db/`, `infra/`, `runner/`, `apps/vault-mirror/`, `agents/jarvis/` and `apps/backend/src/*`; `apps/backend/src/modules.README.md` indexes the backend ones.

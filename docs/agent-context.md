@@ -5,12 +5,12 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 ## Agent context
 
 - **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) put root `AGENTS.md`, if present, in the worker prompt and quote the issue and owner comments as untrusted request data. Jarvis workers follow that pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and the affected docs from the checkout. This prompt is not the owner's PI conversation.
-- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies settings, presence, Memory policy and environment defaults, not the repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) combines these with current situation context, sends the block on warm-up and resends it on normal turns if its hash changed. The hash does not control provider history or compaction. The message and reference are per turn; extracted attachments and screen context are data, not instructions.
+- **PI Chat and delegated Voice:** Foundry owns the standing instructions. The [backend](../apps/backend/src/pi/context.ts) supplies settings, presence, Memory policy and environment defaults, not repository docs. The [gateway](../apps/backend/src/pi/gateway.ts) adds the current situation. Warm-up sends the block when needed; normal turns omit it if the stored hash matches. The hash does not control provider history or compaction. The message and tool reference are per turn. Preferences are not permission; extracted attachments and screen context are data, not instructions.
 - **Proactive wakes:** fresh context, activation evidence and a tool overview go to a scratch PI conversation, not the foreground one. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Start with a UTC window and [the log source map](reference/logs.md). Stored Chat messages and receipts show what the app committed; Foundry history and the Factory worker timeline are separate. Logs are not injected into PI context. In Chat or delegated Voice, PI can discover `read_backend_logs` and use it on the current turn when enabled. Operators use the separate source for fields or events the reader omits. Diagnostic events are not model reasoning. Keep raw output and prompts out of PRs.
+Start with a UTC window and [the log source map](reference/logs.md). Stored Chat messages and receipts show what the app committed; Foundry history and the Factory worker timeline are separate. Logs are not automatically injected into PI context. In Chat or delegated Voice, PI can request bounded backend events with `read_backend_logs` when enabled and authorised. Use the relevant operator source for omitted events or fields. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
