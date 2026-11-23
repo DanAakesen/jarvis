@@ -44,10 +44,3 @@ Widgets and Live Activities are glanceable summaries and routes back into the re
 ## CarPlay
 
 No CarPlay scene in source; **not accepted on device**. See [Apple capabilities](docs/ios/apple-capabilities.md) for the grant and [PRODUCT.md](PRODUCT.md#carplay) for the voice-first requirement.
-
-## Device acceptance
-
-| Item | State |
-| --- | --- |
-| Apple Maps in Chat and Voice | Place choice, spoken estimates and Directions are in source, **not accepted on device**. |
-| Chat resume and typing, target settings, Voice gestures and Watch recovery | **Not accepted on device.** [PLAN.md](PLAN.md) owns the build and retest status. |

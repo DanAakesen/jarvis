@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). The native follow-up is **not accepted on device**. |
+| TestFlight **125** | [Available for internal testing](https://github.com/DanAakesen/jarvis/actions/runs/45102712219). Its source predates the Calendar, Inbox and midnight backend fixes below. The native follow-up is **not accepted on device**. |
 | Backend | The [midnight queue rollout](https://github.com/DanAakesen/jarvis/actions/runs/45107284356) passed deterministic readiness. It includes the Calendar paging and Inbox status fixes. Live conversation acceptance did not run. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
@@ -35,7 +35,7 @@ Backend diagnostics use a backend-only log grant. Verify production readback and
 
 | | Decision | Next check |
 | --- | --- | --- |
-| **A · decided** | PI owns scheduled reviews; the legacy engine is removed from source. | Verify capture and a qualifying follow-up in production. |
+| **A · decided** | PI owns scheduled reviews; the legacy slot runner is gone. The separate legacy event consumer is not the PI queue path. | Verify capture and a qualifying follow-up in production. |
 | **B · decided** | Manual kcal adds one meal on iPhone. | Device check: in Health → Nutrition, log 100 kcal. Meals should gain one entry and Chat should report 100 more kcal for today. |
 | **C** | Keep the same stored conversation for Chat and Voice. Foundry controls context management on this endpoint. | Revisit configurable compaction when the [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview) supports it. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
@@ -51,7 +51,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Run the daily-core checks above on the current build. Workout, Nutrition and full Chat/Voice parity still need device checks. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
-| [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Editing merged in #2028 and first-page visibility and consistent titles in #2031. Dan reports test 2 passed. Editing an existing title was outside that check. |
+| [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Active reply recovery merged; verify one answer after leaving and returning during a send. |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Type a long message quickly on iPhone in a conversation with 100+ messages while Jarvis replies. No visible lag or dropped characters; scrolling stays smooth. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | The single inline Settings switch and Voice gestures await device acceptance. |
