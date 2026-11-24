@@ -4,7 +4,7 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent context
 
-- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` if present, and quote the issue and owner comments as untrusted data. Jarvis workers follow the pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and affected docs from the checkout. This is separate from PI's conversation.
+- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` from the default branch if present. Issue fields and owner comments are untrusted data. The worker follows [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs in its checkout, not PI's conversation.
 - **PI Chat and delegated Voice:** Foundry owns conversation context, instructions and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends the new turn, not the SQL Chat transcript. A matching stored hash omits only the [persona](../apps/backend/src/pi/context.ts) and situation block, not the new [turn reference and local time](../apps/backend/src/pi/prompt.ts) or message notes. Voice warm-up can preload the block, not the tool overview. The overview can repeat after restart, conversation change or tool changes. PI reads Memory, Vault and repo content as needed. The MCP door checks the active turn; preferences, attachments, screen and proactive context do not authorise tool calls.
 - **Proactive wakes:** fresh context, activation evidence and any configured tool overview go to a scratch PI conversation. The gateway attempts to clean it up after the wake, even when the wake fails. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
@@ -71,7 +71,7 @@ Start from [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 
 Add confirmed entries at the top of [decisions.md](decisions.md), newest first. Move decisions older than 14 days out of the live log: keep a dated link with the original ID in the archive index and leave the full text in Git history. Keep proposals separate.
 
-Run the focused offline checks, inspect the diff, and open **one ready PR** when it can be reviewed. Use `<task ID>: ...`, `fix-main: ...` or `docs: ...` as the [title workflow](../.github/workflows/pr-title.yml) requires. Give concrete tests, exact results and unverified behaviour. Use `Refs #N` for partial work or device acceptance; use an explicit closing reference only if the issue's acceptance is complete. Check native closing links as well as the PR body.
+Run focused offline checks and inspect the diff. For a Factory issue task, the worker commits and pushes; [Factory opens or reuses the PR](../apps/backend/src/github/delivery.ts). Otherwise open **one ready PR** when reviewable. Follow the [title workflow](../.github/workflows/pr-title.yml) (`<task ID>: ...`, `fix-main: ...` or `docs: ...`). Give exact check results and unverified behaviour. Use `Refs #N` while acceptance is open; check the PR body and native closing links before merge.
 
 ### Task board
 
