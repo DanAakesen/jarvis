@@ -15,7 +15,7 @@ struct JarvisHealthKitStepsSource: JarvisTodayStepsSource {
         let today = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .day, value: -(max(days, 1) - 1), to: today) ?? today
         let hourly = try await collect(
-            store: store, type: type, anchor: today, from: today,
+            store: store, type: type, anchor: today, from: start,
             to: now, interval: DateComponents(hour: 1)
         )
         let daily = try await collect(
@@ -23,13 +23,22 @@ struct JarvisHealthKitStepsSource: JarvisTodayStepsSource {
             to: now, interval: DateComponents(day: 1)
         )
         var hours = [Int](repeating: 0, count: 24)
+        var history: [Date: [Int]] = [:]
         for (date, value) in hourly {
             let hour = calendar.component(.hour, from: date)
-            if hours.indices.contains(hour) { hours[hour] = value }
+            guard hours.indices.contains(hour) else { continue }
+            let day = calendar.startOfDay(for: date)
+            if day == today { hours[hour] += value }
+            else { history[day, default: Array(repeating: 0, count: 24)][hour] += value }
+
         }
         var perDay: [Date: Int] = [:]
         for (date, value) in daily { perDay[calendar.startOfDay(for: date)] = value }
-        return JarvisStepsSnapshot(hourly: hours, daily: perDay)
+        let typical: [Double]? = history.isEmpty ? nil : (0..<24).map { hour in
+            let total = history.values.reduce(0) { $0 + $1.prefix(hour + 1).reduce(0, +) }
+            return Double(total) / Double(history.count)
+        }
+        return JarvisStepsSnapshot(hourly: hours, daily: perDay, typicalCumulative: typical)
     }
 
     private func collect(

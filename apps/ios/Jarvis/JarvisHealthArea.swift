@@ -213,6 +213,7 @@ struct JarvisHealthArea: View {
     @State private var now: Date
     private let onSyncAppleHealth: (() async -> JarvisHealthSyncState?)?
     private let onSyncScale: ((JarvisHealthClient) async throws -> Bool)?
+    private let onMealPhoto: ((Data) -> Void)?
     private let presentNewLiftAfterLoading: Bool
     /// The Home model, so the plus menu opens the very same log sheets as the Home tiles.
     private let gymModel: JarvisTodayModel?
@@ -220,7 +221,9 @@ struct JarvisHealthArea: View {
     @State private var healthSyncState: JarvisHealthSyncState?
     @State private var scaleRefreshFailed = false
     @State private var isRefreshingFromPull = false
-    @State private var periodPreset: JarvisHealthPeriodPreset = .sevenDays
+    private let periodPreset: JarvisHealthPeriodPreset = .thirtyDays
+    @State private var expandedLifts = false
+    @State private var sleepSegments: [JarvisHealthSleepSegment] = []
     @State private var goals = JarvisHealthGoals.load()
     @State private var searchText = ""
     @State private var refreshVersion = 0
@@ -271,7 +274,8 @@ struct JarvisHealthArea: View {
         presentNewLiftAfterLoading: Bool = false,
         gymModel: JarvisTodayModel? = nil,
         onSyncAppleHealth: (() async -> JarvisHealthSyncState?)? = nil,
-        onSyncScale: ((JarvisHealthClient) async throws -> Bool)? = nil
+        onSyncScale: ((JarvisHealthClient) async throws -> Bool)? = nil,
+        onMealPhoto: ((Data) -> Void)? = nil
     ) {
         self.client = client
         self.language = language
@@ -279,6 +283,7 @@ struct JarvisHealthArea: View {
         self.onRetryConfiguration = onRetryConfiguration
         _now = State(initialValue: now)
         self.onSyncAppleHealth = onSyncAppleHealth
+        self.onMealPhoto = onMealPhoto
         self.onSyncScale = onSyncScale
         self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
         self.gymModel = gymModel
@@ -352,25 +357,12 @@ struct JarvisHealthArea: View {
                             )
                             .accessibilityIdentifier("health.empty")
                         }
-                        JarvisHealthHeroCarousel(
-                            data: dashboard,
-                            period: period,
-                            goals: goals,
-                            client: client,
-                            language: language,
-                            onMealSaved: {
-                                await JarvisAppCache.invalidateAll(.health)
-                                await loadDashboard(force: true)
-                            }
-                        ) { periodMenu }
-                        lastLiftsSection
-                        JarvisHealthSessionsSection(
-                            read: dashboard.workouts,
-                            period: period,
-                            client: client,
-                            capabilities: dashboard.capabilities,
-                            language: language
-                        )
+                        JarvisHealthCards(data: dashboard, goals: goals, language: language, client: client,
+                                          steps: deviceSteps, stages: sleepSegments, onPhoto: onMealPhoto,
+                                          onMealSaved: {
+                            await JarvisAppCache.invalidateAll(.health)
+                            await loadDashboard(force: true)
+                        }) { lastLiftsSection }
                         JarvisHealthBodySection(
                             metrics: visibleMetrics(in: dashboard),
                             dashboard: dashboard,
@@ -421,6 +413,11 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) { await loadVaultLifts() }
         .task(id: refreshVersion) { await loadDeviceWorkouts() }
         .task(id: refreshVersion) { await loadDeviceSteps() }
+        .task(id: refreshVersion) {
+            guard observeRefreshEvents else { return }
+            let stages = try? await JarvisHealthKitReader().lastNightStages(now: now)
+            if !Task.isCancelled { sleepSegments = stages ?? [] }
+        }
         .task(id: refreshVersion) { await loadDeviceActivity() }
         .task(id: scenePhase == .active && client != nil) {
             guard observeRefreshEvents, scenePhase == .active, let client, let onSyncScale else { return }
@@ -556,14 +553,9 @@ struct JarvisHealthArea: View {
     }
 
     private var lastLiftsSection: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisSectionHeadline(copy.text(.lastLifts)) {
-                JarvisTextButton(title: copy.text(.log), identifier: "health.lifts.log") {
-                    newLiftPresented = true
-                }
+        DisclosureGroup("Saved max lifts", isExpanded: $expandedLifts) {
+            JarvisTextButton(title: copy.text(.logLift), identifier: "health.lifts.log") { newLiftPresented = true }
                 .disabled(gymModel == nil)
-                .accessibilityHint(copy.text(gymModel == nil ? .unavailable : .logLift))
-            }
             JarvisRowGroup {
                 if ((liftsLoading && !liftsLoaded) || (vaultLiftsLoading && !vaultLiftsLoaded)) && combinedLiftRows.isEmpty {
                     JarvisHealthStateLine(state: .loading, language: language).jarvisListRow(separator: false)
@@ -573,10 +565,8 @@ struct JarvisHealthArea: View {
                 } else if combinedLiftRows.isEmpty {
                     Text(copy.text(vaultLiftsPartial || vaultLiftsFailed ? .partial : .noLifts)).foregroundStyle(.secondary).jarvisListRow(separator: false)
                 } else {
-                    let recent = Array(combinedLiftRows.sorted {
-                        ($0["performedAt"]?.stringValue ?? "") > ($1["performedAt"]?.stringValue ?? "")
-                    }.prefix(3))
-                    if vaultLiftsPartial || vaultLiftsFailed || (liftFailure != nil && liftFailure != .unavailable) {
+                    let recent = maximumLifts
+                    if liftCursor != nil || vaultLiftsPartial || vaultLiftsFailed || (liftFailure != nil && liftFailure != .unavailable) {
                         Text(copy.text(.partial)).font(.caption).foregroundStyle(.secondary)
                             .jarvisListRow(separator: false)
                     }
@@ -603,6 +593,13 @@ struct JarvisHealthArea: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("health.lastLifts")
+        .task(id: expandedLifts) {
+            while expandedLifts && !Task.isCancelled && !liftsLoading && liftCursor != nil {
+                let previous = liftCursor
+                await loadLifts(more: true)
+                if liftCursor == previous { break }
+            }
+        }
     }
 
     private func lastLiftContent(_ lift: [String: JSONValue]) -> some View {
@@ -668,17 +665,6 @@ struct JarvisHealthArea: View {
             await gymModel?.refreshWorkouts()
         } catch { liftWriteFailed = true }
         refreshVersion += 1
-    }
-
-    private var periodMenu: some View {
-        JarvisPeriodSelector(
-            title: copy.text(.periodLabel),
-            identifierPrefix: "health.period",
-            items: JarvisHealthPeriodPreset.dashboardPresets.map {
-                JarvisTabItem(tag: $0, title: copy.period($0), identifier: "health.period.\($0.rawValue)")
-            },
-            selection: $periodPreset
-        )
     }
 
     private var searchBar: some View {
@@ -778,6 +764,11 @@ struct JarvisHealthArea: View {
             var row: [String: JSONValue] = ["workout_type": .string(raw), "start_at": .string(stamp),
                 "workout_date": .string(JarvisHealthLogic.day(stamp)!), "device_only": .bool(true)]
             if let id = entry.healthKitID ?? entry.manualWorkoutID { row["id"] = .string(id) }
+            row["session"] = .string(entry.session.rawValue.capitalized)
+            if entry.activeKilocalories > 0 {
+                row["active_energy_value"] = .number(entry.activeKilocalories)
+                row["active_energy_unit"] = .string("kcal")
+            }
             if entry.durationMinutes > 0 { row["duration_seconds"] = .number(entry.durationMinutes * 60) }
             data.workouts.items.append(row)
             identities.append(identity)
@@ -785,6 +776,17 @@ struct JarvisHealthArea: View {
         data.workouts.state = data.workouts.items.isEmpty ? (deviceWorkoutsFailed ? .failed : .empty) : .available
         if deviceWorkoutsFailed { data.workouts.isStale = true }
         return data
+    }
+
+    private var maximumLifts: [[String: JSONValue]] {
+        let grouped = Dictionary(grouping: combinedLiftRows) { ($0["exerciseName"]?.stringValue ?? "").lowercased() }
+        return grouped.keys.sorted().compactMap { name in
+            grouped[name]?.max { first, second in
+                let a = (first["weightKg"]?.numberValue ?? 0, first["reps"]?.numberValue ?? 0)
+                let b = (second["weightKg"]?.numberValue ?? 0, second["reps"]?.numberValue ?? 0)
+                return a < b
+            }
+        }
     }
 
     private var combinedLiftRows: [[String: JSONValue]] {
@@ -814,7 +816,7 @@ struct JarvisHealthArea: View {
         defer { if vaultLoadID == loadID { vaultLiftsLoading = false } }
         do {
             let history = try await JarvisVaultGymLogStore(client: notes).recentLifts(
-                since: JarvisHealthSyncWindow.recentStart(now: now)
+                since: .distantPast
             )
             try Task.checkCancellation()
             guard vaultLoadID == loadID else { return }
@@ -1070,7 +1072,6 @@ struct JarvisHealthArea: View {
     private func loadTodayBudget(
         client: JarvisHealthClient, mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID
     ) async {
-        guard selectedPeriod.dayCount == 1 else { return }
         let result: (value: JarvisTodayNutritionBudget?, failure: JarvisHealthFailure?) = await resolved(
             .health, scope: "nutrition-budget:\(selectedPeriod.endDate)", mode: mode
         ) { try await client.fetchTodayNutritionBudget(validator: $0) }

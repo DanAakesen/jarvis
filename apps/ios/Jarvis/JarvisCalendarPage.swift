@@ -115,7 +115,7 @@ struct JarvisCalendarPage: View {
                 }
             }
         })
-        .safeAreaInset(edge: .bottom) {
+        .jarvisPageFooter {
             HStack {
                 JarvisSearchField(placeholder: "Search calendar", text: $search, identifier: "calendar.search", clearTitle: "Clear")
                 JarvisIconButton(title: "New event", systemImage: "plus", identifier: "calendar.add", tint: JarvisDesignTokens.primaryAccent) {

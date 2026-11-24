@@ -406,7 +406,11 @@ struct ContentView: View {
                 presentNewLiftAfterLoading: healthScreenshotState == "newlift",
                 gymModel: todayModel,
                 onSyncAppleHealth: refreshAppleHealth,
-                onSyncScale: healthSyncModel.syncTodaysScale
+                onSyncScale: healthSyncModel.syncTodaysScale,
+                onMealPhoto: { photo in
+                    chatHandoff = JarvisChatHandoff(text: "", mealPhoto: photo)
+                    navigate(to: .chat)
+                }
             )
         } else if destination == .usage {
             JarvisUsageArea(

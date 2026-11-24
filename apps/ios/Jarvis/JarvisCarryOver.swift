@@ -56,5 +56,6 @@ extension View {
 struct JarvisChatHandoff: Equatable {
     let id = UUID()
     let text: String
+    var mealPhoto: Data? = nil
     var action: JarvisComposerPlusAction?
 }

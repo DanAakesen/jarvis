@@ -49,7 +49,11 @@ public struct JarvisStepsSnapshot: Equatable, Sendable {
     /// Total steps for the start of each day.
     public let daily: [Date: Int]
 
-    public init(hourly: [Int], daily: [Date: Int]) {
+    /// Mean cumulative counts through each hour across prior days with recorded steps.
+    public let typicalCumulative: [Double]?
+
+    public init(hourly: [Int], daily: [Date: Int], typicalCumulative: [Double]? = nil) {
+        self.typicalCumulative = typicalCumulative?.count == 24 ? typicalCumulative : nil
         self.hourly = hourly.count == 24 ? hourly.map { max($0, 0) } : Array(repeating: 0, count: 24)
         self.daily = daily.mapValues { max($0, 0) }
     }
