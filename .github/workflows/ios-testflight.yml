@@ -150,6 +150,26 @@ jobs:
                 done || true
             exit 1
           fi
+      - name: Verify archived iPhone and Watch companion
+        run: |
+          python3 - <<'PY'
+          import os
+          import plistlib
+          from pathlib import Path
+
+          apps = Path(os.environ["RUNNER_TEMP"]) / "Jarvis.xcarchive/Products/Applications"
+          phone_path, = apps.glob("*.app")
+          watch_path, = (phone_path / "Watch").glob("*.app")
+          phone = plistlib.loads((phone_path / "Info.plist").read_bytes())
+          watch = plistlib.loads((watch_path / "Info.plist").read_bytes())
+          build = os.environ["GITHUB_RUN_NUMBER"]
+          if (phone["CFBundleIdentifier"] != "com.danaakesen.jarvis"
+                  or watch["CFBundleIdentifier"] != "com.danaakesen.jarvis.watchkitapp"
+                  or watch["WKCompanionAppBundleIdentifier"] != phone["CFBundleIdentifier"]
+                  or phone["CFBundleVersion"] != build or watch["CFBundleVersion"] != build):
+              raise SystemExit("Archive contains an unexpected companion identity or build number.")
+          print(f"Verified signed archive for iPhone and its embedded Watch companion, build {build}.")
+          PY
       - name: Prepare export options
         env:
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
