@@ -154,6 +154,8 @@ public struct WatchEvent: Codable, Sendable {
     public var text: String?
     public var responseID: String?
     public var muted: Bool?
+    public var marksPlaybackEnd: Bool { kind == .voiceState && text == "Playback finished" }
+
     public init(
         _ kind: Kind,
         requestID: UUID,

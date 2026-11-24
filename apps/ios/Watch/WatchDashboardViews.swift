@@ -9,16 +9,14 @@ struct WatchDashboardView: View {
     @State private var workoutRows: [[String: JSONValue]]?
     @State private var workoutReadAt: Date?
     @State private var workoutFailed = false
+    @State private var scrolledHeading: String?
+    @State private var atDashboardEnd = false
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        chatLink
-                        Spacer(minLength: 0)
-                        menuLink
-                    }
+                    dashboardActions
                     if loading && connection.dashboard == nil {
                         ProgressView("Loading dashboard").font(.caption)
                     }
@@ -74,6 +72,14 @@ struct WatchDashboardView: View {
                     }
                 }.padding(.horizontal, 4).padding(.bottom, 22)
             }
+            .coordinateSpace(name: "watch-dashboard")
+            .onPreferenceChange(DashboardScrolledHeading.self) { scrolledHeading = $0 }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                // The final section can be too short for its heading to reach the top.
+                geometry.visibleRect.minY > 0 && geometry.visibleRect.maxY >= geometry.contentSize.height - 1
+            } action: { _, atEnd in
+                atDashboardEnd = atEnd
+            }
             .task {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--watch-fixture"),
@@ -91,37 +97,47 @@ struct WatchDashboardView: View {
         .task(id: connection.reachable) { await refresh() }
         .task(id: connection.reachable) { await refreshWorkouts() }
         .refreshable { await refresh() }
-    }
-    private var chatLink: some View {
-        NavigationLink(value: WatchRoute.chat) {
-            HStack(spacing: 4) {
-                WatchOrb().frame(width: 22, height: 22)
-                if !typeSize.isAccessibilitySize {
-                    Text(voiceActive ? "Resume" : "Chat")
-                        .font(.subheadline.weight(.semibold)).lineLimit(1)
+        .toolbar {
+            if let title = atDashboardEnd ? "Recent Notes" : scrolledHeading {
+                ToolbarItem(placement: .topBarLeading) {
+                    Text(LocalizedStringKey(title))
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .accessibilityAddTraits(.isHeader)
                 }
             }
-            .padding(.horizontal, 6)
-            .frame(minWidth: 44, minHeight: 44)
-            .watchGlass(in: Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(voiceActive ? "Resume voice" : "Chat")
     }
-
-    private var menuLink: some View {
-        NavigationLink(value: WatchRoute.menu) {
-            HStack(spacing: 4) {
-                Image(systemName: "square.grid.2x2")
-                if !typeSize.isAccessibilitySize { Text("Menu").lineLimit(1) }
+    private var dashboardActions: some View {
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        return layout {
+            NavigationLink(value: WatchRoute.chat) {
+                HStack(spacing: 4) {
+                    WatchOrb().frame(width: 22, height: 22)
+                    Text(voiceActive ? "Resume" : "Chat")
+                }
+                .frame(maxWidth: .infinity, minHeight: WatchStyle.controlHeight)
+                .contentShape(Rectangle())
             }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(WatchStyle.amber)
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
+            .accessibilityLabel(voiceActive ? "Resume voice" : "Chat")
+            Rectangle()
+                .fill(.secondary.opacity(0.35))
+                .frame(width: stacked ? nil : 1, height: stacked ? 1 : 18)
+                .accessibilityHidden(true)
+            NavigationLink(value: WatchRoute.menu) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.2x2").foregroundStyle(WatchStyle.accent)
+                    Text("Menu")
+                }
+                .frame(maxWidth: .infinity, minHeight: WatchStyle.controlHeight)
+                .contentShape(Rectangle())
+            }
         }
+        .font(.system(.subheadline, design: .rounded, weight: .semibold))
         .buttonStyle(.plain)
-        .accessibilityLabel("Menu")
+        .modifier(WatchSurface())
     }
 
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {
@@ -132,7 +148,7 @@ struct WatchDashboardView: View {
                 let next = entries.first
                 HStack(alignment: .firstTextBaseline) {
                     Label { WatchDashboardHeading(title: "Up Next") } icon: {
-                        Image(systemName: "calendar").foregroundStyle(WatchStyle.amber)
+                        Image(systemName: "calendar").foregroundStyle(WatchStyle.accent)
                     }
                     Spacer(minLength: 3)
                     Image(systemName: "chevron.forward")
@@ -147,7 +163,7 @@ struct WatchDashboardView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         if current {
                             Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
-                                .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+                                .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.accent)
                         }
                         Text(next.start.formatted(date: .omitted, time: .shortened) + "–" +
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
@@ -160,9 +176,9 @@ struct WatchDashboardView: View {
                     else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }
             }
-            .padding(9)
+            .padding(WatchStyle.cardInset)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(WatchSurface(radius: 16))
+            .modifier(WatchSurface())
             .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityHint("Opens your agenda")
     }
@@ -192,7 +208,7 @@ struct WatchDashboardView: View {
                     }
                     if let duration = row["duration_seconds"]?.numberValue {
                         Label("\((duration / 60).formatted(.number.precision(.fractionLength(0)))) min", systemImage: "stopwatch")
-                            .font(.caption).foregroundStyle(WatchStyle.amber)
+                            .font(.caption).foregroundStyle(WatchStyle.accent)
                     }
                 } else {
                     Text("No workouts in the last 7 days").font(.caption).foregroundStyle(.secondary)
@@ -271,12 +287,26 @@ enum WatchBodyFatSummary {
     }
 }
 
+private struct DashboardScrolledHeading: PreferenceKey {
+    static let defaultValue: String? = nil
+
+    static func reduce(value: inout String?, nextValue: () -> String?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
 struct WatchDashboardHeading: View {
     let title: String
     var body: some View {
         Text(LocalizedStringKey(title))
             .font(.system(.headline, design: .rounded))
             .accessibilityAddTraits(.isHeader)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: DashboardScrolledHeading.self,
+                        value: geometry.frame(in: .named("watch-dashboard")).maxY <= 0 ? title : nil)
+                }
+            }
     }
 }
 
@@ -292,7 +322,7 @@ struct WatchDashboardSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 9) {
             NavigationLink(value: route) {
                 HStack {
-                    Image(systemName: symbol).foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+                    Image(systemName: symbol).foregroundStyle(WatchStyle.accent).accessibilityHidden(true)
                     WatchDashboardHeading(title: title)
                     Spacer()
                     Image(systemName: "chevron.forward")
@@ -300,7 +330,7 @@ struct WatchDashboardSection<Content: View>: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: WatchStyle.controlHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -352,7 +382,7 @@ struct WatchAgendaTimeline: View {
     private var end: Date { start.addingTimeInterval(3 * 3600) }
     var body: some View {
         VStack(spacing: 4) {
-            Canvas { context, size in
+            Canvas { [accent = WatchStyle.accent, markerColor = WatchStyle.secondaryAccent] context, size in
                 let width = max(0, size.width)
                 let height = max(0, size.height)
                 let total = end.timeIntervalSince(start)
@@ -367,14 +397,14 @@ struct WatchAgendaTimeline: View {
                     let left = max(0, min(1, interval.start.timeIntervalSince(start) / total))
                     let right = max(0, min(1, interval.end.timeIntervalSince(start) / total))
                     let rect = CGRect(x: width * CGFloat(left), y: 1, width: max(2, width * CGFloat(right - left)), height: max(1, height - 7))
-                    context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(WatchStyle.amber))
+                    context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(accent))
                 }
                 let fraction = now.timeIntervalSince(start) / total
                 var marker = Path()
                 let x = width * CGFloat(max(0, min(1, fraction)))
                 marker.move(to: CGPoint(x: x, y: 0))
                 marker.addLine(to: CGPoint(x: x, y: height))
-                context.stroke(marker, with: .color(WatchStyle.amber), lineWidth: 1)
+                context.stroke(marker, with: .color(markerColor), lineWidth: 1)
             }.frame(height: 17)
             HStack {
                 ForEach(0..<4) { hour in

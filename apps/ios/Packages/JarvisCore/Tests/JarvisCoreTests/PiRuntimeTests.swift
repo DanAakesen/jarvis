@@ -3,6 +3,26 @@ import XCTest
 @testable import JarvisCore
 
 final class PiRuntimeTests: XCTestCase {
+    func testAppearanceAcceptsBothAccentOverridesAndTheirReset() {
+        for key in ["accent", "accent-secondary"] {
+            for value: JarvisSettingsValue in [.string("#219AbC"), .null] {
+                XCTAssertNoThrow(try JarvisSettingsLogic.validateSettingsPatch(
+                    JarvisSettingsPatch(area: "appearance", key: key, value: value)
+                ))
+            }
+            for value in ["", "#123", "#ff112233", "123456", "#12345G"] {
+                XCTAssertThrowsError(try JarvisSettingsLogic.validateSettingsPatch(
+                    JarvisSettingsPatch(area: "appearance", key: key, value: .string(value))
+                ))
+            }
+        }
+        var draft = JarvisSettingsEditState(.object(["appearance": .object(["theme": .string("dark")])]))
+        draft.set(.string("#226644"), area: "appearance", key: "accent")
+        XCTAssertTrue(draft.isDirty)
+        draft.set(.null, area: "appearance", key: "accent")
+        XCTAssertFalse(draft.isDirty)
+    }
+
     func testDeviceLocationPatchKeepsPermissionAndObservationFreshness() throws {
         let observed = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-19T05:00:00Z"))
         let patch = try XCTUnwrap(DeviceLocationSettings.patch(

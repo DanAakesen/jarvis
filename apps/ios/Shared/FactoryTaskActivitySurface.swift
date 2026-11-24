@@ -10,6 +10,7 @@ struct FactoryTaskActivitySurface: View {
     var taskTitle: String? = nil
     var phase: String? = nil
     var isStale = false
+    var accent = JarvisPalette.shared.primaryColor
 
     private var isRunning: Bool { phase == nil || phase == "running" }
 
@@ -18,9 +19,9 @@ struct FactoryTaskActivitySurface: View {
             HStack(spacing: 12) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(accent)
                     .frame(width: 42, height: 42)
-                    .background(.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+                    .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(factoryTitle)
@@ -57,7 +58,7 @@ struct FactoryTaskActivitySurface: View {
             } else if isRunning {
                 ProgressView()
                     .progressViewStyle(.linear)
-                    .tint(.orange)
+                    .tint(accent)
                     .accessibilityLabel(
                         JarvisFactoryLocalization.string(.activityProgress, language: language)
                     )

@@ -839,6 +839,21 @@ describe('PI gateway', () => {
       expect(await run('another turn')).toEqual(['Next turn']);
     });
 
+    it.each([false, true])('preserves the Maps answer after the stream fails (other work uncertain: %s)', async uncertain => {
+      const confirmation = 'Apple Maps found one match. See the attached map.';
+      const { run, calls, registry } = setup([call => {
+        const grant = registry.resolve(turnOf(call))!;
+        grant.results.push({ tool: 'apple_maps', outcome: 'ok' });
+        grant.receipts.push({ confirmation, action: false });
+        if (uncertain) grant.remote.unverified += 1;
+        return sse(failedFrame());
+      }]);
+      await expect(run('find a shop near me')).rejects.toMatchObject({
+        receipt: uncertain ? `${confirmation} I could not verify any other actions. Check before repeating them.` : confirmation,
+      });
+      expect(responsesOf(calls)).toHaveLength(1);
+    });
+
     it.each([false, true])('retains uncertainty for an unverified write (another write confirmed: %s)', async confirmed => {
       const { run, calls, registry } = setup([
         call => {

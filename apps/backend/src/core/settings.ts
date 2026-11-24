@@ -23,6 +23,9 @@ export interface RoleModelSettings {
   reasoningEffort: ReasoningEffort;
 }
 
+const mobileSurfaceKeys = ['surface-page', 'surface-card', 'surface-control', 'surface-selected', 'surface-field', 'surface-next', 'surface-activity', 'surface-schedule', 'surface-training', 'surface-steps', 'surface-sleep', 'surface-nutrition', 'surface-calendar', 'surface-agenda'] as const;
+type MobileSurfaceKey = typeof mobileSurfaceKeys[number];
+
 export interface Settings {
   identity: {
     description: string;
@@ -48,7 +51,7 @@ export interface Settings {
     motion?: 'full' | 'calm' | 'reduced';
     radius?: number;
     density?: 'compact' | 'comfortable';
-  };
+  } & Partial<Record<MobileSurfaceKey, string>>;
   jarvis: {
     model: string;
     reasoning: string;
@@ -107,7 +110,7 @@ export type SettingsPatch = {
 };
 
 // A null patch value removes the override so the theme's own colour applies.
-const clearableAppearanceKeys = ['accent', 'accent-secondary', 'surface-tint'] as const;
+const clearableAppearanceKeys = ['accent', 'accent-secondary', 'surface-tint', ...mobileSurfaceKeys] as const;
 type ClearableAppearanceKey = typeof clearableAppearanceKeys[number];
 
 export interface SettingsStore {
@@ -199,6 +202,7 @@ const settingKeys = {
   homeBrief: { instruction: 'homeBrief.instruction', maxVisibleLines: 'homeBrief.maxVisibleLines' },
   decisions: { provider: 'decisions.provider' },
   appearance: {
+    ...Object.fromEntries(mobileSurfaceKeys.map(key => [key, `appearance.${key}`])) as Record<MobileSurfaceKey, string>,
     theme: 'appearance.theme',
     accent: 'appearance.accent',
     'accent-secondary': 'appearance.accent-secondary',
@@ -302,7 +306,7 @@ function validSetting(
   if (area === 'decisions') return key === 'provider' && isOption(value, settingsOptions.decisionProviders);
   if (area === 'appearance') {
     if (key === 'theme') return isOption(value, settingsOptions.themes);
-    if (key === 'accent' || key === 'accent-secondary' || key === 'surface-tint') {
+    if ((clearableAppearanceKeys as readonly string[]).includes(key)) {
       return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
     }
     if (key === 'background') return isOption(value, settingsOptions.backgrounds);
@@ -480,6 +484,7 @@ const settingsPatchSchema = {
             theme: selectSchema(settingsOptions.themes),
             accent: { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             'accent-secondary': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            ...Object.fromEntries(mobileSurfaceKeys.map(key => [key, { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 }])),
             'surface-tint': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             background: selectSchema(settingsOptions.backgrounds),
             glow: { type: 'number', minimum: 0, maximum: 1 },

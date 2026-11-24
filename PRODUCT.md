@@ -14,6 +14,9 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ## Daily core
 
+Dan can choose both native brand colours in iPhone Settings and restore the Jarvis defaults.
+His paired Watch adopts the same selection when it connects.
+
 1. **Jarvis project** — issues, PRs, workers and releases.
 2. **Notes** — find, read, create and edit notes.
 3. **Tasks** — find, create, complete and follow up on tasks.
@@ -49,9 +52,13 @@ The Vault is the source of truth. Find and read a note by title or content in Ch
 
 List Tasks by their current state, not by stale chat text. Dan can create, find, update or complete a task from either conversation channel, then see the same outcome in Tasks. Keep general tasks distinct from Factory issues and workers. Preserve the reminder's time and target; distinguish saved, failed delivery and confirmed delivery.
 
+### Calendar
+
+Browse and edit the primary Google Calendar used by Home, Chat and Voice. Schedule combines appointments with tasks and keeps their actions distinct.
+
 ### Workouts
 
-Show recorded workouts and lift history without double-counting or treating missing values as zero. Logging in iPhone Gym must be visible to the tool as well as to the screen. Chat and Voice must find the same lift, report the recorded result and let Dan correct a wrong entry.
+Show recorded workouts and lift history without double-counting or treating missing values as zero. For the training target, count gym sessions and runs. Walks belong in the overall workout count and step history. Saved max lifts record the best weight and reps for each exercise. Logging in iPhone Gym must be visible to the tool as well as to the screen. Chat and Voice must find the same lift, report the recorded result and let Dan correct a wrong entry.
 
 ### Nutrition
 

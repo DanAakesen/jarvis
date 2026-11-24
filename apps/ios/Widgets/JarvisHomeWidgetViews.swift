@@ -6,7 +6,7 @@ private func freshness(_ data: JarvisHomeWidgetData, stale: Bool, language: Jarv
     stale ? JarvisWidgetFormat.updated(data.generatedAt, language: language) : nil
 }
 
-/// The Now phrase beside the orb: the approvals needed, runs in progress or "All quiet". Orange when Dan is needed.
+/// The Now phrase beside the orb: the approvals needed, runs in progress or "All quiet". Uses the primary accent when Dan is needed.
 private struct JarvisHomeNowPhrase: View {
     let data: JarvisHomeWidgetData
     let language: JarvisAppLanguage
@@ -15,13 +15,13 @@ private struct JarvisHomeNowPhrase: View {
     var body: some View {
         Text(JarvisWidgetPhrase.now(data, language: language))
             .font(font.weight(.semibold))
-            .foregroundStyle(data.approvals > 0 ? Color.orange : Color.primary)
+            .foregroundStyle(data.approvals > 0 ? JarvisPalette.shared.primaryColor : Color.primary)
             .lineLimit(2)
             .minimumScaleFactor(0.8)
     }
 }
 
-/// A count tile: bordered, the number in orange when it is above zero. Nothing is tappable inside the widget.
+/// A count tile: bordered, the number accented when it is above zero. Nothing is tappable inside the widget.
 private struct JarvisHomeTile: View {
     let value: String
     let title: String
@@ -31,7 +31,7 @@ private struct JarvisHomeTile: View {
         VStack(spacing: 1) {
             Text(value)
                 .font(.title3.weight(.bold))
-                .foregroundStyle(isAccent ? Color.orange : Color.primary)
+                .foregroundStyle(isAccent ? JarvisPalette.shared.primaryColor : Color.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(title)
@@ -44,7 +44,7 @@ private struct JarvisHomeTile: View {
         .padding(.vertical, 8)
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(isAccent ? Color.orange : Color.secondary.opacity(0.35), lineWidth: 1)
+                .strokeBorder(isAccent ? JarvisPalette.shared.primaryColor : Color.secondary.opacity(0.35), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }
@@ -171,7 +171,7 @@ struct JarvisHomeLargeWidgetView: View {
         }
         if let task = firstTask {
             JarvisWidgetListRow(
-                dot: JarvisWidgetPalette.stone, title: task.title,
+                dot: JarvisWidgetPalette.secondaryAccent, title: task.title,
                 detail: JarvisWidgetPhrase.when(task, language: language)
             )
         }

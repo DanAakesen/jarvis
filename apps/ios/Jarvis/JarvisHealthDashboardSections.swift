@@ -376,11 +376,8 @@ struct JarvisHealthPanel<Content: View>: View {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(JarvisDesignTokens.healthSectionSpacing)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
-            )
+            .padding(JarvisPageHeaderMetrics.heroInset)
+            .jarvisDashboardSurface()
         }
     }
 }

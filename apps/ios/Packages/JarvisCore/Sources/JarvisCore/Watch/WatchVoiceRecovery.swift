@@ -61,7 +61,7 @@ public enum WatchVoiceRecovery {
     @MainActor
     public static func startCapture<Capture>(
         isCurrent: @MainActor () -> Bool,
-        start: @MainActor () throws -> Capture,
+        start: @MainActor (_ attempt: Int) throws -> Capture,
         onFailure: @MainActor (Int, Error) -> Void,
         onReady: @MainActor () -> Void = {},
         wait: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) }
@@ -71,7 +71,7 @@ public enum WatchVoiceRecovery {
             try Task.checkCancellation()
             guard isCurrent() else { throw CancellationError() }
             do {
-                let capture = try start()
+                let capture = try start(attempt)
                 onReady()
                 return capture
             } catch {

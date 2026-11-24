@@ -68,7 +68,7 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 - Stream: authenticated SSE at `GET /now/events` with the events `workspace-ready`, `workspace-command`, `workspace-cancel`. The `workspace-ready` event carries a server-issued `sessionId` (a UUID) for this connection. Send it back in every register and acknowledge call, which answer 409 once that connection is gone.
 - Register: `POST /now/workspace/state` with the snapshot fields flat beside the id: `{sessionId, windows, contextPanelOpen}` plus optional `device`, `frame` and `view`. There is no `snapshot` wrapper, and a body that nests the fields under one is rejected with 400. `windows` holds at most 32 entries, each with a required `viewId` and `title`. `device` is `{kind, label}` where `kind` is `desktop`, `phone` or `tablet` and `label` is optional. It answers 204, 400 for an invalid snapshot and 409 when the connection is stale. The most recent snapshot marks the active client.
 - Acknowledge each command by the `expiresAt` deadline delivered in its SSE event: `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
-- A foreground iPhone advertises `device.appleMaps: true` and, for nearby searches, `device.appleMapsNearby: true`. An `apple-maps` acknowledgement with `applied: true` requires a `mapReceipt` with `matches`, optional `spoken` (local narration finished), `reason` and `nearbyRadiusMeters`. The tool refuses positive nearby results without the radius; an empty result may also report it. Places and routes stay in iPhone memory for five minutes. Refresh reruns the saved request.
+- A foreground iPhone advertises `appleMaps`, `appleMapsNearby` and `appleMapsNearest` in its device capabilities. The receipt carries the match count, local narration status and optional reason. A positive nearby receipt must include the checked radius in nearbyRadiusMeters. A successful nearest lookup returns one match and `nearest: true` after comparing named results from the origin. Places and routes stay in iPhone memory for five minutes. Refresh reruns the saved request.
 - A command `target` is `active`, `desktop`, `phone` or `all`.
 - UNVERIFIED: replay after an SSE reconnect, which commands are desktop only, version negotiation, and how the phone and the desktop choose the active client.
 - iPhone registers as a `phone` client and acknowledges each received command by its deadline. A successful open request is not evidence that the phone was selected.
@@ -95,8 +95,8 @@ Normal reply pushes open the exact committed session and message. Approval and p
 
 ## 9. Notes area
 
-The Notes area uses the existing owner-authenticated vault routes. No iOS-specific route or payload is needed.
-Its Danish/English interface language is an app-owned local preference (`jarvis.appLanguage`), defaulting to Danish; the voice setting is not used for Notes UI copy.
+The Notes area uses the owner-authenticated vault routes.
+The native interface uses English. Voice language is configured separately.
 
 | Screen action | Existing route and contract |
 |---|---|
@@ -107,7 +107,7 @@ Its Danish/English interface language is an app-owned local preference (`jarvis.
 | Open a note in the editor | `GET /notes/note?path=PATH` returns `path`, Markdown `content`, the current `sha` and a GitHub URL. |
 | Create a note | `POST /notes` with `{path, content}` returns `path`, `commit` and `url`. |
 | Create an empty folder | `POST /notes/folders` with `{path}` returns the confirmed `path` and `commit`. A safe visible path is required; an existing directory/file returns 409. |
-| Save or delete a note | `PUT /notes/note` with `{path, content, sha}` saves; `DELETE /notes/note` with `{path, sha}` deletes after confirmation. On a stale revision retain the draft, refresh, and do not blindly repeat the write. |
+| Save, move or delete a note | `PUT /notes/note` saves content against its SHA. An optional `destination` moves the same filename in one commit. An occupied destination returns 422, a stale SHA returns 409. `DELETE /notes/note` requires the path, SHA and owner confirmation. |
 | Load task groups or search tasks | `GET /vault/tasks?state=open|all`, optionally with `q=TEXT`. The response includes task due dates/times, priority, source path/line/version and the backend's `today`. Personal/Work scope is inferred from the source path, as in the web client. |
 | Complete or reopen a task | `PATCH /vault/tasks` with the exact source `path`, `line`, `text`, `version` and `done`. A stale version returns `409`; refresh before another write. |
 | Edit task text, due date/time or priority | `PUT /vault/tasks` with the exact source identity/version plus `newText`, `due`, `time` and `priority`. |
@@ -147,6 +147,8 @@ See [Settings routes](../../apps/backend/src/core/settings.ts) and the [Proactiv
 ## 11. Health dashboard
 
 The dashboard calls `GET /health/capabilities` with `Accept: application/json;version=6`, then queries only advertised sources. The `daily.*` source names are unchanged. Native HealthKit sync posts to `/health/sync`; it is separate from the [Health upload credential and ingestion contract](../reference/daily/health-ingestion.md).
+
+Opening Health or returning to it in the foreground syncs the current Copenhagen day's permitted weight, body-fat and lean-mass readings. The iPhone skips unchanged readings within the app session and reloads the dashboard after upload. Pulling down runs the full Health sync, including the 30-day body trend.
 
 | Dashboard block or action | Existing endpoint and source |
 |---|---|
@@ -214,4 +216,10 @@ shared contract code cited below.
 
 ## 14. Usage, Status and Proactive
 
+Usage charts read dated costs from `healthCostTotals` (UTC days) or `monthlyCostTotals` (all history). The headline covers the selected period, including partial days. Detail rows supply the task breakdown and activity counts and can be truncated. Model costs use list-price estimates.
+
 No new backend route. The pages call `GET /usage?period=`, `GET /status`, `GET /proactive/status`, `GET /proactive/items?state=open|all`, `GET /proactive/runs`, `POST /proactive/runs` (answers 202), `GET`/`PATCH /proactive/settings` (with `expectedRevision`; 409 `settings_changed` re-fetches and rebases the draft), and `POST /proactive/items/:id/feedback` (`seen`, `dismiss`, `snooze` until tomorrow 07:00). 401 and 403 mean sign-in needed, 404 on proactive status means unavailable. "Add to tasks" creates a personal task through the existing Notes task route because proactive has no such route. The settings PATCH does not accept preferences, so the editor shows them read-only.
+
+## Calendar
+
+Home and Calendar read the owner’s primary Google Calendar through `GET /calendar/events`. To create an appointment, `POST /calendar/events` with a stable 32-character lowercase hex ID, subject, start, end and allDay. All-day ends are exclusive. To edit or delete, send the event’s ETag in `If-Match` to `PATCH` or `DELETE /calendar/events/:id`. On conflict, refresh before editing again.

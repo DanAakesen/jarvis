@@ -335,16 +335,22 @@ export function AppearanceDetails() {
   const appearance = preference.appearance;
   const disabled = preference.state !== 'ready' || !preference.saveAppearance;
   const [draft, setDraft] = useState<{ radius?: number; glow?: number; accent?: string; 'accent-secondary'?: string; 'surface-tint'?: string }>({});
+  const pending = useRef<AppearanceChange>({});
   const timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const save = (change: AppearanceChange) => { void preference.saveAppearance?.(change); };
   const later = (change: Partial<typeof draft>) => {
     setDraft((current) => ({ ...current, ...change }));
+    Object.assign(pending.current, change);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      void preference.saveAppearance?.(change).finally(() => setDraft((current) => {
+      const batch = pending.current;
+      pending.current = {};
+      void preference.saveAppearance?.(batch).finally(() => setDraft((current) => {
         const next = { ...current };
-        for (const key of Object.keys(change)) delete next[key as keyof typeof next];
+        for (const key of Object.keys(batch) as Array<keyof typeof next>) {
+          if (next[key] === batch[key]) delete next[key];
+        }
         return next;
       }));
     }, 450);
@@ -372,13 +378,18 @@ export function AppearanceDetails() {
       <RangeField id="appearance-glow" label="Room glow" value={glow} min={0} max={1} step={0.05} disabled={disabled}
         onChange={(value) => later({ glow: value })} low="Dim" high="Bright" format={(value) => `${Math.round(value * 100)}%`} />
       <div className="advanced-colours">
-        {colour('accent', 'Accent', '#52dcfa')}
-        {colour('accent-secondary', 'Second accent', '#55bace')}
+        {colour('accent', 'Primary colour', '#ffb45c')}
+        {colour('accent-secondary', 'Secondary colour', '#52dcfa')}
         {colour('surface-tint', 'Surface tint', '#101f2d')}
       </div>
       {hasCustomColours && (
         <button className="secondary-button" type="button" disabled={disabled}
-          onClick={() => save({ accent: null, 'accent-secondary': null, 'surface-tint': null })}>Use Jarvis colours</button>
+          onClick={() => {
+            window.clearTimeout(timer.current);
+            save({ ...pending.current, accent: null, 'accent-secondary': null, 'surface-tint': null });
+            pending.current = {};
+            setDraft({});
+          }}>Use Jarvis colours</button>
       )}
     </div>
   );

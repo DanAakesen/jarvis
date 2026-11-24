@@ -126,7 +126,7 @@ describe('Watch-only credential boundary', () => {
       headers: { authorization: authorization(credential) }, payload: { audio: 'AAA=' },
     }));
     await started;
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(30_000);
     const response = await pending;
     expect(response.statusCode).toBe(504);
     expect(response.json()).toEqual({ error: 'Transcription timed out' });

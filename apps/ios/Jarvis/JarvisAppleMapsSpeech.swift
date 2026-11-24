@@ -23,8 +23,21 @@ final class JarvisAppleMapsSpeech: NSObject, AVSpeechSynthesizerDelegate {
         if result.places.count > 1 {
             text = "Apple Maps found " + result.places.map(\.name).joined(separator: ", ") + ". Which one?"
         } else if let place = result.places.first {
+            let nearestDescription: String?
+            if result.nearest == true, let distance = place.straightLineDistanceText {
+                nearestDescription = ["The closest match I found is \(place.name)", place.address, distance]
+                    .filter { !$0.isEmpty }.joined(separator: ". ")
+            } else {
+                nearestDescription = nil
+            }
             if let seconds = place.travelSeconds, let minutes = place.travelMinutes {
-                var summary = "\(place.name) is about \(minutes) minutes away."
+                var summary: String
+                if let nearestDescription {
+                    let mode = result.mode == "walking" ? "walking" : "driving"
+                    summary = "\(nearestDescription). About \(minutes) minutes \(mode)."
+                } else {
+                    summary = "\(place.name) is about \(minutes) minutes away."
+                }
                 if let arriveBy = result.arriveBy, let arrival = AppleMapsRequest(query: place.name, arriveBy: arriveBy, bufferMinutes: result.bufferMinutes).arrivalDate {
                     let leave = arrival.addingTimeInterval(-seconds)
                     let date = leave.formatted(date: Calendar.current.isDateInToday(leave) ? .omitted : .abbreviated, time: .shortened)
@@ -32,7 +45,8 @@ final class JarvisAppleMapsSpeech: NSObject, AVSpeechSynthesizerDelegate {
                 }
                 text = summary
             } else {
-                text = [place.name, place.address, result.reason].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ". ")
+                let details = nearestDescription ?? [place.name, place.address].filter { !$0.isEmpty }.joined(separator: ". ")
+                text = [details, result.reason].compactMap { $0 }.joined(separator: ". ")
             }
         } else {
             text = result.reason ?? "Apple Maps found no matching places."

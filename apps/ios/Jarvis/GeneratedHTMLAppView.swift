@@ -19,7 +19,11 @@ struct HTMLAppRenderer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
             if let artifact, artifact.id.caseInsensitiveCompare(artifactId) == .orderedSame {
-                SandboxedHTMLApp(artifact: artifact, voiceStyle: voiceHeight == nil ? nil : (colorScheme == .dark ? .dark : .light))
+                SandboxedHTMLApp(
+                    artifact: artifact,
+                    voiceStyle: voiceHeight == nil ? nil : (colorScheme == .dark ? .dark : .light),
+                    palette: JarvisPalette.shared.selection
+                )
                     .frame(height: voiceHeight ?? 560)
             }
             if failedArtifactID == artifactId {
@@ -57,6 +61,7 @@ struct HTMLAppRenderer: View {
 private struct SandboxedHTMLApp: UIViewRepresentable {
     let artifact: HtmlArtifact
     let voiceStyle: UIUserInterfaceStyle?
+    let palette: JarvisPaletteSelection
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -75,8 +80,10 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
         webView.scrollView.backgroundColor = .clear
         if voiceStyle != nil {
             webView.scrollView.contentInsetAdjustmentBehavior = .never
-            webView.scrollView.contentInset.top = JarvisDesignTokens.controlMinimumHeight
-            webView.scrollView.verticalScrollIndicatorInsets.top = JarvisDesignTokens.controlMinimumHeight
+            let inset = JarvisDesignTokens.voicePanelEdgeInset
+            webView.scrollView.contentInset = UIEdgeInsets(top: inset, left: 0, bottom: inset, right: 0)
+            webView.scrollView.verticalScrollIndicatorInsets = webView.scrollView.contentInset
+            webView.scrollView.setContentOffset(CGPoint(x: 0, y: -inset), animated: false)
         }
         return webView
     }
@@ -85,17 +92,29 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
         if let voiceStyle, webView.overrideUserInterfaceStyle != voiceStyle {
             webView.overrideUserInterfaceStyle = voiceStyle
         }
-        guard context.coordinator.loadedArtifact != artifact else { return }
-        context.coordinator.loadedArtifact = artifact
-        webView.loadHTMLString(Self.sandboxedDocument(artifact.html, followsVoiceTheme: voiceStyle != nil), baseURL: nil)
+        let coordinator = context.coordinator
+        let theme = voiceStyle == nil ? nil : Self.voiceAppearance(palette)
+        let themeChanged = coordinator.theme != theme
+        coordinator.theme = theme
+        if coordinator.loadedArtifact != artifact {
+            coordinator.loadedArtifact = artifact
+            webView.loadHTMLString(Self.sandboxedDocument(artifact.html, theme: theme), baseURL: nil)
+        } else if themeChanged {
+            coordinator.updateTheme(in: webView)
+        }
     }
 
-    private static func sandboxedDocument(_ html: String, followsVoiceTheme: Bool) -> String {
+    private static func sandboxedDocument(_ html: String, theme: String?) -> String {
         let policy = """
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'">
         <meta name="referrer" content="no-referrer">
         """
-        let appearance = followsVoiceTheme ? voiceAppearance : ""
+        let appearance = theme.map {
+            """
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style id="jarvis-voice-theme">\($0)</style>
+            """
+        } ?? ""
         guard let doctype = html.range(
             of: #"^\s*<!doctype[^>]*>"#,
             options: [.regularExpression, .caseInsensitive]
@@ -105,7 +124,7 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
         return String(html[..<doctype.upperBound]) + policy + appearance + String(html[doctype.upperBound...])
     }
 
-    private static var voiceAppearance: String {
+    private static func voiceAppearance(_ palette: JarvisPaletteSelection) -> String {
         func color(_ value: UIColor) -> String {
             func rgb(in style: UIUserInterfaceStyle) -> String {
                 var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -116,25 +135,36 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
             return "light-dark(\(rgb(in: .light)), \(rgb(in: .dark)))"
         }
         return """
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
         :root {
             color-scheme: light dark !important;
             --jarvis-text: \(color(.label));
             --jarvis-muted: \(color(.secondaryLabel));
             --jarvis-background: \(color(UIColor(JarvisDesignTokens.glassSolid)));
-            --jarvis-accent: \(color(UIColor(JarvisDesignTokens.primaryAccent)));
-            --jarvis-accent-warm: \(color(UIColor(JarvisDesignTokens.ambientWarm)));
+            --jarvis-accent: \(color(UIColor(palette.primaryColor)));
+            --jarvis-accent-warm: var(--jarvis-accent);
+            --jarvis-accent-secondary: \(color(UIColor(palette.secondaryColor)));
             --jarvis-error: \(color(.systemRed));
         }
         :where(body) { color: var(--jarvis-text); background: var(--jarvis-background); font-family: system-ui, sans-serif; }
         :where(a) { color: var(--jarvis-accent); }
-        </style>
         """
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var loadedArtifact: HtmlArtifact?
+        var theme: String?
+
+        func updateTheme(in webView: WKWebView) {
+            guard let theme else { return }
+            webView.callAsyncJavaScript(
+                "const style = document.getElementById('jarvis-voice-theme'); if (style) style.textContent = css;",
+                arguments: ["css": theme], in: nil, in: .page, completionHandler: nil
+            )
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            updateTheme(in: webView)
+        }
 
         func webView(
             _ webView: WKWebView,

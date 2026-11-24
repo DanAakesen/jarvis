@@ -39,11 +39,8 @@ struct JarvisInsightsCard<Content: View>: View {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(JarvisDesignTokens.healthSectionSpacing)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
-            )
+            .padding(JarvisPageHeaderMetrics.heroInset)
+            .jarvisDashboardSurface()
         }
     }
 }

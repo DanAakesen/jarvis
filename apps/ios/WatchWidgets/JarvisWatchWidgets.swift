@@ -14,6 +14,7 @@ struct WatchProvider: TimelineProvider {
         completion(Timeline(entries: entries, policy: .after(value.date.addingTimeInterval(900))))
     }
     private func entry(at date: Date = Date()) -> WatchEntry {
+        JarvisPalette.shared.reloadFromDefaults()
         let store = WatchSnapshotStore.appGroup()
         let snapshot = store?.load(.health).flatMap { try? JSONDecoder().decode(WatchHealthSnapshot.self, from: $0) }
         let dashboard = store?.load(.dashboard).flatMap { try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: $0) }

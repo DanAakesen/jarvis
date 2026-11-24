@@ -10,8 +10,8 @@ import SwiftUI
 /// API: Glass.clear, Glass.tint(_:), View.glassEffect(_:in:).
 enum JarvisGlass {
     /// Clear glass with the board's light fill (`--g-fill-bar`), optionally tinted for accent surfaces such as the user bubble.
-    static func surface(tint: Color? = nil) -> Glass {
-        .clear.tint(tint ?? JarvisDesignTokens.glassFill)
+    @MainActor static func surface(tint: Color? = nil) -> Glass {
+        .clear.tint(tint ?? JarvisSurfacePalette.shared.color("control")?.opacity(0.3) ?? JarvisDesignTokens.glassFill)
     }
 }
 
@@ -26,7 +26,15 @@ struct JarvisGlassBackground: ViewModifier {
     var tint: Color?
     var isCircle = false
     var isInteractive = false
+    @Environment(\.jarvisCardRole) private var cardRole
     var customShape: AnyShape?
+    private var surfaceTint: Color? {
+        if let tint { return tint }
+        if customShape != nil {
+            return JarvisSurfacePalette.shared.color(cardRole, inherit: "card")?.opacity(0.3) ?? JarvisDesignTokens.glassFill
+        }
+        return nil
+    }
 
     private var shape: AnyShape {
         if let customShape { customShape } else if isCircle { AnyShape(Circle()) } else if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
@@ -34,9 +42,9 @@ struct JarvisGlassBackground: ViewModifier {
 
     func body(content: Content) -> some View {
         if reduceTransparency {
-            content.background(.regularMaterial, in: shape)
+            content.background(JarvisDesignTokens.glassSolid, in: shape)
         } else {
-            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: tint).interactive() : JarvisGlass.surface(tint: tint), in: shape)
+            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: surfaceTint).interactive() : JarvisGlass.surface(tint: surfaceTint), in: shape)
         }
     }
 }
@@ -127,7 +135,7 @@ enum JarvisRimState {
     }
 }
 
-/// Orange rim with a slow travelling light and a randomised pulse (board: composer `.cring`).
+/// Accent rim with a slow travelling light and a randomised pulse (board: composer `.cring`).
 /// Cheap by construction: one stroked shape redrawn at 12 fps, no mask, no blur, no offscreen pass.
 /// Under Reduce Motion the rim is steady: no sweep and no pulse.
 /// API: ShapeStyle.strokeBorder, AngularGradient, TimelineView, Animation.easeInOut.
@@ -273,6 +281,7 @@ struct JarvisIconButton: View {
     var tint: Color?
     var hint = ""
     var isCompact = false
+    var showsBackground = true
     let action: () -> Void
 
     var body: some View {
@@ -280,7 +289,7 @@ struct JarvisIconButton: View {
             if isCompact {
                 Image(systemName: systemImage ?? "xmark")
                     .font(.system(size: JarvisDesignTokens.photoRemoveGlyphSize, weight: .regular))
-                    .foregroundStyle(tint ?? JarvisDesignTokens.secondaryAccent)
+                    .foregroundStyle(tint ?? JarvisDesignTokens.controlInk)
                     .opacity(isDisabled ? 0.4 : 1)
                     .frame(width: JarvisDesignTokens.photoRemoveDiameter, height: JarvisDesignTokens.photoRemoveDiameter)
                     .jarvisGlassCircle()
@@ -295,7 +304,7 @@ struct JarvisIconButton: View {
                 glyph
             }
         }
-        .jarvisControlChrome(isCompact: isCompact)
+        .jarvisControlChrome(showsBackground: showsBackground && !isCompact)
         .disabled(isDisabled || isBusy)
         .accessibilityLabel(title)
         .accessibilityHint(hint)
@@ -406,7 +415,7 @@ private struct JarvisLabelledContent: View {
 
     private var tint: Color {
         if isDestructive { return .red }
-        return isEmphasised ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent
+        return isEmphasised ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.controlInk
     }
 
     var body: some View {
@@ -445,7 +454,7 @@ private struct JarvisLabelledContent: View {
     }
 }
 
-/// The one labelled button: text with an optional icon on Apple glass, secondary accent, no orange fill.
+/// The one labelled button: text with an optional icon on Apple glass, and secondary-accent text.
 /// `isEmphasised` colours the text with the primary accent (never a fill); `subtitle` adds a second line and
 /// `isLeading` left-aligns a full-width button, for quick-action rows.
 struct JarvisLabelledButton: View {
@@ -687,7 +696,7 @@ private struct JarvisSelectionLens: ViewModifier {
             if !isSeparate {
                 content.background {
                     Capsule()
-                        .fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                        .fill((JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity))
                         .matchedGeometryEffect(id: "selected", in: namespace)
                 }
             } else if reduceTransparency {
@@ -697,7 +706,7 @@ private struct JarvisSelectionLens: ViewModifier {
                 // A separate transparent background lets the lens refract the label itself.
                 content
                     .glassEffect(
-                        .regular.tint(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                        .regular.tint((JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity))
                             .interactive(!reduceMotion),
                         in: .capsule
                     )
@@ -860,7 +869,7 @@ struct JarvisSearchField: View {
         .padding(.trailing, text.isEmpty ? JarvisDesignTokens.labelledHorizontalPadding : 0)
         .frame(minHeight: JarvisDesignTokens.iconButtonDiameter)
         .frame(maxWidth: .infinity)
-        .jarvisGlassSurface()
+        .jarvisGlassSurface(tint: JarvisSurfacePalette.shared.color("field")?.opacity(0.35))
     }
 }
 
@@ -1000,7 +1009,7 @@ struct JarvisShutterButton: View {
     }
 }
 
-/// Icon, short text or progress view with the 44 pt target, the secondary accent and an optional count badge.
+/// Icon, short text or progress view with a 44 pt target and an optional count badge.
 private struct JarvisControlGlyph: View {
     var systemImage: String?
     var text: String?
@@ -1011,7 +1020,7 @@ private struct JarvisControlGlyph: View {
     var tint: Color?
 
     private var color: Color {
-        (tint ?? (isSelected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent))
+        (tint ?? (isSelected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.controlInk))
             .opacity(isDisabled ? 0.4 : 1)
     }
 
@@ -1053,8 +1062,8 @@ private extension View {
     /// In a toolbar the item must also hide the system container (`sharedBackgroundVisibility(.hidden)`), or the
     /// system draws a second glass around this one.
     @ViewBuilder
-    func jarvisControlChrome(isCompact: Bool = false) -> some View {
-        if isCompact {
+    func jarvisControlChrome(showsBackground: Bool = true) -> some View {
+        if !showsBackground {
             buttonStyle(.plain)
         } else {
             buttonStyle(.plain)
@@ -1133,9 +1142,13 @@ struct JarvisOrb: View {
     var isStatic = false
     var isPaused = false
     var adaptsToLowPower = false
+    var palette: JarvisPaletteSelection? = nil
 
     var body: some View {
-        JarvisLatticeOrbView(activity: activity, isStatic: isStatic, isPaused: isPaused, adaptsToLowPower: adaptsToLowPower)
+        JarvisLatticeOrbView(
+            activity: activity, isStatic: isStatic, isPaused: isPaused,
+            adaptsToLowPower: adaptsToLowPower, palette: palette
+        )
             .aspectRatio(1, contentMode: .fit)
             .frame(width: size, height: size)
             .clipShape(Circle())
@@ -1209,7 +1222,7 @@ struct JarvisComposerIconButton: View {
     }
 }
 
-/// The composer's plus: the same orange, backgroundless icon, opening a menu.
+/// The composer's plus: the same accent and icon treatment, opening a menu.
 struct JarvisComposerMenuButton<Content: View>: View {
     let title: String
     let systemImage: String

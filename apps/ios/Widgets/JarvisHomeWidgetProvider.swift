@@ -26,6 +26,7 @@ struct JarvisHomeWidgetProvider: TimelineProvider {
     }
 
     private func plan(now: Date) -> JarvisWidgetTimelinePlan {
+        JarvisPalette.shared.reloadFromDefaults()
         let load = JarvisWidgetSnapshotStore.appGroup()?.load() ?? .missing
         return JarvisWidgetTimeline.plan(for: load, topic: topic, now: now)
     }

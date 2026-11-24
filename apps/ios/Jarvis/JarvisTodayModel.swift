@@ -56,6 +56,17 @@ final class JarvisTodayModel: ObservableObject {
     var notesClient: JarvisNotesClient? { dependencies.notes }
     var isFixture: Bool { dependencies.fixture != nil }
 
+    @Published private var trainingTargets: JarvisHealthTargets?
+    var periodWorkoutTarget: Double? {
+        guard let targets = trainingTargets?.targets,
+              let gym = targets.gymSessionsPerWeek, let run = targets.runSessionsPerWeek else { return nil }
+        return JarvisHealthLogic.sessionTarget(gym + run, days: activity.range.dayCount)
+    }
+    var periodWorkouts: [JarvisGymLogEntry] {
+        JarvisTodayActivity.entriesInRange(workouts.value ?? [], range: activity.range, now: now, calendar: timeCalendar)
+            .sorted { $0.performedAt > $1.performedAt }
+    }
+
     // MARK: Derived
 
     func greeting(language: JarvisAppLanguage) -> JarvisTodayGreeting {
@@ -141,6 +152,7 @@ final class JarvisTodayModel: ObservableObject {
         async let loadedSteps: Void = loadSteps()
         async let loadedWorkouts: Void = loadWorkouts()
         async let loadedActivity: Void = loadActivity()
+        trainingTargets = try? await dependencies.healthClient?.trainingTargets()
         _ = await (loadedCalendar, loadedTasks, loadedSteps, loadedWorkouts, loadedActivity)
     }
 
@@ -208,11 +220,11 @@ final class JarvisTodayModel: ObservableObject {
 
     private func loadCalendar(force: Bool) async {
         let start = timeCalendar.startOfDay(for: now)
-        let end = timeCalendar.date(byAdding: .day, value: 2, to: start) ?? start
+        let end = timeCalendar.date(byAdding: .day, value: 30, to: start) ?? start
         let source = dependencies.calendar
         let currentNow = now
         await load(
-            .calendar, scope: String(Int(start.timeIntervalSince1970)), force: force, into: \.calendar,
+            .calendar, scope: "month-" + String(Int(start.timeIntervalSince1970)), force: force, into: \.calendar,
             fetch: { _ in .modified(try await source.entries(from: start, to: end), validator: nil) },
             map: { JarvisTodayAgenda.upcoming($0, now: currentNow) }
         )

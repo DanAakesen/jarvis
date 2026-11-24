@@ -11,13 +11,13 @@ enum JarvisPageHeaderMetrics {
     static let actionSize = JarvisDesignTokens.iconButtonDiameter
     static let actionIconSize = JarvisDesignTokens.iconButtonGlyphSize
     static let inset: CGFloat = 16
-    static let heroInset: CGFloat = 16
-    static let spacing: CGFloat = 12
+    static let heroInset = inset
+    static let spacing = JarvisDesignTokens.rowSpacing
     static let actionSpacing: CGFloat = 8
     static let statMinimumWidth: CGFloat = 72
     static let dockSpacing: CGFloat = 16
     static let groupRadius: CGFloat = 14
-    static let rowInset: CGFloat = 16
+    static let rowInset = inset
     static let rowVerticalInset: CGFloat = 10
     static let rowLineSpacing: CGFloat = 4
     static let skeletonLineHeight: CGFloat = 18
@@ -235,6 +235,43 @@ struct JarvisHeroHeader<Accessory: View>: View {
     }
 }
 
+/// Shared material and perimeter for dashboard cards, including their solid accessibility appearance.
+private struct JarvisDashboardSurface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.jarvisCardRole) private var role
+    @Environment(\.displayScale) private var displayScale
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
+        content
+            .background {
+                if reduceTransparency {
+                    shape.fill(JarvisDesignTokens.glassSolid)
+                } else {
+                    shape.fill(.ultraThinMaterial)
+                        .overlay { shape.fill(JarvisSurfacePalette.shared.color(role, inherit: "card")?.opacity(0.28) ?? .clear) }
+                        .overlay {
+                            shape.fill(LinearGradient(
+                                colors: [JarvisDesignTokens.primaryAccent.opacity(0.07), .clear],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            ))
+                        }
+                }
+            }
+            .overlay {
+                shape.strokeBorder(LinearGradient(
+                    colors: [.primary.opacity(0.22), .primary.opacity(0.08)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ), lineWidth: 1 / max(displayScale, 1))
+                .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    func jarvisDashboardSurface() -> some View { modifier(JarvisDashboardSurface()) }
+}
+
 /// The one hero component under the headline.
 struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
     let title: String
@@ -264,10 +301,7 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         .padding(JarvisPageHeaderMetrics.heroInset)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
-        )
+        .jarvisDashboardSurface()
         .accessibilityElement(children: .contain)
     }
 

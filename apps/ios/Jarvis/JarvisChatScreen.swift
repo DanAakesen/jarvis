@@ -181,6 +181,12 @@ struct JarvisChatScreen: View {
             // Chat before its parent refreshes. Readiness replaces the old 10s poll.
             guard !Task.isCancelled, let pending = handoff,
                   pending.action != nil || model.isReadyForHandoff else { return }
+            if let photo = pending.mealPhoto {
+                model.addAttachment(name: "Meal.jpg", contentType: "image/jpeg", data: photo)
+                composerFocused = true
+                handoff = nil
+                return
+            }
             model.composerDraft.value.replace(with: pending.text)
             if let action = pending.action {
                 composerFocused = true

@@ -130,7 +130,7 @@ struct JarvisUsageArea: View {
         let repository = JarvisRepository<JarvisUsageReport>(
             cache: JarvisAppCache.shared,
             kind: .usage,
-            scope: selected.rawValue
+            scope: "dated-\(selected.rawValue)"
         ) { try await client.fetchReport(period: selected, validator: $0) }
         for await update in repository.updates(force: force) {
             guard !Task.isCancelled, requestID == currentRequest, period == selected else { return }
@@ -214,7 +214,7 @@ struct JarvisUsageArea: View {
                 .accessibilityLabel(valueText(value, summary: summary))
                 .accessibilityIdentifier("usage.total")
             if let bucket {
-                Text(label(for: bucket)).font(.caption).accessibilityIdentifier("usage.selection")
+                Text(label(for: bucket) + " UTC").font(.caption).accessibilityIdentifier("usage.selection")
                 JarvisIconButton(title: text(.closeSheet), systemImage: "xmark", identifier: "usage.clearSelection") {
                     selectedBucketID = nil
                     chartSelection = nil
@@ -272,7 +272,7 @@ struct JarvisUsageArea: View {
                     y: .value(title, bucket.value)
                 )
                 .foregroundStyle(
-                    (selectedBucketID ?? summary.buckets.last?.id) == bucket.id
+                    selectedBucketID == nil || selectedBucketID == bucket.id
                         ? JarvisDesignTokens.primaryAccent
                         : Color.secondary
                 )
@@ -289,7 +289,7 @@ struct JarvisUsageArea: View {
                 HStack {
                     Text(label(for: first))
                     Spacer(minLength: 8)
-                    Text(label(for: last))
+                    Text(label(for: last) + " UTC")
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)

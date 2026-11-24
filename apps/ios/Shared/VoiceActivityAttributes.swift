@@ -7,6 +7,10 @@ struct VoiceActivityAttributes: ActivityAttributes {
         var phase: VoiceLiveActivityPhase
         var isMuted: Bool
         var waveform: [Double]
+        // Passed with each update because the Voice Activity has its own sandbox.
+        var palette: JarvisPaletteSelection? = nil
+
+        var appearance: JarvisPaletteSelection { palette ?? .standard }
     }
 
     let sessionID: UUID

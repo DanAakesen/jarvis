@@ -1,7 +1,7 @@
 import JarvisCore
 import SwiftUI
 
-/// Workouts (donut by session type) and steps (ring and bars) with one range toggle.
+/// Session totals and steps for the selected range, with details available on demand.
 struct JarvisTodayActivityCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -9,27 +9,13 @@ struct JarvisTodayActivityCard: View {
     let language: JarvisAppLanguage
     let fixtureMode: Bool
 
-    @ScaledMetric(relativeTo: .body) private var ringSize: CGFloat = 56
-    @ScaledMetric(relativeTo: .body) private var donutSize: CGFloat = 100
+    @State private var expanded = false
     @ScaledMetric(relativeTo: .title) private var summaryValueSize: CGFloat = 34
 
     private var isLargeText: Bool { dynamicTypeSize.isAccessibilitySize }
-    private var displayedDonutSize: CGFloat { isLargeText ? min(donutSize, 200) : donutSize }
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
         JarvisTodayLocalization.string(key, language: language)
-    }
-
-    private func color(_ session: JarvisGymSessionType) -> Color {
-        switch session {
-        case .chest: JarvisDesignTokens.primaryAccent
-        case .back: JarvisDesignTokens.secondaryAccent
-        case .arms: Color.cyan
-        case .legs: JarvisDesignTokens.ambientGreen
-        case .cardio: JarvisDesignTokens.ambientBlue
-        case .strength: JarvisDesignTokens.primaryAccent
-        case .other: Color.gray
-        }
     }
 
     var body: some View {
@@ -46,10 +32,25 @@ struct JarvisTodayActivityCard: View {
                 .font(.subheadline.weight(.semibold))
                 .accessibilityAddTraits(.isHeader)
             stepsBlock(display)
+            if expanded {
+                ForEach(Array(model.periodWorkouts.enumerated()), id: \.offset) { _, workout in
+                    HStack {
+                        Text(workout.session.shortTitle(language: language))
+                        Spacer()
+                        Text(workout.performedAt, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                            .foregroundStyle(.secondary)
+                    }.font(.subheadline)
+                }
+                if model.periodWorkouts.isEmpty { Text("No recorded sessions").font(.footnote).foregroundStyle(.secondary) }
+            }
+            JarvisLabelledButton(title: expanded ? "Show less" : "Show more",
+                                 systemImage: expanded ? "chevron.up" : "chevron.down", isCompact: true) {
+                animate { expanded.toggle() }
+            }
         }
         .padding(JarvisPageHeaderMetrics.heroInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+        .jarvisDashboardSurface().environment(\.jarvisCardRole, "activity")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("today.activity")
     }
@@ -57,7 +58,7 @@ struct JarvisTodayActivityCard: View {
     // MARK: Header
 
     private var header: some View {
-        JarvisHeroHeader(copy(.workouts)) { rangeToggle }
+        JarvisHeroHeader("Activity") { rangeToggle }
     }
 
     private var rangeToggle: some View {
@@ -96,121 +97,20 @@ struct JarvisTodayActivityCard: View {
                     retry: model.workouts.failure != .unavailable
                 )
             }
-            summary(display)
-        } else {
-            let layout = isLargeText
-                ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
-                : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
-            layout {
-                donut(display)
-                summary(display)
-            }
         }
-    }
-
-    private func donut(_ display: JarvisTodayActivityDisplay) -> some View {
-        let total = display.totalWorkouts
-        return ZStack {
-            Circle()
-                .stroke(Color.primary.opacity(0.08), lineWidth: 10)
-            if total > 0 {
-                ForEach(arcs(display), id: \.session) { arc in
-                    Circle()
-                        .trim(from: arc.start, to: arc.end)
-                        .stroke(
-                            color(arc.session),
-                            style: StrokeStyle(lineWidth: arc.session == display.centerSession ? 13 : 10)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .opacity(display.centerSession == nil || arc.session == display.centerSession ? 1 : 0.35)
-                }
-            }
-            VStack(spacing: 0) {
-                Text("\(display.centerCount)")
-                    .font(.system(.title3, design: .rounded, weight: .bold))
-                    .monospacedDigit()
-                if let selected = display.centerSession {
-                    Text(selected.shortTitle(language: language))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                } else if total == 0 {
-                    Text(JarvisTodayLocalization.string(.ofGoal, count: 1, language: language))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .padding(12)
+        let sessions = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
+        let durations = sessions.map(\.durationMinutes).filter { $0 > 0 }
+        let minutes = durations.reduce(0, +)
+        let target = model.periodWorkoutTarget.map { String(Int($0.rounded())) } ?? "—"
+        let count = model.workouts.value == nil ? "—" : String(sessions.count)
+        let duration = durations.isEmpty && (!sessions.isEmpty || model.workouts.value == nil) ? "—" :
+            (durations.count < sessions.count ? "≥ " : "") + String(Int(minutes.rounded()))
+        let layout = isLargeText ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .top))
+        layout {
+            summaryValue(count + " / " + target, label: copy(.workouts), identifier: "today.summary.workouts")
+            summaryValue(duration, label: "Workout minutes", identifier: "today.summary.time")
+            summaryValue(activityValue(display.energyTotal), label: copy(.activeKcal), identifier: "today.summary.kcal")
         }
-        .padding(4)
-        .frame(width: displayedDonutSize, height: displayedDonutSize)
-        .contentShape(Circle())
-        .gesture(
-            SpatialTapGesture().onEnded { value in
-                handleDonutTap(at: value.location, display: display)
-            }
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(copy(.workoutsByType))
-        .accessibilityValue("\(display.centerCount)")
-        .accessibilityIdentifier("today.donut")
-    }
-
-    private struct Arc {
-        let session: JarvisGymSessionType
-        let start: CGFloat
-        let end: CGFloat
-    }
-
-    private func arcs(_ display: JarvisTodayActivityDisplay) -> [Arc] {
-        var cursor = 0.0
-        var result: [Arc] = []
-        for segment in display.segments where segment.count > 0 {
-            let gap = display.segments.filter { $0.count > 0 }.count > 1 ? 0.012 : 0
-            result.append(Arc(
-                session: segment.session,
-                start: CGFloat(cursor + gap / 2),
-                end: CGFloat(max(cursor + gap / 2, cursor + segment.fraction - gap / 2))
-            ))
-            cursor += segment.fraction
-        }
-        return result
-    }
-
-    private func handleDonutTap(at point: CGPoint, display: JarvisTodayActivityDisplay) {
-        let center = displayedDonutSize / 2
-        let dx = point.x - center
-        let dy = point.y - center
-        var turn = atan2(dx, -dy) / (2 * .pi)
-        if turn < 0 { turn += 1 }
-        var cursor = 0.0
-        for segment in display.segments where segment.count > 0 {
-            cursor += segment.fraction
-            if turn < cursor {
-                animate { model.activity.toggleSegment(segment.session) }
-                return
-            }
-        }
-    }
-
-    /// Active time and active kilocalories for the period: two large numbers split by a hairline, as tall as the donut.
-    private func summary(_ display: JarvisTodayActivityDisplay) -> some View {
-        VStack(spacing: 0) {
-            summaryValue(
-                activityValue(display.exerciseTotal),
-                label: copy(.activeTime),
-                identifier: "today.summary.time"
-            )
-            Divider().accessibilityHidden(true)
-            summaryValue(
-                activityValue(display.energyTotal),
-                label: copy(.activeKcal),
-                identifier: "today.summary.kcal"
-            )
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: isLargeText ? nil : donutSize)
     }
 
     private func activityValue(_ total: JarvisActivityTotal) -> String {
@@ -263,15 +163,12 @@ struct JarvisTodayActivityCard: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                let layout = isLargeText
-                    ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
-                    : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
-                layout {
-                    ring(display)
-                    bars(display)
-                        .frame(height: isLargeText ? 96 : 48)
-                        .padding(.top, isLargeText ? JarvisPageHeaderMetrics.spacing : 0)
-                }
+                HStack {
+                    Text(display.ringLabel ?? copy(model.activity.range.isHourly ? .stepsToday : .dailySteps))
+                    Spacer()
+                    Text(display.ringSteps.formatted()).fontWeight(.semibold).foregroundStyle(JarvisDesignTokens.primaryAccent)
+                }.font(.subheadline)
+                bars(display).frame(height: isLargeText ? 96 : 54)
                 Text(display.caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -279,33 +176,6 @@ struct JarvisTodayActivityCard: View {
                     .accessibilityIdentifier("today.steps.caption")
             }
         }
-    }
-
-    private func ring(_ display: JarvisTodayActivityDisplay) -> some View {
-        ZStack {
-            Circle().stroke(Color.primary.opacity(0.08), lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: CGFloat(display.ringFraction))
-                .stroke(
-                    JarvisDesignTokens.primaryAccent,
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 0) {
-                Text(JarvisNumberFormat.compact(display.ringSteps, language: language))
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-            }
-            .padding(8)
-        }
-        .padding(3)
-        .frame(width: ringSize, height: ringSize)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(copy(.steps))
-        .accessibilityValue(Text(verbatim: String(display.ringSteps)))
-        .accessibilityIdentifier("today.steps.ring")
     }
 
     private func bars(_ display: JarvisTodayActivityDisplay) -> some View {

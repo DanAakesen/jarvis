@@ -22,7 +22,7 @@ struct WatchVoiceView: View {
         VStack(spacing: 4) {
             WatchOrb(activity: JarvisOrbActivity(watchVoiceStatus: recovery == nil ? model.voiceState : "Reconnecting", isMuted: model.muted), isAnimated: !reduceMotion)
                 .frame(width: 44, height: 44)
-            Text(label).font(.system(.footnote, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+            Text(label).font(.system(.footnote, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.accent)
                 .multilineTextAlignment(.center)
                 .accessibilityLabel("Voice")
                 .accessibilityValue(model.muted ? "Muted, \(recovery ?? model.voiceState)" : label)

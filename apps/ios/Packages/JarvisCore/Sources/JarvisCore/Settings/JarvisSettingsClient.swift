@@ -1,5 +1,11 @@
 import Foundation
 
+public enum JarvisSurfaceSettings {
+    public static let roles = ["page", "card", "control", "selected", "field"]
+    public static let cards = ["next", "activity", "schedule", "training", "steps", "sleep", "nutrition", "calendar", "agenda"]
+    public static let keys = (roles + cards).map { "surface-" + $0 }
+}
+
 public indirect enum JarvisSettingsValue: Codable, Equatable, Sendable {
     case object([String: JarvisSettingsValue])
     case array([JarvisSettingsValue])
@@ -692,6 +698,8 @@ public enum JarvisSettingsLogic {
                 }
             } else {
                 for (key, newValue) in editedValues where oldValues[key] != newValue {
+                    if area == "appearance", (["accent", "accent-secondary"] + JarvisSurfaceSettings.keys).contains(key),
+                       oldValues[key] == nil, newValue == .null { continue }
                     areas[area, default: [:]][key] = newValue
                 }
             }
@@ -757,6 +765,10 @@ public enum JarvisSettingsLogic {
                 switch (area, key) {
                 case ("appearance", "theme"):
                     valid = validSettingsFieldValue(value, options: ["light", "dark", "system"])
+                case ("appearance", _) where (["accent", "accent-secondary"] + JarvisSurfaceSettings.keys).contains(key):
+                    valid = value == .null || value.stringValue.map {
+                        $0.utf8.count == 7 && matches($0, pattern: #"^#[a-fA-F0-9]{6}$"#)
+                    } == true
                 case ("personality", "tone"):
                     valid = validSettingsFieldValue(value, options: ["british_butler", "warm", "direct", "playful"])
                 case ("personality", "responseStyle"):

@@ -28,10 +28,12 @@ struct JarvisTodayScreen: View {
     let fixtureMode: Bool
     let onChat: (JarvisChatHandoff) -> Void
     let onVoice: () -> Void
+    var onCalendar: () -> Void = {}
     var onSyncAppleHealth: (() async -> JarvisHealthSyncState?)? = nil
 
     @State private var healthSyncState: JarvisHealthSyncState?
     @State private var tab: Tab = .today
+    @State private var nextExpanded = false
     @State private var listExpanded = false
     @State private var sheet: Sheet?
     @State private var composerDraft = ComposerDraft()
@@ -60,8 +62,7 @@ struct JarvisTodayScreen: View {
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                 greeting
                 JarvisHealthSyncIssue(state: healthSyncState, language: language)
-                JarvisSectionHeadline(copy(.page))
-                    .accessibilityIdentifier("today.section.home")
+                upNext
                 JarvisTodayActivityCard(model: model, language: language, fixtureMode: fixtureMode)
                 if model.isShowingOfflineCopy {
                     Label(copy(.offline), systemImage: "wifi.slash")
@@ -69,7 +70,7 @@ struct JarvisTodayScreen: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("today.offline")
                 }
-                JarvisSectionHeadline(copy(.upcoming))
+                JarvisSectionHeadline("Schedule")
                     .accessibilityIdentifier("today.section.upcoming")
                 agendaControls
             }
@@ -83,7 +84,7 @@ struct JarvisTodayScreen: View {
                     .accessibilityHidden(true)
             }
         } content: {
-            dayRows
+            dayRows.environment(\.jarvisCardRole, "schedule")
         }
         .listStyle(.plain)
         .listRowSpacing(0)
@@ -192,6 +193,8 @@ struct JarvisTodayScreen: View {
     private var agendaControls: some View {
         HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
             tabControl
+            JarvisIconButton(title: "Calendar", systemImage: "calendar", identifier: "today.calendar",
+                             tint: JarvisDesignTokens.primaryAccent, action: onCalendar)
             plusMenu
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: tab)
@@ -201,16 +204,16 @@ struct JarvisTodayScreen: View {
     }
 
     private var tabControl: some View {
-        let today = taskLists?.today.count
-        let due = taskLists?.upcoming.count
+        let today = rows(for: .today).count
+        let due = rows(for: .due).count
         return JarvisSegmentedBar(
             title: copy(.agendaAndTasks),
             identifierPrefix: "today.tab",
             items: [
-                JarvisTabItem(tag: Tab.today, title: today.map { "\(copy(.tabToday)) \($0)" } ?? copy(.tabToday), identifier: "today.tab.today"),
+                JarvisTabItem(tag: Tab.today, title: "Today \(today)", identifier: "today.tab.today"),
                 JarvisTabItem(
                     tag: Tab.due,
-                    title: due.map { "\(copy(.tabDue)) \($0)" } ?? copy(.tabDue),
+                    title: "Later \(due)",
                     identifier: "today.tab.due"
                 ),
             ],
@@ -220,12 +223,61 @@ struct JarvisTodayScreen: View {
     }
 
     private func rows(for value: Tab) -> [DayRow] {
-        switch value {
-        case .today:
-            let entries = JarvisTodayAgenda.upcoming(calendarSection.value ?? [], now: model.now).map(DayRow.entry)
-            return entries + (taskLists?.today ?? []).map(DayRow.task)
-        case .due:
-            return (taskLists?.upcoming ?? []).map(DayRow.task)
+        let calendar = JarvisHealthSyncWindow.calendar
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: model.now))!
+        let entries = JarvisTodayAgenda.upcoming(calendarSection.value ?? [], now: model.now)
+            .filter { value == .today ? $0.start < tomorrow : $0.start >= tomorrow }
+        let tasks = value == .today ? taskLists?.today : taskLists?.upcoming
+        return (entries.map(DayRow.entry) + (tasks ?? []).map(DayRow.task)).sorted {
+            (rowDate($0), $0.id) < (rowDate($1), $1.id)
+        }
+    }
+
+    private func rowDate(_ row: DayRow) -> Date {
+        switch row {
+        case .entry(let entry): return entry.start
+        case .task(let task):
+            if let due = task.dueAt.flatMap(parseDate) { return due }
+            guard let day = task.dueDate else { return .distantFuture }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = JarvisHealthSyncWindow.calendar.timeZone
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            return formatter.date(from: day + " " + (task.dueTime ?? "23:59")) ?? .distantFuture
+        }
+    }
+
+    @ViewBuilder private var upNext: some View {
+        let today = rows(for: .today)
+        if let first = today.first {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Up Next").font(.headline)
+                    Spacer()
+                    let next = rowDate(first)
+                    if next != .distantFuture {
+                        Text(next, style: .relative).font(.caption).foregroundStyle(JarvisDesignTokens.primaryAccent)
+                    }
+                }
+                nextRow(first)
+                if today.count > 1 {
+                    if nextExpanded {
+                        ForEach(Array(today.dropFirst())) { row in Divider(); nextRow(row) }
+                    }
+                    JarvisLabelledButton(title: nextExpanded ? "Show less" : "Show more",
+                        systemImage: nextExpanded ? "chevron.up" : "chevron.down", isCompact: true) { nextExpanded.toggle() }
+                }
+            }.padding(JarvisPageHeaderMetrics.heroInset).jarvisDashboardSurface().environment(\.jarvisCardRole, "next")
+        }
+    }
+
+    @ViewBuilder private func nextRow(_ row: DayRow) -> some View {
+        switch row {
+        case .entry(let event):
+            Button(action: onCalendar) { calendarRow(event) }.buttonStyle(.plain)
+        case .task(let task):
+            JarvisLabelledButton(title: task.text, subtitle: task.dueTime, systemImage: "checklist",
+                                 isFullWidth: true, isLeading: true) { present(.taskDetail(task)) }
         }
     }
 
@@ -235,7 +287,7 @@ struct JarvisTodayScreen: View {
         let expansion = JarvisTodayExpansion(total: visibleRows.count, isExpanded: listExpanded)
         if isLoadingRows || hasRowIssue {
             JarvisRowGroup {
-                if tab == .today { calendarIssue }
+                calendarIssue
                 taskIssue
             }
             .listRowBackground(Color.clear)
@@ -322,12 +374,12 @@ struct JarvisTodayScreen: View {
     }
 
     private var isLoadingRows: Bool {
-        (tab == .today && calendarSection.value == nil && calendarSection.isLoading)
+        (calendarSection.value == nil && calendarSection.isLoading)
             || (model.taskData.value == nil && model.taskData.isLoading)
     }
 
     private var hasRowIssue: Bool {
-        (tab == .today && calendarSection.value == nil && !calendarSection.isLoading)
+        (calendarSection.value == nil && !calendarSection.isLoading)
             || (model.taskData.value == nil && !model.taskData.isLoading)
     }
 
@@ -348,7 +400,7 @@ struct JarvisTodayScreen: View {
 
     @ViewBuilder
     private var taskIssue: some View {
-        if model.taskData.value == nil, !(tab == .today && calendarSection.value == nil && calendarSection.isLoading) {
+        if model.taskData.value == nil, !(calendarSection.value == nil && calendarSection.isLoading) {
             if model.taskData.isLoading {
                 loadingRow.jarvisListRow(separator: false)
             } else {
@@ -402,7 +454,7 @@ struct JarvisTodayScreen: View {
         Text(JarvisTodayGreeting.timeText(entry.start, language: language))
             .font(.footnote.weight(.medium))
             .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(JarvisDesignTokens.primaryAccent)
             .fixedSize()
     }
 
@@ -624,6 +676,7 @@ struct JarvisTodayScreen: View {
                 draft: $composerDraft,
                 isFocused: $composerFocused,
                 inputIdentifier: "today.input",
+                collapsesWhenUnfocused: true,
                 rimState: dictation.isListening ? .listening : (canSend ? .typing : .idle),
                 isRimAnimated: !fixtureMode,
                 waveformLevels: dictation.isListening ? dictation.levels : nil,

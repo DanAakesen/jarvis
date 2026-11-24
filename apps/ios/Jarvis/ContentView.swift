@@ -153,6 +153,18 @@ struct ContentView: View {
         }
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active, !fixtureMode, let settingsClient else { return }
+            let palette = JarvisPalette.shared
+            let atStart = (palette.primaryHex, palette.secondaryHex)
+            let repository: JarvisRepository<JarvisSettingsResponse> = await JarvisAppCache.repository(.settings) {
+                try await settingsClient.fetchSettings(validator: $0)
+            }
+            let result = await repository.resolve()
+            guard !Task.isCancelled, result.error == nil,
+                  atStart == (palette.primaryHex, palette.secondaryHex) else { return }
+            result.value?.applyNativePalette()
+        }
         .onDisappear { workspaceRuntime.resetSession() }
         .task(id: scenePhase != .background && (navigation.currentDestination == .chat || navigation.currentDestination == .voice)) {
             guard scenePhase != .background, navigation.currentDestination == .chat || navigation.currentDestination == .voice,
@@ -359,8 +371,13 @@ struct ContentView: View {
                     navigate(to: .chat)
                 },
                 onVoice: { navigate(to: .voice) },
+                onCalendar: { navigate(to: .calendar) },
                 onSyncAppleHealth: refreshAppleHealth
             )
+        } else if destination == .calendar {
+            JarvisCalendarPage(source: chatClient.map(JarvisBackendCalendarSource.init(client:)), language: language) {
+                await todayModel.refresh(force: true)
+            }
         } else if destination == .chat {
             JarvisChatScreen(
                 client: chatClient,
@@ -388,7 +405,12 @@ struct ContentView: View {
                 workoutInitiallySelected: healthScreenshotState != nil,
                 presentNewLiftAfterLoading: healthScreenshotState == "newlift",
                 gymModel: todayModel,
-                onSyncAppleHealth: refreshAppleHealth
+                onSyncAppleHealth: refreshAppleHealth,
+                onSyncScale: healthSyncModel.syncTodaysScale,
+                onMealPhoto: { photo in
+                    chatHandoff = JarvisChatHandoff(text: "", mealPhoto: photo)
+                    navigate(to: .chat)
+                }
             )
         } else if destination == .usage {
             JarvisUsageArea(
@@ -601,7 +623,7 @@ struct ContentView: View {
                   let screen = arguments.first(where: { $0.hasPrefix("--screenshot-screen=") })?
                     .split(separator: "=", maxSplits: 1).last,
                   let destination = ["voice": JarvisDestination.voice, "notes": .notes,
-                                     "health": .health, "settings": .settings][String(screen)] {
+                                     "health": .health, "settings": .settings, "calendar": .calendar][String(screen)] {
             state.navigate(to: destination)
         }
         if JarvisFactoryScreenshotConfiguration.parse(arguments: arguments) != nil {

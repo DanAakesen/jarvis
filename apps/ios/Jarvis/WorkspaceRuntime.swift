@@ -296,7 +296,7 @@ final class WorkspaceRuntime: ObservableObject {
                 }
                 try Task.checkCancellation()
                 let receipt = WorkspaceMapReceipt(matches: lookup.result.places.count, spoken: spoken, reason: lookup.status,
-                                                  nearbyRadiusMeters: lookup.result.nearbyRadiusMeters)
+                                                  nearbyRadiusMeters: lookup.result.nearbyRadiusMeters, nearest: lookup.result.nearest)
                 try await client.acknowledge(commandId: id, expiresAtMilliseconds: expiresAt, applied: true, mapReceipt: receipt)
             } catch {
                 if !Task.isCancelled, let error = error as? JarvisWorkspaceClientError, error == .staleConnection {
@@ -413,7 +413,7 @@ final class WorkspaceRuntime: ObservableObject {
         try await workspaceClient.register(WorkspaceSnapshot(
             windows: windows,
             contextPanelOpen: false,
-            device: WorkspaceDevice(kind: .phone, label: "iPhone", appleMaps: true, appleMapsNearby: true)
+            device: WorkspaceDevice(kind: .phone, label: "iPhone", appleMaps: true, appleMapsNearby: true, appleMapsNearest: true)
         ))
     }
 

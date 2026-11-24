@@ -109,6 +109,7 @@ export const phraseTable: readonly PhraseRow[] = [
   // Workspace and visuals
   { intent: 'workspace', en: 'show me a chart of my spending', da: 'vis mig et diagram over mit forbrug', tools: ['show_in_chat', 'workspace_command', 'create_html_view'] },
   { intent: 'workspace', en: 'find a coffee shop near me', da: 'find en café i nærheden', tools: ['apple_maps'] },
+  { intent: 'workspace', en: 'just find the nearest one', da: 'find bare den nærmeste', tools: ['apple_maps'] },
   { intent: 'workspace', en: 'when should I leave for the station', da: 'hvornår skal jeg køre til stationen', tools: ['apple_maps'] },
   { intent: 'workspace', en: 'open the workspace', da: 'åbn arbejdsområdet', tools: ['workspace_command', 'workspaces_open'] },
   { intent: 'workspace', en: 'go to the settings page', da: 'gå til indstillinger', tools: ['workspace_command', 'get_settings'] },

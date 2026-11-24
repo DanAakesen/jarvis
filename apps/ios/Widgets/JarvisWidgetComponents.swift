@@ -3,12 +3,11 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-/// Colours: orange is the accent; blue only separates runs from lifts; the four Factory statuses keep their own.
+/// Widgets share the iPhone palette. Factory phases keep their status colours.
 enum JarvisWidgetPalette {
-    static let lift = Color.orange
-    static let run = Color.blue
-    /// The secondary colour of the Notes and Home widgets: a warm grey that sits beside the orange accent.
-    static let stone = Color(red: 0.66, green: 0.64, blue: 0.62)
+    static var lift: Color { JarvisPalette.shared.primaryColor }
+    static var run: Color { JarvisPalette.shared.secondaryColor }
+    static var secondaryAccent: Color { JarvisPalette.shared.secondaryColor }
     static let secondaryText = JarvisWidgetSecondaryTextStyle()
 
     static func status(_ status: JarvisFactoryWidgetData.Status) -> Color {
@@ -52,7 +51,7 @@ struct JarvisWidgetHeader: View {
         HStack(spacing: 4) {
             Image(systemName: symbol)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(JarvisPalette.shared.primaryColor)
                 .widgetAccentable()
                 .accessibilityHidden(true)
             Text(title)
@@ -167,7 +166,7 @@ struct JarvisWidgetBarChart: View {
                     HStack(alignment: .bottom, spacing: 4) {
                         ForEach(values.indices, id: \.self) { index in
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(index == values.count - 1 ? Color.orange : Color.orange.opacity(0.4))
+                                .fill(index == values.count - 1 ? JarvisPalette.shared.primaryColor : JarvisPalette.shared.primaryColor.opacity(0.4))
                                 .frame(height: max(2, proxy.size.height * Double(values[index]) / ceiling))
                                 .widgetAccentable(index == values.count - 1)
                         }
@@ -184,7 +183,7 @@ struct JarvisWidgetBarChart: View {
     }
 }
 
-/// Lifts (orange) at the bottom and runs (blue) on top, per week, with a dashed weekly target and the current week
+/// Lifts (primary) at the bottom and runs (secondary) on top, per week, with a dashed weekly target and the current week
 /// highlighted.
 struct JarvisWidgetStackedChart: View {
     let weeks: [JarvisGymWidgetData.Week]
@@ -271,7 +270,7 @@ struct JarvisWidgetWeekDots: View {
             HStack(spacing: 4) {
                 ForEach(trained.indices, id: \.self) { index in
                     Circle()
-                        .fill(trained[index] ? Color.orange : Color.secondary.opacity(0.3))
+                        .fill(trained[index] ? JarvisPalette.shared.primaryColor : Color.secondary.opacity(0.3))
                         .frame(width: 10, height: 10)
                         .overlay {
                             if index == trained.count - 1 {
@@ -300,7 +299,7 @@ struct JarvisWidgetStepsRing: View {
             Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 8)
             Circle()
                 .trim(from: 0, to: goal > 0 ? min(Double(steps) / Double(goal), 1) : 0)
-                .stroke(Color.orange, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                .stroke(JarvisPalette.shared.primaryColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .widgetAccentable()
             VStack(spacing: 0) {

@@ -2116,6 +2116,7 @@ export function createVaultModule(options: {
         ...noteWriteBodySchema,
         properties: {
           ...noteWriteBodySchema.properties,
+          destination: noteWriteBodySchema.properties.path,
           sha: { type: 'string', pattern: '^[\\da-fA-F]{40}$' },
         },
         required: ['path', 'content', 'sha'],
@@ -2605,7 +2606,7 @@ export function createVaultModule(options: {
       });
 
       app.put<{
-        Body: { path: string; content: string; sha: string; reason?: string };
+        Body: { path: string; content: string; sha: string; destination?: string; reason?: string };
       }>('/notes/note', {
         schema: {
           body: noteEditBodySchema,
@@ -2614,7 +2615,7 @@ export function createVaultModule(options: {
               path: { type: 'string' }, commit: { type: 'string', pattern: '^[\\da-f]{40}$' },
               url: { type: 'string', format: 'uri' },
             }, required: ['path', 'commit', 'url'], additionalProperties: false },
-            400: noteWriteErrorSchema, 403: apiError, 404: apiError, 409: noteConflictSchema, 503: noteWriteErrorSchema,
+            400: noteWriteErrorSchema, 403: apiError, 404: apiError, 409: noteConflictSchema, 422: noteWriteErrorSchema, 503: noteWriteErrorSchema,
           },
         },
       }, async (request, reply) => {
@@ -2644,13 +2645,23 @@ export function createVaultModule(options: {
               content: current.content,
             });
           }
+          const destination = request.body.destination === undefined ? note.path : validateWritePath(request.body.destination);
+          const moving = destination !== note.path;
+          if (moving && (!isVaultNotePath(destination) || destination.split('/').at(-1) !== note.path.split('/').at(-1))) {
+            return reply.code(400).send({ error: 'Select a folder for the existing Markdown filename' });
+          }
           let commit: string;
           try {
-            commit = await options.client.write(
+            commit = moving
+              ? await options.client.move(note.path, destination, note.content, current.sha, 'jarvis: move note', signal)
+              : await options.client.write(
               note.path, note.content, `jarvis: ${note.reason}`, current.sha, signal,
             );
           } catch (error) {
             if (!(error instanceof VaultWriteConflictError)) throw error;
+            if (moving && await options.client.read(destination, signal)) {
+              return reply.code(422).send({ error: 'A note with this filename already exists in that folder' });
+            }
             const latest = await options.client.read(note.path, signal);
             logWrite('error');
             return reply.code(409).send({
@@ -2659,10 +2670,14 @@ export function createVaultModule(options: {
               content: latest?.content ?? null,
             });
           }
-          await indexWrittenNote(note.path, note.content, signal);
-          indexAfterNoteWrite();
+          try {
+            if (moving) await options.indexStore.deleteFiles([note.path], signal);
+            await indexWrittenNote(destination, note.content, signal);
+          } finally {
+            indexAfterNoteWrite();
+          }
           logWrite('ok');
-          return { path: note.path, commit, url: commitUrl(commit) };
+          return { path: destination, commit, url: commitUrl(commit) };
         } catch (error) {
           logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
           if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });

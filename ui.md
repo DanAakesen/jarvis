@@ -10,17 +10,18 @@ Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
-| **Home** | The brief and next action, today's activity card, tasks and the iPhone Gym sheet. The activity stays usable when the brief is unavailable. The + menu beside Upcoming opens New task, New note, Log workout and Log lift. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
+| **Home** | Brief, Up Next, activity against the training target, and a Schedule with tasks and appointments. The calendar and quick-add actions sit together. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
+| **Calendar** | Primary Google Calendar with day and week timelines, month browsing, search and appointment editing. | `JarvisCalendarPage`, `JarvisCalendarTimeline` |
 | **Chat** | The one PI conversation: resumable replies, a folding composer with plus menu and dictation, tool activity, generated blocks (charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. **Test a reply** in the plus menu uses a separate conversation. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
-| **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |
-| **Health** | Daily dashboard, body chart, workouts, iPhone Gym lifts, goals and HealthKit sync. Nutrition → Today shows kcal left, resting target, active kcal and deficit. **Log meal** takes kcal and optional protein. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
+| **Notes** | One area with a Notes, Tasks and Graph switch: folders and pins, direct Markdown editing with linked notes and expandable tables, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteEditorSheet`, `JarvisNotesGraphView` |
+| **Health** | Training, Steps, Sleep and Nutrition cards with independent periods, saved max lifts and body measurements. Log a meal or photograph it for the Chat draft. | `JarvisHealthArea`, `JarvisHealthCards`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
-| **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
+| **Usage** | Estimated spend for the selected period. Tap a chart bar for its UTC dates and cost. Factory turns count coding-agent work. | `JarvisUsageArea` |
 | **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
 | **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
-| **Settings** | The **Proactive suggestions** switch, Training and Nutrition target editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
+| **Settings** | Appearance with shared iPhone and Watch accents and iPhone surface colors, the **Proactive suggestions** switch, Training and Nutrition target editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
 | **Banking** | Listed in the sidebar but not navigable. Out of scope until Dan sets its approval rules ([PLAN decision F](PLAN.md#open-decisions-af)). | `JarvisDestination.banking` |
 
 Around the destinations: the opening screen (`JarvisOpeningView`, startup only), the lock and sign-in gate (`JarvisGateRootView`), the activity sheet, approval notifications and the shared task row (`JarvisTaskListRow`, used in Notes and Home).

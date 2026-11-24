@@ -15,6 +15,15 @@ describe('the confirmation of a failed or refused tool call', () => {
     expect(confirmToolCall('weather', 'refused', {})).toBe('Not done. It was refused.');
   });
 
+  it('reports the Maps result and where the card actually appeared', () => {
+    const result = { matches: 1, presentation: 'Map attached to the reply.' };
+    expect(confirmToolCall('apple_maps', 'ok', result)).toBe('Apple Maps found one match. See the attached map.');
+    expect(confirmToolCall('apple_maps', 'ok', { ...result, presentation: 'The map could not be shown.' }))
+      .toBe('Apple Maps found one match. The map could not be shown.');
+    expect(confirmToolCall('apple_maps', 'ok', { matches: 0, reason: 'no_matches', nearbyRadiusMeters: 10_000 }))
+      .toBe('Apple Maps found no matches within 10 km.');
+  });
+
   it('is unchanged for a successful call', () => {
     expect(confirmToolCall('weather', 'ok', {})).toBe('Done: weather succeeded.');
   });

@@ -38,6 +38,7 @@ struct JarvisComposerTextInput: UIViewRepresentable {
 
         let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: view.traitCollection)
         if view.font != font { view.font = font }
+        view.tintColor = UIColor(JarvisDesignTokens.primaryAccent)
         view.updatePresentation(compact: isCompact)
         if view.placeholderLabel.font != font { view.placeholderLabel.font = font }
         if view.placeholderLabel.text != placeholder { view.placeholderLabel.text = placeholder }
@@ -181,7 +182,6 @@ final class JarvisComposerTextView: UITextView {
         super.init(frame: .zero, textContainer: nil)
         backgroundColor = .clear
         textColor = .label
-        tintColor = UIColor(JarvisDesignTokens.primaryAccent)
         isScrollEnabled = false
         showsVerticalScrollIndicator = false
         textContainerInset = .zero

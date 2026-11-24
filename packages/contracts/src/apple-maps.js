@@ -8,6 +8,7 @@ const instant = { type: 'string', format: 'date-time', maxLength: 40 };
 const bufferMinutes = { type: 'integer', minimum: 0, maximum: 1_440 };
 const searchSchema = object({
   query: string(300), origin: string(300), searchOnly: { type: 'boolean' }, mode, arriveBy: instant, bufferMinutes,
+  nearest: { type: 'boolean', description: 'Closest named business among MapKit matches, measured from the origin without a fixed radius.' },
   nearby: { type: 'string', enum: ['name', 'category'], description: 'For a local business search, use name with the business name alone, or category with the kind of place.' },
 }, ['query']);
 // Only the original lookup and its handle may live in conversation history.
@@ -34,6 +35,7 @@ function isSearch(value) {
   return hasKeys(value, searchSchema) && text(value.query, 300) &&
     (value.origin === undefined || text(value.origin, 300)) && (value.searchOnly === undefined || typeof value.searchOnly === 'boolean') &&
     (value.nearby === undefined || (['name', 'category'].includes(value.nearby) && value.searchOnly !== true)) &&
+    (value.nearest === undefined || (typeof value.nearest === 'boolean' && (!value.nearest || (value.searchOnly !== true && value.nearby === undefined)))) &&
     (value.mode === undefined || mode.enum.includes(value.mode)) && validTiming(value);
 }
 

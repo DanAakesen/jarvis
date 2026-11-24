@@ -1,3 +1,4 @@
+import AVFoundation
 import Combine
 import Foundation
 import JarvisCore
@@ -14,6 +15,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private(set) var signInRequired = false
     private(set) var isAudioReady = false
     private(set) var isMuted = false
+    private(set) var isOnSpeaker = false
     private(set) var isCaptionsEnabled = false
     private(set) var isMinimized = false
     private(set) var returnToChatRequested = false
@@ -44,6 +46,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
     private let screenShareBridge = VoiceScreenShareBridge()
+    @ObservationIgnored private var audioRouteObserver: AnyCancellable?
     private var captureTask: Task<Void, Never>?
     private var captureReadinessTask: Task<Void, Never>?
     private var screenShareMonitorTask: Task<Void, Never>?
@@ -58,6 +61,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var connectionPresentationMachine = VoiceConnectionPresentationStateMachine()
     private var isEnding = false
     private var screenshotState: VoiceSessionState?
+    private var sessionReportsSpeech = false
+    private var relayThinking = false
 
     init(screenshotConnectionLost: Bool = false) {
         self.screenshotConnectionLost = screenshotConnectionLost
@@ -248,6 +253,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             guard sessionGeneration == generation else { return }
             let baseURL = try JarvisComposition.apiBaseURL()
             self.httpClient = httpClient
+            sessionReportsSpeech = false
+            relayThinking = false
             self.audio = VoiceAudioEngine()
             let audio = self.audio
             let client = VoiceSessionClient(
@@ -267,7 +274,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     }
                 }
             )
-            audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
+            audio.setPlaybackFinishedHandler(activityChanged: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.sessionGeneration == generation else { return }
+                    self.updateSpeechPresentation()
+                }
+            }) { [weak self] responseID, audible in
                 Task { @MainActor in
                     guard let self, self.sessionGeneration == generation else { return }
                     try? await client.playbackCompleted(responseID: responseID, audible: audible)
@@ -337,6 +349,22 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         if cameraPermissionDenied && VoiceCameraCapture.isAuthorized {
             cameraPermissionDenied = false
         }
+    }
+
+    func toggleSpeaker() {
+        guard isAudioReady, canUseControls else { return }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.overrideOutputAudioPort(Self.usesSpeaker ? .none : .speaker)
+            if errorMessage == JarvisVoiceLocalization.string(.outputUnavailable) { errorMessage = nil }
+        } catch {
+            errorMessage = JarvisVoiceLocalization.string(.outputUnavailable)
+        }
+        isOnSpeaker = Self.usesSpeaker
+    }
+
+    private static var usesSpeaker: Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInSpeaker }
     }
 
     func toggleMute() async {
@@ -642,8 +670,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         case .responseCreated(let responseID, _):
             captions.receive(message)
             activeResponseID = responseID
-        case .activity:
-            break
+        case .activity(let activity):
+            relayThinking = activity == .thinking
+            updateSpeechPresentation()
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
             updateLiveStream()
@@ -668,6 +697,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             mapSpeech.stop()
             do {
                 try audio.enqueuePlayback(base64, responseID: responseID)
+                updateSpeechPresentation()
                 if let pcm16 = try? VoiceAudioCodec.decodePCM16(base64) {
                     liveActivity.update(state: voiceState, isMuted: isMuted, pcm16: pcm16)
                 }
@@ -702,6 +732,19 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         guard screenshotState == nil, captureTask == nil else { return }
         do {
             let stream = try audio.startCapture()
+            isOnSpeaker = Self.usesSpeaker
+            let notifications = NotificationCenter.default
+            audioRouteObserver = notifications.publisher(for: AVAudioSession.routeChangeNotification)
+                .merge(with: notifications.publisher(for: .AVAudioEngineConfigurationChange))
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] notification in
+                    guard let self, self.captureTask != nil else { return }
+                    self.isOnSpeaker = Self.usesSpeaker
+                    if let engine = notification.object as? AVAudioEngine {
+                        do { try self.audio.resumeAfterConfigurationChange(engine) }
+                        catch { self.failAudioCapture() }
+                    }
+                }
             isAudioReady = false
             let generation = sessionGeneration
             captureReadinessTask?.cancel()
@@ -786,11 +829,26 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         captureReadinessTask = nil
         captureTask?.cancel()
         captureTask = nil
+        audioRouteObserver = nil
         audio.stop()
+        isOnSpeaker = false
         isAudioReady = false
     }
 
+    private func updateSpeechPresentation() {
+        guard sessionReportsSpeech, !isEnding else { return }
+        let next: VoiceSessionState = audio.isPlayingSpeech ? .speaking : (relayThinking ? .thinking : .listening)
+        guard voiceState != next else { return }
+        voiceState = next
+        liveActivity.update(state: next, isMuted: isMuted)
+    }
+
     private func receiveSessionState(_ state: VoiceSessionState) {
+        sessionReportsSpeech = state == .speaking
+        if sessionReportsSpeech {
+            updateSpeechPresentation()
+            return
+        }
         switch state {
         case .thinking, .listening:
             connectionPresentationState = connectionPresentationMachine.apply(.connected)

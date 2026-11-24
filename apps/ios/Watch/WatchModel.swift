@@ -424,7 +424,11 @@ final class WatchModel: ObservableObject {
         } catch {
             guard epoch == voiceGeneration, !endingVoice else { return }
             setVoiceFailure(error)
-            await endVoice(captureEndReason: "startup_failed")
+            guard let pendingID = voiceID else { return }
+            stopLocalVoice(state: "Disconnected", captureEndReason: "startup_failed")
+            // Release a call the phone may have started before its acknowledgement was lost.
+            _ = try? await connection.request(.init(action: .endVoice, itemID: pendingID.uuidString),
+                                              waitForReadiness: false, timeout: .seconds(2))
         }
     }
     func startDictation() async {
@@ -484,11 +488,6 @@ final class WatchModel: ObservableObject {
         voiceLogger.info("Dictation captured: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak) \(self.audio.captureSummary, privacy: .public)")
         if !captureLevel.hasAudio { failDictation(WatchMicrophoneFailure.noAudio); return }
         if captureLevel.isSilent { failDictation(WatchMicrophoneFailure.silent); return }
-        let clipSeconds = WatchDictationDeadline.clipSeconds(bytes: dictationAudio.count)
-        transcriptionDeadline.start(duration: WatchDictationDeadline.duration(clipSeconds: clipSeconds)) { [weak self] in
-            guard let self, self.dictationGeneration == epoch, self.dictationState == .finishing else { return }
-            self.failDictation(WatchDictationError.timedOut)
-        }
         do {
             let recording = dictationAudio
             dictationAudio.removeAll()
@@ -506,7 +505,6 @@ final class WatchModel: ObservableObject {
     }
     private func transcribeDictation(_ recording: Data, epoch: UUID) async throws -> String {
         guard !recording.isEmpty else { throw WatchFailure.failed }
-        let clipSeconds = WatchDictationDeadline.clipSeconds(bytes: recording.count)
         let direct: (@MainActor @Sendable () async throws -> String)?
         do {
             if connection.credentialStorageFailed { throw WatchFailure.credentialStorage }
@@ -514,14 +512,18 @@ final class WatchModel: ObservableObject {
                 direct = { try await WatchDirectDictation.transcribe(recording) }
             } else { direct = nil }
         } catch { direct = { throw error } }
-        // A slow direct request leaves the phone most of the overall deadline; without a reachable phone it keeps the full window.
         return try await WatchDictationRouting.transcribe(direct: direct, phone: {
             try await self.transcribeViaPhone(recording, epoch: epoch)
-        }, directWindow: WatchDictationDeadline.directWindow(clipSeconds: clipSeconds, phoneFallback: connection.reachable))
+        })
     }
     private func transcribeViaPhone(_ recording: Data, epoch: UUID) async throws -> String {
         try Task.checkCancellation()
         guard dictationGeneration == epoch else { throw CancellationError() }
+        // Bound the Watch-to-phone transfer separately. The finish request has its own reply timeout.
+        transcriptionDeadline.start(duration: WatchLimits.dictationDuration) { [weak self] in
+            guard let self, self.dictationGeneration == epoch, self.dictationState == .finishing else { return }
+            self.failDictation(WatchDictationError.timedOut)
+        }
         let request = WatchRequest(action: .startDictation)
         dictationID = request.id
         let reply = try await connection.request(request)
@@ -534,6 +536,9 @@ final class WatchModel: ObservableObject {
             let chunk = recording.subdata(in: offset..<min(recording.count, offset + WatchLimits.payloadBytes))
             _ = try await connection.request(.init(action: .dictationAudio, itemID: request.id.uuidString, data: chunk))
         }
+        try Task.checkCancellation()
+        guard dictationGeneration == epoch else { throw CancellationError() }
+        transcriptionDeadline.cancel()
         let result = try await connection.request(.init(action: .finishDictation, itemID: request.id.uuidString))
         guard let data = result.data else { throw WatchFailure.failed }
         return try JSONDecoder().decode(String.self, from: data)
@@ -631,9 +636,11 @@ final class WatchModel: ObservableObject {
         forVoice: Bool,
         onReady: @MainActor @Sendable () -> Void = {}, isCurrent: @MainActor @Sendable () -> Bool
     ) async throws -> AsyncStream<Data> {
-        try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: {
+        try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: { attempt in
+            // A route can reject the processed graph at engine.start(), after accepting the I/O change.
             try audio.startCapture(tolerateDrops: forVoice, mode: forVoice ? .voiceChat : .default,
-                                   alternateMode: forVoice ? .default : .voiceChat, useVoiceProcessing: forVoice)
+                                   alternateMode: forVoice ? .default : .voiceChat,
+                                   useVoiceProcessing: forVoice && attempt == 1)
         }, onFailure: { attempt, error in
             audio.stop()
             voiceLogger.error("Audio capture start failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
@@ -733,8 +740,8 @@ final class WatchModel: ObservableObject {
                 }
                 self.repairingAudio = true
                 self.voiceLogger.info("Audio route recovery: reason=\(reason.map { String($0) } ?? "engine_configuration", privacy: .public)")
-                try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: {
-                    try self.audio.recoverRoute()
+                try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: { attempt in
+                    try self.audio.recoverRoute(attempt: attempt)
                 }, onFailure: { attempt, error in
                     self.voiceLogger.error("Audio route restart failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
                 })
@@ -832,7 +839,7 @@ final class WatchModel: ObservableObject {
                     audioFailure = .init(message: "The voice connection to the iPhone ended.", action: .voice)
                 }
             }
-            else if event.text == "Playback finished" { audio.finishPlayback(responseID: event.responseID) }
+            else if event.marksPlaybackEnd { audio.finishPlayback(responseID: event.responseID) }
             else { voiceState = event.text ?? "" }
         case .voiceAudio:
             guard !endingVoice, !repairingAudio else { return }

@@ -6,10 +6,17 @@ import { watchCredentialPath, watchTranscriptionPath, type WatchCredentials } fr
 
 const MAX_AUDIO_BYTES = 2_880_000;
 const MAX_BASE64_LENGTH = Math.ceil(MAX_AUDIO_BYTES / 3) * 4;
+const UPLOAD_TIMEOUT_MS = 30_000;
 const TRANSCRIPTION_TIMEOUT_MS = 20_000;
 const MAX_ACTIVE_REQUESTS = 2;
 
-const transcriptionRequests = new WeakMap<FastifyRequest, { controller: AbortController; reason?: string; lastStage: string }>();
+interface TranscriptionRequest {
+  controller: AbortController;
+  lastStage: string;
+  reason?: string;
+  beginRecognition(): void;
+}
+const transcriptionRequests = new WeakMap<FastifyRequest, TranscriptionRequest>();
 
 interface StageFields { status?: string; reason?: string; lastStage?: string; audioBytes?: number; audioMs?: number; errorCode?: number }
 
@@ -24,10 +31,8 @@ export function installWatchTranscriptionDeadline(app: FastifyInstance<Server, I
     if (request.method !== 'POST' || ![watchTranscriptionPath, '/watch/transcribe'].includes(request.routeOptions.url ?? '')) return;
     logStage(request, 'request_accepted');
     const controller = new AbortController();
-    const state: { controller: AbortController; reason?: string; lastStage: string } = { controller, lastStage: 'request_accepted' };
-    transcriptionRequests.set(request, state);
     let timedOut = false;
-    const timer = setTimeout(() => {
+    const expire = () => {
       timedOut = true;
       // lastStage shows whether the time went to upload, authentication or recognition.
       logStage(request, 'deadline_exceeded', { lastStage: state.lastStage });
@@ -35,7 +40,16 @@ export function installWatchTranscriptionDeadline(app: FastifyInstance<Server, I
         reply.header('Cache-Control', 'no-store').code(504).send({ error: 'Transcription timed out' });
       }
       controller.abort();
-    }, TRANSCRIPTION_TIMEOUT_MS);
+    };
+    let timer = setTimeout(expire, UPLOAD_TIMEOUT_MS);
+    const state: TranscriptionRequest = {
+      controller, lastStage: 'request_accepted',
+      beginRecognition() {
+        clearTimeout(timer);
+        timer = setTimeout(expire, TRANSCRIPTION_TIMEOUT_MS);
+      },
+    };
+    transcriptionRequests.set(request, state);
     const close = () => {
       clearTimeout(timer);
       if (!reply.raw.writableFinished) {
@@ -116,11 +130,13 @@ export function registerWatchTranscriptionRoute(app: FastifyInstance<Server, Inc
       return reply.code(400).send({ error: 'Invalid audio' });
     }
     if (!transcribe) return reply.code(503).send({ error: 'Transcription unavailable' });
-    // PCM16 at 24 kHz mono is 48 bytes per millisecond; the request clock also covers the upload.
+    // PCM16 at 24 kHz mono is 48 bytes per millisecond.
     logStage(request, 'audio_received', { audioBytes: pcm.length, audioMs: Math.round(pcm.length / 48) });
 
     const state = transcriptionRequests.get(request);
     if (!state) return reply.code(503).send({ error: 'Transcription unavailable' });
+    if (reply.sent || state.controller.signal.aborted) return;
+    state.beginRecognition();
     const { controller } = state;
     const abort = () => controller.abort();
     const onResponseClose = () => { if (!reply.raw.writableFinished) abort(); };

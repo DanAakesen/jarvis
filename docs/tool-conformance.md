@@ -47,8 +47,8 @@ and when this file no longer matches the registry.
 | 5 | `github_write` | 590 | 590 | 946 |
 | 6 | `health_show` | 498 | 498 | 1065 |
 | 7 | `health_saved_food` | 489 | 489 | 686 |
-| 8 | `health_nutrition_history` | 447 | 447 | 660 |
-| 9 | `apple_maps` | 398 | 398 | 629 |
+| 8 | `apple_maps` | 468 | 468 | 763 |
+| 9 | `health_nutrition_history` | 447 | 447 | 660 |
 | 10 | `message_dan` | 397 | 397 | 808 |
 | 11 | `health_query` | 391 | 391 | 1182 |
 | 12 | `github_read` | 337 | 337 | 657 |
@@ -65,7 +65,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 
 | Tool | Group | Visible to | Effect | Static | Discoverable | Callable | Schema tokens | Notes |
 | --- | --- | --- | --- | --- | --- | --- | ---: | --- |
-| `apple_maps` | core | chat and voice | read | ok | "find a coffee shop near me" (en, #2) | ok | 398 |  |
+| `apple_maps` | core | chat and voice | read | ok | "find a coffee shop near me" (en, #2) | ok | 468 |  |
 | `archive_project` | factory | chat and voice | action | ok | "Archive the active Software Factory project requested by the owner wi…" (derived, #1) | ok | 41 |  |
 | `attachment_list` | core | chat and voice | unclassified | ok | "List files Dan sent in conversation history" (derived, #1) | ok | 16 |  |
 | `attachment_read` | core | chat and voice | unclassified | ok | "Read a bounded text page, search snippet, or cached image description…" (derived, #1) | ok (3 calls) | 75 |  |

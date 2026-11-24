@@ -62,6 +62,7 @@ async function fixture(seed?: (vault: ReturnType<typeof createMemoryVault>) => v
 }
 
 describe('vault_search straight after vault_write', () => {
+
   it('finds the note Jarvis just saved while the re-index it started is still running', async () => {
     const { replaceFile, module, call, releaseReindex } = await fixture();
 
@@ -94,6 +95,35 @@ describe('vault_search straight after vault_write', () => {
       expect(page.json().notes).toEqual(expect.arrayContaining([expect.objectContaining({ path: pergola.path })]));
     } finally { await app.close(); }
   });
+  it('moves an edited note without replacing a destination or accepting a stale source', async () => {
+    const { ownerApp, vault, releaseReindex, module } = await fixture();
+    const app = ownerApp();
+    const path = 'Personal/Garden plan.md';
+    const destination = 'General/Garden plan.md';
+    const content = '# Garden plan\n\nRepot the seedlings.';
+    try {
+      const sha = (await vault.read(path, signal))!.sha;
+      const move = (version: string) => app.inject({
+        method: 'PUT', url: '/notes/note', headers, payload: { path, destination, content, sha: version },
+      });
+      expect((await move('0'.repeat(40))).statusCode).toBe(409);
+      expect(vault.files.get(path)).toBe(gardenPlan);
+      const result = await move(sha);
+      expect(result.statusCode).toBe(200);
+      expect(result.json().path).toBe(destination);
+      expect(vault.files.has(path)).toBe(false);
+      expect(vault.files.get(destination)).toBe(content);
+      vault.seed(path, gardenPlan);
+      expect((await move((await vault.read(path, signal))!.sha)).statusCode).toBe(422);
+      expect(vault.files.get(path)).toBe(gardenPlan);
+      expect(vault.files.get(destination)).toBe(content);
+    } finally {
+      releaseReindex();
+      await module.synchronize(signal);
+      await app.close();
+    }
+  });
+
 });
 
 describe('browsing committed vault notes', () => {

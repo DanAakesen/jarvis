@@ -6,6 +6,7 @@ import { readAttachedOwnerMessage } from '../core/owner-message.js';
 import type { BackendModule } from '../modules.js';
 import { GoogleApiError, type GoogleApiClient } from './api-client.js';
 import { gmailMessageContent } from './message-content.js';
+import { registerCalendarEdits } from './calendar-edit-routes.js';
 import { PendingGoogleActions, type GoogleActionScope } from './pending-actions.js';
 import { classifyApprovalReply } from '../core/approval.js';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
@@ -423,7 +424,7 @@ export function calendarViewPath(
     maxResults: String(maxResults),
     singleEvents: 'true',
     orderBy: 'startTime',
-    fields: 'items(id,summary,start,end,location,transparency,status,attendees(responseStatus,self)),nextPageToken',
+    fields: 'items(id,etag,summary,start,end,location,transparency,status,attendees(responseStatus,self)),nextPageToken',
   });
   if (searchQuery) params.set('q', searchQuery);
   if (pageToken) params.set('pageToken', pageToken);
@@ -1451,6 +1452,7 @@ export function createGoogleModule(
       pendingActions.onConfirmationPending = app.notifyApproval;
     },
     registerRoutes: async (app) => {
+      registerCalendarEdits(app, google);
       // The phone reads Dan's primary calendar here (the same read the agenda tool uses). Dan-only by default.
       app.get<{ Querystring: { from?: string; to?: string } }>('/calendar/events', {
         schema: {
@@ -1468,11 +1470,11 @@ export function createGoogleModule(
         try {
           const from = request.query.from ? dateTime(request.query.from, 'from') : dayStart;
           const to = request.query.to ? dateTime(request.query.to, 'to') : new Date(from.getTime() + 24 * 60 * 60_000);
-          validateWindow(from, to, 31);
-          const payload = await google.request('calendar', calendarViewPath(from, to, 100), { signal: controller.signal });
-          const events = calendarEvents(payload, 100).map((event) => eventSummary(event, timeZone));
+          validateWindow(from, to, 42 + 1);
+          const page = await pagedCalendarEvents(google, from, to, 200, controller.signal);
+          const events = page.events.map(event => ({ ...eventSummary(event, timeZone), etag: event.etag }));
           reply.header('Cache-Control', 'private, no-store');
-          return { timeZone, events, truncated: calendarTruncated(payload, events.length) };
+          return { timeZone, events, truncated: page.truncated };
         } catch (error) {
           if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
           if (error instanceof GoogleApiError) {

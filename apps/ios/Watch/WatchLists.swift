@@ -192,7 +192,7 @@ struct WatchFactoryView: View {
                     Label {
                         Text(project.name).font(.system(.headline, design: .rounded))
                     } icon: {
-                        Image(systemName: "folder").foregroundStyle(WatchStyle.amber)
+                        Image(systemName: "folder").foregroundStyle(WatchStyle.accent)
                     }
                 }
             }
@@ -251,7 +251,7 @@ struct WatchFactoryTasks: View {
                         Text(state)
                         Spacer()
                         Text((states[state]?.count ?? 0).formatted())
-                            .foregroundStyle(WatchStyle.amber).monospacedDigit()
+                            .foregroundStyle(WatchStyle.accent).monospacedDigit()
                     }
                 }
             }

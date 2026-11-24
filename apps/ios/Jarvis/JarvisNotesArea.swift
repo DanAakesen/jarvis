@@ -150,24 +150,12 @@ struct JarvisNotesArea: View {
             sheetContent(presented)
         }
         .navigationDestination(isPresented: $readerPresented) {
-            if let current = reader {
-                JarvisNoteReaderView(
-                    client: client, copy: copy, language: language, note: current, graph: graph,
-                    isPinned: pinnedPaths.contains(current.path),
-                    onPin: { pinned in Task { await setPinned(current.path, pinned: pinned) } },
-                    onDeleted: { path in
-                        readerPresented = false
-                        Task { await noteDeleted(path) }
-                    },
-                    onNoteChanged: { refreshed in
-                        applyReadTitle(refreshed)
-                        reader = refreshed
-                        refreshVersion += 1
-                    },
-                    onOpenPath: { path in Task { await openNote(path: path) } },
-                    onRetryGraph: { refreshVersion += 1 },
-                    onClose: { readerPresented = false }
-                )
+            if let current = reader, let client {
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .edit(current), graph: graph) { refreshed in
+                    applyReadTitle(refreshed)
+                    reader = refreshed
+                    refreshVersion += 1
+                }
                 .id(current.path)
             }
         }
@@ -196,12 +184,10 @@ struct JarvisNotesArea: View {
         if let client {
             switch presented {
             case let .newNote(folder, staged):
-                JarvisNoteEditorSheet(client: client, copy: copy, mode: .create(folder: folder, staged: staged)) { note in
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .create(folder: folder, staged: staged)) { _ in
                     sheet = nil
                     successConfirmation = JarvisSuccessConfirmation(message: copy.saved)
                     refreshVersion += 1
-                    reader = note
-                    readerPresented = true
                 }
             case .newTask:
                 JarvisTaskEditorSheet(client: client, copy: copy, mode: .create(scope: .work)) {
@@ -303,6 +289,7 @@ struct JarvisNotesArea: View {
             case .noteConflict: return copy.conflict
             case .writeOutcomeUnknown: return copy.unknownWrite
             case .taskConflict: return copy.taskChanged
+            case .destinationExists: return copy[.noteExists]
             case .folderAlreadyExists: return copy.folderAlreadyExists
             case .noteNotFound: return copy.noteMissing
             case .invalidRequest, .invalidResponse: return copy.unavailable

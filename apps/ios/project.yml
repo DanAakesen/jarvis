@@ -136,6 +136,7 @@ targets:
       - path: VoiceActivity
       - path: Shared
       - path: Jarvis/JarvisDesignSystem.swift
+      - path: Jarvis/JarvisSurfacePalette.swift
       - path: Jarvis/JarvisControls.swift
       - path: Jarvis/JarvisLoadingView.swift
     dependencies:

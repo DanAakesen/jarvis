@@ -6,7 +6,7 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 | Date and source | Rule |
 | --- | --- |
-| 2026-11-23 — Apple Maps | Use on-device MapKit for Chat and Voice. Keep map data temporarily on iPhone, save the owner’s lookup and hand navigation to Apple Maps. Nearby requires a checked radius; don't substitute an unrestricted lookup. A supplied origin works with location permission denied. [Apple’s Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/). |
+| 2026-11-23 — Apple Maps | Use on-device MapKit for Chat and Voice. Keep map data temporarily on iPhone, save the owner’s lookup and hand navigation to Apple Maps. Nearby uses a 10 km radius. An explicit request for the nearest named business widens the search and ranks the returned matches on device. A supplied origin works with location permission denied. [Apple’s Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/). |
 | 2026-11-22 — Dan, [#2009](https://github.com/DanAakesen/jarvis/issues/2009) | Jarvis may administer Foundry instructions, versions, activation, models and deployments at Dan’s request. Preserve the protected backend tool contract. |
 | 2026-11-21 — Dan, recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012) | Do not add PI approvals, confirmations or guardrails except for DELETE actions. Prefer model judgement; use deterministic logic for exact results. Keep banking outside that ruling until Dan decides its policy. |
 | 2026-11-16 — Dan's PI migration direction, [cutover checklist](pi/cutover.md); reaffirmed in the 2026-11-22 owner handoff | Build and test the replacement, then delete the old path in an explicit final phase. No fallback, dual path or shim. A deliberate short break is acceptable if called out. |
@@ -20,6 +20,15 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 ## Decisions of the last 14 days
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
+
+### 24 November 2026 — iPhone dashboard and editor
+
+Home and Health use translucent cards beneath the shared scrolling chrome. Calendar sits immediately above Chat and edits the same primary Google Calendar used by Home, Chat and Voice. Notes open directly in the Markdown editor. Insert table creates an editable two-by-two grid in the note with controls to add a row or column.
+
+### 24 November 2026 — Personal native palette
+
+Dan chose orange and blue-cyan as independently editable defaults. Use the saved appearance preferences across
+iPhone and Watch, including the neural artwork. Use the Watch Up Next card as the reference for the dashboard surfaces.
 
 ### 23 November 2026 — Use the local day boundary for capped work
 

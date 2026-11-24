@@ -10,7 +10,7 @@ Evidence labels: **Token** = a value read from code, with its file. **Decision**
 
 - **Dark, calm and quiet.** A near-black navy page, a sparse cyan network, and one bright thing: the orb.
 - **The orb is the identity.** Dark glass sphere, cyan edge, amber heart. Nothing else competes with it.
-- **Glass is neutral.** Controls are dark smoked glass. Colour is small: amber text, cyan states, a few semantic hues.
+- **Glass defaults to a neutral tint.** On iPhone, Appearance sets the page, cards, controls, selection and input colors. Individual cards inherit the shared card color until overridden. Keep the orb visible through the material and use the solid fallback with Reduce Transparency.
 - **Show real state.** Every state is honest: working, empty, failed, offline. No invented numbers.
 - **Motion has a job.** It shows what Jarvis is doing, and it stops when nobody is watching.
 - **One source per look.** Change a shared token or component, never a screen.
@@ -35,7 +35,7 @@ Dark is the primary look. Every role has a light twin. Source for web values: `a
 | Text on orange | `#1d1200` | `#ffffff` | `--primary-action-text` |
 | Focus ring | `#ffb45c` | `#a65300` | `--focus` |
 
-Orb palette (**Token**, `apps/web/src/jarvis-orb-appearance.ts`, mirrored by `JarvisOrbAppearance` in JarvisCore):
+Default orb palette (**Token**, `apps/web/src/jarvis-orb-appearance.ts`, mirrored by `JarvisOrbAppearance` in JarvisCore):
 cool `#52dcfa`, deep `#247af2`, warm `#ffa62e`, hot `#ffbd4a`. The core is amber and never white-hot.
 
 Semantic colours (**Token**, `styles.css`):
@@ -50,8 +50,9 @@ Semantic colours (**Token**, `styles.css`):
 | Error | `--error` `#ff9690` | `#951f25` |
 | Presence: present / away / on the move | `#3ddc84` / `#ffd23f` / `#3b8bff` | `#2db35d` / `#f2c200` / `#2f80ed` |
 
-- **Decision:** cyan = listening, edge of the glass. Amber = Jarvis working, speaking, attention. Red = errors only.
-  Orange is a small accent: text, strokes, soft tints. Presence keeps green, yellow and blue.
+- **Native appearance.** Settings → General → Appearance sets the primary (default `#FFB45C`) and secondary
+  (default `#52DCFA`) on iPhone and Watch. Primary marks actions and the orb core. Secondary colours the network
+  and orb rim. Adapt both to their background. Use neutral ink for labels and independent colours for alerts.
 - **Decision:** light mode keeps the same states and layout. The page is warm cream, the network lines are deeper teal.
 - The web supports a per-user `--theme-accent` override; defaults above apply otherwise.
 

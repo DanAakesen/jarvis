@@ -20,13 +20,18 @@ public struct VoicePlaybackLedger: Sendable {
     private var responses: [String: Progress] = [:]
     private var lastScheduled = 0
     private var playedThrough = 0
+    private var audibleBuffers = Set<Int>()
+
+    /// The next buffer at the speaker, independently of whether the relay has finished the response.
+    public var isPlayingSpeech: Bool { audibleBuffers.contains(playedThrough + 1) }
 
     public init() {}
 
     /// One more buffer of this response is queued on the player.
     @discardableResult
-    public mutating func bufferScheduled(responseID: String) -> Int {
+    public mutating func bufferScheduled(responseID: String, containsSpeech: Bool = true) -> Int {
         lastScheduled += 1
+        if containsSpeech { audibleBuffers.insert(lastScheduled) }
         responses[responseID, default: Progress()].lastBuffer = lastScheduled
         return lastScheduled
     }
@@ -35,6 +40,7 @@ public struct VoicePlaybackLedger: Sendable {
     public mutating func bufferPlayed(_ sequence: Int) -> [Receipt] {
         // Buffers play in schedule order on this player. A later callback also confirms earlier buffers.
         guard sequence > playedThrough, sequence <= lastScheduled else { return [] }
+        for index in (playedThrough + 1)...sequence { audibleBuffers.remove(index) }
         playedThrough = sequence
         let finished = responses.filter { $0.value.finished && $0.value.lastBuffer <= playedThrough }
         return finished.sorted { $0.value.lastBuffer < $1.value.lastBuffer }.map { id, _ in
@@ -61,6 +67,7 @@ public struct VoicePlaybackLedger: Sendable {
             .map { Receipt(responseID: $0.key, audible: $0.value.lastBuffer != 0) }
             .sorted { $0.responseID < $1.responseID }
         responses.removeAll()
+        audibleBuffers.removeAll()
         playedThrough = lastScheduled
         return receipts
     }

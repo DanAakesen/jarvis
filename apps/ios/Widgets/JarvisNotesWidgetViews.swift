@@ -65,7 +65,7 @@ struct JarvisWidgetOutlinedList<Content: View>: View {
 private extension JarvisNotesWidgetData {
     func taskRow(_ task: Task, language: JarvisAppLanguage) -> some View {
         JarvisWidgetListRow(
-            dot: .orange, title: task.title, detail: JarvisWidgetPhrase.when(task, language: language)
+            dot: JarvisPalette.shared.primaryColor, title: task.title, detail: JarvisWidgetPhrase.when(task, language: language)
         )
     }
 
@@ -78,7 +78,7 @@ private struct JarvisWidgetCompactTaskRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle().fill(Color.orange).frame(width: 7, height: 7)
+            Circle().fill(JarvisPalette.shared.primaryColor).frame(width: 7, height: 7)
                 .accessibilityHidden(true)
             Text(task.title)
                 .font(.footnote.weight(.semibold))
@@ -103,7 +103,7 @@ struct JarvisWidgetNoTasksPhrase: View {
     let language: JarvisAppLanguage
 
     var body: some View {
-        (Text(JarvisWidgetCopy.noTasksTodayAccent.text(language: language)).foregroundStyle(.orange)
+        (Text(JarvisWidgetCopy.noTasksTodayAccent.text(language: language)).foregroundStyle(JarvisPalette.shared.primaryColor)
             + Text(" ")
             + Text(JarvisWidgetCopy.noTasksTodayRest.text(language: language)))
             .font(.title3.weight(.semibold))

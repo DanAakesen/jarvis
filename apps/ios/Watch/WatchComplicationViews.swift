@@ -77,7 +77,7 @@ struct WatchMacroBar: View {
                                 RoundedRectangle(cornerRadius: 1)
                                     .fill(.white.opacity(0.18))
                                     .overlay(alignment: .leading) {
-                                        RoundedRectangle(cornerRadius: 1).fill(WatchStyle.amber)
+                                        RoundedRectangle(cornerRadius: 1).fill(WatchStyle.accent)
                                             .frame(width: width * CGFloat(fill))
                                     }
                                     .frame(width: width)
@@ -112,7 +112,7 @@ struct WatchBriefText: View {
         result.foregroundColor = .white
         for term in highlightedTerms where !term.isEmpty {
             if let range = result.range(of: term, options: [.caseInsensitive]) {
-                result[range].foregroundColor = WatchStyle.amber
+                result[range].foregroundColor = WatchStyle.accent
             }
         }
         return result
@@ -131,7 +131,7 @@ struct WatchTaskPreviewRows: View {
             ForEach(Array(titles.enumerated()), id: \.offset) { _, title in
                 HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Image(systemName: "square").font(.system(size: compact ? 10 : 12, weight: .medium))
-                        .foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+                        .foregroundStyle(WatchStyle.accent).accessibilityHidden(true)
                     Text(title).font(.system(size: compact ? 12 : 14, weight: .medium, design: .rounded))
                         .foregroundStyle(.white).lineLimit(compact ? 1 : 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -161,7 +161,7 @@ struct WatchBodyFatChart: View {
                     }
                     Text(percent(lower))
                 }.font(.system(size: 9, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
-                Canvas { context, size in
+                Canvas { [accent = WatchStyle.accent] context, size in
                     let inset: CGFloat = 3
                     let width = max(0, size.width - 2 * inset)
                     let height = max(0, size.height - 2 * inset)
@@ -191,10 +191,10 @@ struct WatchBodyFatChart: View {
                         area.addLine(to: CGPoint(x: first.x, y: inset + height))
                         area.closeSubpath()
                         context.fill(area, with: .linearGradient(
-                            Gradient(colors: [WatchStyle.amber.opacity(0.28), .clear]),
+                            Gradient(colors: [accent.opacity(0.28), .clear]),
                             startPoint: CGPoint(x: 0, y: inset), endPoint: CGPoint(x: 0, y: inset + height)))
                     }
-                    context.stroke(line, with: .color(WatchStyle.amber),
+                    context.stroke(line, with: .color(accent),
                                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
                     for point in points {
                         context.fill(Path(ellipseIn: CGRect(x: point.x - 1.7, y: point.y - 1.7, width: 3.4, height: 3.4)),
@@ -364,7 +364,7 @@ struct WatchStepsChart: View {
     var values: [Int]
     var goal: Int? = nil
     var body: some View {
-        Canvas { context, size in
+        Canvas { [accent = WatchStyle.accent, goalColor = WatchStyle.secondaryAccent] context, size in
             let plot = WatchStepsPlot(values: values, goal: goal)
             let inset: CGFloat = 1
             let width = max(0, size.width - 2 * inset)
@@ -375,7 +375,7 @@ struct WatchStepsChart: View {
                 let y = baseline - height * target
                 reference.move(to: CGPoint(x: inset, y: y))
                 reference.addLine(to: CGPoint(x: inset + width, y: y))
-                context.stroke(reference, with: .color(.white.opacity(0.55)),
+                context.stroke(reference, with: .color(goalColor.opacity(0.8)),
                                style: StrokeStyle(lineWidth: 0.7, dash: [3, 2]))
             }
             guard !plot.values.isEmpty, width > 0, height > 0 else { return }
@@ -393,7 +393,7 @@ struct WatchStepsChart: View {
                 let rect = CGRect(x: x, y: y, width: 1.8, height: max(0, baseline - y))
                 context.fill(Path(roundedRect: rect, cornerRadius: 0.9),
                              with: .linearGradient(
-                                Gradient(colors: [WatchStyle.amber, WatchStyle.amber.opacity(0.03)]),
+                                Gradient(colors: [accent, accent.opacity(0.03)]),
                                 startPoint: CGPoint(x: x, y: y), endPoint: CGPoint(x: x, y: baseline)))
             }
             var line = Path()
@@ -402,10 +402,10 @@ struct WatchStepsChart: View {
                 points.dropFirst().forEach { line.addLine(to: $0) }
                 if points.count == 1 {
                     context.fill(Path(ellipseIn: CGRect(x: first.x - 1, y: first.y - 1, width: 2, height: 2)),
-                                 with: .color(WatchStyle.amber))
+                                 with: .color(accent))
                 }
             }
-            context.stroke(line, with: .color(WatchStyle.amber),
+            context.stroke(line, with: .color(accent),
                            style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
         }.accessibilityHidden(true)
     }

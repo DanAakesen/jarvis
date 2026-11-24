@@ -252,6 +252,8 @@ jobs:
           NOTES=(--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board)
           polish graph-search "${NOTES[@]}" --screenshot-notes-state=graph-search
           polish notes-pinned "${NOTES[@]}" --screenshot-notes-state=pinned
+          polish calendar-day --ui-test-navigation --screenshot-screen=calendar
+          polish calendar-week --ui-test-navigation --screenshot-screen=calendar --screenshot-calendar-week
           polish today --ui-test-navigation --ui-test-today
           polish settings --screenshot-settings-fixture
           polish health --screenshot-health-fixture

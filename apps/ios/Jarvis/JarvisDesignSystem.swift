@@ -19,18 +19,10 @@ struct JarvisSidebarMenuButton: View {
 }
 
 enum JarvisDesignTokens {
-    static let primaryAccent = adaptiveColor(
-        light: UIColor(red: 180.0 / 255, green: 95.0 / 255, blue: 6.0 / 255, alpha: 1),
-        dark: UIColor(red: 1, green: 180.0 / 255, blue: 92.0 / 255, alpha: 1)
-    )
-    static let primaryAccentForeground = adaptiveColor(
-        light: .white,
-        dark: UIColor(red: 29.0 / 255, green: 18.0 / 255, blue: 0, alpha: 1)
-    )
-    static let secondaryAccent = adaptiveColor(
-        light: UIColor(red: 111.0 / 255, green: 101.0 / 255, blue: 81.0 / 255, alpha: 1),
-        dark: UIColor(red: 201.0 / 255, green: 191.0 / 255, blue: 174.0 / 255, alpha: 1)
-    )
+    static var primaryAccent: Color { JarvisPalette.shared.primaryColor }
+    static var primaryAccentForeground: Color { JarvisPalette.shared.onPrimaryColor }
+    static var secondaryAccent: Color { JarvisPalette.shared.secondaryColor }
+    static let controlInk = Color.primary.opacity(0.82)
     static let pageBackground = adaptiveColor(
         light: UIColor(red: 246.0 / 255, green: 240.0 / 255, blue: 230.0 / 255, alpha: 1),
         dark: UIColor(red: 7.0 / 255, green: 9.0 / 255, blue: 15.0 / 255, alpha: 1)
@@ -40,14 +32,8 @@ enum JarvisDesignTokens {
         light: UIColor(red: 246.0 / 255, green: 240.0 / 255, blue: 230.0 / 255, alpha: 1),
         dark: UIColor(red: 2.0 / 255, green: 7.0 / 255, blue: 15.0 / 255, alpha: 1)
     )
-    static let ambientCool = adaptiveColor(
-        light: UIColor(red: 20.0 / 255, green: 118.0 / 255, blue: 141.0 / 255, alpha: 1),
-        dark: UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 1)
-    )
-    static let ambientWarm = adaptiveColor(
-        light: UIColor(red: 232.0 / 255, green: 162.0 / 255, blue: 58.0 / 255, alpha: 1),
-        dark: UIColor(red: 1, green: 180.0 / 255, blue: 92.0 / 255, alpha: 1)
-    )
+    static var ambientCool: Color { secondaryAccent }
+    static var ambientWarm: Color { primaryAccent }
     static let ambientGreen = adaptiveColor(
         light: UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 1),
         dark: UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 1)
@@ -66,10 +52,9 @@ enum JarvisDesignTokens {
     static let liveActivityWaveformHeight: CGFloat = 28
     static let liveActivityInset: CGFloat = 12
     static let liveActivitySpacing: CGFloat = 8
-    static let liveActivityAccent = Color(red: 1, green: 180 / 255, blue: 92 / 255)
-    static let liveActivityStone = Color(red: 201 / 255, green: 191 / 255, blue: 174 / 255)
     static let contentInset: CGFloat = 20
     static let contentSpacing: CGFloat = 16
+    static let voicePanelEdgeInset: CGFloat = 14
     static let rowSpacing: CGFloat = 12
     static let compactSpacing: CGFloat = 4
     static let iconLabelSpacing: CGFloat = 6
@@ -85,7 +70,7 @@ enum JarvisDesignTokens {
     static let chartMinimumPointSpacing: CGFloat = 40
     static let chartMaximumWidth: CGFloat = 1_200
     static let timelineMarkerSize: CGFloat = 8
-    static let chartSeriesColors: [Color] = [primaryAccent, .blue, .green, .orange, .purple]
+    static var chartSeriesColors: [Color] { [primaryAccent, secondaryAccent, .green, .pink, .purple] }
     static let iconSize: CGFloat = 20
     static let sidebarWidthFraction: CGFloat = 0.74
     static let sidebarMaximumWidth: CGFloat = 320
@@ -219,11 +204,8 @@ enum JarvisDesignTokens {
         light: UIColor(red: 111.0 / 255, green: 79.0 / 255, blue: 214.0 / 255, alpha: 1),
         dark: UIColor(red: 182.0 / 255, green: 156.0 / 255, blue: 1, alpha: 1)
     )
-    /// Open task circles keep a warm orange ring that reads on both appearances; meaning is also in the label.
-    static let notesTaskRing = adaptiveColor(
-        light: UIColor(red: 200.0 / 255, green: 90.0 / 255, blue: 0, alpha: 1),
-        dark: UIColor(red: 1, green: 149.0 / 255, blue: 10.0 / 255, alpha: 1)
-    )
+    /// Open task circles use the owner’s accent. The label also conveys the task state.
+    static var notesTaskRing: Color { primaryAccent }
     /// Tighter rows in forms and sheets, which open at half height.
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16
@@ -253,8 +235,8 @@ enum JarvisDesignTokens {
     static let settingsRowMinimumHeight = notesRowMinimumHeight
     static let settingsIconSize = notesIconSize
     static let settingsSearchRadius: CGFloat = 20
-    static let settingsAccent = primaryAccent
-    static let settingsSecondaryAccent = secondaryAccent
+    static var settingsAccent: Color { primaryAccent }
+    static var settingsSecondaryAccent: Color { secondaryAccent }
     static let healthHorizontalInset: CGFloat = 16
     static let healthSectionSpacing: CGFloat = 16
     static let healthRowSpacing: CGFloat = 12
@@ -273,11 +255,10 @@ enum JarvisDesignTokens {
     static let healthChartLineWidth: CGFloat = 2
     static let healthTargetLineWidth: CGFloat = 1
     static let healthTargetLineDash: [CGFloat] = [4, 3]
-    static let healthPanelRadius: CGFloat = surfaceRadius
-    static let healthAccent = primaryAccent
-    static let healthAccentForeground = primaryAccentForeground
-    static let accentSecondary = secondaryAccent
-    static let healthAccentSecondary = secondaryAccent
+    static var healthAccent: Color { primaryAccent }
+    static var healthAccentForeground: Color { primaryAccentForeground }
+    static var accentSecondary: Color { secondaryAccent }
+    static var healthAccentSecondary: Color { secondaryAccent }
     static let factoryHorizontalInset: CGFloat = 16
     static let factorySectionSpacing: CGFloat = 12
     static let factoryControlHeight: CGFloat = 44
@@ -292,9 +273,9 @@ enum JarvisDesignTokens {
     static let factorySkeletonSecondaryHeight: CGFloat = 12
     static let factoryMultilineMinimumLines = 4
     static let factoryMultilineMaximumLines = 10
-    static let factoryAccent = primaryAccent
-    static let factoryAccentForeground = primaryAccentForeground
-    static let factorySecondaryAccent = secondaryAccent
+    static var factoryAccent: Color { primaryAccent }
+    static var factoryAccentForeground: Color { primaryAccentForeground }
+    static var factorySecondaryAccent: Color { secondaryAccent }
     static let gateContentInset: CGFloat = 32
     static let gateOrbSize: CGFloat = 250
     static let gateOrbCenterTop: CGFloat = 296
@@ -305,25 +286,21 @@ enum JarvisDesignTokens {
     static let gateControlSpacing: CGFloat = 24
     static let gateBackgroundBlurRadius: CGFloat = 36
     static let gateStateFadeDuration: Double = 0.3
-    static let gateActionAccent = primaryAccent
-    static let gateActionForeground = primaryAccent
+    static var gateActionAccent: Color { primaryAccent }
+    static var gateActionForeground: Color { primaryAccent }
     static let gateFaceIDSymbolSize: CGFloat = 44
     /// The board's light glass fill (`--g-fill-bar`): white in light, deep blue-grey in dark.
     static let glassFill = adaptiveColor(
         light: UIColor(white: 1, alpha: 0.44),
         dark: UIColor(red: 16.0 / 255, green: 22.0 / 255, blue: 30.0 / 255, alpha: 0.36)
     )
-    /// The warm glint at the end of the composer rim's sweep.
-    static let rimGlint = adaptiveColor(
-        light: UIColor(red: 1, green: 150.0 / 255, blue: 40.0 / 255, alpha: 1),
-        dark: UIColor(red: 1, green: 205.0 / 255, blue: 120.0 / 255, alpha: 1)
-    )
+    /// The accent glint at the end of the composer rim's sweep.
+    static var rimGlint: Color { primaryAccent }
 
     // The cold-start opening screen is always dark, whatever the theme.
     static let openingBackground = Color(red: 2.0 / 255, green: 7.0 / 255, blue: 15.0 / 255)
-    static let openingTrack = Color(red: 29.0 / 255, green: 55.0 / 255, blue: 84.0 / 255)
-    static let openingAmber = Color(red: 253.0 / 255, green: 205.0 / 255, blue: 81.0 / 255)
-    static let openingLine = Color(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255)
+    static var openingTrack: Color { JarvisPalette.shared.secondaryDarkColor.opacity(0.25) }
+    static var openingAccent: Color { JarvisPalette.shared.primaryDarkColor }
     static let openingFadeDuration: Double = 0.3
     static let openingReducedFadeDuration: Double = 0.15
     static let openingBarCycle: Double = 1.5
@@ -385,6 +362,7 @@ struct JarvisNeuralBackground: View {
     var body: some View {
         ZStack {
             JarvisDesignTokens.neuralBackground
+                .overlay(JarvisSurfacePalette.shared.color("page")?.opacity(0.32) ?? .clear)
             GeometryReader { proxy in
                 JarvisNeuralBackgroundView(
                     activity: activity, effects: effects, orb: resolvedOrb(in: proxy),

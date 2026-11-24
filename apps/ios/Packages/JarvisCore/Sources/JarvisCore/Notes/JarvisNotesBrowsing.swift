@@ -85,6 +85,16 @@ extension JarvisCache {
         return paths.filter { JarvisNotesLogic.validNotePath($0) && seen.insert($0).inserted }
     }
 
+    public func remapPinnedNote(from source: String, to destination: String) async {
+        guard source != destination, JarvisNotesLogic.validNotePath(destination),
+              let originalSession = session() else { return }
+        let paths = await pinnedNotePaths()
+        guard isCurrent(originalSession), paths.contains(source) else { return }
+        let moved = paths.filter { $0 != destination }.map { $0 == source ? destination : $0 }
+        guard let data = try? JSONEncoder().encode(moved) else { return }
+        await write(data: data, validator: nil, key: "pinnedNotePaths", session: originalSession)
+    }
+
     public func setNotePinned(path: String, pinned: Bool) async {
         guard JarvisNotesLogic.validNotePath(path), let originalSession = session() else { return }
         var paths = await pinnedNotePaths().filter { $0 != path }

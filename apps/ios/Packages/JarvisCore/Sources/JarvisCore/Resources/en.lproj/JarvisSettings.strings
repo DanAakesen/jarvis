@@ -188,3 +188,6 @@
 "settings.onTheMoveInstructions" = "On the move · extra instructions";
 "settings.homeBriefInstruction" = "Home brief instructions";
 "settings.homeBriefLines" = "Maximum visible lines (1–6)";
+"settings.primaryColour" = "Primary colour";
+"settings.secondaryColour" = "Secondary colour";
+"settings.restoreColours" = "Restore default colours";

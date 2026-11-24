@@ -19,6 +19,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var captureDropCount = 0
     private var playbackLedger = VoicePlaybackLedger()
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
+    private var playbackActivityChanged: (@Sendable () -> Void)?
+    var isPlayingSpeech: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return playbackLedger.isPlayingSpeech
+    }
     private var hasCaptureTap = false
     private var hasPlaybackGraph = false
     private var ownsActiveSession = false
@@ -107,16 +113,15 @@ final class VoiceAudioEngine: @unchecked Sendable {
 
     /// Session, graph, tap and engine start. Shared by the first start and the silence recovery, which keeps the
     /// consumer's stream: it only ever sees audio, never the restart.
-    private func attachInput(mode: AVAudioSession.Mode) throws {
+    private func attachInput(mode: AVAudioSession.Mode, configureAudioSession: Bool = true) throws {
         // Activating playAndRecord can change the hardware route on first use.
         // Build the graph only after that, rather than against the previous session.
-        try configureSession(mode: mode)
+        if configureAudioSession { try configureSession(mode: mode) }
         #if os(watchOS)
         guard AVAudioSession.sharedInstance().isInputAvailable else { throw VoiceAudioEngineError.captureUnavailable }
         if requestsVoiceProcessing && mode == .voiceChat {
             // Switch the stopped I/O graph before connecting the speaker or negotiating the microphone format.
-            do { try engine.inputNode.setVoiceProcessingEnabled(true) }
-            catch { log.notice("Voice processing unavailable on this audio route: \(String(describing: error), privacy: .public)") }
+            try engine.inputNode.setVoiceProcessingEnabled(true)
         }
         #endif
         if !hasPlaybackGraph {
@@ -130,12 +135,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
             throw VoiceAudioEngineError.captureUnavailable
         }
         #if os(watchOS)
-        // Use the negotiated tap format and build the converter from the actual (possibly downmixed) buffer.
-        let tapFormat: AVAudioFormat? = nil
         let converter: AVAudioConverter? = nil
         let voiceProcessing = input.isVoiceProcessingEnabled
         #else
-        let tapFormat = inputFormat
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
             throw VoiceAudioEngineError.captureUnavailable
         }
@@ -148,7 +150,8 @@ final class VoiceAudioEngine: @unchecked Sendable {
         stats.voiceProcessing = voiceProcessing
         #endif
         lock.unlock()
-        input.installTap(onBus: 0, bufferSize: 1_024, format: tapFormat) { [weak self] buffer, _ in
+        // Use the negotiated format. A route change can change the hardware sample rate.
+        input.installTap(onBus: 0, bufferSize: 1_024, format: nil) { [weak self] buffer, _ in
             guard let self else { return }
             self.measure(buffer)
             guard let data = self.convert(buffer) else { return }
@@ -192,19 +195,36 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return !engine.isRunning || captureRoute != Route()
     }
 
-    func recoverRoute() throws {
+    func recoverRoute(attempt: Int) throws {
         controlLock.lock()
         defer { controlLock.unlock() }
         guard !engine.isRunning || captureRoute != Route() else { return }
+        if attempt > 1 { requestsVoiceProcessing = false }
         try restartInput(mode: activeMode)
     }
+
+    #endif
 
     private func replaceGraph() {
         // An engine configuration change can leave the old nodes connected in the old hardware format.
         engine = AVAudioEngine()
         player = AVAudioPlayerNode()
         hasPlaybackGraph = false
+        #if os(watchOS)
         captureRoute = nil
+        #endif
+    }
+
+    #if os(iOS)
+    /// A headset change can stop the graph. Keep the capture stream and the owner's chosen output.
+    func resumeAfterConfigurationChange(_ changedEngine: AVAudioEngine) throws {
+        controlLock.lock()
+        defer { controlLock.unlock() }
+        guard changedEngine === engine, ownsActiveSession, hasCaptureTap, !engine.isRunning else { return }
+        stopCaptureGraph()
+        drainPlayback()
+        replaceGraph()
+        try attachInput(mode: activeMode, configureAudioSession: false)
     }
     #endif
 
@@ -300,8 +320,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return captureDropCount
     }
 
-    func setPlaybackFinishedHandler(_ handler: @escaping @Sendable (String, Bool) -> Void) {
+    func setPlaybackFinishedHandler(activityChanged: (@Sendable () -> Void)? = nil, _ handler: @escaping @Sendable (String, Bool) -> Void) {
         lock.lock()
+        playbackActivityChanged = activityChanged
         playbackFinished = handler
         lock.unlock()
     }
@@ -310,8 +331,8 @@ final class VoiceAudioEngine: @unchecked Sendable {
         #if os(watchOS)
         controlLock.lock()
         defer { controlLock.unlock() }
-        guard engine.isRunning else { return }
         #endif
+        guard engine.isRunning else { return }
         let bytes = try VoiceAudioCodec.decodePCM16(base64)
         let frameCount = AVAudioFrameCount(bytes.count / MemoryLayout<Int16>.size)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount),
@@ -319,15 +340,19 @@ final class VoiceAudioEngine: @unchecked Sendable {
             throw VoiceAudioEngineError.playbackUnavailable
         }
         buffer.frameLength = frameCount
+        var peak: UInt16 = 0
         for frame in 0..<Int(frameCount) {
             let offset = frame * 2
             let sample = UInt16(bytes[offset]) | UInt16(bytes[offset + 1]) << 8
-            channel[frame] = Float(Int16(bitPattern: sample)) / Float(Int16.max)
+            let pcm = Int16(bitPattern: sample)
+            peak = max(peak, pcm.magnitude)
+            channel[frame] = Float(pcm) / Float(Int16.max)
         }
         let sequence = responseID.map { responseID in
             lock.lock()
             defer { lock.unlock() }
-            return playbackLedger.bufferScheduled(responseID: responseID)
+            // Ignore digital silence and near-silent PCM below about -60 dBFS for the Speaking indicator.
+            return playbackLedger.bufferScheduled(responseID: responseID, containsSpeech: peak > 32)
         }
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             if let sequence { self?.bufferPlayed(sequence) }
@@ -355,11 +380,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     private func drainPlayback() {
-        player.stop()
+        if hasPlaybackGraph { player.stop() }
         lock.lock()
+        let changed = playbackLedger.isPlayingSpeech ? playbackActivityChanged : nil
         let receipts = playbackLedger.playbackStopped()
         let handler = playbackFinished
         lock.unlock()
+        changed?()
         for receipt in receipts { handler?(receipt.responseID, receipt.audible) }
     }
 
@@ -368,12 +395,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
         defer { controlLock.unlock() }
         generation.end()
         stopCaptureGraph()
-        player.stop()
+        if hasPlaybackGraph { player.stop() }
         lock.lock()
         captureContinuation?.finish()
         captureContinuation = nil
         _ = playbackLedger.playbackStopped()
         playbackFinished = nil
+        playbackActivityChanged = nil
         converter = nil
         lock.unlock()
         if ownsActiveSession {
@@ -390,10 +418,16 @@ final class VoiceAudioEngine: @unchecked Sendable {
         #if os(watchOS)
         try session.setCategory(.playAndRecord, mode: mode)
         #else
-        try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker])
+        try session.setCategory(.playAndRecord, mode: mode, options: [.allowBluetoothHFP])
         #endif
         try session.setActive(true)
         ownsActiveSession = true
+        #if os(iOS)
+        // Start on speaker when using the handset. Leave connected accessories on their system route.
+        if session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }) {
+            try? session.overrideOutputAudioPort(.speaker)
+        }
+        #endif
     }
 
     // Hardware formats can change after the engine starts (route or voice-processing changes); convert from the buffer's real format.
@@ -467,9 +501,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
 
     private func bufferPlayed(_ sequence: Int) {
         lock.lock()
+        let wasPlayingSpeech = playbackLedger.isPlayingSpeech
         let receipts = playbackLedger.bufferPlayed(sequence)
+        let changed = wasPlayingSpeech != playbackLedger.isPlayingSpeech ? playbackActivityChanged : nil
         let handler = playbackFinished
         lock.unlock()
+        changed?()
         for receipt in receipts { handler?(receipt.responseID, receipt.audible) }
     }
 }

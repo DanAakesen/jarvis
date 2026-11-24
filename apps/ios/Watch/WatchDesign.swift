@@ -3,8 +3,11 @@ import SwiftUI
 
 /// Watch-specific equivalents of the iOS shared controls; UIKit-backed controls cannot link into watchOS.
 enum WatchStyle {
-    static let amber = Color(red: 1, green: 180 / 255, blue: 92 / 255)
-    static let stone = Color(red: 201 / 255, green: 191 / 255, blue: 174 / 255)
+    static var accent: Color { JarvisPalette.shared.primaryDarkColor }
+    static var secondaryAccent: Color { JarvisPalette.shared.secondaryDarkColor }
+    static let cardRadius: CGFloat = 16
+    static let cardInset: CGFloat = 9
+    static let controlHeight: CGFloat = 44
     static let surface = Color(white: 0.10)
 }
 /// Neutral dark smoked glass for floating Watch controls. Reduce Transparency swaps the blur for a solid fill.
@@ -28,7 +31,7 @@ struct WatchGlass<S: Shape>: ViewModifier {
 extension View {
     func watchGlass<S: Shape>(in shape: S) -> some View { modifier(WatchGlass(shape: shape)) }
 }
-/// Round glass icon button with an amber symbol and a native-size hit target.
+/// Round glass icon button with an accent symbol and a native-size hit target.
 struct WatchIconButton: View {
     var systemName: String
     var label: String
@@ -36,8 +39,8 @@ struct WatchIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName).font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(WatchStyle.amber)
-                .frame(width: 44, height: 44).watchGlass(in: Circle()).contentShape(Circle())
+                .foregroundStyle(WatchStyle.accent)
+                .frame(width: WatchStyle.controlHeight, height: WatchStyle.controlHeight).watchGlass(in: Circle()).contentShape(Circle())
         }.buttonStyle(.plain).accessibilityLabel(label)
     }
 }
@@ -45,7 +48,7 @@ struct WatchIconButton: View {
 struct WatchLabelledButton: View {
     var title: String
     var systemName: String
-    var tint: Color = WatchStyle.amber
+    var tint: Color?
     var action: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
@@ -56,8 +59,8 @@ struct WatchLabelledButton: View {
                     Text(title).font(.system(.footnote, design: .rounded, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
-            .foregroundStyle(tint)
-            .frame(maxWidth: .infinity, minHeight: 44).watchGlass(in: Capsule()).contentShape(Capsule())
+            .foregroundStyle(tint ?? WatchStyle.accent)
+            .frame(maxWidth: .infinity, minHeight: WatchStyle.controlHeight).watchGlass(in: Capsule()).contentShape(Capsule())
         }.buttonStyle(.plain).accessibilityLabel(title)
     }
 }
@@ -72,14 +75,14 @@ struct WatchEdgeFade: View {
     }
 }
 struct WatchSurface: ViewModifier {
-    var radius: CGFloat = 22
+    var radius: CGFloat = WatchStyle.cardRadius
     func body(content: Content) -> some View {
         content.background {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(LinearGradient(colors: [Color(white: 0.18), .black], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .overlay {
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(LinearGradient(colors: [WatchStyle.amber.opacity(0.65), .white.opacity(0.12), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.7)
+                        .stroke(LinearGradient(colors: [WatchStyle.accent.opacity(0.65), WatchStyle.secondaryAccent.opacity(0.16), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.7)
                 }
         }
     }
@@ -119,7 +122,7 @@ struct WatchGlyph: View {
                     Image(systemName: "dumbbell.fill").font(.system(size: 18, weight: .semibold))
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }.foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+        }.foregroundStyle(WatchStyle.accent).accessibilityHidden(true)
     }
 }
 struct JarvisWatchAction: View {
@@ -132,7 +135,7 @@ struct JarvisWatchAction: View {
                 WatchGlyph(kind: kind).frame(width: 34, height: 26)
                 Text(title).font(.system(.body, design: .rounded, weight: .semibold))
                 Spacer(minLength: 0)
-            }.padding(.horizontal, 14).frame(minHeight: 46).modifier(WatchSurface())
+            }.padding(.horizontal, 14).frame(minHeight: WatchStyle.controlHeight).modifier(WatchSurface())
         }.buttonStyle(.plain).accessibilityLabel(title)
     }
 }
@@ -151,8 +154,8 @@ struct WatchPrimaryAction: View {
     var body: some View {
         Button(action: action) {
             Text(title).font(.system(.body, design: .rounded, weight: .semibold))
-                .frame(maxWidth: .infinity, minHeight: 44)
-        }.buttonStyle(.borderedProminent).tint(WatchStyle.amber).foregroundStyle(.black)
+                .frame(maxWidth: .infinity, minHeight: WatchStyle.controlHeight)
+        }.buttonStyle(.borderedProminent).tint(WatchStyle.accent).foregroundStyle(.black)
     }
 }
 

@@ -127,6 +127,35 @@ describe('Fastify backend', () => {
     }
     expect((await limited.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(200);
   });
+  it('allows a slow Watch upload and gives recognition its own deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let beginUpload!: () => void;
+    const uploading = new Promise<void>(resolve => { beginUpload = resolve; });
+    let beginRecognition!: () => void;
+    const recognizing = new Promise<void>(resolve => { beginRecognition = resolve; });
+    const { app } = fixture({ watchTranscriber: async () => {
+      beginRecognition();
+      await new Promise(resolve => setTimeout(resolve, 12_000));
+      return 'finished';
+    } });
+    app.addHook('preParsing', async (_request, _reply, payload) => {
+      beginUpload();
+      await new Promise(resolve => setTimeout(resolve, 25_000));
+      return payload;
+    });
+    const pending = Promise.resolve(app.inject({
+      method: 'POST', url: '/watch/transcribe', payload: { audio: 'AAA=' },
+      headers: { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` },
+    }));
+    await uploading;
+    await vi.advanceTimersByTimeAsync(25_000);
+    await recognizing;
+    await vi.advanceTimersByTimeAsync(12_000);
+    const response = await pending;
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ text: 'finished' });
+  });
+
   it('times out a non-cooperative transcription at 20 seconds and releases capacity', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     let started!: () => void;
