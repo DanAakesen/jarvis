@@ -90,7 +90,7 @@ struct JarvisLockScreenTasksPreview: View {
                 Text(JarvisApprovalLocalization.string(.decline, language: language))
             }
             .font(.body.weight(.medium))
-            .foregroundStyle(.orange)
+            .foregroundStyle(JarvisDesignTokens.primaryAccent)
             .padding(.top, 10)
             .overlay(alignment: .top) {
                 Rectangle()

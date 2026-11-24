@@ -14,6 +14,9 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ## Daily core
 
+Dan can choose both native brand colours in iPhone Settings and restore the Jarvis defaults.
+His paired Watch adopts the same selection when it connects.
+
 1. **Jarvis project** — issues, PRs, workers and releases.
 2. **Notes** — find, read, create and edit notes.
 3. **Tasks** — find, create, complete and follow up on tasks.

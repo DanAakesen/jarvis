@@ -153,6 +153,18 @@ struct ContentView: View {
         }
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active, !fixtureMode, let settingsClient else { return }
+            let palette = JarvisPalette.shared
+            let atStart = (palette.primaryHex, palette.secondaryHex)
+            let repository: JarvisRepository<JarvisSettingsResponse> = await JarvisAppCache.repository(.settings) {
+                try await settingsClient.fetchSettings(validator: $0)
+            }
+            let result = await repository.resolve()
+            guard !Task.isCancelled, result.error == nil,
+                  atStart == (palette.primaryHex, palette.secondaryHex) else { return }
+            result.value?.applyNativePalette()
+        }
         .onDisappear { workspaceRuntime.resetSession() }
         .task(id: scenePhase != .background && (navigation.currentDestination == .chat || navigation.currentDestination == .voice)) {
             guard scenePhase != .background, navigation.currentDestination == .chat || navigation.currentDestination == .voice,

@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 private enum JarvisSettingsFieldKind {
     case choice
@@ -7,6 +8,7 @@ private enum JarvisSettingsFieldKind {
     case multiline
     case number
     case toggle
+    case colour
 }
 
 private struct JarvisSettingsField: Identifiable {
@@ -37,6 +39,8 @@ struct JarvisSettingsEditorView: View {
         case .appearance:
             return [
                 choice("appearance.theme", .theme, response?.options["themes"]?.arrayValues ?? []),
+                colour("appearance.accent", .primaryColour),
+                colour("appearance.accent-secondary", .secondaryColour),
             ]
         case .instructions, .personality, .identity:
             return [
@@ -119,9 +123,21 @@ struct JarvisSettingsEditorView: View {
         editState?.isDirty ?? false
     }
 
+    private var previewPalette: JarvisPaletteSelection {
+        func hex(_ field: String, fallback: String) -> String {
+            let value = draft[field] ?? initialValue(for: field)
+            return value.isEmpty ? fallback : value
+        }
+        return JarvisPaletteSelection(
+            primaryHex: hex("appearance.accent", fallback: JarvisPalette.defaultPrimaryHex),
+            secondaryHex: hex("appearance.accent-secondary", fallback: JarvisPalette.defaultSecondaryHex)
+        ) ?? .standard
+    }
+
     private var validDraft: Bool {
         fields.allSatisfy { field in
             guard let value = typedValue(for: field, rawValue: draft[field.id] ?? "") else { return false }
+            if field.kind == .colour { return value == .null || value.stringValue != nil }
             let parts = field.id.split(separator: ".", maxSplits: 1).map(String.init)
             let bounds = field.kind == .number && parts.count == 2
                 ? JarvisSettingsLogic.numericBounds(area: parts[0], key: parts[1])
@@ -150,6 +166,16 @@ struct JarvisSettingsEditorView: View {
                 fieldRow(field)
                     .disabled(response == nil || readOnly || saving)
                     .accessibilityHint(response == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
+            }
+            if detail == .appearance {
+                Button(copy(.restoreColours)) {
+                    for field in fields where field.kind == .colour {
+                        setDraft("", for: field)
+                    }
+                }
+                .disabled(response == nil || readOnly || saving || !fields.contains {
+                    $0.kind == .colour && !(draft[$0.id] ?? "").isEmpty
+                })
             }
         }
         .navigationTitle(title)
@@ -182,15 +208,46 @@ struct JarvisSettingsEditorView: View {
     @ViewBuilder
     private func fieldRow(_ field: JarvisSettingsField) -> some View {
         switch field.kind {
+        case .colour:
+            ColorPicker(copy(field.title), selection: Binding(
+                get: {
+                    let fallback = field.title == .primaryColour
+                        ? JarvisPalette.defaultPrimaryHex : JarvisPalette.defaultSecondaryHex
+                    let raw = (draft[field.id] ?? "").drop(while: { $0 == "#" })
+                    let rgb = UInt32(raw, radix: 16) ?? UInt32(fallback, radix: 16)!
+                    return Color(.sRGB, red: Double(rgb >> 16) / 255,
+                                 green: Double(rgb >> 8 & 255) / 255, blue: Double(rgb & 255) / 255)
+                },
+                set: { selected in
+                    guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                          let rgb = UIColor(selected).cgColor.converted(to: space, intent: .defaultIntent, options: nil),
+                          let components = rgb.components, components.count >= 3 else { return }
+                    let bytes = components.prefix(3).map { Int((min(1, max(0, $0)) * 255).rounded()) }
+                    setDraft(String(format: "#%02X%02X%02X", bytes[0], bytes[1], bytes[2]), for: field)
+                }
+            ), supportsOpacity: false)
+            .accessibilityIdentifier("settings.field.\(field.id)")
         case .choice:
             let available = options(for: field)
             if available.isEmpty {
                 LabeledContent(copy(field.title), value: draft[field.id] ?? initialValue(for: field.id))
             } else {
-                Picker(copy(field.title), selection: binding(for: field)) {
+                Picker(selection: binding(for: field)) {
                     ForEach(available, id: \.self) { value in
                         Text(jarvisSettingsOptionTitle(value, language: language))
                             .tag(value)
+                    }
+                } label: {
+                    if field.id == "appearance.theme" {
+                        HStack(spacing: JarvisDesignTokens.rowSpacing) {
+                            JarvisLatticeOrbView(activity: .calm, isStatic: true, palette: previewPalette)
+                                .frame(width: JarvisDesignTokens.controlMinimumHeight,
+                                       height: JarvisDesignTokens.controlMinimumHeight)
+                                .accessibilityHidden(true)
+                            Text(copy(field.title))
+                        }
+                    } else {
+                        Text(copy(field.title))
                     }
                 }
                 .pickerStyle(.menu)
@@ -222,6 +279,8 @@ struct JarvisSettingsEditorView: View {
 
     private func typedValue(for field: JarvisSettingsField, rawValue: String) -> JarvisSettingsValue? {
         switch field.kind {
+        case .colour:
+            return rawValue.isEmpty ? .null : .string(rawValue)
         case .choice, .text, .multiline:
             return JarvisSettingsValue.string(rawValue)
         case .toggle:
@@ -385,6 +444,10 @@ struct JarvisSettingsEditorView: View {
 
     private func toggle(_ id: String, _ title: JarvisSettingsLocalizationKey) -> JarvisSettingsField {
         JarvisSettingsField(id: id, title: title, kind: .toggle, options: [], maximumLength: nil)
+    }
+
+    private func colour(_ id: String, _ title: JarvisSettingsLocalizationKey) -> JarvisSettingsField {
+        JarvisSettingsField(id: id, title: title, kind: .colour, options: [], maximumLength: nil)
     }
 }
 

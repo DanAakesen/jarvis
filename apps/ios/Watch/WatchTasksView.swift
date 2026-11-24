@@ -147,11 +147,11 @@ struct WatchPersonalTaskRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: task.done ? "checkmark.square" : "square")
-                .foregroundStyle(WatchStyle.amber).padding(.top, 2).accessibilityHidden(true)
+                .foregroundStyle(WatchStyle.accent).padding(.top, 2).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.text).font(.system(.body, design: .rounded, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(WatchTaskPresentation.due(task, today: today)).font(.caption).foregroundStyle(WatchStyle.stone)
+                Text(WatchTaskPresentation.due(task, today: today)).font(.caption).foregroundStyle(WatchStyle.secondaryAccent)
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.caption)
@@ -178,7 +178,7 @@ struct WatchTaskDetailView: View {
             HStack {
                 Spacer(minLength: 0)
                 Button("Edit") { showEdit = true }
-                    .buttonStyle(.plain).foregroundStyle(WatchStyle.amber)
+                    .buttonStyle(.plain).foregroundStyle(WatchStyle.accent)
                     .frame(minHeight: 40).disabled(busy || needsRefresh)
             }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             Text(task.text).font(.system(.title3, design: .rounded, weight: .semibold))
@@ -220,7 +220,7 @@ struct WatchTaskDetailView: View {
             Button { Task { await complete() } } label: {
                 Label(busy ? "Saving…" : task.done ? "Completed" : "Mark complete",
                       systemImage: task.done ? "checkmark.square" : "square")
-            }.foregroundStyle(WatchStyle.amber)
+            }.foregroundStyle(WatchStyle.accent)
                 .disabled(busy || task.done || needsRefresh || !connection.reachable)
                 .listRowBackground(Color.clear)
         }.navigationTitle("Task")
@@ -339,7 +339,7 @@ struct WatchPersonalTaskEditor: View {
         Form {
             if let savedResult {
                 Label(task == nil ? "Task saved" : "Changes saved", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(WatchStyle.amber)
+                    .foregroundStyle(WatchStyle.accent)
                 Text(savedResult.text).fixedSize(horizontal: false, vertical: true)
                 Button(task == nil ? "Create another task" : "Done") {
                     if task == nil { startAnother() }
@@ -397,7 +397,7 @@ struct WatchPersonalTaskEditor: View {
                         submissions.request != nil || update != nil ? "Retry save" : "Save") {
                     Task { await save() }
                 }
-                .tint(WatchStyle.amber)
+                .tint(WatchStyle.accent)
                 .disabled(busy || !storageAvailable || requiresRefresh ||
                           !connection.reachable || validationMessage != nil)
                 if requiresRefresh {

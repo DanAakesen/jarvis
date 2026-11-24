@@ -692,6 +692,8 @@ public enum JarvisSettingsLogic {
                 }
             } else {
                 for (key, newValue) in editedValues where oldValues[key] != newValue {
+                    if area == "appearance", ["accent", "accent-secondary"].contains(key),
+                       oldValues[key] == nil, newValue == .null { continue }
                     areas[area, default: [:]][key] = newValue
                 }
             }
@@ -757,6 +759,10 @@ public enum JarvisSettingsLogic {
                 switch (area, key) {
                 case ("appearance", "theme"):
                     valid = validSettingsFieldValue(value, options: ["light", "dark", "system"])
+                case ("appearance", "accent"), ("appearance", "accent-secondary"):
+                    valid = value == .null || value.stringValue.map {
+                        $0.utf8.count == 7 && matches($0, pattern: #"^#[a-fA-F0-9]{6}$"#)
+                    } == true
                 case ("personality", "tone"):
                     valid = validSettingsFieldValue(value, options: ["british_butler", "warm", "direct", "playful"])
                 case ("personality", "responseStyle"):

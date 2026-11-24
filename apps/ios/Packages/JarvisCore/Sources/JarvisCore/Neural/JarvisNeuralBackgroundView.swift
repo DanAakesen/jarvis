@@ -50,7 +50,7 @@ public struct JarvisNeuralBackgroundView: View {
     public var body: some View {
         GeometryReader { proxy in
             let geometry = JarvisNeuralGeometry(size: proxy.size, orb: orb)
-            let palette = JarvisNeuralPalette(isDark: colorScheme == .dark, saturation: activity.saturation, isCheap: isCheap)
+            let palette = JarvisNeuralPalette(selection: JarvisPalette.shared.selection, isDark: colorScheme == .dark, saturation: activity.saturation, isCheap: isCheap)
             ZStack {
                 Canvas { context, _ in
                     JarvisNeuralPainter.paintNetwork(&context, geometry: geometry, palette: palette, intensity: intensity)
@@ -189,15 +189,17 @@ struct JarvisNeuralPalette {
     let isCheap: Bool
     private let components: (cool: (Double, Double, Double), warm: (Double, Double, Double))
 
-    init(isDark: Bool, saturation: Double, isCheap: Bool = false) {
+    init(selection: JarvisPaletteSelection, isDark: Bool, saturation: Double, isCheap: Bool = false) {
         self.isDark = isDark
         self.isCheap = isCheap
-        let cool = isDark
-            ? (JarvisOrbAppearance.cool.r, JarvisOrbAppearance.cool.g, JarvisOrbAppearance.cool.b)
-            : (20.0 / 255, 118.0 / 255, 141.0 / 255)
-        let warm = isDark
-            ? (JarvisOrbAppearance.warm.r, JarvisOrbAppearance.warm.g, JarvisOrbAppearance.warm.b)
-            : (196.0 / 255, 110.0 / 255, 8.0 / 255)
+        var cool = isDark ? selection.secondary.dark : selection.secondary.light
+        var warm = isDark ? selection.primary.dark : selection.primary.light
+        if selection.secondary == JarvisPaletteSelection.standard.secondary {
+            cool = isDark ? JarvisOrbAppearance.cool : (20.0 / 255, 118.0 / 255, 141.0 / 255)
+        }
+        if selection.primary == JarvisPaletteSelection.standard.primary {
+            warm = isDark ? JarvisOrbAppearance.warm : (196.0 / 255, 110.0 / 255, 8.0 / 255)
+        }
         components = (cool, warm)
         self.cool = Self.color(cool, saturation)
         self.warm = Self.color(warm, saturation)

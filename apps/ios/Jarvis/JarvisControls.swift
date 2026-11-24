@@ -127,7 +127,7 @@ enum JarvisRimState {
     }
 }
 
-/// Orange rim with a slow travelling light and a randomised pulse (board: composer `.cring`).
+/// Accent rim with a slow travelling light and a randomised pulse (board: composer `.cring`).
 /// Cheap by construction: one stroked shape redrawn at 12 fps, no mask, no blur, no offscreen pass.
 /// Under Reduce Motion the rim is steady: no sweep and no pulse.
 /// API: ShapeStyle.strokeBorder, AngularGradient, TimelineView, Animation.easeInOut.
@@ -281,7 +281,7 @@ struct JarvisIconButton: View {
             if isCompact {
                 Image(systemName: systemImage ?? "xmark")
                     .font(.system(size: JarvisDesignTokens.photoRemoveGlyphSize, weight: .regular))
-                    .foregroundStyle(tint ?? JarvisDesignTokens.secondaryAccent)
+                    .foregroundStyle(tint ?? JarvisDesignTokens.controlInk)
                     .opacity(isDisabled ? 0.4 : 1)
                     .frame(width: JarvisDesignTokens.photoRemoveDiameter, height: JarvisDesignTokens.photoRemoveDiameter)
                     .jarvisGlassCircle()
@@ -407,7 +407,7 @@ private struct JarvisLabelledContent: View {
 
     private var tint: Color {
         if isDestructive { return .red }
-        return isEmphasised ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent
+        return isEmphasised ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.controlInk
     }
 
     var body: some View {
@@ -446,7 +446,7 @@ private struct JarvisLabelledContent: View {
     }
 }
 
-/// The one labelled button: text with an optional icon on Apple glass, secondary accent, no orange fill.
+/// The one labelled button: text with an optional icon on Apple glass, and secondary-accent text.
 /// `isEmphasised` colours the text with the primary accent (never a fill); `subtitle` adds a second line and
 /// `isLeading` left-aligns a full-width button, for quick-action rows.
 struct JarvisLabelledButton: View {
@@ -1001,7 +1001,7 @@ struct JarvisShutterButton: View {
     }
 }
 
-/// Icon, short text or progress view with the 44 pt target, the secondary accent and an optional count badge.
+/// Icon, short text or progress view with a 44 pt target and an optional count badge.
 private struct JarvisControlGlyph: View {
     var systemImage: String?
     var text: String?
@@ -1012,7 +1012,7 @@ private struct JarvisControlGlyph: View {
     var tint: Color?
 
     private var color: Color {
-        (tint ?? (isSelected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent))
+        (tint ?? (isSelected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.controlInk))
             .opacity(isDisabled ? 0.4 : 1)
     }
 
@@ -1134,9 +1134,13 @@ struct JarvisOrb: View {
     var isStatic = false
     var isPaused = false
     var adaptsToLowPower = false
+    var palette: JarvisPaletteSelection? = nil
 
     var body: some View {
-        JarvisLatticeOrbView(activity: activity, isStatic: isStatic, isPaused: isPaused, adaptsToLowPower: adaptsToLowPower)
+        JarvisLatticeOrbView(
+            activity: activity, isStatic: isStatic, isPaused: isPaused,
+            adaptsToLowPower: adaptsToLowPower, palette: palette
+        )
             .aspectRatio(1, contentMode: .fit)
             .frame(width: size, height: size)
             .clipShape(Circle())
@@ -1210,7 +1214,7 @@ struct JarvisComposerIconButton: View {
     }
 }
 
-/// The composer's plus: the same orange, backgroundless icon, opening a menu.
+/// The composer's plus: the same accent and icon treatment, opening a menu.
 struct JarvisComposerMenuButton<Content: View>: View {
     let title: String
     let systemImage: String

@@ -1,5 +1,21 @@
 import JarvisCore
 import SwiftUI
+import WidgetKit
+
+extension JarvisSettingsResponse {
+    @MainActor
+    func applyNativePalette() {
+        guard case .object? = settings["appearance"] else { return }
+        let primary = string(area: "appearance", key: "accent") ?? JarvisPalette.defaultPrimaryHex
+        let secondary = string(area: "appearance", key: "accent-secondary") ?? JarvisPalette.defaultSecondaryHex
+        let palette = JarvisPalette.shared
+        let previous = (palette.primaryHex, palette.secondaryHex)
+        palette.set(primaryHex: primary, secondaryHex: secondary)
+        guard previous != (palette.primaryHex, palette.secondaryHex) else { return }
+        WidgetCenter.shared.reloadAllTimelines()
+        JarvisWatchBridge.shared.syncPalette()
+    }
+}
 
 private enum JarvisSettingsSection: String, CaseIterable, Identifiable {
     case general
@@ -546,7 +562,10 @@ struct JarvisSettingsArea: View {
                 language: language,
                 readOnly: readOnly,
                 onSaved: { fresh in
+                    loadGeneration += 1
+                    loading = false
                     response = fresh
+                    fresh.applyNativePalette()
                     Task { await JarvisAppCache.invalidate(.settings) }
                     if let theme = fresh.string(area: "appearance", key: "theme") {
                         storedTheme = theme
@@ -576,6 +595,7 @@ struct JarvisSettingsArea: View {
             guard !Task.isCancelled, loadGeneration == generation else { return }
             switch update {
             case .cached(let fresh, _), .fresh(let fresh):
+                if case .fresh = update { fresh.applyNativePalette() }
                 response = fresh
                 loadError = nil
                 readOnly = false

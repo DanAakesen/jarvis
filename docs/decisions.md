@@ -21,6 +21,11 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
 
+### 24 November 2026 — Personal native palette
+
+Dan chose orange and blue-cyan as independently editable defaults. Use the saved appearance preferences across
+iPhone and Watch, including the neural artwork. Use the Watch Up Next card as the reference for the dashboard surfaces.
+
 ### 23 November 2026 — Use the local day boundary for capped work
 
 Use the next Copenhagen midnight, not a fixed-hour delay, so queued work can be checked as soon as the allowance resets across daylight-saving changes.

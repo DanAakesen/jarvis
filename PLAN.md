@@ -14,6 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
+| Native appearance | Implemented locally. Apple build and paired-device checks pending for palette save, reset, Watch reconnection, tinted complications and dashboard readability. |
 | TestFlight **128** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). Release lookup, Watch Night Mode, Watch composer tap targets, and the iPhone Chat composer passed on device. Watch dictation intermittently times out after Stop. Watch Voice failed at startup and the Watch app crashed once. iPhone Voice stayed on Speaking during silence. The Nutrition breakdown still needs a device check. Nutrition balance, location lookup and Watch dictation passed on build 126. |
 | Backend | The [nearby Maps release](https://github.com/DanAakesen/jarvis/actions/runs/45237665783) deployed and passed PI revision and runtime readiness checks. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |

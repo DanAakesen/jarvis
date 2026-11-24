@@ -115,6 +115,23 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         await credentialRefresh?.value
     }
 
+    private var paletteContext: [String: String] {
+        let palette = JarvisPalette.shared
+        return ["primary": palette.primaryHex, "secondary": palette.secondaryHex]
+    }
+
+    /// Latest-only delivery also reaches the paired Watch after it comes back in range.
+    func syncPalette() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled else { return }
+        var context = session.applicationContext
+        let colors = paletteContext
+        guard context["appearancePalette"] as? [String: String] != colors else { return }
+        context["appearancePalette"] = colors
+        try? session.updateApplicationContext(context)
+    }
+
     func activate() {
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self
@@ -132,7 +149,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         pendingCredentialRefresh?.cancel(); credentialRefresh = nil; credential = nil
         credentialRenewal?.cancel(); credentialRenewal = nil
         connectivityGrace?.cancel(); connectivityGrace = nil
-        let cleared: [String: Any] = ["clearCredentials": true, "credentialRevision": Date().timeIntervalSince1970]
+        let cleared: [String: Any] = ["clearCredentials": true, "credentialRevision": Date().timeIntervalSince1970,
+                                      "appearancePalette": paletteContext]
         try? WCSession.default.updateApplicationContext(cleared)
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(cleared, replyHandler: nil, errorHandler: { _ in })
@@ -152,7 +170,13 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         } catch { return false }
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        Task { @MainActor in await self.refreshDictationCredential() }
+        Task { @MainActor in
+            self.syncPalette()
+            await self.refreshDictationCredential()
+        }
+    }
+    nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
+        Task { @MainActor in self.syncPalette() }
     }
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor in
@@ -170,6 +194,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             self.connectivityGrace?.cancel()
             if WCSession.default.isReachable {
                 self.deliverEvents()
+                self.syncPalette()
                 await self.refreshDictationCredential()
             } else {
                 if self.voiceID != nil {

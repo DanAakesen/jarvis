@@ -173,7 +173,7 @@ private struct JarvisFactoryTaskRow: View {
     private func icon(_ symbol: String, _ copy: JarvisWidgetCopy) -> some View {
         Image(systemName: symbol)
             .font(.body.weight(.semibold))
-            .foregroundStyle(.orange)
+            .foregroundStyle(JarvisPalette.shared.primaryColor)
             .widgetAccentable()
             .frame(width: 32, height: 32)
             .accessibilityLabel("\(copy.text(language: language)), \(task.title)")

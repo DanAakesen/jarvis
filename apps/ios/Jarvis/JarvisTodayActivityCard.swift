@@ -24,7 +24,7 @@ struct JarvisTodayActivityCard: View {
         switch session {
         case .chest: JarvisDesignTokens.primaryAccent
         case .back: JarvisDesignTokens.secondaryAccent
-        case .arms: Color.cyan
+        case .arms: Color.purple
         case .legs: JarvisDesignTokens.ambientGreen
         case .cardio: JarvisDesignTokens.ambientBlue
         case .strength: JarvisDesignTokens.primaryAccent
@@ -49,7 +49,7 @@ struct JarvisTodayActivityCard: View {
         }
         .padding(JarvisPageHeaderMetrics.heroInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+        .jarvisDashboardSurface()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("today.activity")
     }

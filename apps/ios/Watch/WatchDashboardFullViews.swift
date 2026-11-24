@@ -61,7 +61,7 @@ struct WatchAgendaView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(entry.start, format: .dateTime.hour().minute())
                                     .font(.system(.caption, design: .rounded, weight: .semibold))
-                                    .monospacedDigit().foregroundStyle(WatchStyle.amber)
+                                    .monospacedDigit().foregroundStyle(WatchStyle.accent)
                                 Text(entry.title).font(.system(.body, design: .rounded, weight: .semibold))
                                     .lineLimit(2)
                             }
@@ -156,7 +156,7 @@ struct WatchNoteLinks: View {
             if let date, previous.map({ !Calendar.current.isDate($0, inSameDayAs: date) }) ?? true {
                 Text(date, format: .dateTime.month(.abbreviated).day())
                     .font(.system(.caption2, design: .rounded, weight: .semibold))
-                    .foregroundStyle(WatchStyle.stone).accessibilityAddTraits(.isHeader)
+                    .foregroundStyle(WatchStyle.secondaryAccent).accessibilityAddTraits(.isHeader)
                     .listRowBackground(Color.clear)
             }
             NavigationLink {

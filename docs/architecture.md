@@ -4,6 +4,10 @@ System map from code and workflows, not a production readback. See [PLAN.md](../
 
 ## Stack overview
 
+Native appearance uses the existing owner settings keys `appearance.accent` and `appearance.accent-secondary`.
+The iPhone caches the pair in its App Group and sends the latest pair through WatchConnectivity application context.
+Watch reads the pair into its own App Group for its screens and complications.
+
 | Component | Where it lives | Responsibility |
 | --- | --- | --- |
 | iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and the shared `JarvisCore` package | Chat, Voice, local capture and native notifications. Watch has its own Chat and Voice views; dictation sends recorded audio to Azure Speech through the backend. The backend allows 30 seconds for upload and 20 seconds for recognition. The Watch allows 55 seconds for a direct request. A phone retry gets its own transfer and recognition windows. The Speech SDK uses its Node WebSocket transport so its upgrade carries the bearer header. |

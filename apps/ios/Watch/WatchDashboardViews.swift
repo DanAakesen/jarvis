@@ -118,7 +118,7 @@ struct WatchDashboardView: View {
                     WatchOrb().frame(width: 22, height: 22)
                     Text(voiceActive ? "Resume" : "Chat")
                 }
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: WatchStyle.controlHeight)
                 .contentShape(Rectangle())
             }
             .accessibilityLabel(voiceActive ? "Resume voice" : "Chat")
@@ -128,16 +128,16 @@ struct WatchDashboardView: View {
                 .accessibilityHidden(true)
             NavigationLink(value: WatchRoute.menu) {
                 HStack(spacing: 4) {
-                    Image(systemName: "square.grid.2x2").foregroundStyle(WatchStyle.amber)
+                    Image(systemName: "square.grid.2x2").foregroundStyle(WatchStyle.accent)
                     Text("Menu")
                 }
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: WatchStyle.controlHeight)
                 .contentShape(Rectangle())
             }
         }
         .font(.system(.subheadline, design: .rounded, weight: .semibold))
         .buttonStyle(.plain)
-        .modifier(WatchSurface(radius: 16))
+        .modifier(WatchSurface())
     }
 
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {
@@ -148,7 +148,7 @@ struct WatchDashboardView: View {
                 let next = entries.first
                 HStack(alignment: .firstTextBaseline) {
                     Label { WatchDashboardHeading(title: "Up Next") } icon: {
-                        Image(systemName: "calendar").foregroundStyle(WatchStyle.amber)
+                        Image(systemName: "calendar").foregroundStyle(WatchStyle.accent)
                     }
                     Spacer(minLength: 3)
                     Image(systemName: "chevron.forward")
@@ -163,7 +163,7 @@ struct WatchDashboardView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         if current {
                             Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
-                                .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+                                .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.accent)
                         }
                         Text(next.start.formatted(date: .omitted, time: .shortened) + "–" +
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
@@ -176,9 +176,9 @@ struct WatchDashboardView: View {
                     else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }
             }
-            .padding(9)
+            .padding(WatchStyle.cardInset)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(WatchSurface(radius: 16))
+            .modifier(WatchSurface())
             .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityHint("Opens your agenda")
     }
@@ -208,7 +208,7 @@ struct WatchDashboardView: View {
                     }
                     if let duration = row["duration_seconds"]?.numberValue {
                         Label("\((duration / 60).formatted(.number.precision(.fractionLength(0)))) min", systemImage: "stopwatch")
-                            .font(.caption).foregroundStyle(WatchStyle.amber)
+                            .font(.caption).foregroundStyle(WatchStyle.accent)
                     }
                 } else {
                     Text("No workouts in the last 7 days").font(.caption).foregroundStyle(.secondary)
@@ -322,7 +322,7 @@ struct WatchDashboardSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 9) {
             NavigationLink(value: route) {
                 HStack {
-                    Image(systemName: symbol).foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+                    Image(systemName: symbol).foregroundStyle(WatchStyle.accent).accessibilityHidden(true)
                     WatchDashboardHeading(title: title)
                     Spacer()
                     Image(systemName: "chevron.forward")
@@ -330,7 +330,7 @@ struct WatchDashboardSection<Content: View>: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
-                .frame(minHeight: 44)
+                .frame(minHeight: WatchStyle.controlHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -382,7 +382,7 @@ struct WatchAgendaTimeline: View {
     private var end: Date { start.addingTimeInterval(3 * 3600) }
     var body: some View {
         VStack(spacing: 4) {
-            Canvas { context, size in
+            Canvas { [accent = WatchStyle.accent, markerColor = WatchStyle.secondaryAccent] context, size in
                 let width = max(0, size.width)
                 let height = max(0, size.height)
                 let total = end.timeIntervalSince(start)
@@ -397,14 +397,14 @@ struct WatchAgendaTimeline: View {
                     let left = max(0, min(1, interval.start.timeIntervalSince(start) / total))
                     let right = max(0, min(1, interval.end.timeIntervalSince(start) / total))
                     let rect = CGRect(x: width * CGFloat(left), y: 1, width: max(2, width * CGFloat(right - left)), height: max(1, height - 7))
-                    context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(WatchStyle.amber))
+                    context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .color(accent))
                 }
                 let fraction = now.timeIntervalSince(start) / total
                 var marker = Path()
                 let x = width * CGFloat(max(0, min(1, fraction)))
                 marker.move(to: CGPoint(x: x, y: 0))
                 marker.addLine(to: CGPoint(x: x, y: height))
-                context.stroke(marker, with: .color(WatchStyle.amber), lineWidth: 1)
+                context.stroke(marker, with: .color(markerColor), lineWidth: 1)
             }.frame(height: 17)
             HStack {
                 ForEach(0..<4) { hour in

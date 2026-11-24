@@ -78,8 +78,8 @@ struct WatchChatView: View {
                                 .padding(message.user ? 7 : 0)
                                 .background {
                                     if message.user {
-                                        RoundedRectangle(cornerRadius: 15).fill(WatchStyle.amber.opacity(0.12))
-                                            .overlay { RoundedRectangle(cornerRadius: 15).stroke(WatchStyle.amber.opacity(0.34), lineWidth: 0.5) }
+                                        RoundedRectangle(cornerRadius: 15).fill(WatchStyle.accent.opacity(0.12))
+                                            .overlay { RoundedRectangle(cornerRadius: 15).stroke(WatchStyle.accent.opacity(0.34), lineWidth: 0.5) }
                                     }
                                 }
                                 .accessibilityLabel("\(message.user ? "You" : "Jarvis"): \(message.text)")
@@ -222,7 +222,7 @@ struct WatchChatView: View {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .foregroundStyle(WatchStyle.amber)
+                    .foregroundStyle(WatchStyle.accent)
                     .disabled(composerDisabled)
                     .accessibilityLabel("Send message")
                 } else {
@@ -231,7 +231,7 @@ struct WatchChatView: View {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .foregroundStyle(WatchStyle.amber)
+                    .foregroundStyle(WatchStyle.accent)
                     .disabled(composerDisabled).accessibilityLabel("Dictate")
                     Button { Task { await model.startVoice() } } label: {
                         WatchOrb().frame(width: 26, height: 26)

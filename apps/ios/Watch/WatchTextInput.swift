@@ -59,7 +59,7 @@ private struct WatchDictateButton: View {
     var body: some View {
         Button { beginDictation() } label: {
             Image(systemName: "mic.fill").frame(width: 32, height: 38)
-        }.buttonStyle(.plain).foregroundStyle(WatchStyle.amber)
+        }.buttonStyle(.plain).foregroundStyle(WatchStyle.accent)
             .disabled(presenting).accessibilityLabel("Dictate " + title)
     }
     private func beginDictation() {
@@ -115,7 +115,7 @@ struct WatchAddButton: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) { Image(systemName: "plus").font(.title3).frame(width: 44, height: 44) }
-            .buttonStyle(.plain).foregroundStyle(WatchStyle.amber).accessibilityLabel(title)
+            .buttonStyle(.plain).foregroundStyle(WatchStyle.accent).accessibilityLabel(title)
     }
 }
 
@@ -148,7 +148,7 @@ struct WatchChoiceBar<Value: Hashable>: View {
                     if let count = counts[value] {
                         Text(count).font(.caption2).monospacedDigit()
                             .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(WatchStyle.amber.opacity(0.18), in: Capsule())
+                            .background(WatchStyle.accent.opacity(0.18), in: Capsule())
                     }
                 }
                 .font(.system(compact ? .caption : .body, design: .rounded, weight: .semibold))
@@ -159,7 +159,7 @@ struct WatchChoiceBar<Value: Hashable>: View {
                         .fill(selection == value ? WatchStyle.surface : .clear)
                 }
             }.buttonStyle(.plain)
-                .foregroundStyle(selection == value ? WatchStyle.amber : WatchStyle.stone)
+                .foregroundStyle(selection == value ? WatchStyle.accent : WatchStyle.secondaryAccent)
                 .accessibilityLabel(title)
                 .accessibilityValue(counts[value].map { "\($0) open tasks" } ?? "")
                 .accessibilityAddTraits(selection == value ? .isSelected : [])

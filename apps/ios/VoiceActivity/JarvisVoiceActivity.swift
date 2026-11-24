@@ -15,11 +15,12 @@ struct JarvisVoiceActivity: Widget {
         ActivityConfiguration(for: VoiceActivityAttributes.self) { context in
             VoiceLockScreenView(attributes: context.attributes, state: context.state)
                 .activityBackgroundTint(Color.black.opacity(0.86))
-                .activitySystemActionForegroundColor(JarvisDesignTokens.liveActivityStone)
+                .activitySystemActionForegroundColor(context.state.appearance.secondaryDarkColor)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VoiceActivityMark(
+                        palette: context.state.appearance,
                         diameter: 30,
                         phase: context.state.phase,
                         language: .default,
@@ -37,7 +38,7 @@ struct JarvisVoiceActivity: Widget {
                             context.state.phase, language: context.attributes.appLanguage
                         ))
                         .font(.caption)
-                        .foregroundStyle(JarvisDesignTokens.liveActivityStone)
+                        .foregroundStyle(context.state.appearance.secondaryDarkColor)
                         .lineLimit(1)
                     }
                 }
@@ -45,7 +46,7 @@ struct JarvisVoiceActivity: Widget {
                     Text(context.attributes.startedAt, style: .timer)
                         .monospacedDigit()
                         .font(.caption2)
-                        .foregroundStyle(JarvisDesignTokens.liveActivityStone)
+                        .foregroundStyle(context.state.appearance.secondaryDarkColor)
                         .frame(minWidth: 42, alignment: .trailing)
                         .accessibilityLabel(
                             VoiceLiveActivityCopy.elapsed.text(language: context.attributes.appLanguage)
@@ -54,6 +55,7 @@ struct JarvisVoiceActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: JarvisDesignTokens.compactSpacing + 4) {
                         VoiceActivityWaveformView(
+                            color: context.state.appearance.primaryDarkColor,
                             levels: context.state.waveform,
                             barCount: VoiceWaveform.sampleCount,
                             height: JarvisDesignTokens.liveActivityWaveformHeight,
@@ -75,7 +77,7 @@ struct JarvisVoiceActivity: Widget {
                                 .frame(maxWidth: .infinity, minHeight: 36)
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(JarvisDesignTokens.liveActivityStone)
+                            .foregroundStyle(context.state.appearance.secondaryDarkColor)
                             .background(.white.opacity(0.08), in: Capsule())
 
                             Button(intent: EndVoiceActivityIntent(
@@ -90,9 +92,9 @@ struct JarvisVoiceActivity: Widget {
                                 .frame(maxWidth: .infinity, minHeight: 36)
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(JarvisDesignTokens.liveActivityAccent)
+                            .foregroundStyle(context.state.appearance.primaryDarkColor)
                             .background(
-                                JarvisDesignTokens.liveActivityAccent.opacity(0.12),
+                                context.state.appearance.primaryDarkColor.opacity(0.12),
                                 in: Capsule()
                             )
                         }
@@ -100,6 +102,7 @@ struct JarvisVoiceActivity: Widget {
                 }
             } compactLeading: {
                 VoiceActivityMark(
+                    palette: context.state.appearance,
                     diameter: 18,
                     phase: context.state.phase,
                     language: context.attributes.appLanguage,
@@ -109,6 +112,7 @@ struct JarvisVoiceActivity: Widget {
                 )
             } compactTrailing: {
                 VoiceActivityWaveformView(
+                    color: context.state.appearance.primaryDarkColor,
                     levels: context.state.waveform,
                     barCount: 6,
                     height: 12,
@@ -117,6 +121,7 @@ struct JarvisVoiceActivity: Widget {
                 .frame(width: 22, height: 14)
             } minimal: {
                 VoiceActivityMark(
+                    palette: context.state.appearance,
                     diameter: 18,
                     phase: context.state.phase,
                     language: context.attributes.appLanguage,
@@ -125,7 +130,7 @@ struct JarvisVoiceActivity: Widget {
                     )
                 )
             }
-            .keylineTint(JarvisDesignTokens.liveActivityAccent)
+            .keylineTint(context.state.appearance.primaryDarkColor)
         }
     }
 }
@@ -137,13 +142,14 @@ private func voiceActivityStatusText(
 }
 
 private struct VoiceActivityMark: View {
+    let palette: JarvisPaletteSelection
     let diameter: CGFloat
     let phase: VoiceLiveActivityPhase
     let language: JarvisAppLanguage
     let status: String
 
     var body: some View {
-        JarvisOrb(activity: JarvisOrbActivity(livePhase: phase), size: diameter, isStatic: true)
+        JarvisOrb(activity: JarvisOrbActivity(livePhase: phase), size: diameter, isStatic: true, palette: palette)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(VoiceLiveActivityCopy.title.text(language: language))
             .accessibilityValue(status)
@@ -151,6 +157,7 @@ private struct VoiceActivityMark: View {
 }
 
 private struct VoiceActivityWaveformView: View {
+    let color: Color
     let levels: [Double]
     let barCount: Int
     let height: CGFloat
@@ -166,7 +173,7 @@ private struct VoiceActivityWaveformView: View {
                     ? 0
                     : levels[min(index * levels.count / barCount, levels.count - 1)]
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(JarvisDesignTokens.liveActivityAccent)
+                    .fill(color)
                     .frame(width: barWidth, height: max(2, height * CGFloat(min(1, max(0, sample)))))
             }
         }
@@ -190,13 +197,13 @@ struct VoiceLockScreenView: View {
             HStack(spacing: JarvisDesignTokens.rowSpacing) {
                 JarvisOrb(
                     activity: JarvisOrbActivity(livePhase: state.phase), size: JarvisDesignTokens.liveActivityOrbSize,
-                    isStatic: true
+                    isStatic: true, palette: state.appearance
                 )
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
                     Text(text(.title)).font(.headline).foregroundStyle(.white)
                     Text(voiceActivityStatusText(state.phase, language: attributes.appLanguage))
                         .font(.subheadline)
-                        .foregroundStyle(JarvisDesignTokens.liveActivityStone)
+                        .foregroundStyle(state.appearance.secondaryDarkColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: JarvisDesignTokens.compactSpacing)
@@ -204,7 +211,7 @@ struct VoiceLockScreenView: View {
                     .monospacedDigit()
                     .font(.subheadline)
                     .multilineTextAlignment(.trailing)
-                    .foregroundStyle(JarvisDesignTokens.liveActivityStone)
+                    .foregroundStyle(state.appearance.secondaryDarkColor)
                     .frame(maxWidth: 72)
                     .accessibilityLabel(text(.elapsed))
             }
@@ -213,7 +220,7 @@ struct VoiceLockScreenView: View {
                     ForEach(0..<VoiceWaveform.sampleCount, id: \.self) { index in
                         let level = state.waveform.indices.contains(index) ? state.waveform[index] : 0
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(JarvisDesignTokens.liveActivityAccent)
+                            .fill(state.appearance.primaryDarkColor)
                             .frame(
                                 maxWidth: .infinity,
                                 minHeight: 2,
@@ -246,7 +253,7 @@ struct VoiceLockScreenView: View {
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(JarvisDesignTokens.liveActivityStone)
+        .foregroundStyle(state.appearance.secondaryDarkColor)
         .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
 
         Button(intent: EndVoiceActivityIntent(sessionID: attributes.sessionID.uuidString)) {
@@ -254,7 +261,7 @@ struct VoiceLockScreenView: View {
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(JarvisDesignTokens.liveActivityAccent)
-        .background(JarvisDesignTokens.liveActivityAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
+        .foregroundStyle(state.appearance.primaryDarkColor)
+        .background(state.appearance.primaryDarkColor.opacity(0.12), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
     }
 }

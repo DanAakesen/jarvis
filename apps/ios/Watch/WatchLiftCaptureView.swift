@@ -117,7 +117,7 @@ struct WatchLiftCaptureView: View {
             VStack(alignment: .leading, spacing: 10) {
                 if case .saved(let entry, _) = capture.draft.result, capture.draft.phase == .saved {
                     Label("Saved", systemImage: "checkmark.circle.fill")
-                        .font(.headline).foregroundStyle(WatchStyle.amber)
+                        .font(.headline).foregroundStyle(WatchStyle.accent)
                     Text(entry.exerciseName).font(.body)
                     Text("\(entry.weightKg.formatted()) kg · \(entry.reps) reps × \(entry.sets) sets")
                         .font(.body).accessibilityLabel("\(entry.weightKg.formatted()) kilograms, \(entry.reps) repetitions, \(entry.sets) sets")
@@ -184,6 +184,6 @@ struct WatchLogLiftShortcut: View {
     var body: some View {
         NavigationLink(value: WatchRoute.logLift) {
             Label("Log lift", systemImage: "plus").frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-        }.buttonStyle(.plain).foregroundStyle(WatchStyle.amber).accessibilityIdentifier("watch.logLift")
+        }.buttonStyle(.plain).foregroundStyle(WatchStyle.accent).accessibilityIdentifier("watch.logLift")
     }
 }

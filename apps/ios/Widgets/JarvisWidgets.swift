@@ -68,6 +68,7 @@ private struct LockScreenFactoryTaskActivity: View {
     }
 
     var body: some View {
+        let accent = JarvisPalette.shared.persistedSelection.primaryColor
         FactoryTaskActivitySurface(
             factoryTitle: context.attributes.factoryTitle,
             state: context.state.state,
@@ -76,9 +77,10 @@ private struct LockScreenFactoryTaskActivity: View {
             language: language,
             taskTitle: context.attributes.title,
             phase: context.state.phase,
-            isStale: context.isStale
+            isStale: context.isStale,
+            accent: accent
         )
         .activityBackgroundTint(Color(uiColor: .secondarySystemBackground))
-        .activitySystemActionForegroundColor(.orange)
+        .activitySystemActionForegroundColor(accent)
     }
 }

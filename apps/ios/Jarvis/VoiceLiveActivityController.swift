@@ -24,7 +24,7 @@ final class VoiceLiveActivityController {
         guard activity == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         self.waveform = waveform ?? Array(repeating: 0, count: VoiceWaveform.sampleCount)
         let state = VoiceActivityAttributes.ContentState(
-            phase: .listening, isMuted: false, waveform: self.waveform
+            phase: .listening, isMuted: false, waveform: self.waveform, palette: JarvisPalette.shared.selection
         )
         activity = try Activity.request(
             attributes: VoiceActivityAttributes(sessionID: sessionID, startedAt: startedAt),
@@ -49,7 +49,7 @@ final class VoiceLiveActivityController {
             waveform.append(VoiceWaveform.level(pcm16: pcm16))
         }
         let content = VoiceActivityAttributes.ContentState(
-            phase: phase, isMuted: isMuted, waveform: waveform
+            phase: phase, isMuted: isMuted, waveform: waveform, palette: JarvisPalette.shared.selection
         )
         let changedState = lastState?.phase != phase || lastState?.isMuted != isMuted
         guard changedState || Date().timeIntervalSince(lastWaveformUpdate) >= 1 else { return }

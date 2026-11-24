@@ -39,5 +39,6 @@ struct JarvisApp: App {
             JarvisGateRootView()
             #endif
         }
+        .tint(JarvisDesignTokens.primaryAccent)
     }
 }

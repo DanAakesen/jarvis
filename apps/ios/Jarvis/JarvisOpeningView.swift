@@ -40,7 +40,7 @@ struct JarvisOpeningView: View {
                     isPaused: isPaused
                 )
                 RadialGradient(
-                    colors: [JarvisDesignTokens.ambientBlue.opacity(0.1), .clear],
+                    colors: [JarvisPalette.shared.secondaryDarkColor.opacity(0.1), .clear],
                     center: .center, startRadius: layout.orbDiameter * 0.45, endRadius: layout.orbDiameter * 0.85
                 )
                 .frame(width: layout.orbDiameter * 1.8, height: layout.orbDiameter * 1.8)
@@ -69,7 +69,7 @@ struct JarvisOpeningView: View {
     }
 }
 
-/// A slim linear activity bar: a filled amber bar when the work reports real progress, otherwise an amber segment
+/// A slim linear activity bar: an accent fill when the work reports real progress, otherwise a segment
 /// that travels along the same track. With Reduce Motion the segment holds still and breathes in opacity.
 /// It carries no text; the screen that shows it exposes the accessibility label and value.
 struct JarvisActivityBar: View {
@@ -87,14 +87,14 @@ struct JarvisActivityBar: View {
                 Capsule().fill(JarvisDesignTokens.openingTrack)
                 if let fraction = progress.fraction {
                     Capsule()
-                        .fill(JarvisDesignTokens.openingAmber)
+                        .fill(JarvisDesignTokens.openingAccent)
                         .frame(width: width * fraction)
                         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: fraction)
                 } else if reduceMotion || isPaused {
                     TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: isPaused)) { timeline in
                         let beat = 0.5 + 0.5 * sin(timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / 1.6)
                         Capsule()
-                            .fill(JarvisDesignTokens.openingAmber)
+                            .fill(JarvisDesignTokens.openingAccent)
                             .frame(width: width * segmentFraction)
                             .offset(x: width * (1 - segmentFraction) / 2)
                             .opacity(reduceMotion ? 0.5 + 0.5 * beat : 1)
@@ -106,7 +106,7 @@ struct JarvisActivityBar: View {
                         let eased = cycle * cycle * (3 - 2 * cycle)
                         let segment = width * segmentFraction
                         Capsule()
-                            .fill(JarvisDesignTokens.openingAmber)
+                            .fill(JarvisDesignTokens.openingAccent)
                             .frame(width: segment)
                             .offset(x: -segment + (width + segment) * eased)
                     }

@@ -368,6 +368,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let context = session.receivedApplicationContext
         Task { @MainActor in
+            self.receivePalette(context)
             self.receiveCredentials(context)
             self.updateReachability(); await self.refresh()
         }
@@ -382,6 +383,15 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in self.receiveCredentials(message) }
     }
+    private func receivePalette(_ context: [String: Any]) {
+        guard let colors = context["appearancePalette"] as? [String: String],
+              let primary = colors["primary"], let secondary = colors["secondary"] else { return }
+        let palette = JarvisPalette.shared
+        guard primary != palette.primaryHex || secondary != palette.secondaryHex else { return }
+        palette.set(primaryHex: primary, secondaryHex: secondary)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     @discardableResult
     private func receiveCredentials(_ context: [String: Any]) -> Bool {
         guard credentialRevision.accept(context["credentialRevision"] as? Double, isEmpty: context.isEmpty) else { return false }
@@ -403,6 +413,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         let dashboardData = applicationContext["dashboard"] as? Data
         let voiceData = applicationContext["voice"] as? Data
         Task { @MainActor in
+            self.receivePalette(applicationContext)
             if self.receiveCredentials(applicationContext) { return }
             if let data = voiceData, data.count <= WatchLimits.payloadBytes,
                let event = try? JSONDecoder().decode(WatchEvent.self, from: data),

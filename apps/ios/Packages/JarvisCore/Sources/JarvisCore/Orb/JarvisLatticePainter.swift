@@ -10,6 +10,7 @@ public struct JarvisLatticeOrbView: View {
     let isStatic: Bool
     let isPaused: Bool
     let adaptsToLowPower: Bool
+    let palette: JarvisPaletteSelection?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -20,25 +21,28 @@ public struct JarvisLatticeOrbView: View {
     /// while the orb is covered. `adaptsToLowPower` draws half the frames on the neural background's cheap path
     /// (Low Power Mode, the Simulator), for the orb that sits behind every page.
     public init(
-        activity: JarvisOrbActivity, isStatic: Bool = false, isPaused: Bool = false, adaptsToLowPower: Bool = false
+        activity: JarvisOrbActivity, isStatic: Bool = false, isPaused: Bool = false, adaptsToLowPower: Bool = false,
+        palette: JarvisPaletteSelection? = nil
     ) {
         self.activity = activity
         self.isStatic = isStatic
         self.isPaused = isPaused
+        self.palette = palette
         self.adaptsToLowPower = adaptsToLowPower
     }
 
     private var frameInterval: Double { adaptsToLowPower && isCheap ? 1.0 / 15.0 : 1.0 / 30.0 }
 
     public var body: some View {
-        GeometryReader { proxy in
+        let colors = JarvisLatticeColors(selection: palette ?? JarvisPalette.shared.selection)
+        return GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             Group {
                 if isStatic || reduceMotion {
-                    orb(frame: clock.frame(at: nil, activity: activity), side: side)
+                    orb(frame: clock.frame(at: nil, activity: activity), side: side, colors: colors)
                 } else {
                     TimelineView(.animation(minimumInterval: frameInterval, paused: isPaused || scenePhase != .active)) { timeline in
-                        orb(frame: clock.frame(at: timeline.date, activity: activity), side: side)
+                        orb(frame: clock.frame(at: timeline.date, activity: activity), side: side, colors: colors)
                     }
                 }
             }
@@ -50,11 +54,11 @@ public struct JarvisLatticeOrbView: View {
         }
     }
 
-    private func orb(frame: JarvisOrbFrame, side: CGFloat) -> some View {
+    private func orb(frame: JarvisOrbFrame, side: CGFloat, colors: JarvisLatticeColors) -> some View {
         let activity = activity
         let scene = JarvisLatticeScene.make(frame: frame, detail: JarvisLatticeDetail(points: Double(side)))
         return Canvas { context, size in
-            JarvisLatticePainter(scene: scene, frame: frame, activity: activity, size: size).paint(&context)
+            JarvisLatticePainter(scene: scene, frame: frame, activity: activity, size: size, colors: colors).paint(&context)
         }
         .frame(width: side, height: side)
     }
@@ -81,19 +85,10 @@ struct JarvisLatticePainter {
     let frame: JarvisOrbFrame
     let activity: JarvisOrbActivity
     let size: CGSize
+    let colors: JarvisLatticeColors
 
     private typealias RGB = (r: Double, g: Double, b: Double)
 
-    private static let edgeCool: RGB = (0.22, 0.70, 1.0)
-    private static let edgeMiddle: RGB = (0.45, 0.78, 0.62)
-    private static let edgeWarm: RGB = (1.0, 0.5, 0.07)
-    private static let nodeCool: RGB = (0.58, 0.92, 1.0)
-    private static let nodeMiddle: RGB = (0.72, 0.9, 0.55)
-    private static let nodeWarm: RGB = (1.0, 0.64, 0.16)
-    private static let haze: RGB = (1.0, 0.42, 0.06)
-    private static let spark: RGB = (1.0, 0.93, 0.78)
-    private static let signalCool: RGB = (0.45, 0.85, 1.0)
-    private static let signalWarm: RGB = (1.0, 0.8, 0.4)
     private static let warmBuckets = 6
     private static let alphaBuckets = 12
     private static let alphaStep = 0.07
@@ -156,9 +151,9 @@ struct JarvisLatticePainter {
     private func glass(_ context: inout GraphicsContext) {
         let shading = GraphicsContext.Shading.radialGradient(
             Gradient(stops: [
-                .init(color: Color(red: 0.012, green: 0.03, blue: 0.075).opacity(0.92), location: 0),
-                .init(color: Color(red: 0.014, green: 0.05, blue: 0.12).opacity(0.92), location: 0.72),
-                .init(color: Color(red: 0.024, green: 0.102, blue: 0.243).opacity(0.95), location: 1),
+                .init(color: Color(red: colors.glassCore.r, green: colors.glassCore.g, blue: colors.glassCore.b).opacity(0.92), location: 0),
+                .init(color: Color(red: colors.glassMiddle.r, green: colors.glassMiddle.g, blue: colors.glassMiddle.b).opacity(0.92), location: 0.72),
+                .init(color: Color(red: colors.glassEdge.r, green: colors.glassEdge.g, blue: colors.glassEdge.b).opacity(0.95), location: 1),
             ]),
             center: center, startRadius: 0, endRadius: CGFloat(radius)
         )
@@ -176,9 +171,9 @@ struct JarvisLatticePainter {
             circle(heart.x, heart.y, wide),
             with: .radialGradient(
                 Gradient(stops: [
-                    .init(color: color(JarvisLatticePainter.haze, heart.intensity * 0.38), location: 0),
-                    .init(color: color(JarvisLatticePainter.haze, heart.intensity * 0.17), location: 0.5),
-                    .init(color: color(JarvisLatticePainter.haze, 0), location: 1),
+                    .init(color: color(colors.haze, heart.intensity * 0.38), location: 0),
+                    .init(color: color(colors.haze, heart.intensity * 0.17), location: 0.5),
+                    .init(color: color(colors.haze, 0), location: 1),
                 ]),
                 center: p, startRadius: 0, endRadius: CGFloat(wide)
             )
@@ -188,9 +183,9 @@ struct JarvisLatticePainter {
             circle(heart.x, heart.y, reach),
             with: .radialGradient(
                 Gradient(stops: [
-                    .init(color: color(JarvisLatticePainter.edgeWarm, heart.intensity * 0.55), location: 0),
-                    .init(color: color(JarvisLatticePainter.edgeWarm, heart.intensity * 0.2), location: 0.5),
-                    .init(color: color(JarvisLatticePainter.edgeWarm, 0), location: 1),
+                    .init(color: color(colors.edgeWarm, heart.intensity * 0.55), location: 0),
+                    .init(color: color(colors.edgeWarm, heart.intensity * 0.2), location: 0.5),
+                    .init(color: color(colors.edgeWarm, 0), location: 1),
                 ]),
                 center: p, startRadius: 0, endRadius: CGFloat(reach)
             )
@@ -202,8 +197,8 @@ struct JarvisLatticePainter {
         let heart = scene.heart
         let p = point(heart.x, heart.y)
         let r = radius * 0.1 * (1 + heart.heat)
-        let hot = JarvisOrbAppearance.hot
-        let warm = JarvisOrbAppearance.warm
+        let hot = colors.hot
+        let warm = colors.warm
         layer.fill(
             circle(heart.x, heart.y, r),
             with: .radialGradient(
@@ -220,8 +215,8 @@ struct JarvisLatticePainter {
             circle(heart.x, heart.y, tip),
             with: .radialGradient(
                 Gradient(stops: [
-                    .init(color: color(JarvisLatticePainter.spark, heart.heat * 0.85), location: 0),
-                    .init(color: color(JarvisLatticePainter.spark, 0), location: 1),
+                    .init(color: color(colors.spark, heart.heat * 0.85), location: 0),
+                    .init(color: color(colors.spark, 0), location: 1),
                 ]),
                 center: p, startRadius: 0, endRadius: CGFloat(tip)
             )
@@ -252,7 +247,7 @@ struct JarvisLatticePainter {
         for (key, path) in lines {
             let warm = Double(key / Self.alphaBuckets % Self.warmBuckets) + 0.5
             let alpha = (Double(key % Self.alphaBuckets) + 0.5) * Self.alphaStep
-            let tone = blend(Self.edgeCool, Self.edgeMiddle, Self.edgeWarm, warm / Double(Self.warmBuckets))
+            let tone = blend(colors.edgeCool, colors.edgeMiddle, colors.edgeWarm, warm / Double(Self.warmBuckets))
             layer.stroke(path, with: .color(color(tone, alpha)), style: StrokeStyle(lineWidth: width, lineCap: .round))
             if scene.detail != .minimal {
                 layer.stroke(
@@ -265,7 +260,7 @@ struct JarvisLatticePainter {
         for (key, path) in glows {
             let warm = Double(key / 4) + 0.5
             let light = (Double(key % 4) + 0.5) / 4
-            let tone = blend(Self.edgeCool, Self.edgeMiddle, Self.edgeWarm, warm / Double(Self.warmBuckets))
+            let tone = blend(colors.edgeCool, colors.edgeMiddle, colors.edgeWarm, warm / Double(Self.warmBuckets))
             layer.stroke(path, with: .color(color(tone, light * 0.22)), style: StrokeStyle(lineWidth: width * 2.4, lineCap: .round))
         }
     }
@@ -280,7 +275,7 @@ struct JarvisLatticePainter {
             let alpha = min(5, Int(dot.alpha * 6))
             bodies[warm * 6 + alpha, default: Path()].addEllipse(in: square(dot.x, dot.y, r))
             if dot.halo > 0.05 {
-                let tone = blend(Self.nodeCool, Self.nodeMiddle, Self.nodeWarm, dot.warmth)
+                let tone = blend(colors.nodeCool, colors.nodeMiddle, colors.nodeWarm, dot.warmth)
                 let reach = r * 3.6
                 layer.fill(
                     circle(dot.x, dot.y, reach),
@@ -294,14 +289,14 @@ struct JarvisLatticePainter {
         for (key, path) in bodies {
             let warm = (Double(key / 6) + 0.5) / 4
             let alpha = (Double(key % 6) + 0.5) / 6
-            layer.fill(path, with: .color(color(blend(Self.nodeCool, Self.nodeMiddle, Self.nodeWarm, warm), alpha)))
+            layer.fill(path, with: .color(color(blend(colors.nodeCool, colors.nodeMiddle, colors.nodeWarm, warm), alpha)))
         }
     }
 
     private func signals(_ layer: inout GraphicsContext) {
         for dot in scene.signals {
             let r = max(0.6, dot.radius * radius)
-            let tone = mix(Self.signalCool, Self.signalWarm, dot.warmth)
+            let tone = mix(colors.signalCool, colors.signalWarm, dot.warmth)
             if dot.halo > 0.05 {
                 layer.fill(circle(dot.x, dot.y, r * 3), with: .color(color(tone, dot.halo * 0.16)))
             }
@@ -320,9 +315,9 @@ struct JarvisLatticePainter {
         let strength = (0.62 + 0.53 * m.awake) * lively * clamp(0.6 + 0.4 * scene.outerGain, 0, 1.3)
         let steps = 48
         var stops: [Gradient.Stop] = []
-        let deep = JarvisOrbAppearance.deep
-        let cool = JarvisOrbAppearance.cool
-        let warm = JarvisOrbAppearance.warm
+        let deep = colors.deep
+        let cool = colors.cool
+        let warm = colors.warm
         for step in 0...steps {
             let rho = Double(step) / Double(steps)
             let edge = pow(1 - (1 - rho * rho).squareRoot(), 2.7)
@@ -338,9 +333,9 @@ struct JarvisLatticePainter {
             r += cool.r * ring; g += cool.g * ring; b += cool.b * ring
             let wave = JarvisOrbMotion.smoothstep(0.1, 0.7, m.wave)
             let frontMix = front * 1.6
-            r += (warm.r * (1 - wave) + 0.62 * wave) * frontMix
-            g += (warm.g * (1 - wave) + 0.9 * wave) * frontMix
-            b += (warm.b * (1 - wave) + 1.0 * wave) * frontMix
+            r += (warm.r * (1 - wave) + colors.wave.r * wave) * frontMix
+            g += (warm.g * (1 - wave) + colors.wave.g * wave) * frontMix
+            b += (warm.b * (1 - wave) + colors.wave.b * wave) * frontMix
             let tide = inward * (1 - edge * 0.4)
             r += (cool.r * 0.65 + warm.r * 0.35) * tide
             g += (cool.g * 0.65 + warm.g * 0.35) * tide
@@ -361,9 +356,7 @@ struct JarvisLatticePainter {
         let m = motion
         let lift = (0.55 + 0.45 * m.awake) * (1 + 0.25 * m.surge + 0.2 * m.listen * m.input)
             * clamp(0.7 + 0.3 * scene.outerGain, 0, 1.3)
-        let cyan: RGB = (0.42, 0.88, 1.0)
-        let blue: RGB = (0.16, 0.5, 0.95)
-        let amber: RGB = (1.0, 0.44, 0.06)
+        let cyan = colors.rimLight, blue = colors.rimShade, amber = colors.rimWarm
         let stops: [(angle: Double, tone: RGB, level: Double)] = [
             (0, blue, 0.34), (22, amber, 0.45), (40, amber, 0.95), (60, amber, 1.0), (84, amber, 0.9), (108, amber, 0.4),
             (132, cyan, 0.36), (160, cyan, 0.6), (185, cyan, 0.9), (212, cyan, 1.0), (245, cyan, 0.8), (285, cyan, 0.45),
@@ -393,7 +386,7 @@ struct JarvisLatticePainter {
             Gradient(stops: [
                 .init(color: color(cyan, 0), location: 0),
                 .init(color: color(cyan, 0), location: 150 / 360),
-                .init(color: color((0.8, 0.95, 1.0), 0.2 * lift), location: 215 / 360),
+                .init(color: color(colors.sheen, 0.2 * lift), location: 215 / 360),
                 .init(color: color(cyan, 0), location: 275 / 360),
                 .init(color: color(cyan, 0), location: 1),
             ]),

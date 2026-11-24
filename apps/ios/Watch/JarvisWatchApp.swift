@@ -11,7 +11,7 @@ struct JarvisWatchApp: App {
     var body: some Scene {
         WindowGroup {
             WatchRoot().environmentObject(model).environmentObject(model.connection)
-                .tint(WatchStyle.amber)
+                .tint(WatchStyle.accent)
         }
     }
 }
@@ -241,7 +241,7 @@ struct WatchRoot: View {
         NavigationLink(value: route) {
             VStack(alignment: .leading, spacing: 5) {
                 Image(systemName: symbol)
-                    .foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+                    .foregroundStyle(WatchStyle.accent).accessibilityHidden(true)
                 Text(title).font(.system(.caption, design: .rounded, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
             }
