@@ -15,7 +15,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | Delivery | State |
 | --- | --- |
 | TestFlight | Apple confirmed **128** for internal testing. Its Maps, Watch, Nutrition and composer changes are **not accepted on device**. |
-| Backend and web | Deploy for the Watch, Maps, Nutrition and composer release applied the backend and web; the PI-configured revision and deterministic readiness passed. Live conversation acceptance was skipped. |
+| Deploy | The latest rollout applied infrastructure, backend, the legacy agent and web. PI agent and deterministic readiness checks passed; live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
