@@ -36,10 +36,10 @@ Use the established Voice screen and controls; no provider selector, engine badg
 | Surface | Current direction |
 | --- | --- |
 | Library | Title row, folder/sort actions in the header menu, content, then the fixed Notes/Tasks/Graph switch and Search/+ row. No Recent section. A query swaps the mode switch for search scopes; clearing it restores the previous context. On reopen, show the last available rows while fetching fresh results. |
-| Reader and editor | Show the title and folder before the body. Use the same title in the list, reader, pins and generated links; preserve explicit link aliases. Hide only repeated leading copies of the same H1 in the reader, not later sections or editable Markdown. The title is editable and falls back to a readable filename. Saving it must not eat the first body line. Keep a draft on failure. Delete asks first. |
+| Editor | Opening a note starts an editable draft. Cancel and Done sit in the header. Keep linked notes and Markdown tools within reach above the keyboard. Insert table adds a two-column, two-row grid in place. Rows and columns can be added afterwards. Preserve frontmatter, explicit link aliases and unsaved edits on conflicts. |
 | Pins and order | Folder order and pins use the same reordering sheet and VoiceOver move actions. Changing folder order selects Manual; on failure show the stored order and the error. An unresolved pin shows its Vault path and labelled Unpin in the same row, with no Open or Delete. |
 | Tasks | Distinguish reading task detail, editing the task, choosing a date/time and choosing options. Preserve scope and edits while moving between them. Reuse the shared task row in Notes and Home. |
-| Graph | Project actual Vault nodes and links in 3D. Label top-level folder clusters, ring notes with open tasks, and show the actual open-task count in the selected-note preview when known. Depth and opacity carry hierarchy; explicit links are stronger than similarity. The preview opens the reader. Pan, rotate and zoom under user control; never rotate the whole camera by itself. |
+| Graph | Project actual Vault nodes and links in 3D. Label top-level folder clusters, ring notes with open tasks, and show the actual open-task count in the selected-note preview when known. Depth and opacity carry hierarchy; explicit links are stronger than similarity. The preview opens the note. Pan, rotate and zoom under user control; never rotate the whole camera by itself. |
 
 ## Proactive and notification opening
 

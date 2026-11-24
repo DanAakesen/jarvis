@@ -150,24 +150,12 @@ struct JarvisNotesArea: View {
             sheetContent(presented)
         }
         .navigationDestination(isPresented: $readerPresented) {
-            if let current = reader {
-                JarvisNoteReaderView(
-                    client: client, copy: copy, language: language, note: current, graph: graph,
-                    isPinned: pinnedPaths.contains(current.path),
-                    onPin: { pinned in Task { await setPinned(current.path, pinned: pinned) } },
-                    onDeleted: { path in
-                        readerPresented = false
-                        Task { await noteDeleted(path) }
-                    },
-                    onNoteChanged: { refreshed in
-                        applyReadTitle(refreshed)
-                        reader = refreshed
-                        refreshVersion += 1
-                    },
-                    onOpenPath: { path in Task { await openNote(path: path) } },
-                    onRetryGraph: { refreshVersion += 1 },
-                    onClose: { readerPresented = false }
-                )
+            if let current = reader, let client {
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .edit(current), graph: graph) { refreshed in
+                    applyReadTitle(refreshed)
+                    reader = refreshed
+                    refreshVersion += 1
+                }
                 .id(current.path)
             }
         }

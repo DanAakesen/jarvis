@@ -2,16 +2,14 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-/// The one document editor, used to create a note and to edit one. Title and body are editable at once, Cancel and
-/// Save sit in the accessory above the keyboard, and the draft is never replaced or lost: a conflict or a failed
-/// write keeps it on screen and offers a way forward the owner chooses.
+/// Edits the title and body together. Failed writes and conflicts preserve the local draft.
 struct JarvisNoteEditorSheet: View {
     enum Mode: Equatable {
         case create(folder: String, staged: [String])
         case edit(VaultNote)
     }
 
-    private enum Field: Hashable { case title, body }
+    private enum Field: Hashable { case title, body(UUID) }
 
     private enum Failure: Equatable {
         case failed, unconfirmed, exists, missing, notSignedIn(String)
@@ -29,20 +27,30 @@ struct JarvisNoteEditorSheet: View {
     @State private var folder: String
     @State private var stagedFolders: [String]
     @State private var baseline: VaultNote?
-    @State private var selection: TextSelection?
+    @State private var blocks: [JarvisMarkdownBlock]
+    @State private var activeBlock: UUID?
+    @State private var selections: [UUID: TextSelection] = [:]
+    @State private var graph: KnowledgeGraph?
+    @State private var linkedExpanded = false
+    @State private var showWikiPicker = false
+    @State private var linkedNote: VaultNote?
+    @State private var linkError: String?
+    @State private var linkSearch = ""
     @State private var saving = false
     @State private var failure: Failure?
     @State private var conflict: VaultNote?
     @State private var discardPresented = false
     @State private var folderPickerPresented = false
 
-    init(client: JarvisNotesClient, copy: JarvisNotesCopy, mode: Mode, onSaved: @escaping (VaultNote) -> Void) {
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, mode: Mode, graph: KnowledgeGraph? = nil, onSaved: @escaping (VaultNote) -> Void) {
         self.client = client
         self.copy = copy
         self.mode = mode
+        _graph = State(initialValue: graph)
         self.onSaved = onSaved
         switch mode {
         case let .create(folder, staged):
+            _blocks = State(initialValue: JarvisMarkdownBlock.parse(""))
             _parts = State(initialValue: JarvisNoteParts(newTitle: "", body: ""))
             _draftTitle = State(initialValue: "")
             _folder = State(initialValue: folder)
@@ -50,6 +58,7 @@ struct JarvisNoteEditorSheet: View {
             _baseline = State(initialValue: nil)
         case let .edit(note):
             let parts = JarvisNoteParts(note.content)
+            _blocks = State(initialValue: JarvisMarkdownBlock.parse(parts.body))
             _parts = State(initialValue: parts)
             _draftTitle = State(initialValue: parts.displayedTitle(path: note.path))
             _folder = State(initialValue: "")
@@ -63,15 +72,19 @@ struct JarvisNoteEditorSheet: View {
         return false
     }
 
-    private var bodyBinding: Binding<String> {
-        Binding(get: { parts.body }, set: { parts.body = $0; failure = nil })
+    private var bodyText: String { blocks.map(\.text).joined() }
+
+    private func focusBody() {
+        if let id = activeBlock ?? blocks.first(where: { $0.table == nil })?.id {
+            focus = .body(id)
+        }
     }
 
     private var titleBinding: Binding<String> {
         Binding(
             get: { draftTitle },
             set: { value in
-                if value.contains(where: \.isNewline) { focus = .body }
+                if value.contains(where: \.isNewline) { focusBody() }
                 draftTitle = value.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).joined(separator: " ")
                 failure = nil
             }
@@ -79,6 +92,8 @@ struct JarvisNoteEditorSheet: View {
     }
 
     private var draftContent: String {
+        var parts = self.parts
+        parts.body = bodyText
         if let baseline { return parts.content(editedTitle: draftTitle, path: baseline.path) }
         return JarvisNoteParts(newTitle: draftTitle, body: parts.body).content
     }
@@ -86,7 +101,7 @@ struct JarvisNoteEditorSheet: View {
     private var isDirty: Bool {
         isCreating
             ? !draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || !parts.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             : draftContent != baseline?.content
     }
 
@@ -101,8 +116,6 @@ struct JarvisNoteEditorSheet: View {
             if notePath == nil { return copy[.saveNeedsTitle] }
         } else if draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return copy[.saveNeedsTitle]
-        } else if !isDirty {
-            return copy[.saveNothingChanged]
         }
         return JarvisNotesLogic.validNoteText(draftContent) ? nil : copy.unavailable
     }
@@ -114,71 +127,66 @@ struct JarvisNoteEditorSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
-            if isCreating {
-                HStack {
-                    Text(copy.newNote)
-                        .font(.title2.weight(.bold))
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    JarvisSheetCloseButton(title: copy.cancel, isDisabled: saving) { cancel() }
-                }
-                JarvisRowGroup {
-                    JarvisDetailRow(
-                        title: location, systemImage: "folder", identifier: "editor.destination",
-                        isDisabled: saving, action: { folderPickerPresented = true }
-                    )
-                }
-                .accessibilityLabel(copy[.destination])
-            } else {
-                Label(location, systemImage: "folder")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("editor.location")
-            }
-            TextField(copy.titleField, text: titleBinding, axis: .vertical)
-                .font(.title.weight(.bold))
-                .lineLimit(1...3)
-                .submitLabel(.next)
-                .focused($focus, equals: .title)
-                .onSubmit { focus = .body }
-                .disabled(saving)
-                .accessibilityIdentifier("editor.title")
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: bodyBinding, selection: $selection)
-                    .scrollContentBackground(.hidden)
-                    .focused($focus, equals: .body)
-                    .disabled(saving)
-                    .accessibilityLabel(copy.contentField)
-                    .accessibilityIdentifier("editor.body")
-                if parts.body.isEmpty {
-                    Text(copy[.startWriting])
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
+            HStack {
+                Text(isCreating ? copy.newNote : copy.title).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                Spacer()
+                JarvisSheetCloseButton(title: copy.cancel, isDisabled: saving, action: cancel)
+                JarvisSheetConfirmButton(title: copy.done, isWorking: saving, isDisabled: blockedReason != nil) {
+                    if isDirty { Task { await save() } } else { dismiss() }
                 }
             }
-            .frame(maxHeight: .infinity)
-            if let blockedReason {
-                Text(blockedReason)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("editor.blocked")
+            HStack(alignment: .center) {
+                TextField(copy.titleField, text: titleBinding)
+                    .font(.title.bold()).focused($focus, equals: .title).submitLabel(.next)
+                    .onSubmit { focusBody() }.accessibilityIdentifier("editor.title")
+                Spacer(minLength: 4)
+                if isCreating {
+                    JarvisLabelledButton(title: location, systemImage: "folder", isCompact: true) { folderPickerPresented = true }
+                } else { Label(location, systemImage: "folder").font(.footnote).foregroundStyle(.secondary) }
             }
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach($blocks) { $block in
+                        if block.table != nil {
+                            JarvisNoteTableGrid(block: $block)
+                        } else {
+                            TextEditor(text: $block.text, selection: $selections[block.id])
+                                .font(.body).scrollContentBackground(.hidden).scrollDisabled(true)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(minHeight: blocks.count == 1 ? 150 : 44)
+                                .focused($focus, equals: .body(block.id))
+                                .accessibilityLabel(copy.contentField).accessibilityIdentifier("editor.body")
+                        }
+                    }
+                }
+            }.frame(maxHeight: .infinity)
+            if let blockedReason, !draftTitle.isEmpty { Text(blockedReason).font(.footnote) }
             if let failure { banner(failure) }
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.top, JarvisDesignTokens.notesSectionSpacing)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            JarvisEditorAccessory(
-                cancelTitle: copy.cancel, saveTitle: copy.save,
-                isSaveDisabled: blockedReason != nil, isSaving: saving, isCancelDisabled: saving,
-                saveHint: blockedReason ?? "",
-                onCancel: cancel, onSave: { Task { await save() } }
-            ) { tools }
+            VStack(spacing: 6) {
+                if !isCreating { linkedNotes }
+                HStack(spacing: 0) { tools }
+                    .frame(maxWidth: .infinity)
+                    .jarvisGlassSurface()
+            }.padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         }
-        .jarvisAmbientBackground()
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden()
+        .onChange(of: focus) { _, next in
+            if case let .body(id) = next { activeBlock = id }
+        }
+        .disabled(saving)
+        .sheet(isPresented: $showWikiPicker) { linkPicker }
+        .sheet(item: $linkedNote) { next in
+            NavigationStack {
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .edit(next), graph: graph) { _ in }
+            }
+        }
+        .jarvisPageBackground()
         .interactiveDismissDisabled(isDirty || saving)
         .confirmationDialog(copy.discardTitle, isPresented: $discardPresented, titleVisibility: .visible) {
             Button(copy.discard, role: .destructive) { dismiss() }
@@ -204,12 +212,13 @@ struct JarvisNoteEditorSheet: View {
         }
         .task {
             try? await Task.sleep(for: .milliseconds(300))
-            focus = isCreating ? .title : .body
+            if isCreating { focus = .title }
+            if graph == nil { graph = try? await client.graph() }
 #if targetEnvironment(simulator)
             // CI captures only: type a change and save, to show the conflict or failed-save recovery states.
             if !isCreating, ProcessInfo.processInfo.arguments.contains("--screenshot-notes-edit-save") {
                 try? await Task.sleep(for: .seconds(1))
-                parts.body += "\nEdited in the fixture.\n"
+                insertAtCursor("\nEdited in the fixture.\n")
                 try? await Task.sleep(for: .seconds(1))
                 await save()
             }
@@ -219,16 +228,59 @@ struct JarvisNoteEditorSheet: View {
 
     @ViewBuilder
     private var tools: some View {
-        JarvisAccessoryToolMenu(title: copy[.formatting], systemImage: "textformat", identifier: "editor.format") {
-            Button(copy.heading) { prefixLine("## ") }
+        JarvisAccessoryToolButton(title: copy.heading, systemImage: "textformat.size", identifier: "editor.heading") { prefixLine("## ") }
+        JarvisAccessoryToolButton(title: "Bold", systemImage: "bold", identifier: "editor.bold") { wrap("**") }
+        JarvisAccessoryToolButton(title: "Italic", systemImage: "italic", identifier: "editor.italic") { wrap("*") }
+        JarvisAccessoryToolButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "editor.checklist") { prefixLine("- [ ] ") }
+        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link") { showWikiPicker = true }
+        JarvisAccessoryToolMenu(title: copy[.formatting], systemImage: "ellipsis", identifier: "editor.format") {
+            Button("Insert table", systemImage: "tablecells", action: insertTable)
             Button(copy[.bulletList]) { prefixLine("- ") }
+            Button("Numbered list") { prefixLine("1. ") }
             Button(copy[.quote]) { prefixLine("> ") }
+            Button("Highlight") { wrap("==") }
+            Button("Inline code") { wrap("`") }
+            Button("Web link") { wrap("[", "](https://)") }
         }
-        JarvisAccessoryToolButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "editor.checklist", isDisabled: saving) {
-            prefixLine("- [ ] ")
-        }
-        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link", isDisabled: saving) {
-            insertAtCursor("[link](https://)")
+    }
+
+    private var linkedNotes: some View {
+        let connections = baseline.flatMap { note in graph.map { JarvisNoteLinks.connections(of: note.path, in: $0) } }
+        let nodes = (connections?.outgoing ?? []) + (connections?.incoming ?? [])
+        let unique = Dictionary(grouping: nodes, by: \.path).compactMap { $0.value.first }.sorted { $0.title < $1.title }
+        return DisclosureGroup(isExpanded: $linkedExpanded) {
+            ScrollView {
+                VStack(alignment: .leading) {
+                    if graph == nil { Text(copy[.graphUnavailable]) }
+                    else if unique.isEmpty { Text(copy[.noConnections]) }
+                    if let linkError { Text(linkError).font(.caption) }
+                    ForEach(unique) { node in
+                        JarvisDetailRow(title: node.title, subtitle: node.path, identifier: "link." + node.path) {
+                            Task {
+                                do { linkedNote = try await client.readNote(path: node.path); linkError = nil }
+                                catch { linkError = copy.unavailable }
+                            }
+                        }
+                    }
+                }
+            }.frame(maxHeight: 120)
+        } label: { Label(copy[.linkedNotes] + "  " + String(unique.count), systemImage: "link") }
+            .padding(.horizontal).padding(.vertical, 8).jarvisGlassSurface()
+    }
+
+    private var linkPicker: some View {
+        NavigationStack {
+            List {
+                if graph == nil { Text(copy[.graphUnavailable]) }
+                ForEach((graph?.nodes ?? []).filter { linkSearch.isEmpty || $0.path.localizedCaseInsensitiveContains(linkSearch) || $0.title.localizedCaseInsensitiveContains(linkSearch) }) { node in
+                    Button(node.title) {
+                        let path = (node.path as NSString).deletingPathExtension
+                        insertAtCursor("[[" + path + "]]")
+                        showWikiPicker = false
+                    }
+                }
+            }.searchable(text: $linkSearch).navigationTitle(copy.addLink)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { JarvisSheetCloseButton(title: copy.cancel) { showWikiPicker = false } } }
         }
     }
 
@@ -264,34 +316,62 @@ struct JarvisNoteEditorSheet: View {
         if isDirty { discardPresented = true } else { dismiss() }
     }
 
-    private func cursorIndex(in text: String) -> String.Index {
-        if let selection, case let .selection(range) = selection.indices {
-            return min(range.lowerBound, text.endIndex)
-        }
-        return text.endIndex
+    private var activeIndex: Int {
+        blocks.firstIndex(where: { $0.id == activeBlock && $0.table == nil }) ?? blocks.lastIndex(where: { $0.table == nil }) ?? 0
+    }
+
+    private func editRange(_ index: Int) -> Range<String.Index> {
+        let text = blocks[index].text
+        if let selection = selections[blocks[index].id], case let .selection(range) = selection.indices,
+           range.lowerBound >= text.startIndex, range.upperBound <= text.endIndex { return range }
+        return text.endIndex..<text.endIndex
+    }
+
+    private func replace(_ range: Range<String.Index>, with value: String, caret: Int? = nil) {
+        let index = activeIndex
+        var text = blocks[index].text
+        let offset = text.distance(from: text.startIndex, to: range.lowerBound) + (caret ?? value.count)
+        text.replaceSubrange(range, with: value)
+        blocks[index].text = text
+        selections[blocks[index].id] = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: offset))
+        focus = .body(blocks[index].id)
+    }
+
+    private func wrap(_ start: String, _ end: String? = nil) {
+        let selected = editRange(activeIndex)
+        let value = String(blocks[activeIndex].text[selected])
+        replace(selected, with: start + value + (end ?? start), caret: start.count + value.count)
     }
 
     private func prefixLine(_ prefix: String) {
-        let text = parts.body
-        let insertion = cursorIndex(in: text)
-        let lineStart = text[..<insertion].lastIndex(of: "\n").map { text.index(after: $0) } ?? text.startIndex
-        let offset = text.distance(from: text.startIndex, to: lineStart) + prefix.count
-        parts.body.insert(contentsOf: prefix, at: lineStart)
-        selection = TextSelection(insertionPoint: parts.body.index(parts.body.startIndex, offsetBy: offset))
-        focus = .body
+        let text = blocks[activeIndex].text
+        let caret = editRange(activeIndex).lowerBound
+        let start = text[..<caret].lastIndex(of: "\n").map { text.index(after: $0) } ?? text.startIndex
+        replace(start..<start, with: prefix)
     }
 
-    private func insertAtCursor(_ value: String) {
-        let text = parts.body
-        let insertion = cursorIndex(in: text)
-        let offset = text.distance(from: text.startIndex, to: insertion) + value.count
-        parts.body.insert(contentsOf: value, at: insertion)
-        selection = TextSelection(insertionPoint: parts.body.index(parts.body.startIndex, offsetBy: offset))
-        focus = .body
+    private func insertAtCursor(_ value: String) { replace(editRange(activeIndex), with: value) }
+
+    private func insertTable() {
+        let index = activeIndex
+        let text = blocks[index].text
+        let caret = editRange(index).lowerBound
+        let before = String(text[..<caret])
+        let after = String(text[caret...])
+        blocks[index].text = before + (before.isEmpty || before.hasSuffix("\n") ? "" : "\n")
+        let table = JarvisMarkdownTable()
+        let tail = JarvisMarkdownBlock(text: (after.hasPrefix("\n") ? "" : "\n") + after)
+        blocks.insert(contentsOf: [.init(text: table.markdown, table: table), tail], at: index + 1)
+        activeBlock = tail.id
+        selections = [:]
+        focus = nil
     }
 
     private func applyLatest(_ latest: VaultNote) {
         parts = JarvisNoteParts(latest.content)
+        blocks = JarvisMarkdownBlock.parse(parts.body)
+        selections = [:]
+        activeBlock = nil
         draftTitle = parts.displayedTitle(path: latest.path)
         baseline = latest
         conflict = nil
