@@ -140,40 +140,17 @@ The [plan](../PLAN.md#open-decisions-af) owns unresolved choices and acceptance.
 
 ## Index of older decisions
 
-The [October](archive/decisions-index-2026-10.md) and [November](archive/decisions-index-2026-11.md) indexes point to full historical decisions in Git. Search October learnings by `LN` (for example `L63`); L33 and L34 remain reserved.
-
-### P7-23 latency evidence
-
-[P7-23 table in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L8138).
-
+<a name="p7-23-latency-evidence"></a>
+<a name="catalogue-count-is-not-a-global-limit"></a>
 <a name="catalogue-count-is-not-a-global-limit-22-october-2026-1204"></a>
-
-### Catalogue count is not a global limit
-
-[Tool catalogue ruling and route inventory](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L1559).
-
-### Daily renamed to Health
-
-[Daily rename and legacy feeds](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-11.md?plain=1#L2667) records the route aliases.
-
 <a name="keep-the-first-web-push-proof-dark-and-user-triggered-17-october-2026-p13-01-917"></a>
+<a name="p14-35--daily-v182-unresolved-delivery-questions-19-october-2026-1095"></a>
+<a name="schema-field-mapping-scope"></a>
+<a name="selected-tool-packaging"></a>
+<a name="favorites-query-contract"></a>
 
-### Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
+The [October index](archive/decisions-index-2026-10.md) links to P7-23, the historical tool and Daily decisions, and the numbered decisions and learnings.
 
-[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L4152).
+<a name="daily-renamed-to-health"></a>
 
-### P14-35 — Daily v182 unresolved delivery questions (19 October 2026; #1095)
-
-[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2535).
-
-### Schema field-mapping scope
-
-[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2540).
-
-### Selected tool packaging
-
-[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2638).
-
-### Favorites query contract
-
-[Decision in Git history](https://github.com/DanAakesen/jarvis/blob/3851f4d96cc6d33b2c4b55f6a0c8ae29d1816177/docs/archive/decisions-2026-10.md?plain=1#L2651).
+The [November index](archive/decisions-index-2026-11.md) links to the Daily rename and other November decisions.
