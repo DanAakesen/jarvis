@@ -21,4 +21,20 @@ final class SleepTimelineTests: XCTestCase {
         XCTAssertNil(row?["deep_hours"])
         XCTAssertNil(JarvisSleepTimeline(segments: []).dailyRow(date: "2026-11-24"))
     }
+
+    func testOvernightExcludesPriorAfternoonAndOverlappingSecondSource() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let midnight = Date(timeIntervalSince1970: 24 * 3600)
+        func sample(_ id: String, _ source: String, _ start: Int, _ end: Int) -> JarvisHealthSleepSegment {
+            .init(id: id, stage: "core", start: midnight.addingTimeInterval(Double(start) * 3600),
+                  end: midnight.addingTimeInterval(Double(end) * 3600), source: source)
+        }
+        let nap = sample("nap", "watch", -9, -8)
+        let overnight = sample("night", "watch", -1, 6)
+        let shorter = sample("duplicate", "phone", 0, 4)
+        let result = JarvisSleepTimeline.overnight([nap, shorter, overnight], wakingOn: midnight, calendar: calendar)
+        XCTAssertEqual(result.segments, [overnight])
+        XCTAssertTrue(JarvisSleepTimeline.overnight([nap], wakingOn: midnight, calendar: calendar).segments.isEmpty)
+    }
 }

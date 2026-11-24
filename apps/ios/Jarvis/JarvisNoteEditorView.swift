@@ -264,7 +264,7 @@ struct JarvisNoteEditorSheet: View {
                 }
             }.frame(maxHeight: 120)
         } label: { Label(copy[.linkedNotes] + "  " + String(unique.count), systemImage: "link").foregroundStyle(.primary) }
-            .padding(.horizontal).padding(.vertical, 8).jarvisGlassSurface()
+            .padding(.horizontal).padding(.vertical, 10).jarvisDashboardSurface()
     }
 
     private var linkPicker: some View {

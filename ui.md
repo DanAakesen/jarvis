@@ -10,11 +10,11 @@ Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
-| **Home** | Brief, Up Next, activity against the training target, and a Schedule with tasks and appointments. The calendar and quick-add actions sit together. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
+| **Home** | Up Next, activity against the training target, and a Schedule with tasks and appointments. The calendar and quick-add actions sit together. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
 | **Calendar** | From Home Schedule or the sidebar above Chat. Day and week timelines, month browsing, search and editing for the primary Google Calendar. | `JarvisCalendarPage`, `JarvisCalendarTimeline` |
 | **Chat** | The one PI conversation: resumable replies, a folding composer with plus menu and dictation, tool activity, generated blocks (charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. **Test a reply** in the plus menu uses a separate conversation. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
-| **Notes** | Notes, Tasks and Graph switch: folders and pins, a direct Markdown editor with linked notes, editable tables and folder moves, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteEditorSheet`, `JarvisNotesGraphView` |
+| **Notes** | Notes, Tasks and Graph switch: pinned tiles, a folder grid, a direct Markdown editor with linked notes, editable tables and folder moves, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteEditorSheet`, `JarvisNotesGraphView` |
 | **Health** | Training, Steps, Sleep and Nutrition cards with independent periods, saved max lifts and body measurements. Log a meal or photograph it for the Chat draft. | `JarvisHealthArea`, `JarvisHealthCards`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
