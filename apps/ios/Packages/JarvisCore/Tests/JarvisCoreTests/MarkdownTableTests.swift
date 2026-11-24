@@ -25,6 +25,13 @@ final class MarkdownTableTests: XCTestCase {
         XCTAssertEqual(JarvisMarkdownBlock.parse(saved).compactMap(\.table), [JarvisMarkdownTable()])
     }
 
+    func testLiteralBackslashesBeforePipeInCell() {
+        var table = JarvisMarkdownTable()
+        table.set(#"a\|b\\|c|d"#, row: 1, column: 0)
+        let reopened = JarvisMarkdownBlock.parse(table.markdown).compactMap(\.table)
+        XCTAssertEqual(reopened, [table])
+    }
+
     func testUntouchedTablesAndFencedExamplesRoundTrip() {
         let fence = String(repeating: "\u{60}", count: 3)
         let raw = "| A | B |\n| :--- | ---: |\n|  x | y  |"

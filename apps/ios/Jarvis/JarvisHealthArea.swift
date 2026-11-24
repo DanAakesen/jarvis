@@ -602,11 +602,9 @@ struct JarvisHealthArea: View {
         .task(id: expandedLifts ? vaultNextOffset : nil) {
             if expandedLifts, let offset = vaultNextOffset { await loadVaultLifts(offset: offset) }
         }
-        .task(id: expandedLifts) {
-            while expandedLifts && !Task.isCancelled && !liftsLoading && liftCursor != nil {
-                let previous = liftCursor
+        .task(id: expandedLifts ? liftCursor : nil) {
+            if expandedLifts, liftCursor != nil, !liftsLoading {
                 await loadLifts(more: true)
-                if liftCursor == previous { break }
             }
         }
     }

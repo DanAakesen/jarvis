@@ -95,7 +95,7 @@ public struct JarvisMarkdownTable: Equatable, Sendable {
                 result.append(cell.trimmingCharacters(in: .whitespaces))
                 cell = ""
             } else if char == "|" {
-                cell.removeLast()
+                cell.removeLast(slashes / 2 + 1)
                 cell.append(char)
             } else { cell.append(char) }
             slashes = char == "\\" ? slashes + 1 : 0
@@ -108,7 +108,16 @@ public struct JarvisMarkdownTable: Equatable, Sendable {
 
     public var markdown: String {
         func line(_ cells: [String]) -> String {
-            "| " + cells.map { $0.replacingOccurrences(of: "|", with: "\\|") }.joined(separator: " | ") + " |"
+            let encoded = cells.map { cell in
+                var value = "", slashes = 0
+                for character in cell {
+                    if character == "|" { value += String(repeating: "\\", count: slashes + 1) }
+                    value.append(character)
+                    slashes = character == "\\" ? slashes + 1 : 0
+                }
+                return value
+            }
+            return "| " + encoded.joined(separator: " | ") + " |"
         }
         return ([line(rows[0]), line(dividers)] + rows.dropFirst().map(line)).joined(separator: "\n")
     }

@@ -371,6 +371,7 @@ struct JarvisNoteEditorSheet: View {
         selections = [:]
         activeBlock = nil
         draftTitle = parts.displayedTitle(path: latest.path)
+        folder = latest.path.split(separator: "/").dropLast().joined(separator: "/")
         baseline = latest
         conflict = nil
         failure = nil
@@ -408,6 +409,9 @@ struct JarvisNoteEditorSheet: View {
         } catch {
             failure = .unconfirmed
             return
+        }
+        if let previous = baseline?.path, previous != refreshed.path {
+            await JarvisAppCache.shared.remapPinnedNote(from: previous, to: refreshed.path)
         }
         onSaved(refreshed)
         dismiss()
