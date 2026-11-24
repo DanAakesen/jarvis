@@ -15,7 +15,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | Delivery | State |
 | --- | --- |
 | P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Merged: Home, Calendar, Health, Notes, appearance and iPhone/Watch fixes. **Not accepted on device**. |
-| TestFlight | **128** is the [latest Apple-confirmed internal build](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). The combined release's [build 129](https://github.com/DanAakesen/jarvis/actions/runs/45417046936) is awaiting Apple confirmation. |
+| TestFlight | **128** is the [latest Apple-confirmed internal build](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). The combined release's [build 129 run](https://github.com/DanAakesen/jarvis/actions/runs/45417046936) was cancelled before Apple confirmation. |
 | Backend | [Deploy for the combined release](https://github.com/DanAakesen/jarvis/actions/runs/45412673488) applied the backend and passed deterministic runtime readiness. Live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
