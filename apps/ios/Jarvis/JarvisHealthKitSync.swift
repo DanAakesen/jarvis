@@ -6,7 +6,13 @@ import SwiftUI
 /// iOS never says which read types the user denied, so a type that fails to read is reported as unread,
 /// and the batch is only ever called complete when every query succeeded.
 struct JarvisHealthKitReader {
-    private static let quantities: [(HKQuantityTypeIdentifier, String, HKUnit, String)] = [
+    private typealias Quantity = (HKQuantityTypeIdentifier, String, HKUnit, String)
+    private static let scaleQuantities: [Quantity] = [
+        (.bodyMass, "body_mass", .gramUnit(with: .kilo), "kg"),
+        (.bodyFatPercentage, "body_fat_percentage", .percent(), "fraction"),
+        (.leanBodyMass, "lean_body_mass", .gramUnit(with: .kilo), "kg"),
+    ]
+    private static let quantities: [Quantity] = [
         (.distanceWalkingRunning, "walking_running_distance", .meterUnit(with: .kilo), "km"),
         (.distanceCycling, "cycling_distance", .meterUnit(with: .kilo), "km"),
         (.flightsClimbed, "flights_climbed", .count(), "count"),
@@ -17,12 +23,9 @@ struct JarvisHealthKitReader {
         (.oxygenSaturation, "blood_oxygen_saturation", .percent(), "%"),
         (.respiratoryRate, "respiratory_rate", HKUnit.count().unitDivided(by: .minute()), "count/min"),
         (.vo2Max, "vo2_max", HKUnit(from: "ml/kg*min"), "ml/(kg·min)"),
-        (.bodyMass, "body_mass", .gramUnit(with: .kilo), "kg"),
         (.bodyMassIndex, "body_mass_index", .count(), "count"),
         (.height, "height", .meterUnit(with: .centi), "cm"),
         (.waistCircumference, "waist_circumference", .meterUnit(with: .centi), "cm"),
-        (.bodyFatPercentage, "body_fat_percentage", .percent(), "fraction"),
-        (.leanBodyMass, "lean_body_mass", .gramUnit(with: .kilo), "kg"),
         (.dietaryEnergyConsumed, "dietary_energy", .kilocalorie(), "kcal"),
         (.dietaryProtein, "protein", .gram(), "g"),
         (.dietaryCarbohydrates, "carbohydrates", .gram(), "g"),
@@ -58,21 +61,13 @@ struct JarvisHealthKitReader {
             } catch { unread.append(name) }
         }
 
-        for (identifier, name, unit, label) in Self.quantities {
-            guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
+        for quantity in Self.quantities + Self.scaleQuantities {
+            let (identifier, name, _, _) = quantity
             do {
-                let isBody = ["body_mass", "body_fat_percentage", "lean_body_mass"].contains(name)
+                let isBody = Self.scaleQuantities.contains { $0.0 == identifier }
                 let quantityWindow = isBody
                     ? HKQuery.predicateForSamples(withStart: recentStart, end: now, options: []) : window
-                let results = try await readSamples(
-                    store: store, predicate: .quantitySample(type: type, predicate: quantityWindow)
-                )
-                samples += results.map {
-                    JarvisHealthSample(
-                        id: $0.uuid.uuidString, metric: name, unit: label, start: $0.startDate, end: $0.endDate,
-                        value: $0.quantity.doubleValue(for: unit), source: $0.sourceRevision.source.name
-                    )
-                }
+                samples += try await readQuantity(quantity, store: store, window: quantityWindow)
                 read.append(name)
             } catch {
                 unread.append(name)
@@ -114,6 +109,33 @@ struct JarvisHealthKitReader {
             samples: samples, sleep: sleep, workouts: workouts, readTypes: read,
             deniedOrUnreadTypes: unread, windowStart: min(start, recentStart), windowEnd: now
         )
+    }
+
+    /// An ordinary Health visit reads only already-permitted scale samples for this Copenhagen day.
+    /// Reading the full day preserves the server's per-day replacement and latest-measurement rules.
+    func todaysScaleSamples(now: Date = Date()) async throws -> [JarvisHealthSample] {
+        guard HKHealthStore.isHealthDataAvailable() else { return [] }
+        let store = HKHealthStore()
+        let window = HKQuery.predicateForSamples(withStart: JarvisHealthSyncWindow.calendar.startOfDay(for: now),
+                                                 end: now, options: .strictStartDate)
+        var samples: [JarvisHealthSample] = []
+        for quantity in Self.scaleQuantities {
+            do {
+                samples += try await readQuantity(quantity, store: store, window: window)
+            } catch let error as HKError where error.code == .errorAuthorizationNotDetermined || error.code == .errorAuthorizationDenied {
+                continue
+            }
+        }
+        return samples
+    }
+
+    private func readQuantity(_ quantity: Quantity, store: HKHealthStore, window: NSPredicate) async throws -> [JarvisHealthSample] {
+        let (identifier, name, unit, label) = quantity
+        let results = try await readSamples(store: store, predicate: .quantitySample(type: HKQuantityType(identifier), predicate: window))
+        return results.map {
+            JarvisHealthSample(id: $0.uuid.uuidString, metric: name, unit: label, start: $0.startDate, end: $0.endDate,
+                               value: $0.quantity.doubleValue(for: unit), source: $0.sourceRevision.source.name)
+        }
     }
 
     /// Resume each bounded query with HealthKit's cursor, including deletion-only pages.
@@ -212,6 +234,8 @@ final class JarvisHealthSyncModel: ObservableObject {
     @Published private(set) var lastSync: Date?
     private let store: JarvisHealthSyncAnchorStore
     private var inFlight: Task<JarvisHealthSyncState, Never>?
+    private var scaleSync: Task<Bool, Error>?
+    private var uploadedScaleIDs: Set<String> = []
 
     init(store: JarvisHealthSyncAnchorStore = JarvisHealthUserDefaultsAnchorStore()) {
         self.store = store
@@ -219,10 +243,32 @@ final class JarvisHealthSyncModel: ObservableObject {
         if let lastSync { state = .complete(at: lastSync) }
     }
 
-    deinit { inFlight?.cancel() }
+    deinit {
+        inFlight?.cancel()
+        scaleSync?.cancel()
+    }
+
+    /// A foreground scale check never moves the full Health sync anchor.
+    func syncTodaysScale(client: JarvisHealthClient) async throws -> Bool {
+        if let inFlight { _ = await inFlight.value }
+        if let scaleSync { return try await scaleSync.value }
+        let operation = Task {
+            let samples = try await JarvisHealthKitReader().todaysScaleSamples()
+            let ids = Set(samples.map(\.id))
+            guard !ids.isEmpty, ids != uploadedScaleIDs else { return false }
+            try Task.checkCancellation()
+            try await client.send(JarvisHealthSyncRequest(anchor: nil, samples: samples))
+            uploadedScaleIDs = ids
+            return true
+        }
+        scaleSync = operation
+        defer { scaleSync = nil }
+        return try await operation.value
+    }
 
     /// Home and Health share this operation. Another pull awaits the active read/upload.
     func sync(client: JarvisHealthClient) async -> JarvisHealthSyncState {
+        if let scaleSync { _ = try? await scaleSync.value }
         if let inFlight { return await inFlight.value }
         isSyncing = true
         let operation = Task { [store] in

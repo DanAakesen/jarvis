@@ -148,6 +148,8 @@ See [Settings routes](../../apps/backend/src/core/settings.ts) and the [Proactiv
 
 The dashboard calls `GET /health/capabilities` with `Accept: application/json;version=6`, then queries only advertised sources. The `daily.*` source names are unchanged. Native HealthKit sync posts to `/health/sync`; it is separate from the [Health upload credential and ingestion contract](../reference/daily/health-ingestion.md).
 
+Opening Health or returning to it in the foreground syncs the current Copenhagen day's permitted weight, body-fat and lean-mass readings. The iPhone skips unchanged readings within the app session and reloads the dashboard after upload. Pulling down runs the full Health sync, including the 30-day body trend.
+
 | Dashboard block or action | Existing endpoint and source |
 |---|---|
 | Gym and Run rings; recent-session rows | `POST /health/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |

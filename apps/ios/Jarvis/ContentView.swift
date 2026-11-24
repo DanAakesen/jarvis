@@ -388,7 +388,8 @@ struct ContentView: View {
                 workoutInitiallySelected: healthScreenshotState != nil,
                 presentNewLiftAfterLoading: healthScreenshotState == "newlift",
                 gymModel: todayModel,
-                onSyncAppleHealth: refreshAppleHealth
+                onSyncAppleHealth: refreshAppleHealth,
+                onSyncScale: healthSyncModel.syncTodaysScale
             )
         } else if destination == .usage {
             JarvisUsageArea(

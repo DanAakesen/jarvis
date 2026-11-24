@@ -27,6 +27,7 @@ Build 128 found a local shop and correctly reported an empty 10 km search. Two f
 2. On the next build, dictate a short phrase and then a longer message on Watch. Each Stop should put the transcript in the draft once. Start Voice from the Watch, confirm it reaches Listening and stays open, then listen to two complete replies on the Watch speaker and interrupt a third. On iPhone, verify that Voice leaves Speaking between replies.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
+5. After a scale reading appears in Apple Health, open Jarvis Health and compare the weight, body fat and measurement date. On Watch Home, scroll through all five sections and check the heading beside the clock in both directions.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 

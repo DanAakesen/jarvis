@@ -168,12 +168,26 @@ public enum JarvisHealthLogic {
         guard let value else { return false }
         switch key {
         case .weight:
-            return ["weight_body_mass", "body_mass", "weight"].contains(value.lowercased())
+            return ["weight_body_mass", "body_mass", "body_weight", "weight"].contains(value.lowercased())
         case .fatPercent:
             return value.lowercased() == "body_fat_percentage"
         case .leanMass:
             return value.lowercased() == "lean_body_mass"
         }
+    }
+
+    /// Native HealthKit and imported scales can publish weight under different names.
+    public static func latestBodyMetric(in catalog: [[String: JSONValue]], matching kind: BodyMetric) -> String? {
+        func text(_ field: JSONValue?) -> String {
+            if case .string(let value) = field { return value }
+            return ""
+        }
+        let matches = catalog.filter { bodyMetricName(text($0["metric_name"]), matching: kind) }
+        let newest = matches.max { lhs, rhs in
+            (text(lhs["last_date"]), text(lhs["latest_updated_at"])) <
+                (text(rhs["last_date"]), text(rhs["latest_updated_at"]))
+        }
+        return newest.map { text($0["metric_name"]) }
     }
 
     public enum WorkoutKind: Equatable, Sendable {

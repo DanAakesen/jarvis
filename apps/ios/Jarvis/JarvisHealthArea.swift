@@ -212,11 +212,13 @@ struct JarvisHealthArea: View {
     let onRetryConfiguration: () -> Void
     @State private var now: Date
     private let onSyncAppleHealth: (() async -> JarvisHealthSyncState?)?
+    private let onSyncScale: ((JarvisHealthClient) async throws -> Bool)?
     private let presentNewLiftAfterLoading: Bool
     /// The Home model, so the plus menu opens the very same log sheets as the Home tiles.
     private let gymModel: JarvisTodayModel?
 
     @State private var healthSyncState: JarvisHealthSyncState?
+    @State private var scaleRefreshFailed = false
     @State private var isRefreshingFromPull = false
     @State private var periodPreset: JarvisHealthPeriodPreset = .sevenDays
     @State private var goals = JarvisHealthGoals.load()
@@ -268,7 +270,8 @@ struct JarvisHealthArea: View {
         workoutInitiallySelected: Bool = false,
         presentNewLiftAfterLoading: Bool = false,
         gymModel: JarvisTodayModel? = nil,
-        onSyncAppleHealth: (() async -> JarvisHealthSyncState?)? = nil
+        onSyncAppleHealth: (() async -> JarvisHealthSyncState?)? = nil,
+        onSyncScale: ((JarvisHealthClient) async throws -> Bool)? = nil
     ) {
         self.client = client
         self.language = language
@@ -276,6 +279,7 @@ struct JarvisHealthArea: View {
         self.onRetryConfiguration = onRetryConfiguration
         _now = State(initialValue: now)
         self.onSyncAppleHealth = onSyncAppleHealth
+        self.onSyncScale = onSyncScale
         self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
         self.gymModel = gymModel
         _trackWorkout = State(initialValue: workoutInitiallySelected)
@@ -303,7 +307,7 @@ struct JarvisHealthArea: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
-                    JarvisHealthSyncIssue(state: healthSyncState, language: language)
+                    JarvisHealthSyncIssue(state: scaleRefreshFailed ? .failed : healthSyncState, language: language)
                     if liftWriteFailed {
                         Text("The change could not be confirmed. Refresh lifts before trying again.")
                             .foregroundStyle(.red)
@@ -418,6 +422,21 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) { await loadDeviceWorkouts() }
         .task(id: refreshVersion) { await loadDeviceSteps() }
         .task(id: refreshVersion) { await loadDeviceActivity() }
+        .task(id: scenePhase == .active && client != nil) {
+            guard observeRefreshEvents, scenePhase == .active, let client, let onSyncScale else { return }
+            do {
+                let uploaded = try await onSyncScale(client)
+                if uploaded { await JarvisAppCache.invalidateAll(.health) }
+                guard !Task.isCancelled else { return }
+                scaleRefreshFailed = false
+                if uploaded {
+                    now = Date()
+                    refreshVersion += 1
+                }
+            } catch {
+                if !Task.isCancelled { scaleRefreshFailed = true }
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, observeRefreshEvents { refreshVersion += 1 }
         }
@@ -472,6 +491,7 @@ struct JarvisHealthArea: View {
         defer { isRefreshingFromPull = false }
         if observeRefreshEvents { now = Date() }
         healthSyncState = await onSyncAppleHealth?()
+        scaleRefreshFailed = false
         guard !Task.isCancelled else { return }
         // Read all affected sources after the upload, not just the previously cached dashboard.
         async let dashboard: Void = loadDashboard(force: true)
@@ -1197,8 +1217,7 @@ struct JarvisHealthArea: View {
         ]
         var metrics: [JarvisHealthMetricSeries] = []
         for (kind, title) in definitions {
-            guard let metricName = catalog.items.compactMap({ $0["metric_name"]?.stringValue })
-                .first(where: { JarvisHealthLogic.bodyMetricName($0, matching: kind) }) else {
+            guard let metricName = JarvisHealthLogic.latestBodyMetric(in: catalog.items, matching: kind) else {
                 continue
             }
             let old = dashboard?.bodyMetrics.first { $0.metricName == metricName }?.read
