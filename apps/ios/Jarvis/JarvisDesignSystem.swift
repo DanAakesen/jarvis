@@ -442,14 +442,8 @@ struct JarvisScreenBackground: View {
 }
 
 struct JarvisGlassSurface: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     var body: some View {
-        if reduceTransparency {
-            JarvisDesignTokens.glassSolid
-        } else {
-            Rectangle().fill(.ultraThinMaterial)
-        }
+        Color.clear.jarvisGlassSurface(in: Rectangle())
     }
 }
 

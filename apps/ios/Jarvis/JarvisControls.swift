@@ -5,23 +5,8 @@ import SwiftUI
 /// icon-only, SF Symbols, 44 pt hit targets and the system glass or prominent styles.
 /// HIG: Buttons, Toolbars, Sheets, Toggles, Pickers. API: ButtonStyle.glass, ToolbarContent, Label, LabelStyle.iconOnly.
 
-/// The one glass look for anything that floats over content. The board's glass is clear: it bends and shows the
-/// background and carries only a light fill for legibility, where the regular material frosts and blurs it.
-/// API: Glass.clear, Glass.tint(_:), View.glassEffect(_:in:).
-enum JarvisGlass {
-    /// Clear glass with the board's light fill (`--g-fill-bar`), optionally tinted for accent surfaces such as the user bubble.
-    @MainActor static func surface(tint: Color? = nil) -> Glass {
-        .clear.tint(tint ?? JarvisSurfacePalette.shared.color("control")?.opacity(0.3) ?? JarvisDesignTokens.glassFill)
-    }
-}
-
-/// The one glass surface for anything that floats over content: Now bar, composer, pills, search, floating buttons.
-/// Uses Apple's glass (`glassEffect`, iOS 26, the app's deployment target) and falls back to a solid system
-/// material when Reduce Transparency is on. Toolbar items get the same glass from the system toolbar, so the
-/// navigation bar itself stays transparent while each control keeps its own glass capsule or circle.
-/// API: View.glassEffect(_:in:), Glass, Shape, AccessibilityEnvironment reduceTransparency.
+/// Shared control geometry and role colour. The material renderer owns the finish.
 struct JarvisGlassBackground: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var cornerRadius: CGFloat?
     var tint: Color?
     var isCircle = false
@@ -41,10 +26,10 @@ struct JarvisGlassBackground: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        if reduceTransparency {
-            content.background(JarvisDesignTokens.glassSolid, in: shape)
-        } else {
-            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: surfaceTint).interactive() : JarvisGlass.surface(tint: surfaceTint), in: shape)
+        let tint = surfaceTint ?? JarvisSurfacePalette.shared.color("control")?.opacity(0.3) ?? JarvisDesignTokens.glassFill
+        content.background {
+            JarvisMaterialSurface(in: shape, style: .control, tint: tint,
+                                  solid: JarvisDesignTokens.glassSolid, interactive: isInteractive)
         }
     }
 }
@@ -599,7 +584,7 @@ struct JarvisContentTileButton<Content: View>: View {
             content()
                 .frame(width: width, alignment: .leading)
                 .padding(JarvisDesignTokens.labelledHorizontalPadding)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
                 .foregroundStyle(.primary)
         }
         .buttonStyle(.plain)
@@ -685,8 +670,6 @@ private struct JarvisSelectionPressStyle: ButtonStyle {
 /// A joined control has one optical glass surface; the moving selection sits inside it.
 /// Separate scrolling choices each carry their own native lens.
 private struct JarvisSelectionLens: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let namespace: Namespace.ID
     let isSelected: Bool
     let isSeparate: Bool
@@ -699,17 +682,10 @@ private struct JarvisSelectionLens: ViewModifier {
                         .fill((JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity))
                         .matchedGeometryEffect(id: "selected", in: namespace)
                 }
-            } else if reduceTransparency {
-                content.background(JarvisDesignTokens.glassSolid, in: Capsule())
             } else {
-                // GlassEffectContainer captures this content above its material.
-                // A separate transparent background lets the lens refract the label itself.
-                content
-                    .glassEffect(
-                        .regular.tint((JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity))
-                            .interactive(!reduceMotion),
-                        in: .capsule
-                    )
+                content.modifier(JarvisGlassBackground(
+                    tint: (JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity),
+                    isInteractive: true))
                     .glassEffectID("selected", in: namespace)
             }
         } else if isSeparate {

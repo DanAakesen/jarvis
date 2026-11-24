@@ -235,55 +235,30 @@ struct JarvisHeroHeader<Accessory: View>: View {
     }
 }
 
-/// Shared material and perimeter for dashboard cards, including their solid accessibility appearance.
-struct JarvisDashboardCardFill: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.jarvisCardRole) private var role
+/// Role colours can vary; all material intensities come from the shared renderer.
+struct JarvisDashboardCardFill<S: Shape>: View {
+    let shape: S
     var horizontal = false
-
-    private var cornerHighlight: Color {
-        switch role {
-        case "next", "training", "steps", "nutrition": JarvisDesignTokens.primaryAccent.opacity(0.15)
-        case "sleep": JarvisDesignTokens.secondaryAccent.opacity(0.10)
-        default: Color.white.opacity(0.035)
-        }
-    }
+    @Environment(\.jarvisCardRole) private var role
 
     var body: some View {
         let tone = JarvisSurfacePalette.shared.color(role, inherit: "card") ?? JarvisDesignTokens.dashboardCardTone
-        if reduceTransparency { JarvisDesignTokens.glassSolid }
-        else {
-            LinearGradient(colors: [tone.opacity(0.84), tone.opacity(0.55)],
-                           startPoint: horizontal ? .leading : .topLeading, endPoint: horizontal ? .trailing : .bottomTrailing)
-                .overlay {
-                    if !horizontal {
-                        EllipticalGradient(colors: [cornerHighlight, .clear], center: .topLeading,
-                                           startRadiusFraction: 0, endRadiusFraction: 0.82)
-                    }
-                }
+        let highlight: Color? = switch role {
+        case "next", "training", "steps", "nutrition": JarvisDesignTokens.primaryAccent
+        case "sleep", "schedule": JarvisDesignTokens.secondaryAccent
+        default: nil
         }
-    }
-}
-
-private struct JarvisDashboardSurface: ViewModifier {
-    @Environment(\.displayScale) private var displayScale
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
-        content
-            .background { JarvisDashboardCardFill().clipShape(shape) }
-            .overlay {
-                shape.strokeBorder(LinearGradient(
-                    colors: [.primary.opacity(0.22), .primary.opacity(0.08)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ), lineWidth: 1 / max(displayScale, 1))
-                .allowsHitTesting(false)
-            }
+        JarvisMaterialSurface(in: shape, style: horizontal ? .joinedRow : .card, tint: tone,
+                              highlight: highlight, solid: JarvisDesignTokens.glassSolid)
     }
 }
 
 extension View {
-    func jarvisDashboardSurface() -> some View { modifier(JarvisDashboardSurface()) }
+    func jarvisDashboardSurface() -> some View {
+        background {
+            JarvisDashboardCardFill(shape: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous))
+        }
+    }
 }
 
 /// The one hero component under the headline.

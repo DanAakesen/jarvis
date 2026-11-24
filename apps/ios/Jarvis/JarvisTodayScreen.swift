@@ -313,7 +313,7 @@ struct JarvisTodayScreen: View {
                                            bottomTrailingRadius: last ? radius : 0, topTrailingRadius: first ? radius : 0)
         return VStack(alignment: .leading, spacing: 0) { content() }.padding(.horizontal, JarvisPageHeaderMetrics.heroInset)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background { JarvisDashboardCardFill(horizontal: true).clipShape(shape) }
+            .background { JarvisDashboardCardFill(shape: shape, horizontal: true) }
             .listRowBackground(Color.clear).listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: JarvisDesignTokens.notesHorizontalInset, bottom: 0, trailing: JarvisDesignTokens.notesHorizontalInset))
     }

@@ -18,7 +18,11 @@ import SwiftUI
     }
 
     func color(_ role: String, inherit: String? = nil) -> Color? {
-        guard let hex = overrides[role] ?? inherit.flatMap({ overrides[$0] }),
+        Self.color(hex: overrides[role] ?? inherit.flatMap { overrides[$0] })
+    }
+
+    static func color(hex: String?) -> Color? {
+        guard let hex,
               let rgb = UInt32(hex.drop(while: { $0 == "#" }), radix: 16) else { return nil }
         return Color(.sRGB, red: Double(rgb >> 16) / 255, green: Double((rgb >> 8) & 255) / 255,
                      blue: Double(rgb & 255) / 255)

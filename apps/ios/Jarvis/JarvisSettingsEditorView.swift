@@ -31,6 +31,7 @@ struct JarvisSettingsEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: [String: String] = [:]
     @State private var editState: JarvisSettingsEditState?
+    @State private var material = JarvisMaterialSettings()
     @State private var saving = false
     @State private var selectedCard = "next"
     @State private var error: String?
@@ -135,6 +136,12 @@ struct JarvisSettingsEditorView: View {
         ) ?? .standard
     }
 
+    private var previewCardTone: Color {
+        JarvisSurfacePalette.color(hex: draft["appearance.surface-next"])
+            ?? JarvisSurfacePalette.color(hex: draft["appearance.surface-card"])
+            ?? JarvisDesignTokens.dashboardCardTone
+    }
+
     private var validDraft: Bool {
         fields.allSatisfy { field in
             guard let value = typedValue(for: field, rawValue: draft[field.id] ?? "") else { return false }
@@ -169,6 +176,43 @@ struct JarvisSettingsEditorView: View {
                     .accessibilityHint(response == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             if detail == .appearance {
+                Section("Surface appearance") {
+                    ZStack {
+                        JarvisLatticeOrbView(activity: .calm, isStatic: true, palette: previewPalette)
+                            .frame(width: 68, height: 68).accessibilityHidden(true)
+                        HStack {
+                            Text("Up Next").font(.headline)
+                            Spacer()
+                            Image(systemName: "calendar").foregroundStyle(previewPalette.primaryColor)
+                        }
+                        .padding().background {
+                            JarvisMaterialSurface(in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous),
+                                                  style: .card, tint: previewCardTone, highlight: previewPalette.primaryColor,
+                                                  solid: JarvisDesignTokens.glassSolid)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore).accessibilityLabel("Material preview")
+                    ForEach(JarvisMaterialControl.allCases, id: \.self) { control in
+                        let percent = material.percentages[control.rawValue] ?? control.defaultPercent
+                        let label = control.rawValue.capitalized
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Text(label)
+                                Spacer()
+                                Text(Double(percent) / 100, format: .percent).monospacedDigit().foregroundStyle(.secondary)
+                            }.accessibilityHidden(true)
+                            Slider(value: Binding(get: { Double(percent) },
+                                                  set: { setMaterial(Int($0.rounded()), for: control) }),
+                                   in: 0...100, step: 1)
+                                .accessibilityLabel(label)
+                                .accessibilityValue(Text(Double(percent) / 100, format: .percent))
+                                .accessibilityIdentifier("settings.material." + control.rawValue)
+                        }
+                    }
+                    Button("Restore default finish") {
+                        for control in JarvisMaterialControl.allCases { setMaterial(control.defaultPercent, for: control) }
+                    }.disabled(material == JarvisMaterialSettings())
+                }.disabled(response == nil || readOnly || saving)
                 Section("Background colors") {
                     ForEach(fields.filter { field in JarvisSurfaceSettings.roles.contains(surfaceRole(field)) }) { field in
                         fieldRow(field)
@@ -195,6 +239,7 @@ struct JarvisSettingsEditorView: View {
                 })
             }
         }
+        .environment(\.jarvisMaterialPreview, detail == .appearance ? material : nil)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.locale, language.locale)
@@ -216,9 +261,19 @@ struct JarvisSettingsEditorView: View {
         }
     }
 
+    private func setMaterial(_ percent: Int, for control: JarvisMaterialControl) {
+        guard var state = editState else { return }
+        var values = material.percentages
+        values[control.rawValue] = percent
+        material = JarvisMaterialSettings(values)
+        state.set(.integer(percent), area: "appearance", key: control.rawValue)
+        editState = state
+    }
+
     private func initializeDraft() {
         guard let response, editState == nil else { return }
         draft = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, initialValue(for: $0.id)) })
+        material = response.materialSettings
         editState = JarvisSettingsEditState(response.settings)
     }
 

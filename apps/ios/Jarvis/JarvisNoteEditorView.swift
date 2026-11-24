@@ -581,7 +581,7 @@ struct JarvisNoteConflictSheet: View {
         }
         .padding(JarvisDesignTokens.notesSectionSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .accessibilityElement(children: .combine)
     }
 

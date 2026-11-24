@@ -13,18 +13,9 @@ enum WatchStyle {
 /// Neutral dark smoked glass for floating Watch controls. Reduce Transparency swaps the blur for a solid fill.
 struct WatchGlass<S: Shape>: ViewModifier {
     var shape: S
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     func body(content: Content) -> some View {
         content.background {
-            if reduceTransparency {
-                shape.fill(WatchStyle.surface)
-            } else {
-                shape.fill(Color.black.opacity(0.4)).background(.ultraThinMaterial, in: shape)
-            }
-        }
-        .overlay {
-            shape.stroke(.white.opacity(reduceTransparency ? 0.3 : 0.18), lineWidth: 0.5)
-                .allowsHitTesting(false)
+            JarvisMaterialSurface(in: shape, style: .control, tint: .black.opacity(0.40), solid: WatchStyle.surface)
         }
     }
 }
@@ -78,12 +69,9 @@ struct WatchSurface: ViewModifier {
     var radius: CGFloat = WatchStyle.cardRadius
     func body(content: Content) -> some View {
         content.background {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .fill(LinearGradient(colors: [Color(white: 0.18), .black], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay {
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .stroke(LinearGradient(colors: [WatchStyle.accent.opacity(0.65), WatchStyle.secondaryAccent.opacity(0.16), .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.7)
-                }
+            JarvisMaterialSurface(in: RoundedRectangle(cornerRadius: radius, style: .continuous),
+                                  style: .card, tint: WatchStyle.surface, highlight: WatchStyle.accent,
+                                  solid: WatchStyle.surface)
         }
     }
 }
