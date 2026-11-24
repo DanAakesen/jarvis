@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **128** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). Release lookup, Watch Night Mode, Watch composer tap targets and dictation, and the iPhone Chat composer passed on device. Watch Voice failed at startup and the Watch app crashed once. iPhone Voice stayed on Speaking during silence. The Nutrition breakdown still needs a device check. Nutrition balance, location lookup and Watch dictation passed on build 126. |
+| TestFlight **128** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). Release lookup, Watch Night Mode, Watch composer tap targets, and the iPhone Chat composer passed on device. Watch dictation intermittently times out after Stop. Watch Voice failed at startup and the Watch app crashed once. iPhone Voice stayed on Speaking during silence. The Nutrition breakdown still needs a device check. Nutrition balance, location lookup and Watch dictation passed on build 126. |
 | Backend | The [nearby Maps release](https://github.com/DanAakesen/jarvis/actions/runs/45237665783) deployed and passed PI revision and runtime readiness checks. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
@@ -24,7 +24,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 Build 128 found a local shop and correctly reported an empty 10 km search. Two follow-ups need a new build: choosing the closest named match beyond 10 km and reporting a completed lookup when reply writing fails. Also check the folding Home composer and the iPhone Voice speaker control on device. In a short and a long Voice panel, check the plain close button and both scroll edges.
 
 1. Check the project issue-to-worker flow, renaming an existing note and task reminder delivery in the shared conversation. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
-2. On the next build, start Voice from the Watch, confirm it reaches Listening and stays open, then listen to two complete replies on the Watch speaker and interrupt a third. On iPhone, verify that Voice leaves Speaking between replies.
+2. On the next build, dictate a short phrase and then a longer message on Watch. Each Stop should put the transcript in the draft once. Start Voice from the Watch, confirm it reaches Listening and stays open, then listen to two complete replies on the Watch speaker and interrupt a third. On iPhone, verify that Voice leaves Speaking between replies.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 

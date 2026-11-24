@@ -171,9 +171,8 @@ final class WatchDictationRoutingTests: XCTestCase {
         }
         let directWait = await direct.next()
         let timerWait = await timer.next()
-        XCTAssertEqual(timerDuration, .seconds(22))
-        XCTAssertGreaterThan(WatchDictationDeadline.directSeconds, 20)
-        XCTAssertLessThan(WatchDictationDeadline.directSeconds, WatchDictationDeadline.seconds)
+        XCTAssertEqual(timerDuration, .seconds(WatchDictationDeadline.directSeconds))
+        XCTAssertGreaterThan(WatchDictationDeadline.directSeconds, 30 + 20)
         timerWait.resume()
         let text = try await task.value
         XCTAssertEqual(text, "Phone transcript")
@@ -183,26 +182,26 @@ final class WatchDictationRoutingTests: XCTestCase {
         XCTAssertEqual(phoneCalls, 1)
     }
 
-    func testShortDirectWindowLeavesMostOfTheDeadlineToThePhone() async throws {
+    func testDirectResultReceivedBeforeDeadlineDoesNotStartPhoneTranscription() async throws {
         let direct = Gate<String>()
         let timer = Gate<Void>()
-        var timerDuration: Duration?
         let task = Task {
             try await WatchDictationRouting.transcribe(direct: {
                 await direct.wait()
-            }, phone: { "Phone transcript" }, directWindow: WatchDictationDeadline.directWithPhoneFallbackDuration, sleep: { duration in
-                timerDuration = duration
+            }, phone: {
+                XCTFail("A completed direct lookup must not be repeated on the phone")
+                return "Duplicate transcript"
+            }, sleep: { duration in
+                XCTAssertGreaterThan(duration, .seconds(50))
                 await timer.wait()
             })
         }
         let directWait = await direct.next()
         let timerWait = await timer.next()
-        XCTAssertEqual(timerDuration, .seconds(10))
-        XCTAssertGreaterThanOrEqual(WatchDictationDeadline.seconds - WatchDictationDeadline.directWithPhoneFallbackSeconds, 15)
-        timerWait.resume()
+        directWait.resume(returning: "Watch transcript")
         let text = try await task.value
-        XCTAssertEqual(text, "Phone transcript")
-        directWait.resume(returning: "Stale transcript")
+        XCTAssertEqual(text, "Watch transcript")
+        timerWait.resume()
     }
 
     func testCancellationDuringStalledDirectDoesNotStartPhoneFallback() async {
