@@ -21,6 +21,10 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
 
+### 24 November 2026 — iPhone dashboard and editor
+
+Home and Health use translucent cards beneath the shared scrolling chrome. Calendar sits immediately above Chat and edits the same primary Google Calendar used by Home, Chat and Voice. Notes open directly in the Markdown editor. Insert table creates an editable two-by-two grid in the note with controls to add a row or column.
+
 ### 24 November 2026 — Personal native palette
 
 Dan chose orange and blue-cyan as independently editable defaults. Use the saved appearance preferences across

@@ -371,8 +371,13 @@ struct ContentView: View {
                     navigate(to: .chat)
                 },
                 onVoice: { navigate(to: .voice) },
+                onCalendar: { navigate(to: .calendar) },
                 onSyncAppleHealth: refreshAppleHealth
             )
+        } else if destination == .calendar {
+            JarvisCalendarPage(source: chatClient.map(JarvisBackendCalendarSource.init(client:)), language: language) {
+                await todayModel.refresh(force: true)
+            }
         } else if destination == .chat {
             JarvisChatScreen(
                 client: chatClient,

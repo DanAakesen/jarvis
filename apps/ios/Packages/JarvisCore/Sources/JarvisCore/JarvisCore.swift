@@ -2,6 +2,7 @@ public enum JarvisCore {}
 
 public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sendable {
     case today
+    case calendar
     case chat
     case voice
     case notes
@@ -15,7 +16,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     case settings
 
     public static let sidebarItems: [JarvisDestination] = [
-        .proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .chat, .today,
+        .proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .calendar, .chat, .today,
     ]
 
     public var id: String { rawValue }
@@ -23,6 +24,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     public var title: String {
         switch self {
         case .today: "Home"
+        case .calendar: "Calendar"
         case .chat: "Chat"
         case .voice: "Voice"
         case .notes: "Notes"
@@ -41,6 +43,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
         let key: JarvisNotesLocalizationKey
         switch self {
         case .today: key = .todayTitle
+        case .calendar: return "Calendar"
         case .chat: key = .chatTitle
         case .voice: key = .voiceTitle
         case .workspaces: key = .workspacesTitle
@@ -59,6 +62,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     public var symbolName: String {
         switch self {
         case .today: "house"
+        case .calendar: "calendar"
         case .chat: "bubble.left.and.bubble.right"
         case .voice: "waveform"
         case .notes: "note.text"

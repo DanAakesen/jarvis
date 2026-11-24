@@ -283,3 +283,29 @@ describe('refusals of invalid arguments through the dispatcher', () => {
       .toMatchObject(invalid('Give at least one field to change besides eventId: title, startDateTime with endDateTime, location, attendees or description.'));
   });
 });
+describe('native calendar edits', () => {
+  const config = loadConfig({});
+  const owner = { authorization: 'Bearer test.owner.fixture' };
+  const google = scriptedGoogle({ fail: (call) => call.path.endsWith('/stale') ? new GoogleApiError('rejected', 412) : undefined });
+  const app = buildApp(config, pino({ level: 'silent' }), {
+    modules: [coreModule, createGoogleModule(google.client, { timeZone: 'Europe/Copenhagen', now })],
+    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+  });
+  const payload = { subject: 'Planning', start: '2026-11-24T09:00:00Z', end: '2026-11-24T10:00:00Z', allDay: false };
+  const id = '12345678123412341234123456781234';
+  afterAll(() => app.close());
+  it('creates only signed-in appointments with a stable provider id and positive duration', async () => {
+    const create = { method: 'POST' as const, url: '/calendar/events', payload: { ...payload, id } };
+    expect((await app.inject(create)).statusCode).toBe(401);
+    expect((await app.inject({ ...create, headers: owner, payload: { ...create.payload, end: payload.start } })).statusCode).toBe(400);
+    expect((await app.inject({ ...create, headers: owner })).statusCode).toBe(201);
+  });
+  it('edits and deletes a specific version and reports stale appointments', async () => {
+    const change = { method: 'PATCH' as const, url: '/calendar/events/' + id, payload };
+    expect((await app.inject({ ...change, headers: owner })).statusCode).toBe(400);
+    const headers = { ...owner, 'if-match': '"1"' };
+    expect((await app.inject({ ...change, headers })).statusCode).toBe(204);
+    expect((await app.inject({ ...change, headers, url: '/calendar/events/stale' })).statusCode).toBe(409);
+    expect((await app.inject({ method: 'DELETE', url: change.url, headers })).statusCode).toBe(204);
+  });
+});

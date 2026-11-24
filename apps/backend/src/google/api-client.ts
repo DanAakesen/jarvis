@@ -11,6 +11,7 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 export type GoogleApi = keyof typeof ORIGINS;
 
 export interface GoogleApiRequest {
+  readonly ifMatch?: string;
   readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly signal: AbortSignal;
@@ -125,6 +126,7 @@ export function createGoogleApiClient({
         headers: {
           Authorization: 'Bearer ' + token,
           Accept: 'application/json',
+          ...(options.ifMatch ? { 'If-Match': options.ifMatch } : {}),
           ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
