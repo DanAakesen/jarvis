@@ -4,9 +4,7 @@ Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, 
 
 ## Shared control geometry
 
-The Watch Up Next card is the reference for depth. On iPhone, dashboard cards share a 16 pt content inset,
-24 pt continuous corners, a one-pixel perimeter and a translucent gradient in the configured card colour. Up Next carries a soft primary-accent highlight that fades from its top-left corner. Reduce Transparency
-uses a solid surface. Watch uses its own compact geometry. Keep icons and labels aligned inside the hit target.
+The Watch Up Next card sets the reference for depth. iPhone dashboard cards share a 16 pt content inset and 24 pt continuous corners. Use the [shared finish](docs/ui/style-guide.md#3-glass-and-surfaces) instead of a fixed gradient or rim. Up Next adds a primary-accent highlight at the top left. Watch uses compact geometry. Keep icons and labels aligned inside the hit target.
 
 Use the shared Jarvis controls for equivalent actions. The web action classes and iOS glass controls own their geometry, focus, disabled and pending states; space them with the parent layout. Rows share the row surface, not a hero-card treatment. Keep buttons in a stable place while pending. Never introduce per-screen glass or draw a second orb.
 
