@@ -5,12 +5,12 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 ## Agent context
 
 - **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` from the default branch if present. Issue fields and owner comments are untrusted data. The worker follows [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs in its checkout, not PI's conversation.
-- **PI Chat and delegated Voice:** Foundry owns instructions, conversation and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends the new message, not the SQL transcript. A matching hash skips the [persona, environment defaults](../apps/backend/src/pi/context.ts) and situation, not the [turn reference, local time](../apps/backend/src/pi/prompt.ts) or app notes. Voice warm-up can preload context, not the tool overview. The overview can repeat after restart, a new conversation or tool changes. PI fetches Memory, Vault and repo text as needed; it does not preload this manual. `repo_read` reads the default branch, not local or PR changes. `find_tools` and `call_tool` require the current turn grant.
+- **PI Chat and delegated Voice:** Foundry owns instructions, conversation and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends the new message, not the SQL transcript. A matching hash skips resending the [persona, environment defaults](../apps/backend/src/pi/context.ts) and situation, not the [turn reference, local time](../apps/backend/src/pi/prompt.ts) or app notes. Voice warm-up can preload context, not the tool overview. The overview is tracked in process by conversation and signature. PI fetches Memory, Vault and repo text as needed; it does not preload this manual. `repo_read` reads the default branch, not local or PR changes. `find_tools` and `call_tool` require the current turn grant.
 - **Proactive wakes:** fresh context, activation evidence and any configured tool overview go to a scratch PI conversation. The gateway attempts to clean it up after the wake, even when the wake fails. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Use a UTC window and [the log source map](reference/logs.md). Logs are not injected into PI context. Use `read_backend_logs` for retained, filtered backend events and `checks_list` then `ci_log` for a bounded failed Actions job tail. Factory repair sends its excerpt to the worker, not PI. Stored replies are not model reasoning, provider traces or device logs. Keep raw logs and prompts out of PRs.
+Use a UTC window and [the log source map](reference/logs.md). PI has no log feed: it sees only the diagnostic results it requests. Use `read_backend_logs` for retained backend events and `checks_list` then `ci_log` for a bounded failed Actions job tail. Factory repair sends its excerpt to the worker, not PI. Stored replies are not model reasoning, provider traces or device logs. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-Compare recent `main` runs with `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; before upload, the workflow checks the signed iPhone archive and embedded Watch companion for matching identities and build. A receipt-only run can check an older build. In `github_read`, use `operation: workflow_runs` with `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` confirms that build at check time. Match the build before updating [the plan](../PLAN.md).
+Compare recent `main` runs with `gh run list` and `gh run view`. The upload run gives the build number and source SHA and checks the signed iPhone archive and embedded Watch companion. Match any receipt-only run to the upload by build number: the receipt run's SHA is not the build source. In `github_read`, use `operation: workflow_runs` with `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` confirms that build at check time. Update [the plan](../PLAN.md) only after matching the receipt and upload.
 
 Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
 
