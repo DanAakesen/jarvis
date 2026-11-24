@@ -226,7 +226,7 @@ struct JarvisHealthKitReader {
         let samples = try await readSamples(store: store, predicate: .categorySample(type: type, predicate: window))
         let segments = samples.compactMap { sample -> JarvisHealthSleepSegment? in
             let stage = Self.stage(sample.value)
-            guard ["core", "deep", "rem", "awake"].contains(stage) else { return nil }
+            guard ["core", "deep", "rem", "awake", "asleep"].contains(stage) else { return nil }
             return JarvisHealthSleepSegment(id: sample.uuid.uuidString, stage: stage,
                 start: max(start, sample.startDate), end: min(end, sample.endDate),
                 source: sample.sourceRevision.source.bundleIdentifier)

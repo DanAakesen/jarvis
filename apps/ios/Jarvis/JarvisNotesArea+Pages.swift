@@ -192,16 +192,16 @@ extension JarvisNotesArea {
 
     private func folderRow(_ folder: VaultFolderNode) -> some View {
         JarvisRowButton(identifier: "notes.folder.\(folder.path)", action: { navigateToFolder(folder.path) }) {
-            HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+            HStack(spacing: 8) {
                 Image(systemName: "folder")
                     .font(.system(size: JarvisDesignTokens.notesIconSize + 4))
                     .foregroundStyle(JarvisNotesFolderPalette.color(folder.path))
                     .frame(width: JarvisDesignTokens.notesIconSize + 6)
                     .accessibilityHidden(true)
-                Text(folder.name).font(.headline).foregroundStyle(.primary).lineLimit(2)
+                Text(folder.name).font(.body.weight(.semibold)).foregroundStyle(.primary).lineLimit(2).layoutPriority(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, JarvisPageHeaderMetrics.rowInset)
+            .padding(.horizontal, 10)
             .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset - 2)
             .frame(minHeight: 44)
         }

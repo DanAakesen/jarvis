@@ -32,6 +32,7 @@ struct JarvisTodayActivityCard: View {
             if expanded {
                 let training = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
                 let walks = model.periodWorkouts.filter { ["walk", "walking", "52", "healthkit52"].contains(JarvisHealthLogic.normalizedWorkoutType($0.workoutType)) }
+                Text("Workouts include walks. The target is for gym sessions and runs.").font(.caption).foregroundStyle(.secondary)
                 Text("Gym & runs").font(.subheadline.weight(.semibold))
                 ForEach(Array(training.sorted { $0.performedAt > $1.performedAt }.enumerated()), id: \.offset) { _, workout in
                     HStack {

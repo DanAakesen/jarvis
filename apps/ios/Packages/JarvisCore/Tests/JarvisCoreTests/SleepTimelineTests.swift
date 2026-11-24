@@ -37,4 +37,16 @@ final class SleepTimelineTests: XCTestCase {
         XCTAssertEqual(result.segments, [overnight])
         XCTAssertTrue(JarvisSleepTimeline.overnight([nap], wakingOn: midnight, calendar: calendar).segments.isEmpty)
     }
+
+    func testUnclassifiedSleepFillsOnlyGapsAndRetainsACompleteSummary() {
+        let start = Date(timeIntervalSince1970: 0)
+        func sample(_ stage: String, _ from: Int, _ to: Int) -> JarvisHealthSleepSegment {
+            .init(id: stage, stage: stage, start: start.addingTimeInterval(Double(from) * 3600),
+                  end: start.addingTimeInterval(Double(to) * 3600))
+        }
+        let night = JarvisSleepTimeline(segments: [sample("asleep", 0, 8), sample("core", 1, 5), sample("awake", 5, 6)])
+        XCTAssertEqual(night.stagedHours, 4)
+        XCTAssertEqual(night.dailyRow(date: "2026-11-24")?["total_sleep_hours"], .number(7))
+        XCTAssertEqual(night.dailyRow(date: "2026-11-24", retainedTotal: 8)?["total_sleep_hours"], .number(8))
+    }
 }

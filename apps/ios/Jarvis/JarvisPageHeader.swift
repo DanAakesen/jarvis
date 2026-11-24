@@ -241,12 +241,26 @@ struct JarvisDashboardCardFill: View {
     @Environment(\.jarvisCardRole) private var role
     var horizontal = false
 
+    private var cornerHighlight: Color {
+        switch role {
+        case "next", "training", "steps", "nutrition": JarvisDesignTokens.primaryAccent.opacity(0.15)
+        case "sleep": JarvisDesignTokens.secondaryAccent.opacity(0.10)
+        default: Color.white.opacity(0.035)
+        }
+    }
+
     var body: some View {
         let tone = JarvisSurfacePalette.shared.color(role, inherit: "card") ?? JarvisDesignTokens.dashboardCardTone
         if reduceTransparency { JarvisDesignTokens.glassSolid }
         else {
             LinearGradient(colors: [tone.opacity(0.84), tone.opacity(0.55)],
                            startPoint: horizontal ? .leading : .topLeading, endPoint: horizontal ? .trailing : .bottomTrailing)
+                .overlay {
+                    if !horizontal {
+                        EllipticalGradient(colors: [cornerHighlight, .clear], center: .topLeading,
+                                           startRadiusFraction: 0, endRadiusFraction: 0.82)
+                    }
+                }
         }
     }
 }

@@ -58,6 +58,9 @@ final class JarvisTodayModel: ObservableObject {
 
     @Published private var trainingTargets: JarvisHealthTargets?
     var periodWorkoutTarget: Double? {
+        if let fixture = dependencies.fixture {
+            return JarvisHealthLogic.sessionTarget(fixture.weeklyTrainingTarget, days: activity.range.dayCount)
+        }
         guard let targets = trainingTargets?.targets,
               let gym = targets.gymSessionsPerWeek, let run = targets.runSessionsPerWeek else { return nil }
         return JarvisHealthLogic.sessionTarget(gym + run, days: activity.range.dayCount)

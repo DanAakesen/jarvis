@@ -391,8 +391,10 @@ struct JarvisHealthArea: View {
                     guard !observeRefreshEvents, dashboard != nil,
                           let option = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screenshot-health-card=") }),
                           let card = option.split(separator: "=").last else { return }
-                    await Task.yield()
-                    proxy.scrollTo(String(card), anchor: .top)
+                    try? await Task.sleep(for: .milliseconds(650))
+                    guard !Task.isCancelled else { return }
+                    if card == "nutrition" { proxy.scrollTo("meal-actions", anchor: .center) }
+                    else { proxy.scrollTo(String(card), anchor: .top) }
                 }
 #endif
             }

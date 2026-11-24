@@ -10,6 +10,7 @@ struct JarvisTodayFixture {
     let notes: [VaultNoteSummary]
     let steps: JarvisStepsSnapshot
     let gymEntries: [JarvisGymLogEntry]
+    let weeklyTrainingTarget = 5.0
     var dailyActivity: JarvisDailyActivitySnapshot {
         let calendar = JarvisHealthSyncWindow.calendar
         let formatter = DateFormatter()
@@ -41,9 +42,9 @@ struct JarvisTodayFixture {
             generatedAt: "2026-11-02T13:30:00Z", highlights: ["Design review"])
     }
 
-    /// Monday 2 November 2026, 14:30 in the device time zone.
+    /// Monday 2 November 2026, 14:30 in Copenhagen.
     static func make() -> JarvisTodayFixture {
-        let calendar = Calendar.current
+        let calendar = JarvisHealthSyncWindow.calendar
         func date(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
             calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour, minute: minute)) ?? Date()
         }
@@ -83,12 +84,12 @@ struct JarvisTodayFixture {
             JarvisGymLogEntry(
                 performedAt: date(2, 7),
                 session: .chest,
-                lift: JarvisGymLift(exercise: "Bench press", weightKg: 80, reps: 5, sets: 3)
+                lift: JarvisGymLift(exercise: "Bench press", weightKg: 80, reps: 5, sets: 3), durationMinutes: 48
             ),
-            JarvisGymLogEntry(performedAt: date(1, 18), session: .back),
+            JarvisGymLogEntry(performedAt: date(1, 18), session: .back, durationMinutes: 51),
             JarvisGymLogEntry(
                 performedAt: calendar.date(byAdding: .day, value: -3, to: date(2, 18)) ?? now,
-                session: .legs
+                session: .legs, durationMinutes: 54
             ),
         ]
         return JarvisTodayFixture(

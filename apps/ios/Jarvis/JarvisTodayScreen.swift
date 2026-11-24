@@ -85,6 +85,7 @@ struct JarvisTodayScreen: View {
         .contentMargins(.top, 0, for: .scrollContent)
         .contentMargins(.bottom, JarvisPageHeaderMetrics.spacing, for: .scrollContent)
         .jarvisPageHeader { JarvisPageHeader(title: JarvisDestination.today.localizedTitle(language: language), language: language) }
+        .environment(\.timeZone, JarvisHealthSyncWindow.calendar.timeZone)
         .accessibilityIdentifier("today.list")
         .refreshable {
             healthSyncState = await onSyncAppleHealth?()
@@ -266,10 +267,13 @@ struct JarvisTodayScreen: View {
         switch row {
         case .entry(let event):
             if event.allDay == true { return "All day" }
-            return [event.start, event.end].map { JarvisTodayGreeting.timeText($0, language: language) }.joined(separator: " – ")
+            return [event.start, event.end].map { JarvisTodayGreeting.timeText($0, language: language, calendar: JarvisHealthSyncWindow.calendar) }.joined(separator: " – ")
         case .task(let task):
             if let value = task.dueTime { return JarvisNotesLocalization.formattedDueTime(value, language: language) }
-            return task.dueDate ?? "—"
+            if task.dueAt != nil, rowDate(row) != .distantFuture {
+                return JarvisTodayGreeting.timeText(rowDate(row), language: language, calendar: JarvisHealthSyncWindow.calendar)
+            }
+            return task.dueDate == nil ? "—" : "Any time"
         }
     }
 
@@ -334,7 +338,7 @@ struct JarvisTodayScreen: View {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             if case .entry(let event) = row, event.allDay != true {
-                                Text(JarvisTodayGreeting.timeText(event.start, language: language))
+                                Text(JarvisTodayGreeting.timeText(event.start, language: language, calendar: JarvisHealthSyncWindow.calendar))
                             } else { Text(time(row)) }
                             if rowDate(row) != .distantFuture && !JarvisHealthSyncWindow.calendar.isDate(rowDate(row), inSameDayAs: model.now) {
                                 Text(rowDate(row), format: .dateTime.month(.abbreviated).day()).font(.caption2)

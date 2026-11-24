@@ -71,7 +71,7 @@ struct JarvisHealthCards<Lifts: View>: View {
                     JarvisLabelledButton(title: "Scan meal", systemImage: "camera", isDisabled: onPhoto == nil) {
                         Task { await openCamera() }
                     }
-                }.frame(maxWidth: .infinity).padding(.top, 4)
+                }.frame(maxWidth: .infinity).padding(.top, 4).id("meal-actions")
                 if let captureError { Text(captureError).font(.footnote) }
                 if let mealReceipt { Text("\(number(mealReceipt.energyKcal)) kcal logged").font(.footnote).accessibilityIdentifier("health.nutrition.saved") }
             }.environment(\.jarvisCardRole, "nutrition").accessibilityIdentifier("health.hero.nutrition").id("nutrition")
@@ -244,12 +244,11 @@ struct JarvisHealthCards<Lifts: View>: View {
         let window = period(sleep)
         let measured = JarvisSleepTimeline(segments: stages)
         var items = data.sleep.items
-        if let night = measured.dailyRow(date: period(.today).endDate) {
-            let date = period(.today).endDate
-            if sleep == .today || JarvisHealthSleepNight.nights(from: items)[date]?.total == nil {
-                items.removeAll { $0["sleep_date"]?.stringValue.map { String($0.prefix(10)) } == date }
-                items.append(night)
-            }
+        let date = period(.today).endDate
+        let retained = JarvisHealthSleepNight.nights(from: items)[date]?.total
+        if let night = measured.dailyRow(date: date, retainedTotal: retained), sleep == .today || retained == nil {
+            items.removeAll { $0["sleep_date"]?.stringValue.map { String($0.prefix(10)) } == date }
+            items.append(night)
         }
         let average = JarvisHealthSleepSummary(items: items, period: window)
         return VStack(alignment: .leading, spacing: 12) {
@@ -262,8 +261,13 @@ struct JarvisHealthCards<Lifts: View>: View {
                 Text("\(duration(goals.sleepHours)) goal").font(.footnote)
             }
             if sleep == .today {
-                if measured.segments.isEmpty { Text("Sleep stage timeline unavailable").font(.footnote).foregroundStyle(.secondary) }
-                else { JarvisNightChart(timeline: measured) }
+                if measured.stagedHours == 0 { Text("Sleep stage timeline unavailable").font(.footnote).foregroundStyle(.secondary) }
+                else {
+                    JarvisNightChart(timeline: measured)
+                    if let total = average.total, total - measured.stagedHours >= 1.0 / 60 {
+                        Text("Stages recorded for \(duration(measured.stagedHours)) of sleep").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Divider()
                 HStack {
                     ForEach(Array(zip(["Awake", "REM", "Core", "Deep"], [average.awake, average.rem, average.light, average.deep])), id: \.0) { label, hours in
