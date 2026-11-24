@@ -623,7 +623,7 @@ struct ContentView: View {
                   let screen = arguments.first(where: { $0.hasPrefix("--screenshot-screen=") })?
                     .split(separator: "=", maxSplits: 1).last,
                   let destination = ["voice": JarvisDestination.voice, "notes": .notes,
-                                     "health": .health, "settings": .settings][String(screen)] {
+                                     "health": .health, "settings": .settings, "calendar": .calendar][String(screen)] {
             state.navigate(to: destination)
         }
         if JarvisFactoryScreenshotConfiguration.parse(arguments: arguments) != nil {

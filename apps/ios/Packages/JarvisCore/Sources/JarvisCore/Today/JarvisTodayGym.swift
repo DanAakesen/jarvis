@@ -118,6 +118,14 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
     public let healthKitID: String?
     public let healthActivity: String?
 
+    public var workoutType: String {
+        if let healthActivity { return healthActivity }
+        switch session {
+        case .chest, .back, .arms, .legs, .strength: return "gym"
+        case .cardio, .other: return "other"
+        }
+    }
+
     public init(
         performedAt: Date,
         session: JarvisGymSessionType,
@@ -354,6 +362,7 @@ public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
 
 /// A bounded read of the existing Home log notes. Partial means older notes may contain more lifts.
 public struct JarvisGymLiftHistory: Sendable {
+    public let nextOffset: Int?
     public let entries: [JarvisGymLogEntry]
     public let partial: Bool
 }
@@ -375,37 +384,28 @@ extension JarvisGymLogNote {
 
 extension JarvisVaultGymLogStore {
     /// Reads existing notes without migrating or rewriting the owner's log. All reads are bounded and cancellable.
-    public func recentLifts(since: Date, maximumNoteReads: Int = 30) async throws -> JarvisGymLiftHistory {
+    public func recentLifts(since: Date, offset: Int = 0, maximumNoteReads: Int = 30) async throws -> JarvisGymLiftHistory {
+        let page = try await client.notes(directory: JarvisGymLogNote.folder, offset: offset, recentFirst: true)
         let deadline = ContinuousClock.now + .seconds(25)
-        var candidates: [(path: String, date: Date, session: JarvisGymSessionType)] = []
-        var offset = 0
+        let limit = max(1, maximumNoteReads)
+        var consumed = 0
         var partial = false
-        for pageIndex in 0..<maximumPages {
-            try Task.checkCancellation()
-            guard ContinuousClock.now < deadline else { partial = true; break }
-            let page = try await client.notes(directory: JarvisGymLogNote.folder, offset: offset)
-            for note in page.notes {
-                if let parsed = JarvisGymLogNote.parse(path: note.path, timeZone: timeZone), parsed.performedAt >= since {
-                    candidates.append((note.path, parsed.performedAt, parsed.session))
-                }
-            }
-            if !page.hasMore { break }
-            if pageIndex == maximumPages - 1 { partial = true }
-            offset += page.limit
-        }
-        let limit = min(max(maximumNoteReads, 1), 100)
-        partial = partial || candidates.count > limit
         var entries: [JarvisGymLogEntry] = []
-        for candidate in candidates.sorted(by: { $0.date > $1.date }).prefix(limit) {
+        for item in page.notes {
             try Task.checkCancellation()
-            guard ContinuousClock.now < deadline else { partial = true; break }
-            let note = try await client.readNote(path: candidate.path)
+            if consumed >= limit || (consumed > 0 && ContinuousClock.now >= deadline) { break }
+            consumed += 1
+            guard let parsed = JarvisGymLogNote.parse(path: item.path, timeZone: timeZone),
+                  parsed.performedAt >= since else { continue }
+            let note = try await client.readNote(path: item.path)
             if let lift = JarvisGymLogNote.lift(from: note.content) {
-                entries.append(JarvisGymLogEntry(performedAt: candidate.date, session: candidate.session, lift: lift, vaultNote: note))
-            } else if note.content.contains("- Lift:") {
-                partial = true
-            }
+                entries.append(JarvisGymLogEntry(performedAt: parsed.performedAt, session: parsed.session,
+                                                  lift: lift, vaultNote: note))
+            } else if note.content.contains("- Lift:") { partial = true }
         }
-        return JarvisGymLiftHistory(entries: entries, partial: partial)
+        let more = consumed < page.notes.count || page.hasMore
+        let next = offset + consumed
+        let cursor = more && consumed > 0 && next <= 10_000 ? next : nil
+        return JarvisGymLiftHistory(nextOffset: cursor, entries: entries, partial: partial || (more && cursor == nil))
     }
 }

@@ -225,9 +225,9 @@ struct JarvisHealthCards<Lifts: View>: View {
                 else {
                     Chart(stages, id: \.id) { item in
                         RectangleMark(xStart: .value("Start", item.start), xEnd: .value("End", item.end),
-                                      y: .value("Stage", item.stage.capitalized), height: .ratio(0.7))
+                                      y: .value("Stage", (item.stage == "rem" ? "REM" : item.stage.capitalized)), height: .ratio(0.7))
                             .foregroundStyle(item.stage == "awake" ? accent : secondary.opacity(item.stage == "deep" ? 0.48 : item.stage == "core" ? 0.72 : 1))
-                    }.chartYScale(domain: ["Deep", "Core", "Rem", "Awake"]).frame(height: 105)
+                    }.chartYScale(domain: ["Deep", "Core", "REM", "Awake"]).frame(height: 105)
                 }
             } else {
                 let values = JarvisHealthSleepNight.nights(from: data.sleep.items).compactMapValues(\.total)
@@ -266,9 +266,16 @@ struct JarvisHealthCards<Lifts: View>: View {
                 if let amount, let allowance = budget?.allowanceKcal, allowance > 0 {
                     ProgressView(value: min(allowance, amount), total: allowance).tint(accent)
                 }
+                HStack {
+                    if data.nutritionDays.state == .available || data.nutritionDays.state == .empty {
+                        Text("\(recorded.mealCount) meals logged")
+                    }
+                    Spacer()
+                    Text("Intake target \(number(budget?.allowanceKcal)) kcal")
+                }.font(.caption).foregroundStyle(.secondary)
                 LabeledContent("Resting target", value: "\(number(budget?.restingKcal)) kcal")
                 LabeledContent("Active energy", value: "\(number(budget?.activeKcal)) kcal")
-                LabeledContent("Planned deficit", value: "\(number(budget?.deficitKcal)) kcal")
+                LabeledContent("Planned deficit", value: "\(number(budget?.deficitKcal.map { -$0 })) kcal")
             } else {
                 bars(.init(values: JarvisHealthNutritionDays.values(from: data.nutritionDays.items, nutrient: .kcal), endingOn: window.endDate, count: window.dayCount, target: nil),
                      unit: "kcal", title: "Daily intake", id: "health.chart.nutrition", state: data.nutritionDays.state)

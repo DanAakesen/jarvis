@@ -9,7 +9,11 @@ struct JarvisCalendarPage: View {
     let onChanged: () async -> Void
     private let calendar = JarvisHealthSyncWindow.calendar
     @State private var date = Date()
+#if targetEnvironment(simulator)
+    @State private var period: Period = ProcessInfo.processInfo.arguments.contains("--screenshot-calendar-week") ? .week : .day
+#else
     @State private var period = Period.day
+#endif
     @State private var events: [JarvisTodayCalendarEntry] = []
     @State private var search = ""
     @State private var draft: CalendarDraft?
@@ -162,6 +166,12 @@ struct JarvisCalendarPage: View {
             }
             TextField("Title", text: binding.title).textFieldStyle(.roundedBorder)
             Toggle("All day", isOn: binding.allDay)
+                .onChange(of: value.allDay) { _, enabled in
+                    if enabled, calendar.isDate(value.start, inSameDayAs: value.end),
+                       let next = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: value.start)) {
+                        draft?.end = next
+                    }
+                }
             DatePicker("Starts", selection: binding.start, displayedComponents: value.allDay ? [.date] : [.date, .hourAndMinute])
             DatePicker(value.allDay ? "Ends before" : "Ends", selection: binding.end, displayedComponents: value.allDay ? [.date] : [.date, .hourAndMinute])
             HStack {

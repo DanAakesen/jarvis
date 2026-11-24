@@ -242,6 +242,7 @@ struct JarvisHealthArea: View {
     @State private var vaultLiftsLoading = false
     @State private var vaultLoadID: UUID?
     @State private var vaultLiftsLoaded = false
+    @State private var vaultNextOffset: Int?
     @State private var vaultLiftsPartial = false
     @State private var vaultLiftsFailed = false
     @State private var deviceWorkouts: [JarvisGymLogEntry]?
@@ -332,7 +333,7 @@ struct JarvisHealthArea: View {
                             failed: liftFailure != nil || vaultLiftsFailed,
                             exercisesFailed: exerciseFailure != nil || vaultLiftsFailed,
                             hasMore: liftCursor != nil,
-                            exercisesPartial: exercisesPartial || vaultLiftsPartial || vaultLiftsFailed,
+                            exercisesPartial: exercisesPartial || vaultLiftsPartial || vaultNextOffset != nil || vaultLiftsFailed,
                             language: language,
                             loadMore: { Task { await loadLifts(more: true) } },
                             deletingID: deletingLiftID,
@@ -556,6 +557,11 @@ struct JarvisHealthArea: View {
         DisclosureGroup("Saved max lifts", isExpanded: $expandedLifts) {
             JarvisTextButton(title: copy.text(.logLift), identifier: "health.lifts.log") { newLiftPresented = true }
                 .disabled(gymModel == nil)
+            if vaultLiftsFailed {
+                JarvisTextButton(title: copy.text(.retry), identifier: "health.lifts.retryVault") {
+                    Task { await loadVaultLifts(offset: vaultNextOffset ?? 0) }
+                }
+            }
             JarvisRowGroup {
                 if ((liftsLoading && !liftsLoaded) || (vaultLiftsLoading && !vaultLiftsLoaded)) && combinedLiftRows.isEmpty {
                     JarvisHealthStateLine(state: .loading, language: language).jarvisListRow(separator: false)
@@ -563,10 +569,10 @@ struct JarvisHealthArea: View {
                     Text(liftFailure.title(language: language)).foregroundStyle(.secondary)
                         .jarvisListRow(separator: false)
                 } else if combinedLiftRows.isEmpty {
-                    Text(copy.text(vaultLiftsPartial || vaultLiftsFailed ? .partial : .noLifts)).foregroundStyle(.secondary).jarvisListRow(separator: false)
+                    Text(copy.text(vaultLiftsPartial || vaultNextOffset != nil || vaultLiftsFailed ? .partial : .noLifts)).foregroundStyle(.secondary).jarvisListRow(separator: false)
                 } else {
                     let recent = maximumLifts
-                    if liftCursor != nil || vaultLiftsPartial || vaultLiftsFailed || (liftFailure != nil && liftFailure != .unavailable) {
+                    if liftCursor != nil || vaultLiftsPartial || vaultNextOffset != nil || vaultLiftsFailed || (liftFailure != nil && liftFailure != .unavailable) {
                         Text(copy.text(.partial)).font(.caption).foregroundStyle(.secondary)
                             .jarvisListRow(separator: false)
                     }
@@ -593,6 +599,9 @@ struct JarvisHealthArea: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("health.lastLifts")
+        .task(id: expandedLifts ? vaultNextOffset : nil) {
+            if expandedLifts, let offset = vaultNextOffset { await loadVaultLifts(offset: offset) }
+        }
         .task(id: expandedLifts) {
             while expandedLifts && !Task.isCancelled && !liftsLoading && liftCursor != nil {
                 let previous = liftCursor
@@ -755,7 +764,7 @@ struct JarvisHealthArea: View {
                 kind: JarvisHealthLogic.workoutKind(row["workout_type"]?.stringValue))
         }
         for entry in deviceWorkouts {
-            let raw = entry.healthActivity ?? ([JarvisGymSessionType.chest, .back, .arms, .legs, .strength].contains(entry.session) ? "gym" : "other")
+            let raw = entry.workoutType
             let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
                 kind: JarvisHealthLogic.workoutKind(raw), source: entry.manualWorkoutID == nil ? .healthKit : .manual)
             if let index = identities.firstIndex(where: { $0?.matches(identity) == true }) {
@@ -813,20 +822,21 @@ struct JarvisHealthArea: View {
     }
 
     @MainActor
-    private func loadVaultLifts() async {
+    private func loadVaultLifts(offset: Int = 0) async {
         guard observeRefreshEvents, let notes = gymModel?.notesClient else { return }
         let loadID = UUID()
+        if offset == 0 { vaultNextOffset = nil }
         vaultLoadID = loadID
         vaultLiftsLoading = true
         defer { if vaultLoadID == loadID { vaultLiftsLoading = false } }
         do {
             let history = try await JarvisVaultGymLogStore(client: notes).recentLifts(
-                since: .distantPast
+                since: .distantPast, offset: offset
             )
             try Task.checkCancellation()
             guard vaultLoadID == loadID else { return }
             let formatter = ISO8601DateFormatter()
-            vaultLifts = history.entries.compactMap { entry in
+            let rows: [[String: JSONValue]] = history.entries.compactMap { entry in
                 guard let lift = entry.lift else { return nil }
                 var row: [String: JSONValue] = ["exerciseName": .string(lift.exercise), "weightKg": .number(lift.weightKg),
                         "reps": .number(Double(lift.reps)), "sets": .number(Double(lift.sets)),
@@ -838,7 +848,9 @@ struct JarvisHealthArea: View {
                 }
                 return row
             }
-            vaultLiftsPartial = history.partial
+            vaultLifts = offset == 0 ? rows : vaultLifts + rows
+            vaultNextOffset = history.nextOffset
+            vaultLiftsPartial = (offset != 0 && vaultLiftsPartial) || history.partial
             vaultLiftsFailed = false
             vaultLiftsLoaded = true
         } catch is CancellationError {

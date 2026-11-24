@@ -15,7 +15,7 @@ struct JarvisNoteTableGrid: View {
                                     TextField(row == 0 ? "Heading \(column + 1)" : "", text: cell(row, column))
                                         .font(row == 0 ? .body.weight(.semibold) : .body)
                                         .padding(.horizontal, 8).frame(width: 145, height: 44)
-                                        .background(.primary.opacity(row == 0 ? 0.10 : 0.045))
+                                        .background((JarvisSurfacePalette.shared.color("field") ?? Color.primary).opacity(row == 0 ? 0.15 : 0.075))
                                         .accessibilityLabel("Row \(row + 1), column \(column + 1)")
                                 }
                             }
@@ -26,6 +26,8 @@ struct JarvisNoteTableGrid: View {
                     JarvisLabelledButton(title: "Row", systemImage: "plus", isCompact: true) { update { $0.addRow() } }
                     JarvisLabelledButton(title: "Column", systemImage: "plus", isCompact: true) { update { $0.addColumn() } }
                     Spacer()
+                    JarvisIconButton(title: "Edit table as Markdown", systemImage: "chevron.left.forwardslash.chevron.right",
+                                     identifier: "editor.table.markdown") { block.table = nil }
                 }
             }
         }

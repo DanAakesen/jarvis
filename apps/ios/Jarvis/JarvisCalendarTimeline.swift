@@ -43,7 +43,7 @@ struct JarvisCalendarTimeline: View {
                         Button { selectedDay = day } label: {
                             VStack(spacing: 0) {
                                 Text(day, format: .dateTime.weekday(.abbreviated))
-                            Text(day, format: .dateTime.day()).fontWeight(.semibold)
+                                Text(day, format: .dateTime.day()).fontWeight(.semibold)
                             }.font(.caption).frame(maxWidth: .infinity, minHeight: 42)
                                 .foregroundStyle(calendar.isDate(day, inSameDayAs: selectedDay) ? JarvisDesignTokens.primaryAccent : .primary)
                                 .contentShape(Rectangle())
@@ -52,51 +52,56 @@ struct JarvisCalendarTimeline: View {
                     }
                 }
             }
-            ScrollViewReader { proxy in
-                ScrollView(.vertical) {
-                    GeometryReader { geo in
-                        let width = max(1, (geo.size.width - gutter) / CGFloat(days.count))
-                        ZStack(alignment: .topLeading) {
-                            ForEach(0..<25) { index in
-                                HStack(spacing: 3) {
-                                    Text(String(format: "%02d.00", index)).font(.caption2.monospacedDigit())
-                                        .foregroundStyle(.secondary).frame(width: gutter - 3, alignment: .leading)
-                                    Rectangle().fill(.secondary.opacity(0.22)).frame(height: 0.5)
-                                }
-                                .frame(height: 12).offset(y: CGFloat(index) * hour)
+            ScrollView(.vertical) {
+                GeometryReader { geo in
+                    let width = max(1, (geo.size.width - gutter) / CGFloat(days.count))
+                    ZStack(alignment: .topLeading) {
+                        ForEach(0..<25) { index in
+                            HStack(spacing: 3) {
+                                Text(String(format: "%02d.00", index)).font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.secondary).frame(width: gutter - 3, alignment: .leading)
+                                Rectangle().fill(.secondary.opacity(0.22)).frame(height: 0.5)
                             }
-                            ForEach(Array(days.enumerated()), id: \.element) { index, day in
-                                ForEach(slots(day)) { slot in
-                                    let column = width / CGFloat(slot.lanes)
-                                    let active = dragging == slot.id
-                                    block(slot.event, compact: days.count > 1)
-                                        .frame(width: max(1, column - 2), height: max(10, (slot.end - slot.start) * hour - 1),
-                                               alignment: .topLeading)
-                                        .background(JarvisDesignTokens.primaryAccent.opacity(active ? 0.34 : 0.17),
-                                                    in: RoundedRectangle(cornerRadius: 5))
-                                        .clipShape(RoundedRectangle(cornerRadius: 5))
-                                        .contentShape(Rectangle())
-                                        .gesture(moveGesture(slot.event, width: width))
-                                        .onTapGesture { onSelect(slot.event) }
-                                        .accessibilityAddTraits(.isButton)
-                                        .accessibilityAction { onSelect(slot.event) }
-                                        .offset(x: gutter + CGFloat(index) * width + CGFloat(slot.lane) * column + (active ? shift.width : 0),
-                                                y: 6 + slot.start * hour + (active ? shift.height : 0))
-                                        .zIndex(active ? 2 : 1)
+                            .frame(height: 12).offset(y: CGFloat(index) * hour)
+                        }
+                        TimelineView(.periodic(from: .now, by: 60)) { context in
+                            if let column = days.firstIndex(where: { calendar.isDate($0, inSameDayAs: context.date) }) {
+                                Path { path in
+                                    let y = 6 + clock(context.date) * hour
+                                    let x = gutter + CGFloat(column) * width
+                                    path.move(to: CGPoint(x: x, y: y))
+                                    path.addLine(to: CGPoint(x: x + width, y: y))
                                 }
+                                .stroke(JarvisDesignTokens.primaryAccent, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                                .allowsHitTesting(false)
                             }
                         }
-                    }.frame(height: 24 * hour + 15)
-                    .overlay(alignment: .topLeading) {
-                        VStack(spacing: 0) {
-                            Color.clear.frame(height: 7 * hour)
-                            Color.clear.frame(height: 1).id("seven")
-                        }.allowsHitTesting(false)
+                        ForEach(Array(days.enumerated()), id: \.element) { index, day in
+                            ForEach(slots(day)) { slot in
+                                let column = width / CGFloat(slot.lanes)
+                                let active = dragging == slot.id
+                                block(slot.event, compact: days.count > 1)
+                                    .frame(width: max(1, column - 2), height: max(10, (slot.end - slot.start) * hour - 1),
+                                           alignment: .topLeading)
+                                    .background(JarvisDesignTokens.primaryAccent.opacity(active ? 0.34 : 0.17),
+                                                in: RoundedRectangle(cornerRadius: 5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                                    .contentShape(Rectangle())
+                                    .gesture(moveGesture(slot.event, width: width))
+                                    .onTapGesture { onSelect(slot.event) }
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityAction { onSelect(slot.event) }
+                                    .offset(x: gutter + CGFloat(index) * width + CGFloat(slot.lane) * column + (active ? shift.width : 0),
+                                            y: 6 + slot.start * hour + (active ? shift.height : 0))
+                                    .zIndex(active ? 2 : 1)
+                            }
+                        }
                     }
-                }
-                .frame(height: 10 * hour + 15)
-                .onAppear { proxy.scrollTo("seven", anchor: .top) }
+                }.frame(height: 24 * hour + 15)
             }
+            .frame(height: 10 * hour + 15)
+            // A 10-hour window centred in the 24-hour sheet starts at 07.00.
+            .defaultScrollAnchor(.center, for: .initialOffset)
         }
     }
 

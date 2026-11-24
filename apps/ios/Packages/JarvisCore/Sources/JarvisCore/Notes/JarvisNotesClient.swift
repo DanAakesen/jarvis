@@ -177,6 +177,7 @@ public enum JarvisNotesClientError: Error, Equatable, Sendable {
     case noteNotFound
     case noteConflict(currentSha: String?, content: String?)
     case taskConflict
+    case destinationExists
     case folderAlreadyExists
     case writeOutcomeUnknown
 }
@@ -441,9 +442,9 @@ public final class JarvisNotesClient: Sendable {
         try await writeNote(path: path, content: content, sha: nil)
     }
 
-    public func saveNote(path: String, content: String, sha: String) async throws -> VaultNoteWrite {
+    public func saveNote(path: String, content: String, sha: String, destination: String? = nil) async throws -> VaultNoteWrite {
         guard Self.validGitSHA(sha) else { throw JarvisNotesClientError.invalidRequest }
-        return try await writeNote(path: path, content: content, sha: sha)
+        return try await writeNote(path: path, content: content, sha: sha, destination: destination)
     }
 
     public func deleteNote(path: String, sha: String) async throws {
@@ -735,12 +736,13 @@ public final class JarvisNotesClient: Sendable {
         return KnowledgeGraphSearch(graph: graph, hits: result.hits.filter { nodeIDs.contains($0.nodeId) })
     }
 
-    private func writeNote(path: String, content: String, sha: String?) async throws -> VaultNoteWrite {
+    private func writeNote(path: String, content: String, sha: String?, destination: String? = nil) async throws -> VaultNoteWrite {
         guard JarvisNotesLogic.validNotePath(path), !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               JarvisNotesLogic.validNoteText(content) else {
             throw JarvisNotesClientError.invalidRequest
         }
-        let body = NoteWriteRequest(path: path, content: content, sha: sha)
+        guard destination.map(JarvisNotesLogic.validNotePath) ?? true else { throw JarvisNotesClientError.invalidRequest }
+        let body = NoteWriteRequest(path: path, content: content, sha: sha, destination: destination)
         do {
             let response = try await request(
                 method: sha == nil ? .post : .put,
@@ -754,10 +756,12 @@ public final class JarvisNotesClient: Sendable {
             }
             guard response.body.count <= 1024 * 1024,
                   let write = try? JSONDecoder().decode(VaultNoteWrite.self, from: response.body),
-                  write.path == path, Self.validGitSHA(write.commit), Self.validGitHubURL(write.url) else {
+                  write.path == (destination ?? path), Self.validGitSHA(write.commit), Self.validGitHubURL(write.url) else {
                 throw JarvisNotesClientError.writeOutcomeUnknown
             }
             return write
+        } catch JarvisClientError.httpStatus(422) {
+            throw JarvisNotesClientError.destinationExists
         } catch JarvisClientError.httpStatus(404) {
             throw JarvisNotesClientError.noteNotFound
         } catch JarvisClientError.serviceUnavailable {
@@ -886,6 +890,7 @@ private struct NoteWriteRequest: Encodable {
     let path: String
     let content: String
     let sha: String?
+    let destination: String?
 }
 
 private struct NoteConflictResponse: Decodable {

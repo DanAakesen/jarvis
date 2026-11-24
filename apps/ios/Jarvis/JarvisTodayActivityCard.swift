@@ -98,11 +98,11 @@ struct JarvisTodayActivityCard: View {
                 )
             }
         }
-        let sessions = model.periodWorkouts
+        let sessions = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
         let durations = sessions.map(\.durationMinutes).filter { $0 > 0 }
         let minutes = durations.reduce(0, +)
         let target = model.periodWorkoutTarget.map { String(Int($0.rounded())) } ?? "—"
-        let count = model.workouts.value == nil ? "—" : String(display.totalWorkouts)
+        let count = model.workouts.value == nil ? "—" : String(sessions.count)
         let duration = durations.isEmpty && (!sessions.isEmpty || model.workouts.value == nil) ? "—" :
             (durations.count < sessions.count ? "≥ " : "") + String(Int(minutes.rounded()))
         let layout = isLargeText ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .top))

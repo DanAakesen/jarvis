@@ -95,8 +95,8 @@ Normal reply pushes open the exact committed session and message. Approval and p
 
 ## 9. Notes area
 
-The Notes area uses the existing owner-authenticated vault routes. No iOS-specific route or payload is needed.
-Its Danish/English interface language is an app-owned local preference (`jarvis.appLanguage`), defaulting to Danish; the voice setting is not used for Notes UI copy.
+The Notes area uses the owner-authenticated vault routes.
+The native interface uses English. Voice language is configured separately.
 
 | Screen action | Existing route and contract |
 |---|---|
@@ -107,7 +107,7 @@ Its Danish/English interface language is an app-owned local preference (`jarvis.
 | Open a note in the editor | `GET /notes/note?path=PATH` returns `path`, Markdown `content`, the current `sha` and a GitHub URL. |
 | Create a note | `POST /notes` with `{path, content}` returns `path`, `commit` and `url`. |
 | Create an empty folder | `POST /notes/folders` with `{path}` returns the confirmed `path` and `commit`. A safe visible path is required; an existing directory/file returns 409. |
-| Save or delete a note | `PUT /notes/note` with `{path, content, sha}` saves; `DELETE /notes/note` with `{path, sha}` deletes after confirmation. On a stale revision retain the draft, refresh, and do not blindly repeat the write. |
+| Save, move or delete a note | `PUT /notes/note` saves content against its SHA. An optional `destination` moves the same filename in one commit. An occupied destination returns 422, a stale SHA returns 409. `DELETE /notes/note` requires the path, SHA and owner confirmation. |
 | Load task groups or search tasks | `GET /vault/tasks?state=open|all`, optionally with `q=TEXT`. The response includes task due dates/times, priority, source path/line/version and the backend's `today`. Personal/Work scope is inferred from the source path, as in the web client. |
 | Complete or reopen a task | `PATCH /vault/tasks` with the exact source `path`, `line`, `text`, `version` and `done`. A stale version returns `409`; refresh before another write. |
 | Edit task text, due date/time or priority | `PUT /vault/tasks` with the exact source identity/version plus `newText`, `due`, `time` and `priority`. |

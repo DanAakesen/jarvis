@@ -11,6 +11,29 @@ actor JarvisRuntimeTestFixtureTransport: HTTPTransport {
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         let path = request.url.path
+#if targetEnvironment(simulator)
+        if request.method == .get, path == "/api/calendar/events",
+           ProcessInfo.processInfo.arguments.contains("--screenshot-screen=calendar") {
+            let calendar = JarvisHealthSyncWindow.calendar
+            let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let formatter = ISO8601DateFormatter()
+            guard let startValue = query.first(where: { $0.name == "from" })?.value,
+                  let endValue = query.first(where: { $0.name == "to" })?.value,
+                  let from = formatter.date(from: startValue), let to = formatter.date(from: endValue) else {
+                throw FixtureTransportError.requestMismatch
+            }
+            let appointments = [(0, 10, "Design review"), (0, 14, "Gym session"), (1, 12, "Lunch"), (3, 9, "Planning")]
+            var events: [[String: Any]] = []
+            for (index, appointment) in appointments.enumerated() {
+                let (offset, hour, title) = appointment
+                guard let day = calendar.date(byAdding: .day, value: offset, to: from),
+                      let start = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day), start < to else { continue }
+                events.append(["id": "fixture-\(index)", "subject": title, "etag": "\"1\"", "allDay": false,
+                               "start": formatter.string(from: start), "end": formatter.string(from: start.addingTimeInterval(3600))])
+            }
+            return try json(200, ["events": events, "timeZone": calendar.timeZone.identifier, "truncated": false])
+        }
+#endif
         if request.method == .get && path == "/api/conversation/runtime-tests" {
             return try json(200, ["current": ["available": true],
                                   "copilot": ["available": false, "reason": "copilot_not_configured"]])

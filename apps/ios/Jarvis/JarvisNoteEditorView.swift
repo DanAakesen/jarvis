@@ -61,7 +61,7 @@ struct JarvisNoteEditorSheet: View {
             _blocks = State(initialValue: JarvisMarkdownBlock.parse(parts.body))
             _parts = State(initialValue: parts)
             _draftTitle = State(initialValue: parts.displayedTitle(path: note.path))
-            _folder = State(initialValue: "")
+            _folder = State(initialValue: note.path.split(separator: "/").dropLast().joined(separator: "/"))
             _stagedFolders = State(initialValue: [])
             _baseline = State(initialValue: note)
         }
@@ -102,13 +102,13 @@ struct JarvisNoteEditorSheet: View {
         isCreating
             ? !draftTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            : draftContent != baseline?.content
+            : draftContent != baseline?.content || notePath != baseline?.path
     }
 
     private var notePath: String? {
-        isCreating
-            ? JarvisNotesLogic.notePath(folder: folder, title: draftTitle)
-            : baseline?.path
+        if isCreating { return JarvisNotesLogic.notePath(folder: folder, title: draftTitle) }
+        guard let filename = baseline?.path.split(separator: "/").last else { return nil }
+        return folder.isEmpty ? String(filename) : folder + "/" + filename
     }
 
     private var blockedReason: String? {
@@ -121,7 +121,7 @@ struct JarvisNoteEditorSheet: View {
     }
 
     private var location: String {
-        let value = isCreating ? folder : JarvisNoteTitle.location(path: baseline?.path ?? "")
+        let value = folder
         return value.isEmpty ? copy.vaultRoot : value.replacingOccurrences(of: "/", with: " / ")
     }
 
@@ -140,9 +140,7 @@ struct JarvisNoteEditorSheet: View {
                     .font(.title.bold()).focused($focus, equals: .title).submitLabel(.next)
                     .onSubmit { focusBody() }.accessibilityIdentifier("editor.title")
                 Spacer(minLength: 4)
-                if isCreating {
-                    JarvisLabelledButton(title: location, systemImage: "folder", isCompact: true) { folderPickerPresented = true }
-                } else { Label(location, systemImage: "folder").font(.footnote).foregroundStyle(.secondary) }
+                JarvisLabelledButton(title: location, systemImage: "folder", isCompact: true) { folderPickerPresented = true }
             }
             Divider()
             ScrollView {
@@ -389,8 +387,9 @@ struct JarvisNoteEditorSheet: View {
         do {
             if isCreating {
                 _ = try await client.createNote(path: path, content: submitted)
-            } else if let sha = baseline?.sha {
-                _ = try await client.saveNote(path: path, content: submitted, sha: sha)
+            } else if let baseline {
+                _ = try await client.saveNote(path: baseline.path, content: submitted, sha: baseline.sha,
+                                              destination: path == baseline.path ? nil : path)
             }
             await finish(path: path)
         } catch {
@@ -416,12 +415,14 @@ struct JarvisNoteEditorSheet: View {
 
     @MainActor
     private func handle(_ error: Error, path: String, submitted: String) async {
+        if (error as? JarvisNotesClientError) == .destinationExists { failure = .exists; return }
         switch JarvisNoteSaveFailure.classify(error) {
         case .conflict:
             if isCreating {
                 failure = .exists
             } else {
-                await presentConflict(path: path, submitted: submitted, reported: Self.reportedLatest(error, path: path, url: baseline?.url))
+                let source = baseline?.path ?? path
+                await presentConflict(path: source, submitted: submitted, reported: Self.reportedLatest(error, path: source, url: baseline?.url))
             }
         case .outcomeUnknown: failure = .unconfirmed
         case .notFound: failure = .missing
@@ -438,7 +439,7 @@ struct JarvisNoteEditorSheet: View {
             // The vault's own conflict reply carries the newer version; a fresh read is the fallback.
             let latest: VaultNote
             if let reported { latest = reported } else { latest = try await client.readNote(path: path) }
-            if latest.content == submitted {
+            if latest.content == submitted, notePath == latest.path {
                 await finish(path: path, confirmed: latest)
             } else {
                 conflict = latest
@@ -472,6 +473,20 @@ struct JarvisNoteEditorSheet: View {
                     await finish(path: path)
                     return
                 }
+            }
+            if let baseline, baseline.path != path {
+                let original: VaultNote
+                do { original = try await client.readNote(path: baseline.path) }
+                catch JarvisNotesClientError.noteNotFound {
+                    let moved = try await client.readNote(path: path)
+                    if moved.content == submitted { await finish(path: path, confirmed: moved) }
+                    else { failure = .unconfirmed }
+                    return
+                }
+                guard original.sha == baseline.sha else { conflict = original; return }
+                _ = try await client.saveNote(path: original.path, content: submitted, sha: original.sha, destination: path)
+                await finish(path: path)
+                return
             }
             let latest = try await client.readNote(path: path)
             switch JarvisNoteSaveRecovery.decide(draft: submitted, baselineSha: baseline?.sha ?? "", latest: latest) {
