@@ -10,7 +10,7 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent logs
 
-Use a UTC window and [the log source map](reference/logs.md). PI gets no log feed: `read_backend_logs` queries retained backend events on request when configured; `ci_log` reads failed Actions job tails. Factory check repair passes an untrusted CI excerpt to the worker, not PI. Chat history holds stored replies, not model reasoning or device logs. Keep raw logs and prompts out of PRs.
+Use a UTC window and [the log source map](reference/logs.md). PI gets no log feed: it requests retained backend events or failed Actions job tails. Factory repair sends its CI excerpt to the worker, not PI. Chat history holds stored replies, not model reasoning or device logs. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
@@ -81,10 +81,10 @@ A new `P##-##` row in a `PLAN.md` task table creates a GitHub issue if none matc
 
 | Column | What it means |
 | --- | --- |
-| In review | An open, ready linked PR; review takes precedence over the claim. |
+| In review | An open, ready PR whose body says `Fixes #N`, `Closes #N` or `Resolves #N`. `Refs #N` keeps acceptance open and does not create a board link. |
 | In progress | Worker label, or an open linked draft that is not parked for a decision. Draft support is not permission to open a placeholder. |
 | Needs Dan | Unclaimed `needs-decision` issue. |
-| Backlog / Ready | An open dependency blocks work; otherwise an unclaimed, unlinked issue is Ready. |
+| Backlog / Ready | An unclaimed, unlinked issue is Ready unless deferred or blocked by an open dependency. |
 | Done | Issue closed. A previously merged PR alone does not finish a reopened issue. |
 
 The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it skips sync and warns when the secret is absent. Do not print the value. If sync disagrees with reality, compare the issue's labels, dependencies and actual linked PR to the script's rules.
@@ -94,7 +94,7 @@ The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it
 
 ## Merge and release procedure
 
-1. Verify independent review of the **exact head**, no unresolved threads or High findings, and green required checks for that head. Fix Medium findings or record explicit follow-ups. The PR author may merge after the gates pass. A Deploy-triggering push to `main` without a qualified PR fails with `exact_qualification_missing`.
+1. Require green **CI result** and any GitHub-required checks on the PR's **exact head**. `gh pr checks --required` can report none; this does not waive CI. Match the independent review to that SHA, including when it arrives as a review-bot comment. Resolve threads and High findings; fix or track Mediums. The author may then merge. Unqualified Deploy changes fail with `exact_qualification_missing`.
 2. Bring the branch up to `origin/main` before qualifying it. Keep both sides of additive docs conflicts and take main's version for untouched content. Recheck the new head after any update. The merged tree must equal the tree tested in CI; see [CI receipts](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
 3. After each merge to `main`, refresh and requalify other affected PRs. Updating another open iOS PR triggers `synchronize` and restarts its macOS checks. The update, not the push to `main` on its own, is the trigger. Batch coordinated merges instead of repeatedly updating native PRs.
 
