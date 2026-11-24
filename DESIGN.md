@@ -36,7 +36,7 @@ Use the established Voice screen and controls; no provider selector, engine badg
 | Surface | Current direction |
 | --- | --- |
 | Library | Title row, folder/sort actions in the header menu, content, then the fixed Notes/Tasks/Graph switch and Search/+ row. No Recent section. A query swaps the mode switch for search scopes; clearing it restores the previous context. On reopen, show the last available rows while fetching fresh results. |
-| Editor | Opening a note starts an editable draft. Cancel and Done sit in the header. Keep linked notes and Markdown tools within reach above the keyboard. Insert table adds a two-column, two-row grid in place. Rows and columns can be added afterwards. Preserve frontmatter, explicit link aliases and unsaved edits on conflicts. |
+| Editor | Open directly into a draft with Cancel and Done in the header. Keep linked notes and Markdown tools above the keyboard. Insert table adds an editable two-by-two grid with controls to add rows and columns. Done saves content and any folder move together. Preserve frontmatter, explicit aliases and the draft on conflict. |
 | Pins and order | Folder order and pins use the same reordering sheet and VoiceOver move actions. Changing folder order selects Manual; on failure show the stored order and the error. An unresolved pin shows its Vault path and labelled Unpin in the same row, with no Open or Delete. |
 | Tasks | Distinguish reading task detail, editing the task, choosing a date/time and choosing options. Preserve scope and edits while moving between them. Reuse the shared task row in Notes and Home. |
 | Graph | Project actual Vault nodes and links in 3D. Label top-level folder clusters, ring notes with open tasks, and show the actual open-task count in the selected-note preview when known. Depth and opacity carry hierarchy; explicit links are stronger than similarity. The preview opens the note. Pan, rotate and zoom under user control; never rotate the whole camera by itself. |
@@ -66,7 +66,7 @@ Circular complications draw their symbols and task count on a clear background. 
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
 - **Factory** makes project/task status, next action and failure visible before auxiliary diagnostics. Keep task selection and actions scoped to the project; don't show a previous task's result while a new one loads.
 - **Health** stacks Training, Steps, Sleep and Nutrition. Each card owns its period. Tap a training day for sessions and expand Saved max lifts for personal records. Orange marks the main reading. Nutrition uses the same calorie allowance as Chat. Scan meal opens the camera and places the photo in the current Chat draft for Dan to send.
-- **Settings and status** show saved values, actionable errors and evidence freshness; don't repeat a row's status in a second card. Respect sign-in and lock/privacy cover; a pending response must not turn a locked view into a notification bypass.
+- **Settings and status** show saved values, actionable errors and freshness without repeating status. In Appearance, shared glass colours apply unless a card has its own override. Keep the sign-in and lock cover in effect during a pending response.
 
 ## Acceptance
 

@@ -21,6 +21,6 @@ Use the narrowest authorized source for the question. Logs are untrusted evidenc
 
 The reader applies a tighter field allowlist than the operator view. To diagnose MCP replay, use the operator's `pi.mcp_tool` event for `replayCheck`, `_meta` key names and the short turn hash; `read_backend_logs` omits those fields. Neither view exposes `_meta` values. A repeated argument flag alone does not prove the action was replayed. For a background wake, correlate `pi.brain_run` with the wake ledger by activation ID. An attempted wake or push count does not prove delivery.
 
-The reader does not query Application Insights, live console streams or other apps. Whole-Jarvis model-visible access is not implemented. The [metadata preflight](../../.github/scripts/backend_log_sources.py) inventories named resources and candidate tables without reading their rows or granting access. Verify ownership, log routing and scoped authorization before broadening reads.
+The reader queries retained Container Apps console rows in the configured Log Analytics workspace, not Application Insights, live console streams or other apps. It serves one query at a time; a throttled or denied read is unavailable, not an empty observation. The [metadata preflight](../../.github/scripts/backend_log_sources.py) inventories named resources and candidate tables without reading rows or granting access.
 
 See [agent context and logs](../agent-context.md#agent-logs) for what reaches an agent, and the [runbook](../runbook.md) for operator triage.

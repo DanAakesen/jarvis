@@ -23,7 +23,7 @@ Add confirmed decisions here, newest first. When an entry is older than 14 days,
 
 ### 24 November 2026 — iPhone dashboard and editor
 
-Home and Health use translucent cards beneath the shared scrolling chrome. Calendar sits immediately above Chat and edits the same primary Google Calendar used by Home, Chat and Voice. Notes open directly in the Markdown editor. Insert table creates an editable two-by-two grid in the note with controls to add a row or column.
+Home and Health use translucent cards beneath shared scrolling chrome. Calendar edits the same primary Google Calendar used by Home, Chat and Voice. Notes open in the Markdown editor, with an editable table grid. A deliberate folder move and content edit save together, not as two writes. [#2071](https://github.com/DanAakesen/jarvis/pull/2071).
 
 ### 24 November 2026 — Personal native palette
 
