@@ -29,7 +29,7 @@
 "insights.usageRefreshReport" = "Refresh usage";
 "insights.usageSandbox" = "Sandbox";
 "insights.usageTokens" = "Tokens";
-"insights.usageTurns" = "Turns";
+"insights.usageTurns" = "Factory turns";
 "insights.usagePremium" = "Premium";
 "insights.usageMinutesUnit" = "min";
 "insights.usageBreakdown" = "Breakdown";

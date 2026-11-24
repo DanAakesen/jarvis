@@ -20,45 +20,58 @@ interface CostTotalRow {
   unverifiedEntries: number;
 }
 
+// Split running sessions at UTC midnight. The same rows feed the detail table and the cost chart.
+const usageRows = `WITH open_sessions AS (
+  SELECT task_id, size,
+    CASE WHEN started_at < @from THEN @from ELSE started_at END AS rangeStart
+  FROM dbo.sandbox_sessions
+  WHERE status = N'Active' AND ended_at IS NULL AND started_at < @to
+    AND (@from IS NULL OR @from < @to)
+),
+usage_rows AS (
+  SELECT task_id AS taskId, project_id AS projectId, source, metric, quantity,
+    CASE WHEN source NOT IN (N'codex', N'copilot') THEN cost_dkk END AS costDkk,
+    CASE WHEN source NOT IN (N'codex', N'copilot') THEN cost_usd END AS costUsd,
+    cost_status AS costStatus, role, model, at,
+    CONVERT(bit, CASE WHEN cost_status = N'estimated' OR source IN (N'sandbox', N'voice') OR
+      (source = N'jarvis_model' AND metric = N'screen_frames') THEN 1 ELSE 0 END) AS estimated
+  FROM dbo.usage
+  WHERE at < @to AND (@from IS NULL OR at >= @from)
+  UNION ALL
+  SELECT s.task_id, t.project_id, N'sandbox', N'minutes',
+    CONVERT(decimal(19,6), elapsed.ms / 60000.0), cost.dkk,
+    CONVERT(decimal(19,8), cost.dkk / ${DKK_PER_USD}), N'estimated', NULL, NULL,
+    CASE WHEN @to < boundary.midnight THEN @to ELSE DATEADD(millisecond, -1, boundary.midnight) END,
+    CONVERT(bit, 1)
+  FROM open_sessions s
+  INNER JOIN dbo.tasks t ON t.id = s.task_id
+  CROSS APPLY GENERATE_SERIES(0, DATEDIFF(day, s.rangeStart, @to), 1) days
+  CROSS APPLY (VALUES (DATEADD(day, days.value, CONVERT(date, s.rangeStart)))) d(dayStart)
+  CROSS APPLY (VALUES (CONVERT(datetime2, DATEADD(day, 1, d.dayStart)))) boundary(midnight)
+  CROSS APPLY (VALUES (DATEDIFF_BIG(millisecond, GREATEST(s.rangeStart, d.dayStart),
+    LEAST(@to, boundary.midnight)))) elapsed(ms)
+  CROSS APPLY (VALUES (CONVERT(decimal(19,8), elapsed.ms / 3600000.0 *
+    CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END))) cost(dkk)
+  WHERE d.dayStart < @to
+)`;
+
 export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
   return {
-    async list(from, to) {
+    async list(from, to, detailBy) {
       const healthFrom = from ?? new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
       const utcDayStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
-      const utcMonthStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), 1));
+      const detailBucket = detailBy === 'day' ? ', CONVERT(date, u.at)'
+        : detailBy === 'month' ? ', YEAR(u.at), MONTH(u.at)' : '';
       const { recordset } = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, from)
         .input('to', sql.DateTime2, to)
-        .query<UsageRow>(`WITH usage_rows AS (
-          SELECT task_id AS taskId, project_id AS projectId, source, metric, quantity,
-            cost_dkk AS costDkk, cost_usd AS costUsd, cost_status AS costStatus, role, model, at,
-            CONVERT(bit, CASE
-              WHEN source IN (N'sandbox', N'voice') OR
-                (source = N'jarvis_model' AND metric = N'screen_frames') THEN 1 ELSE 0 END) AS estimated
-          FROM dbo.usage
-          WHERE at < @to AND (@from IS NULL OR at >= @from)
-          UNION ALL
-          SELECT s.task_id, t.project_id, N'sandbox', N'minutes',
-            CONVERT(decimal(19,6), DATEDIFF_BIG(millisecond,
-              CASE WHEN @from IS NOT NULL AND s.started_at < @from THEN @from ELSE s.started_at END, @to) / 60000.0),
-            CONVERT(decimal(19,8), ROUND(DATEDIFF_BIG(millisecond,
-              CASE WHEN @from IS NOT NULL AND s.started_at < @from THEN @from ELSE s.started_at END, @to) / 3600000.0 *
-              CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 8)),
-            CONVERT(decimal(19,8), ROUND(ROUND(DATEDIFF_BIG(millisecond,
-              CASE WHEN @from IS NOT NULL AND s.started_at < @from THEN @from ELSE s.started_at END, @to) / 3600000.0 *
-              CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 8) / ${DKK_PER_USD}, 8)),
-            N'estimated', NULL, NULL, @to, CONVERT(bit, 1)
-          FROM dbo.sandbox_sessions s
-          INNER JOIN dbo.tasks t ON t.id = s.task_id
-          WHERE s.status = N'Active' AND s.ended_at IS NULL AND s.started_at < @to
-        ),
+        .query<UsageRow>(`${usageRows},
         grouped AS (
           SELECT CAST(u.taskId AS varchar(19)) AS taskId, t.title AS taskTitle,
             CAST(COALESCE(u.projectId, t.project_id) AS varchar(19)) AS projectId, p.name AS projectName,
             COALESCE(t.agent, N'jarvis') AS agent, u.source, u.metric, u.role, u.model,
             SUM(u.quantity) AS quantity,
-            SUM(CASE WHEN u.source IN (N'codex', N'copilot') THEN NULL ELSE u.costDkk END) AS costDkk,
-            SUM(CASE WHEN u.source IN (N'codex', N'copilot') THEN NULL ELSE u.costUsd END) AS costUsd,
+            SUM(u.costDkk) AS costDkk, SUM(u.costUsd) AS costUsd,
             u.costStatus,
             MAX(u.at) AS at,
             CONVERT(bit, MAX(CONVERT(tinyint, u.estimated))) AS estimated,
@@ -67,12 +80,12 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
           LEFT JOIN dbo.tasks t ON t.id = u.taskId
           LEFT JOIN dbo.projects p ON p.id = COALESCE(u.projectId, t.project_id)
           GROUP BY u.taskId, t.title, u.projectId, t.project_id, p.name, t.agent,
-            u.source, u.metric, u.role, u.model, u.costStatus
+            u.source, u.metric, u.role, u.model, u.costStatus${detailBucket}
         )
         SELECT TOP (1000) taskId, taskTitle, projectId, projectName, agent, source, metric, role, model,
           quantity, costUsd, costDkk, costStatus, at, estimated, totalEntries
         FROM grouped
-        ORDER BY at DESC, projectName, taskTitle, source, metric, role, model;`);
+        ORDER BY at DESC, projectName, taskTitle, source, metric, role, model, costStatus, projectId, taskId;`);
       const toolCalls = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, utcDayStart)
         .input('to', sql.DateTime2, to)
@@ -85,58 +98,20 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
         .input('from', sql.DateTime2, from)
         .input('to', sql.DateTime2, to)
         .input('healthFrom', sql.DateTime2, healthFrom)
-        .input('dayStart', sql.DateTime2, utcDayStart)
-        .input('monthStart', sql.DateTime2, utcMonthStart)
-        .query<CostTotalRow>(`WITH daily_cost_rows AS (
-            SELECT at, cost_usd, cost_dkk, cost_status
-            FROM dbo.usage WHERE at >= @healthFrom AND at < @to
-            UNION ALL
-            SELECT @to,
-              CONVERT(decimal(19,8), ROUND(ROUND(DATEDIFF_BIG(millisecond,
-                CASE WHEN s.started_at > (CASE WHEN @from IS NOT NULL AND @from > @dayStart THEN @from ELSE @dayStart END)
-                  THEN s.started_at ELSE (CASE WHEN @from IS NOT NULL AND @from > @dayStart THEN @from ELSE @dayStart END) END,
-                @to) / 3600000.0 *
-                CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 8) / ${DKK_PER_USD}, 8)),
-              CONVERT(decimal(19,8), ROUND(DATEDIFF_BIG(millisecond,
-                CASE WHEN s.started_at > (CASE WHEN @from IS NOT NULL AND @from > @dayStart THEN @from ELSE @dayStart END)
-                  THEN s.started_at ELSE (CASE WHEN @from IS NOT NULL AND @from > @dayStart THEN @from ELSE @dayStart END) END,
-                @to) / 3600000.0 *
-                CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 8)),
-              N'estimated'
-            FROM dbo.sandbox_sessions s
-            WHERE s.status = N'Active' AND s.ended_at IS NULL AND s.started_at < @to AND @to > @dayStart
-          ),
-          monthly_cost_rows AS (
-            SELECT at, cost_usd, cost_dkk, cost_status
-            FROM dbo.usage WHERE (@from IS NULL OR at >= @from) AND at < @to
-            UNION ALL
-            SELECT @to,
-              CONVERT(decimal(19,8), ROUND(ROUND(DATEDIFF_BIG(millisecond,
-                CASE WHEN s.started_at > (CASE WHEN @from IS NOT NULL AND @from > @monthStart THEN @from ELSE @monthStart END)
-                  THEN s.started_at ELSE (CASE WHEN @from IS NOT NULL AND @from > @monthStart THEN @from ELSE @monthStart END) END,
-                @to) / 3600000.0 *
-                CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 8) / ${DKK_PER_USD}, 8)),
-              CONVERT(decimal(19,8), ROUND(DATEDIFF_BIG(millisecond,
-                CASE WHEN s.started_at > (CASE WHEN @from IS NOT NULL AND @from > @monthStart THEN @from ELSE @monthStart END)
-                  THEN s.started_at ELSE (CASE WHEN @from IS NOT NULL AND @from > @monthStart THEN @from ELSE @monthStart END) END,
-                @to) / 3600000.0 *
-                CASE s.size WHEN N'1x2' THEN 0.8901 ELSE 1.7802 END, 8)),
-              N'estimated'
-            FROM dbo.sandbox_sessions s
-            WHERE s.status = N'Active' AND s.ended_at IS NULL AND s.started_at < @to AND @to > @monthStart
+        .query<CostTotalRow>(`${usageRows},
+          buckets AS (
+            SELECT b.period, b.bucket, u.costUsd, u.costDkk, u.costStatus
+            FROM usage_rows u
+            CROSS APPLY (VALUES
+              (N'daily', CONVERT(char(10), u.at, 23)),
+              (N'monthly', CONVERT(varchar(7), u.at, 120))
+            ) b(period, bucket)
+            WHERE b.period = N'monthly' OR u.at >= @healthFrom
           )
-          SELECT N'daily' AS period, CONVERT(char(10), CONVERT(date, at), 23) AS bucket,
-            COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(cost_dkk), 0) AS dkk,
-            COUNT_BIG(CASE WHEN cost_status = N'estimated' AND (cost_usd IS NOT NULL OR cost_dkk IS NOT NULL) THEN 1 END) AS estimatedEntries,
-            COUNT_BIG(CASE WHEN cost_status = N'unverified' THEN 1 END) AS unverifiedEntries
-          FROM daily_cost_rows GROUP BY CONVERT(date, at)
-          UNION ALL
-          SELECT N'monthly', CONVERT(char(7), DATEFROMPARTS(YEAR(at), MONTH(at), 1), 120),
-            COALESCE(SUM(cost_usd), 0), COALESCE(SUM(cost_dkk), 0),
-            COUNT_BIG(CASE WHEN cost_status = N'estimated' AND (cost_usd IS NOT NULL OR cost_dkk IS NOT NULL) THEN 1 END),
-            COUNT_BIG(CASE WHEN cost_status = N'unverified' THEN 1 END)
-          FROM monthly_cost_rows
-          GROUP BY YEAR(at), MONTH(at);`);
+          SELECT period, RTRIM(bucket) AS bucket, COALESCE(SUM(costUsd), 0) AS usd, COALESCE(SUM(costDkk), 0) AS dkk,
+            COUNT_BIG(CASE WHEN costStatus = N'estimated' AND (costUsd IS NOT NULL OR costDkk IS NOT NULL) THEN 1 END) AS estimatedEntries,
+            COUNT_BIG(CASE WHEN costStatus = N'unverified' THEN 1 END) AS unverifiedEntries
+          FROM buckets GROUP BY period, bucket;`);
       const meteredTools = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, from)
         .input('to', sql.DateTime2, to)

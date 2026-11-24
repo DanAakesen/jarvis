@@ -17,7 +17,7 @@ The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/Ja
 | **Health** | Daily dashboard, body chart, workouts, iPhone Gym lifts, goals and HealthKit sync. Nutrition → Today shows kcal left, resting target, active kcal and deficit. **Log meal** takes kcal and optional protein. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
 | **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
-| **Usage** | What Jarvis has used and cost. | `JarvisUsageArea` |
+| **Usage** | Estimated spend for the selected period. Tap a chart bar for its UTC dates and cost. Factory turns count coding-agent work. | `JarvisUsageArea` |
 | **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
 | **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
 | **Settings** | The **Proactive suggestions** switch, Training and Nutrition target editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |

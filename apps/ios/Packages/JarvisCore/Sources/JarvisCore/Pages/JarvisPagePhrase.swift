@@ -285,7 +285,9 @@ public enum JarvisUsagePagePhrase {
             return JarvisPagePhrase(markup: "Dan, here is your {usage}.")
         }
         let amount = JarvisNumberFormat.compact(summary.totalValue, language: language)
-        return JarvisPagePhrase(markup: "Dan, your usage is {\(amount) DKK}.")
+        let period = summary.period.days.map { "in the last \($0) days" } ?? "across all recorded usage"
+        let cost = summary.hasEstimates ? "estimated cost" : "recorded cost"
+        return JarvisPagePhrase(markup: "Dan, your \(cost) \(period) is {\(amount) DKK}.")
     }
 }
 

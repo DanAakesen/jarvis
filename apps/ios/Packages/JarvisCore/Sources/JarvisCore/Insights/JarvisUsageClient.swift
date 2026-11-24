@@ -72,6 +72,7 @@ public struct JarvisUsageEntry: Codable, Equatable, Sendable {
     public let costDkk: Double?
     public let at: String
     public let estimated: Bool
+    public let costStatus: String?
 
     public init(
         taskId: String? = nil,
@@ -84,7 +85,8 @@ public struct JarvisUsageEntry: Codable, Equatable, Sendable {
         quantity: Double,
         costDkk: Double?,
         at: String,
-        estimated: Bool = false
+        estimated: Bool = false,
+        costStatus: String? = nil
     ) {
         self.taskId = taskId
         self.taskTitle = taskTitle
@@ -97,6 +99,7 @@ public struct JarvisUsageEntry: Codable, Equatable, Sendable {
         self.costDkk = costDkk
         self.at = at
         self.estimated = estimated
+        self.costStatus = costStatus
     }
 }
 
@@ -120,6 +123,12 @@ public struct JarvisUsageDailyTools: Codable, Equatable, Sendable {
     }
 }
 
+public struct JarvisUsageCostTotal: Codable, Equatable, Sendable {
+    public let period: String
+    public let dkk: Double
+    public let estimatedEntries: Int
+}
+
 public struct JarvisUsageReport: Codable, Equatable, Sendable {
     public let period: String
     public let from: String?
@@ -132,6 +141,8 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
     public let dailyToolUsage: JarvisUsageDailyTools?
     public let healthToolUsage: JarvisUsageDailyTools?
     public let toolCalls: [JarvisUsageToolCount]?
+    public let healthCostTotals: [JarvisUsageCostTotal]?
+    public let monthlyCostTotals: [JarvisUsageCostTotal]?
 
     public init(
         period: String,
@@ -143,7 +154,9 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
         truncated: Bool = false,
         dailyToolUsage: JarvisUsageDailyTools? = nil,
         healthToolUsage: JarvisUsageDailyTools? = nil,
-        toolCalls: [JarvisUsageToolCount]? = nil
+        toolCalls: [JarvisUsageToolCount]? = nil,
+        healthCostTotals: [JarvisUsageCostTotal]? = nil,
+        monthlyCostTotals: [JarvisUsageCostTotal]? = nil
     ) {
         self.period = period
         self.from = from
@@ -155,6 +168,8 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
         self.dailyToolUsage = dailyToolUsage
         self.healthToolUsage = healthToolUsage
         self.toolCalls = toolCalls
+        self.healthCostTotals = healthCostTotals
+        self.monthlyCostTotals = monthlyCostTotals
     }
 
     static let agents: Set<String> = ["codex", "copilot", "jarvis"]
@@ -183,6 +198,15 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
             }
             && (toolCalls.map(Self.validCounts) ?? true)
             && (codexToolCallsToday.map(Self.validCounts) ?? true)
+            && (healthCostTotals ?? []).allSatisfy { Self.validCost($0, monthly: false) }
+            && (monthlyCostTotals ?? []).allSatisfy { Self.validCost($0, monthly: true) }
+    }
+
+    private static func validCost(_ total: JarvisUsageCostTotal, monthly: Bool) -> Bool {
+        let day = monthly ? total.period + "-01" : total.period
+        guard let date = JarvisInsightsDates.date(fromDayKey: day) else { return false }
+        return total.dkk.isFinite && total.dkk >= 0 && total.estimatedEntries >= 0
+            && JarvisInsightsDates.dayKey(date) == day
     }
 
     private static func validCounts(_ counts: [JarvisUsageToolCount]) -> Bool {
@@ -250,11 +274,16 @@ public struct JarvisUsageSummary: Equatable, Sendable {
         entries = report.entries
         truncated = report.truncated
         totalEntries = report.totalEntries
+        let costTotals = period == .all ? report.monthlyCostTotals : report.healthCostTotals
         let usesCost = report.entries.contains { $0.costDkk != nil }
+            || costTotals?.contains { $0.dkk > 0 || $0.estimatedEntries > 0 } == true
         self.usesCost = usesCost
-        hasEstimates = report.entries.contains { $0.costDkk != nil && $0.estimated }
-        totalValue = report.entries.reduce(0) { $0 + Self.measure($1, usesCost: usesCost) }
-        buckets = Self.makeBuckets(report: report, period: period, usesCost: usesCost)
+        hasEstimates = costTotals?.contains { $0.estimatedEntries > 0 } == true
+            || report.entries.contains { $0.costDkk != nil && ($0.estimated || $0.costStatus == "estimated") }
+        let pricedTotals = usesCost && costTotals?.isEmpty == false ? costTotals : nil
+        totalValue = pricedTotals?.reduce(0) { $0 + $1.dkk }
+            ?? report.entries.reduce(0) { $0 + Self.measure($1, usesCost: usesCost) }
+        buckets = Self.makeBuckets(report: report, period: period, usesCost: usesCost, costTotals: pricedTotals)
         toolCallsAreDaily = report.toolCalls == nil && report.dailyToolUsage != nil
         toolCallsAvailable = report.toolCalls != nil || report.dailyToolUsage != nil
         toolCalls = (report.toolCalls ?? report.dailyToolUsage?.tools ?? [])
@@ -293,7 +322,7 @@ public struct JarvisUsageSummary: Equatable, Sendable {
         guard let bucket else { return entries }
         return entries.filter { entry in
             guard let date = JarvisInsightsDates.parse(entry.at) else { return false }
-            let key = JarvisInsightsDates.dayKey(date)
+            let key = Self.utcDayKey(date)
             return key >= bucket.startKey && key <= bucket.endKey
         }
     }
@@ -374,12 +403,24 @@ public struct JarvisUsageSummary: Equatable, Sendable {
 
     // MARK: Buckets
 
+    private static var utcCalendar: Calendar {
+        var calendar = JarvisInsightsDates.calendar
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }
+
+    private static func utcDayKey(_ date: Date) -> String {
+        let parts = utcCalendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
     private static func makeBuckets(
         report: JarvisUsageReport,
         period: JarvisUsagePeriod,
-        usesCost: Bool
+        usesCost: Bool,
+        costTotals: [JarvisUsageCostTotal]?
     ) -> [JarvisUsageBucket] {
-        let calendar = JarvisInsightsDates.calendar
+        let calendar = utcCalendar
         let end = JarvisInsightsDates.parse(report.to) ?? Date()
         var ranges: [(String, String)] = []
         switch period.bucketKind {
@@ -393,11 +434,13 @@ public struct JarvisUsageSummary: Equatable, Sendable {
             while cursor <= lastStart, ranges.count < maximumBuckets {
                 guard let interval = calendar.dateInterval(of: unit, for: cursor),
                       let last = calendar.date(byAdding: .day, value: -1, to: interval.end) else { break }
-                ranges.append((JarvisInsightsDates.dayKey(interval.start), JarvisInsightsDates.dayKey(last)))
+                ranges.append((utcDayKey(interval.start), utcDayKey(last)))
                 cursor = interval.end
             }
         case .month:
-            let earliest = report.entries.compactMap { JarvisInsightsDates.parse($0.at) }.min() ?? end
+            let firstCostMonth = costTotals?.map(\.period).min()
+            let earliest = firstCostMonth.flatMap { JarvisInsightsDates.date(fromDayKey: $0 + "-01") }
+                ?? report.entries.compactMap { JarvisInsightsDates.parse($0.at) }.min() ?? end
             guard let firstMonth = calendar.dateInterval(of: .month, for: earliest)?.start,
                   let lastMonth = calendar.dateInterval(of: .month, for: end)?.start else { return [] }
             let boundedStart = calendar.date(byAdding: .month, value: -(maximumBuckets - 1), to: lastMonth) ?? firstMonth
@@ -407,16 +450,24 @@ public struct JarvisUsageSummary: Equatable, Sendable {
                       let last = calendar.date(byAdding: .day, value: -1, to: interval.end) else { break }
                 // Coalesce older history into the first labelled range, preserving the chart/hero total.
                 let start = ranges.isEmpty ? firstMonth : interval.start
-                ranges.append((JarvisInsightsDates.dayKey(start), JarvisInsightsDates.dayKey(last)))
+                ranges.append((utcDayKey(start), utcDayKey(last)))
                 cursor = interval.end
             }
         }
         var values = [Double](repeating: 0, count: ranges.count)
-        for entry in report.entries {
-            guard let date = JarvisInsightsDates.parse(entry.at) else { continue }
-            let key = JarvisInsightsDates.dayKey(date)
+        func add(_ value: Double, on key: String) {
             if let index = ranges.firstIndex(where: { key >= $0.0 && key <= $0.1 }) {
-                values[index] += measure(entry, usesCost: usesCost)
+                values[index] += value
+            }
+        }
+        if let costTotals {
+            for total in costTotals {
+                add(total.dkk, on: period == .all ? total.period + "-01" : total.period)
+            }
+        } else {
+            for entry in report.entries {
+                guard let date = JarvisInsightsDates.parse(entry.at) else { continue }
+                add(measure(entry, usesCost: usesCost), on: utcDayKey(date))
             }
         }
         return ranges.enumerated().map {

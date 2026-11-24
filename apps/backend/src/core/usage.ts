@@ -37,7 +37,7 @@ export interface FoundryModelUsage {
 }
 
 export interface UsageStore {
-  list(from: Date | null, to: Date): Promise<{
+  list(from: Date | null, to: Date, detailBy?: 'day' | 'month'): Promise<{
     entries: UsageEntry[];
     totalEntries: string;
     healthToolCounts?: HealthToolCount[];
@@ -170,7 +170,7 @@ export async function registerUsageRoutes(app: FastifyInstance) {
     const period = request.query.period ?? '30d';
     const to = new Date();
     const { from } = usageRange(period, to);
-    const report = await app.usageStore.list(from, to);
+    const report = await app.usageStore.list(from, to, period === 'all' ? 'month' : 'day');
     const todayStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
     const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
     let codexToolCallsToday: CodexToolUsageCount[] | null = null;

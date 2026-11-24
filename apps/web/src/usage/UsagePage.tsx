@@ -22,6 +22,9 @@ interface UsageEntry {
   metric: UsageMetric;
   quantity: number;
   costDkk: number | null;
+  role?: string | null;
+  model?: string | null;
+  costStatus?: string;
   at: string;
   estimated: boolean;
 }
@@ -387,7 +390,8 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
                       </thead>
                       <tbody>
                         {group.entries.map((entry) => (
-                          <tr key={`${entry.taskId ?? 'jarvis'}-${entry.source}-${entry.metric}`}>
+                          <tr key={JSON.stringify([entry.taskId, entry.projectId, entry.source, entry.metric,
+                            entry.role, entry.model, entry.costStatus, entry.at])}>
                             <td>{entry.taskId
                               ? <TaskWindowLink taskId={entry.taskId}>{taskLabel(entry)}</TaskWindowLink>
                               : taskLabel(entry)}<span className="usage-source">{sourceLabel(entry.source)}</span></td>
