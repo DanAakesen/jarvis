@@ -10,7 +10,7 @@ struct JarvisHealthCards<Lifts: View>: View {
     let language: JarvisAppLanguage
     let client: JarvisHealthClient?
     let steps: JarvisStepsSnapshot?
-    let stages: [JarvisHealthSleepSegment]
+    let night: JarvisSleepTimeline
     let onPhoto: ((Data) -> Void)?
     let onMealSaved: () async -> Void
     @ViewBuilder let lifts: () -> Lifts
@@ -242,11 +242,11 @@ struct JarvisHealthCards<Lifts: View>: View {
 
     private var sleepSummary: some View {
         let window = period(sleep)
-        let measured = JarvisSleepTimeline(segments: stages)
+        let measured = night
         var items = data.sleep.items
         let date = period(.today).endDate
-        let retained = JarvisHealthSleepNight.nights(from: items)[date]?.total
-        if let night = measured.dailyRow(date: date, retainedTotal: retained), sleep == .today || retained == nil {
+        let retained = JarvisHealthSleepNight.nights(from: items)[date]
+        if let night = measured.dailyRow(date: date, retained: retained), sleep == .today || retained?.total == nil {
             items.removeAll { $0["sleep_date"]?.stringValue.map { String($0.prefix(10)) } == date }
             items.append(night)
         }

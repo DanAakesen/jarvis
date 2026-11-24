@@ -214,14 +214,14 @@ struct JarvisHealthKitReader {
         }
     }
 
-    func lastNightStages(now: Date) async throws -> [JarvisHealthSleepSegment] {
+    func lastNightStages(now: Date) async throws -> JarvisSleepTimeline {
         let calendar = JarvisHealthSyncWindow.calendar
         let midnight = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .hour, value: -12, to: midnight)!
         let end = min(now, calendar.date(byAdding: .hour, value: 12, to: midnight)!)
         let store = HKHealthStore()
         try await JarvisHealthKitAccess.requestReadAccess(store)
-        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return .init(segments: []) }
         let window = HKQuery.predicateForSamples(withStart: start, end: end)
         let samples = try await readSamples(store: store, predicate: .categorySample(type: type, predicate: window))
         let segments = samples.compactMap { sample -> JarvisHealthSleepSegment? in
@@ -231,7 +231,7 @@ struct JarvisHealthKitReader {
                 start: max(start, sample.startDate), end: min(end, sample.endDate),
                 source: sample.sourceRevision.source.bundleIdentifier)
         }
-        return JarvisSleepTimeline.overnight(segments, wakingOn: now, calendar: calendar).segments
+        return JarvisSleepTimeline.overnight(segments, wakingOn: now, calendar: calendar)
     }
 
     private static func stage(_ value: Int) -> String {

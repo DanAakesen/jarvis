@@ -33,6 +33,7 @@ public struct JarvisHealthSleepNight: Equatable, Sendable {
 /// from that source occupy each instant at most once.
 public struct JarvisSleepTimeline: Sendable {
     public let segments: [JarvisHealthSleepSegment]
+    public private(set) var asleepHours: Double
 
     public init(segments samples: [JarvisHealthSleepSegment]) {
         let ordered = samples.filter { $0.end > $0.start }.sorted {
@@ -57,6 +58,7 @@ public struct JarvisSleepTimeline: Sendable {
             previousEnd = max(previousEnd, sample.end)
         }
         segments = (staged + unclassified).sorted { $0.start < $1.start }
+        asleepHours = segments.filter { $0.stage != "awake" }.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) / 3600 }
     }
 
     private static func part(_ sample: JarvisHealthSleepSegment, _ start: Date, _ end: Date) -> JarvisHealthSleepSegment {
@@ -69,10 +71,9 @@ public struct JarvisSleepTimeline: Sendable {
     }
 
     /// Separate daytime naps from a night's recording. Competing devices may cover
-    /// the same night; choose one continuous session by time asleep.
+    /// the same night. Keep the longest sleep total and the most detailed overlapping recording.
     public static func overnight(_ samples: [JarvisHealthSleepSegment], wakingOn date: Date, calendar: Calendar) -> Self {
-        var best = Self(segments: [])
-        var bestAsleep: TimeInterval = 0
+        var candidates: [Self] = []
         let sources = Dictionary(grouping: samples) { $0.source ?? "" }
         for source in sources.keys.sorted() {
             let ordered = Self(segments: sources[source] ?? []).segments
@@ -84,21 +85,33 @@ public struct JarvisSleepTimeline: Sendable {
             }
             for session in sessions {
                 guard let end = session.last?.end, calendar.isDate(end, inSameDayAs: date) else { continue }
-                let asleep = session.filter { $0.stage != "awake" }.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
-                if asleep > bestAsleep { best = Self(segments: session); bestAsleep = asleep }
+                candidates.append(Self(segments: session))
             }
         }
-        return best
+        guard let longest = candidates.max(by: { $0.asleepHours < $1.asleepHours }),
+              longest.asleepHours > 0, let start = longest.segments.first?.start,
+              let end = longest.segments.last?.end else { return Self(segments: []) }
+        let overlapping = candidates.filter { candidate in
+            guard let first = candidate.segments.first, let last = candidate.segments.last else { return false }
+            return first.start < end && last.end > start
+        }
+        var detailed = overlapping.max { ($0.stagedHours, $0.asleepHours) < ($1.stagedHours, $1.asleepHours) } ?? longest
+        detailed.asleepHours = longest.asleepHours
+        return detailed
     }
 
-    public func dailyRow(date: String, retainedTotal: Double? = nil) -> [String: JSONValue]? {
+    public func dailyRow(date: String, retained: JarvisHealthSleepNight? = nil) -> [String: JSONValue]? {
         var hours: [String: Double] = [:]
         for segment in segments {
             hours[segment.stage, default: 0] += segment.end.timeIntervalSince(segment.start) / 3600
         }
-        let asleep = ["deep", "rem", "core", "asleep"].compactMap { hours[$0] }.reduce(0, +)
-        guard asleep > 0 else { return nil }
-        var row: [String: JSONValue] = ["sleep_date": .string(date), "total_sleep_hours": .number(max(asleep, retainedTotal ?? 0))]
+        guard asleepHours > 0 else { return nil }
+        var row: [String: JSONValue] = ["sleep_date": .string(date), "total_sleep_hours": .number(max(asleepHours, retained?.total ?? 0))]
+        if stagedHours == 0, let retained {
+            for (stage, value) in [("deep", retained.deep), ("rem", retained.rem), ("core", retained.light), ("awake", retained.awake)] {
+                if let value { row[stage + "_hours"] = .number(value) }
+            }
+        }
         for (stage, value) in hours { row[stage + "_hours"] = .number(value) }
         return row
     }

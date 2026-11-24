@@ -223,7 +223,7 @@ struct JarvisHealthArea: View {
     @State private var isRefreshingFromPull = false
     private let periodPreset: JarvisHealthPeriodPreset = .thirtyDays
     @State private var expandedLifts = false
-    @State private var sleepSegments: [JarvisHealthSleepSegment] = []
+    @State private var sleepTimeline = JarvisSleepTimeline(segments: [])
     @State private var goals = JarvisHealthGoals.load()
     @State private var searchText = ""
     @State private var refreshVersion = 0
@@ -359,7 +359,7 @@ struct JarvisHealthArea: View {
                                 .accessibilityIdentifier("health.empty")
                             }
                             JarvisHealthCards(data: dashboard, goals: goals, language: language, client: client,
-                                              steps: deviceSteps, stages: sleepSegments, onPhoto: onMealPhoto,
+                                              steps: deviceSteps, night: sleepTimeline, onPhoto: onMealPhoto,
                                               onMealSaved: {
                                 await JarvisAppCache.invalidateAll(.health)
                                 await loadDashboard(force: true)
@@ -429,13 +429,13 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) {
 #if targetEnvironment(simulator)
             if !observeRefreshEvents, ProcessInfo.processInfo.arguments.contains("--screenshot-health-card=sleep") {
-                sleepSegments = JarvisHealthPreview.nightStages
+                sleepTimeline = .init(segments: JarvisHealthPreview.nightStages)
                 return
             }
 #endif
             guard observeRefreshEvents else { return }
             let stages = try? await JarvisHealthKitReader().lastNightStages(now: now)
-            if !Task.isCancelled { sleepSegments = stages ?? [] }
+            if !Task.isCancelled { sleepTimeline = stages ?? .init(segments: []) }
         }
         .task(id: refreshVersion) { await loadDeviceActivity() }
         .task(id: scenePhase == .active && client != nil) {

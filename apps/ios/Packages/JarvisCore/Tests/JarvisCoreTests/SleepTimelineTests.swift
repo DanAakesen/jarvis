@@ -47,6 +47,15 @@ final class SleepTimelineTests: XCTestCase {
         let night = JarvisSleepTimeline(segments: [sample("asleep", 0, 8), sample("core", 1, 5), sample("awake", 5, 6)])
         XCTAssertEqual(night.stagedHours, 4)
         XCTAssertEqual(night.dailyRow(date: "2026-11-24")?["total_sleep_hours"], .number(7))
-        XCTAssertEqual(night.dailyRow(date: "2026-11-24", retainedTotal: 8)?["total_sleep_hours"], .number(8))
+        let retained = JarvisHealthSleepNight(date: "2026-11-24", total: 8, deep: 1, rem: 2, light: 5, awake: nil)
+        XCTAssertEqual(night.dailyRow(date: retained.date, retained: retained)?["total_sleep_hours"], .number(8))
+        let unstaged = JarvisSleepTimeline(segments: [sample("asleep", 0, 8)])
+        XCTAssertEqual(unstaged.dailyRow(date: retained.date, retained: retained)?["rem_hours"], .number(2))
+        let watch = JarvisHealthSleepSegment(id: "watch", stage: "core", start: start, end: start.addingTimeInterval(7 * 3600), source: "watch")
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        let combined = JarvisSleepTimeline.overnight(unstaged.segments + [watch], wakingOn: start, calendar: utc)
+        XCTAssertEqual(combined.segments, [watch])
+        XCTAssertEqual(combined.asleepHours, 8)
     }
 }
