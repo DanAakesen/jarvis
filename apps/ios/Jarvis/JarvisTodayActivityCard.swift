@@ -20,7 +20,7 @@ struct JarvisTodayActivityCard: View {
 
     var body: some View {
         let display = model.display(language: language)
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             header
             workoutsBlock(display)
             if !model.dailyActivity.isLoading, let issue = activityIssue(display) {
@@ -28,23 +28,30 @@ struct JarvisTodayActivityCard: View {
                     .accessibilityIdentifier("today.activity.issue")
             }
             Divider().accessibilityHidden(true)
-            Text(copy(.steps))
-                .font(.subheadline.weight(.semibold))
-                .accessibilityAddTraits(.isHeader)
             stepsBlock(display)
             if expanded {
-                ForEach(Array(model.periodWorkouts.enumerated()), id: \.offset) { _, workout in
+                let training = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
+                let walks = model.periodWorkouts.filter { ["walk", "walking", "52", "healthkit52"].contains(JarvisHealthLogic.normalizedWorkoutType($0.workoutType)) }
+                Text("Workouts include walks. The target is for gym sessions and runs.").font(.caption).foregroundStyle(.secondary)
+                Text("Gym & runs").font(.subheadline.weight(.semibold))
+                ForEach(Array(training.sorted { $0.performedAt > $1.performedAt }.enumerated()), id: \.offset) { _, workout in
                     HStack {
-                        Text(workout.session.shortTitle(language: language))
+                        Text(workout.performedAt, format: .dateTime.day().month(.abbreviated)).foregroundStyle(.secondary)
+                        Text(workout.session.shortTitle(language: language)).fontWeight(.semibold)
                         Spacer()
-                        Text(workout.performedAt, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
-                            .foregroundStyle(.secondary)
-                    }.font(.subheadline)
+                        Text(workout.durationMinutes > 0 ? "\(Int(workout.durationMinutes.rounded())) min" : "—").foregroundStyle(.secondary)
+                    }.font(.footnote)
                 }
-                if model.periodWorkouts.isEmpty { Text("No recorded sessions").font(.footnote).foregroundStyle(.secondary) }
+                if training.isEmpty { Text("No gym sessions or runs recorded").font(.footnote).foregroundStyle(.secondary) }
+                if !walks.isEmpty {
+                    let timed = walks.map(\.durationMinutes).filter { $0 > 0 }
+                    let minutes = (timed.count == walks.count ? "" : "≥ ") + "\(Int(timed.reduce(0, +).rounded())) min"
+                    Text("\(walks.count) \(walks.count == 1 ? "walk" : "walks")" + (timed.isEmpty ? "" : " · " + minutes))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
-            JarvisLabelledButton(title: expanded ? "Show less" : "Show more",
-                                 systemImage: expanded ? "chevron.up" : "chevron.down", isCompact: true) {
+            Divider()
+            JarvisDashboardDisclosure(title: expanded ? "Show less" : "Show more", expanded: expanded) {
                 animate { expanded.toggle() }
             }
         }
@@ -98,7 +105,7 @@ struct JarvisTodayActivityCard: View {
                 )
             }
         }
-        let sessions = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
+        let sessions = model.periodWorkouts
         let durations = sessions.map(\.durationMinutes).filter { $0 > 0 }
         let minutes = durations.reduce(0, +)
         let target = model.periodWorkoutTarget.map { String(Int($0.rounded())) } ?? "—"
@@ -107,7 +114,7 @@ struct JarvisTodayActivityCard: View {
             (durations.count < sessions.count ? "≥ " : "") + String(Int(minutes.rounded()))
         let layout = isLargeText ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .top))
         layout {
-            summaryValue(count + " / " + target, label: copy(.workouts), identifier: "today.summary.workouts")
+            summaryValue(count + " / " + target, label: copy(.workouts), identifier: "today.summary.workouts", tint: JarvisDesignTokens.primaryAccent)
             summaryValue(duration, label: "Workout minutes", identifier: "today.summary.time")
             summaryValue(activityValue(display.energyTotal), label: copy(.activeKcal), identifier: "today.summary.kcal")
         }
@@ -126,9 +133,10 @@ struct JarvisTodayActivityCard: View {
         return nil
     }
 
-    private func summaryValue(_ value: String, label: String, identifier: String) -> some View {
-        VStack(spacing: 0) {
+    private func summaryValue(_ value: String, label: String, identifier: String, tint: Color = .primary) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(value)
+                .foregroundStyle(tint)
                 .font(.system(size: isLargeText ? summaryValueSize : 34, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
@@ -140,7 +148,7 @@ struct JarvisTodayActivityCard: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, isLargeText ? JarvisPageHeaderMetrics.actionSpacing : 0)
-        .frame(maxWidth: .infinity, maxHeight: isLargeText ? nil : .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityValue(value)
@@ -164,9 +172,9 @@ struct JarvisTodayActivityCard: View {
         } else {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(display.ringLabel ?? copy(model.activity.range.isHourly ? .stepsToday : .dailySteps))
+                    Text(copy(.steps)).fontWeight(.semibold)
                     Spacer()
-                    Text(display.ringSteps.formatted()).fontWeight(.semibold).foregroundStyle(JarvisDesignTokens.primaryAccent)
+                    Text(stepTotal(display)).fontWeight(.semibold).foregroundStyle(JarvisDesignTokens.primaryAccent)
                 }.font(.subheadline)
                 bars(display).frame(height: isLargeText ? 96 : 54)
                 Text(display.caption)
@@ -176,6 +184,14 @@ struct JarvisTodayActivityCard: View {
                     .accessibilityIdentifier("today.steps.caption")
             }
         }
+    }
+
+    private func stepTotal(_ display: JarvisTodayActivityDisplay) -> String {
+        if let label = display.ringLabel { return label + " · " + display.ringSteps.formatted() }
+        if model.activity.range.isHourly { return display.ringSteps.formatted() }
+        let recorded = display.bars.filter(\.isEnabled)
+        guard !recorded.isEmpty else { return "—" }
+        return (recorded.count < display.bars.count ? "≥ " : "") + recorded.map(\.value).reduce(0, +).formatted()
     }
 
     private func bars(_ display: JarvisTodayActivityDisplay) -> some View {
@@ -204,16 +220,6 @@ struct JarvisTodayActivityCard: View {
                 )
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-                Text("\(copy(.goal)) \(JarvisTodayActivity.stepGoal.formatted(.number.locale(language.locale)))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .offset(y: -height * goal / top)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
             }
         }
         .accessibilityElement(children: .contain)
@@ -229,7 +235,7 @@ struct JarvisTodayActivityCard: View {
             ZStack(alignment: .bottom) {
                 Color.clear
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(selected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent)
+                    .fill((selected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent).gradient)
                     .opacity(bar.isEnabled ? (selected || model.activity.selectedBar == nil ? 1 : 0.45) : 0.15)
                     .frame(height: max(2, fill))
             }

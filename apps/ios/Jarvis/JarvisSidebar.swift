@@ -167,7 +167,7 @@ struct JarvisSidebar: View {
                 } label: {
                     Image(systemName: JarvisDestination.settings.symbolName)
                         .font(.system(size: JarvisDesignTokens.sidebarIconSize))
-                        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
                         .frame(
                             width: JarvisDesignTokens.sidebarSettingsButtonSize,
                             height: JarvisDesignTokens.sidebarSettingsButtonSize
@@ -229,7 +229,7 @@ struct JarvisSidebar: View {
             HStack(spacing: JarvisDesignTokens.sidebarRowLabelSpacing) {
                 Image(systemName: destination.symbolName)
                     .font(.system(size: JarvisDesignTokens.sidebarIconSize))
-                    .foregroundStyle(destination.isNavigable ? JarvisDesignTokens.secondaryAccent : Color.secondary)
+                    .foregroundStyle(destination.isNavigable ? JarvisDesignTokens.primaryAccent : Color.secondary)
                     .frame(width: JarvisDesignTokens.sidebarIconColumnWidth)
                 Text(destination.localizedTitle(language: language))
                     .font(.body.weight(isHighlighted ? .semibold : .regular))

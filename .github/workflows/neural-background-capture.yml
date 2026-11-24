@@ -7,6 +7,8 @@ on:
       - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Neural/**'
       - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/**'
       - 'apps/ios/Jarvis/JarvisDesignSystem.swift'
+      - 'apps/ios/Jarvis/JarvisControls.swift'
+      - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Settings/JarvisMaterial*.swift'
       - 'apps/ios/Jarvis/JarvisGateRootView.swift'
       - 'apps/ios/Jarvis/JarvisOpeningView.swift'
       - '.github/workflows/neural-background-capture.yml'
@@ -78,6 +80,10 @@ jobs:
           # Calm screens (Settings, Health), dark and light, and a light chat.
           run --screenshot-settings-fixture
           sleep 3; shot calm-settings-dark
+          run --screenshot-settings-fixture --screenshot-surface-appearance
+          sleep 8; shot surface-appearance-dark
+          run --ui-test-navigation --ui-test-today
+          sleep 5; shot surface-home-dark
           run --screenshot-health-fixture
           sleep 3; shot calm-health-dark
           xcrun simctl ui "$PHONE_ID" appearance light

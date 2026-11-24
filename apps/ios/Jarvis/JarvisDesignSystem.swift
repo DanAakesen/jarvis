@@ -290,6 +290,10 @@ enum JarvisDesignTokens {
     static var gateActionForeground: Color { primaryAccent }
     static let gateFaceIDSymbolSize: CGFloat = 44
     /// The board's light glass fill (`--g-fill-bar`): white in light, deep blue-grey in dark.
+    static let dashboardCardTone = adaptiveColor(
+        light: UIColor(red: 0.93, green: 0.95, blue: 0.97, alpha: 1),
+        dark: UIColor(red: 0.11, green: 0.16, blue: 0.20, alpha: 1)
+    )
     static let glassFill = adaptiveColor(
         light: UIColor(white: 1, alpha: 0.44),
         dark: UIColor(red: 16.0 / 255, green: 22.0 / 255, blue: 30.0 / 255, alpha: 0.36)
@@ -438,14 +442,8 @@ struct JarvisScreenBackground: View {
 }
 
 struct JarvisGlassSurface: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     var body: some View {
-        if reduceTransparency {
-            JarvisDesignTokens.glassSolid
-        } else {
-            Rectangle().fill(.ultraThinMaterial)
-        }
+        Color.clear.jarvisGlassSurface(in: Rectangle())
     }
 }
 

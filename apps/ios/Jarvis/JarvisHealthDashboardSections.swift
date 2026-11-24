@@ -331,7 +331,7 @@ struct JarvisHealthBodySection: View {
             JarvisSectionHeadline(copy.text(.bodyTrend)) {
                 Text(copy.text(.thirtyDays)).font(.caption).foregroundStyle(.secondary)
             }
-            JarvisRowGroup {
+            VStack(alignment: .leading, spacing: 0) {
                 if dashboard.metricCatalog.state == .loading {
                     JarvisHealthStateLine(state: .loading, language: language).jarvisListRow(separator: false)
                 } else if dashboard.metricCatalog.state == .notServed ||
@@ -350,7 +350,7 @@ struct JarvisHealthBodySection: View {
                         }
                     }
                 }
-            }
+            }.frame(maxWidth: .infinity, alignment: .leading).jarvisDashboardSurface()
         }
     }
 

@@ -131,7 +131,8 @@ struct JarvisNoteEditorSheet: View {
                 Text(isCreating ? copy.newNote : copy.title).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
                 Spacer()
                 JarvisSheetCloseButton(title: copy.cancel, isDisabled: saving, action: cancel)
-                JarvisSheetConfirmButton(title: copy.done, isWorking: saving, isDisabled: blockedReason != nil) {
+                JarvisIconButton(title: copy.done, systemImage: "checkmark", identifier: "sheet.confirm", isBusy: saving,
+                                 isDisabled: blockedReason != nil, tint: JarvisDesignTokens.primaryAccent) {
                     if isDirty { Task { await save() } } else { dismiss() }
                 }
             }
@@ -226,20 +227,20 @@ struct JarvisNoteEditorSheet: View {
 
     @ViewBuilder
     private var tools: some View {
-        JarvisAccessoryToolButton(title: copy.heading, systemImage: "textformat.size", identifier: "editor.heading") { prefixLine("## ") }
+        JarvisAccessoryToolButton(title: copy.heading, systemImage: "textformat.size", identifier: "editor.heading", glyph: "H₂") { prefixLine("## ") }
         JarvisAccessoryToolButton(title: "Bold", systemImage: "bold", identifier: "editor.bold") { wrap("**") }
         JarvisAccessoryToolButton(title: "Italic", systemImage: "italic", identifier: "editor.italic") { wrap("*") }
         JarvisAccessoryToolButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "editor.checklist") { prefixLine("- [ ] ") }
-        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link") { showWikiPicker = true }
+        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link", glyph: "[[ ]]", tint: JarvisDesignTokens.secondaryAccent) { showWikiPicker = true }
         JarvisAccessoryToolMenu(title: copy[.formatting], systemImage: "ellipsis", identifier: "editor.format") {
+            Button(copy[.bulletList], systemImage: "list.bullet") { prefixLine("- ") }
+            Button("Numbered list", systemImage: "list.number") { prefixLine("1. ") }
+            Button(copy[.quote], systemImage: "text.quote") { prefixLine("> ") }
+            Button("Highlight", systemImage: "highlighter") { wrap("==") }
+            Button("Inline code", systemImage: "chevron.left.forwardslash.chevron.right") { wrap("`") }
+            Button("Web link", systemImage: "link") { wrap("[", "](https://)") }
             Button("Insert table", systemImage: "tablecells", action: insertTable)
-            Button(copy[.bulletList]) { prefixLine("- ") }
-            Button("Numbered list") { prefixLine("1. ") }
-            Button(copy[.quote]) { prefixLine("> ") }
-            Button("Highlight") { wrap("==") }
-            Button("Inline code") { wrap("`") }
-            Button("Web link") { wrap("[", "](https://)") }
-        }
+        }.menuOrder(.fixed)
     }
 
     private var linkedNotes: some View {
@@ -262,8 +263,8 @@ struct JarvisNoteEditorSheet: View {
                     }
                 }
             }.frame(maxHeight: 120)
-        } label: { Label(copy[.linkedNotes] + "  " + String(unique.count), systemImage: "link") }
-            .padding(.horizontal).padding(.vertical, 8).jarvisGlassSurface()
+        } label: { Label(copy[.linkedNotes] + "  " + String(unique.count), systemImage: "link").foregroundStyle(.primary) }
+            .padding(.horizontal).padding(.vertical, 10).jarvisDashboardSurface()
     }
 
     private var linkPicker: some View {
@@ -580,7 +581,7 @@ struct JarvisNoteConflictSheet: View {
         }
         .padding(JarvisDesignTokens.notesSectionSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .accessibilityElement(children: .combine)
     }
 

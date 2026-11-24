@@ -58,6 +58,8 @@ Semantic colours (**Token**, `styles.css`):
 
 ## 3. Glass and surfaces
 
+**Native material ownership.** Settings → General → Appearance has one Gradient, Frost and Glass slider for all app-owned iPhone and Watch surfaces. Use the shared card and control components, backed by `JarvisMaterialSurface` and `JarvisMaterialSettings`. A role can choose a colour, including Up Next’s primary highlight. The renderer alone sets wash strength, backdrop frosting and lens strength. Reduce Transparency uses a solid surface. System-owned menus, keyboard and widget chrome follow the OS.
+
 - **Decision (owner-approved Notes direction, 15 Nov):** every action button is **neutral dark smoked
   glass**. No yellow, orange or gold fill, no warm gradient. Primary labels (Save, Done, Retry) are **amber text**;
   secondary labels are neutral; disabled labels are muted. Orange survives only on task rings, with a label.

@@ -54,6 +54,7 @@ enum JarvisNotesReadSection: CaseIterable, Hashable, Sendable {
 /// header menu, the content, and a fixed dock with the Notes / Tasks / Graph switch, Search and a separate plus.
 /// State lives here; the page views, header and dock are in the `JarvisNotesArea+…` extensions.
 struct JarvisNotesArea: View {
+    @Environment(\.dynamicTypeSize) var libraryTypeSize
     let client: JarvisNotesClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void

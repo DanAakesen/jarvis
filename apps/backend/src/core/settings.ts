@@ -24,6 +24,8 @@ export interface RoleModelSettings {
 }
 
 const mobileSurfaceKeys = ['surface-page', 'surface-card', 'surface-control', 'surface-selected', 'surface-field', 'surface-next', 'surface-activity', 'surface-schedule', 'surface-training', 'surface-steps', 'surface-sleep', 'surface-nutrition', 'surface-calendar', 'surface-agenda'] as const;
+const materialControls = ['gradient', 'frost', 'glass'] as const;
+type MaterialControl = typeof materialControls[number];
 type MobileSurfaceKey = typeof mobileSurfaceKeys[number];
 
 export interface Settings {
@@ -51,7 +53,7 @@ export interface Settings {
     motion?: 'full' | 'calm' | 'reduced';
     radius?: number;
     density?: 'compact' | 'comfortable';
-  } & Partial<Record<MobileSurfaceKey, string>>;
+  } & Partial<Record<MobileSurfaceKey, string>> & Partial<Record<MaterialControl, number>>;
   jarvis: {
     model: string;
     reasoning: string;
@@ -203,6 +205,7 @@ const settingKeys = {
   decisions: { provider: 'decisions.provider' },
   appearance: {
     ...Object.fromEntries(mobileSurfaceKeys.map(key => [key, `appearance.${key}`])) as Record<MobileSurfaceKey, string>,
+    ...Object.fromEntries(materialControls.map(key => [key, 'appearance.' + key])) as Record<MaterialControl, string>,
     theme: 'appearance.theme',
     accent: 'appearance.accent',
     'accent-secondary': 'appearance.accent-secondary',
@@ -310,6 +313,9 @@ function validSetting(
       return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
     }
     if (key === 'background') return isOption(value, settingsOptions.backgrounds);
+    if ((materialControls as readonly string[]).includes(key)) {
+      return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100;
+    }
     if (key === 'glow') {
       return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
     }
@@ -487,6 +493,7 @@ const settingsPatchSchema = {
             ...Object.fromEntries(mobileSurfaceKeys.map(key => [key, { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 }])),
             'surface-tint': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             background: selectSchema(settingsOptions.backgrounds),
+            ...Object.fromEntries(materialControls.map(key => [key, { type: 'integer', minimum: 0, maximum: 100 }])),
             glow: { type: 'number', minimum: 0, maximum: 1 },
             motion: selectSchema(settingsOptions.themeMotions),
             radius: { type: 'number', minimum: 0, maximum: 24 },

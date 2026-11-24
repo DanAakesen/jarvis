@@ -223,7 +223,7 @@ struct JarvisHealthArea: View {
     @State private var isRefreshingFromPull = false
     private let periodPreset: JarvisHealthPeriodPreset = .thirtyDays
     @State private var expandedLifts = false
-    @State private var sleepSegments: [JarvisHealthSleepSegment] = []
+    @State private var sleepTimeline = JarvisSleepTimeline(segments: [])
     @State private var goals = JarvisHealthGoals.load()
     @State private var searchText = ""
     @State private var refreshVersion = 0
@@ -311,79 +311,92 @@ struct JarvisHealthArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
-                    JarvisHealthSyncIssue(state: scaleRefreshFailed ? .failed : healthSyncState, language: language)
-                    if liftWriteFailed {
-                        Text("The change could not be confirmed. Refresh lifts before trying again.")
-                            .foregroundStyle(.red)
-                            .accessibilityIdentifier("health.lift.writeError")
-                    }
-                    if trackWorkout {
-                        if let failure = liftFailure ?? exerciseFailure { failureRow(failure) }
-                        else if vaultLiftsFailed { failureRow(.failed) }
-                        JarvisHealthLiftLog(
-                            lifts: combinedLiftRows,
-                            exercises: combinedExerciseRows,
-                            searchText: searchText,
-                            loading: liftsLoading || vaultLiftsLoading,
-                            exercisesLoading: exercisesLoading || vaultLiftsLoading,
-                            historyLoaded: liftsLoaded && (vaultLiftsLoaded || gymModel?.notesClient == nil),
-                            exercisesLoaded: exercisesLoaded && (vaultLiftsLoaded || gymModel?.notesClient == nil),
-                            failed: liftFailure != nil || vaultLiftsFailed,
-                            exercisesFailed: exerciseFailure != nil || vaultLiftsFailed,
-                            hasMore: liftCursor != nil,
-                            exercisesPartial: exercisesPartial || vaultLiftsPartial || vaultNextOffset != nil || vaultLiftsFailed,
-                            language: language,
-                            loadMore: { Task { await loadLifts(more: true) } },
-                            deletingID: deletingLiftID,
-                            onEdit: { editedLift = $0 },
-                            onDelete: { lift in Task { await deleteLift(lift) } }
-                        )
-                    } else {
-                        if let liftFailure, liftFailure != .unavailable { failureRow(liftFailure) }
-                        else if vaultLiftsFailed { failureRow(.failed) }
-                        let dashboard = withDeviceWorkouts(currentDashboard)
-                        if let failure = dashboard.failure {
-                            failureRow(failure)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
+                        JarvisHealthSyncIssue(state: scaleRefreshFailed ? .failed : healthSyncState, language: language)
+                        if liftWriteFailed {
+                            Text("The change could not be confirmed. Refresh lifts before trying again.")
+                                .foregroundStyle(.red)
+                                .accessibilityIdentifier("health.lift.writeError")
                         }
-                        if dashboard.failure == nil && dashboard.hasFailure {
-                            failureRow(firstFailure(in: dashboard))
-                        }
-                        if let capabilities = dashboard.capabilities, capabilities.availableSources.isEmpty {
-                            ContentUnavailableView(
-                                copy.text(.notAuthorised),
-                                systemImage: "heart.text.square"
+                        if trackWorkout {
+                            if let failure = liftFailure ?? exerciseFailure { failureRow(failure) }
+                            else if vaultLiftsFailed { failureRow(.failed) }
+                            JarvisHealthLiftLog(
+                                lifts: combinedLiftRows,
+                                exercises: combinedExerciseRows,
+                                searchText: searchText,
+                                loading: liftsLoading || vaultLiftsLoading,
+                                exercisesLoading: exercisesLoading || vaultLiftsLoading,
+                                historyLoaded: liftsLoaded && (vaultLiftsLoaded || gymModel?.notesClient == nil),
+                                exercisesLoaded: exercisesLoaded && (vaultLiftsLoaded || gymModel?.notesClient == nil),
+                                failed: liftFailure != nil || vaultLiftsFailed,
+                                exercisesFailed: exerciseFailure != nil || vaultLiftsFailed,
+                                hasMore: liftCursor != nil,
+                                exercisesPartial: exercisesPartial || vaultLiftsPartial || vaultNextOffset != nil || vaultLiftsFailed,
+                                language: language,
+                                loadMore: { Task { await loadLifts(more: true) } },
+                                deletingID: deletingLiftID,
+                                onEdit: { editedLift = $0 },
+                                onDelete: { lift in Task { await deleteLift(lift) } }
                             )
-                            .accessibilityIdentifier("health.empty")
-                        }
-                        JarvisHealthCards(data: dashboard, goals: goals, language: language, client: client,
-                                          steps: deviceSteps, stages: sleepSegments, onPhoto: onMealPhoto,
-                                          onMealSaved: {
-                            await JarvisAppCache.invalidateAll(.health)
-                            await loadDashboard(force: true)
-                        }) { lastLiftsSection }
-                        JarvisHealthBodySection(
-                            metrics: visibleMetrics(in: dashboard),
-                            dashboard: dashboard,
-                            period: bodyPeriod,
-                            client: client,
-                            language: language,
-                            hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        )
-                        if dashboard.isStale || dashboard.isPartial {
-                            freshnessLine(dashboard)
+                        } else {
+                            if let liftFailure, liftFailure != .unavailable { failureRow(liftFailure) }
+                            else if vaultLiftsFailed { failureRow(.failed) }
+                            let dashboard = withDeviceWorkouts(currentDashboard)
+                            if let failure = dashboard.failure {
+                                failureRow(failure)
+                            }
+                            if dashboard.failure == nil && dashboard.hasFailure {
+                                failureRow(firstFailure(in: dashboard))
+                            }
+                            if let capabilities = dashboard.capabilities, capabilities.availableSources.isEmpty {
+                                ContentUnavailableView(
+                                    copy.text(.notAuthorised),
+                                    systemImage: "heart.text.square"
+                                )
+                                .accessibilityIdentifier("health.empty")
+                            }
+                            JarvisHealthCards(data: dashboard, goals: goals, language: language, client: client,
+                                              steps: deviceSteps, night: sleepTimeline, onPhoto: onMealPhoto,
+                                              onMealSaved: {
+                                await JarvisAppCache.invalidateAll(.health)
+                                await loadDashboard(force: true)
+                            }) { lastLiftsSection }
+                            JarvisHealthBodySection(
+                                metrics: visibleMetrics(in: dashboard),
+                                dashboard: dashboard,
+                                period: bodyPeriod,
+                                client: client,
+                                language: language,
+                                hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            )
+                            if dashboard.isStale || dashboard.isPartial {
+                                freshnessLine(dashboard)
+                            }
                         }
                     }
+                    .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
+                    .padding(.top, JarvisDesignTokens.healthSectionSpacing)
+                    .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
                 }
-                .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-                .padding(.top, JarvisDesignTokens.healthSectionSpacing)
-                .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
-            }
-            .scrollIndicators(.hidden)
-            .scrollEdgeEffectHidden(true, for: .bottom)
-            .refreshable {
-                await refreshFromPull()
+                .scrollIndicators(.hidden)
+                .scrollEdgeEffectHidden(true, for: .bottom)
+                .refreshable {
+                    await refreshFromPull()
+                }
+#if targetEnvironment(simulator)
+                .task(id: dashboard != nil) {
+                    guard !observeRefreshEvents, dashboard != nil,
+                          let option = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screenshot-health-card=") }),
+                          let card = option.split(separator: "=").last else { return }
+                    try? await Task.sleep(for: .milliseconds(650))
+                    guard !Task.isCancelled else { return }
+                    if card == "nutrition" { proxy.scrollTo("meal-actions", anchor: .center) }
+                    else { proxy.scrollTo(String(card), anchor: .top) }
+                }
+#endif
             }
             .jarvisPageFooter {
                 VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
@@ -414,9 +427,15 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) { await loadDeviceWorkouts() }
         .task(id: refreshVersion) { await loadDeviceSteps() }
         .task(id: refreshVersion) {
+#if targetEnvironment(simulator)
+            if !observeRefreshEvents, ProcessInfo.processInfo.arguments.contains("--screenshot-health-card=sleep") {
+                sleepTimeline = .init(segments: JarvisHealthPreview.nightStages)
+                return
+            }
+#endif
             guard observeRefreshEvents else { return }
             let stages = try? await JarvisHealthKitReader().lastNightStages(now: now)
-            if !Task.isCancelled { sleepSegments = stages ?? [] }
+            if !Task.isCancelled { sleepTimeline = stages ?? .init(segments: []) }
         }
         .task(id: refreshVersion) { await loadDeviceActivity() }
         .task(id: scenePhase == .active && client != nil) {
@@ -544,7 +563,7 @@ struct JarvisHealthArea: View {
     }
 
     private var lastLiftsSection: some View {
-        DisclosureGroup("Saved max lifts", isExpanded: $expandedLifts) {
+        DisclosureGroup(isExpanded: $expandedLifts) {
             JarvisTextButton(title: copy.text(.logLift), identifier: "health.lifts.log") { newLiftPresented = true }
                 .disabled(gymModel == nil)
             if vaultLiftsFailed {
@@ -586,7 +605,14 @@ struct JarvisHealthArea: View {
                     }
                 }
             }
+        } label: {
+            HStack {
+                Text("Saved max lifts").font(.headline)
+                Spacer()
+                Text("All time").font(.footnote).foregroundStyle(.secondary)
+            }.foregroundStyle(.primary)
         }
+        .tint(.secondary)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("health.lastLifts")
         .task(id: expandedLifts ? vaultNextOffset : nil) {
@@ -756,6 +782,13 @@ struct JarvisHealthArea: View {
             let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
                 kind: JarvisHealthLogic.workoutKind(raw), source: entry.manualWorkoutID == nil ? .healthKit : .manual)
             if let index = identities.firstIndex(where: { $0?.matches(identity) == true }) {
+                if data.workouts.items[index]["duration_seconds"]?.numberValue == nil, entry.durationMinutes > 0 {
+                    data.workouts.items[index]["duration_seconds"] = .number(entry.durationMinutes * 60)
+                }
+                if data.workouts.items[index]["active_energy_value"]?.numberValue == nil, entry.activeKilocalories > 0 {
+                    data.workouts.items[index]["active_energy_value"] = .number(entry.activeKilocalories)
+                    data.workouts.items[index]["active_energy_unit"] = .string("kcal")
+                }
                 if entry.session != .other, data.workouts.items[index]["session"] == nil {
                     data.workouts.items[index]["session"] = .string(entry.session.rawValue.capitalized)
                 }

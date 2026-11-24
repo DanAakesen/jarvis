@@ -153,7 +153,7 @@ public struct JarvisStepBar: Equatable, Identifiable, Sendable {
     public let label: String
     /// Caption shown under the chart while selected ("14:00" or "Mon 2 Nov").
     public let caption: String
-    /// Hours after the current one have no data yet and cannot be selected.
+    /// Future hours and days without a recorded reading cannot be selected.
     public let isEnabled: Bool
     public let isCurrent: Bool
 }
@@ -195,7 +195,7 @@ public enum JarvisTodayActivity {
                 value: steps.daily[day] ?? 0,
                 label: formatted(day, template: "EEE", language: language, calendar: calendar),
                 caption: formatted(day, template: "EEE d MMM", language: language, calendar: calendar),
-                isEnabled: true,
+                isEnabled: steps.daily[day] != nil,
                 isCurrent: offset == 0
             )
         }

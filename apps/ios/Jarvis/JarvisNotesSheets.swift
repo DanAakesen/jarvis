@@ -242,7 +242,7 @@ struct JarvisNewFolderSheet: View {
                 .autocorrectionDisabled()
                 .submitLabel(.continue)
                 .padding(JarvisDesignTokens.notesSectionSpacing)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
                 .accessibilityIdentifier("newfolder.name")
             Text(problem ?? copy[.folderStagedNote])
                 .font(.footnote)

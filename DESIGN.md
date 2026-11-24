@@ -5,7 +5,7 @@ Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, 
 ## Shared control geometry
 
 The Watch Up Next card is the reference for depth. On iPhone, dashboard cards share a 16 pt content inset,
-24 pt continuous corners, a one-pixel perimeter and a faint primary-colour wash over material. Reduce Transparency
+24 pt continuous corners, a one-pixel perimeter and a translucent gradient in the configured card colour. Up Next carries a soft primary-accent highlight that fades from its top-left corner. Reduce Transparency
 uses a solid surface. Watch uses its own compact geometry. Keep icons and labels aligned inside the hit target.
 
 Use the shared Jarvis controls for equivalent actions. The web action classes and iOS glass controls own their geometry, focus, disabled and pending states; space them with the parent layout. Rows share the row surface, not a hero-card treatment. Keep buttons in a stable place while pending. Never introduce per-screen glass or draw a second orb.
@@ -61,12 +61,12 @@ Circular complications draw their symbols and task count on a clear background. 
 
 ## Home, workspaces and utility pages
 
-- **Home** leads with the brief and Up Next. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. Each card can show data while another source is unavailable.
+- **Home** opens with Up Next. Its date tile and relative time identify the next appointment or task. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. Each card can show data while another source is unavailable.
 - **Calendar** opens the day at 07:00 with ten hours in view. Scroll for earlier or later appointments. Day and Week share a time scale; the grid, agenda and date headings use one time zone. Hold an appointment to move it or expand its agenda row to edit. Search and add stay in the footer.
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
 - **Factory** makes project/task status, next action and failure visible before auxiliary diagnostics. Keep task selection and actions scoped to the project; don't show a previous task's result while a new one loads.
 - **Health** stacks Training, Steps, Sleep and Nutrition. Each card owns its period. Training shows its selected period once and lists walks separately when present. Tap a training day for sessions and expand Saved max lifts for personal records. Nutrition uses the same calorie allowance as Chat. Scan meal attaches a photo to the Chat draft without sending.
-- **Settings and status** show saved values, actionable errors and freshness without repeating status. In Appearance, shared glass colours apply unless a card has its own override. Keep the sign-in and lock cover in effect during a pending response.
+- **Settings and status** show saved values, actionable errors and freshness without repeating status. Appearance sets one shared Gradient, Frost and Glass finish across native cards and controls. Individual cards may override their colour. Keep the sign-in and lock cover in effect during a pending response.
 
 ## Acceptance
 

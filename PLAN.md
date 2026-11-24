@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Merged the Home, Calendar, Health, Notes, appearance, iPhone and Watch changes. [Calendar time labels and the Training summary](https://github.com/DanAakesen/jarvis/pull/2074) passed in the iPhone simulator. **Not accepted on device**. |
+| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Merged the Home, Calendar, Health, Notes, appearance, iPhone and Watch changes. [Calendar time labels and the Training summary](https://github.com/DanAakesen/jarvis/pull/2074) passed in the iPhone simulator. **Device review found gaps** in Home, Health and Notes. Corrections are in progress. |
 | TestFlight **130** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45430079631) for iPhone with the [matching Watch companion](https://github.com/DanAakesen/jarvis/actions/runs/45420997992). |
 | Backend | The [combined release](https://github.com/DanAakesen/jarvis/actions/runs/45412673488) deployed the backend. The [follow-up](https://github.com/DanAakesen/jarvis/actions/runs/45420922589) retained that image and passed PI and deterministic readiness checks. Live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |

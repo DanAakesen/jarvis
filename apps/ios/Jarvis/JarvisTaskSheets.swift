@@ -214,7 +214,7 @@ struct JarvisTaskDetailSheet: View {
                             .font(.body)
                             .padding(JarvisDesignTokens.notesSectionSpacing)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
                             .accessibilityIdentifier("task.notes")
                     }
                 }
@@ -412,7 +412,7 @@ struct JarvisTaskEditorSheet: View {
                 .submitLabel(.done)
                 .disabled(saving)
                 .padding(JarvisDesignTokens.notesSectionSpacing)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
                 .accessibilityIdentifier("taskeditor.title")
             JarvisRowGroup {
                 if let existing {

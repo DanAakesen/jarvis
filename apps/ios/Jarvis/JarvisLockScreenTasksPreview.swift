@@ -50,7 +50,7 @@ struct JarvisLockScreenTasksPreview: View {
                         startedAt: startedAt,
                         language: language
                     )
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
+                    .jarvisGlassSurface(cornerRadius: 28)
 
                     approvalNotification
                 }
@@ -99,6 +99,6 @@ struct JarvisLockScreenTasksPreview: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28))
+        .jarvisGlassSurface(cornerRadius: 28)
     }
 }

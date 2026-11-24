@@ -127,7 +127,7 @@ struct WorkspacesView: View {
         .padding(.leading, JarvisDesignTokens.contentInset)
         .padding(.trailing, query.isEmpty ? JarvisDesignTokens.contentInset : 4)
         .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
-        .background(.ultraThinMaterial, in: Capsule())
+        .jarvisGlassSurface()
         .padding(.horizontal, JarvisDesignTokens.contentInset)
         .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
     }
