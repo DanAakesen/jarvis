@@ -59,7 +59,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 ## Phase task tracking
 
-Next available P15 task ID: `P15-212`. Check GitHub issues and Git history before assigning it.
+Next available P15 task ID: `P15-213`. Check GitHub issues and Git history before assigning it.
 
 Use the table for active numbered work. `Complete` means task delivery, not physical acceptance. Keep any remaining device checks in the backlog above; completed tasks are in GitHub and Git history.
 

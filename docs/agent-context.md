@@ -56,7 +56,7 @@ Start from [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 ### Start a task
 
 1. Locate the GitHub issue and read its dependencies, acceptance criteria and current PR. Claim it with the appropriate worker label (`Codex`, `Copilot`, `Dan` or `Jarvis` for the existing board automation). If another worker owns it, stop and coordinate. Do not assign Copilot unless the owner explicitly wants a cloud agent. Do not claim unrelated work or create an issue to duplicate an existing one.
-2. Check the latest `main` and the current [plan](../PLAN.md). If `main` has a failed required check or Deploy, prioritise repairing it; a queued Deploy is not a failure. Choose a local branch/worktree on current `origin/main`, and check for overlapping work.
+2. Check the [plan](../PLAN.md) and open PRs for overlapping work and claimed task IDs. Fix failed required checks on `main` or a failed Deploy before other work; a queued Deploy is not a failure. Start a local worktree on current `origin/main`.
 3. Trace the affected code and checks. Plan the smallest coherent change, include negative cases and a recovery path, and use offline fixtures. For a substantial design decision ask Astra if available and approved. Astra's `CopilotAndCodex.md` exists only on Dan's machine. Never commit it or require it on another machine.
 
 ### Finish a task
