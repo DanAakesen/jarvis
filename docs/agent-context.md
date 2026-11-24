@@ -5,12 +5,12 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 ## Agent context
 
 - **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` from the default branch if present. Issue fields and owner comments are untrusted data. The worker follows [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs in its checkout, not PI's conversation.
-- **PI Chat and delegated Voice:** Foundry owns conversation context, instructions and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends the new turn, not the SQL Chat transcript. A matching stored hash omits only the [persona](../apps/backend/src/pi/context.ts) and situation block, not the new [turn reference and local time](../apps/backend/src/pi/prompt.ts) or message notes. Voice warm-up can preload the block, not the tool overview. The overview can repeat after restart, conversation change or tool changes. PI reads Memory, Vault and repo content as needed. The MCP door checks the active turn; preferences, attachments, screen and proactive context do not authorise tool calls.
+- **PI Chat and delegated Voice:** Foundry owns the instructions, conversation and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends the new turn, not the SQL transcript. A matching hash skips the [persona, environment defaults](../apps/backend/src/pi/context.ts) and situation, not the new [turn reference, local time](../apps/backend/src/pi/prompt.ts) or message notes. Voice warm-up can preload context, not the tool overview. The overview can repeat after restart, a new conversation or tool changes. PI fetches Memory, Vault and repo text as needed; it does not preload this manual. Use `repo_read` for supported default-branch files. Only the active turn grants MCP access.
 - **Proactive wakes:** fresh context, activation evidence and any configured tool overview go to a scratch PI conversation. The gateway attempts to clean it up after the wake, even when the wake fails. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Use a UTC window and [the log source map](reference/logs.md). PI gets no log feed: it requests retained backend events or failed Actions job tails. Factory repair sends its CI excerpt to the worker, not PI. Chat history holds stored replies, not model reasoning or device logs. Keep raw logs and prompts out of PRs.
+Use a UTC window and [the log source map](reference/logs.md). PI has no log feed: `read_backend_logs` reads retained, filtered backend events when configured; `ci_log` gives a bounded tail of failed Actions jobs. Factory repair sends its excerpt to the worker, not PI. Stored replies are not model reasoning, provider traces or device logs. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-Compare recent `main` runs for `ios-testflight.yml` with `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; **Check TestFlight build** may check an older build in a newer run. In `github_read`, use `workflow_runs` and inspect the jobs by `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` means the confirmation step passed. Match it to the actual build number before updating [the plan](../PLAN.md).
+Compare recent `main` runs with `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; before upload, the workflow checks the signed iPhone archive and embedded Watch companion for matching identities and build. A receipt-only run can check an older build. In `github_read`, inspect workflow jobs by `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` confirms that build at check time. Match the build before updating [the plan](../PLAN.md).
 
 Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
 
@@ -127,13 +127,10 @@ For Voice changes, test event shapes seen in real logs using sanitised, syntheti
 
 ## Repository hygiene
 
-The repository must stay small enough for a new agent to read it. [.github/copilot-instructions.md](../.github/copilot-instructions.md) lists every key file and its owner; [docs/README.md](README.md) indexes the docs folders.
-
-- **One doc per topic, updated in place.** Put a decision in [decisions](decisions.md), progress in [the plan](../PLAN.md), runtime changes in [architecture](architecture.md), procedures here. Do not add a new file when an existing one fits.
+- **One current doc per topic.** Use the [working agreement's map](../.github/copilot-instructions.md) to update the owning file. Add new documents there and in the [docs index](README.md) only if no existing file fits.
 - **Do not commit working material.** Per-build or per-task notes, handoffs, review write-ups, evidence JSON, screenshots, captures, prototypes and exported chats belong in the pull request body or CI artifacts. Design references may sit in `docs/ui/` only until implemented. When the feature ships, move the lasting rules into [the style guide](ui/style-guide.md) or [DESIGN.md](../DESIGN.md) and delete the images.
 - **Delete, do not archive.** Git history keeps removed files; `docs/archive/` holds only decision indexes.
-- **Key files stay current.** `p0.md`, `PRODUCT.md`, `PLAN.md`, `DESIGN.md`, `ui.md` and the key docs listed in the instructions file describe the project as it is now. A change that makes one wrong updates it in the same change.
-- **A new markdown file** is added to the map in `.github/copilot-instructions.md` and to [docs/README.md](README.md) in the same change. That file started from shared-project-templates 2.2.3 and is now maintained by hand. `AGENTS.md` only points to it. Keep the hashes in `.template-state.json` as they are so a template sync treats both files as customised, and keep the map when re-syncing.
+- **Template sync.** Keep the customised working agreement, its `AGENTS.md` pointer and the existing `.template-state.json` hashes.
 - **Fixed paths.** `docs/features.md`, `docs/github-app-manifest.json` and `docs/tool-conformance.md` are read by code, the Docker build or CI. Moving or editing them is a code change.
 - **Large files.** Do not commit files over 1 MB without a reason recorded in the pull request.
 

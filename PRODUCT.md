@@ -14,9 +14,6 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 ## Daily core
 
-Dan can choose both native brand colours in iPhone Settings and restore the Jarvis defaults.
-His paired Watch adopts the same selection when it connects.
-
 1. **Jarvis project** — issues, PRs, workers and releases.
 2. **Notes** — find, read, create and edit notes.
 3. **Tasks** — find, create, complete and follow up on tasks.
@@ -46,7 +43,7 @@ Show actual issues, PRs, worker state and releases, and surface what needs Dan's
 
 ### Notes
 
-The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not move or rename the file. A missing note can still be unpinned by path. See [PLAN.md](PLAN.md) for device results.
+The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not rename or move the file; an explicit folder move saves with the draft. A missing note can still be unpinned by path. See [PLAN.md](PLAN.md) for device results.
 
 ### Tasks
 
@@ -55,6 +52,10 @@ List Tasks by their current state, not by stale chat text. Dan can create, find,
 ### Calendar
 
 Browse and edit the primary Google Calendar used by Home, Chat and Voice. Schedule combines appointments with tasks and keeps their actions distinct.
+
+### Appearance
+
+Dan can change or reset the primary and secondary colours on iPhone. The paired Watch picks them up when it connects. iPhone also supports shared glass colours and individual card overrides.
 
 ### Workouts
 

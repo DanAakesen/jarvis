@@ -4,10 +4,6 @@ System map from code and workflows, not a production readback. See [PLAN.md](../
 
 ## Stack overview
 
-Native appearance uses the existing owner settings keys `appearance.accent` and `appearance.accent-secondary`.
-The iPhone caches the pair in its App Group and sends the latest pair through WatchConnectivity application context.
-Watch reads the pair into its own App Group for its screens and complications.
-
 | Component | Where it lives | Responsibility |
 | --- | --- | --- |
 | iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and the shared `JarvisCore` package | Chat, Voice, local capture and native notifications. Watch has its own Chat and Voice views; dictation sends recorded audio to Azure Speech through the backend. The backend allows 30 seconds for upload and 20 seconds for recognition. The Watch allows 55 seconds for a direct request. A phone retry gets its own transfer and recognition windows. The Speech SDK uses its Node WebSocket transport so its upgrade carries the bearer header. |
@@ -53,8 +49,6 @@ flowchart TB
     SQL -->|outbox| PUSH --> APP
 ```
 
-**Legend:** Boxes are clients, services or jobs; cylinders are stores. Arrows show calls or data delivery; two heads mean traffic goes both ways.
-
 ## The two Foundry agents
 
 | Ownership | `jarvis-pi` | `jarvis-pi-live` |
@@ -78,7 +72,7 @@ flowchart LR
     LEG["Legend: boxes are steps; arrow labels select a path"]
 ```
 
-**Legend:** Boxes are lifecycle steps; arrow labels show when a branch is taken. The pin selects the version that serves; with no pin the provisioning script reads latest. Portal save/activation behaviour and the current serving versions were not checked live. See [provision_pi_agent.py](../.github/scripts/provision_pi_agent.py).
+Without a pin, the [provisioner](../.github/scripts/provision_pi_agent.py) reads the latest version.
 
 <a name="voice"></a>
 
@@ -108,8 +102,6 @@ sequenceDiagram
     Note over App,PI: Legend: solid = input or command<br/>dashed = event or result
 ```
 
-**Legend:** Columns are owners of work. Solid arrows send input or start work; dashed arrows carry events or results. The diagram is the delegated path, not direct talk.
-
 ## Tools, retries and failure copy
 
 ```mermaid
@@ -123,8 +115,6 @@ flowchart LR
     PRIOR --> RECEIPT
     LEG["Legend: diamond = replay check; arrows = request flow"]
 ```
-
-**Legend:** Boxes are steps or records; the diamond is a request-identity check, not an approval screen. Each completed door call also emits a safe ledger event.
 
 1. PI passes the **current** turn reference to `find_tools` and `call_tool`. Use an exact name returned by search; `otherMatches` are callable. Prefer aliases over new MCP entry points. GitHub and Azure bridges load on named searches with a bounded wait; the first search can ask PI to try again.
 2. The door calls the normal `/tools/:name` route for Jarvis tools using the owner message bound to this turn. GitHub file reads carry the embedded source text and its resource URI. A download receipt alone points PI to `repo_read` for line ranges on the project's default branch. Read results above 24,000 serialized characters get a bounded preview, except `list_capabilities`; paging/status fields and receipts stay intact. Do not truncate action results.
@@ -146,7 +136,7 @@ flowchart TB
     LEG["Legend: diamond = item type; arrows = gateway control flow"]
 ```
 
-**Legend:** The diamond selects how the gateway handles stream items; arrows are control flow. Foundry executes native built-ins. The backend does not run a harness shell command or sub-agent.
+Foundry, not the backend, runs the harness's native shell and sub-agent work.
 
 **Limits.** Large retained conversations can hit the shared model quota across tool rounds. Foundry controls context compaction. Session policy can deny an MCP name *before* `/pi/mcp` sees it; compare `pi.stream_failed` and `pi.mcp_tool`. Live provider replay IDs remain unverified. `get_settings` with the `location` area returns the coarse iPhone observation and timestamp when available. An unsynced permission is unknown until iOS reports it.
 
@@ -167,11 +157,15 @@ Apple Maps requests use the signed-in iPhone workspace connection. MapKit search
 
 Notes and Graph share titles. `/notes/summaries` checks up to 50 exact pin paths, outside page or graph limits. Missing or stale metadata uses a readable filename, not a scan or embedding lookup. iPhone can show an account-bound snapshot while revalidating newest-first pages without HTTP cache reuse.
 
+An iPhone edit and folder move use the original blob SHA and one Vault commit. The filename stays the same; a stale source or occupied destination leaves the draft unsaved.
+
 ### Daily integration boundary (P12-01)
 
 Health and workout tools use the SQL `daily` schema. The iPhone Today card, Chat and Voice use one Copenhagen-day meal ledger and nutrition calculation. It selects one eligible daily active-energy reading, not the sum of the iPhone and exporter totals. iPhone Health sync and ingestion/Shortcuts are separate from Watch display. iPhone Gym can record lifts in the Vault; `gym_lifts` reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
-The Home brief sends short per-request references to the model, then resolves citations back to the original source references before returning them to the client.
+Home and Calendar read the primary Google Calendar through the owner-authenticated backend. Edits use Google event versions and publish a Home refresh after Google confirms the write. The Home brief expands short model citations back to original source references.
+
+iPhone caches the owner’s primary and secondary colours in its App Group and transfers the pair through WatchConnectivity application context. Watch caches the pair for its screens and complications. iPhone surface overrides are separate.
 
 ## Proactive wake and Inbox review
 
@@ -194,7 +188,6 @@ flowchart LR
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
 - Missing switch state means **Off**. The owner controls it in Settings. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. A successful wake is not evidence of a delivered message.
 - PI owns the 07:00 and 18:00 Copenhagen slots and Check now. At the daily turn cap, pending events wait until Copenhagen midnight. An event-covered slot can run its Inbox review once even at the cap, without a second PI wake. No brain configured means no slots claimed.
-- The iPhone Calendar and Home read the primary Google calendar through the owner-authenticated backend. Calendar edits use Google event versions and publish a Home refresh after Google confirms the write.
 - Background Calendar reads the next 48 hours; Travel queries its own days 3–7 window. Continuations keep the original Google query. Each background window reads at most two pages and 50 returned events.
 
 ## Reply push and reminders
@@ -216,8 +209,6 @@ sequenceDiagram
     Note over Chat,Phone: Legend: solid = request<br/>dashed = provider result or delivery
 ```
 
-**Legend:** Solid arrows send commands or requests; dashed arrows are provider outcomes or delivery. Provider acceptance does not prove the notification was displayed.
-
 The normal reply sender is [`reply-notifications.ts`](../apps/backend/src/push/reply-notifications.ts), not an inline callback. One stored preview per reply and per-registration delivery evidence keep retries honest. A tap is a `jarvis.reply` target, not an approval or a `jarvis.proactive` item. Watch may defer the tap while busy and retains the exact target across refresh. Explicit reminders use their own occurrence outbox and terminal evidence; see [migration 0102](../db/migrations/0102_owner_reminder_delivery_outbox.sql).
 
 ## Deployment and qualification
@@ -233,8 +224,6 @@ flowchart LR
     READY --> TF["Separate signed TestFlight build from main"]
     LEG["Legend: cylinder = immutable artifact; arrows = build order or input"]
 ```
-
-**Legend:** Solid arrows are required inputs or ordering; the cylinder is an immutable CI artifact. TestFlight is a separate manual workflow, not a Deploy job.
 
 - [Bicep](../infra/README.md) owns Azure SQL, Key Vault, Storage, ACR, Container Apps, Foundry and Static Web Apps. A Container Apps image runs the backend; managed identity gives it scoped Azure access. The mirror is a separate job. Client sign-in is Entra; keys and server credentials do not go to clients.
 - [CI](../.github/workflows/ci.yml) qualifies the ready PR, not whatever later happens to be on the branch. [Deploy](../.github/workflows/deploy.yml) selects affected components, verifies the merged Git tree equals the qualified tree, and retains [deployment evidence](../.github/scripts/release_state.py). A no-op or superseded run is not fresh provider acceptance. An unchanged tree need not rerun a component; changed inputs need matching evidence.
