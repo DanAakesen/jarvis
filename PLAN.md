@@ -14,15 +14,15 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Build 130 includes the [Calendar and Training corrections](https://github.com/DanAakesen/jarvis/pull/2074). Device review found preview gaps in Home, Health and Notes. The [fixes](https://github.com/DanAakesen/jarvis/pull/2076) merged after build 130 and are **not accepted on device**. |
-| TestFlight **130** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45430079631) for iPhone with the [matching Watch companion](https://github.com/DanAakesen/jarvis/actions/runs/45420997992). |
-| Backend | Use the [preview fix Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45497638562) to qualify the next mobile release. The [build 130 Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45420922589) retained the previous image and passed PI and deterministic readiness; live conversation acceptance was skipped. |
+| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | The [Home, Health, Notes and shared Appearance corrections](https://github.com/DanAakesen/jarvis/pull/2076) passed iPhone simulator review. Physical-device review remains open. |
+| TestFlight **135** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45503575353) for iPhone with the [matching Watch companion](https://github.com/DanAakesen/jarvis/actions/runs/45500374585). |
+| Backend | The [Appearance settings deployment](https://github.com/DanAakesen/jarvis/actions/runs/45497638562) passed deterministic runtime readiness. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-On build 130, check the folding Home composer, iPhone Voice speaker control, and the close button and scroll edges in short and long Voice panels.
+On build 135, check the folding Home composer, iPhone Voice speaker control, and the close button and scroll edges in short and long Voice panels.
 
 1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), test the daily core in Chat and Voice: check project status and the issue-to-worker flow for approved work; save, find and rename a note and check its iPhone folder without refreshing; create a task, check its reminder, then complete it; check workout and lift readback in Danish and English. When logging food, save one meal and verify that it counts once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
 2. Dictate a short phrase and then a longer message on Watch. Each Stop should put the transcript in the draft once. Start Voice from the Watch, confirm it reaches Listening and stays open, then listen to two complete replies on the Watch speaker and interrupt a third. On iPhone, verify that Voice leaves Speaking between replies.
