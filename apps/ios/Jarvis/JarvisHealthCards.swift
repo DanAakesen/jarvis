@@ -52,13 +52,13 @@ struct JarvisHealthCards<Lifts: View>: View {
                 trainingSummary
                 Divider()
                 lifts()
-            }.accessibilityIdentifier("health.hero.training")
+            }.environment(\.jarvisCardRole, "training").accessibilityIdentifier("health.hero.training")
             JarvisPageHeroCard(title: stepRange == .today ? "Steps today" : "Steps", accessory: { range($stepRange, "steps") }) {
                 stepSummary
-            }
+            }.environment(\.jarvisCardRole, "steps")
             JarvisPageHeroCard(title: "Sleep", accessory: { range($sleep, "sleep") }) {
                 sleepSummary
-            }.accessibilityIdentifier("health.hero.sleep")
+            }.environment(\.jarvisCardRole, "sleep").accessibilityIdentifier("health.hero.sleep")
             JarvisPageHeroCard(title: "Nutrition", accessory: { range($nutrition, "nutrition") }) {
                 nutritionSummary
                 HStack {
@@ -71,7 +71,7 @@ struct JarvisHealthCards<Lifts: View>: View {
                 }
                 if let captureError { Text(captureError).font(.footnote) }
                 if let mealReceipt { Text("\(number(mealReceipt.energyKcal)) kcal logged").font(.footnote).accessibilityIdentifier("health.nutrition.saved") }
-            }.accessibilityIdentifier("health.hero.nutrition")
+            }.environment(\.jarvisCardRole, "nutrition").accessibilityIdentifier("health.hero.nutrition")
         }
         .onChange(of: training) { _, _ in selectedDay = nil }
         .sheet(isPresented: $showingMeal) {

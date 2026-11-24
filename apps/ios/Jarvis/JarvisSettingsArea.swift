@@ -8,6 +8,7 @@ extension JarvisSettingsResponse {
         guard case .object? = settings["appearance"] else { return }
         let primary = string(area: "appearance", key: "accent") ?? JarvisPalette.defaultPrimaryHex
         let secondary = string(area: "appearance", key: "accent-secondary") ?? JarvisPalette.defaultSecondaryHex
+        JarvisSurfacePalette.shared.apply(self)
         let palette = JarvisPalette.shared
         let previous = (palette.primaryHex, palette.secondaryHex)
         palette.set(primaryHex: primary, secondaryHex: secondary)

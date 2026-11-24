@@ -21,7 +21,7 @@ Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the
 | **Usage** | Estimated spend for the selected period. Tap a chart bar for its UTC dates and cost. Factory turns count coding-agent work. | `JarvisUsageArea` |
 | **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
 | **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
-| **Settings** | Appearance with primary and secondary colours for iPhone and Watch, the **Proactive suggestions** switch, Training and Nutrition target editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
+| **Settings** | Appearance with shared iPhone and Watch accents and iPhone surface colors, the **Proactive suggestions** switch, Training and Nutrition target editors, deployment and resource views, and sign-out. | `JarvisSettingsArea` and its views |
 | **Banking** | Listed in the sidebar but not navigable. Out of scope until Dan sets its approval rules ([PLAN decision F](PLAN.md#open-decisions-af)). | `JarvisDestination.banking` |
 
 Around the destinations: the opening screen (`JarvisOpeningView`, startup only), the lock and sign-in gate (`JarvisGateRootView`), the activity sheet, approval notifications and the shared task row (`JarvisTaskListRow`, used in Notes and Home).

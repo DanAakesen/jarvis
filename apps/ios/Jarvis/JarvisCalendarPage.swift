@@ -80,7 +80,7 @@ struct JarvisCalendarPage: View {
                     JarvisCalendarTimeline(days: days, events: events, calendar: calendar, selectedDay: $date,
                                            onSelect: { date = max(interval.start, $0.start); draft = CalendarDraft($0) }, onMove: move)
                 }
-            }.padding().jarvisGlassSurface()
+            }.padding().jarvisDashboardSurface().environment(\.jarvisCardRole, "calendar")
         }, sections: {
             VStack(alignment: .leading, spacing: 8) {
                 Text(search.isEmpty ? date.formatted(.dateTime.weekday(.wide).day().month(.wide)) : "Search results").font(.headline)
@@ -111,7 +111,7 @@ struct JarvisCalendarPage: View {
                             }.contentShape(Rectangle())
                         }.buttonStyle(.plain)
                         if let draft, draft.id == event.id { Divider(); editor(draft) }
-                    }.padding().jarvisGlassSurface().id(event.id)
+                    }.padding().jarvisDashboardSurface().environment(\.jarvisCardRole, "agenda").id(event.id)
                 }
             }
         })

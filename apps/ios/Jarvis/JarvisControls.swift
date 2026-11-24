@@ -10,8 +10,8 @@ import SwiftUI
 /// API: Glass.clear, Glass.tint(_:), View.glassEffect(_:in:).
 enum JarvisGlass {
     /// Clear glass with the board's light fill (`--g-fill-bar`), optionally tinted for accent surfaces such as the user bubble.
-    static func surface(tint: Color? = nil) -> Glass {
-        .clear.tint(tint ?? JarvisDesignTokens.glassFill)
+    @MainActor static func surface(tint: Color? = nil) -> Glass {
+        .clear.tint(tint ?? JarvisSurfacePalette.shared.color("control")?.opacity(0.3) ?? JarvisDesignTokens.glassFill)
     }
 }
 
@@ -26,7 +26,15 @@ struct JarvisGlassBackground: ViewModifier {
     var tint: Color?
     var isCircle = false
     var isInteractive = false
+    @Environment(\.jarvisCardRole) private var cardRole
     var customShape: AnyShape?
+    private var surfaceTint: Color? {
+        if let tint { return tint }
+        if customShape != nil {
+            return JarvisSurfacePalette.shared.color(cardRole, inherit: "card")?.opacity(0.3) ?? JarvisDesignTokens.glassFill
+        }
+        return nil
+    }
 
     private var shape: AnyShape {
         if let customShape { customShape } else if isCircle { AnyShape(Circle()) } else if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
@@ -34,9 +42,9 @@ struct JarvisGlassBackground: ViewModifier {
 
     func body(content: Content) -> some View {
         if reduceTransparency {
-            content.background(.regularMaterial, in: shape)
+            content.background(JarvisDesignTokens.glassSolid, in: shape)
         } else {
-            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: tint).interactive() : JarvisGlass.surface(tint: tint), in: shape)
+            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: surfaceTint).interactive() : JarvisGlass.surface(tint: surfaceTint), in: shape)
         }
     }
 }
@@ -688,7 +696,7 @@ private struct JarvisSelectionLens: ViewModifier {
             if !isSeparate {
                 content.background {
                     Capsule()
-                        .fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                        .fill((JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity))
                         .matchedGeometryEffect(id: "selected", in: namespace)
                 }
             } else if reduceTransparency {
@@ -698,7 +706,7 @@ private struct JarvisSelectionLens: ViewModifier {
                 // A separate transparent background lets the lens refract the label itself.
                 content
                     .glassEffect(
-                        .regular.tint(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                        .regular.tint((JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity))
                             .interactive(!reduceMotion),
                         in: .capsule
                     )
@@ -861,7 +869,7 @@ struct JarvisSearchField: View {
         .padding(.trailing, text.isEmpty ? JarvisDesignTokens.labelledHorizontalPadding : 0)
         .frame(minHeight: JarvisDesignTokens.iconButtonDiameter)
         .frame(maxWidth: .infinity)
-        .jarvisGlassSurface()
+        .jarvisGlassSurface(tint: JarvisSurfacePalette.shared.color("field")?.opacity(0.35))
     }
 }
 

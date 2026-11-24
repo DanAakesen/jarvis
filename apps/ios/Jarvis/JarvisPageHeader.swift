@@ -238,6 +238,7 @@ struct JarvisHeroHeader<Accessory: View>: View {
 /// Shared material and perimeter for dashboard cards, including their solid accessibility appearance.
 private struct JarvisDashboardSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.jarvisCardRole) private var role
     @Environment(\.displayScale) private var displayScale
 
     func body(content: Content) -> some View {
@@ -247,7 +248,8 @@ private struct JarvisDashboardSurface: ViewModifier {
                 if reduceTransparency {
                     shape.fill(JarvisDesignTokens.glassSolid)
                 } else {
-                    shape.fill(.regularMaterial)
+                    shape.fill(.ultraThinMaterial)
+                        .overlay { shape.fill(JarvisSurfacePalette.shared.color(role, inherit: "card")?.opacity(0.28) ?? .clear) }
                         .overlay {
                             shape.fill(LinearGradient(
                                 colors: [JarvisDesignTokens.primaryAccent.opacity(0.07), .clear],

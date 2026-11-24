@@ -50,7 +50,7 @@ struct JarvisTodayActivityCard: View {
         }
         .padding(JarvisPageHeaderMetrics.heroInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisDashboardSurface()
+        .jarvisDashboardSurface().environment(\.jarvisCardRole, "activity")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("today.activity")
     }

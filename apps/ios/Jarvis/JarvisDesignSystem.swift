@@ -362,6 +362,7 @@ struct JarvisNeuralBackground: View {
     var body: some View {
         ZStack {
             JarvisDesignTokens.neuralBackground
+                .overlay(JarvisSurfacePalette.shared.color("page")?.opacity(0.32) ?? .clear)
             GeometryReader { proxy in
                 JarvisNeuralBackgroundView(
                     activity: activity, effects: effects, orb: resolvedOrb(in: proxy),

@@ -10,7 +10,7 @@ Evidence labels: **Token** = a value read from code, with its file. **Decision**
 
 - **Dark, calm and quiet.** A near-black navy page, a sparse cyan network, and one bright thing: the orb.
 - **The orb is the identity.** Dark glass sphere, cyan edge, amber heart. Nothing else competes with it.
-- **Glass is neutral.** Controls are dark smoked glass. Colour is small: amber text, cyan states, a few semantic hues.
+- **Glass defaults to a neutral tint.** On iPhone, Appearance sets the page, cards, controls, selection and input colors. Individual cards inherit the shared card color until overridden. Keep the orb visible through the material and use the solid fallback with Reduce Transparency.
 - **Show real state.** Every state is honest: working, empty, failed, offline. No invented numbers.
 - **Motion has a job.** It shows what Jarvis is doing, and it stops when nobody is watching.
 - **One source per look.** Change a shared token or component, never a screen.

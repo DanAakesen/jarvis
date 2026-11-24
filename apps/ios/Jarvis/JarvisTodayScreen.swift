@@ -84,7 +84,7 @@ struct JarvisTodayScreen: View {
                     .accessibilityHidden(true)
             }
         } content: {
-            dayRows
+            dayRows.environment(\.jarvisCardRole, "schedule")
         }
         .listStyle(.plain)
         .listRowSpacing(0)
@@ -267,7 +267,7 @@ struct JarvisTodayScreen: View {
                     JarvisLabelledButton(title: nextExpanded ? "Show less" : "Show more",
                         systemImage: nextExpanded ? "chevron.up" : "chevron.down", isCompact: true) { nextExpanded.toggle() }
                 }
-            }.padding(JarvisPageHeaderMetrics.heroInset).jarvisDashboardSurface()
+            }.padding(JarvisPageHeaderMetrics.heroInset).jarvisDashboardSurface().environment(\.jarvisCardRole, "next")
         }
     }
 

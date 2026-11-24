@@ -32,6 +32,7 @@ struct JarvisSettingsEditorView: View {
     @State private var draft: [String: String] = [:]
     @State private var editState: JarvisSettingsEditState?
     @State private var saving = false
+    @State private var selectedCard = "next"
     @State private var error: String?
 
     private var fields: [JarvisSettingsField] {
@@ -41,7 +42,7 @@ struct JarvisSettingsEditorView: View {
                 choice("appearance.theme", .theme, response?.options["themes"]?.arrayValues ?? []),
                 colour("appearance.accent", .primaryColour),
                 colour("appearance.accent-secondary", .secondaryColour),
-            ]
+            ] + JarvisSurfaceSettings.keys.map { colour("appearance." + $0, .primaryColour) }
         case .instructions, .personality, .identity:
             return [
                 multiline("identity.description", .identityDescription, maximumLength: 2_000),
@@ -162,12 +163,28 @@ struct JarvisSettingsEditorView: View {
                 Text(error)
                     .foregroundStyle(.red)
             }
-            ForEach(fields) { field in
+            ForEach(fields.filter { !$0.id.contains(".surface-") }) { field in
                 fieldRow(field)
                     .disabled(response == nil || readOnly || saving)
                     .accessibilityHint(response == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             if detail == .appearance {
+                Section("Background colors") {
+                    ForEach(fields.filter { field in JarvisSurfaceSettings.roles.contains(surfaceRole(field)) }) { field in
+                        fieldRow(field)
+                    }
+                    DisclosureGroup("Individual cards") {
+                        Picker("Card", selection: $selectedCard) {
+                            ForEach(JarvisSurfaceSettings.cards, id: \.self) { role in
+                                Text(JarvisSurfacePalette.label(role)).tag(role)
+                            }
+                        }
+                        if let field = fields.first(where: { surfaceRole($0) == selectedCard }) {
+                            fieldRow(field)
+                            Button("Use shared card color") { setDraft("", for: field) }
+                        }
+                    }
+                }.disabled(response == nil || readOnly || saving)
                 Button(copy(.restoreColours)) {
                     for field in fields where field.kind == .colour {
                         setDraft("", for: field)
@@ -205,16 +222,29 @@ struct JarvisSettingsEditorView: View {
         editState = JarvisSettingsEditState(response.settings)
     }
 
+    private func surfaceRole(_ field: JarvisSettingsField) -> String {
+        field.id.replacingOccurrences(of: "appearance.surface-", with: "")
+    }
+
     @ViewBuilder
     private func fieldRow(_ field: JarvisSettingsField) -> some View {
         switch field.kind {
         case .colour:
-            ColorPicker(copy(field.title), selection: Binding(
+            ColorPicker(field.id.contains(".surface-") ? JarvisSurfacePalette.label(surfaceRole(field)) : copy(field.title), selection: Binding(
                 get: {
-                    let fallback = field.title == .primaryColour
-                        ? JarvisPalette.defaultPrimaryHex : JarvisPalette.defaultSecondaryHex
+                    let fallback: String
+                    if JarvisSurfaceSettings.cards.contains(surfaceRole(field)) {
+                        fallback = draft["appearance.surface-card"] ?? ""
+                    } else if field.id == "appearance.accent" {
+                        fallback = JarvisPalette.defaultPrimaryHex
+                    } else if field.id == "appearance.accent-secondary" {
+                        fallback = JarvisPalette.defaultSecondaryHex
+                    } else {
+                        fallback = ""
+                    }
                     let raw = (draft[field.id] ?? "").drop(while: { $0 == "#" })
-                    let rgb = UInt32(raw, radix: 16) ?? UInt32(fallback, radix: 16)!
+                    let rgb = UInt32(raw, radix: 16)
+                        ?? UInt32(fallback.drop(while: { $0 == "#" }), radix: 16) ?? 0x25303D
                     return Color(.sRGB, red: Double(rgb >> 16) / 255,
                                  green: Double(rgb >> 8 & 255) / 255, blue: Double(rgb & 255) / 255)
                 },
