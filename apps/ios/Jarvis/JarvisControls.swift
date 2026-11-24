@@ -686,7 +686,6 @@ private struct JarvisSelectionLens: ViewModifier {
                 content.modifier(JarvisGlassBackground(
                     tint: (JarvisSurfacePalette.shared.color("selected") ?? Color.primary).opacity(JarvisDesignTokens.segmentedSelectionOpacity),
                     isInteractive: true))
-                    .glassEffectID("selected", in: namespace)
             }
         } else if isSeparate {
             content.jarvisGlassCapsule()
@@ -716,12 +715,12 @@ private struct JarvisSelectionRow<Tag: Hashable>: View {
     }
 
     var body: some View {
-        GlassEffectContainer(spacing: layout == .scrolling ? 8 : 0) {
+        // A glass container composites detached lenses above its children and can
+        // refract their labels. Keep the material behind the entire button row.
+        Group {
             if layout == .scrolling {
                 choices
             } else {
-                // Apply glass to the label-bearing control, just like Search. A detached
-                // or nested optical background can refract the labels themselves.
                 choices.jarvisGlassCapsule()
             }
         }
