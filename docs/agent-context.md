@@ -71,7 +71,7 @@ Start from [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 
 Add confirmed entries at the top of [decisions.md](decisions.md), newest first. Move decisions older than 14 days out of the live log: keep a dated link with the original ID in the archive index and leave the full text in Git history. Keep proposals separate.
 
-Run focused offline checks and inspect the diff. For a Factory issue task, the worker commits and pushes; [Factory opens or reuses the PR](../apps/backend/src/github/delivery.ts). Otherwise open **one ready PR** when reviewable. Follow the [title workflow](../.github/workflows/pr-title.yml) (`<task ID>: ...`, `fix-main: ...` or `docs: ...`). Give exact check results and unverified behaviour. Use `Refs #N` while acceptance is open; check the PR body and native closing links before merge.
+Run focused offline checks and inspect the diff. Factory issue workers commit and push; [Factory opens or reuses the PR](../apps/backend/src/github/delivery.ts) with `Fixes #N`. Otherwise open **one ready PR** when reviewable. Follow the [title workflow](../.github/workflows/pr-title.yml) (`<task ID>: ...`, `fix-main: ...` or `docs: ...`). State exact check results and unverified behaviour. While acceptance is open, use `Refs #N` instead: change Factory's reference after delivery and verify GitHub's closing links before merge.
 
 ### Task board
 
