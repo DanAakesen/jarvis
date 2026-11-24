@@ -14,9 +14,9 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Build 130 includes the [Calendar and Training corrections](https://github.com/DanAakesen/jarvis/pull/2074). Device review found gaps in Home, Health and Notes; the [preview fixes](https://github.com/DanAakesen/jarvis/pull/2076) are not in build 130. **Not accepted on device**. |
+| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Build 130 includes the [Calendar and Training corrections](https://github.com/DanAakesen/jarvis/pull/2074). Device review found preview gaps in Home, Health and Notes. The [fixes](https://github.com/DanAakesen/jarvis/pull/2076) merged after build 130 and are **not accepted on device**. |
 | TestFlight **130** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45430079631) for iPhone with the [matching Watch companion](https://github.com/DanAakesen/jarvis/actions/runs/45420997992). |
-| Backend | The [combined release](https://github.com/DanAakesen/jarvis/actions/runs/45412673488) deployed the backend. The [follow-up](https://github.com/DanAakesen/jarvis/actions/runs/45420922589) retained that image and passed PI and deterministic readiness checks. Live conversation acceptance was skipped. |
+| Backend | Use the [preview fix Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45497638562) to qualify the next mobile release. The [build 130 Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45420922589) retained the previous image and passed PI and deterministic readiness; live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
@@ -29,7 +29,7 @@ On build 130, check the folding Home composer, iPhone Voice speaker control, and
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. If none appears, ask explicitly for the nearest and check the match and Directions beyond 10 km. Check that a completed lookup still reports its result if reply writing fails. In Voice, compare the spoken departure estimate with the map card for an event with an address and a ten-minute buffer.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 5. After a scale reading appears in Apple Health, open Jarvis Health and compare the weight, body fat and measurement date. On Watch Home, scroll through all five sections and check the heading beside the clock in both directions.
-6. Open Calendar from Home Schedule, edit an appointment and compare its time in the grid and agenda. Check the Training period and separate walk count, and a Notes folder move with a Markdown table edit. Save and reset appearance; check per-card colours, dashboard readability, Watch reconnection and tinted complications.
+6. Open Calendar from Home Schedule, edit an appointment and compare its time in the grid and agenda. Check the Training period and separate walk count, and a Notes folder move with a Markdown table edit. On the first build with the preview fixes, check Up Next, Health cards and Notes tiles. Save and reset the shared finish; compare the paired Watch after reconnecting and check per-card colours and tinted complications.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 

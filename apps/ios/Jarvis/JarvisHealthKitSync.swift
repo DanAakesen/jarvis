@@ -214,29 +214,24 @@ struct JarvisHealthKitReader {
         }
     }
 
-    func lastNightStages(now: Date) async throws -> [JarvisHealthSleepSegment] {
+    func lastNightStages(now: Date) async throws -> JarvisSleepTimeline {
         let calendar = JarvisHealthSyncWindow.calendar
         let midnight = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .hour, value: -12, to: midnight)!
         let end = min(now, calendar.date(byAdding: .hour, value: 12, to: midnight)!)
         let store = HKHealthStore()
         try await JarvisHealthKitAccess.requestReadAccess(store)
-        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return .init(segments: []) }
         let window = HKQuery.predicateForSamples(withStart: start, end: end)
         let samples = try await readSamples(store: store, predicate: .categorySample(type: type, predicate: window))
         let segments = samples.compactMap { sample -> JarvisHealthSleepSegment? in
             let stage = Self.stage(sample.value)
-            guard ["core", "deep", "rem", "awake"].contains(stage) else { return nil }
+            guard ["core", "deep", "rem", "awake", "asleep"].contains(stage) else { return nil }
             return JarvisHealthSleepSegment(id: sample.uuid.uuidString, stage: stage,
                 start: max(start, sample.startDate), end: min(end, sample.endDate),
                 source: sample.sourceRevision.source.bundleIdentifier)
         }
-        // A Watch and a third-party app can both record the same night.
-        let sources = Dictionary(grouping: segments, by: { $0.source ?? "" })
-        return sources.values.max {
-            $0.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) } <
-            $1.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
-        }?.sorted { $0.start < $1.start } ?? []
+        return JarvisSleepTimeline.overnight(segments, wakingOn: now, calendar: calendar)
     }
 
     private static func stage(_ value: Int) -> String {

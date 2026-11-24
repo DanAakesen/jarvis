@@ -127,7 +127,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled else { return }
         var context = session.applicationContext
         let colors = paletteContext
-        guard context["appearancePalette"] as? [String: String] != colors else { return }
+        let finish = JarvisMaterialPreferences.shared.current.percentages
+        guard context["appearancePalette"] as? [String: String] != colors || context["surfaceMaterial"] as? [String: Int] != finish else { return }
+        context["surfaceMaterial"] = finish
         context["appearancePalette"] = colors
         try? session.updateApplicationContext(context)
     }
@@ -150,7 +152,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         credentialRenewal?.cancel(); credentialRenewal = nil
         connectivityGrace?.cancel(); connectivityGrace = nil
         let cleared: [String: Any] = ["clearCredentials": true, "credentialRevision": Date().timeIntervalSince1970,
-                                      "appearancePalette": paletteContext]
+                                      "appearancePalette": paletteContext, "surfaceMaterial": JarvisMaterialPreferences.shared.current.percentages]
         try? WCSession.default.updateApplicationContext(cleared)
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(cleared, replyHandler: nil, errorHandler: { _ in })

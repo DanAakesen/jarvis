@@ -94,7 +94,7 @@ Apply these requirements to software changes, including small corrections, even 
 
 ## UI components
 
-All buttons, menus, sheet actions, orbs and page headers must use the shared components in `apps/ios/Jarvis`: `JarvisIconButton`, `JarvisLabelledButton`, `JarvisMenuButton`, `JarvisSheetConfirmButton`, `JarvisSheetCloseButton` and `JarvisComposerIconButton` (`JarvisControls.swift`), `JarvisOrb`, and `JarvisPageScaffold` with `JarvisPageHeader` (`JarvisPageHeader.swift`). Never call `glassEffect`, define a `ButtonStyle`, or draw an orb in a screen file; use `jarvisGlassSurface` for glass. To change the look, change the shared component. `JarvisDesignSystemGuardTests` fails the build when a screen breaks this.
+All buttons, menus, sheet actions, orbs and page headers must use the shared components in `apps/ios/Jarvis`: `JarvisIconButton`, `JarvisLabelledButton`, `JarvisMenuButton`, `JarvisSheetConfirmButton`, `JarvisSheetCloseButton` and `JarvisComposerIconButton` (`JarvisControls.swift`), `JarvisOrb`, and `JarvisPageScaffold` with `JarvisPageHeader` (`JarvisPageHeader.swift`). Never call `glassEffect`, define a `ButtonStyle`, or draw an orb in a screen file; use `jarvisGlassSurface` for glass. For iPhone and Watch surfaces, inherit the [shared material settings](../docs/ui/style-guide.md#3-glass-and-surfaces). Keep gradient, frost and glass strengths in the shared renderer. A screen selects a surface role and colour. To change the look, change the shared component. `JarvisDesignSystemGuardTests` fails the build when a screen breaks this.
 
 ## Installed skills (paths relative to the repository root)
 

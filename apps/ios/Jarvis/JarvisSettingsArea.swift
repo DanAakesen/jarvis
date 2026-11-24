@@ -3,16 +3,27 @@ import SwiftUI
 import WidgetKit
 
 extension JarvisSettingsResponse {
+    var materialSettings: JarvisMaterialSettings {
+        var values: [String: Int] = [:]
+        for control in JarvisMaterialControl.allCases {
+            values[control.rawValue] = value(area: "appearance", key: control.rawValue)?.integerValue
+        }
+        return JarvisMaterialSettings(values)
+    }
+
     @MainActor
     func applyNativePalette() {
         guard case .object? = settings["appearance"] else { return }
         let primary = string(area: "appearance", key: "accent") ?? JarvisPalette.defaultPrimaryHex
         let secondary = string(area: "appearance", key: "accent-secondary") ?? JarvisPalette.defaultSecondaryHex
         JarvisSurfacePalette.shared.apply(self)
+        let material = JarvisMaterialPreferences.shared
+        let previousMaterial = material.current
+        material.apply(materialSettings)
         let palette = JarvisPalette.shared
         let previous = (palette.primaryHex, palette.secondaryHex)
         palette.set(primaryHex: primary, secondaryHex: secondary)
-        guard previous != (palette.primaryHex, palette.secondaryHex) else { return }
+        guard previous != (palette.primaryHex, palette.secondaryHex) || previousMaterial != material.current else { return }
         WidgetCenter.shared.reloadAllTimelines()
         JarvisWatchBridge.shared.syncPalette()
     }
@@ -120,6 +131,11 @@ struct JarvisSettingsArea: View {
             .jarvisPageBackground()
             .task {
                 if response == nil { await reload() }
+                #if DEBUG
+                if path.isEmpty && ProcessInfo.processInfo.arguments.contains("--screenshot-surface-appearance") {
+                    path = [.appearance]
+                }
+                #endif
             }
             .onDisappear {
                 loadGeneration += 1

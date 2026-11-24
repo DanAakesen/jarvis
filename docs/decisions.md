@@ -6,6 +6,7 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 | Date and source | Rule |
 | --- | --- |
+| 2026-11-24 — Dan’s Appearance decision | Every app-owned native card and control inherits one configurable glass finish. Per-card overrides change colour only. See the [material ownership rule](ui/style-guide.md#3-glass-and-surfaces). |
 | 2026-11-23 — Apple Maps | Use on-device MapKit for Chat and Voice. Keep map data temporarily on iPhone, save the owner’s lookup and hand navigation to Apple Maps. Nearby uses a 10 km radius. An explicit request for the nearest named business widens the search and ranks the returned matches on device. A supplied origin works with location permission denied. [Apple’s Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/). |
 | 2026-11-22 — Dan, [#2009](https://github.com/DanAakesen/jarvis/issues/2009) | Jarvis may administer Foundry instructions, versions, activation, models and deployments at Dan’s request. Preserve the protected backend tool contract. |
 | 2026-11-21 — Dan, recorded in [#2011](https://github.com/DanAakesen/jarvis/issues/2011) and [#2012](https://github.com/DanAakesen/jarvis/issues/2012) | Do not add PI approvals, confirmations or guardrails except for DELETE actions. Prefer model judgement; use deterministic logic for exact results. Keep banking outside that ruling until Dan decides its policy. |
@@ -23,7 +24,7 @@ Add confirmed decisions here, newest first. When an entry is older than 14 days,
 
 ### 24 November 2026 — iPhone dashboard and editor
 
-Home and Health use translucent cards beneath shared scrolling chrome. Calendar edits the same primary Google Calendar used by Home, Chat and Voice. Notes open in the Markdown editor, with an editable table grid. A deliberate folder move and content edit save together, not as two writes. [#2071](https://github.com/DanAakesen/jarvis/pull/2071).
+Home starts with Up Next. Home and Health share translucent card surfaces beneath floating headers and footers. Navigation icons use the configured primary accent. Notes uses pinned tiles and a two-column folder card. Calendar edits the same primary Google Calendar used by Home, Chat and Voice. Notes open in the Markdown editor, with an editable table grid. A deliberate folder move and content edit save together, not as two writes. [#2071](https://github.com/DanAakesen/jarvis/pull/2071), [#2076](https://github.com/DanAakesen/jarvis/pull/2076).
 
 ### 24 November 2026 — Personal native palette
 

@@ -3,6 +3,33 @@ import XCTest
 @testable import JarvisCore
 
 final class PiRuntimeTests: XCTestCase {
+    @MainActor
+    func testSharedMaterialDefaultsValidationAndPersistence() throws {
+        let suite = "material-tests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let prefs = JarvisMaterialPreferences(defaults: defaults)
+        let settings = JarvisMaterialSettings(["gradient": 0, "frost": 100, "glass": -1])
+        prefs.apply(settings)
+        XCTAssertEqual(JarvisMaterialPreferences(defaults: defaults).current, settings)
+        XCTAssertEqual(settings[.gradient], 0)
+        XCTAssertEqual(settings[.frost], 1)
+        XCTAssertEqual(settings[.glass], JarvisMaterialSettings()[.glass])
+        for control in JarvisMaterialControl.allCases {
+            var draft = JarvisSettingsEditState(.object(["appearance": .object([:])]))
+            for value in [0, 100] {
+                draft.set(.integer(value), area: "appearance", key: control.rawValue)
+                try JarvisSettingsLogic.validateSettingsPatch(XCTUnwrap(draft.changes))
+            }
+            draft.set(.integer(control.defaultPercent), area: "appearance", key: control.rawValue)
+            XCTAssertFalse(draft.isDirty)
+            for value: JarvisSettingsValue in [.integer(-1), .integer(101), .number(0.5), .string("10")] {
+                XCTAssertThrowsError(try JarvisSettingsLogic.validateSettingsPatch(
+                    JarvisSettingsPatch(area: "appearance", key: control.rawValue, value: value)))
+            }
+        }
+    }
+
     func testAppearanceAcceptsBothAccentOverridesAndTheirReset() {
         for key in ["accent", "accent-secondary"] {
             for value: JarvisSettingsValue in [.string("#219AbC"), .null] {

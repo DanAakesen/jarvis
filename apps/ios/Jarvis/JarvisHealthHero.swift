@@ -115,10 +115,11 @@ struct JarvisManualMealSheet: View {
 struct JarvisHealthHeroStat: View {
     let value: String
     let title: String
+    var tint: Color = .primary
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-            Text(value).font(.title2.weight(.semibold))
+            Text(value).font(.title.weight(.bold)).foregroundStyle(tint).minimumScaleFactor(0.7).lineLimit(1)
             Text(title).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -135,6 +136,8 @@ struct JarvisHealthBarChart: View {
     let identifier: String
     let language: JarvisAppLanguage
     var state: JarvisHealthReadState = .available
+    var showSummary = true
+    var barColor: Color = .secondary
     let format: (Double) -> String
 
     @State private var selected: String?
@@ -150,30 +153,32 @@ struct JarvisHealthBarChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
-            HStack(alignment: .top) {
-                (
-                    Text(values.headline(selected: selected).map(format) ?? "—")
-                        .font(.headline)
-                    + Text(" \(unit) · \(caption)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                )
-                .fixedSize(horizontal: false, vertical: true)
-                .contentTransition(.numericText())
-                Spacer(minLength: 0)
-                if let target = values.target {
-                    Text("\(copy.text(.targetLabel)) \(format(target))")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(JarvisDesignTokens.healthAccent)
-                        .padding(.horizontal, JarvisDesignTokens.healthMenuSpacing + 2)
-                        .padding(.vertical, 4)
-                        .background(JarvisDesignTokens.healthAccent.opacity(0.15), in: Capsule())
-                        .accessibilityLabel("\(copy.text(.targetLabel)) \(format(target)) \(unit)")
-                        .accessibilityIdentifier("\(identifier).target")
+            if showSummary || selected != nil {
+                HStack(alignment: .top) {
+                    (
+                        Text(values.headline(selected: selected).map(format) ?? "—")
+                            .font(.headline)
+                        + Text(" \(unit) · \(caption)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .contentTransition(.numericText())
+                    Spacer(minLength: 0)
+                    if let target = values.target {
+                        Text("\(copy.text(.targetLabel)) \(format(target))")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(JarvisDesignTokens.healthAccent)
+                            .padding(.horizontal, JarvisDesignTokens.healthMenuSpacing + 2)
+                            .padding(.vertical, 4)
+                            .background(JarvisDesignTokens.healthAccent.opacity(0.15), in: Capsule())
+                            .accessibilityLabel("\(copy.text(.targetLabel)) \(format(target)) \(unit)")
+                            .accessibilityIdentifier("\(identifier).target")
+                    }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("\(identifier).headline")
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("\(identifier).headline")
             if values.hasData {
                 chart
             } else if state != .available && state != .empty {
@@ -222,7 +227,7 @@ struct JarvisHealthBarChart: View {
                     )
                     .cornerRadius(JarvisDesignTokens.healthBarRadius)
                     .foregroundStyle(
-                        selected == day.date ? JarvisDesignTokens.healthAccent : Color.secondary
+                        (selected == day.date ? JarvisDesignTokens.healthAccent : barColor).gradient
                     )
                 }
             }
@@ -273,6 +278,10 @@ struct JarvisHealthBarChart: View {
     }
 
     private func weekday(_ date: String) -> String {
+        Self.dayLabel(date, language: language, dense: values.days.count > 7)
+    }
+
+    static func dayLabel(_ date: String, language: JarvisAppLanguage, dense: Bool) -> String {
         let input = DateFormatter()
         input.locale = Locale(identifier: "en_US_POSIX")
         input.calendar = Calendar(identifier: .gregorian)
@@ -283,7 +292,7 @@ struct JarvisHealthBarChart: View {
         output.locale = language.locale
         output.calendar = Calendar(identifier: .gregorian)
         output.timeZone = TimeZone(secondsFromGMT: 0)
-        output.dateFormat = values.days.count > 7 ? "d MMM" : "EEE"
+        output.dateFormat = dense ? "d MMM" : "EEE"
         return output.string(from: parsed)
     }
 

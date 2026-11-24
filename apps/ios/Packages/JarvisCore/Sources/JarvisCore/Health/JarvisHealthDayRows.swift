@@ -29,6 +29,94 @@ public struct JarvisHealthSleepNight: Equatable, Sendable {
     }
 }
 
+/// A single recording source supplies both the chart and the totals. Overlapping samples
+/// from that source occupy each instant at most once.
+public struct JarvisSleepTimeline: Sendable {
+    public let segments: [JarvisHealthSleepSegment]
+    public private(set) var asleepHours: Double
+
+    public init(segments samples: [JarvisHealthSleepSegment]) {
+        let ordered = samples.filter { $0.end > $0.start }.sorted {
+            ($0.start, $0.end, $0.id) < ($1.start, $1.end, $1.id)
+        }
+        // HealthKit can provide a whole-night "asleep" envelope as well as detailed stages.
+        // Give the stages precedence and use only the uncovered parts of the envelope.
+        var staged: [JarvisHealthSleepSegment] = []
+        for sample in ordered where ["awake", "rem", "core", "deep"].contains(sample.stage) {
+            let start = max(staged.last?.end ?? sample.start, sample.start)
+            if start < sample.end { staged.append(Self.part(sample, start, sample.end)) }
+        }
+        var unclassified: [JarvisHealthSleepSegment] = []
+        var previousEnd = Date.distantPast
+        for sample in ordered where sample.stage == "asleep" {
+            var cursor = max(previousEnd, sample.start)
+            for stage in staged where stage.end > cursor && stage.start < sample.end {
+                if cursor < stage.start { unclassified.append(Self.part(sample, cursor, stage.start)) }
+                cursor = max(cursor, stage.end)
+            }
+            if cursor < sample.end { unclassified.append(Self.part(sample, cursor, sample.end)) }
+            previousEnd = max(previousEnd, sample.end)
+        }
+        segments = (staged + unclassified).sorted { $0.start < $1.start }
+        asleepHours = segments.filter { $0.stage != "awake" }.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) / 3600 }
+    }
+
+    private static func part(_ sample: JarvisHealthSleepSegment, _ start: Date, _ end: Date) -> JarvisHealthSleepSegment {
+        .init(id: sample.id, stage: sample.stage, start: start, end: end, source: sample.source)
+    }
+
+    public var stagedHours: Double {
+        segments.filter { ["deep", "rem", "core"].contains($0.stage) }
+            .reduce(0) { $0 + $1.end.timeIntervalSince($1.start) / 3600 }
+    }
+
+    /// Separate daytime naps from a night's recording. Competing devices may cover
+    /// the same night. Keep the longest sleep total and the most detailed overlapping recording.
+    public static func overnight(_ samples: [JarvisHealthSleepSegment], wakingOn date: Date, calendar: Calendar) -> Self {
+        var candidates: [Self] = []
+        let sources = Dictionary(grouping: samples) { $0.source ?? "" }
+        for source in sources.keys.sorted() {
+            let ordered = Self(segments: sources[source] ?? []).segments
+            var sessions: [[JarvisHealthSleepSegment]] = []
+            for sample in ordered {
+                if let end = sessions.last?.last?.end, sample.start.timeIntervalSince(end) <= 2 * 3600 {
+                    sessions[sessions.count - 1].append(sample)
+                } else { sessions.append([sample]) }
+            }
+            for session in sessions {
+                guard let end = session.last?.end, calendar.isDate(end, inSameDayAs: date) else { continue }
+                candidates.append(Self(segments: session))
+            }
+        }
+        guard let longest = candidates.max(by: { $0.asleepHours < $1.asleepHours }),
+              longest.asleepHours > 0, let start = longest.segments.first?.start,
+              let end = longest.segments.last?.end else { return Self(segments: []) }
+        let overlapping = candidates.filter { candidate in
+            guard let first = candidate.segments.first, let last = candidate.segments.last else { return false }
+            return first.start < end && last.end > start
+        }
+        var detailed = overlapping.max { ($0.stagedHours, $0.asleepHours) < ($1.stagedHours, $1.asleepHours) } ?? longest
+        detailed.asleepHours = longest.asleepHours
+        return detailed
+    }
+
+    public func dailyRow(date: String, retained: JarvisHealthSleepNight? = nil) -> [String: JSONValue]? {
+        var hours: [String: Double] = [:]
+        for segment in segments {
+            hours[segment.stage, default: 0] += segment.end.timeIntervalSince(segment.start) / 3600
+        }
+        guard asleepHours > 0 else { return nil }
+        var row: [String: JSONValue] = ["sleep_date": .string(date), "total_sleep_hours": .number(max(asleepHours, retained?.total ?? 0))]
+        if stagedHours == 0, let retained {
+            for (stage, value) in [("deep", retained.deep), ("rem", retained.rem), ("core", retained.light), ("awake", retained.awake)] {
+                if let value { row[stage + "_hours"] = .number(value) }
+            }
+        }
+        for (stage, value) in hours { row[stage + "_hours"] = .number(value) }
+        return row
+    }
+}
+
 public enum JarvisHealthNutrient: String, Sendable {
     case kcal = "energy_kcal"
     case protein = "protein_grams"

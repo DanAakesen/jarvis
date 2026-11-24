@@ -700,6 +700,8 @@ public enum JarvisSettingsLogic {
                 for (key, newValue) in editedValues where oldValues[key] != newValue {
                     if area == "appearance", (["accent", "accent-secondary"] + JarvisSurfaceSettings.keys).contains(key),
                        oldValues[key] == nil, newValue == .null { continue }
+                    if area == "appearance", oldValues[key] == nil,
+                       let control = JarvisMaterialControl(rawValue: key), newValue.integerValue == control.defaultPercent { continue }
                     areas[area, default: [:]][key] = newValue
                 }
             }
@@ -763,6 +765,8 @@ public enum JarvisSettingsLogic {
             for (key, value) in fields {
                 let valid: Bool
                 switch (area, key) {
+                case ("appearance", _) where JarvisMaterialControl(rawValue: key) != nil:
+                    valid = value.integerValue.map { (0...100).contains($0) } == true
                 case ("appearance", "theme"):
                     valid = validSettingsFieldValue(value, options: ["light", "dark", "system"])
                 case ("appearance", _) where (["accent", "accent-secondary"] + JarvisSurfaceSettings.keys).contains(key):

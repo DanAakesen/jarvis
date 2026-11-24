@@ -384,6 +384,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         Task { @MainActor in self.receiveCredentials(message) }
     }
     private func receivePalette(_ context: [String: Any]) {
+        if let values = context["surfaceMaterial"] as? [String: Int] {
+            JarvisMaterialPreferences.shared.apply(JarvisMaterialSettings(values))
+        }
         guard let colors = context["appearancePalette"] as? [String: String],
               let primary = colors["primary"], let secondary = colors["secondary"] else { return }
         let palette = JarvisPalette.shared

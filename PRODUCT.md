@@ -55,7 +55,7 @@ Browse and edit the primary Google Calendar used by Home, Chat and Voice. Schedu
 
 ### Appearance
 
-Dan can change or reset the primary and secondary colours on iPhone. The paired Watch picks them up when it connects. iPhone also supports shared glass colours and individual card overrides.
+Dan can change or reset the accent colours and the shared Gradient, Frost and Glass finish on iPhone. The paired Watch picks up the saved settings when it connects. Individual iPhone cards can override colour, not finish.
 
 ### Workouts
 

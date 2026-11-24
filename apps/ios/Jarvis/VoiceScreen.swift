@@ -556,7 +556,7 @@ struct VoiceScreenView: View {
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .frame(maxWidth: .infinity)
         .frame(height: JarvisDesignTokens.voiceScreenShareBarHeight)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceScreenShareBarHeight / 2))
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.voiceScreenShareBarHeight / 2)
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .accessibilityElement(children: .contain)
     }
