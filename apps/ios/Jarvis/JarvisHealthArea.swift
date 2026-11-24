@@ -341,7 +341,6 @@ struct JarvisHealthArea: View {
                             onDelete: { lift in Task { await deleteLift(lift) } }
                         )
                     } else {
-                        if let headline { JarvisPageHeadline(phrase: headline) }
                         if let liftFailure, liftFailure != .unavailable { failureRow(liftFailure) }
                         else if vaultLiftsFailed { failureRow(.failed) }
                         let dashboard = withDeviceWorkouts(currentDashboard)
@@ -529,15 +528,6 @@ struct JarvisHealthArea: View {
             .accessibilityHint(copy.text(gymModel == nil ? .unavailable : .logWorkout))
             .accessibilityIdentifier("health.logWorkout")
         }
-    }
-
-    private var headline: JarvisPagePhrase? {
-        let dashboard = currentDashboard
-        guard let capabilities = dashboard.capabilities, !capabilities.availableSources.isEmpty else { return nil }
-        let visible = withDeviceWorkouts(dashboard)
-        guard visible.workouts.state == .available || visible.workouts.state == .empty else { return nil }
-        let rings = JarvisHealthRingsSection(data: visible, period: period, language: language)
-        return JarvisHealthPagePhrase.make(rings.phraseInput(isToday: periodPreset == .today), language: language)
     }
 
     private var segmentSwitcher: some View {
