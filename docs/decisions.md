@@ -24,7 +24,7 @@ Add confirmed decisions here, newest first. When an entry is older than 14 days,
 
 ### 24 November 2026 — iPhone dashboard and editor
 
-Home starts with Up Next. Home and Health share translucent card surfaces beneath floating headers and footers. Navigation icons use the configured primary accent. Notes uses pinned tiles and a two-column folder card. Calendar edits the same primary Google Calendar used by Home, Chat and Voice. Notes open in the Markdown editor, with an editable table grid. A deliberate folder move and content edit save together, not as two writes. [#2071](https://github.com/DanAakesen/jarvis/pull/2071).
+Home starts with Up Next. Home and Health share translucent card surfaces beneath floating headers and footers. Navigation icons use the configured primary accent. Notes uses pinned tiles and a two-column folder card. Calendar edits the same primary Google Calendar used by Home, Chat and Voice. Notes open in the Markdown editor, with an editable table grid. A deliberate folder move and content edit save together, not as two writes. [#2071](https://github.com/DanAakesen/jarvis/pull/2071), [#2076](https://github.com/DanAakesen/jarvis/pull/2076).
 
 ### 24 November 2026 — Personal native palette
 

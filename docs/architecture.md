@@ -165,7 +165,7 @@ Health and workout tools use the SQL `daily` schema. The iPhone Today card, Chat
 
 Home and Calendar read the primary Google Calendar through the owner-authenticated backend. Edits use Google event versions and publish a Home refresh after Google confirms the write. The Home brief expands short model citations back to original source references.
 
-iPhone caches the owner’s primary and secondary colours in its App Group and transfers the pair through WatchConnectivity application context. Watch caches the pair for its screens and complications. iPhone surface overrides are separate.
+`PATCH /settings` validates and saves material percentages. iPhone caches the palette and saved finish in its App Group and transfers both through WatchConnectivity application context. Watch caches both and uses the palette in complications. iPhone card overrides change colour only.
 
 ## Proactive wake and Inbox review
 
