@@ -184,12 +184,10 @@ struct JarvisNotesArea: View {
         if let client {
             switch presented {
             case let .newNote(folder, staged):
-                JarvisNoteEditorSheet(client: client, copy: copy, mode: .create(folder: folder, staged: staged)) { note in
+                JarvisNoteEditorSheet(client: client, copy: copy, mode: .create(folder: folder, staged: staged)) { _ in
                     sheet = nil
                     successConfirmation = JarvisSuccessConfirmation(message: copy.saved)
                     refreshVersion += 1
-                    reader = note
-                    readerPresented = true
                 }
             case .newTask:
                 JarvisTaskEditorSheet(client: client, copy: copy, mode: .create(scope: .work)) {

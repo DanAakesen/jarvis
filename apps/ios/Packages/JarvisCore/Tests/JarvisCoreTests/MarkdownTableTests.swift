@@ -14,6 +14,17 @@ final class MarkdownTableTests: XCTestCase {
         XCTAssertEqual(blocks.last?.text, "\n\nAfter")
     }
 
+    func testTypingBesideTableAtFileBoundaryKeepsSeparateLines() {
+        let table = JarvisMarkdownTable().markdown
+        var blocks = JarvisMarkdownBlock.parse(table)
+        XCTAssertEqual(JarvisMarkdownBlock.document(blocks), table)
+        blocks[0].text = "Before"
+        blocks[blocks.count - 1].text = "After"
+        let saved = JarvisMarkdownBlock.document(blocks)
+        XCTAssertEqual(saved, "Before\n" + table + "\nAfter")
+        XCTAssertEqual(JarvisMarkdownBlock.parse(saved).compactMap(\.table), [JarvisMarkdownTable()])
+    }
+
     func testUntouchedTablesAndFencedExamplesRoundTrip() {
         let fence = String(repeating: "\u{60}", count: 3)
         let raw = "| A | B |\n| :--- | ---: |\n|  x | y  |"

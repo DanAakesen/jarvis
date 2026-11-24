@@ -287,7 +287,7 @@ struct JarvisTodayScreen: View {
         let expansion = JarvisTodayExpansion(total: visibleRows.count, isExpanded: listExpanded)
         if isLoadingRows || hasRowIssue {
             JarvisRowGroup {
-                if tab == .today { calendarIssue }
+                calendarIssue
                 taskIssue
             }
             .listRowBackground(Color.clear)
@@ -374,12 +374,12 @@ struct JarvisTodayScreen: View {
     }
 
     private var isLoadingRows: Bool {
-        (tab == .today && calendarSection.value == nil && calendarSection.isLoading)
+        (calendarSection.value == nil && calendarSection.isLoading)
             || (model.taskData.value == nil && model.taskData.isLoading)
     }
 
     private var hasRowIssue: Bool {
-        (tab == .today && calendarSection.value == nil && !calendarSection.isLoading)
+        (calendarSection.value == nil && !calendarSection.isLoading)
             || (model.taskData.value == nil && !model.taskData.isLoading)
     }
 
@@ -400,7 +400,7 @@ struct JarvisTodayScreen: View {
 
     @ViewBuilder
     private var taskIssue: some View {
-        if model.taskData.value == nil, !(tab == .today && calendarSection.value == nil && calendarSection.isLoading) {
+        if model.taskData.value == nil, !(calendarSection.value == nil && calendarSection.isLoading) {
             if model.taskData.isLoading {
                 loadingRow.jarvisListRow(separator: false)
             } else {

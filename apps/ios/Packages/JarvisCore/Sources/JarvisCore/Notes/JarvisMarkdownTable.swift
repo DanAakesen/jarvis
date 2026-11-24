@@ -10,6 +10,18 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
         self.table = table
     }
 
+    public static func document(_ blocks: [Self]) -> String {
+        var source = ""
+        var precedingTable = false
+        for block in blocks where !block.text.isEmpty {
+            if (precedingTable || block.table != nil), !source.isEmpty,
+               !source.hasSuffix("\n"), !block.text.hasPrefix("\n") { source += "\n" }
+            source += block.text
+            precedingTable = block.table != nil
+        }
+        return source
+    }
+
     public static func parse(_ source: String) -> [Self] {
         let lines = source.components(separatedBy: "\n")
         var result: [Self] = []

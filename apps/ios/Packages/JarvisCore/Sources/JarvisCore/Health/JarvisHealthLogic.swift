@@ -108,6 +108,10 @@ public enum JarvisHealthLogic {
         return target * Double(days) / 7
     }
 
+    public static func sessionTarget(_ weekly: Double?, days: Int) -> Double? {
+        scaledWeeklyTarget(weekly, days: days)?.rounded(.up)
+    }
+
     public static func calorieBalance(eaten: Double?, restingKcal: Double?, deficitKcal: Double?) -> (amount: Double, isOver: Bool)? {
         guard let eaten, let restingKcal, let deficitKcal,
               eaten.isFinite, restingKcal.isFinite, deficitKcal.isFinite,

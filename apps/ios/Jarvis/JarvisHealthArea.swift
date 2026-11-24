@@ -749,7 +749,7 @@ struct JarvisHealthArea: View {
             formatter.formatOptions = [.withInternetDateTime]
             return formatter.date(from: raw)
         }
-        var identities = data.workouts.items.compactMap { row -> JarvisHealthWorkoutIdentity? in
+        var identities = data.workouts.items.map { row -> JarvisHealthWorkoutIdentity? in
             guard let start = instant(row["start_at"]?.stringValue) else { return nil }
             return JarvisHealthWorkoutIdentity(id: row["id"]?.stringValue, start: start,
                 kind: JarvisHealthLogic.workoutKind(row["workout_type"]?.stringValue))
@@ -758,11 +758,16 @@ struct JarvisHealthArea: View {
             let raw = entry.healthActivity ?? ([JarvisGymSessionType.chest, .back, .arms, .legs, .strength].contains(entry.session) ? "gym" : "other")
             let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
                 kind: JarvisHealthLogic.workoutKind(raw), source: entry.manualWorkoutID == nil ? .healthKit : .manual)
-            guard !identities.contains(where: { $0.matches(identity) }) else { continue }
+            if let index = identities.firstIndex(where: { $0?.matches(identity) == true }) {
+                if entry.session != .other, data.workouts.items[index]["session"] == nil {
+                    data.workouts.items[index]["session"] = .string(entry.session.rawValue.capitalized)
+                }
+                continue
+            }
             formatter.formatOptions = [.withInternetDateTime]
             let stamp = formatter.string(from: entry.performedAt)
             var row: [String: JSONValue] = ["workout_type": .string(raw), "start_at": .string(stamp),
-                "workout_date": .string(JarvisHealthLogic.day(stamp)!), "device_only": .bool(true)]
+                "workout_date": .string(JarvisHealthPeriod.make(.today, now: entry.performedAt).endDate), "device_only": .bool(true)]
             if let id = entry.healthKitID ?? entry.manualWorkoutID { row["id"] = .string(id) }
             row["session"] = .string(entry.session.rawValue.capitalized)
             if entry.activeKilocalories > 0 {

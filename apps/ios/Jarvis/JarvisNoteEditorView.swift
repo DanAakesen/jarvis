@@ -72,7 +72,7 @@ struct JarvisNoteEditorSheet: View {
         return false
     }
 
-    private var bodyText: String { blocks.map(\.text).joined() }
+    private var bodyText: String { JarvisMarkdownBlock.document(blocks) }
 
     private func focusBody() {
         if let id = activeBlock ?? blocks.first(where: { $0.table == nil })?.id {

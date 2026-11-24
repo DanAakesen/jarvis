@@ -60,7 +60,7 @@ final class JarvisTodayModel: ObservableObject {
     var periodWorkoutTarget: Double? {
         guard let targets = trainingTargets?.targets,
               let gym = targets.gymSessionsPerWeek, let run = targets.runSessionsPerWeek else { return nil }
-        return JarvisHealthLogic.scaledWeeklyTarget(gym + run, days: activity.range.dayCount)
+        return JarvisHealthLogic.sessionTarget(gym + run, days: activity.range.dayCount)
     }
     var periodWorkouts: [JarvisGymLogEntry] {
         JarvisTodayActivity.entriesInRange(workouts.value ?? [], range: activity.range, now: now, calendar: timeCalendar)

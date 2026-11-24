@@ -125,7 +125,7 @@ struct JarvisHealthCards<Lifts: View>: View {
         let weekly = targets.flatMap { t in
             t.gymSessionsPerWeek.flatMap { gym in t.runSessionsPerWeek.map { gym + $0 } }
         }
-        let goal = JarvisHealthLogic.scaledWeeklyTarget(weekly, days: window.dayCount).map { $0.rounded(.up) }
+        let goal = JarvisHealthLogic.sessionTarget(weekly, days: window.dayCount)
         let counts = "\(readable ? String(workouts.count) : "—") / \(number(goal))"
         let grouped = Dictionary(grouping: workouts) { day($0) ?? "" }
         let days = JarvisHealthChartValues(values: [:], endingOn: window.endDate, count: window.dayCount, target: nil).days

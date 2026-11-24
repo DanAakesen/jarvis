@@ -13,6 +13,7 @@ struct JarvisCalendarPage: View {
     @State private var events: [JarvisTodayCalendarEntry] = []
     @State private var search = ""
     @State private var draft: CalendarDraft?
+    @State private var conflict: JarvisTodayCalendarEntry?
     @State private var pendingDeletion = false
     @State private var busy = false
     @State private var loading = false
@@ -50,6 +51,7 @@ struct JarvisCalendarPage: View {
         ScrollViewReader { proxy in
             page
                 .onChange(of: draft?.id) { _, id in
+                    conflict = nil
                     guard let id else { return }
                     Task { @MainActor in
                         await Task.yield()
@@ -90,7 +92,7 @@ struct JarvisCalendarPage: View {
                     JarvisLabelledButton(title: "Refresh", systemImage: "arrow.clockwise") { refresh = UUID() }
                 }
                 if truncated { Text("Showing the first 200 appointments. Select a shorter period to see more.").font(.footnote) }
-                if let draft, draft.isNew { editor(draft).id(draft.id) }
+                if let draft, draft.isNew || !listed.contains(where: { $0.id == draft.id }) { editor(draft).id(draft.id) }
                 if listed.isEmpty && !loading && error == nil {
                     Text(search.isEmpty ? "No appointments" : "No matching appointments").foregroundStyle(.secondary)
                 }
@@ -110,7 +112,7 @@ struct JarvisCalendarPage: View {
                                 Image(systemName: draft?.id == event.id ? "chevron.down" : "chevron.right").font(.caption)
                             }.contentShape(Rectangle())
                         }.buttonStyle(.plain)
-                        if let draft, draft.id == event.id { Divider(); editor(draft) }
+                        if let draft, !draft.isNew, draft.id == event.id { Divider(); editor(draft) }
                     }.padding().jarvisDashboardSurface().environment(\.jarvisCardRole, "agenda").id(event.id)
                 }
             }
@@ -143,6 +145,21 @@ struct JarvisCalendarPage: View {
     private func editor(_ value: CalendarDraft) -> some View {
         let binding = Binding(get: { draft ?? value }, set: { draft = $0 })
         return VStack(alignment: .leading, spacing: 10) {
+            if let current = conflict, current.id == value.id {
+                Text("Google Calendar has a newer version.").font(.subheadline.bold())
+                Text(current.title + " · " + current.start.formatted() + " – " + current.end.formatted())
+                    .font(.footnote).foregroundStyle(.secondary)
+                Button("Use calendar version") { draft = CalendarDraft(current); conflict = nil }
+                Button("Keep my changes") {
+                    var updated = CalendarDraft(current)
+                    updated.title = value.title
+                    updated.start = value.start
+                    updated.end = value.end
+                    updated.allDay = value.allDay
+                    draft = updated
+                    conflict = nil
+                }
+            }
             TextField("Title", text: binding.title).textFieldStyle(.roundedBorder)
             Toggle("All day", isOn: binding.allDay)
             DatePicker("Starts", selection: binding.start, displayedComponents: value.allDay ? [.date] : [.date, .hourAndMinute])
@@ -153,7 +170,7 @@ struct JarvisCalendarPage: View {
                 }
                 Spacer()
                 JarvisLabelledButton(title: "Cancel", systemImage: "xmark", isCompact: true) { draft = nil }
-                JarvisLabelledButton(title: "Save", systemImage: "checkmark", isDisabled: !value.valid(calendar),
+                JarvisLabelledButton(title: "Save", systemImage: "checkmark", isDisabled: !value.valid(calendar) || conflict?.id == value.id,
                                      isEmphasised: true, isCompact: true) { Task { await persist(value) } }
             }
         }
@@ -174,6 +191,15 @@ struct JarvisCalendarPage: View {
             let page = try await source.page(from: range.start, to: range.end)
             try Task.checkCancellation()
             events = page.entries; truncated = page.truncated
+            if let draft, let saved = events.first(where: { $0.id == draft.id }), saved.etag != draft.version {
+                if draft.matches(saved, calendar: calendar) {
+                    self.draft = nil
+                    conflict = nil
+                    await onChanged()
+                } else {
+                    conflict = saved
+                }
+            }
         } catch {
             if Task.isCancelled { return }
             events = []; truncated = false
@@ -198,7 +224,8 @@ struct JarvisCalendarPage: View {
             draft = nil; refresh = UUID()
             await onChanged()
         } catch {
-            self.error = "The change could not be confirmed. Refresh the calendar and check the appointment."
+            draft = change
+            self.error = "The change could not be confirmed. Refresh to compare with Google Calendar."
         }
     }
 }
@@ -224,6 +251,13 @@ private struct CalendarDraft {
         version = nil; isNew = true; title = ""; allDay = false
         start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
         end = start.addingTimeInterval(3600)
+    }
+    func matches(_ event: JarvisTodayCalendarEntry, calendar: Calendar) -> Bool {
+        guard title == event.title, allDay == (event.allDay == true) else { return false }
+        if allDay {
+            return calendar.isDate(start, inSameDayAs: event.start) && calendar.isDate(end, inSameDayAs: event.end)
+        }
+        return abs(start.timeIntervalSince(event.start)) < 1 && abs(end.timeIntervalSince(event.end)) < 1
     }
     func valid(_ calendar: Calendar) -> Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
