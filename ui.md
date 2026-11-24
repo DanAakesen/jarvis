@@ -6,12 +6,12 @@ Update this page in the same change that adds, removes, renames or retires a scr
 
 ## iPhone
 
-The sidebar lists the destinations of `JarvisDestination` (`apps/ios/Packages/JarvisCore`). Shared controls, orb and page header come from `JarvisControls.swift` and `JarvisPageHeader.swift`; screens never draw their own.
+Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the header gear; Voice and Workspaces are not sidebar rows. Shared controls and the orb come from `JarvisControls.swift`; page chrome comes from `JarvisPageHeader.swift`.
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
 | **Home** | The brief and next action, today's activity card, tasks and the iPhone Gym sheet. The activity stays usable when the brief is unavailable. The + menu beside Upcoming opens New task, New note, Log workout and Log lift. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
-| **Chat** | The one PI conversation: resumable replies, composer with plus menu and dictation, grouped tool activity, generated blocks (including charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. The plus menu's **Test a reply** sheet uses a separate conversation; it does not test normal Chat. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
+| **Chat** | The one PI conversation: resumable replies, a folding composer with plus menu and dictation, tool activity, generated blocks (charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. **Test a reply** in the plus menu uses a separate conversation. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
 | **Voice** | Live GPT-Live call: orb, captions, mute and end, a bottom panel for generated visuals, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | One area with a Notes, Tasks and Graph switch: library with folders, pins and ordering, reader, editor with editable title, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteReaderView`, `JarvisNoteEditorView`, `JarvisNotesGraphView` |
 | **Health** | Daily dashboard, body chart, workouts, iPhone Gym lifts, goals and HealthKit sync. Nutrition → Today shows kcal left, resting target, active kcal and deficit. **Log meal** takes kcal and optional protein. | `JarvisHealthArea`, `JarvisHealthLiftLog`, `JarvisLiftEditorSheet`, `JarvisHealthKitSync` |
@@ -27,13 +27,13 @@ Around the destinations: the opening screen (`JarvisOpeningView`, startup only),
 
 ## Apple Watch
 
-The Watch dashboard opens Chat or an adaptive tile Menu in one tap, above the agenda, workouts, body fat, tasks and recent notes. **Chat** has an editable draft up to three lines with dictation; Send replaces the audio controls when the draft contains text. **Voice** has a focused call with Mute and End. Other destinations are **Tasks** (list, detail, edit, new), **Health**, **Workouts**, **Lifts** and lift capture, **Factory** and new task, **Agenda**, **Body Fat**, **Notes**, **Home** brief and **Nutrition**.
+The Watch dashboard opens Chat or an adaptive tile Menu in one tap, above the agenda, workouts, body fat, tasks and recent notes. **Chat** previews up to three lines of the draft; tapping the field opens native editing and dictation appends to the draft. Send replaces the audio controls when the draft contains text. **Voice** has a focused call with Mute and End. Other destinations are **Tasks** (list, detail, edit, new), **Health**, **Workouts**, **Lifts** and lift capture, **Factory** and new task, **Agenda**, **Body Fat**, **Notes**, **Home** brief and **Nutrition**.
 
 ## Widgets and Live Activities
 
 - **iPhone Home screen widgets** ([bundle](apps/ios/Widgets/JarvisWidgets.swift)): Gym (small Steps and Workouts, plus medium and large), Software Factory (small Status and Done, plus medium and large), Notes and Home (each in small, medium and large).
 - **Live Activities:** Software Factory task and Voice call.
-- **Watch complications** ([bundle](apps/ios/WatchWidgets/JarvisWatchWidgets.swift)): rectangular Steps, Nutrition, Home, task list and Body Fat; circular Tasks Today, Dictate, Voice Session and Log Lift. Dictate opens a draft; it does not send a message.
+- **Watch complications** ([bundle](apps/ios/WatchWidgets/JarvisWatchWidgets.swift)): rectangular Daily steps, Nutrition, Home, Tasks and Body Fat; circular Tasks Today, Dictate, Voice Session and Log lift. Dictate opens Chat for capture into a draft; it does not send a message.
 
 Widgets and Live Activities are glanceable summaries and routes back into the real screen. They are not second editors.
 

@@ -35,8 +35,8 @@ Use this as the single frontend workflow. The project entrypoint contains the ma
 
 ## Keep one coherent design system
 
-- For Jarvis, first read `docs/agent-context.md` under **Jarvis control styling**
-  and the **Shared control geometry** contract in `DESIGN.md`. Reuse the existing
+- For Jarvis, use the [style guide](../../../docs/ui/style-guide.md#7-components-and-patterns-worth-copying)
+  and the [shared control geometry contract](../../../DESIGN.md#shared-control-geometry). Reuse the existing
   control radius and surface states across routes; no arbitrary action capsules,
   decorative coloured boxes, bevels or inset-shadow control borders. Preserve
   semantic shapes, neutral field/structural borders and visible keyboard focus.

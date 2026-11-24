@@ -24,7 +24,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 Build 128 found a local shop and correctly reported an empty 10 km search. Two follow-ups need a new build: choosing the closest named match beyond 10 km and reporting a completed lookup when reply writing fails. Also check the folding Home composer and the iPhone Voice speaker control on device. In a short and a long Voice panel, check the plain close button and both scroll edges.
 
-1. Check the project issue-to-worker flow, renaming an existing note and task reminder delivery in the shared conversation. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
+1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), test the daily core in Chat and Voice: check project status and the issue-to-worker flow for approved work; save, find and rename a note and check its iPhone folder without refreshing; create a task, check its reminder, then complete it; check workout and lift readback in Danish and English. When logging food, save one meal and verify that it counts once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
 2. On the next build, dictate a short phrase and then a longer message on Watch. Each Stop should put the transcript in the draft once. Start Voice from the Watch, confirm it reaches Listening and stays open, then listen to two complete replies on the Watch speaker and interrupt a third. On iPhone, verify that Voice leaves Speaking between replies.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. Check Directions for a genuine match. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
@@ -37,7 +37,7 @@ Build 128 found a local shop and correctly reported an empty 10 km search. Two f
 | | Decision | Next check |
 | --- | --- | --- |
 | **A · decided** | PI owns scheduled reviews; the legacy slot runner is gone. The separate legacy event consumer is not the PI queue path. | Verify capture and a qualifying follow-up in production. |
-| **B · decided** | Manual entry adds one meal with kcal and optional protein on iPhone. | Check that one save counts once and Today agrees with Chat for the same activity and meals. |
+| **B · decided** | Manual entry adds one meal with kcal and optional protein on iPhone. | Run the Nutrition check above. |
 | **C** | Keep the same stored conversation for Chat and Voice. Foundry controls context management on this endpoint. | Revisit configurable compaction when the [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview) supports it. |
 | **D** | P1-5: what could be removed from the PI instructions? | Dan owns the Foundry edit and activation. Keep the `KEEP THIS BLOCK` tool contract. |
 | **E** | Foundry administration is approved. | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) covers instructions, versions, activation, models and deployments. Live acceptance is open. |
@@ -54,31 +54,20 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Returning during a reply passed on build 125. Check failed, cancelled and superseded states in the separate reply test. |
-| [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed on build 125. The simulator shows one row at rest and the editor above the controls on focus. Check keyboard dismissal and draft retention on iPhone. |
+| [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed. Check rapid typing in a conversation with 100+ messages, focus, keyboard dismissal and draft retention. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Proactive settings and caption scrolling passed on build 125. The Voice activity label still needs a device retest. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Dictation works on build 126. Single-tap composer actions, audible replies and saved-turn recovery still need device verification. |
 | [#1971](https://github.com/DanAakesen/jarvis/issues/1971) — incremental refresh, search and delivery | Chat counts streamed bytes as they arrive. Busy Home briefs keep urgent tasks and upcoming meetings. Short citations preserve full Calendar event IDs within the existing model limits. Chat and Voice can return a local repository reader while GitHub tools load. Gmail refreshes unread membership each poll and reuses immutable message headers within the current authorization. Calendar covers the next 48 hours and Travel days 3–7. Paged reads keep one query through the result limit. Cross-poll Calendar sync remains open. |
 | [#2009](https://github.com/DanAakesen/jarvis/issues/2009) — Foundry administration | Ask “show my Foundry agents”, then read the serving version and its model. Verify a version change on a test agent when authorized. |
 | [#1972](https://github.com/DanAakesen/jarvis/issues/1972), [#1973](https://github.com/DanAakesen/jarvis/issues/1973) — verified dead code | Open. No broad deletion until the replacement and relevant contracts are qualified. |
 
-## Recently completed phase tasks
+## Phase task tracking
 
-Next available P15 task ID: `P15-212`. Check the plan, archive and GitHub issues before assigning it.
+Next available P15 task ID: `P15-212`. Check GitHub issues and Git history before assigning it.
 
-`Complete` means task delivery, not physical acceptance. Add new numbered tasks with the same columns; priority issues such as `P0: …` stay in the backlog above, not as invented task IDs.
+Use the table for active numbered work. `Complete` means task delivery, not physical acceptance. Keep any remaining device checks in the backlog above; completed tasks are in GitHub and Git history.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P15-143 | [#1834](https://github.com/DanAakesen/jarvis/issues/1834) | Cognitive lattice orb, opening screen and app icon (#1853) | Shared orb and opening design merged. | — | Complete |
-| P15-160 | [#1856](https://github.com/DanAakesen/jarvis/issues/1856) | Watch first-press dictation and voice (#1857) | Capture/start regressions addressed; later Watch acceptance tracked in #2006. | — | Complete |
-| P15-162 | [#1859](https://github.com/DanAakesen/jarvis/issues/1859) | Refresh the Watch steps complication (#1861) | Steps use the refreshed complication data path. | — | Complete |
-| P15-174 | [#1885](https://github.com/DanAakesen/jarvis/issues/1885) | Provision the PI agent, MCP and initial iOS Chat (#1890, #1897, #1898) | Managed harness provisioning and initial Chat path merged. | — | Complete |
-| P15-175 | [#1886](https://github.com/DanAakesen/jarvis/issues/1886) | Add PI reach, brain loop and standing watches (#1901, #1904, #1906) | Core reach and wake paths merged; subsequent decisions and live switch tracked separately. | — | Complete |
-| P15-180 | [#1894](https://github.com/DanAakesen/jarvis/issues/1894) | Redesign Notes and Tasks (#1899) | Native pages, note reader, editor and recovery merged. | — | Complete |
-| P15-183 | [#1920](https://github.com/DanAakesen/jarvis/issues/1920) | Set manual Notes folder order (#1921) | Owner's folder order persists rather than living only on one device. | — | Complete |
-| P15-186 | [#1924](https://github.com/DanAakesen/jarvis/issues/1924) | Design the 3D Vault graph (#1926, #1932) | Design and rendered graph merged. | — | Complete |
-| P15-187 | [#1925](https://github.com/DanAakesen/jarvis/issues/1925) | Design the Jarvis iPhone sheet and generated content (#1927, #1931, #1933, #1934) | Agreed handover; conversational blocks and Voice bottom panel merged. | — | Complete |
-| P15-195 | [#1940](https://github.com/DanAakesen/jarvis/issues/1940) | Make graph titles and links readable (#1948) | Long-title wrapping and clearer link lines merged. | — | Complete |
-| P15-200 | [#1945](https://github.com/DanAakesen/jarvis/issues/1945) | Focus the Watch active Voice view (#1946, #1952) | Watch Voice focus design and implementation merged. | — | Complete |
 
-[Plan status](.github/workflows/plan-status.yml) reconciles only this file's numbered rows. On a plan push or manual run it creates issues for new IDs and resolves `Depends on` by issue title against **all** GitHub issues, including closed ones. It does not need archived rows to find their issues. The archive is not a work queue; do not reuse its IDs. Keep the Issue/Status columns and issue checklist links to [Development workflow](docs/agent-context.md#development-workflow), [Start a task](docs/agent-context.md#start-a-task) and [Finish a task](docs/agent-context.md#finish-a-task) intact.
+[Plan status](.github/workflows/plan-status.yml) reconciles only numbered rows. On a plan push or manual run it creates issues for new IDs and resolves `Depends on` by issue title against **all** GitHub issues, including closed ones. Never reuse an ID. Keep the Issue/Status columns and issue checklist links to [Development workflow](docs/agent-context.md#development-workflow), [Start a task](docs/agent-context.md#start-a-task) and [Finish a task](docs/agent-context.md#finish-a-task) intact.

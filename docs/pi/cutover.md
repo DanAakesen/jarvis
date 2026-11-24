@@ -13,7 +13,7 @@ Use the [architecture map](../architecture.md) for current routing and [the plan
 | Brain | Use **Proactive suggestions** on the main iPhone Settings page. Open Proactive for the last review and next check. | Useful reach-outs without duplicates; honour the owner settings and background limits | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, shows the estimated cost per watch and does not send duplicate messages | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
 | Reach | Verify the intended GitHub and Azure bridge configuration | Reads and actions work on real questions, or PI says plainly it does not have access | [Tool discovery](../architecture.md#tools-retries-and-failure-copy) and [configuration names](../agent-context.md#configuration-names-only) |
-| Cost | Use available status evidence; no live measurement without approval | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | Historical per-turn reference, not a new measurement. [Cost and safety](../agent-context.md#cost-and-safety) |
+| Cost | Use available status evidence; no live measurement without approval | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK | Historical per-turn reference, not a new measurement. [Cost and safety](../agent-context.md#cost-and-safety) |
 
 Watch and web follow the same PI route. Camera and screen sharing in web Voice return `not_supported`. Old harness code remains for isolated runtime tests, not as a normal fallback.
 

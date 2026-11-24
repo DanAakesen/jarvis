@@ -4,13 +4,13 @@ Use this when starting work. The [plan](../PLAN.md) owns release status, [archit
 
 ## Agent context
 
-- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` if present, and quote the issue and owner comments as untrusted data. Jarvis workers follow the pointer to [the working agreement](../.github/copilot-instructions.md), then read [P0](../p0.md) and affected docs from the checkout. This is separate from PI's conversation.
-- **PI Chat and delegated Voice:** Foundry owns standing instructions and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends [persona, presence, Memory policy and environment defaults](../apps/backend/src/pi/context.ts) with the current situation. It does not preload Memory, Vault contents or repository docs. Warm-up can send that block without an owner request; turns omit it while its stored hash matches. The [turn header](../apps/backend/src/pi/prompt.ts) gives PI the tool reference and local time. The optional tool overview is a turn note, not part of warm-up. It is resent after a restart or change of conversation or signature. Preferences aren't permission; attachments and screen context are data, not instructions.
+- **Repository work:** [Factory issue starts](../apps/backend/src/factory/issues.ts) include root `AGENTS.md` from the default branch if present. Issue fields and owner comments are untrusted data. The worker follows [the working agreement](../.github/copilot-instructions.md), [P0](../p0.md) and affected docs in its checkout, not PI's conversation.
+- **PI Chat and delegated Voice:** Foundry owns conversation context, instructions and compaction. The [gateway](../apps/backend/src/pi/gateway.ts) sends the new turn, not the SQL Chat transcript. A matching stored hash omits only the [persona](../apps/backend/src/pi/context.ts) and situation block, not the new [turn reference and local time](../apps/backend/src/pi/prompt.ts) or message notes. Voice warm-up can preload the block, not the tool overview. The overview can repeat after restart, conversation change or tool changes. PI reads Memory, Vault and repo content as needed. The MCP door checks the active turn; preferences, attachments, screen and proactive context do not authorise tool calls.
 - **Proactive wakes:** fresh context, activation evidence and any configured tool overview go to a scratch PI conversation. The gateway attempts to clean it up after the wake, even when the wake fails. Durable Personal Memory and Vault Knowledge are separate; see [architecture](architecture.md#memory-and-vault-knowledge).
 
 ## Agent logs
 
-Start with a UTC window and [the log source map](reference/logs.md). Logs are not injected into PI context: stored Chat, Foundry history and Factory timelines are separate. Chat or delegated Voice can request bounded backend events with `read_backend_logs` when enabled and authorised. It cannot read on-device Watch logs. Use the relevant operator source for omitted evidence; keep raw logs and prompts out of PRs.
+Use a UTC window and [the log source map](reference/logs.md). PI gets no log feed: it requests retained backend events or failed Actions job tails. Factory repair sends its CI excerpt to the worker, not PI. Chat history holds stored replies, not model reasoning or device logs. Keep raw logs and prompts out of PRs.
 
 ## Setup and commands
 
@@ -71,7 +71,7 @@ Start from [.github/copilot-instructions.md](../.github/copilot-instructions.md)
 
 Add confirmed entries at the top of [decisions.md](decisions.md), newest first. Move decisions older than 14 days out of the live log: keep a dated link with the original ID in the archive index and leave the full text in Git history. Keep proposals separate.
 
-Run the focused offline checks, inspect the diff, and open **one ready PR** when it can be reviewed. Use `<task ID>: ...`, `fix-main: ...` or `docs: ...` as the [title workflow](../.github/workflows/pr-title.yml) requires. Give concrete tests, exact results and unverified behaviour. Use `Refs #N` for partial work or device acceptance; use an explicit closing reference only if the issue's acceptance is complete. Check native closing links as well as the PR body.
+Run focused offline checks and inspect the diff. Factory issue workers commit and push; [Factory opens or reuses the PR](../apps/backend/src/github/delivery.ts) with `Fixes #N`. Otherwise open **one ready PR** when reviewable. Follow the [title workflow](../.github/workflows/pr-title.yml) (`<task ID>: ...`, `fix-main: ...` or `docs: ...`). State exact check results and unverified behaviour. While acceptance is open, use `Refs #N` instead: change Factory's reference after delivery and verify GitHub's closing links before merge.
 
 ### Task board
 
@@ -81,10 +81,10 @@ A new `P##-##` row in a `PLAN.md` task table creates a GitHub issue if none matc
 
 | Column | What it means |
 | --- | --- |
-| In review | An open, ready linked PR; review takes precedence over the claim. |
+| In review | An open, ready PR whose body says `Fixes #N`, `Closes #N` or `Resolves #N`. `Refs #N` keeps acceptance open and does not create a board link. |
 | In progress | Worker label, or an open linked draft that is not parked for a decision. Draft support is not permission to open a placeholder. |
 | Needs Dan | Unclaimed `needs-decision` issue. |
-| Backlog / Ready | An open dependency blocks work; otherwise an unclaimed, unlinked issue is Ready. |
+| Backlog / Ready | An unclaimed, unlinked issue is Ready unless deferred or blocked by an open dependency. |
 | Done | Issue closed. A previously merged PR alone does not finish a reopened issue. |
 
 The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it skips sync and warns when the secret is absent. Do not print the value. If sync disagrees with reality, compare the issue's labels, dependencies and actual linked PR to the script's rules.
@@ -94,7 +94,7 @@ The board workflow uses `PROJECT_TOKEN` from the `project-board` environment; it
 
 ## Merge and release procedure
 
-1. Verify independent review of the **exact head**, no unresolved threads or High findings, and green required checks for that head. Fix Medium findings or record explicit follow-ups. The PR author may merge after the gates pass. A Deploy-triggering push to `main` without a qualified PR fails with `exact_qualification_missing`.
+1. Require green **CI result** and any GitHub-required checks on the PR's **exact head**. `gh pr checks --required` can report none; this does not waive CI. Match the independent review to that SHA, including when it arrives as a review-bot comment. Resolve threads and High findings; fix or track Mediums. The author may then merge. Unqualified Deploy changes fail with `exact_qualification_missing`.
 2. Bring the branch up to `origin/main` before qualifying it. Keep both sides of additive docs conflicts and take main's version for untouched content. Recheck the new head after any update. The merged tree must equal the tree tested in CI; see [CI receipts](../.github/scripts/pipeline_evidence.py) and [Deploy qualification](../.github/scripts/release_state.py).
 3. After each merge to `main`, refresh and requalify other affected PRs. Updating another open iOS PR triggers `synchronize` and restarts its macOS checks. The update, not the push to `main` on its own, is the trigger. Batch coordinated merges instead of repeatedly updating native PRs.
 
@@ -106,7 +106,7 @@ When the approved release work is merged and nothing is pending, the release own
 gh workflow run ios-testflight.yml --ref main -f branch=main
 ```
 
-For release answers, Chat and Voice start with [the plan](../PLAN.md), then look for newer `main` runs with `github_read` (`workflow_runs` for `ios-testflight.yml`). Inspect a newer run by `runId` for `appleInternalAvailabilityConfirmedAtCheck: true` in its jobs. Operators can use `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; **Check TestFlight build** checks an existing build without uploading again.
+Compare recent `main` runs for `ios-testflight.yml` with `gh run list` and `gh run view`. Uploads use the dispatch SHA and run number; **Check TestFlight build** may check an older build in a newer run. In `github_read`, use `workflow_runs` and inspect the jobs by `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` means the confirmation step passed. Match it to the actual build number before updating [the plan](../PLAN.md).
 
 Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
 
