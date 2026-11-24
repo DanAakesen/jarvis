@@ -6,7 +6,7 @@ System map from code and workflows, not a production readback. See [PLAN.md](../
 
 | Component | Where it lives | Responsibility |
 | --- | --- | --- |
-| iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and the shared `JarvisCore` package | Chat, Voice, local capture and native notifications. Watch has its own Chat and Voice views; dictation sends recorded audio to Azure Speech through the backend. The Speech SDK uses its Node WebSocket transport so its upgrade carries the bearer header. |
+| iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and the shared `JarvisCore` package | Chat, Voice, local capture and native notifications. Watch sends dictation to the backend directly with a dictation credential or via the iPhone. The backend Speech SDK uses its Node WebSocket transport to carry the bearer header to Azure Speech. |
 | Web | [apps/web](../apps/web), React, TypeScript, Vite | Browser UI, Entra sign-in, Chat and Voice. |
 | Backend | [apps/backend](../apps/backend), Node 22, TypeScript, Fastify | Auth, Chat, `/voice`, tools and their receipts, PI gateway, scheduled jobs and push. Shared schemas and failure copy live in [packages/contracts](../packages/contracts). |
 | Database | [Azure SQL schema and migrations](../db/README.md) | Chat history, owner settings, Personal Memory, Vault index, PI runs and situation, proactive queue, APNs registrations and delivery outboxes. The backend runs forward migrations before listening; preserve existing checksums and matching down batches. |
