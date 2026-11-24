@@ -14,8 +14,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Merged: Home, Calendar, Health, Notes, appearance and iPhone/Watch fixes. **Not accepted on device**. |
-| TestFlight | **128** is the [latest Apple-confirmed internal build](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). The combined release's [build 129 run](https://github.com/DanAakesen/jarvis/actions/runs/45417046936) was cancelled before Apple confirmation. |
+| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Merged, including the [Calendar and Health follow-up](https://github.com/DanAakesen/jarvis/pull/2074). **Not accepted on device**. |
+| TestFlight | **128** is the [latest Apple-confirmed internal build](https://github.com/DanAakesen/jarvis/actions/runs/45245270594). The combined release is not yet confirmed for internal testing. |
 | Backend | [Deploy for the combined release](https://github.com/DanAakesen/jarvis/actions/runs/45412673488) applied the backend and passed deterministic runtime readiness. Live conversation acceptance was skipped. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
@@ -29,7 +29,7 @@ Use the combined release once [Apple confirms internal availability](docs/agent-
 3. On iPhone, ask for a named store nearby, then explicitly ask for the nearest if the local search is empty. Check that the selected match and Directions are for the business. In Voice, ask when to leave for an event with an address and a ten-minute buffer. Compare the spoken estimate with the map card.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 5. After a scale reading appears in Apple Health, open Jarvis Health and compare the weight, body fat and measurement date. On Watch Home, scroll through all five sections and check the heading beside the clock in both directions.
-6. Check a Calendar edit from Home Schedule, a Notes folder move with a Markdown table edit, and appearance save/reset across the paired Watch. Verify the per-card colours and tinted complications remain legible.
+6. Edit an appointment from Home Schedule and compare its time in the grid and agenda. Verify Training shows the selected period and reports walks separately. Check a Notes folder move with a Markdown table edit, then save/reset appearance and check per-card colours and tinted Watch complications.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 

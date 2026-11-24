@@ -62,10 +62,10 @@ Circular complications draw their symbols and task count on a clear background. 
 ## Home, workspaces and utility pages
 
 - **Home** leads with the brief and Up Next. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. Each card can show data while another source is unavailable.
-- **Calendar** opens the day at 07:00 with ten hours in view. Scroll for earlier or later appointments. Day and Week share a time scale. Hold an appointment to move it or expand its agenda row to edit. Search and add stay in the footer.
+- **Calendar** opens the day at 07:00 with ten hours in view. Scroll for earlier or later appointments. Day and Week share a time scale; the grid, agenda and date headings use one time zone. Hold an appointment to move it or expand its agenda row to edit. Search and add stay in the footer.
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
 - **Factory** makes project/task status, next action and failure visible before auxiliary diagnostics. Keep task selection and actions scoped to the project; don't show a previous task's result while a new one loads.
-- **Health** stacks Training, Steps, Sleep and Nutrition. Each card owns its period. Tap a training day for sessions and expand Saved max lifts for personal records. Orange marks the main reading. Nutrition uses the same calorie allowance as Chat. Scan meal opens the camera and places the photo in the current Chat draft for Dan to send.
+- **Health** stacks Training, Steps, Sleep and Nutrition. Each card owns its period. Training shows its selected period once and lists walks separately when present. Tap a training day for sessions and expand Saved max lifts for personal records. Nutrition uses the same calorie allowance as Chat. Scan meal attaches a photo to the Chat draft without sending.
 - **Settings and status** show saved values, actionable errors and freshness without repeating status. In Appearance, shared glass colours apply unless a card has its own override. Keep the sign-in and lock cover in effect during a pending response.
 
 ## Acceptance
