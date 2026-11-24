@@ -9,16 +9,14 @@ struct WatchDashboardView: View {
     @State private var workoutRows: [[String: JSONValue]]?
     @State private var workoutReadAt: Date?
     @State private var workoutFailed = false
+    @State private var scrolledHeading: String?
+    @State private var atDashboardEnd = false
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        chatLink
-                        Spacer(minLength: 0)
-                        menuLink
-                    }
+                    dashboardActions
                     if loading && connection.dashboard == nil {
                         ProgressView("Loading dashboard").font(.caption)
                     }
@@ -74,6 +72,14 @@ struct WatchDashboardView: View {
                     }
                 }.padding(.horizontal, 4).padding(.bottom, 22)
             }
+            .coordinateSpace(name: "watch-dashboard")
+            .onPreferenceChange(DashboardScrolledHeading.self) { scrolledHeading = $0 }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                // The final section can be too short for its heading to reach the top.
+                geometry.visibleRect.minY > 0 && geometry.visibleRect.maxY >= geometry.contentSize.height - 1
+            } action: { _, atEnd in
+                atDashboardEnd = atEnd
+            }
             .task {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--watch-fixture"),
@@ -91,37 +97,47 @@ struct WatchDashboardView: View {
         .task(id: connection.reachable) { await refresh() }
         .task(id: connection.reachable) { await refreshWorkouts() }
         .refreshable { await refresh() }
-    }
-    private var chatLink: some View {
-        NavigationLink(value: WatchRoute.chat) {
-            HStack(spacing: 4) {
-                WatchOrb().frame(width: 22, height: 22)
-                if !typeSize.isAccessibilitySize {
-                    Text(voiceActive ? "Resume" : "Chat")
-                        .font(.subheadline.weight(.semibold)).lineLimit(1)
+        .toolbar {
+            if let title = atDashboardEnd ? "Recent Notes" : scrolledHeading {
+                ToolbarItem(placement: .topBarLeading) {
+                    Text(LocalizedStringKey(title))
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .accessibilityAddTraits(.isHeader)
                 }
             }
-            .padding(.horizontal, 6)
-            .frame(minWidth: 44, minHeight: 44)
-            .watchGlass(in: Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(voiceActive ? "Resume voice" : "Chat")
     }
-
-    private var menuLink: some View {
-        NavigationLink(value: WatchRoute.menu) {
-            HStack(spacing: 4) {
-                Image(systemName: "square.grid.2x2")
-                if !typeSize.isAccessibilitySize { Text("Menu").lineLimit(1) }
+    private var dashboardActions: some View {
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        return layout {
+            NavigationLink(value: WatchRoute.chat) {
+                HStack(spacing: 4) {
+                    WatchOrb().frame(width: 22, height: 22)
+                    Text(voiceActive ? "Resume" : "Chat")
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(WatchStyle.amber)
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
+            .accessibilityLabel(voiceActive ? "Resume voice" : "Chat")
+            Rectangle()
+                .fill(.secondary.opacity(0.35))
+                .frame(width: stacked ? nil : 1, height: stacked ? 1 : 18)
+                .accessibilityHidden(true)
+            NavigationLink(value: WatchRoute.menu) {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.2x2").foregroundStyle(WatchStyle.amber)
+                    Text("Menu")
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
         }
+        .font(.system(.subheadline, design: .rounded, weight: .semibold))
         .buttonStyle(.plain)
-        .accessibilityLabel("Menu")
+        .modifier(WatchSurface(radius: 16))
     }
 
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {
@@ -271,12 +287,26 @@ enum WatchBodyFatSummary {
     }
 }
 
+private struct DashboardScrolledHeading: PreferenceKey {
+    static let defaultValue: String? = nil
+
+    static func reduce(value: inout String?, nextValue: () -> String?) {
+        if let next = nextValue() { value = next }
+    }
+}
+
 struct WatchDashboardHeading: View {
     let title: String
     var body: some View {
         Text(LocalizedStringKey(title))
             .font(.system(.headline, design: .rounded))
             .accessibilityAddTraits(.isHeader)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: DashboardScrolledHeading.self,
+                        value: geometry.frame(in: .named("watch-dashboard")).maxY <= 0 ? title : nil)
+                }
+            }
     }
 }
 

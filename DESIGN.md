@@ -45,7 +45,9 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Watch
 
-The dashboard opens with Chat (or Resume voice) and a labelled Menu on one row when they fit, leaving the next event visible. The system owns the clock and Back area. Whole section headings open their details. Menu uses labelled symbol tiles that adapt to text size. Agenda and Notes show each date once. Factory groups work by status and opens long titles on tap. Home uses the Today screen’s amber accent for Up Next and the Log lift action.
+Chat (or Resume) and Menu share a slim gradient surface aligned with Up Next. Each gets half the row and a full tap target. At accessibility text sizes the actions stack. As a section heading scrolls out of view, its name appears at the leading edge of the toolbar beside the system clock. At the bottom, the title is Recent Notes. Whole section headings open their details.
+
+Menu uses labelled symbol tiles that adapt to text size. Agenda and Notes show each date once. Factory groups work by status and opens long titles on tap. Home uses the Today screen’s amber accent for Up Next and the Log lift action.
 
 Keep one Chat entry point. When reading history, collapse the composer to **Reply** only if it will not interrupt a draft, dictation or a call. **Reply** reopens the composer. At rest show Message, dictation and the Voice orb. Dictation appends to the editable Chat draft. An empty composer takes one control row. The draft wraps to at most three lines. With text, Send replaces both audio controls beside the draft. Send, Dictate and Voice each use their full 44 × 44 pt tap area. Tapping the field opens native editing directly. Give transient status its own space above the action row.
 
