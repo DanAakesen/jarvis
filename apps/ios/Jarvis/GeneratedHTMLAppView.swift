@@ -75,8 +75,10 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
         webView.scrollView.backgroundColor = .clear
         if voiceStyle != nil {
             webView.scrollView.contentInsetAdjustmentBehavior = .never
-            webView.scrollView.contentInset.top = JarvisDesignTokens.controlMinimumHeight
-            webView.scrollView.verticalScrollIndicatorInsets.top = JarvisDesignTokens.controlMinimumHeight
+            let inset = JarvisDesignTokens.voicePanelEdgeInset
+            webView.scrollView.contentInset = UIEdgeInsets(top: inset, left: 0, bottom: inset, right: 0)
+            webView.scrollView.verticalScrollIndicatorInsets = webView.scrollView.contentInset
+            webView.scrollView.setContentOffset(CGPoint(x: 0, y: -inset), animated: false)
         }
         return webView
     }

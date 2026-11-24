@@ -273,6 +273,7 @@ struct JarvisIconButton: View {
     var tint: Color?
     var hint = ""
     var isCompact = false
+    var showsBackground = true
     let action: () -> Void
 
     var body: some View {
@@ -295,7 +296,7 @@ struct JarvisIconButton: View {
                 glyph
             }
         }
-        .jarvisControlChrome(isCompact: isCompact)
+        .jarvisControlChrome(showsBackground: showsBackground && !isCompact)
         .disabled(isDisabled || isBusy)
         .accessibilityLabel(title)
         .accessibilityHint(hint)
@@ -1053,8 +1054,8 @@ private extension View {
     /// In a toolbar the item must also hide the system container (`sharedBackgroundVisibility(.hidden)`), or the
     /// system draws a second glass around this one.
     @ViewBuilder
-    func jarvisControlChrome(isCompact: Bool = false) -> some View {
-        if isCompact {
+    func jarvisControlChrome(showsBackground: Bool = true) -> some View {
+        if !showsBackground {
             buttonStyle(.plain)
         } else {
             buttonStyle(.plain)

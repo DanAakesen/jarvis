@@ -337,7 +337,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 return
             }
             eventDeliveryAttempts.removeValue(forKey: item.event.deliveryID)
-            if item.event.kind == .voiceState, let id = voiceID, item.event.requestID == id {
+            // Only the playback boundary needs its receipt to advance the audio protocol.
+            // A missing Connecting/Listening label must not tear down a working call.
+            if item.event.marksPlaybackEnd, let id = voiceID, item.event.requestID == id {
                 Task { if self.voiceID == id { await self.stopVoice(audioLinkStalled: true) } }
             } else if item.event.kind != .voiceState {
                 // The saved turn replaces partial captions when the Watch reloads history.
@@ -619,18 +621,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard !stoppingVoice,
                   VoiceLiveActivityActions.session?.liveActivitySessionID == nil else { throw WatchFailure.busy }
             guard cancelledVoiceStarts.remove(r.id) == nil else { throw WatchFailure.unavailable }
-            let id = r.id; voiceID = id; lastVoiceContact = Date()
+            let id = r.id; voiceID = id
             voicePlaybackPipelined = r.flag == true
             voiceAudioSequence = WatchVoiceSequence(streamID: r.flag == true ? r.id : nil)
             voiceSequenceDrops = 0; voiceSequenceGaps = 0; voiceSequenceLog = Date()
             playbackFailureSince = nil; lastPlaybackFailure = nil; lastPlaybackLog = Date(); playbackDrops = 0
-            voiceWatchdog = Task { [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(5))
-                    guard let self, !Task.isCancelled, self.voiceID == id else { return }
-                    if Date().timeIntervalSince(self.lastVoiceContact) > 15 { await self.stopVoice(); return }
-                }
-            }
             let session = VoiceSessionClient(
                 baseURL: try JarvisComposition.apiBaseURL(),
                 transport: URLSessionWebSocketTransport(),
@@ -668,6 +663,15 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 try? liveActivity.start(sessionID: id)
             }
             catch { await stopVoice(); throw error }
+            // The Watch starts sending audio and heartbeats only after it receives this reply.
+            lastVoiceContact = Date()
+            voiceWatchdog = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(5))
+                    guard let self, !Task.isCancelled, self.voiceID == id else { return }
+                    if Date().timeIntervalSince(self.lastVoiceContact) > 15 { await self.stopVoice(); return }
+                }
+            }
             return try encode(id)
         case .voiceHeartbeat:
             guard let id = r.itemID.flatMap(UUID.init(uuidString:)),

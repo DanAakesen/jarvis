@@ -3,6 +3,15 @@ import XCTest
 @testable import JarvisCore
 
 final class WatchVoiceTransportTests: XCTestCase {
+    func testLosingAConnectingLabelIsNotLosingAPlaybackBoundary() {
+        let id = UUID()
+        for state in ["Connecting", "Listening", "Speaking", "Thinking", "Reconnecting", "Muted"] {
+            XCTAssertFalse(WatchEvent(.voiceState, requestID: id, text: state).marksPlaybackEnd)
+        }
+        XCTAssertTrue(WatchEvent(.voiceState, requestID: id, text: "Playback finished", responseID: "reply").marksPlaybackEnd)
+        XCTAssertFalse(WatchEvent(.voiceTranscript, requestID: id, text: "Playback finished").marksPlaybackEnd)
+    }
+
     func testSequenceAcceptsGapsAndRejectsDuplicatesAndLatePackets() {
         var sequence = WatchVoiceSequence()
         XCTAssertTrue(sequence.accept(0))
@@ -91,9 +100,10 @@ final class WatchVoiceTransportTests: XCTestCase {
         var handler: ((VoicePlaybackLedger.Receipt) -> Void)?
         var attempts = 0
         var resets = 0
-        try await WatchVoiceRecovery.startCapture(isCurrent: { true }, start: {
+        try await WatchVoiceRecovery.startCapture(isCurrent: { true }, start: { attempt in
             attempts += 1
-            if attempts == 1 { throw WatchFailure.unavailable }
+            XCTAssertEqual(attempt, attempts)
+            if attempt == 1 { throw WatchFailure.unavailable }
         }, onFailure: { _, _ in
             resets += 1
             // A stopped audio engine clears pending playback and its completion handler.
@@ -122,7 +132,7 @@ final class WatchVoiceTransportTests: XCTestCase {
         var current = true
         var attempts = 0
         do {
-            try await WatchVoiceRecovery.startCapture(isCurrent: { current }, start: {
+            try await WatchVoiceRecovery.startCapture(isCurrent: { current }, start: { _ in
                 attempts += 1
                 throw WatchFailure.unavailable
             }, onFailure: { _, _ in }, onReady: {
@@ -137,7 +147,7 @@ final class WatchVoiceTransportTests: XCTestCase {
     func testCaptureRecoveryExhaustsRetriesWithoutReportingReady() async {
         var failedAttempts: [Int] = []
         do {
-            try await WatchVoiceRecovery.startCapture(isCurrent: { true }, start: {
+            try await WatchVoiceRecovery.startCapture(isCurrent: { true }, start: { _ in
                 throw WatchFailure.unavailable
             }, onFailure: { attempt, _ in failedAttempts.append(attempt) }, onReady: {
                 XCTFail("An unavailable microphone must not be reported ready")

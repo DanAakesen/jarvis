@@ -19,6 +19,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var captureDropCount = 0
     private var playbackLedger = VoicePlaybackLedger()
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
+    private var playbackActivityChanged: (@Sendable () -> Void)?
+    var isPlayingSpeech: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return playbackLedger.isPlayingSpeech
+    }
     private var hasCaptureTap = false
     private var hasPlaybackGraph = false
     private var ownsActiveSession = false
@@ -115,8 +121,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         guard AVAudioSession.sharedInstance().isInputAvailable else { throw VoiceAudioEngineError.captureUnavailable }
         if requestsVoiceProcessing && mode == .voiceChat {
             // Switch the stopped I/O graph before connecting the speaker or negotiating the microphone format.
-            do { try engine.inputNode.setVoiceProcessingEnabled(true) }
-            catch { log.notice("Voice processing unavailable on this audio route: \(String(describing: error), privacy: .public)") }
+            try engine.inputNode.setVoiceProcessingEnabled(true)
         }
         #endif
         if !hasPlaybackGraph {
@@ -190,10 +195,11 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return !engine.isRunning || captureRoute != Route()
     }
 
-    func recoverRoute() throws {
+    func recoverRoute(attempt: Int) throws {
         controlLock.lock()
         defer { controlLock.unlock() }
         guard !engine.isRunning || captureRoute != Route() else { return }
+        if attempt > 1 { requestsVoiceProcessing = false }
         try restartInput(mode: activeMode)
     }
 
@@ -314,8 +320,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return captureDropCount
     }
 
-    func setPlaybackFinishedHandler(_ handler: @escaping @Sendable (String, Bool) -> Void) {
+    func setPlaybackFinishedHandler(activityChanged: (@Sendable () -> Void)? = nil, _ handler: @escaping @Sendable (String, Bool) -> Void) {
         lock.lock()
+        playbackActivityChanged = activityChanged
         playbackFinished = handler
         lock.unlock()
     }
@@ -333,15 +340,19 @@ final class VoiceAudioEngine: @unchecked Sendable {
             throw VoiceAudioEngineError.playbackUnavailable
         }
         buffer.frameLength = frameCount
+        var peak: UInt16 = 0
         for frame in 0..<Int(frameCount) {
             let offset = frame * 2
             let sample = UInt16(bytes[offset]) | UInt16(bytes[offset + 1]) << 8
-            channel[frame] = Float(Int16(bitPattern: sample)) / Float(Int16.max)
+            let pcm = Int16(bitPattern: sample)
+            peak = max(peak, pcm.magnitude)
+            channel[frame] = Float(pcm) / Float(Int16.max)
         }
         let sequence = responseID.map { responseID in
             lock.lock()
             defer { lock.unlock() }
-            return playbackLedger.bufferScheduled(responseID: responseID)
+            // Ignore digital silence and near-silent PCM below about -60 dBFS for the Speaking indicator.
+            return playbackLedger.bufferScheduled(responseID: responseID, containsSpeech: peak > 32)
         }
         player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
             if let sequence { self?.bufferPlayed(sequence) }
@@ -369,11 +380,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     private func drainPlayback() {
-        player.stop()
+        if hasPlaybackGraph { player.stop() }
         lock.lock()
+        let changed = playbackLedger.isPlayingSpeech ? playbackActivityChanged : nil
         let receipts = playbackLedger.playbackStopped()
         let handler = playbackFinished
         lock.unlock()
+        changed?()
         for receipt in receipts { handler?(receipt.responseID, receipt.audible) }
     }
 
@@ -382,12 +395,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
         defer { controlLock.unlock() }
         generation.end()
         stopCaptureGraph()
-        player.stop()
+        if hasPlaybackGraph { player.stop() }
         lock.lock()
         captureContinuation?.finish()
         captureContinuation = nil
         _ = playbackLedger.playbackStopped()
         playbackFinished = nil
+        playbackActivityChanged = nil
         converter = nil
         lock.unlock()
         if ownsActiveSession {
@@ -487,9 +501,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
 
     private func bufferPlayed(_ sequence: Int) {
         lock.lock()
+        let wasPlayingSpeech = playbackLedger.isPlayingSpeech
         let receipts = playbackLedger.bufferPlayed(sequence)
+        let changed = wasPlayingSpeech != playbackLedger.isPlayingSpeech ? playbackActivityChanged : nil
         let handler = playbackFinished
         lock.unlock()
+        changed?()
         for receipt in receipts { handler?(receipt.responseID, receipt.audible) }
     }
 }

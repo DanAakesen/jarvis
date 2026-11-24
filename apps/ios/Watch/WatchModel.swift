@@ -424,7 +424,11 @@ final class WatchModel: ObservableObject {
         } catch {
             guard epoch == voiceGeneration, !endingVoice else { return }
             setVoiceFailure(error)
-            await endVoice(captureEndReason: "startup_failed")
+            guard let pendingID = voiceID else { return }
+            stopLocalVoice(state: "Disconnected", captureEndReason: "startup_failed")
+            // Release a call the phone may have started before its acknowledgement was lost.
+            _ = try? await connection.request(.init(action: .endVoice, itemID: pendingID.uuidString),
+                                              waitForReadiness: false, timeout: .seconds(2))
         }
     }
     func startDictation() async {
@@ -631,9 +635,11 @@ final class WatchModel: ObservableObject {
         forVoice: Bool,
         onReady: @MainActor @Sendable () -> Void = {}, isCurrent: @MainActor @Sendable () -> Bool
     ) async throws -> AsyncStream<Data> {
-        try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: {
+        try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: { attempt in
+            // A route can reject the processed graph at engine.start(), after accepting the I/O change.
             try audio.startCapture(tolerateDrops: forVoice, mode: forVoice ? .voiceChat : .default,
-                                   alternateMode: forVoice ? .default : .voiceChat, useVoiceProcessing: forVoice)
+                                   alternateMode: forVoice ? .default : .voiceChat,
+                                   useVoiceProcessing: forVoice && attempt == 1)
         }, onFailure: { attempt, error in
             audio.stop()
             voiceLogger.error("Audio capture start failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
@@ -733,8 +739,8 @@ final class WatchModel: ObservableObject {
                 }
                 self.repairingAudio = true
                 self.voiceLogger.info("Audio route recovery: reason=\(reason.map { String($0) } ?? "engine_configuration", privacy: .public)")
-                try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: {
-                    try self.audio.recoverRoute()
+                try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: { attempt in
+                    try self.audio.recoverRoute(attempt: attempt)
                 }, onFailure: { attempt, error in
                     self.voiceLogger.error("Audio route restart failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
                 })
@@ -832,7 +838,7 @@ final class WatchModel: ObservableObject {
                     audioFailure = .init(message: "The voice connection to the iPhone ended.", action: .voice)
                 }
             }
-            else if event.text == "Playback finished" { audio.finishPlayback(responseID: event.responseID) }
+            else if event.marksPlaybackEnd { audio.finishPlayback(responseID: event.responseID) }
             else { voiceState = event.text ?? "" }
         case .voiceAudio:
             guard !endingVoice, !repairingAudio else { return }

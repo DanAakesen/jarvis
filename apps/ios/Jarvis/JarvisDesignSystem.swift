@@ -70,6 +70,7 @@ enum JarvisDesignTokens {
     static let liveActivityStone = Color(red: 201 / 255, green: 191 / 255, blue: 174 / 255)
     static let contentInset: CGFloat = 20
     static let contentSpacing: CGFloat = 16
+    static let voicePanelEdgeInset: CGFloat = 14
     static let rowSpacing: CGFloat = 12
     static let compactSpacing: CGFloat = 4
     static let iconLabelSpacing: CGFloat = 6

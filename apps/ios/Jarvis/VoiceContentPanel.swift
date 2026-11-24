@@ -9,6 +9,7 @@ struct VoiceContentSlot: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isExpanded = false
+    @State private var summaryHeight: CGFloat?
 
     private var hasVisuals: Bool { runtime.voiceVisuals?.selectedID != nil }
 
@@ -18,7 +19,9 @@ struct VoiceContentSlot: View {
                 VoiceVisualCarousel(runtime: runtime, language: language, isExpanded: false, isActive: !isExpanded) {
                     setExpanded(true)
                 }
-                .frame(height: maximumHeight)
+                // A single short text result leaves room for captions above the panel.
+                .frame(height: min(maximumHeight, summaryHeight.map { $0 + JarvisDesignTokens.iconButtonDiameter } ?? maximumHeight))
+                .onPreferenceChange(VoiceSummaryHeight.self) { summaryHeight = $0 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
@@ -50,6 +53,13 @@ struct VoiceContentSlot: View {
     }
 }
 
+private struct VoiceSummaryHeight: PreferenceKey {
+    static var defaultValue: CGFloat? { nil }
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
+        if let height = nextValue() { value = height }
+    }
+}
+
 private struct VoiceVisualCarousel: View {
     @ObservedObject var runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
@@ -73,7 +83,7 @@ private struct VoiceVisualCarousel: View {
                     set: { if isActive, let id = $0 { runtime.selectVoiceVisual(id) } }
                 )) {
                     ForEach(entries) { visual in
-                        VoiceVisualPage(presented: visual, runtime: runtime, language: language, inset: inset)
+                        VoiceVisualPage(presented: visual, runtime: runtime, language: language, inset: inset, measuresSummary: !isExpanded && entries.count == 1)
                             .tag(visual.id)
                     }
                 }
@@ -111,7 +121,7 @@ private struct VoiceVisualCarousel: View {
                     }
             )
             .padding(.horizontal, JarvisDesignTokens.controlMinimumHeight)
-            JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark", identifier: "voice.panel.close") {
+            JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark", identifier: "voice.panel.close", showsBackground: false) {
                 runtime.userDismissedView()
             }
         }
@@ -153,9 +163,18 @@ private struct VoiceVisualPage: View {
     let runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
     let inset: CGFloat
+    let measuresSummary: Bool
 
     @Environment(\.openURL) private var openURL
     @State private var notice: String?
+
+    private var fitsSummary: Bool {
+        guard measuresSummary else { return false }
+        switch presented.view {
+        case .text, .detail, .list, .status: return true
+        default: return false
+        }
+    }
 
     private var title: String? {
         switch presented.view {
@@ -167,7 +186,7 @@ private struct VoiceVisualPage: View {
     var body: some View {
         GeometryReader { geometry in
             content(htmlHeight: max(
-                JarvisDesignTokens.controlMinimumHeight, geometry.size.height - 2 * JarvisDesignTokens.compactSpacing
+                JarvisDesignTokens.controlMinimumHeight, geometry.size.height
             ))
         }
     }
@@ -199,10 +218,31 @@ private struct VoiceVisualPage: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, inset)
-            .padding(.vertical, JarvisDesignTokens.compactSpacing)
+            .padding(.vertical, usesWebScrolling ? 0 : JarvisDesignTokens.voicePanelEdgeInset)
+            .background {
+                if fitsSummary {
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: VoiceSummaryHeight.self, value: ceil(proxy.size.height))
+                    }
+                }
+            }
         }
         .scrollBounceBehavior(.basedOnSize)
+        .mask {
+            VStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                    .frame(height: JarvisDesignTokens.voicePanelEdgeInset)
+                Rectangle().fill(.black)
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: JarvisDesignTokens.voicePanelEdgeInset)
+            }
+        }
         .onChange(of: presented.view) { _, _ in notice = nil }
+    }
+
+    private var usesWebScrolling: Bool {
+        if case .htmlApp = presented.view { return true }
+        return false
     }
 
     @ViewBuilder

@@ -2,6 +2,32 @@ import XCTest
 @testable import JarvisCore
 
 final class VoicePlaybackLedgerTests: XCTestCase {
+    func testSpeakingFollowsThePlayingBufferBeforeTheRelayCompletes() {
+        var ledger = VoicePlaybackLedger()
+        let silence = ledger.bufferScheduled(responseID: "a", containsSpeech: false)
+        let spoken = ledger.bufferScheduled(responseID: "a", containsSpeech: true)
+        let tail = ledger.bufferScheduled(responseID: "a", containsSpeech: false)
+        XCTAssertFalse(ledger.isPlayingSpeech)
+        XCTAssertEqual(ledger.bufferPlayed(silence), [])
+        XCTAssertTrue(ledger.isPlayingSpeech)
+        XCTAssertEqual(ledger.bufferPlayed(spoken), [])
+        XCTAssertFalse(ledger.isPlayingSpeech)
+        XCTAssertEqual(ledger.bufferPlayed(tail), [])
+        XCTAssertEqual(ledger.responseFinished(responseID: "a"), .init(responseID: "a", audible: true))
+    }
+
+    func testInterruptedSpeechDoesNotRelightOnAnOldPlaybackCallback() {
+        var ledger = VoicePlaybackLedger()
+        let interrupted = ledger.bufferScheduled(responseID: "a")
+        _ = ledger.playbackStopped()
+        let silence = ledger.bufferScheduled(responseID: "b", containsSpeech: false)
+        ledger.bufferScheduled(responseID: "b")
+        _ = ledger.bufferPlayed(interrupted)
+        XCTAssertFalse(ledger.isPlayingSpeech)
+        _ = ledger.bufferPlayed(silence)
+        XCTAssertTrue(ledger.isPlayingSpeech)
+    }
+
     func testAFinishedResponseIsReportedOnceWhenItsLastBufferHasPlayed() {
         var ledger = VoicePlaybackLedger()
         let first = ledger.bufferScheduled(responseID: "a")

@@ -61,6 +61,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var connectionPresentationMachine = VoiceConnectionPresentationStateMachine()
     private var isEnding = false
     private var screenshotState: VoiceSessionState?
+    private var sessionReportsSpeech = false
+    private var relayThinking = false
 
     init(screenshotConnectionLost: Bool = false) {
         self.screenshotConnectionLost = screenshotConnectionLost
@@ -251,6 +253,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             guard sessionGeneration == generation else { return }
             let baseURL = try JarvisComposition.apiBaseURL()
             self.httpClient = httpClient
+            sessionReportsSpeech = false
+            relayThinking = false
             self.audio = VoiceAudioEngine()
             let audio = self.audio
             let client = VoiceSessionClient(
@@ -270,7 +274,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     }
                 }
             )
-            audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
+            audio.setPlaybackFinishedHandler(activityChanged: { [weak self] in
+                Task { @MainActor in
+                    guard let self, self.sessionGeneration == generation else { return }
+                    self.updateSpeechPresentation()
+                }
+            }) { [weak self] responseID, audible in
                 Task { @MainActor in
                     guard let self, self.sessionGeneration == generation else { return }
                     try? await client.playbackCompleted(responseID: responseID, audible: audible)
@@ -661,8 +670,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         case .responseCreated(let responseID, _):
             captions.receive(message)
             activeResponseID = responseID
-        case .activity:
-            break
+        case .activity(let activity):
+            relayThinking = activity == .thinking
+            updateSpeechPresentation()
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
             updateLiveStream()
@@ -687,6 +697,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             mapSpeech.stop()
             do {
                 try audio.enqueuePlayback(base64, responseID: responseID)
+                updateSpeechPresentation()
                 if let pcm16 = try? VoiceAudioCodec.decodePCM16(base64) {
                     liveActivity.update(state: voiceState, isMuted: isMuted, pcm16: pcm16)
                 }
@@ -824,7 +835,20 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isAudioReady = false
     }
 
+    private func updateSpeechPresentation() {
+        guard sessionReportsSpeech, !isEnding else { return }
+        let next: VoiceSessionState = audio.isPlayingSpeech ? .speaking : (relayThinking ? .thinking : .listening)
+        guard voiceState != next else { return }
+        voiceState = next
+        liveActivity.update(state: next, isMuted: isMuted)
+    }
+
     private func receiveSessionState(_ state: VoiceSessionState) {
+        sessionReportsSpeech = state == .speaking
+        if sessionReportsSpeech {
+            updateSpeechPresentation()
+            return
+        }
         switch state {
         case .thinking, .listening:
             connectionPresentationState = connectionPresentationMachine.apply(.connected)
