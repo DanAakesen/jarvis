@@ -26,6 +26,7 @@ struct JarvisHealthCards<Lifts: View>: View {
     @State private var captureError: String?
     @State private var mealReceipt: JarvisManualMeal?
 
+    @Environment(\.dynamicTypeSize) private var typeSize
     private let accent = JarvisDesignTokens.healthAccent
     private let secondary = JarvisDesignTokens.healthAccentSecondary
     private func period(_ value: JarvisHealthPeriodPreset) -> JarvisHealthPeriod {
@@ -43,6 +44,8 @@ struct JarvisHealthCards<Lifts: View>: View {
     private func duration(_ hours: Double?) -> String {
         guard let hours else { return "—" }
         let mins = Int((hours * 60).rounded())
+        if mins < 60 { return "\(mins)m" }
+        if mins.isMultiple(of: 60) { return "\(mins / 60)h" }
         return "\(mins / 60)h \(mins % 60)m"
     }
 
@@ -58,20 +61,20 @@ struct JarvisHealthCards<Lifts: View>: View {
             }.environment(\.jarvisCardRole, "steps")
             JarvisPageHeroCard(title: "Sleep", accessory: { range($sleep, "sleep") }) {
                 sleepSummary
-            }.environment(\.jarvisCardRole, "sleep").accessibilityIdentifier("health.hero.sleep")
+            }.environment(\.jarvisCardRole, "sleep").accessibilityIdentifier("health.hero.sleep").id("sleep")
             JarvisPageHeroCard(title: "Nutrition", accessory: { range($nutrition, "nutrition") }) {
                 nutritionSummary
-                HStack {
-                    Spacer(minLength: 0)
+                let mealLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
+                mealLayout {
                     JarvisLabelledButton(title: "Log meal", systemImage: "plus", identifier: "health.nutrition.add",
-                        isDisabled: client == nil, isCompact: true) { showingMeal = true }
-                    JarvisLabelledButton(title: "Scan meal", systemImage: "camera", isDisabled: onPhoto == nil,
-                        isCompact: true) { Task { await openCamera() } }
-                    Spacer(minLength: 0)
-                }
+                        isDisabled: client == nil) { showingMeal = true }
+                    JarvisLabelledButton(title: "Scan meal", systemImage: "camera", isDisabled: onPhoto == nil) {
+                        Task { await openCamera() }
+                    }
+                }.frame(maxWidth: .infinity).padding(.top, 4)
                 if let captureError { Text(captureError).font(.footnote) }
                 if let mealReceipt { Text("\(number(mealReceipt.energyKcal)) kcal logged").font(.footnote).accessibilityIdentifier("health.nutrition.saved") }
-            }.environment(\.jarvisCardRole, "nutrition").accessibilityIdentifier("health.hero.nutrition")
+            }.environment(\.jarvisCardRole, "nutrition").accessibilityIdentifier("health.hero.nutrition").id("nutrition")
         }
         .onChange(of: training) { _, _ in selectedDay = nil }
         .sheet(isPresented: $showingMeal) {
@@ -113,7 +116,7 @@ struct JarvisHealthCards<Lifts: View>: View {
     }
     private func sum(_ rows: [[String: JSONValue]], energy: Bool) -> Double? {
         let values = rows.compactMap { metric($0, energy: energy) }
-        return values.count == rows.count ? values.reduce(0, +) : nil
+        return values.isEmpty && !rows.isEmpty ? nil : values.reduce(0, +)
     }
 
     private var trainingSummary: some View {
@@ -130,10 +133,9 @@ struct JarvisHealthCards<Lifts: View>: View {
         let grouped = Dictionary(grouping: workouts) { day($0) ?? "" }
         let days = JarvisHealthChartValues(values: [:], endingOn: window.endDate, count: window.dayCount, target: nil).days
         return VStack(alignment: .leading, spacing: 12) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top) { trainingMetrics(counts, workouts, readable) }
-                VStack(alignment: .leading) { trainingMetrics(counts, workouts, readable) }
-            }
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .top, spacing: 8))
+            layout { trainingMetrics(counts, workouts, readable) }
+            Divider()
             if readable {
                 let walks = rows.filter {
                     ["walk", "walking", "52", "healthkit52"].contains(JarvisHealthLogic.normalizedWorkoutType($0["workout_type"]?.stringValue))
@@ -143,7 +145,16 @@ struct JarvisHealthCards<Lifts: View>: View {
                     Spacer()
                     if walks > 0 { Text(walks == 1 ? "Includes 1 walk" : "Includes \(walks) walks") }
                 }.font(.footnote).foregroundStyle(.secondary)
-                Text("Training minutes").font(.subheadline.weight(.semibold))
+                HStack {
+                    Text("Training minutes").font(.subheadline.weight(.semibold))
+                    Spacer()
+                    ForEach(["Gym", "Run"], id: \.self) { kind in
+                        HStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 2).fill(kind == "Gym" ? accent : secondary).frame(width: 7, height: 7)
+                            Text(kind).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Chart {
                     ForEach(days) { item in
                         ForEach(["Gym", "Run"], id: \.self) { kind in
@@ -154,11 +165,19 @@ struct JarvisHealthCards<Lifts: View>: View {
                                     .opacity(selectedDay == nil || selectedDay == item.date ? 1 : 0.45)
                             }
                         }
+                        if days.count <= 7, let minutes = sum(grouped[item.date] ?? [], energy: false), minutes > 0 {
+                            PointMark(x: .value("Day", item.date), y: .value("Minutes", minutes))
+                                .symbolSize(0).annotation(position: .top, spacing: 2) {
+                                    Text(number(minutes)).font(.caption2.weight(.medium))
+                                }
+                        }
                     }
                 }
+                .chartLegend(.hidden)
+                .chartXScale(domain: days.map(\.date))
                 .chartForegroundStyleScale(["Gym": accent, "Run": secondary])
                 .chartXAxis { AxisMarks(values: stride(from: 0, to: days.count, by: max(1, (days.count + 6) / 7)).map { days[$0].date }) { value in
-                    if let key = value.as(String.self) { AxisValueLabel(String(key.suffix(2))) }
+                    if let key = value.as(String.self) { AxisValueLabel(JarvisHealthBarChart.dayLabel(key, language: language, dense: days.count > 7)) }
                 } }
                 .chartXSelection(value: $selectedDay)
                 .frame(height: 128)
@@ -177,9 +196,15 @@ struct JarvisHealthCards<Lifts: View>: View {
     }
 
     @ViewBuilder private func trainingMetrics(_ counts: String, _ rows: [[String: JSONValue]], _ readable: Bool) -> some View {
-        JarvisHealthHeroStat(value: counts, title: "Workouts completed").foregroundStyle(accent)
-        JarvisHealthHeroStat(value: number(readable ? sum(rows, energy: false) : nil), title: "Workout minutes")
-        JarvisHealthHeroStat(value: number(readable ? sum(rows, energy: true) : nil), title: "Active kcal burned").foregroundStyle(secondary)
+        JarvisHealthHeroStat(value: counts, title: counts.replacingOccurrences(of: " / ", with: " of ") + " workouts completed", tint: accent)
+        JarvisHealthHeroStat(value: recordedTotal(rows, energy: false, readable: readable), title: "Workout minutes")
+        JarvisHealthHeroStat(value: recordedTotal(rows, energy: true, readable: readable), title: "Active kcal burned", tint: secondary)
+    }
+
+    private func recordedTotal(_ rows: [[String: JSONValue]], energy: Bool, readable: Bool) -> String {
+        guard readable, let total = sum(rows, energy: energy) else { return "—" }
+        let partial = rows.contains { metric($0, energy: energy) == nil }
+        return (partial ? "≥ " : "") + number(total)
     }
 
     private var stepSummary: some View {
@@ -217,9 +242,18 @@ struct JarvisHealthCards<Lifts: View>: View {
 
     private var sleepSummary: some View {
         let window = period(sleep)
-        let average = JarvisHealthSleepSummary(items: data.sleep.items, period: window)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        let measured = JarvisSleepTimeline(segments: stages)
+        var items = data.sleep.items
+        if let night = measured.dailyRow(date: period(.today).endDate) {
+            let date = period(.today).endDate
+            if sleep == .today || JarvisHealthSleepNight.nights(from: items)[date]?.total == nil {
+                items.removeAll { $0["sleep_date"]?.stringValue.map { String($0.prefix(10)) } == date }
+                items.append(night)
+            }
+        }
+        let average = JarvisHealthSleepSummary(items: items, period: window)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .bottom) {
                 VStack(alignment: .leading) {
                     Text(duration(average.total)).font(.title.bold()).foregroundStyle(accent)
                     Text(sleep == .today ? "Asleep last night" : "Average sleep").font(.caption).foregroundStyle(.secondary)
@@ -228,26 +262,23 @@ struct JarvisHealthCards<Lifts: View>: View {
                 Text("\(duration(goals.sleepHours)) goal").font(.footnote)
             }
             if sleep == .today {
-                if stages.isEmpty { Text("Sleep stage timeline unavailable").font(.footnote).foregroundStyle(.secondary) }
-                else {
-                    Chart(stages, id: \.id) { item in
-                        RectangleMark(xStart: .value("Start", item.start), xEnd: .value("End", item.end),
-                                      y: .value("Stage", (item.stage == "rem" ? "REM" : item.stage.capitalized)), height: .ratio(0.7))
-                            .foregroundStyle(item.stage == "awake" ? accent : secondary.opacity(item.stage == "deep" ? 0.48 : item.stage == "core" ? 0.72 : 1))
-                    }.chartYScale(domain: ["Deep", "Core", "REM", "Awake"]).frame(height: 105)
+                if measured.segments.isEmpty { Text("Sleep stage timeline unavailable").font(.footnote).foregroundStyle(.secondary) }
+                else { JarvisNightChart(timeline: measured) }
+                Divider()
+                HStack {
+                    ForEach(Array(zip(["Awake", "REM", "Core", "Deep"], [average.awake, average.rem, average.light, average.deep])), id: \.0) { label, hours in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(label).font(.caption).foregroundStyle(.secondary)
+                            Text(duration(hours)).font(.footnote.bold())
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             } else {
-                let values = JarvisHealthSleepNight.nights(from: data.sleep.items).compactMapValues(\.total)
-                bars(.init(values: values, endingOn: window.endDate, count: window.dayCount, target: goals.sleepHours),
-                     unit: "h", title: "Sleep by night", id: "health.chart.sleep", state: data.sleep.state)
-            }
-            Divider()
-            HStack {
-                ForEach(["Awake", "REM", "Core", "Deep"], id: \.self) { key in
-                    let value = ["Awake": average.awake, "REM": average.rem, "Core": average.light, "Deep": average.deep][key] ?? nil
-                    VStack(alignment: .leading) { Text(key).font(.caption); Text(duration(value)).font(.footnote.bold()) }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                let values = JarvisHealthSleepNight.nights(from: items).compactMapValues(\.total)
+                JarvisHealthBarChart(values: .init(values: values, endingOn: window.endDate, count: window.dayCount, target: goals.sleepHours),
+                    unit: "", title: "Sleep by night", identifier: "health.chart.sleep", language: language, state: data.sleep.state,
+                    showSummary: false, barColor: secondary, format: { duration($0) })
+                Text("\(average.nightCount) of \(window.dayCount) nights recorded").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -280,9 +311,12 @@ struct JarvisHealthCards<Lifts: View>: View {
                     Spacer()
                     Text("Intake target \(number(budget?.allowanceKcal)) kcal")
                 }.font(.caption).foregroundStyle(.secondary)
-                LabeledContent("Resting target", value: "\(number(budget?.restingKcal)) kcal")
-                LabeledContent("Active energy", value: "\(number(budget?.activeKcal)) kcal")
-                LabeledContent("Planned deficit", value: "\(number(budget?.deficitKcal.map { -$0 })) kcal")
+                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(alignment: .top))
+                layout {
+                    budgetValue("Resting target", budget?.restingKcal)
+                    budgetValue("Active kcal", budget?.activeKcal)
+                    budgetValue("Planned deficit", budget?.deficitKcal.map { -$0 })
+                }
             } else {
                 bars(.init(values: JarvisHealthNutritionDays.values(from: data.nutritionDays.items, nutrient: .kcal), endingOn: window.endDate, count: window.dayCount, target: nil),
                      unit: "kcal", title: "Daily intake", id: "health.chart.nutrition", state: data.nutritionDays.state)
@@ -292,6 +326,13 @@ struct JarvisHealthCards<Lifts: View>: View {
             macro("Carbs", recorded.average(.carbs), goals.carbsGrams, secondary)
             macro("Fat", recorded.average(.fat), goals.fatGrams, .secondary)
         }.font(.subheadline)
+    }
+
+    private func budgetValue(_ title: String, _ kcal: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(kcal.map { number($0) + " kcal" } ?? "—").font(.footnote.weight(.semibold))
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func macro(_ title: String, _ value: Double?, _ target: Double, _ tint: Color) -> some View {
@@ -335,6 +376,58 @@ private struct JarvisMealCamera: UIViewControllerRepresentable {
                 parent.failed(); return
             }
             parent.captured(bytes)
+        }
+    }
+}
+
+/// Four fixed lanes keep brief awakenings visible even when the night spans many hours.
+private struct JarvisNightChart: View {
+    let timeline: JarvisSleepTimeline
+    private let stages = ["Awake", "REM", "Core", "Deep"]
+
+    var body: some View {
+        if let first = timeline.segments.first, let last = timeline.segments.last {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(stages, id: \.self) { Text($0).font(.caption2).frame(height: 20) }
+                }.foregroundStyle(.secondary)
+                VStack(spacing: 4) {
+                    Canvas { context, size in
+                        for index in stages.indices {
+                            let y = CGFloat(index) * 20 + 10
+                            var guide = Path()
+                            guide.move(to: CGPoint(x: 0, y: y))
+                            guide.addLine(to: CGPoint(x: size.width, y: y))
+                            context.stroke(guide, with: .color(.secondary.opacity(0.25)), lineWidth: 0.6)
+                        }
+                        let scale = size.width / CGFloat(last.end.timeIntervalSince(first.start))
+                        let secondary = JarvisDesignTokens.secondaryAccent
+                        let colors = [JarvisDesignTokens.primaryAccent, secondary, secondary.opacity(0.78), Color.indigo]
+                        var previous: (end: Date, y: CGFloat)?
+                        for segment in timeline.segments {
+                            guard let lane = stages.firstIndex(where: { $0.lowercased() == segment.stage }) else { continue }
+                            let x = CGFloat(segment.start.timeIntervalSince(first.start)) * scale
+                            let width = CGFloat(segment.end.timeIntervalSince(segment.start)) * scale
+                            let y = CGFloat(lane) * 20 + 10
+                            if let previous, previous.end == segment.start {
+                                var connector = Path()
+                                connector.move(to: .init(x: x, y: previous.y))
+                                connector.addLine(to: .init(x: x, y: y))
+                                context.stroke(connector, with: .color(secondary.opacity(0.55)), lineWidth: 1)
+                            }
+                            let rect = CGRect(x: x, y: y - 5, width: max(1, width), height: 10)
+                            context.fill(Path(roundedRect: rect, cornerRadius: min(2, width / 2)), with: .color(colors[lane]))
+                            previous = (segment.end, y)
+                        }
+                    }.frame(height: 80)
+                    HStack {
+                        Text(first.start, style: .time)
+                        Spacer()
+                        Text(last.end, style: .time)
+                    }.font(.caption2).foregroundStyle(.secondary)
+                }
+            }.accessibilityElement(children: .combine)
+            .accessibilityLabel("Sleep stages from \(first.start.formatted(date: .omitted, time: .shortened)) to \(last.end.formatted(date: .omitted, time: .shortened))")
         }
     }
 }

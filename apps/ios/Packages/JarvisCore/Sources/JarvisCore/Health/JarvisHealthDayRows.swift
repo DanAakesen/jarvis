@@ -29,6 +29,58 @@ public struct JarvisHealthSleepNight: Equatable, Sendable {
     }
 }
 
+/// A single recording source supplies both the chart and the totals. Overlapping samples
+/// from that source occupy each instant at most once.
+public struct JarvisSleepTimeline: Sendable {
+    public let segments: [JarvisHealthSleepSegment]
+
+    public init(segments samples: [JarvisHealthSleepSegment]) {
+        var result: [JarvisHealthSleepSegment] = []
+        for sample in samples.sorted(by: { ($0.start, $0.end, $0.id) < ($1.start, $1.end, $1.id) }) {
+            guard ["awake", "rem", "core", "deep"].contains(sample.stage) else { continue }
+            let start = max(result.last?.end ?? sample.start, sample.start)
+            guard start < sample.end else { continue }
+            result.append(.init(id: sample.id, stage: sample.stage, start: start, end: sample.end, source: sample.source))
+        }
+        segments = result
+    }
+
+    /// Separate daytime naps from a night's recording. Competing devices may cover
+    /// the same night; choose one continuous session by time asleep.
+    public static func overnight(_ samples: [JarvisHealthSleepSegment], wakingOn date: Date, calendar: Calendar) -> Self {
+        var best = Self(segments: [])
+        var bestAsleep: TimeInterval = 0
+        let sources = Dictionary(grouping: samples) { $0.source ?? "" }
+        for source in sources.keys.sorted() {
+            let ordered = Self(segments: sources[source] ?? []).segments
+            var sessions: [[JarvisHealthSleepSegment]] = []
+            for sample in ordered {
+                if let end = sessions.last?.last?.end, sample.start.timeIntervalSince(end) <= 2 * 3600 {
+                    sessions[sessions.count - 1].append(sample)
+                } else { sessions.append([sample]) }
+            }
+            for session in sessions {
+                guard let end = session.last?.end, calendar.isDate(end, inSameDayAs: date) else { continue }
+                let asleep = session.filter { $0.stage != "awake" }.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
+                if asleep > bestAsleep { best = Self(segments: session); bestAsleep = asleep }
+            }
+        }
+        return best
+    }
+
+    public func dailyRow(date: String) -> [String: JSONValue]? {
+        var hours: [String: Double] = [:]
+        for segment in segments {
+            hours[segment.stage, default: 0] += segment.end.timeIntervalSince(segment.start) / 3600
+        }
+        let asleep = ["deep", "rem", "core"].compactMap { hours[$0] }.reduce(0, +)
+        guard asleep > 0 else { return nil }
+        var row: [String: JSONValue] = ["sleep_date": .string(date), "total_sleep_hours": .number(asleep)]
+        for (stage, value) in hours { row[stage + "_hours"] = .number(value) }
+        return row
+    }
+}
+
 public enum JarvisHealthNutrient: String, Sendable {
     case kcal = "energy_kcal"
     case protein = "protein_grams"

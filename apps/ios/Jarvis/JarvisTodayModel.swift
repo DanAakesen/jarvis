@@ -43,7 +43,7 @@ final class JarvisTodayModel: ObservableObject {
     @Published private(set) var brief = JarvisTodaySection<JarvisHomeBrief>()
     private var briefGeneration = 0
     @Published private(set) var now: Date
-    @Published var activity = JarvisTodayActivityState()
+    @Published var activity = JarvisTodayActivityState(range: .week)
 
     private let dependencies: JarvisTodayDependencies
     private let timeCalendar = JarvisHealthSyncWindow.calendar

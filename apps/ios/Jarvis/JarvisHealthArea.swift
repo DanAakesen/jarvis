@@ -311,7 +311,8 @@ struct JarvisHealthArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
+            ScrollViewReader { proxy in
+                ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
                     JarvisHealthSyncIssue(state: scaleRefreshFailed ? .failed : healthSyncState, language: language)
                     if liftWriteFailed {
@@ -385,6 +386,16 @@ struct JarvisHealthArea: View {
             .refreshable {
                 await refreshFromPull()
             }
+#if targetEnvironment(simulator)
+                .task(id: dashboard != nil) {
+                    guard !observeRefreshEvents, dashboard != nil,
+                          let option = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screenshot-health-card=") }),
+                          let card = option.split(separator: "=").last else { return }
+                    await Task.yield()
+                    proxy.scrollTo(String(card), anchor: .top)
+                }
+#endif
+            }
             .jarvisPageFooter {
                 VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
                     segmentSwitcher
@@ -414,6 +425,12 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) { await loadDeviceWorkouts() }
         .task(id: refreshVersion) { await loadDeviceSteps() }
         .task(id: refreshVersion) {
+#if targetEnvironment(simulator)
+            if !observeRefreshEvents, ProcessInfo.processInfo.arguments.contains("--screenshot-health-card=sleep") {
+                sleepSegments = JarvisHealthPreview.nightStages
+                return
+            }
+#endif
             guard observeRefreshEvents else { return }
             let stages = try? await JarvisHealthKitReader().lastNightStages(now: now)
             if !Task.isCancelled { sleepSegments = stages ?? [] }
@@ -544,7 +561,7 @@ struct JarvisHealthArea: View {
     }
 
     private var lastLiftsSection: some View {
-        DisclosureGroup("Saved max lifts", isExpanded: $expandedLifts) {
+        DisclosureGroup(isExpanded: $expandedLifts) {
             JarvisTextButton(title: copy.text(.logLift), identifier: "health.lifts.log") { newLiftPresented = true }
                 .disabled(gymModel == nil)
             if vaultLiftsFailed {
@@ -586,7 +603,14 @@ struct JarvisHealthArea: View {
                     }
                 }
             }
+        } label: {
+            HStack {
+                Text("Saved max lifts").font(.headline)
+                Spacer()
+                Text("All time").font(.footnote).foregroundStyle(.secondary)
+            }.foregroundStyle(.primary)
         }
+        .tint(.secondary)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("health.lastLifts")
         .task(id: expandedLifts ? vaultNextOffset : nil) {
@@ -756,6 +780,13 @@ struct JarvisHealthArea: View {
             let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
                 kind: JarvisHealthLogic.workoutKind(raw), source: entry.manualWorkoutID == nil ? .healthKit : .manual)
             if let index = identities.firstIndex(where: { $0?.matches(identity) == true }) {
+                if data.workouts.items[index]["duration_seconds"]?.numberValue == nil, entry.durationMinutes > 0 {
+                    data.workouts.items[index]["duration_seconds"] = .number(entry.durationMinutes * 60)
+                }
+                if data.workouts.items[index]["active_energy_value"]?.numberValue == nil, entry.activeKilocalories > 0 {
+                    data.workouts.items[index]["active_energy_value"] = .number(entry.activeKilocalories)
+                    data.workouts.items[index]["active_energy_unit"] = .string("kcal")
+                }
                 if entry.session != .other, data.workouts.items[index]["session"] == nil {
                     data.workouts.items[index]["session"] = .string(entry.session.rawValue.capitalized)
                 }

@@ -54,6 +54,7 @@ extension JarvisNotesArea {
     }
 
     private var notesPage: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: libraryTypeSize.isAccessibilitySize ? 1 : 2)
         let pinned = scopedPinnedPaths
         let folders = childFolders
         let notes = listedNotes
@@ -66,21 +67,21 @@ extension JarvisNotesArea {
                 }
                 if !pinned.isEmpty {
                     sectionHeader(copy.pinned)
-                    ForEach(pinned, id: \.self) { path in
-                        let first = path == pinned.first
-                        let last = path == pinned.last
-                        if let note = pinnedSummaries[path] {
-                            noteRow(note, first: first, last: last)
-                        } else {
-                            unresolvedPinRow(path, first: first, last: last)
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(pinned, id: \.self) { path in
+                            if let note = pinnedSummaries[path] {
+                                noteRow(note, first: true, last: true, tile: true)
+                            } else {
+                                unresolvedPinRow(path, first: true, last: true)
+                            }
                         }
                     }
                 }
                 if !folders.isEmpty {
                     sectionHeader(copy[.folders])
-                    ForEach(folders) { folder in
-                        folderRow(folder, first: folder.id == folders.first?.id, last: folder.id == folders.last?.id)
-                    }
+                    LazyVGrid(columns: columns, spacing: 0) {
+                        ForEach(folders) { folder in folderRow(folder) }
+                    }.padding(.vertical, 4).jarvisDashboardSurface()
                 }
                 if !notes.isEmpty {
                     sectionHeader(copy.notes)
@@ -127,10 +128,10 @@ extension JarvisNotesArea {
         .jarvisLazyRowSurface(first: first, last: last)
     }
 
-    func noteRow(_ note: VaultNoteSummary, first: Bool, last: Bool) -> some View {
+    @ViewBuilder func noteRow(_ note: VaultNoteSummary, first: Bool, last: Bool, tile: Bool = false) -> some View {
         let isPinned = pinnedPaths.contains(note.path)
         let location = JarvisNoteTitle.location(path: note.path)
-        return JarvisPinDeleteSwipeRow(
+        let row = JarvisPinDeleteSwipeRow(
             title: note.title,
             accessibilityValue: [location.isEmpty ? copy.vaultRoot : location, isPinned ? copy.pinned : ""]
                 .filter { !$0.isEmpty }.joined(separator: ", "),
@@ -144,36 +145,52 @@ extension JarvisNotesArea {
             onPin: { Task { await setPinned(note.path, pinned: !isPinned) } },
             onDelete: { Task { await requestDeleteNote(path: note.path, title: note.title) } }
         ) {
-            HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                if openingNotePaths.contains(note.path) {
-                    JarvisLoadingView(size: .inline)
-                        .frame(width: JarvisDesignTokens.notesIconSize + 6, height: JarvisDesignTokens.notesIconSize + 6)
-                } else {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: JarvisDesignTokens.notesIconSize + 4))
-                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                        .frame(width: JarvisDesignTokens.notesIconSize + 6)
+            if tile {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Image(systemName: openingNotePaths.contains(note.path) ? "hourglass" : "doc.text")
+                        Spacer()
+                        Image(systemName: "pin.fill").font(.caption)
+                    }.foregroundStyle(JarvisDesignTokens.primaryAccent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(note.title).font(.headline).lineLimit(2)
+                        Text(location.isEmpty ? copy.vaultRoot : location)
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }.padding(12).frame(maxWidth: .infinity, minHeight: 85, alignment: .topLeading)
+            } else {
+                HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                    if openingNotePaths.contains(note.path) {
+                        JarvisLoadingView(size: .inline)
+                            .frame(width: JarvisDesignTokens.notesIconSize + 6, height: JarvisDesignTokens.notesIconSize + 6)
+                    } else {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: JarvisDesignTokens.notesIconSize + 4))
+                            .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                            .frame(width: JarvisDesignTokens.notesIconSize + 6)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(note.title).font(.headline).lineLimit(2).foregroundStyle(.primary)
+                        Text(location.isEmpty ? copy.vaultRoot : location)
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: isPinned ? "pin.fill" : "chevron.right")
+                        .font(isPinned ? .body : .footnote.weight(.semibold))
+                        .foregroundStyle(isPinned ? JarvisDesignTokens.primaryAccent : Color.secondary.opacity(0.7))
+                        .accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(note.title).font(.headline).lineLimit(2).foregroundStyle(.primary)
-                    Text(location.isEmpty ? copy.vaultRoot : location)
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: isPinned ? "pin.fill" : "chevron.right")
-                    .font(isPinned ? .body : .footnote.weight(.semibold))
-                    .foregroundStyle(isPinned ? JarvisDesignTokens.primaryAccent : Color.secondary.opacity(0.7))
-                    .accessibilityHidden(true)
+                .frame(minHeight: JarvisDesignTokens.notesRowMinimumHeight - 20)
+                .padding(.horizontal, JarvisPageHeaderMetrics.rowInset)
+                .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset)
+                .overlay(alignment: .bottom) { rowDivider(last) }
             }
-            .frame(minHeight: JarvisDesignTokens.notesRowMinimumHeight - 20)
-            .padding(.horizontal, JarvisPageHeaderMetrics.rowInset)
-            .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset)
-            .overlay(alignment: .bottom) { rowDivider(last) }
         }
-        .jarvisLazyRowSurface(first: first, last: last)
+        if tile { row.jarvisDashboardSurface() }
+        else { row.jarvisLazyRowSurface(first: first, last: last) }
     }
 
-    private func folderRow(_ folder: VaultFolderNode, first: Bool, last: Bool) -> some View {
+    private func folderRow(_ folder: VaultFolderNode) -> some View {
         JarvisRowButton(identifier: "notes.folder.\(folder.path)", action: { navigateToFolder(folder.path) }) {
             HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                 Image(systemName: "folder")
@@ -183,16 +200,11 @@ extension JarvisNotesArea {
                     .accessibilityHidden(true)
                 Text(folder.name).font(.headline).foregroundStyle(.primary).lineLimit(2)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Color.secondary.opacity(0.7))
-                    .accessibilityHidden(true)
             }
             .padding(.horizontal, JarvisPageHeaderMetrics.rowInset)
             .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset - 2)
-            .overlay(alignment: .bottom) { rowDivider(last) }
+            .frame(minHeight: 44)
         }
-        .jarvisLazyRowSurface(first: first, last: last)
     }
 
     // MARK: Tasks

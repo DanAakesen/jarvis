@@ -257,6 +257,8 @@ jobs:
           polish today --ui-test-navigation --ui-test-today
           polish settings --screenshot-settings-fixture
           polish health --screenshot-health-fixture
+          polish sleep --screenshot-health-fixture --screenshot-health-card=sleep
+          polish nutrition --screenshot-health-fixture --screenshot-health-card=nutrition
           polish chat-keyboard --screenshot-chat-fixture --screenshot-chat-keyboard
           polish chat-blocks --screenshot-chat-fixture --ui-test-chat-blocks
           VOICE=(--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel)

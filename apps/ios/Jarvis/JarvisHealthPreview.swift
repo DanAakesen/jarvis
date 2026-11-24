@@ -29,6 +29,16 @@ import SwiftUI
 }
 
 enum JarvisHealthPreview {
+    static var nightStages: [JarvisHealthSleepSegment] {
+        var cursor = now.addingTimeInterval(-14 * 3600)
+        let stages = [("core", 45), ("deep", 35), ("core", 75), ("rem", 40), ("awake", 8),
+                      ("core", 90), ("deep", 22), ("rem", 55), ("core", 67)]
+        return stages.enumerated().map { index, item in
+            let end = cursor.addingTimeInterval(Double(item.1) * 60)
+            defer { cursor = end }
+            return .init(id: "fixture-\(index)", stage: item.0, start: cursor, end: end)
+        }
+    }
     static let now = ISO8601DateFormatter().date(from: "2026-10-31T12:00:00Z")!
 
     static func makeClient() -> JarvisHealthClient? {

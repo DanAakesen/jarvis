@@ -236,28 +236,28 @@ struct JarvisHeroHeader<Accessory: View>: View {
 }
 
 /// Shared material and perimeter for dashboard cards, including their solid accessibility appearance.
-private struct JarvisDashboardSurface: ViewModifier {
+struct JarvisDashboardCardFill: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.jarvisCardRole) private var role
+    var horizontal = false
+
+    var body: some View {
+        let tone = JarvisSurfacePalette.shared.color(role, inherit: "card") ?? JarvisDesignTokens.dashboardCardTone
+        if reduceTransparency { JarvisDesignTokens.glassSolid }
+        else {
+            LinearGradient(colors: [tone.opacity(0.84), tone.opacity(0.55)],
+                           startPoint: horizontal ? .leading : .topLeading, endPoint: horizontal ? .trailing : .bottomTrailing)
+        }
+    }
+}
+
+private struct JarvisDashboardSurface: ViewModifier {
     @Environment(\.displayScale) private var displayScale
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
         content
-            .background {
-                if reduceTransparency {
-                    shape.fill(JarvisDesignTokens.glassSolid)
-                } else {
-                    shape.fill(.ultraThinMaterial)
-                        .overlay { shape.fill(JarvisSurfacePalette.shared.color(role, inherit: "card")?.opacity(0.28) ?? .clear) }
-                        .overlay {
-                            shape.fill(LinearGradient(
-                                colors: [JarvisDesignTokens.primaryAccent.opacity(0.07), .clear],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
-                        }
-                }
-            }
+            .background { JarvisDashboardCardFill().clipShape(shape) }
             .overlay {
                 shape.strokeBorder(LinearGradient(
                     colors: [.primary.opacity(0.22), .primary.opacity(0.08)],
@@ -523,5 +523,26 @@ private struct JarvisLazyRowSurface: ViewModifier {
 extension View {
     func jarvisLazyRowSurface(first: Bool, last: Bool) -> some View {
         modifier(JarvisLazyRowSurface(first: first, last: last))
+    }
+}
+
+
+/// A disclosure inside an existing card shares its surface and spans the available touch width.
+struct JarvisDashboardDisclosure: View {
+    let title: String
+    let expanded: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                Image(systemName: expanded ? "chevron.up" : "chevron.down").font(.caption2)
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(JarvisDesignTokens.primaryAccent)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
     }
 }

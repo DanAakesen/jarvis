@@ -231,12 +231,7 @@ struct JarvisHealthKitReader {
                 start: max(start, sample.startDate), end: min(end, sample.endDate),
                 source: sample.sourceRevision.source.bundleIdentifier)
         }
-        // A Watch and a third-party app can both record the same night.
-        let sources = Dictionary(grouping: segments, by: { $0.source ?? "" })
-        return sources.values.max {
-            $0.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) } <
-            $1.reduce(0) { $0 + $1.end.timeIntervalSince($1.start) }
-        }?.sorted { $0.start < $1.start } ?? []
+        return JarvisSleepTimeline.overnight(segments, wakingOn: now, calendar: calendar).segments
     }
 
     private static func stage(_ value: Int) -> String {
