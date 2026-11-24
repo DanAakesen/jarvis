@@ -289,6 +289,7 @@ struct JarvisNotesArea: View {
             case .noteConflict: return copy.conflict
             case .writeOutcomeUnknown: return copy.unknownWrite
             case .taskConflict: return copy.taskChanged
+            case .destinationExists: return copy[.noteExists]
             case .folderAlreadyExists: return copy.folderAlreadyExists
             case .noteNotFound: return copy.noteMissing
             case .invalidRequest, .invalidResponse: return copy.unavailable
