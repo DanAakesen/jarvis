@@ -42,12 +42,24 @@ struct JarvisCalendarPage: View {
             return entry.start < day.end && entry.end > day.start
         }
     }
+    private func label(_ date: Date, _ format: Date.FormatStyle) -> String {
+        var local = format
+        local.locale = language.locale
+        local.calendar = calendar
+        local.timeZone = calendar.timeZone
+        return date.formatted(local)
+    }
+
+    private func clock(_ date: Date) -> String {
+        JarvisTodayGreeting.timeText(date, language: language, calendar: calendar)
+    }
+
     private var periodTitle: String {
         switch period {
-        case .day: return date.formatted(.dateTime.weekday(.abbreviated).day().month(.wide))
-        case .week: return interval.start.formatted(.dateTime.day().month(.abbreviated)) + " – " +
-                days.last!.formatted(.dateTime.day().month(.abbreviated))
-        case .month: return date.formatted(.dateTime.month(.wide).year())
+        case .day: return label(date, .dateTime.weekday(.abbreviated).day().month(.wide))
+        case .week: return label(interval.start, .dateTime.day().month(.abbreviated)) + " – " +
+                label(days.last!, .dateTime.day().month(.abbreviated))
+        case .month: return label(date, .dateTime.month(.wide).year())
         }
     }
 
@@ -89,7 +101,7 @@ struct JarvisCalendarPage: View {
             }.padding().jarvisDashboardSurface().environment(\.jarvisCardRole, "calendar")
         }, sections: {
             VStack(alignment: .leading, spacing: 8) {
-                Text(search.isEmpty ? date.formatted(.dateTime.weekday(.wide).day().month(.wide)) : "Search results").font(.headline)
+                Text(search.isEmpty ? label(date, .dateTime.weekday(.wide).day().month(.wide)) : "Search results").font(.headline)
                 if loading { ProgressView() }
                 if let error {
                     Text(error).font(.footnote)
@@ -108,7 +120,7 @@ struct JarvisCalendarPage: View {
                             HStack {
                                 VStack(alignment: .leading) {
                                     if period != .day { Text(event.start, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated)).font(.caption) }
-                                    Text(event.allDay == true ? "All day" : event.start.formatted(date: .omitted, time: .shortened) + " – " + event.end.formatted(date: .omitted, time: .shortened))
+                                    Text(event.allDay == true ? "All day" : clock(event.start) + " – " + clock(event.end))
                                         .font(.subheadline).foregroundStyle(JarvisDesignTokens.primaryAccent)
                                 }
                                 Text(event.title).font(.body.weight(.semibold)).multilineTextAlignment(.leading)
@@ -151,7 +163,7 @@ struct JarvisCalendarPage: View {
         return VStack(alignment: .leading, spacing: 10) {
             if let current = conflict, current.id == value.id {
                 Text("Google Calendar has a newer version.").font(.subheadline.bold())
-                Text(current.title + " · " + current.start.formatted() + " – " + current.end.formatted())
+                Text(current.title + " · " + label(current.start, .dateTime.day().month().year().hour().minute()) + " – " + label(current.end, .dateTime.day().month().year().hour().minute()))
                     .font(.footnote).foregroundStyle(.secondary)
                 Button("Use calendar version") { draft = CalendarDraft(current); conflict = nil }
                 Button("Keep my changes") {

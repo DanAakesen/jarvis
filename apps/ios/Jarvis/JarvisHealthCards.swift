@@ -135,7 +135,14 @@ struct JarvisHealthCards<Lifts: View>: View {
                 VStack(alignment: .leading) { trainingMetrics(counts, workouts, readable) }
             }
             if readable {
-                Text("\(rows.count) workouts total, including walks").font(.footnote).foregroundStyle(.secondary)
+                let walks = rows.filter {
+                    ["walk", "walking", "52", "healthkit52"].contains(JarvisHealthLogic.normalizedWorkoutType($0["workout_type"]?.stringValue))
+                }.count
+                HStack {
+                    Text(rows.count == 1 ? "1 workout total" : "\(rows.count) workouts total")
+                    Spacer()
+                    if walks > 0 { Text(walks == 1 ? "Includes 1 walk" : "Includes \(walks) walks") }
+                }.font(.footnote).foregroundStyle(.secondary)
                 Text("Training minutes").font(.subheadline.weight(.semibold))
                 Chart {
                     ForEach(days) { item in
