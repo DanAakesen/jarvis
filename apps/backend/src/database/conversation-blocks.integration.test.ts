@@ -39,6 +39,25 @@ afterAll(async () => {
 });
 
 describe('conversation blocks in the message store', () => {
+  it('updates one archived window per call and keeps it in history after the next call starts', async () => {
+    const store = createConversationStore(pool);
+    const first = await store.createSession({ channel: 'voice', language: 'en' });
+    const turn = await store.addMessage({ sessionId: first.id, role: 'dan', text: 'Show a window', model: null });
+    const block = {
+      version: 1, id: randomUUID(), type: 'voice-window', title: 'Result', summary: 'Result',
+      source: { label: 'Voice', issuedAt: new Date().toISOString() },
+      data: { view: { version: 1, renderer: 'text', title: 'Result', source: { id: 'now', status: 'complete' },
+        data: { format: 'plain', content: 'Example' } } },
+    } as const;
+    expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', block)).toBe(true);
+    expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', { ...block, title: 'Updated' })).toBe(true);
+    await store.endSession(first.id);
+    const second = await store.createSession({ channel: 'voice', language: 'en' });
+    const history = await store.getHistory({ sessionId: first.id, limit: 10 });
+    expect(history.messages.flatMap(message => message.blocks ?? [])).toEqual([{ ...block, title: 'Updated' }]);
+    expect((await store.getHistory({ sessionId: second.id, limit: 10 })).messages).toEqual([]);
+  });
+
   it.each([false, true])('keeps the saved reply linked to its turn in history (reply push enabled: %s)', async (notify) => {
     const store = createConversationStore(pool);
     const owner = randomUUID();

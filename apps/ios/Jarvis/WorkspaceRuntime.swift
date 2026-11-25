@@ -165,7 +165,7 @@ final class WorkspaceRuntime: ObservableObject {
     func userDismissedView() {
         guard presentedView != nil || voiceVisuals?.entries.isEmpty == false else { return }
         presentedView = nil
-        if voiceVisuals != nil { voiceVisuals = VoiceVisualHistory() }
+        voiceVisuals?.dismissAll()
         let generation = sessionGeneration
         Task {
             guard generation == sessionGeneration else { return }
@@ -195,6 +195,13 @@ final class WorkspaceRuntime: ObservableObject {
         guard voiceVisuals?.selectedID != id, voiceVisuals?.entries.contains(where: { $0.id == id }) == true else { return }
         voiceVisuals?.select(id)
         presentedView = voiceVisuals?.selected
+        reportActive()
+    }
+
+    func reopenVoiceVisual(_ visual: PresentedWorkspaceView) {
+        guard let current = voiceVisuals?.windows.first(where: { $0.id == visual.id }) else { return }
+        knownViews[current.id] = current.view
+        present(viewId: current.id, view: current.view)
         reportActive()
     }
 
@@ -397,7 +404,7 @@ final class WorkspaceRuntime: ObservableObject {
                 present(viewId: viewId, view: view)
             case .dismissAll(let forget):
                 presentedView = nil
-                if voiceVisuals != nil { voiceVisuals = VoiceVisualHistory() }
+                voiceVisuals?.dismissAll()
                 if forget {
                     knownViews.removeAll()
                     lastPresentedViewId = nil

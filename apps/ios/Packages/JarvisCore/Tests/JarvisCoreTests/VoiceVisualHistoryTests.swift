@@ -57,6 +57,21 @@ final class VoiceVisualHistoryTests: XCTestCase {
         XCTAssertFalse(history.apply(.next))
     }
 
+    func testClosedWindowsRemainAvailableOnlyInsideTheirCall() throws {
+        var history = VoiceVisualHistory()
+        let first = try visual("one"), second = try visual("two")
+        history.present(first)
+        history.present(second)
+        history.dismissAll()
+        XCTAssertNil(history.selected)
+        XCTAssertEqual(history.windows, [first, second])
+        history.present(second)
+        history.present(first)
+        XCTAssertEqual(history.entries, [first, second])
+        XCTAssertEqual(history.selectedID, first.id)
+        XCTAssertTrue(VoiceVisualHistory().windows.isEmpty)
+    }
+
     func testResizeAndMinimizeSwipesRequireDominantVerticalTravel() {
         XCTAssertEqual(VoiceVerticalSwipe(translation: CGSize(width: 10, height: -45), minimumDistance: 32), .up)
         XCTAssertEqual(VoiceVerticalSwipe(translation: CGSize(width: -12, height: 32), minimumDistance: 32), .down)

@@ -119,3 +119,11 @@ test('Apple Maps history stores the original lookup; a route or result cannot en
   assert.equal(isWorkspaceCommand({ ...command, bufferMinutes: -1 }), false);
   assert.equal(isWorkspaceSnapshot({ windows: [], contextPanelOpen: false, device: { kind: 'phone', appleMaps: true } }), true);
 });
+
+test('only a stored Voice window may carry its validated chart snapshot without live actions', () => {
+  const block = { ...list, type: 'voice-window', data: { view: { ...list.data.view, renderer: 'chart',
+    data: { kind: 'line', series: [{ name: 'Temperature', points: [{ x: '12:00', y: 9 }] }] } } } };
+  assert.equal(isChatBlock(block), true);
+  assert.equal(isChatBlock(withoutStamp(block), { stored: false }), false);
+  assert.equal(isChatBlock({ ...block, data: { view: { ...block.data.view, actions: [{ type: 'close-window' }] } } }), false);
+});

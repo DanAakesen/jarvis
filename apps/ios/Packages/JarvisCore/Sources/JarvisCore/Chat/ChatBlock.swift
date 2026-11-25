@@ -173,7 +173,7 @@ extension ChatBlock: Codable {
             guard let chart = try? decoder.decode(ChatBlockChart.self, from: encoded),
                   !chart.panels.isEmpty else { return unsupported }
             return .chart(chart)
-        case "view":
+        case "view", "voice-window":
             guard case .object(let object) = raw, let view = object["view"],
                   let viewData = try? JSONEncoder().encode(view),
                   let decoded = try? decoder.decode(GeneratedView.self, from: viewData) else { return unsupported }

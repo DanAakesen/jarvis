@@ -6,6 +6,7 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 | Date and source | Rule |
 | --- | --- |
+| 2026-11-25 — Dan’s Voice layout | Keep the iPhone orb fixed behind captions and generated windows. Window selection belongs to one call; its results remain in Chat. |
 | 2026-11-25 — Dan’s orb themes | Orange, Red, Teal and Violet pair an iPhone icon with its primary accent. Display mode (System, Light or Dark) is independent on iPhone and web. Card glow follows Primary, Secondary or a custom colour across all dashboard cards. |
 | 2026-11-24 — Dan’s Appearance decision | Every app-owned native card and control inherits one configurable glass finish. Per-card overrides change colour only. See the [material ownership rule](ui/style-guide.md#3-glass-and-surfaces). |
 | 2026-11-23 — Apple Maps | Use on-device MapKit for Chat and Voice. Keep map data temporarily on iPhone, save the owner’s lookup and hand navigation to Apple Maps. Nearby uses a 10 km radius. An explicit request for the nearest named business widens the search and ranks the returned matches on device. A supplied origin works with location permission denied. [Apple’s Maps terms, Attachment 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/). |

@@ -15,6 +15,7 @@ import {
   type GeneratedView,
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
+import { archiveVoiceWindow, voiceWindowTurn } from './chat-blocks.js';
 import { appleMapsGuidance, generatedViewValidationOptions } from './generated-view-validation.js';
 import { explainedArgumentsMessage, toolArgumentRefusal } from './tool-arguments.js';
 import { isJarvisToolCall } from './tool-origin.js';
@@ -44,6 +45,7 @@ interface WorkspaceConnection {
 }
 
 interface CommandRecord {
+  archive?: Promise<void>;
   view?: { viewId: string; view: GeneratedView };
   readonly fingerprint: string;
   readonly expectsMapReceipt: boolean;
@@ -198,6 +200,17 @@ export class WorkspaceCommandBroker {
 
   async execute(ownerId: string, command: WorkspaceCommand, signal: AbortSignal): Promise<void> {
     await this.dispatch(ownerId, command, signal);
+    const turn = voiceWindowTurn.getStore();
+    const record = this.records.get(ownerId)?.get(command.commandId);
+    if (turn && record && 'view' in command && command.view && (command.operation === 'create' || command.operation === 'update' ||
+        (command.operation === 'context-panel' && command.action === 'open'))) {
+      record.archive ??= archiveVoiceWindow(turn, 'viewId' in command ? command.viewId : command.commandId, command.view)
+        .catch(() => {
+          delete record.archive;
+          throw new ToolFailure('Window displayed. Saving it in Chat could not be confirmed.', { outcomeUnknown: true });
+        });
+      await record.archive;
+    }
   }
 
   async appleMaps(ownerId: string, query: AppleMapsQuery, speakResult: boolean, signal: AbortSignal) {

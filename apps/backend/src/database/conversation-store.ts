@@ -428,6 +428,26 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.recordset[0]?.session_exists === 1;
     },
 
+    async saveVoiceWindow(turnId, sourceItemId, block) {
+      if (!validReplyToTurnId(turnId)) return false;
+      const trustedBlobHost = trustedBlobHostFromEnvironment();
+      if (!isChatBlock(block, trustedBlobHost ? { trustedBlobHost } : {})) throw new TypeError('Invalid voice window');
+      const result = await pool.request()
+        .input('turnId', sql.BigInt, BigInt(turnId))
+        .input('sourceItemId', sql.NVarChar(128), sourceItemId)
+        .input('title', sql.NVarChar(200), block.title)
+        .input('metadata', sql.NVarChar(sql.MAX), JSON.stringify({ blocks: [block], replyToTurnId: turnId }))
+        .query<{ id: string }>(`MERGE dbo.messages WITH (HOLDLOCK) AS target
+          USING (SELECT s.id, s.language FROM dbo.jarvis_sessions s JOIN dbo.messages m ON m.jarvis_session_id = s.id
+                 WHERE m.id = @turnId AND m.role = N'dan' AND s.channel = N'voice') AS source
+          ON target.jarvis_session_id = source.id AND target.source_item_id = @sourceItemId AND target.role = N'jarvis'
+          WHEN MATCHED THEN UPDATE SET text = @title, metadata = @metadata
+          WHEN NOT MATCHED THEN INSERT (jarvis_session_id, role, text, language, interrupted, source_item_id, metadata)
+            VALUES (source.id, N'jarvis', @title, source.language, 0, @sourceItemId, @metadata)
+          OUTPUT CONVERT(varchar(20), inserted.id) AS id;`);
+      return result.recordset.length === 1;
+    },
+
     async addMessage(input) {
       if (input.attachmentIds?.length) return addMessageWithAttachments(pool, input);
       if (input.replyNotification) return addMessageWithReplyNotification(pool, input);

@@ -719,7 +719,7 @@ export function isGeneratedView(
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is GeneratedView;
 export const chatBlockVersion: 1;
-export const chatBlockTypes: readonly ['forecast', 'chart', 'view'];
+export const chatBlockTypes: readonly ['forecast', 'chart', 'view', 'voice-window'];
 export const chatBlockForecastSymbols: readonly [
   'clear', 'partly-cloudy', 'cloudy', 'fog', 'drizzle', 'rain', 'snow', 'thunder', 'wind',
 ];
@@ -770,10 +770,11 @@ interface ChatBlockBase {
 export type ChatBlock =
   | (ChatBlockBase & { type: 'forecast'; data: ChatBlockForecastData })
   | (ChatBlockBase & { type: 'chart'; data: { xLabel: string; panels: ChatBlockChartPanel[] } })
-  | (ChatBlockBase & { type: 'view'; data: { view: GeneratedView } });
+  | (ChatBlockBase & { type: 'view'; data: { view: GeneratedView } })
+  | (ChatBlockBase & { type: 'voice-window'; data: { view: GeneratedView } });
 /** What a model submits: no id, and the issue time is optional. */
 export type ChatBlockInput = ChatBlock extends infer Block
-  ? Block extends ChatBlock
+  ? Block extends Exclude<ChatBlock, { type: 'voice-window' }>
     ? Omit<Block, 'id' | 'source'> & { source: Omit<ChatBlockSource, 'issuedAt'> & { issuedAt?: string } }
     : never
   : never;

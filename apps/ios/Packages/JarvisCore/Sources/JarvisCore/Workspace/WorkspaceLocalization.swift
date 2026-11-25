@@ -67,6 +67,8 @@ public enum JarvisWorkspaceLocalizationKey: String, CaseIterable, Sendable {
     case htmlAppLoading = "workspace.htmlAppLoading"
     case htmlAppLoadFailed = "workspace.htmlAppLoadFailed"
     case generatedView = "workspace.generatedView"
+    case voiceWindows = "workspace.voicePanel.windows"
+    case voiceWindowsEmpty = "workspace.voicePanel.windowsEmpty"
     case voicePanelClose = "workspace.voicePanel.close"
     case voicePanelExpand = "workspace.voicePanel.expand"
     case voicePanelCollapse = "workspace.voicePanel.collapse"

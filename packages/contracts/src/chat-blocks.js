@@ -2,7 +2,7 @@
 // A block is never code. The model picks one of the types below and fills in data; clients render it natively.
 
 export const chatBlockVersion = 1;
-export const chatBlockTypes = Object.freeze(['forecast', 'chart', 'view']);
+export const chatBlockTypes = Object.freeze(['forecast', 'chart', 'view', 'voice-window']);
 export const chatBlockForecastSymbols = Object.freeze([
   'clear', 'partly-cloudy', 'cloudy', 'fog', 'drizzle', 'rain', 'snow', 'thunder', 'wind',
 ]);
@@ -105,12 +105,16 @@ export function createChatBlockValidator(isGeneratedView) {
     const stored = options.stored !== false;
     let serialized;
     try { serialized = JSON.stringify(value); } catch { return false; }
-    if (serialized === undefined || new TextEncoder().encode(serialized).byteLength > chatBlockLimits.bytes ||
+    if (serialized === undefined || new TextEncoder().encode(serialized).byteLength > (stored && value?.type === 'voice-window' ? 260 * 1024 : chatBlockLimits.bytes) ||
         !isObject(value) || !onlyKeys(value, chatBlockKeys) || value.version !== chatBlockVersion ||
         (stored ? !idPattern.test(value.id ?? '') : value.id !== undefined) ||
         !chatBlockTypes.includes(value.type) || !text(value.title, 200) || !text(value.summary, 1_000) ||
         !validSource(value.source, stored)) return false;
     switch (value.type) {
+      case 'voice-window':
+        // Only the server archives windows. Retain their data and artifact references, not live tool controls.
+        return stored && isObject(value.data) && onlyKeys(value.data, ['view']) &&
+          isGeneratedView(value.data.view, options) && !value.data.view.actions?.length;
       case 'forecast': return validForecast(value.data);
       case 'chart': return validChart(value.data);
       case 'view': return validView(value.data, isGeneratedView, options);

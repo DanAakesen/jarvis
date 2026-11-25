@@ -127,3 +127,6 @@
 "workspace.voicePanel.first" = "This is the first open Voice result.";
 "workspace.voicePanel.last" = "This is the last open Voice result.";
 "workspace.voicePanel.shown" = "%@ shown";
+
+"workspace.voicePanel.windows" = "Windows";
+"workspace.voicePanel.windowsEmpty" = "No windows in this call";

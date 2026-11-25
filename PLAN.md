@@ -14,7 +14,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Build 135 includes the [Home, Health, Notes and shared Appearance corrections](https://github.com/DanAakesen/jarvis/pull/2076). They are **not accepted on device**. |
+| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2071) | Build 135 includes the [Home, Health, Notes and shared Appearance corrections](https://github.com/DanAakesen/jarvis/pull/2076). [The next combined release](https://github.com/DanAakesen/jarvis/pull/2084) adds orb themes, card glow, calendar gestures and Voice windows. Physical-device acceptance is tracked separately. |
 | Appearance and Health follow-up | Orb themes, shared Card glow, Body trend and all-history views are in development. |
 | TestFlight **135** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45503575353). The [signed upload](https://github.com/DanAakesen/jarvis/actions/runs/45500374585) verified the embedded Watch companion, not Watch installation or playback. |
 | Backend | The [latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45497638562) passed PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
