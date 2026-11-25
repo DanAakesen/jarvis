@@ -14,10 +14,9 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2084) | Build 137 is available to internal testers on iPhone and paired Watch. It includes the fixed-position Voice orb, swipeable windows, calendar gestures and shared appearance controls. [Signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45658685353) · [Apple receipt](https://github.com/DanAakesen/jarvis/actions/runs/45663058853) · [Backend readiness](https://github.com/DanAakesen/jarvis/actions/runs/45655162587). Physical-device acceptance is tracked below. |
-| Appearance and Health follow-up | Orb themes, shared Card glow, Body trend and all-history views are in development. |
-| TestFlight **135** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45503575353). The [signed upload](https://github.com/DanAakesen/jarvis/actions/runs/45500374585) verified the embedded Watch companion, not Watch installation or playback. |
-| Backend | The [latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45497638562) passed PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
+| P15-212 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2084) | Build 137 ships the fixed-position Voice orb and swipeable windows, calendar gestures, orb themes, shared card glow, Body trend and all-time Health charts. Physical-device acceptance is tracked below. |
+| TestFlight **137** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45663058853). The [signed iPhone archive](https://github.com/DanAakesen/jarvis/actions/runs/45658685353) includes the matching Watch companion. |
+| Backend | The [production deployment](https://github.com/DanAakesen/jarvis/actions/runs/45655162587) passed startup migration and runtime readiness checks. |
 | Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
