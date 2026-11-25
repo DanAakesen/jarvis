@@ -1,7 +1,7 @@
 # Jarvis UI style guide
 
 Read this first when you build a Jarvis surface. The code and [DESIGN.md](../../DESIGN.md) stay authoritative.
-The [UI map](../../ui.md) lists every screen and the designs that still need work.
+The [UI map](../../ui.md) lists screens in source. The [plan](../../PLAN.md) tracks device acceptance.
 
 Evidence labels: **Token** = a value read from code, with its file. **Decision** = agreed in `DESIGN.md` or
 `docs/decisions.md`, no token. **Suggestion** = this guide's advice for a new platform, not yet agreed.

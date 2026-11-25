@@ -6,7 +6,7 @@ Health upload reuses Jarvis's backend and SQL. For legacy input compatibility, s
 
 ## Acceptance contract
 
-`createSqlHealthUpload(existingPool, configuredOwner)` returns the SQL-backed upload dependencies. Production `index.ts` passes them to the existing `buildApp` only when `JARVIS_HEALTH_UPLOAD_ENABLED === "true"` and the existing SQL pool is configured; the switch defaults off. The scoped plugin installs only POST `/api/health/ingest` and `/api/health/heartbeat`. The root authentication exception requires explicit enablement, exact method/path and plugin opt-in. All other Jarvis login/service routes keep their current authentication.
+`createSqlHealthUpload(existingPool, configuredOwner)` returns the SQL-backed upload dependencies. `index.ts` passes them to `buildApp` only when `JARVIS_HEALTH_UPLOAD_ENABLED === "true"` and the SQL pool is configured. The scoped plugin installs only POST `/api/health/ingest` and `/api/health/heartbeat`. The root authentication exception requires explicit enablement, exact method/path and plugin opt-in. All other Jarvis login/service routes keep their current authentication.
 
 - Ingest requires valid UTF-8 JSON, `automation-id` and `session-id`, with optional matching SHA-256 `checksum`/`x-payload-checksum`. Original bytes are preserved, including units/offsets/empty workouts; no measurements are normalized here.
 - Bodyless heartbeat remains supported. Only bounded `shortcut-name` provenance and checked feeds `metrics`/`workouts` are retained; a heartbeat does not prove measurements arrived.
@@ -19,14 +19,13 @@ Health upload reuses Jarvis's backend and SQL. For legacy input compatibility, s
 
 Uploads are at most **8 MiB**; ignored heartbeat bodies are at most **32 KiB**. The SQL inbox has a **256 MiB raw-byte ceiling and 10,000-row ceiling per owner** (a rehearsal caller may lower the byte limit, never raise it). All retained raw rows count, including processed/quarantined rows. Identical retries still work at capacity; new sessions fail closed. This is storage backpressure, not a billing cap or measured production sizing.
 
-The Daily `daily.sync` source exposes numeric `inbox.retained_bytes` (the sum of
-stored `byte_count` for every retained owner row), `inbox.byte_limit` and
+The Health query source `daily.sync` exposes `inbox.retained_bytes` (the sum of
+`byte_count` for every retained owner row), `inbox.byte_limit` and
 `inbox.row_limit`, alongside retained/pending/processing/quarantined counts and timestamps.
 Pending, processing, processed and quarantined rows all consume capacity; other
 owners' rows never count. An empty inbox reports zero retained bytes and still
-returns both limits. No payload content is returned. The Daily freshness pill's
-details panel shows these figures in a "Stored" row. See the
-Daily query reference.
+returns both limits. No payload content is returned. The web Health freshness
+popover shows these figures in a "Stored" row. See the [Health module](../../../apps/backend/src/health/README.md).
 
 Raw rows have no age-based deletion or compaction. Preserve pending and quarantined rows for processing, reconciliation and rollback, and keep acceptance, checksum and idempotency evidence.
 
@@ -36,7 +35,7 @@ The existing backend does not trust forwarded headers. Behind ingress, clients m
 
 ## Processing and replay limits
 
-The existing `SqlHealthProcessor` is wired to a bounded worker only in the same default-off production composition. It claims one owner inbox row at a time under the existing owner transaction lock, marks a 45-second processing lease, and recovers expired leases after restart. Accepted, processing, succeeded (`health_ingestions.status`), and quarantined evidence are distinct; SQL acceptance never claims processing success. The worker drains at most ten completed/quarantined rows before a one-second pause, polls idle/retry states every 30 seconds, and wakes after durable acceptance. Retry delays are bounded; exhausted/invalid rows remain quarantined with raw evidence retained.
+The same upload switch gates the bounded `SqlHealthProcessor` worker. It claims one owner inbox row at a time under the owner transaction lock, marks a 45-second processing lease, and recovers expired leases after restart. Accepted, processing, succeeded (`health_ingestions.status`), and quarantined evidence are distinct; SQL acceptance never claims processing success. The worker drains at most ten completed/quarantined rows before a one-second pause, polls idle/retry states every 30 seconds, and wakes after durable acceptance. Retry delays are bounded; exhausted/invalid rows remain quarantined with raw evidence retained.
 
 Existing writes reject older `accepted_at` snapshots from replacing newer per-key rows, and an older workout retry cannot replace newer child details. Empty workout exports do not delete history. This does **not** establish complete-day replacement safety: the original Health Auto Export request has no verified day-completeness marker, and a later partial chunk can replace the values it supplies for a metric/date key.
 
