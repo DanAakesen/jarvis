@@ -24,8 +24,8 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 
 ## 3. Voice (WebSocket)
 
-- iPhone and Watch use one JSON WebSocket at `wss://BACKEND/voice` for English and Danish.
-- The paired iPhone batches adjacent reply audio or caption fragments for Watch delivery. When a call ends, the Watch reads the saved conversation to recover any missed captions.
+- The iPhone opens the JSON WebSocket at `wss://BACKEND/voice` for English and Danish. During a Watch call, microphone audio, reply audio and captions travel over WatchConnectivity through the paired iPhone; the Watch does not open the backend socket.
+- The iPhone batches adjacent reply audio or caption fragments for Watch delivery. When a call ends, the Watch reads the saved conversation to recover missed captions.
 - Auth: exactly two subprotocols, `jarvis.voice.v2` and `jarvis.auth.TOKEN`.
   v1 is rejected during the upgrade and has no alias or fallback.
 - Terminal: `jarvis.session.ended` is clean completion only.
@@ -81,8 +81,8 @@ The backend endpoints the native iPhone app uses. Check the [shared client](../.
 
 - `GET /now` lists the pending confirmations as `{id, actionKind, summary, expiresAt}`. `GET /now/events` carries `refresh` and `status` events (kind `approval_pending`) from the same hub.
 - `POST /now/confirmations/:id` with `{decision: "approve" or "reject"}` resolves one. The id is a 43-character base64url string. It answers 204 on success, 403 for anyone except the owner, 404 when the confirmation is unknown, expired or already used, and 503 when the service is not available.
-- A confirmation lives 5 minutes and is single-use: the approval is consumed once on the server before the action runs.
-- The pending confirmation is held in the memory of the one backend instance (the deployment is fixed at one replica), so a restart ends it. The app treats 404 as no longer available.
+- A confirmation expires within five minutes. SQL records the request and decision and consumes an approval once before the action runs.
+- The waiting action is process-local. Startup expires pending SQL requests; a stale notification cannot resume the action. The app treats 404 as no longer available.
 - The app registers the `jarvis.approval` category with Approve and Decline actions, both marked `.authenticationRequired`. The handler makes one authenticated `POST /now/confirmations/:id` using the existing Keychain session, with an eight-second timeout and no retry.
 - The standard system notification permission prompt appears after sign-in and device unlock, before any approval exists. Denial prevents APNs registration; it does not block in-app approval.
 - The owner-only `POST /ios/approval-notifications` stores an APNs token, time zone and preview-action preference; `DELETE` removes that device registration. After an approval is persisted/staged, the backend sends one APNs alert with `aps.alert`, `aps.category`, `aps.thread-id`, `aps.sound`, and top-level `confirmationID`. The body contains the bounded server summary and localized absolute expiry. The last registered `showActions` value selects the category; a changed preview setting may not be registered yet. Verify on a device that setting previews to Never and refreshing registration suppresses Approve and Decline.
