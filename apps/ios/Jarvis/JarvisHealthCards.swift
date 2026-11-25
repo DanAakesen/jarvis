@@ -68,7 +68,7 @@ struct JarvisHealthCards<Lifts: View>: View {
                 Divider()
                 lifts()
             }.environment(\.jarvisCardRole, "training").accessibilityIdentifier("health.hero.training")
-            JarvisPageHeroCard(title: stepRange == .today && !fullHistory.contains(.steps) ? "Steps today" : "Steps", accessory: { range($stepRange, .steps) }) {
+            JarvisPageHeroCard(title: "Steps", accessory: { range($stepRange, .steps) }) {
                 if fullHistory.contains(.steps) {
                     historyChart(.steps)
                 } else { stepSummary }
