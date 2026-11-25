@@ -10,7 +10,7 @@ Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
-| **Home** | Up Next, activity against the training target, and a Schedule with tasks and appointments. The calendar and quick-add actions sit together. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
+| **Home** | Up Next, Activity and Schedule. Schedule opens Calendar. Quick add sits to the right of the one-row composer and hides while typing or dictating. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
 | **Calendar** | From Home Schedule or the sidebar above Chat. Day and week timelines, day dividers in Week, month browsing and inline event cards for the primary Google Calendar. | `JarvisCalendarPage`, `JarvisCalendarTimeline` |
 | **Chat** | The one PI conversation: resumable replies, a folding composer with plus menu and dictation, tool activity, generated blocks (charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. **Test a reply** in the plus menu uses a separate conversation. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
 | **Voice** | Live GPT-Live call: stationary background orb, captions, Mute, Speaker and End, swipeable result cards with resize and per-call reopening, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |

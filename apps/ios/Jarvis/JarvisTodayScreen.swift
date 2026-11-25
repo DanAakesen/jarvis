@@ -154,7 +154,6 @@ struct JarvisTodayScreen: View {
             tabControl
             JarvisIconButton(title: "Calendar", systemImage: "calendar", identifier: "today.calendar",
                              tint: JarvisDesignTokens.primaryAccent, action: onCalendar)
-            plusMenu
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: tab)
         .accessibilityElement(children: .contain)
@@ -641,7 +640,8 @@ struct JarvisTodayScreen: View {
                             }
                         )
                     }
-                }
+                },
+                compactAccessory: { plusMenu }
             )
         }
         .overlay(alignment: .top) { flyingBubble }
