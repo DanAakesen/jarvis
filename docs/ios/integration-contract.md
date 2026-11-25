@@ -123,14 +123,11 @@ Empty folders use a `.gitkeep` marker that never counts as a note. An account-bo
 
 ## 10. Settings area
 
-The four native Settings sections reuse the existing owner-session bearer token
-and the web application's routes. The handlers below use the verified owner
-principal; no iOS-only route, authentication path or backend change is part of
-this screen.
+Native Settings uses the verified owner session and the shared settings routes.
 
 | Screen action | Existing route and verified contract |
 |---|---|
-| Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
+| Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance includes display mode, accents, surface tints, shared finish and `card-glow` with optional `card-glow-color`. |
 | Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
 | Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
 | Log meal | Owner POST /health/meals accepts idempotencyKey (UUID), occurredAt (ISO timestamp), energyKcal (>0–10,000) and optional proteinGrams (0–1,000). Retry the identical submission. The receipt confirms the key, energy, protein and Copenhagen mealDate. |
@@ -156,6 +153,7 @@ Opening Health or returning to it in the foreground syncs the current Copenhagen
 | Steps ring | `POST /health/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /health/training-targets`. |
 | Nutrition | Today reads calories eaten, allowance and calories left from `GET /health/nutrition-budget`. Period averages and macros use `daily.nutrition.days` from `POST /health/query`. The protein target comes from `GET /health/nutrition-targets`. |
 | Sleep value and sleep-night detail | `POST /health/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
+| All history | Owner `GET /health/dashboard-history/:kind` returns monthly history for `training`, `steps`, `sleep` or `nutrition`. |
 | Open a workout | `POST /health/query` with `source: "daily.health.workout"` and the exact `workoutId`. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
 | Open meals | `POST /health/query` with `source: "daily.nutrition.meals"` and the selected date range. |
 | Body trend catalogue and detail | `POST /health/query` with `source: "daily.health.metric-catalog"`, then `source: "daily.health.metrics"` with the selected metric name and date range. |

@@ -108,7 +108,7 @@ gh workflow run ios-testflight.yml --ref main -f branch=main
 
 Compare recent `main` runs with `gh run list` and `gh run view`. The upload run gives the build number and source SHA and checks the signed iPhone archive and embedded Watch companion. Match any receipt-only run to the upload by build number: the receipt run's SHA is not the build source. In `github_read`, use `operation: workflow_runs` with `runId`: `appleInternalAvailabilityConfirmedAtCheck: true` confirms that build at check time. Update [the plan](../PLAN.md) only after matching the receipt and upload.
 
-Inspect the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb) in the summary: `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. The named confirmation step exposes the same result. A green run or `NOT_LISTED` after upload does not prove availability. The authorised release owner can recheck without archiving again:
+In the exact build's [Apple receipt](../.github/scripts/testflight_receipt.rb), `available_to_internal_testing: true` means `VALID`, `IN_BETA_TESTING` and unexpired. In `gh run view --json jobs`, **Apple confirmed availability for internal testing** must succeed, not skip. A green upload or receipt-only run can still report `NOT_LISTED`. The authorised release owner can recheck without archiving again:
 
 ```sh
 gh workflow run ios-testflight.yml --ref main -f branch=main -f receipt_build_number=BUILD_NUMBER

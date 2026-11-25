@@ -161,11 +161,11 @@ An iPhone edit and folder move use the original blob SHA and one Vault commit. T
 
 ### Daily integration boundary (P12-01)
 
-Health and workout tools use the SQL `daily` schema. The iPhone Today card, Chat and Voice use one Copenhagen-day meal ledger and nutrition calculation. It selects one eligible daily active-energy reading, not the sum of the iPhone and exporter totals. iPhone Health sync and ingestion/Shortcuts are separate from Watch display. iPhone Gym can record lifts in the Vault; `gym_lifts` reads both sources. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
+Health and workout tools use the SQL `daily` schema. The iPhone Today card, Chat and Voice use one Copenhagen-day meal ledger and select one eligible active-energy reading, not both iPhone and exporter totals. All-history cards aggregate owner-scoped records by month on the backend. iPhone Health sync and Shortcut ingestion are separate from Watch display. iPhone Gym can record lifts in the Vault; `gym_lifts` reads SQL and the Vault. See the [data model](reference/data-model.md) and [Health module](../apps/backend/src/health/README.md).
 
 Home and Calendar read the primary Google Calendar through the owner-authenticated backend. Edits use Google event versions and publish a Home refresh after Google confirms the write. The Home brief expands short model citations back to original source references.
 
-`PATCH /settings` validates and saves material percentages. iPhone caches the palette and saved finish in its App Group and transfers both through WatchConnectivity application context. Watch caches both and uses the palette in complications. iPhone card overrides change colour only.
+`PATCH /settings` saves validated appearance settings, including material percentages and Card glow. The iPhone caches the palette and finish in its App Group and sends them via WatchConnectivity application context. Watch caches both and uses the palette in complications. Per-card iPhone overrides change colour only.
 
 ## Proactive wake and Inbox review
 

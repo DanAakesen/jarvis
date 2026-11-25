@@ -1,12 +1,12 @@
 # Jarvis design direction
 
-Use the [UI style guide](docs/ui/style-guide.md) for tokens, shared components, motion, accessibility and hard rules. This page sets composition and behaviour for each surface; it does not define a second palette. [Product requirements](PRODUCT.md), [current work and device acceptance](PLAN.md), and [decisions](docs/decisions.md) are separate. Screens and their code live in [the UI map](ui.md).
+This page owns composition and behaviour. See the [style guide](docs/ui/style-guide.md) for appearance and shared controls, the [UI map](ui.md) for screens and code, and the [plan](PLAN.md) for device acceptance.
 
 ## Shared control geometry
 
 The Watch Up Next card sets the reference for depth. iPhone dashboard cards share a 16 pt content inset and 24 pt continuous corners. Use the [shared finish](docs/ui/style-guide.md#3-glass-and-surfaces) instead of a fixed gradient or rim. Card glow applies the same upper-left highlight across pages. Watch uses compact geometry. Keep icons and labels aligned inside the hit target.
 
-Use the shared Jarvis controls for equivalent actions. The web action classes and iOS glass controls own their geometry, focus, disabled and pending states; space them with the parent layout. Rows share the row surface, not a hero-card treatment. Keep buttons in a stable place while pending. Never introduce per-screen glass or draw a second orb.
+Use shared controls for equivalent actions and space them in the parent layout. Rows use the row surface, not a hero card. Keep pending buttons in place. Never introduce per-screen glass or draw a second orb.
 
 ## One living neural background
 
@@ -27,7 +27,7 @@ The Apple Maps card shows the native map with each place or route, a labelled es
 
 Use the established Voice screen and controls; no provider selector, engine badge or split speech settings. Connecting, Listening, Thinking, Speaking, Reconnecting and Ended reflect evidence from the session. Speaking tracks playback, not whether the mic is off. An old reply must not keep Speaking on during a later turn. Keep caption order stable on reconnect. The GPT-Live backend is audio-only: after an unsupported camera or screen response, stop capture and explain why.
 
-**iPhone Voice.** The shared orb holds its background position as captions and windows appear. Swipe between full result cards; the neighbouring cards sharpen as they enter. The headline scrolls with the content. Tap the grip or swipe it up to enlarge and down to minimise. The floating × dismisses the selected window. **+ → Windows** reopens it during the same call. A new call starts with an empty list. Generated results stay in Chat. Spoken previous, next and close follow the same selection. On iPhone, Speaking follows audible playback. Show Thinking while a settled spoken request awaits its answer and Listening when the owner continues. Live Activity actions use the primary accent and the state label uses the secondary accent. Keep Mute, Speaker and End reachable on iPhone. Speaker shows the active output and switches between speakerphone and the system call route. A downward gesture in the status region minimises Voice; a gesture in captions or content only scrolls it. Reduce Motion removes the transition, not the affordance. Speech, capture recovery and gestures on a real device are not verified by this guide.
+**iPhone Voice.** Keep the orb fixed behind captions and windows. Swipe between full result cards; neighbouring cards sharpen on entry. The headline scrolls with the content. Tap the grip or swipe it up to enlarge and down to minimise. The floating × dismisses the selected window. **+ → Windows** reopens it in the same call; a new call starts empty. Results stay in Chat. Spoken previous, next and close follow the same selection. Show Thinking while a settled request awaits an answer and Listening when the owner continues. Live Activity actions use the primary accent; the state label uses the secondary. Keep Mute, Speaker and End reachable. Speaker shows the active output and switches between speakerphone and the system call route. A downward status gesture minimises Voice; captions and content only scroll. Reduce Motion removes the transition, not the affordance.
 
 ## Notes, Tasks and Graph
 
@@ -68,4 +68,4 @@ Circular complications draw their symbols and task count on a clear background. 
 
 ## Acceptance
 
-Concepts, source review and simulator results do not establish physical-device acceptance. Follow [the plan](PLAN.md) for device checks. CarPlay is a voice-first direction, not a shipped interface; see [Apple capabilities](docs/ios/apple-capabilities.md).
+Source and simulator results do not establish [device acceptance](PLAN.md#next-steps-and-blockers). CarPlay has no shipped interface.
