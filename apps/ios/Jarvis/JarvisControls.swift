@@ -1249,7 +1249,7 @@ struct JarvisComposerMenuButton<Content: View>: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
-        .tint(JarvisDesignTokens.secondaryAccent)
+        .tint(JarvisDesignTokens.primaryAccent)
         .menuOrder(.fixed)
         .disabled(isDisabled)
         .accessibilityLabel(title)
