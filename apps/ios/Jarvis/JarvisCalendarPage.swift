@@ -78,12 +78,7 @@ struct JarvisCalendarPage: View {
     }
 
     private var page: some View {
-        JarvisPageScaffold(title: "Calendar", language: language, actions: {}, headline: {
-            HStack {
-                JarvisSegmentedBar(title: "Calendar period", identifierPrefix: "calendar.period", items: Period.allCases.map { JarvisTabItem(tag: $0, title: $0.rawValue, identifier: "calendar." + $0.rawValue) }, selection: $period)
-                JarvisLabelledButton(title: "Today", isEmphasised: true) { date = Date() }
-            }
-        }, hero: {
+        JarvisPageScaffold(title: "Calendar", language: language, actions: {}, headline: {}, hero: {
             VStack(spacing: 12) {
                 HStack {
                     Text(periodTitle).font(.headline)
@@ -96,7 +91,8 @@ struct JarvisCalendarPage: View {
                         .datePickerStyle(.graphical).tint(JarvisDesignTokens.primaryAccent)
                 } else {
                     JarvisCalendarTimeline(days: days, events: events, calendar: calendar, selectedDay: $date,
-                                           onSelect: { date = max(interval.start, $0.start); draft = CalendarDraft($0) }, onMove: move)
+                                           onSelect: { date = max(interval.start, $0.start); draft = CalendarDraft($0) }, onMove: move,
+                                           onCreate: startDraft)
                 }
             }.padding().jarvisDashboardSurface().environment(\.jarvisCardRole, "calendar")
         }, sections: {
@@ -134,11 +130,16 @@ struct JarvisCalendarPage: View {
             }
         })
         .jarvisPageFooter {
-            HStack {
-                JarvisSearchField(placeholder: "Search calendar", text: $search, identifier: "calendar.search", clearTitle: "Clear")
-                JarvisIconButton(title: "New event", systemImage: "plus", identifier: "calendar.add", tint: JarvisDesignTokens.primaryAccent) {
-                    search = ""
-                    draft = CalendarDraft(date: date, calendar: calendar)
+            VStack(spacing: 6) {
+                HStack {
+                    JarvisSegmentedBar(title: "Calendar period", identifierPrefix: "calendar.period", items: Period.allCases.map { JarvisTabItem(tag: $0, title: $0.rawValue, identifier: "calendar." + $0.rawValue) }, selection: $period)
+                    JarvisLabelledButton(title: "Today", isEmphasised: true) { date = Date() }
+                }
+                HStack {
+                    JarvisSearchField(placeholder: "Search calendar", text: $search, identifier: "calendar.search", clearTitle: "Clear")
+                    JarvisIconButton(title: "New event", systemImage: "plus", identifier: "calendar.add", tint: JarvisDesignTokens.primaryAccent) {
+                        startDraft(at: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date)
+                    }
                 }
             }.padding(.horizontal).padding(.vertical, 4)
         }
@@ -148,6 +149,12 @@ struct JarvisCalendarPage: View {
         .confirmationDialog("Delete this appointment?", isPresented: $pendingDeletion) {
             Button("Delete", role: .destructive) { if let draft { Task { await persist(draft, delete: true) } } }
         }
+    }
+
+    private func startDraft(at start: Date) {
+        search = ""
+        date = start
+        draft = CalendarDraft(start: start)
     }
 
     private func arrow(_ label: String, _ direction: Int) -> some View {
@@ -268,10 +275,10 @@ private struct CalendarDraft {
         id = event.id; version = event.etag; isNew = false
         title = event.title; start = event.start; end = event.end; allDay = event.allDay == true
     }
-    init(date: Date, calendar: Calendar) {
+    init(start: Date) {
         id = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         version = nil; isNew = true; title = ""; allDay = false
-        start = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        self.start = start
         end = start.addingTimeInterval(3600)
     }
     func matches(_ event: JarvisTodayCalendarEntry, calendar: Calendar) -> Bool {
