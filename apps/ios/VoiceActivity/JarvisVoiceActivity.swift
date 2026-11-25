@@ -15,7 +15,7 @@ struct JarvisVoiceActivity: Widget {
         ActivityConfiguration(for: VoiceActivityAttributes.self) { context in
             VoiceLockScreenView(attributes: context.attributes, state: context.state)
                 .activityBackgroundTint(Color.black.opacity(0.86))
-                .activitySystemActionForegroundColor(context.state.appearance.secondaryDarkColor)
+                .activitySystemActionForegroundColor(context.state.appearance.primaryDarkColor)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -77,7 +77,7 @@ struct JarvisVoiceActivity: Widget {
                                 .frame(maxWidth: .infinity, minHeight: 36)
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(context.state.appearance.secondaryDarkColor)
+                            .foregroundStyle(context.state.appearance.primaryDarkColor)
                             .background(.white.opacity(0.08), in: Capsule())
 
                             Button(intent: EndVoiceActivityIntent(
@@ -253,7 +253,7 @@ struct VoiceLockScreenView: View {
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(state.appearance.secondaryDarkColor)
+        .foregroundStyle(state.appearance.primaryDarkColor)
         .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
 
         Button(intent: EndVoiceActivityIntent(sessionID: attributes.sessionID.uuidString)) {

@@ -728,9 +728,10 @@ final class WatchModel: ObservableObject {
                 }
             }
             do {
+                let buffers = self.audio.capturedBuffers
                 try await Task.sleep(for: WatchVoiceRecovery.RouteBudget.settleDelay)
                 guard isCurrent() else { return }
-                let needsRestart = self.audio.needsRouteRecovery()
+                let needsRestart = self.audio.needsRouteRecovery(buffersBeforeSettling: buffers)
                 switch self.audioRouteBudget.decide(needsRestart: needsRestart) {
                 case .unchanged: return
                 case .exhausted:

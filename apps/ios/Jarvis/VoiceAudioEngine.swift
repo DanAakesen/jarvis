@@ -187,12 +187,27 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     #if os(watchOS)
-    func needsRouteRecovery(changedEngine: AVAudioEngine? = nil) -> Bool {
+    var capturedBuffers: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return stats.buffers
+    }
+
+    func needsRouteRecovery(changedEngine: AVAudioEngine? = nil, buffersBeforeSettling: Int? = nil) -> Bool {
         controlLock.lock()
         defer { controlLock.unlock() }
         if let changedEngine, changedEngine !== engine { return false }
         guard hasCaptureTap else { return false }
-        return !engine.isRunning || captureRoute != Route()
+        guard engine.isRunning else { return true }
+        let route = Route()
+        guard captureRoute != route else { return false }
+        // watchOS may finish assigning its speaker after the microphone tap is already delivering.
+        if let buffersBeforeSettling, capturedBuffers > buffersBeforeSettling,
+           !route.inputs.isEmpty, !route.outputs.isEmpty {
+            captureRoute = route
+            return false
+        }
+        return true
     }
 
     func recoverRoute(attempt: Int) throws {
@@ -200,7 +215,10 @@ final class VoiceAudioEngine: @unchecked Sendable {
         defer { controlLock.unlock() }
         guard !engine.isRunning || captureRoute != Route() else { return }
         if attempt > 1 { requestsVoiceProcessing = false }
-        try restartInput(mode: activeMode)
+        // First rebuild against the route the OS has just activated. Reapplying the session
+        // category here can cause another route-change notification during startup.
+        let mode: AVAudioSession.Mode = attempt >= 3 ? .default : activeMode
+        try restartInput(mode: mode, configureAudioSession: attempt > 1)
     }
 
     #endif
@@ -236,13 +254,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
         engine.stop()
     }
 
-    private func restartInput(mode: AVAudioSession.Mode) throws {
+    private func restartInput(mode: AVAudioSession.Mode, configureAudioSession: Bool = true) throws {
         stopCaptureGraph()
         #if os(watchOS)
         drainPlayback()
         replaceGraph()
         #endif
-        try attachInput(mode: mode)
+        try attachInput(mode: mode, configureAudioSession: configureAudioSession)
     }
 
     private func measure(_ buffer: AVAudioPCMBuffer) {
