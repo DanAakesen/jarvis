@@ -55,7 +55,7 @@ Browse and edit the primary Google Calendar used by Home, Chat and Voice. Schedu
 
 ### Appearance
 
-Dan can change or reset the accent colours and the shared Gradient, Frost and Glass finish on iPhone. The paired Watch picks up the saved settings when it connects. Individual iPhone cards can override colour, not finish.
+Dan can change or reset the accent colours and the shared Gradient, Frost and Glass finish on iPhone. The paired Watch picks up the saved settings when it connects. An iPhone orb theme pairs its icon with a primary colour. All dashboard cards share a glow colour, and individual cards can override their base tint.
 
 ### Workouts
 

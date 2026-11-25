@@ -77,6 +77,28 @@ export class HealthReadModel {
   /** Server-owned background reads; never pass an owner from request input. */
   static forOwner(pool: sql.ConnectionPool, owner: string) { return new HealthReadModel(pool, ownerId(owner)); }
 
+  /** Aggregate the owner's recorded history in SQL so the phone receives at most one row per month. */
+  async dashboardHistory(kind: 'training' | 'steps' | 'sleep' | 'nutrition', signal: AbortSignal) {
+    const daily = {
+      training: `SELECT workout_date AS day, COUNT(*) AS amount FROM daily.health_workouts
+        WHERE owner_object_id=@owner GROUP BY workout_date`,
+      steps: `SELECT metric_date AS day, value AS amount FROM daily.health_daily_metrics
+        WHERE owner_object_id=@owner AND metric_name='step_count' AND unit='count' AND value IS NOT NULL`,
+      sleep: `SELECT sleep_date AS day, COALESCE(total_sleep_hours,asleep_hours) AS amount FROM daily.health_sleep_daily
+        WHERE owner_object_id=@owner AND COALESCE(total_sleep_hours,asleep_hours)>0`,
+      nutrition: `SELECT meal_date AS day, SUM(energy_kcal) AS amount FROM daily.nutrition_meals
+        WHERE owner_object_id=@owner AND deleted_at IS NULL GROUP BY meal_date HAVING COUNT(energy_kcal)=COUNT(*)`,
+    };
+    return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
+      const request = new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner);
+      const result = await healthSqlQuery(request, `WITH recorded AS (${daily[kind]})
+        SELECT CONVERT(char(7),day,126) AS month, COUNT(*) AS days, SUM(CAST(amount AS float)) AS total
+        FROM recorded WHERE day<=CONVERT(date,SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Romance Standard Time')
+        GROUP BY CONVERT(char(7),day,126) ORDER BY month;`, bounded);
+      return { months: result.recordset };
+    });
+  }
+
   async sync(signal: AbortSignal) {
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
       const request = () => new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner);

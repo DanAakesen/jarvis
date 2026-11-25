@@ -59,6 +59,7 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         CODE_SIGN_ENTITLEMENTS: Jarvis/Jarvis.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: OrbRed OrbTeal OrbViolet
       configs:
         Debug:
           APS_ENVIRONMENT: development

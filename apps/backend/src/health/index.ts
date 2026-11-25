@@ -1,6 +1,6 @@
 import { healthContractVersion, healthCapabilitiesVersion, healthModuleId, healthViewIds, healthQuerySourcesV1, healthQuerySourcesV2, healthQuerySourcesV3, healthQuerySourcesV5, healthQuerySourcesV6, healthQuerySourcesV6WithoutTrainingTargets } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
-import { resolveHealthOwner } from './owner.js';
+import { resolveHealthBrowserOwner, resolveHealthOwner } from './owner.js';
 import type { HealthData } from './query.js';
 import { healthQueryTool } from './tools/query.js';
 import { healthShowTool } from './tools/show.js';
@@ -49,6 +49,18 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
       serveLegacyDailyAlias(app);
       if (data) {
         await app.register(healthQueryRoutes(data.query));
+        const history = data.dashboardHistory;
+        if (history) {
+          app.get<{ Params: { kind: 'training' | 'steps' | 'sleep' | 'nutrition' } }>('/health/dashboard-history/:kind', {
+            onRequest: async (request, reply) => {
+              resolveHealthBrowserOwner(request);
+              reply.header('Cache-Control', 'no-store');
+            },
+            schema: { params: { type: 'object', required: ['kind'], properties: {
+              kind: { type: 'string', enum: ['training', 'steps', 'sleep', 'nutrition'] },
+            } } },
+          }, async request => history(request, request.params.kind, AbortSignal.timeout(30_000)));
+        }
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets, nutritionSuggestions));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (internalNutrition) await app.register(manualMealRoutes(internalNutrition));

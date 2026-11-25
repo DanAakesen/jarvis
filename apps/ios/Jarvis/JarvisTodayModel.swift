@@ -53,6 +53,7 @@ final class JarvisTodayModel: ObservableObject {
         now = dependencies.now()
     }
 
+    var healthClient: JarvisHealthClient? { dependencies.healthClient }
     var notesClient: JarvisNotesClient? { dependencies.notes }
     var isFixture: Bool { dependencies.fixture != nil }
 

@@ -18,6 +18,7 @@ struct JarvisHealthCards<Lifts: View>: View {
     @State private var stepRange = JarvisHealthPeriodPreset.today
     @State private var sleep = JarvisHealthPeriodPreset.today
     @State private var nutrition = JarvisHealthPeriodPreset.today
+    @State private var fullHistory: Set<JarvisHistoryMetric> = []
     @State private var selectedDay: String?
     @State private var showingMeal = false
     @State private var pendingMeal: JarvisManualMeal?
@@ -32,11 +33,14 @@ struct JarvisHealthCards<Lifts: View>: View {
     private func period(_ value: JarvisHealthPeriodPreset) -> JarvisHealthPeriod {
         .make(value, now: data.activityNow)
     }
-    private func range(_ value: Binding<JarvisHealthPeriodPreset>, _ key: String) -> some View {
-        JarvisPeriodSelector(title: "Period", identifierPrefix: "health.\(key).period",
+    private func range(_ value: Binding<JarvisHealthPeriodPreset>, _ metric: JarvisHistoryMetric) -> some View {
+        let key = metric.rawValue
+        return JarvisHistoryPeriodSelector(title: "Period", identifierPrefix: "health.\(key).period",
             items: JarvisHealthPeriodPreset.dashboardPresets.map {
                 JarvisTabItem(tag: $0, title: $0 == .today ? "Today" : "\($0.dayCount)d", identifier: "health.\(key).\($0.rawValue)")
-            }, selection: value)
+            }, selection: value, all: Binding(get: { fullHistory.contains(metric) }, set: { on in
+                if on { fullHistory.insert(metric) } else { fullHistory.remove(metric) }
+            }))
     }
     private func number(_ value: Double?) -> String {
         value?.formatted(.number.locale(language.locale).precision(.fractionLength(0))) ?? "—"
@@ -51,19 +55,27 @@ struct JarvisHealthCards<Lifts: View>: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            JarvisPageHeroCard(title: "Training", accessory: { range($training, "training") }) {
-                trainingSummary
+            JarvisPageHeroCard(title: "Training", accessory: { range($training, .training) }) {
+                if fullHistory.contains(.training) {
+                    JarvisHistoryChart(metric: .training, client: client)
+                } else { trainingSummary }
                 Divider()
                 lifts()
             }.environment(\.jarvisCardRole, "training").accessibilityIdentifier("health.hero.training")
-            JarvisPageHeroCard(title: stepRange == .today ? "Steps today" : "Steps", accessory: { range($stepRange, "steps") }) {
-                stepSummary
+            JarvisPageHeroCard(title: stepRange == .today && !fullHistory.contains(.steps) ? "Steps today" : "Steps", accessory: { range($stepRange, .steps) }) {
+                if fullHistory.contains(.steps) {
+                    JarvisHistoryChart(metric: .steps, client: client)
+                } else { stepSummary }
             }.environment(\.jarvisCardRole, "steps")
-            JarvisPageHeroCard(title: "Sleep", accessory: { range($sleep, "sleep") }) {
-                sleepSummary
+            JarvisPageHeroCard(title: "Sleep", accessory: { range($sleep, .sleep) }) {
+                if fullHistory.contains(.sleep) {
+                    JarvisHistoryChart(metric: .sleep, client: client)
+                } else { sleepSummary }
             }.environment(\.jarvisCardRole, "sleep").accessibilityIdentifier("health.hero.sleep").id("sleep")
-            JarvisPageHeroCard(title: "Nutrition", accessory: { range($nutrition, "nutrition") }) {
-                nutritionSummary
+            JarvisPageHeroCard(title: "Nutrition", accessory: { range($nutrition, .nutrition) }) {
+                if fullHistory.contains(.nutrition) {
+                    JarvisHistoryChart(metric: .nutrition, client: client)
+                } else { nutritionSummary }
                 let mealLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
                 mealLayout {
                     JarvisLabelledButton(title: "Log meal", systemImage: "plus", identifier: "health.nutrition.add",

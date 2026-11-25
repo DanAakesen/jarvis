@@ -326,31 +326,24 @@ struct JarvisHealthBodySection: View {
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
+    @State private var selectedName = ""
+
     var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisSectionHeadline(copy.text(.bodyTrend)) {
-                Text(copy.text(.thirtyDays)).font(.caption).foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                if dashboard.metricCatalog.state == .loading {
-                    JarvisHealthStateLine(state: .loading, language: language).jarvisListRow(separator: false)
-                } else if dashboard.metricCatalog.state == .notServed ||
-                            dashboard.metricCatalog.state == .offline ||
-                            dashboard.metricCatalog.state == .failed {
-                    JarvisHealthStateLine(state: dashboard.metricCatalog.state, language: language).jarvisListRow(separator: false)
-                } else if metrics.isEmpty {
-                    Text(copy.text(hasSearch ? .noResults : .empty))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .jarvisListRow(separator: false)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(metrics, id: \.metricName) { metric in
-                            metricRow(metric).jarvisListRow(separator: metric.metricName != metrics.last?.metricName)
-                        }
-                    }
+        JarvisPageHeroCard(title: copy.text(.bodyTrend), accessory: {
+            Text(copy.text(.thirtyDays)).font(.caption).foregroundStyle(.secondary)
+        }) {
+            if dashboard.metricCatalog.state == .loading || (dashboard.metricCatalog.failure != nil && metrics.isEmpty) || dashboard.metricCatalog.state == .notServed {
+                JarvisHealthStateLine(state: dashboard.metricCatalog.state, language: language)
+            } else if let selected = metrics.first(where: { $0.metricName == selectedName }) ?? metrics.first {
+                if metrics.count > 1 {
+                    JarvisPeriodSelector(title: copy.text(.bodyTrend), identifierPrefix: "health.body.metric",
+                        items: metrics.map { JarvisTabItem(tag: $0.metricName, title: copy.text($0.title), identifier: "health.body.select." + $0.metricName) },
+                        selection: Binding(get: { selected.metricName }, set: { selectedName = $0 }))
                 }
-            }.frame(maxWidth: .infinity, alignment: .leading).jarvisDashboardSurface()
+                metricRow(selected).id(selected.metricName)
+            } else {
+                Text(copy.text(hasSearch ? .noResults : .empty)).font(.subheadline).foregroundStyle(.secondary)
+            }
         }
     }
 

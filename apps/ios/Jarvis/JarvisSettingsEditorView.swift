@@ -19,6 +19,20 @@ private struct JarvisSettingsField: Identifiable {
     let maximumLength: Int?
 }
 
+private enum JarvisIconTheme: String, CaseIterable {
+    case orange = "Orange", red = "Red", teal = "Teal", violet = "Violet"
+
+    var iconName: String? { self == .orange ? nil : "Orb" + rawValue }
+    var primary: String {
+        switch self {
+        case .orange: "#" + JarvisPalette.defaultPrimaryHex
+        case .red: "#F54253"
+        case .teal: "#14CBA5"
+        case .violet: "#AA65F4"
+        }
+    }
+}
+
 struct JarvisSettingsEditorView: View {
     let detail: JarvisSettingsDetail
     let response: JarvisSettingsResponse?
@@ -32,6 +46,7 @@ struct JarvisSettingsEditorView: View {
     @State private var draft: [String: String] = [:]
     @State private var editState: JarvisSettingsEditState?
     @State private var material = JarvisMaterialSettings()
+    @State private var pendingTheme: JarvisIconTheme?
     @State private var saving = false
     @State private var selectedCard = "next"
     @State private var error: String?
@@ -43,6 +58,8 @@ struct JarvisSettingsEditorView: View {
                 choice("appearance.theme", .theme, response?.options["themes"]?.arrayValues ?? []),
                 colour("appearance.accent", .primaryColour),
                 colour("appearance.accent-secondary", .secondaryColour),
+                choice("appearance.card-glow", .cardGlow, JarvisCardGlow.allCases.map(\.rawValue)),
+                colour("appearance.card-glow-color", .customGlowColour),
             ] + JarvisSurfaceSettings.keys.map { colour("appearance." + $0, .primaryColour) }
         case .instructions, .personality, .identity:
             return [
@@ -122,7 +139,7 @@ struct JarvisSettingsEditorView: View {
     }
 
     private var hasChanges: Bool {
-        editState?.isDirty ?? false
+        editState?.isDirty == true || needsIconChange
     }
 
     private var previewPalette: JarvisPaletteSelection {
@@ -134,6 +151,41 @@ struct JarvisSettingsEditorView: View {
             primaryHex: hex("appearance.accent", fallback: JarvisPalette.defaultPrimaryHex),
             secondaryHex: hex("appearance.accent-secondary", fallback: JarvisPalette.defaultSecondaryHex)
         ) ?? .standard
+    }
+
+    private var needsIconChange: Bool {
+        guard let pendingTheme else { return false }
+        return UIApplication.shared.supportsAlternateIcons && UIApplication.shared.alternateIconName != pendingTheme.iconName
+    }
+
+    private var themeChoices: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 62))]) {
+            ForEach(JarvisIconTheme.allCases, id: \.self) { theme in
+                let selected = previewPalette.primaryHex.caseInsensitiveCompare(String(theme.primary.dropFirst())) == .orderedSame
+                    && (pendingTheme.map { $0 == theme } ?? (UIApplication.shared.alternateIconName == theme.iconName))
+                Button {
+                    guard let primary = fields.first(where: { $0.id == "appearance.accent" }) else { return }
+                    pendingTheme = theme
+                    setDraft(theme.primary, for: primary)
+                } label: {
+                    VStack {
+                        Image("Theme" + theme.rawValue).resizable().scaledToFit().frame(width: 48, height: 48)
+                            .clipShape(RoundedRectangle(cornerRadius: 11)).accessibilityHidden(true)
+                        HStack(spacing: 2) {
+                            if selected { Image(systemName: "checkmark") }
+                            Text(theme.rawValue)
+                        }.font(.caption)
+                    }
+                }.buttonStyle(.plain).accessibilityLabel(theme.rawValue)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+    }
+
+    private var draftMaterial: JarvisMaterialSettings {
+        JarvisMaterialSettings(material.percentages,
+            glow: JarvisCardGlow(rawValue: draft["appearance.card-glow"] ?? "") ?? .primary,
+            customHex: draft["appearance.card-glow-color"] ?? JarvisPalette.defaultPrimaryHex)
     }
 
     private var previewCardTone: Color {
@@ -170,7 +222,10 @@ struct JarvisSettingsEditorView: View {
                 Text(error)
                     .foregroundStyle(.red)
             }
-            ForEach(fields.filter { !$0.id.contains(".surface-") }) { field in
+            if detail == .appearance {
+                Section("Orb theme") { themeChoices }.disabled(response == nil || readOnly || saving)
+            }
+            ForEach(fields.filter { !$0.id.contains(".surface-") && !$0.id.hasPrefix("appearance.card-glow") }) { field in
                 fieldRow(field)
                     .disabled(response == nil || readOnly || saving)
                     .accessibilityHint(response == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
@@ -187,11 +242,15 @@ struct JarvisSettingsEditorView: View {
                         }
                         .padding().background {
                             JarvisMaterialSurface(in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous),
-                                                  style: .card, tint: previewCardTone, highlight: previewPalette.primaryColor,
+                                                  style: .card, tint: previewCardTone, highlight: draftMaterial.cardHighlight(palette: previewPalette),
                                                   solid: JarvisDesignTokens.glassSolid)
                         }
                     }
                     .accessibilityElement(children: .ignore).accessibilityLabel("Material preview")
+                    ForEach(fields.filter { $0.id == "appearance.card-glow" ||
+                        ($0.id == "appearance.card-glow-color" && draftMaterial.glow == .custom) }) { field in
+                        fieldRow(field)
+                    }
                     ForEach(JarvisMaterialControl.allCases, id: \.self) { control in
                         let percent = material.percentages[control.rawValue] ?? control.defaultPercent
                         let label = control.rawValue.capitalized
@@ -211,7 +270,7 @@ struct JarvisSettingsEditorView: View {
                     }
                     Button("Restore default finish") {
                         for control in JarvisMaterialControl.allCases { setMaterial(control.defaultPercent, for: control) }
-                    }.disabled(material == JarvisMaterialSettings())
+                    }.disabled(material.percentages == JarvisMaterialSettings().percentages)
                 }.disabled(response == nil || readOnly || saving)
                 Section("Background colors") {
                     ForEach(fields.filter { field in JarvisSurfaceSettings.roles.contains(surfaceRole(field)) }) { field in
@@ -290,7 +349,7 @@ struct JarvisSettingsEditorView: View {
                     let fallback: String
                     if JarvisSurfaceSettings.cards.contains(surfaceRole(field)) {
                         fallback = draft["appearance.surface-card"] ?? ""
-                    } else if field.id == "appearance.accent" {
+                    } else if field.id == "appearance.accent" || field.id == "appearance.card-glow-color" {
                         fallback = JarvisPalette.defaultPrimaryHex
                     } else if field.id == "appearance.accent-secondary" {
                         fallback = JarvisPalette.defaultSecondaryHex
@@ -319,7 +378,7 @@ struct JarvisSettingsEditorView: View {
             } else {
                 Picker(selection: binding(for: field)) {
                     ForEach(available, id: \.self) { value in
-                        Text(jarvisSettingsOptionTitle(value, language: language))
+                        Text(field.id == "appearance.card-glow" ? value.capitalized : jarvisSettingsOptionTitle(value, language: language))
                             .tag(value)
                     }
                 } label: {
@@ -427,7 +486,7 @@ struct JarvisSettingsEditorView: View {
         case .integer(let value): return String(value)
         case .number(let value): return String(value)
         case .boolean(let value): return String(value)
-        default: return ""
+        default: return id == "appearance.card-glow" ? JarvisCardGlow.primary.rawValue : ""
         }
     }
 
@@ -474,13 +533,24 @@ struct JarvisSettingsEditorView: View {
     }
 
     private func save() async {
-        guard let client, !readOnly, !saving, hasChanges, validDraft, let patch = editState?.changes else { return }
+        guard let client, !readOnly, !saving, hasChanges, validDraft else { return }
         saving = true
         error = nil
         do {
-            let saved = try await client.saveSettings(patch)
-            editState = JarvisSettingsEditState(saved.settings)
-            onSaved(saved)
+            if let patch = editState?.changes {
+                let saved = try await client.saveSettings(patch)
+                editState = JarvisSettingsEditState(saved.settings)
+                onSaved(saved)
+            }
+            if let pendingTheme, needsIconChange {
+                do {
+                    try await UIApplication.shared.setAlternateIconName(pendingTheme.iconName)
+                } catch {
+                    self.error = "Colours saved. The Home Screen icon could not change. Tap Save to retry."
+                    saving = false
+                    return
+                }
+            }
             dismiss()
         } catch {
             self.error = copy(.saveFailed)

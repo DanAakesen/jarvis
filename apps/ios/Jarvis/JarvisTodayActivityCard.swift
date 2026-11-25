@@ -10,6 +10,7 @@ struct JarvisTodayActivityCard: View {
     let fixtureMode: Bool
 
     @State private var expanded = false
+    @State private var showAll = false
     @ScaledMetric(relativeTo: .title) private var summaryValueSize: CGFloat = 34
 
     private var isLargeText: Bool { dynamicTypeSize.isAccessibilitySize }
@@ -22,37 +23,43 @@ struct JarvisTodayActivityCard: View {
         let display = model.display(language: language)
         VStack(alignment: .leading, spacing: 10) {
             header
-            workoutsBlock(display)
-            if !model.dailyActivity.isLoading, let issue = activityIssue(display) {
-                Text(issue).font(.footnote).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("today.activity.issue")
-            }
-            Divider().accessibilityHidden(true)
-            stepsBlock(display)
-            if expanded {
-                let training = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
-                let walks = model.periodWorkouts.filter { ["walk", "walking", "52", "healthkit52"].contains(JarvisHealthLogic.normalizedWorkoutType($0.workoutType)) }
-                Text("Workouts include walks. The target is for gym sessions and runs.").font(.caption).foregroundStyle(.secondary)
-                Text("Gym & runs").font(.subheadline.weight(.semibold))
-                ForEach(Array(training.sorted { $0.performedAt > $1.performedAt }.enumerated()), id: \.offset) { _, workout in
-                    HStack {
-                        Text(workout.performedAt, format: .dateTime.day().month(.abbreviated)).foregroundStyle(.secondary)
-                        Text(workout.session.shortTitle(language: language)).fontWeight(.semibold)
-                        Spacer()
-                        Text(workout.durationMinutes > 0 ? "\(Int(workout.durationMinutes.rounded())) min" : "—").foregroundStyle(.secondary)
-                    }.font(.footnote)
+            if showAll {
+                JarvisHistoryChart(metric: .training, client: model.healthClient)
+                Divider()
+                JarvisHistoryChart(metric: .steps, client: model.healthClient)
+            } else {
+                workoutsBlock(display)
+                if !model.dailyActivity.isLoading, let issue = activityIssue(display) {
+                    Text(issue).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("today.activity.issue")
                 }
-                if training.isEmpty { Text("No gym sessions or runs recorded").font(.footnote).foregroundStyle(.secondary) }
-                if !walks.isEmpty {
-                    let timed = walks.map(\.durationMinutes).filter { $0 > 0 }
-                    let minutes = (timed.count == walks.count ? "" : "≥ ") + "\(Int(timed.reduce(0, +).rounded())) min"
-                    Text("\(walks.count) \(walks.count == 1 ? "walk" : "walks")" + (timed.isEmpty ? "" : " · " + minutes))
-                        .font(.footnote).foregroundStyle(.secondary)
+                Divider().accessibilityHidden(true)
+                stepsBlock(display)
+                if expanded {
+                    let training = model.periodWorkouts.filter { JarvisHealthLogic.workoutKind($0.workoutType) != .other }
+                    let walks = model.periodWorkouts.filter { ["walk", "walking", "52", "healthkit52"].contains(JarvisHealthLogic.normalizedWorkoutType($0.workoutType)) }
+                    Text("Workouts include walks. The target is for gym sessions and runs.").font(.caption).foregroundStyle(.secondary)
+                    Text("Gym & runs").font(.subheadline.weight(.semibold))
+                    ForEach(Array(training.sorted { $0.performedAt > $1.performedAt }.enumerated()), id: \.offset) { _, workout in
+                        HStack {
+                            Text(workout.performedAt, format: .dateTime.day().month(.abbreviated)).foregroundStyle(.secondary)
+                            Text(workout.session.shortTitle(language: language)).fontWeight(.semibold)
+                            Spacer()
+                            Text(workout.durationMinutes > 0 ? "\(Int(workout.durationMinutes.rounded())) min" : "—").foregroundStyle(.secondary)
+                        }.font(.footnote)
+                    }
+                    if training.isEmpty { Text("No gym sessions or runs recorded").font(.footnote).foregroundStyle(.secondary) }
+                    if !walks.isEmpty {
+                        let timed = walks.map(\.durationMinutes).filter { $0 > 0 }
+                        let minutes = (timed.count == walks.count ? "" : "≥ ") + "\(Int(timed.reduce(0, +).rounded())) min"
+                        Text("\(walks.count) \(walks.count == 1 ? "walk" : "walks")" + (timed.isEmpty ? "" : " · " + minutes))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-            }
-            Divider()
-            JarvisDashboardDisclosure(title: expanded ? "Show less" : "Show more", expanded: expanded) {
-                animate { expanded.toggle() }
+                Divider()
+                JarvisDashboardDisclosure(title: expanded ? "Show less" : "Show more", expanded: expanded) {
+                    animate { expanded.toggle() }
+                }
             }
         }
         .padding(JarvisPageHeaderMetrics.heroInset)
@@ -69,7 +76,7 @@ struct JarvisTodayActivityCard: View {
     }
 
     private var rangeToggle: some View {
-        JarvisPeriodSelector(
+        JarvisHistoryPeriodSelector(
             title: copy(.period),
             identifierPrefix: "today.range",
             items: JarvisTodayRange.allCases.map {
@@ -78,7 +85,7 @@ struct JarvisTodayActivityCard: View {
             selection: Binding(
                 get: { model.activity.range },
                 set: { range in animate { model.activity.setRange(range) } }
-            )
+            ), all: $showAll
         )
     }
 

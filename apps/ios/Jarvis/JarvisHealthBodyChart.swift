@@ -3,7 +3,7 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-/// Full-width plots retain the actual 30-day spacing, even when only one measurement exists.
+/// Show the recorded dates and preserve their relative spacing.
 struct JarvisHealthBodyChart: View {
     let metric: JarvisHealthMetricSeries
     let period: JarvisHealthPeriod
@@ -44,6 +44,13 @@ struct JarvisHealthBodyChart: View {
                                 dateLabel(reading)
                             }
                         }
+                        if let index = trend.readings.firstIndex(where: { $0.id == reading.id }), index > 0 {
+                            let previous = trend.readings[index - 1]
+                            let change = reading.value - previous.value
+                            let unit = reading.unit == "%" ? "pp" : reading.unit
+                            Text("\(change > 0 ? "+" : "")\(formatBodyMeasurement(change, language: language)) \(unit) since \(JarvisHealthLocalization.formattedDate(previous.day, language: language))")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .foregroundStyle(.primary)
@@ -82,7 +89,7 @@ struct JarvisHealthBodyChart: View {
 
     private func value(_ reading: JarvisBodyTrend.Reading) -> some View {
         Text("\(formatBodyMeasurement(reading.value, language: language)) \(reading.unit)")
-            .font(.title3.weight(.semibold)).monospacedDigit()
+            .font(.title.bold()).foregroundStyle(JarvisDesignTokens.primaryAccent).monospacedDigit()
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -103,10 +110,11 @@ struct JarvisBodyTrendPlot: View {
     @Binding var selectedID: Int?
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
-    private var start: Date { parseDate(period.startDate)! }
-    private var end: Date { parseDate(period.endDate)! }
+    private var start: Date { trend.readings.first?.date ?? parseDate(period.startDate)! }
+    private var end: Date { trend.latest?.date ?? parseDate(period.endDate)! }
     private var ticks: [Date] {
-        dynamicTypeSize.isAccessibilitySize ? [start, end]
+        if start == end { return [start] }
+        return trend.readings.count <= 2 || dynamicTypeSize.isAccessibilitySize ? [start, end]
             : [start, start.addingTimeInterval(end.timeIntervalSince(start) / 2), end]
     }
 
