@@ -86,8 +86,7 @@ private struct VoiceVisualCarousel: View {
     let toggleExpanded: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var visibleID: String?
-    @State private var userPaging = false
+    @GestureState private var horizontalDrag: CGFloat = 0
 
     private var entries: [PresentedWorkspaceView] { runtime.voiceVisuals?.entries ?? [] }
     private var selectedID: String? { runtime.voiceVisuals?.selectedID }
@@ -96,53 +95,38 @@ private struct VoiceVisualCarousel: View {
     var body: some View {
         GeometryReader { geometry in
             let peek = entries.count > 1 ? min(geometry.size.width * 0.09, 38) : 0
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: JarvisDesignTokens.compactSpacing) {
-                    ForEach(entries) { visual in
-                        let selected = visual.id == selectedID
-                        VoiceVisualPage(presented: visual, runtime: runtime, language: language,
-                                        inset: inset, measuresSummary: !isExpanded && entries.count == 1)
-                            .overlay(alignment: .top) { if selected { resizeControl } }
-                            .overlay(alignment: .topTrailing) {
-                                if selected {
-                                    JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark",
-                                                     identifier: "voice.panel.close", showsBackground: false) {
-                                        runtime.closeSelectedVoiceVisual()
-                                    }
-                                }
-                            }
-                            .frame(width: max(1, geometry.size.width - 2 * peek))
-                            .frame(maxHeight: .infinity)
+            let width = max(1, geometry.size.width - 2 * peek)
+            let stride = width + JarvisDesignTokens.compactSpacing
+            let index = entries.firstIndex { $0.id == selectedID } ?? 0
+            let drag = max(index == entries.count - 1 ? 0 : -stride,
+                           min(index == 0 ? 0 : stride, horizontalDrag))
+
+            ZStack(alignment: .leading) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { position, visual in
+                    if abs(position - index) <= 2 {
+                        let distance = CGFloat(position - index) + drag / stride
+                        let fraction = reduceMotion ? 0 : min(1, abs(distance))
+                        page(visual, selected: position == index)
+                            .frame(width: width, height: geometry.size.height)
                             .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                            // A material over the card softens its contents without rasterizing WebKit.
                             .overlay {
-                                if !selected {
-                                    Color.clear.contentShape(Rectangle()).onTapGesture { runtime.selectVoiceVisual(visual.id) }
-                                }
+                                RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.55 * Double(fraction))
+                                    .allowsHitTesting(false)
                             }
-                            .scrollTransition(.interactive, axis: .horizontal) { page, phase in
-                                page.scaleEffect(reduceMotion || phase.isIdentity ? 1 : 0.94)
-                                    .blur(radius: reduceMotion || phase.isIdentity ? 0 : 1.4)
-                            }
-                            .accessibilityHidden(!selected)
-                            .id(visual.id)
+                            .scaleEffect(1 - 0.06 * fraction)
+                            .offset(x: peek + distance * stride)
                     }
                 }
-                .scrollTargetLayout()
             }
-            .contentMargins(.horizontal, peek, for: .scrollContent)
-            .scrollIndicators(.hidden)
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-            .scrollPosition(id: $visibleID, anchor: .center)
-            .onScrollPhaseChange { _, phase in
-                if phase == .interacting { userPaging = true }
-                if phase == .idle, userPaging {
-                    userPaging = false
-                    if let visibleID { runtime.selectVoiceVisual(visibleID) }
-                }
-            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+            .contentShape(Rectangle())
+            .clipped()
+            .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
+            .simultaneousGesture(pageDrag(index: index, stride: stride))
             .onChange(of: selectedID, initial: true) { _, id in
-                userPaging = false
-                withAnimation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion) { visibleID = id }
                 guard let visual = entries.first(where: { $0.id == id }) else { return }
                 AccessibilityNotification.Announcement(visual.view.workspaceTitle(language: language)).post()
             }
@@ -154,6 +138,42 @@ private struct VoiceVisualCarousel: View {
             if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
         }
         .accessibilityIdentifier("voice.panel")
+    }
+
+    private func page(_ visual: PresentedWorkspaceView, selected: Bool) -> some View {
+        VoiceVisualPage(presented: visual, runtime: runtime, language: language,
+                        inset: inset, measuresSummary: !isExpanded && entries.count == 1)
+            .overlay(alignment: .top) { if selected { resizeControl } }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark",
+                                     identifier: "voice.panel.close", showsBackground: false) {
+                        runtime.closeSelectedVoiceVisual()
+                    }
+                }
+            }
+            .overlay {
+                if !selected {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { runtime.selectVoiceVisual(visual.id) }
+                }
+            }
+            .accessibilityHidden(!selected)
+    }
+
+    private func pageDrag(index: Int, stride: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .updating($horizontalDrag) { value, drag, transaction in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                transaction.animation = nil
+                drag = value.translation.width
+            }
+            .onEnded { value in
+                let delta = value.translation
+                guard abs(delta.width) > abs(delta.height),
+                      abs(value.predictedEndTranslation.width) > stride * 0.2 else { return }
+                let next = index + (delta.width < 0 ? 1 : -1)
+                if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
+            }
     }
 
     private var resizeControl: some View {
@@ -201,51 +221,52 @@ private struct VoiceVisualPage: View {
 
     var body: some View {
         GeometryReader { geometry in
-            content(htmlHeight: max(
-                JarvisDesignTokens.controlMinimumHeight, geometry.size.height
-            ))
+            let height = max(JarvisDesignTokens.controlMinimumHeight, geometry.size.height)
+            if usesWebScrolling {
+                content(htmlHeight: height)
+            } else {
+                ScrollView { content(htmlHeight: height) }
+                    .scrollBounceBehavior(.basedOnSize)
+            }
         }
+        .onChange(of: presented.view) { _, _ in notice = nil }
     }
 
     private func content(htmlHeight: CGFloat) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
-                if let title, !title.isEmpty {
-                    Text(title)
-                        .padding(.trailing, JarvisDesignTokens.controlMinimumHeight)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                sourceNote
-                GeneratedViewContent(
-                    view: presented.view,
-                    runtime: runtime,
-                    language: language,
-                    previewImage: nil,
-                    voiceHTMLHeight: htmlHeight,
-                    onAction: { notice = performGeneratedViewAction($0, runtime: runtime, language: language, openURL: openURL) }
-                )
-                if let notice {
-                    Text(notice)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.updatesFrequently)
-                }
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
+            if let title, !title.isEmpty {
+                Text(title)
+                    .padding(.trailing, JarvisDesignTokens.controlMinimumHeight)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, inset)
-            .padding(.vertical, usesWebScrolling ? 0 : JarvisDesignTokens.voicePanelEdgeInset)
-            .background {
-                if fitsSummary {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: VoiceSummaryHeight.self, value: ceil(proxy.size.height))
-                    }
+            sourceNote
+            GeneratedViewContent(
+                view: presented.view,
+                runtime: runtime,
+                language: language,
+                previewImage: nil,
+                voiceHTMLHeight: htmlHeight,
+                onAction: { notice = performGeneratedViewAction($0, runtime: runtime, language: language, openURL: openURL) }
+            )
+            if let notice {
+                Text(notice)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, inset)
+        .padding(.vertical, usesWebScrolling ? 0 : JarvisDesignTokens.voicePanelEdgeInset)
+        .background {
+            if fitsSummary {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: VoiceSummaryHeight.self, value: ceil(proxy.size.height))
                 }
             }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .onChange(of: presented.view) { _, _ in notice = nil }
     }
 
     private var usesWebScrolling: Bool {
