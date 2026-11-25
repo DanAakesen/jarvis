@@ -137,6 +137,7 @@ struct JarvisHealthBarChart: View {
     let language: JarvisAppLanguage
     var state: JarvisHealthReadState = .available
     var showSummary = true
+    var prominentHeadline = false
     var barColor: Color = .secondary
     let format: (Double) -> String
 
@@ -157,7 +158,8 @@ struct JarvisHealthBarChart: View {
                 HStack(alignment: .top) {
                     (
                         Text(values.headline(selected: selected).map(format) ?? "—")
-                            .font(.headline)
+                            .font(prominentHeadline ? .title2.bold() : .headline)
+                            .foregroundColor(prominentHeadline ? JarvisDesignTokens.healthAccent : .primary)
                         + Text(" \(unit) · \(caption)")
                             .font(.caption)
                             .foregroundColor(.secondary)
