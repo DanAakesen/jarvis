@@ -46,11 +46,11 @@ describe('conversation blocks in the message store', () => {
     const block = {
       version: 1, id: randomUUID(), type: 'voice-window', title: 'Result', summary: 'Result',
       source: { label: 'Voice', issuedAt: new Date().toISOString() },
-      data: { view: { version: 1, renderer: 'text', title: 'Result', source: { id: 'now', status: 'complete' },
-        data: { format: 'plain', content: 'Example' } } },
+      data: { view: { version: 1, renderer: 'detail', title: 'Result', source: { id: 'now', status: 'complete' },
+        data: { fields: Array.from({ length: 24 }, (_, i) => ({ label: String(i), value: 'x'.repeat(1_800) })) } } },
     } as const;
     expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', block)).toBe(true);
-    expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', { ...block, title: 'Updated' })).toBe(true);
+    expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', { ...block, id: randomUUID(), title: 'Updated' })).toBe(true);
     await store.endSession(first.id);
     const second = await store.createSession({ channel: 'voice', language: 'en' });
     const history = await store.getHistory({ sessionId: first.id, limit: 10 });

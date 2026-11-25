@@ -441,7 +441,8 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           USING (SELECT s.id, s.language FROM dbo.jarvis_sessions s JOIN dbo.messages m ON m.jarvis_session_id = s.id
                  WHERE m.id = @turnId AND m.role = N'dan' AND s.channel = N'voice') AS source
           ON target.jarvis_session_id = source.id AND target.source_item_id = @sourceItemId AND target.role = N'jarvis'
-          WHEN MATCHED THEN UPDATE SET text = @title, metadata = @metadata
+          WHEN MATCHED THEN UPDATE SET text = @title,
+            metadata = JSON_MODIFY(@metadata, '$.blocks[0].id', JSON_VALUE(target.metadata, '$.blocks[0].id'))
           WHEN NOT MATCHED THEN INSERT (jarvis_session_id, role, text, language, interrupted, source_item_id, metadata)
             VALUES (source.id, N'jarvis', @title, source.language, 0, @sourceItemId, @metadata)
           OUTPUT CONVERT(varchar(20), inserted.id) AS id;`);
