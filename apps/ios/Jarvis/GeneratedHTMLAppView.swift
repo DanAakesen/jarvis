@@ -25,7 +25,8 @@ struct HTMLAppRenderer: View {
                     voiceStyle: voiceHeight == nil ? nil : (colorScheme == .dark ? .dark : .light),
                     palette: JarvisPalette.shared.selection
                 )
-                    .frame(height: voiceHeight ?? 560)
+                    .frame(minHeight: voiceHeight == nil ? 560 : JarvisDesignTokens.controlMinimumHeight,
+                           maxHeight: voiceHeight ?? 560)
             }
             if failedArtifactID == artifactId {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {

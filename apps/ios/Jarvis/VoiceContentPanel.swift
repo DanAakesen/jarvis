@@ -125,7 +125,7 @@ private struct VoiceVisualCarousel: View {
             .contentShape(Rectangle())
             .clipped()
             .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
-            .simultaneousGesture(pageDrag(index: index, stride: stride))
+            .simultaneousGesture(pageDrag(index: index, stride: stride, width: geometry.size.width, peek: peek))
             .onChange(of: selectedID, initial: true) { _, id in
                 guard let visual = entries.first(where: { $0.id == id }) else { return }
                 AccessibilityNotification.Announcement(visual.view.workspaceTitle(language: language)).post()
@@ -160,16 +160,29 @@ private struct VoiceVisualCarousel: View {
             .accessibilityHidden(!selected)
     }
 
-    private func pageDrag(index: Int, stride: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 10)
+    private func pageDrag(index: Int, stride: CGFloat, width: CGFloat, peek: CGFloat) -> some Gesture {
+        func canPage(from start: CGPoint) -> Bool {
+            guard entries.count > 1, entries.indices.contains(index) else { return false }
+            switch entries[index].view {
+            case .htmlApp, .map, .table, .knowledgeGraph, .code, .chart:
+                // Keep horizontal interaction inside the content; the grip and adjacent cards still page.
+                let grip = JarvisDesignTokens.controlMinimumHeight
+                return start.x < peek || start.x > width - peek ||
+                    (abs(start.x - width / 2) < grip * 0.75 && start.y < grip / 2)
+            default:
+                return true
+            }
+        }
+
+        return DragGesture(minimumDistance: 10)
             .updating($horizontalDrag) { value, drag, transaction in
-                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                guard canPage(from: value.startLocation), abs(value.translation.width) > abs(value.translation.height) else { return }
                 transaction.animation = nil
                 drag = value.translation.width
             }
             .onEnded { value in
                 let delta = value.translation
-                guard abs(delta.width) > abs(delta.height),
+                guard canPage(from: value.startLocation), abs(delta.width) > abs(delta.height),
                       abs(value.predictedEndTranslation.width) > stride * 0.2 else { return }
                 let next = index + (delta.width < 0 ? 1 : -1)
                 if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
