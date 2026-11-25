@@ -37,6 +37,26 @@ final class VoiceVisualHistoryTests: XCTestCase {
         XCTAssertNil(history.selectedID)
     }
 
+    func testRelativeCommandsFollowManualFocusAndCloseOnlyTheSelectedResult() throws {
+        var history = VoiceVisualHistory()
+        XCTAssertFalse(history.apply(.close))
+        for id in ["forecast", "rain", "walk"] { history.present(try visual(id)) }
+        XCTAssertFalse(history.apply(.next))
+        history.select("forecast")
+        XCTAssertFalse(history.apply(.previous))
+        XCTAssertTrue(history.apply(.next))
+        XCTAssertEqual(history.selected?.id, "rain")
+        XCTAssertTrue(history.apply(.close))
+        XCTAssertEqual(history.entries.map(\.id), ["forecast", "walk"])
+        XCTAssertEqual(history.selected?.id, "walk")
+        XCTAssertTrue(history.apply(.previous))
+        XCTAssertEqual(history.selected?.id, "forecast")
+        XCTAssertTrue(history.apply(.close))
+        XCTAssertTrue(history.apply(.close))
+        XCTAssertNil(history.selected)
+        XCTAssertFalse(history.apply(.next))
+    }
+
     func testResizeAndMinimizeSwipesRequireDominantVerticalTravel() {
         XCTAssertEqual(VoiceVerticalSwipe(translation: CGSize(width: 10, height: -45), minimumDistance: 32), .up)
         XCTAssertEqual(VoiceVerticalSwipe(translation: CGSize(width: -12, height: 32), minimumDistance: 32), .down)

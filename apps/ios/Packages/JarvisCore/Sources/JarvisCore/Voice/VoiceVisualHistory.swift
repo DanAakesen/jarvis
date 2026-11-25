@@ -12,6 +12,10 @@ public struct PresentedWorkspaceView: Equatable, Identifiable, Sendable {
     public var id: String { viewId }
 }
 
+public enum VoiceWindowAction: String, Sendable {
+    case previous, next, close
+}
+
 public struct VoiceVisualHistory: Equatable, Sendable {
     public private(set) var entries: [PresentedWorkspaceView] = []
     public private(set) var selectedID: String?
@@ -30,6 +34,24 @@ public struct VoiceVisualHistory: Equatable, Sendable {
     public mutating func select(_ id: String) {
         guard entries.contains(where: { $0.id == id }) else { return }
         selectedID = id
+    }
+
+    public var selected: PresentedWorkspaceView? {
+        entries.first { $0.id == selectedID }
+    }
+
+    @discardableResult
+    public mutating func apply(_ action: VoiceWindowAction) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == selectedID }) else { return false }
+        switch action {
+        case .close:
+            dismiss(entries[index].id)
+        case .previous, .next:
+            let neighbour = index + (action == .previous ? -1 : 1)
+            guard entries.indices.contains(neighbour) else { return false }
+            selectedID = entries[neighbour].id
+        }
+        return true
     }
 
     public mutating func dismiss(_ id: String) {

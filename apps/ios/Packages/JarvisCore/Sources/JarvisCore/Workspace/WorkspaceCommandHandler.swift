@@ -5,6 +5,7 @@ public enum WorkspaceCommandIntent: Equatable, Sendable {
     case present(viewId: String, view: GeneratedView)
     case focus(viewId: String)
     case dismiss(viewId: String)
+    case voiceWindow(VoiceWindowAction)
     /// Hides what is on screen; `forget` also drops the views so they cannot be shown again.
     case dismissAll(forget: Bool)
     case restoreLast
@@ -28,6 +29,11 @@ public enum WorkspaceCommandInterpreter {
         language: JarvisAppLanguage = .en
     ) -> WorkspaceCommandInterpretation {
         switch command.operation {
+        case "voice-window":
+            guard case .string(let value)? = command.fields["action"], let action = VoiceWindowAction(rawValue: value) else {
+                return .refused(reason: JarvisWorkspaceLocalization.string(.operationUnsupported, language: language))
+            }
+            return .supported(.voiceWindow(action))
         case "navigate":
             guard case .string(let page)? = command.fields["page"], navigationPages.contains(page) else {
                 return .refused(reason: JarvisWorkspaceLocalization.string(.unsupportedDestination, language: language))

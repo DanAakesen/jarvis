@@ -8,6 +8,7 @@ test('the schema the model reads offers only actions and values that some comman
   for (const name of action.enum) {
     const commands = [
       { operation: 'conversation', action: name },
+      { operation: 'voice-window', action: name },
       { operation: 'context-panel', action: name },
       ...value.enum.map((given) => ({ operation: 'session', action: name, value: given })),
     ];
@@ -17,6 +18,18 @@ test('the schema the model reads offers only actions and values that some comman
     assert.ok(['voice', 'camera'].some((action) => accepted({ operation: 'session', action, value: name })),
       `the schema offers value ${name}, but no session command accepts it`);
   }
+});
+
+test('relative Voice window commands accept only a phone and a supported action', () => {
+  const base = { commandId: 'step', operation: 'voice-window' };
+  for (const action of ['previous', 'next', 'close']) {
+    assert.ok(isWorkspaceCommand({ ...base, action }));
+    assert.ok(isWorkspaceCommand({ ...base, action, target: 'phone' }));
+    assert.deepEqual(workspaceCommandProblems({ ...base, action }), []);
+  }
+  assert.equal(isWorkspaceCommand({ ...base, action: 'next', target: 'all' }), false);
+  assert.equal(isWorkspaceCommand({ ...base, action: 'end' }), false);
+  assert.equal(isWorkspaceCommand({ ...base, action: 'next', viewId: 'other' }), false);
 });
 
 test('a session command other than ending the voice session or setting the camera is refused and names the supported actions', () => {

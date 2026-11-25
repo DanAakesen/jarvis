@@ -551,6 +551,7 @@ export type WorkspaceCommand = { target?: WorkspaceCommandTarget } & (
   | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
   | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
   | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
+  | { commandId: string; operation: 'voice-window'; target?: 'phone'; action: 'previous' | 'next' | 'close' }
   | { commandId: string; operation: 'conversation'; action: 'show' | 'hide' }
   | { commandId: string; operation: 'session'; action: 'voice'; value: 'end' }
   | { commandId: string; operation: 'session'; action: 'camera'; value: 'front' | 'rear' | 'off' }

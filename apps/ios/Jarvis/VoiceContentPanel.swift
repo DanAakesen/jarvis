@@ -122,7 +122,7 @@ private struct VoiceVisualCarousel: View {
             )
             .padding(.horizontal, JarvisDesignTokens.controlMinimumHeight)
             JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark", identifier: "voice.panel.close", showsBackground: false) {
-                runtime.userDismissedView()
+                runtime.closeSelectedVoiceVisual()
             }
         }
         .padding(.horizontal, inset)

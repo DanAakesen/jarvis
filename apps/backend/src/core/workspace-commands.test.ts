@@ -72,6 +72,29 @@ describe('session commands', () => {
   });
 });
 
+describe('relative Voice window commands', () => {
+  it('uses the phone selection even when a desktop reported last and delivers a retried close only once', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const received: string[] = [];
+    const phone = broker.connect('owner', (event, data) => {
+      if (event === 'workspace-command') received.push(data.command.commandId);
+      return true;
+    });
+    const desktop = broker.connect('owner', () => { throw new Error('unexpected desktop delivery'); });
+    const snapshot = { windows: [], contextPanelOpen: false };
+    broker.updateSnapshot('owner', phone.sessionId, { ...snapshot, device: { kind: 'phone' } });
+    broker.updateSnapshot('owner', desktop.sessionId, { ...snapshot, device: { kind: 'desktop' } });
+    const command = { commandId: 'close-current', operation: 'voice-window', action: 'close' } as const;
+    const signal = new AbortController().signal;
+    const first = broker.execute('owner', command, signal);
+    broker.acknowledge('owner', phone.sessionId, command.commandId, true);
+    await first;
+    await broker.execute('owner', command, signal);
+    expect(received).toEqual(['close-current']);
+    broker.dispose();
+  });
+});
+
 describe('Apple Maps phone acknowledgements', () => {
   it('selects only a capable phone and accepts only its bounded receipt for the matching lookup', async () => {
     const broker = new WorkspaceCommandBroker();
