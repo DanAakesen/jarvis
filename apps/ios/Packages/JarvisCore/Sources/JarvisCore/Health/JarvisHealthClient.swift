@@ -13,6 +13,19 @@ public enum JarvisHealthSource: String, CaseIterable, Codable, Sendable {
     case lifts = "daily.health.lifts"
 }
 
+public enum JarvisHistoryMetric: String, Sendable { case training, steps, sleep, nutrition }
+
+public struct JarvisMonthlyHistory: Decodable, Sendable {
+    public struct Month: Decodable, Identifiable, Sendable {
+        public let month: String
+        public let days: Int
+        public let total: Double
+        public var id: String { month }
+        public var average: Double { total / Double(days) }
+    }
+    public let months: [Month]
+}
+
 public struct JarvisTodayNutritionBudget: Codable, Equatable, Sendable {
     public struct Calories: Codable, Equatable, Sendable {
         public let restingKcal: Double?
@@ -360,6 +373,17 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
         let result: WorkoutEnvelope = try decode(response.body)
         guard result.entry.isValid else { throw JarvisHealthClientError.invalidResponse }
         return result.entry
+    }
+
+    public func dashboardHistory(_ metric: JarvisHistoryMetric) async throws -> JarvisMonthlyHistory {
+        let response = try await client.performAuthenticatedRequest(method: .get,
+            path: ["health", "dashboard-history", metric.rawValue], idempotent: true)
+        guard response.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
+        let history: JarvisMonthlyHistory = try decode(response.body)
+        guard history.months.allSatisfy({ $0.days > 0 && $0.total.isFinite }) else {
+            throw JarvisHealthClientError.invalidResponse
+        }
+        return history
     }
 
     /// Lists recent workouts for the Health and Home pages; `days` is 7, 14 or 30 when set.

@@ -117,7 +117,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
 
     private var paletteContext: [String: String] {
         let palette = JarvisPalette.shared
-        return ["primary": palette.primaryHex, "secondary": palette.secondaryHex]
+        let finish = JarvisMaterialPreferences.shared.current
+        return ["primary": palette.primaryHex, "secondary": palette.secondaryHex,
+                "cardGlow": finish.glow.rawValue, "customGlow": finish.customHex]
     }
 
     /// Latest-only delivery also reaches the paired Watch after it comes back in range.

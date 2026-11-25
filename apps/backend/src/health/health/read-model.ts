@@ -70,12 +70,92 @@ function withoutReadColumns(row: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(row).filter(([field]) => !field.startsWith('read_')));
 }
 
+interface HistoricalWorkout {
+  manual: boolean; day: string; started: Date | null; kind: string | null;
+}
+
+const workoutMatchWindow = 2 * 60 * 60 * 1000;
+const strengthKinds = new Set(['20', '50', '11', '59', '63', 'gym', 'strengthtraining', 'traditionalstrengthtraining',
+  'functionalstrengthtraining', 'highintensityintervaltraining', 'hiit', 'crosstraining', 'coretraining']);
+
+/** Count each synced workout once, matching the nearest compatible unused manual log within two hours. */
+export function monthlyTraining(rows: HistoricalWorkout[]) {
+  const months = new Map<string, { days: Set<string>; total: number }>();
+  const manual = new Map<number, HistoricalWorkout[]>();
+  const used = new Set<HistoricalWorkout>();
+  function count(day: string) {
+    const key = day.slice(0, 7);
+    const month = months.get(key) ?? { days: new Set<string>(), total: 0 };
+    month.days.add(day); month.total++; months.set(key, month);
+  }
+  for (const row of rows.filter(row => row.manual)) {
+    count(row.day);
+    if (!row.started) continue;
+    const bucket = Math.floor(row.started.getTime() / workoutMatchWindow);
+    const group = manual.get(bucket) ?? [];
+    group.push(row); manual.set(bucket, group);
+  }
+  for (const row of rows.filter(row => !row.manual)) {
+    if (!row.started) { count(row.day); continue; }
+    const kind = (row.kind ?? '').toLowerCase().replace(/^hkworkoutactivitytype/, '').replace(/[^a-z0-9]/g, '')
+      .replace(/^(?:rawvalue|healthkit)(\d+)$/, '$1').replace('strenght', 'strength');
+    const group = strengthKinds.has(kind) ? 'strength' : ['run', 'running', '37'].includes(kind) ? 'cardio' : 'other';
+    const start = row.started.getTime(), bucket = Math.floor(start / workoutMatchWindow);
+    let nearest: HistoricalWorkout | undefined;
+    let distance = workoutMatchWindow;
+    for (const key of [bucket - 1, bucket, bucket + 1]) {
+      for (const candidate of manual.get(key) ?? []) {
+        const compatible = group === 'strength' ? candidate.kind !== 'cardio' && candidate.kind !== 'other' : candidate.kind === group;
+        const delta = Math.abs(candidate.started!.getTime() - start);
+        if (!used.has(candidate) && compatible && delta < distance) { nearest = candidate; distance = delta; }
+      }
+    }
+    if (nearest) used.add(nearest);
+    else count(row.day);
+  }
+  return Array.from(months, ([month, data]) => ({ month, days: data.days.size, total: data.total }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
 /** Read-only, unregistered boundary. Existing root auth resolves owner; no owner argument or raw-inbox reads. */
 export class HealthReadModel {
   private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string) {}
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest) { return new HealthReadModel(pool, ownerId(resolveHealthOwner(request))); }
   /** Server-owned background reads; never pass an owner from request input. */
   static forOwner(pool: sql.ConnectionPool, owner: string) { return new HealthReadModel(pool, ownerId(owner)); }
+
+  /** Return one row per recorded month. */
+  async dashboardHistory(kind: 'training' | 'steps' | 'sleep' | 'nutrition', signal: AbortSignal) {
+    const daily = {
+      steps: `SELECT metric_date AS day, value AS amount FROM daily.health_daily_metrics
+        WHERE owner_object_id=@owner AND metric_name='step_count' AND unit='count' AND value IS NOT NULL`,
+      sleep: `SELECT sleep_date AS day, COALESCE(total_sleep_hours,asleep_hours) AS amount FROM daily.health_sleep_daily
+        WHERE owner_object_id=@owner AND COALESCE(total_sleep_hours,asleep_hours)>0`,
+      nutrition: `SELECT meal_date AS day, SUM(energy_kcal) AS amount FROM daily.nutrition_meals
+        WHERE owner_object_id=@owner AND deleted_at IS NULL GROUP BY meal_date HAVING COUNT(energy_kcal)=COUNT(*)`,
+    };
+    return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
+      const request = new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner);
+      if (kind === 'training') {
+        const result = await healthSqlQuery<HistoricalWorkout>(request, `SELECT manual, CONVERT(char(10),day,126) AS day, started, kind
+          FROM (
+            SELECT CAST(0 AS bit) AS manual, workout_date AS day,
+                   CONVERT(datetime2, SWITCHOFFSET(TRY_CONVERT(datetimeoffset,start_at), '+00:00')) AS started, workout_type AS kind, id AS row_id
+              FROM daily.health_workouts WHERE owner_object_id=@owner
+            UNION ALL
+            SELECT CAST(1 AS bit), CONVERT(date,gym_day), started_at, session_type, CONVERT(nvarchar(36),id)
+              FROM daily.workout_entries WHERE owner_object_id=@owner AND deleted_at IS NULL
+          ) workouts WHERE day<=CONVERT(date,SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Romance Standard Time')
+          ORDER BY day,row_id;`, bounded);
+        return { months: monthlyTraining(result.recordset) };
+      }
+      const result = await healthSqlQuery(request, `WITH recorded AS (${daily[kind]})
+        SELECT CONVERT(char(7),day,126) AS month, COUNT(*) AS days, SUM(CAST(amount AS float)) AS total
+        FROM recorded WHERE day<=CONVERT(date,SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Romance Standard Time')
+        GROUP BY CONVERT(char(7),day,126) ORDER BY month;`, bounded);
+      return { months: result.recordset };
+    });
+  }
 
   async sync(signal: AbortSignal) {
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {

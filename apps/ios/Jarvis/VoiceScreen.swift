@@ -21,55 +21,31 @@ struct VoiceScreenView: View {
     @State private var screenSharePickerToken = 0
     @State private var screenShareProblem: String?
     @State private var captionFollow = ChatFollowState()
-    @State private var orbFrame: CGRect = .zero
+    @State private var expandedWindow = false
     @State private var panelHeight: CGFloat = 0
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                JarvisNeuralBackground(activity: orbActivity, effects: .full, orb: .screen(orbFrame))
-
-                VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
-                    Spacer(minLength: 0)
-                    voiceOrb(
-                        diameter: min(
-                            JarvisDesignTokens.gateOrbSize,
-                            max(minimumOrbDiameter(in: geometry.size), geometry.size.height - voiceBottomReservation(in: geometry.size) -
-                                JarvisDesignTokens.voiceOrbHaloInset * 2 -
-                                JarvisDesignTokens.voiceStatusFontSize * 2 -
-                                JarvisDesignTokens.voiceContentSpacing * 2 -
-                                JarvisDesignTokens.voiceControlBottomInset)
-                        )
-                    )
-                    if let connectionTitle {
-                        Text(connectionTitle)
-                            .font(.system(size: JarvisDesignTokens.voiceStatusFontSize, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .contentTransition(.opacity)
-                    } else {
-                        Text(model.statusText)
-                            .font(.system(size: JarvisDesignTokens.voiceStatusFontSize, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .contentTransition(.opacity)
-                            .accessibilityHidden(true)
-                    }
-
-                    Spacer(minLength: JarvisDesignTokens.voiceControlBottomInset)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: max(0, geometry.size.height - voiceBottomReservation(in: geometry.size)))
-                // Only the orb/status region can minimize Voice. Captions, visuals and call controls are siblings.
-                .contentShape(Rectangle())
-                .gesture(minimizeGesture)
-                .frame(maxHeight: .infinity, alignment: .top)
-                .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
+                JarvisNeuralStage(activity: orbActivity)
 
                 VStack(spacing: JarvisDesignTokens.voiceStatusSpacing) {
+                    Text(connectionTitle ?? model.statusText)
+                        .font(.system(size: JarvisDesignTokens.voiceStatusFontSize, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.opacity)
+                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .contentShape(Rectangle())
+                        .gesture(minimizeGesture)
+                        .modifier(VoiceMinimizeAction(
+                            isEnabled: model.isSessionActive && !model.showsConnectionRecovery,
+                            action: minimizeVoice
+                        ))
                     Spacer(minLength: 0)
                     if model.showsConnectionRecovery {
                         connectionRecoveryActions
                     } else {
-                        if model.isCaptionsEnabled, hasCaptions {
+                        if model.isCaptionsEnabled, hasCaptions, !expandedWindow {
                             captions(maximumHeight: captionMaximumHeight(in: geometry.size, alongsidePanel: visiblePanelHeight > 0))
                         }
                         if let errorMessage = model.errorMessage {
@@ -84,7 +60,8 @@ struct VoiceScreenView: View {
                                 runtime: workspaceRuntime,
                                 language: language,
                                 maximumHeight: panelMaximumHeight(in: geometry.size),
-                                height: $panelHeight
+                                height: $panelHeight,
+                                isExpanded: $expandedWindow
                             )
                         }
                     }
@@ -94,7 +71,7 @@ struct VoiceScreenView: View {
                          JarvisDesignTokens.voiceControlDiameter +
                          JarvisDesignTokens.voiceControlBottomInset +
                          JarvisDesignTokens.voiceContentSpacing +
-                         screenShareReservation(visualIsVisible: visiblePanelHeight > 0))
+                         screenShareReservation)
 
                 VStack(spacing: JarvisDesignTokens.voiceStatusSpacing) {
                     Spacer(minLength: 0)
@@ -113,7 +90,6 @@ struct VoiceScreenView: View {
                     cameraTile(camera, in: geometry.size)
                 }
             }
-            // One eased, interruptible curve moves the orb back when content arrives and returns it when it goes.
             .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: panelHeight)
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -179,25 +155,6 @@ struct VoiceScreenView: View {
         JarvisOrbActivity(voiceState: model.voiceState, isMuted: model.showsConnectionRecovery || model.isMuted)
     }
 
-    private func voiceOrb(diameter: CGFloat) -> some View {
-        JarvisOrb(activity: orbActivity, size: diameter)
-        .jarvisCarryOver(.orb)
-        .frame(
-            width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
-            height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2
-        )
-        // The background fans out from the orb itself, not its halo.
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-            orbFrame = $0.insetBy(dx: JarvisDesignTokens.voiceOrbHaloInset, dy: JarvisDesignTokens.voiceOrbHaloInset)
-        }
-        .accessibilityElement()
-        .accessibilityLabel("\(JarvisVoiceLocalization.string(.orb)). \(connectionTitle ?? model.statusText)")
-        .modifier(VoiceMinimizeAction(
-            isEnabled: model.isSessionActive && !model.showsConnectionRecovery,
-            action: minimizeVoice
-        ))
-    }
-
     private var connectionTitle: String? {
         guard model.showsConnectionRecovery else { return nil }
         let key: JarvisNotesLocalizationKey =
@@ -237,51 +194,21 @@ struct VoiceScreenView: View {
         model.showsConnectionRecovery ? 0 : panelHeight
     }
 
-    private func voiceBottomReservation(in size: CGSize) -> CGFloat {
-        let showsCaptions = model.isCaptionsEnabled && hasCaptions
-        let panel = visiblePanelHeight
-        let captionReservation = showsCaptions
-            ? captionMaximumHeight(in: size, alongsidePanel: panel > 0)
-            : JarvisDesignTokens.voiceIdleCaptionReservation
-        // With the panel open, space for captions is reserved only while captions are on screen.
-        let reservedCaptions = panel > 0 && !showsCaptions ? 0 : captionReservation
-        return reservedCaptions +
-            (panel > 0 ? panel + JarvisDesignTokens.voiceContentSpacing : 0) +
-            JarvisDesignTokens.voiceControlDiameter +
-            JarvisDesignTokens.voiceControlBottomInset +
-            screenShareReservation(visualIsVisible: panel > 0) +
-            JarvisDesignTokens.voiceContentSpacing * 2
+    private var screenShareReservation: CGFloat {
+        model.isScreenSharing ? JarvisDesignTokens.voiceScreenShareBarHeight : 0
     }
 
-    private func screenShareReservation(visualIsVisible: Bool) -> CGFloat {
-        model.isScreenSharing || !visualIsVisible ? JarvisDesignTokens.voiceScreenShareBarHeight : 0
-    }
-
-    /// The most room the panel may take: what is left once the controls, the captions on screen and a small
-    /// orb with its status keep their place.
     private func panelMaximumHeight(in size: CGSize) -> CGFloat {
+        let available = spaceForPanelAndCaptions(in: size)
+        if expandedWindow { return available }
         let captions = model.isCaptionsEnabled && hasCaptions
-            ? captionMaximumHeight(in: size, alongsidePanel: true) + JarvisDesignTokens.voiceContentSpacing : 0
-        return min(
-            max(0, spaceForPanelAndCaptions(in: size) - captions),
-            size.height * (dynamicTypeSize.isAccessibilitySize ? 0.45 : 0.34)
-        )
+            ? captionMaximumHeight(in: size, alongsidePanel: true) + JarvisDesignTokens.voiceStatusSpacing : 0
+        return min(max(0, available - captions), size.height * 0.5)
     }
 
     private func spaceForPanelAndCaptions(in size: CGSize) -> CGFloat {
-        let controls = JarvisDesignTokens.voiceControlDiameter +
-            JarvisDesignTokens.voiceControlBottomInset +
-            screenShareReservation(visualIsVisible: true) +
-            JarvisDesignTokens.voiceContentSpacing * 2
-        let smallOrbRegion = minimumOrbDiameter(in: size) + JarvisDesignTokens.voiceOrbHaloInset * 2 +
-            JarvisDesignTokens.voiceStatusFontSize * 2 +
-            JarvisDesignTokens.voiceContentSpacing * 2 +
-            JarvisDesignTokens.voiceControlBottomInset
-        return size.height - controls - smallOrbRegion - JarvisDesignTokens.voiceContentSpacing
-    }
-
-    private func minimumOrbDiameter(in size: CGSize) -> CGFloat {
-        min(100, size.height * 0.15)
+        max(0, size.height - JarvisDesignTokens.controlMinimumHeight - JarvisDesignTokens.voiceControlDiameter -
+            JarvisDesignTokens.voiceControlBottomInset - screenShareReservation - JarvisDesignTokens.voiceStatusSpacing * 3)
     }
 
     private func captionMaximumHeight(in size: CGSize, alongsidePanel: Bool) -> CGFloat {
@@ -472,41 +399,47 @@ struct VoiceScreenView: View {
                 title: JarvisVoiceLocalization.string(.add),
                 systemImage: "plus",
                 identifier: "voice.add",
-                isDisabled: !model.canUseControls || model.visualInputUnavailable
+                isDisabled: !model.canUseControls
             ) {
-                if model.cameraPermissionDenied {
-                    Button(JarvisVoiceLocalization.string(.cameraSettings), systemImage: "gearshape") {
-                        model.openSettings()
-                    }
+                if let workspaceRuntime {
+                    VoiceWindowMenu(runtime: workspaceRuntime, language: language)
                 }
-                Toggle(isOn: Binding(
-                    get: { model.isCameraEnabled },
-                    set: { enabled in
-                        Task { enabled ? await model.startCamera() : await model.stopCamera() }
+                Group {
+                    if model.cameraPermissionDenied {
+                        Button(JarvisVoiceLocalization.string(.cameraSettings), systemImage: "gearshape") {
+                            model.openSettings()
+                        }
                     }
-                )) {
-                    Label(JarvisVoiceLocalization.string(.enableVideo), systemImage: "video")
-                }
-                .accessibilityIdentifier("voice.enableVideo")
-                Button(JarvisVoiceLocalization.string(.camera), systemImage: "camera") {
-                    Task {
-                        if await model.beginPhotoSession() { showsCameraViewfinder = true }
+                    Toggle(isOn: Binding(
+                        get: { model.isCameraEnabled },
+                        set: { enabled in
+                            Task { enabled ? await model.startCamera() : await model.stopCamera() }
+                        }
+                    )) {
+                        Label(JarvisVoiceLocalization.string(.enableVideo), systemImage: "video")
                     }
-                }
-                .accessibilityIdentifier("voice.photo")
-                if model.isScreenSharing {
-                    Button(JarvisVoiceLocalization.string(.stopSharing), systemImage: "stop.circle") {
-                        model.requestStopScreenSharing()
+                    .accessibilityIdentifier("voice.enableVideo")
+                    Button(JarvisVoiceLocalization.string(.camera), systemImage: "camera") {
+                        Task {
+                            if await model.beginPhotoSession() { showsCameraViewfinder = true }
+                        }
                     }
-                } else {
-                    Button(JarvisVoiceLocalization.string(.shareScreen), systemImage: "rectangle.on.rectangle") {
-                        if VoiceBroadcastExtension.isInstalled {
-                            screenSharePickerToken += 1
-                        } else {
-                            screenShareProblem = JarvisVoiceLocalization.string(.screenShareUnavailable)
+                    .accessibilityIdentifier("voice.photo")
+                    if model.isScreenSharing {
+                        Button(JarvisVoiceLocalization.string(.stopSharing), systemImage: "stop.circle") {
+                            model.requestStopScreenSharing()
+                        }
+                    } else {
+                        Button(JarvisVoiceLocalization.string(.shareScreen), systemImage: "rectangle.on.rectangle") {
+                            if VoiceBroadcastExtension.isInstalled {
+                                screenSharePickerToken += 1
+                            } else {
+                                screenShareProblem = JarvisVoiceLocalization.string(.screenShareUnavailable)
+                            }
                         }
                     }
                 }
+                .disabled(model.visualInputUnavailable)
             }
 
             VoiceControlButton(

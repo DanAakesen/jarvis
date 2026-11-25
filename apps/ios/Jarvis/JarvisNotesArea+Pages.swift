@@ -85,9 +85,11 @@ extension JarvisNotesArea {
                 }
                 if !notes.isEmpty {
                     sectionHeader(copy.notes)
-                    ForEach(notes) { note in
-                        noteRow(note, first: note.id == notes.first?.id, last: note.id == notes.last?.id)
-                    }
+                    LazyVStack(spacing: 0) {
+                        ForEach(notes) { note in
+                            noteRow(note, first: note.id == notes.first?.id, last: note.id == notes.last?.id, grouped: true)
+                        }
+                    }.jarvisDashboardSurface()
                 }
                 if isLoadingNotes && loadError == nil {
                     JarvisLoadingView(title: copy.loading, size: .inline).padding(.top, 24).frame(maxWidth: .infinity)
@@ -128,7 +130,7 @@ extension JarvisNotesArea {
         .jarvisLazyRowSurface(first: first, last: last)
     }
 
-    @ViewBuilder func noteRow(_ note: VaultNoteSummary, first: Bool, last: Bool, tile: Bool = false) -> some View {
+    @ViewBuilder func noteRow(_ note: VaultNoteSummary, first: Bool, last: Bool, tile: Bool = false, grouped: Bool = false) -> some View {
         let isPinned = pinnedPaths.contains(note.path)
         let location = JarvisNoteTitle.location(path: note.path)
         let row = JarvisPinDeleteSwipeRow(
@@ -186,7 +188,8 @@ extension JarvisNotesArea {
                 .overlay(alignment: .bottom) { rowDivider(last) }
             }
         }
-        if tile { row.jarvisDashboardSurface() }
+        if grouped { row }
+        else if tile { row.jarvisDashboardSurface() }
         else { row.jarvisLazyRowSurface(first: first, last: last) }
     }
 

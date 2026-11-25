@@ -70,7 +70,7 @@ struct WatchSurface: ViewModifier {
     func body(content: Content) -> some View {
         content.background {
             JarvisMaterialSurface(in: RoundedRectangle(cornerRadius: radius, style: .continuous),
-                                  style: .card, tint: WatchStyle.surface, highlight: WatchStyle.accent,
+                                  style: .card, tint: WatchStyle.surface,
                                   solid: WatchStyle.surface)
         }
     }

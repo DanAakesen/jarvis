@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
-  chatBlockInputSchema, chatBlockLimits, isChatBlock, type ChatBlock, type ChatBlockInput,
+  chatBlockInputSchema, chatBlockLimits, isChatBlock, type ChatBlock, type ChatBlockInput, type GeneratedView,
 } from '@jarvis/contracts';
 import { appleMapsGuidance, generatedViewValidationOptions } from './generated-view-validation.js';
-import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 const pendingTtlMs = 15 * 60 * 1000;
 
@@ -51,6 +52,24 @@ export function finalizeChatBlock(input: ChatBlockInput, now = new Date()): Chat
     id: randomUUID(),
     source: { ...input.source, issuedAt: input.source.issuedAt ?? now.toISOString() },
   } as ChatBlock;
+}
+
+// Detached tool jobs inherit the turn that started them, including when another call has since opened.
+export const voiceWindowTurn = new AsyncLocalStorage<{ app: FastifyInstance; turnId: string }>();
+
+export async function archiveVoiceWindow(
+  { app, turnId }: { app: FastifyInstance; turnId: string }, viewId: string, view: GeneratedView,
+): Promise<void> {
+  const snapshot = { ...view };
+  delete snapshot.actions;
+  const title = view.title.trim().slice(0, 200) || 'Voice window';
+  const sourceItemId = 'voice-window:' + createHash('sha256').update(viewId).digest('hex');
+  const saved = await app.conversationStore?.saveVoiceWindow?.(app.ownerObjectId, turnId, sourceItemId, {
+    version: 1, type: 'voice-window', id: randomUUID(), title, summary: title,
+    source: { label: 'Voice', issuedAt: new Date().toISOString() }, data: { view: snapshot },
+  });
+  if (!saved) throw new ToolFailure('Window displayed. Saving it in Chat could not be confirmed.', { outcomeUnknown: true });
+  app.nowEventHub.publish({ type: 'refresh' });
 }
 
 const contractRefusal = 'The block does not match the contract: version 1, a type, title, source.label, summary and data for the type. ' +

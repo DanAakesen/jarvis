@@ -58,7 +58,7 @@ Semantic colours (**Token**, `styles.css`):
 
 ## 3. Glass and surfaces
 
-**Native material ownership.** Settings → General → Appearance has one Gradient, Frost and Glass slider for all app-owned iPhone and Watch surfaces. Use the shared card and control components, backed by `JarvisMaterialSurface` and `JarvisMaterialSettings`. A role can choose a colour, including Up Next’s primary highlight. The renderer alone sets wash strength, backdrop frosting and lens strength. Reduce Transparency uses a solid surface. System-owned menus, keyboard and widget chrome follow the OS.
+**Native material ownership.** Settings → General → Appearance has one Gradient, Frost and Glass slider for all app-owned iPhone and Watch surfaces. Use the shared card and control components, backed by `JarvisMaterialSurface` and `JarvisMaterialSettings`. Card glow sets the upper-left highlight for every dashboard card, including Sleep. It follows Primary by default, or Secondary or a custom colour. A role can override its base tint. The renderer alone sets wash strength, backdrop frosting and lens strength. Reduce Transparency uses a solid surface. System-owned menus, keyboard and widget chrome follow the OS.
 
 - **Decision (owner-approved Notes direction, 15 Nov):** every action button is **neutral dark smoked
   glass**. No yellow, orange or gold fill, no warm gradient. Primary labels (Save, Done, Retry) are **amber text**;
@@ -222,7 +222,7 @@ node positions, not a screenshot.
 - **Tokens (web):** `--motion-press` 140ms, `--motion-state` 260ms, `--motion-panel` 420ms, `--motion-fade` 160ms,
   `--motion-ambient` 34s; easing `--ease-standard` `cubic-bezier(.2, .65, .3, 1)`, `--ease-enter` `cubic-bezier(.16, 1, .3, 1)`.
   `data-motion="calm"` slows these by 1.5×; `data-motion="reduced"` sets them to 0.
-- **Tokens (iOS):** filter animation 0.18s, Voice panel orb retreat and return `.smooth` 0.55s (`voicePanelMotion`), sidebar spring response 0.36 and damping 0.88, opening crossfade 0.3s
+- **Tokens (iOS):** filter animation 0.18s, Voice card transitions `.smooth` 0.55s (`voicePanelMotion`), sidebar spring response 0.36 and damping 0.88, opening crossfade 0.3s
   (0.15s with Reduce Motion), opening bar cycle 1.5s.
 - **Decision:** motion needs a stated purpose: feedback, state change, hierarchy or continuity. Acknowledge a press
   immediately. Prefer transform and opacity. No perpetual decoration and no parallax.

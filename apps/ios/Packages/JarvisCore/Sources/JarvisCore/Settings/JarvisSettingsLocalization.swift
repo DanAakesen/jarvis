@@ -87,6 +87,8 @@ public enum JarvisSettingsLocalizationKey: String, CaseIterable, Hashable, Senda
     case signOutFailed = "settings.signOutFailed"
     case ownerUnavailable = "settings.ownerUnavailable"
     case theme = "settings.theme"
+    case cardGlow = "settings.cardGlow"
+    case customGlowColour = "settings.customGlowColour"
     case primaryColour = "settings.primaryColour"
     case secondaryColour = "settings.secondaryColour"
     case restoreColours = "settings.restoreColours"

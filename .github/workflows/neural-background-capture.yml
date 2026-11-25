@@ -8,6 +8,8 @@ on:
       - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/**'
       - 'apps/ios/Jarvis/JarvisDesignSystem.swift'
       - 'apps/ios/Jarvis/JarvisControls.swift'
+      - 'apps/ios/Jarvis/VoiceContentPanel.swift'
+      - 'apps/ios/Jarvis/VoiceScreen.swift'
       - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Settings/JarvisMaterial*.swift'
       - 'apps/ios/Jarvis/JarvisGateRootView.swift'
       - 'apps/ios/Jarvis/JarvisOpeningView.swift'
@@ -70,6 +72,11 @@ jobs:
             run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=$state
             sleep 3; shot voice-$state-a; sleep 0.7; shot voice-$state-b; sleep 0.7; shot voice-$state-c
           done
+          # The Voice orb stays anchored behind captions and compact or expanded results.
+          VOICE=(--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel)
+          run "${VOICE[@]}"; sleep 15; shot voice-window-html
+          run "${VOICE[@]}" --screenshot-voice-chart; sleep 6; shot voice-window-chart
+          run "${VOICE[@]}" --screenshot-voice-fullscreen; sleep 15; shot voice-window-expanded
           # Chat: idle, then the working states over the message window.
           run --screenshot-chat-fixture
           sleep 3; shot chat-idle

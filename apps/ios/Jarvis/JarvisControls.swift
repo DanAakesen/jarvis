@@ -856,21 +856,38 @@ struct JarvisPeriodSelector<Tag: Hashable>: View {
     @Binding var selection: Tag
 
     var body: some View {
-        ScrollView(.horizontal) {
+        ViewThatFits(in: .horizontal) {
             segments.fixedSize(horizontal: true, vertical: false)
-                .padding(.vertical, 2)
+            ScrollView(.horizontal) {
+                segments.fixedSize(horizontal: true, vertical: false)
+            }.scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
-        // Short controls sit against the trailing inset; overflowing labels still
-        // start at the first period and remain horizontally scrollable.
-        .defaultScrollAnchor(.trailing, for: .alignment)
+        .padding(.vertical, 2)
         .accessibilityIdentifier("\(identifierPrefix).scroll")
-        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private var segments: some View {
         JarvisSelectionRow(title: title, identifierPrefix: identifierPrefix,
                            items: items, selection: $selection, layout: .period)
+    }
+}
+
+/// All represents a separate lifetime read. Fixed ranges keep their normal data paths.
+struct JarvisHistoryPeriodSelector<Tag: Hashable>: View {
+    let title: String
+    let identifierPrefix: String
+    let items: [JarvisTabItem<Tag>]
+    @Binding var selection: Tag
+    @Binding var all: Bool
+
+    var body: some View {
+        let options = items.map { JarvisTabItem<Tag?>(tag: $0.tag, title: $0.title, identifier: $0.identifier) }
+        JarvisPeriodSelector(title: title, identifierPrefix: identifierPrefix,
+            items: options + [JarvisTabItem(tag: nil, title: "All", identifier: identifierPrefix + ".all")],
+            selection: Binding(get: { all ? nil : selection }, set: { value in
+                all = value == nil
+                if let value { selection = value }
+            }))
     }
 }
 
@@ -1232,7 +1249,7 @@ struct JarvisComposerMenuButton<Content: View>: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
-        .tint(JarvisDesignTokens.secondaryAccent)
+        .tint(JarvisDesignTokens.primaryAccent)
         .menuOrder(.fixed)
         .disabled(isDisabled)
         .accessibilityLabel(title)

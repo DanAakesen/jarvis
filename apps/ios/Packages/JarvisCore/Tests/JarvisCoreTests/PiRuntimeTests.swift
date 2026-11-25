@@ -30,8 +30,20 @@ final class PiRuntimeTests: XCTestCase {
         }
     }
 
+    func testCardGlowChoicesCanBeSavedFromAnExistingInstallation() throws {
+        var draft = JarvisSettingsEditState(.object(["appearance": .object([:])]))
+        draft.set(.string("primary"), area: "appearance", key: "card-glow")
+        XCTAssertFalse(draft.isDirty)
+        for mode in JarvisCardGlow.allCases {
+            let patch = JarvisSettingsPatch(area: "appearance", key: "card-glow", value: .string(mode.rawValue))
+            try JarvisSettingsLogic.validateSettingsPatch(patch)
+        }
+        XCTAssertThrowsError(try JarvisSettingsLogic.validateSettingsPatch(
+            JarvisSettingsPatch(area: "appearance", key: "card-glow", value: .string("automatic"))))
+    }
+
     func testAppearanceAcceptsBothAccentOverridesAndTheirReset() {
-        for key in ["accent", "accent-secondary"] {
+        for key in ["accent", "accent-secondary", "card-glow-color"] {
             for value: JarvisSettingsValue in [.string("#219AbC"), .null] {
                 XCTAssertNoThrow(try JarvisSettingsLogic.validateSettingsPatch(
                     JarvisSettingsPatch(area: "appearance", key: key, value: value)

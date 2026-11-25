@@ -698,10 +698,11 @@ public enum JarvisSettingsLogic {
                 }
             } else {
                 for (key, newValue) in editedValues where oldValues[key] != newValue {
-                    if area == "appearance", (["accent", "accent-secondary"] + JarvisSurfaceSettings.keys).contains(key),
+                    if area == "appearance", (["accent", "accent-secondary", "card-glow-color"] + JarvisSurfaceSettings.keys).contains(key),
                        oldValues[key] == nil, newValue == .null { continue }
                     if area == "appearance", oldValues[key] == nil,
                        let control = JarvisMaterialControl(rawValue: key), newValue.integerValue == control.defaultPercent { continue }
+                    if area == "appearance", key == "card-glow", oldValues[key] == nil, newValue == .string("primary") { continue }
                     areas[area, default: [:]][key] = newValue
                 }
             }
@@ -767,9 +768,11 @@ public enum JarvisSettingsLogic {
                 switch (area, key) {
                 case ("appearance", _) where JarvisMaterialControl(rawValue: key) != nil:
                     valid = value.integerValue.map { (0...100).contains($0) } == true
+                case ("appearance", "card-glow"):
+                    valid = value.stringValue.flatMap(JarvisCardGlow.init(rawValue:)) != nil
                 case ("appearance", "theme"):
                     valid = validSettingsFieldValue(value, options: ["light", "dark", "system"])
-                case ("appearance", _) where (["accent", "accent-secondary"] + JarvisSurfaceSettings.keys).contains(key):
+                case ("appearance", _) where (["accent", "accent-secondary", "card-glow-color"] + JarvisSurfaceSettings.keys).contains(key):
                     valid = value == .null || value.stringValue.map {
                         $0.utf8.count == 7 && matches($0, pattern: #"^#[a-fA-F0-9]{6}$"#)
                     } == true

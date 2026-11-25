@@ -4,7 +4,7 @@ import {
 } from '@jarvis/contracts';
 import type { FastifyRequest } from 'fastify';
 import { finalizeChatBlock } from './chat-blocks.js';
-import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 async function present(data: AppleMapsViewData, status: 'complete' | 'partial', voice: boolean, request: FastifyRequest, signal: AbortSignal): Promise<string> {
   const app = request.server;
@@ -46,7 +46,7 @@ export const appleMapsTool: JarvisTool = {
     let presentation = 'No places to show.';
     if (receipt.matches > 0) {
       presentation = await present({ lookupId, ...('query' in input ? { request: input } : {}) }, receipt.reason ? 'partial' : 'complete', voice, request, signal)
-        .catch(() => 'The map could not be shown.');
+        .catch((error: unknown) => error instanceof ToolFailure && error.outcomeUnknown ? error.message : 'The map could not be shown.');
     }
     return { ...receipt, ...(receipt.matches > 1 ? { lookupId } : {}), presentation };
   },

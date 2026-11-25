@@ -554,7 +554,7 @@ export const workspaceCommandSchema = Object.freeze({
   properties: {
     commandId: workspaceCommandId,
     target: { enum: workspaceCommandTargets },
-    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation', 'session', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation', 'session', 'voice-window', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin'] },
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
@@ -569,7 +569,7 @@ export const workspaceCommandSchema = Object.freeze({
     width: { type: 'number', minimum: 0.32, maximum: 0.92 },
     height: { type: 'number', minimum: 0.34, maximum: 0.92 },
     arrangement: { enum: ['tiled', 'layered'] },
-    action: { enum: ['open', 'close', 'toggle', 'show', 'hide', 'voice', 'camera'] },
+    action: { enum: ['open', 'close', 'toggle', 'show', 'hide', 'voice', 'camera', 'previous', 'next'] },
     value: { type: 'string', enum: ['end', 'front', 'rear', 'off'] },
   },
   required: ['commandId', 'operation'],
@@ -1040,6 +1040,9 @@ export function isWorkspaceCommand(value, options = {}) {
         (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId)) &&
         (value.issueNumber === undefined ||
           value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
+    case 'voice-window':
+      return hasOnly('action') && (value.target === undefined || value.target === 'phone') &&
+        ['previous', 'next', 'close'].includes(value.action);
     case 'conversation':
       return hasOnly('action') && ['show', 'hide'].includes(value.action);
     case 'session':
@@ -1117,6 +1120,7 @@ const workspaceOperationShapes = Object.freeze({
   layout: operationShape(['arrangement']),
   'context-panel': operationShape(['action', 'view'], ['action']),
   navigate: operationShape(['page', 'section', 'taskId', 'issueNumber'], ['page']),
+  'voice-window': operationShape(['action']),
   conversation: operationShape(['action']),
   session: operationShape(['action', 'value']),
   place: operationShape(['viewId', 'region']),
@@ -1128,7 +1132,7 @@ const workspaceOperationShapes = Object.freeze({
   unpin: operationShape(['viewId']),
 });
 const workspaceActionValues = Object.freeze({
-  conversation: ['show', 'hide'], session: ['voice', 'camera'], 'context-panel': ['open', 'close', 'toggle'],
+  'voice-window': ['previous', 'next', 'close'], conversation: ['show', 'hide'], session: ['voice', 'camera'], 'context-panel': ['open', 'close', 'toggle'],
 });
 const workspaceSessionValues = Object.freeze({ voice: ['end'], camera: ['front', 'rear', 'off'] });
 const generatedViewKeys = Object.freeze(['version', 'title', 'renderer', 'source', 'data', 'actions']);
@@ -1571,6 +1575,8 @@ export function workspaceCommandProblems(value, options = {}) {
   }
   if (value.target !== undefined && !workspaceCommandTargets.includes(value.target)) {
     addWorkspaceProblem(problems, 'target', `must be one of ${listText(workspaceCommandTargets)}`);
+  } else if (value.operation === 'voice-window' && value.target !== undefined && value.target !== 'phone') {
+    addWorkspaceProblem(problems, 'target', 'must be phone for a Voice result');
   }
   const operation = typeof value.operation === 'string' && Object.hasOwn(workspaceOperationShapes, value.operation)
     ? value.operation : undefined;

@@ -95,13 +95,14 @@ public final class JarvisWorkspaceClient: Sendable {
         }
     }
 
-    public func htmlArtifact(id: String) async throws -> HtmlArtifact {
+    public func htmlArtifact(id: String, version: Int? = nil) async throws -> HtmlArtifact {
         guard Self.validArtifactID(id) else {
             throw JarvisWorkspaceClientError.invalidResponse
         }
         let response = try await client.performAuthenticatedRequest(
             method: .get,
             path: ["factory", "workspace-artifacts", "html", id],
+            queryItems: version.map { [URLQueryItem(name: "version", value: String($0))] } ?? [],
             idempotent: true
         )
         guard response.statusCode == 200,

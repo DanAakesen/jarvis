@@ -89,6 +89,7 @@ struct GeneratedViewContent: View {
     let runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
     let previewImage: Image?
+    var artifactVersion: Int? = nil
     var voiceHTMLHeight: CGFloat? = nil
     let onAction: (GeneratedViewAction) -> Void
 
@@ -140,6 +141,7 @@ struct GeneratedViewContent: View {
                 artifactId: envelope.data.artifactId,
                 runtime: runtime,
                 language: language,
+                artifactVersion: artifactVersion,
                 voiceHeight: voiceHTMLHeight,
                 revision: voiceHTMLHeight == nil ? nil : envelope.source.updatedAt
             )

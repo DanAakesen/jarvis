@@ -15,6 +15,7 @@ import {
   type GeneratedView,
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
+import { archiveVoiceWindow, voiceWindowTurn } from './chat-blocks.js';
 import { appleMapsGuidance, generatedViewValidationOptions } from './generated-view-validation.js';
 import { explainedArgumentsMessage, toolArgumentRefusal } from './tool-arguments.js';
 import { isJarvisToolCall } from './tool-origin.js';
@@ -44,6 +45,7 @@ interface WorkspaceConnection {
 }
 
 interface CommandRecord {
+  archive?: Promise<void>;
   view?: { viewId: string; view: GeneratedView };
   readonly fingerprint: string;
   readonly expectsMapReceipt: boolean;
@@ -198,6 +200,17 @@ export class WorkspaceCommandBroker {
 
   async execute(ownerId: string, command: WorkspaceCommand, signal: AbortSignal): Promise<void> {
     await this.dispatch(ownerId, command, signal);
+    const turn = voiceWindowTurn.getStore();
+    const record = this.records.get(ownerId)?.get(command.commandId);
+    if (turn && record && 'view' in command && command.view && (command.operation === 'create' || command.operation === 'update' ||
+        (command.operation === 'context-panel' && command.action === 'open'))) {
+      record.archive ??= archiveVoiceWindow(turn, 'viewId' in command ? command.viewId : command.commandId, command.view)
+        .catch(() => {
+          delete record.archive;
+          throw new ToolFailure('Window displayed. Saving it in Chat could not be confirmed.', { outcomeUnknown: true });
+        });
+      await record.archive;
+    }
   }
 
   async appleMaps(ownerId: string, query: AppleMapsQuery, speakResult: boolean, signal: AbortSignal) {
@@ -230,7 +243,7 @@ export class WorkspaceCommandBroker {
       return this.waitFor(existing.promise, signal);
     }
 
-    const target = command.target ?? 'active';
+    const target = command.operation === 'voice-window' ? 'phone' : command.target ?? 'active';
     const mapSession = command.operation === 'create' && command.view.renderer === 'map'
       ? ownerRecords.get(command.view.data.lookupId)?.sessionIds : undefined;
     const selection = command.operation === 'apple-maps' && 'lookupId' in command ? command : undefined;
@@ -568,8 +581,9 @@ export function explainWorkspaceCommand(input: unknown, app: FastifyInstance): s
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Show Dan something on his screen and control it. In a voice conversation this is how to show a visual: operation create with a commandId, a viewId and a view (text, list, table, chart, timeline, status, detail or image) whose title names the content; it appears in a panel on his phone. In typed chat use show_in_chat. ' +
-    'Target defaults to active: the tab with the latest snapshot, or the first connected tab if none has reported. Use desktop or phone for the latest-reporting tab of that kind, or all to broadcast. An unavailable kind is refused with the connected devices. ' +
+  description: 'Show and control temporary windows. In Voice, create a titled view on the phone using commandId, viewId and view. In typed chat use show_in_chat. ' +
+    'Target defaults to active (latest snapshot, otherwise first connected tab). desktop or phone selects the latest of that kind; all broadcasts. ' +
+    'iPhone Voice: voice-window previous, next or close acts on the selected result without ending the call. Set action, omit viewId. ' +
     'For window requests, act by intent rather than coordinates: resolve names and "that one" from snapshot titles and front, then use their viewIds. Place a window in a named region; arrange with auto ("tidy up"), side-by-side (left to right; "X right, Y left" uses viewIds [Y, X]), grid, or cascade ("stack"; viewIds are front-to-back, first frontmost—put the desired top window first). On phones, geometry requests focus the named window. Minimise, restore or close everything with minimise-all, restore-all or close-all. Pin or unpin on request; report it applied only when the result confirms storage succeeded, otherwise relay the result. ' +
     'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, notes, knowledge, Workspaces (legacy page key "folio"), status, or Health when both module and client are enabled; legacy page "daily" is an alias), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Use operation session to change the current session, not saved defaults: action voice with value end, or action camera with value front, rear or off. The page applies session changes; the backend never requests browser permissions. For video, applied confirms capture started, not frame delivery; only claim receiving sampled updates after delivery is confirmed. If the page refuses for missing camera or microphone permission, relay its reason and tell Dan to grant permission in the browser. For readable summaries or dates, reuse the matching existing window or create a text view: {"version":1,"title":"Summary","renderer":"text","source":{"id":"now","status":"complete"},"data":{"format":"plain","content":"Actual returned summary"}}. To show a set of results such as bookings, emails or events, create a clean list view, one item per result with only what Dan needs, never raw JSON or full message bodies: {"commandId":"hotels-1","operation":"create","viewId":"hotels-found","view":{"version":1,"title":"Hotels found","renderer":"list","source":{"id":"now","status":"complete"},"data":{"items":[{"title":"Hotel Alpha","description":"Booked 12 Nov, 3 nights"}]}}}; create and update both need viewId and view, and view is a JSON object, never a string of JSON. A create command takes only those (plus commandId and target), so position a new view with a separate place, arrange, move or resize command. When a command is refused, the reason names the field to fix: correct it and retry once, and say a view was or was not shown only as the result reports. For chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,

@@ -165,7 +165,7 @@ final class WorkspaceRuntime: ObservableObject {
     func userDismissedView() {
         guard presentedView != nil || voiceVisuals?.entries.isEmpty == false else { return }
         presentedView = nil
-        if voiceVisuals != nil { voiceVisuals = VoiceVisualHistory() }
+        voiceVisuals?.dismissAll()
         let generation = sessionGeneration
         Task {
             guard generation == sessionGeneration else { return }
@@ -192,8 +192,32 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     func selectVoiceVisual(_ id: String) {
-        guard voiceVisuals?.selectedID != id else { return }
+        guard voiceVisuals?.selectedID != id, voiceVisuals?.entries.contains(where: { $0.id == id }) == true else { return }
         voiceVisuals?.select(id)
+        presentedView = voiceVisuals?.selected
+        reportActive()
+    }
+
+    func reopenVoiceVisual(_ visual: PresentedWorkspaceView) {
+        guard let current = voiceVisuals?.windows.first(where: { $0.id == visual.id }) else { return }
+        knownViews[current.id] = current.view
+        present(viewId: current.id, view: current.view)
+        reportActive()
+    }
+
+    func closeSelectedVoiceVisual() {
+        if applyVoiceWindow(.close) { reportActive() }
+    }
+
+    private func applyVoiceWindow(_ action: VoiceWindowAction) -> Bool {
+        let priorID = voiceVisuals?.selectedID
+        guard voiceVisuals?.apply(action) == true else { return false }
+        presentedView = voiceVisuals?.selected
+        if action == .close, let priorID {
+            knownViews.removeValue(forKey: priorID)
+            if lastPresentedViewId == priorID { lastPresentedViewId = presentedView?.viewId }
+        }
+        return true
     }
 
     func openRoute(_ route: String) -> Bool {
@@ -202,14 +226,14 @@ final class WorkspaceRuntime: ObservableObject {
         return true
     }
 
-    func loadHTMLArtifact(id: String) async throws -> HtmlArtifact {
+    func loadHTMLArtifact(id: String, version: Int? = nil) async throws -> HtmlArtifact {
 #if DEBUG && targetEnvironment(simulator)
         if let fixtureHTMLArtifact, id == fixtureHTMLArtifact.id { return fixtureHTMLArtifact }
 #endif
         guard let workspaceClient else {
             throw JarvisWorkspaceClientError.invalidResponse
         }
-        return try await workspaceClient.htmlArtifact(id: id)
+        return try await workspaceClient.htmlArtifact(id: id, version: version)
     }
 
     func canPerform(_ action: GeneratedViewAction) -> Bool {
@@ -313,6 +337,7 @@ final class WorkspaceRuntime: ObservableObject {
     ) async {
         guard let workspaceClient else { return }
         let generation = sessionGeneration
+        guard Double(expiresAtMilliseconds) > Date().timeIntervalSince1970 * 1_000 else { return }
         let result = apply(command, trustedBlobHost: trustedBlobHost ?? self.trustedBlobHost)
         do {
             try await WorkspaceCommandProcessor().acknowledge(
@@ -351,6 +376,14 @@ final class WorkspaceRuntime: ObservableObject {
             return .error(reason: reason)
         case .supported(let intent):
             switch intent {
+            case .voiceWindow(let action):
+                guard voiceVisuals?.selectedID != nil else {
+                    return .refused(reason: JarvisWorkspaceLocalization.string(.noVoiceWindow, language: language))
+                }
+                guard applyVoiceWindow(action) else {
+                    return .refused(reason: JarvisWorkspaceLocalization.string(
+                        action == .previous ? .firstVoiceWindow : .lastVoiceWindow, language: language))
+                }
             case .navigate(let page, let taskId):
                 if page == "factory", let taskId {
                     requestedNavigation = .factoryTask(taskId)
@@ -371,7 +404,7 @@ final class WorkspaceRuntime: ObservableObject {
                 present(viewId: viewId, view: view)
             case .dismissAll(let forget):
                 presentedView = nil
-                if voiceVisuals != nil { voiceVisuals = VoiceVisualHistory() }
+                voiceVisuals?.dismissAll()
                 if forget {
                     knownViews.removeAll()
                     lastPresentedViewId = nil
@@ -386,6 +419,10 @@ final class WorkspaceRuntime: ObservableObject {
                     return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
                 }
                 dismiss(viewId: viewId)
+                if command.operation == "close" {
+                    knownViews.removeValue(forKey: viewId)
+                    if lastPresentedViewId == viewId { lastPresentedViewId = presentedView?.viewId }
+                }
             }
             return .applied
         }
@@ -401,15 +438,19 @@ final class WorkspaceRuntime: ObservableObject {
     private func dismiss(viewId: String) {
         voiceVisuals?.dismiss(viewId)
         if presentedView?.viewId == viewId {
-            presentedView = voiceVisuals?.entries.last
+            presentedView = voiceVisuals?.selected
         }
     }
 
     private func registerCurrentSnapshot() async throws {
         guard let workspaceClient else { return }
-        let windows = presentedView.map {
-            [WorkspaceWindow(viewId: $0.viewId, title: workspaceTitle(for: $0.view))]
-        } ?? []
+        let entries = voiceVisuals?.entries ?? [presentedView].compactMap { $0 }
+        // Snapshots accept 32 windows. Include the selection and its neighbours in a long call.
+        let selectedIndex = entries.firstIndex { $0.viewId == presentedView?.viewId } ?? 0
+        let start = max(0, min(selectedIndex - 16, entries.count - 32))
+        let windows = entries.dropFirst(start).prefix(32).map {
+            WorkspaceWindow(viewId: $0.viewId, title: workspaceTitle(for: $0.view), front: $0.viewId == presentedView?.viewId)
+        }
         try await workspaceClient.register(WorkspaceSnapshot(
             windows: windows,
             contextPanelOpen: false,

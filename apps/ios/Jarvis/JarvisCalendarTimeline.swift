@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 /// Day and week share a scrollable clock. Week columns use the same hour scale as the day.
 struct JarvisCalendarTimeline: View {
@@ -10,10 +11,14 @@ struct JarvisCalendarTimeline: View {
     let onSelect: (JarvisTodayCalendarEntry) -> Void
     let onMove: (JarvisTodayCalendarEntry, Date) -> Void
 
+    let onCreate: (Date) -> Void
+
     @ScaledMetric private var hour: CGFloat = 40
     private let gutter: CGFloat = 39
     @State private var dragging: String?
     @State private var shift = CGSize.zero
+    @State private var proposedStart: Date?
+
     private struct Slot: Identifiable {
         let event: JarvisTodayCalendarEntry
         let start, end: CGFloat
@@ -76,6 +81,7 @@ struct JarvisCalendarTimeline: View {
                                 .allowsHitTesting(false)
                             }
                         }
+                        emptySlots(columnWidth: width)
                         ForEach(Array(days.enumerated()), id: \.element) { index, day in
                             ForEach(slots(day)) { slot in
                                 let column = width / CGFloat(slot.lanes)
@@ -103,6 +109,49 @@ struct JarvisCalendarTimeline: View {
             // A 10-hour window centred in the 24-hour sheet starts at 07.00.
             .defaultScrollAnchor(.center, for: .initialOffset)
         }
+    }
+
+    @ViewBuilder
+    private func emptySlots(columnWidth: CGFloat) -> some View {
+        // This layer sits behind the appointment buttons and excludes the hour labels.
+        CalendarBlankPress { state, point in
+            switch state {
+            case .began, .changed:
+                proposedStart = slotStart(at: point, columnWidth: columnWidth)
+            case .ended:
+                proposedStart = nil
+                if let start = slotStart(at: point, columnWidth: columnWidth) { onCreate(start) }
+            default:
+                proposedStart = nil
+            }
+        }
+        .frame(width: columnWidth * CGFloat(days.count), height: 24 * hour)
+        .offset(x: gutter, y: 6)
+        .accessibilityHidden(true)
+
+        if let start = proposedStart,
+           let column = days.firstIndex(where: { calendar.isDate($0, inSameDayAs: start) }) {
+            let time = clock(start)
+            Text(start, style: .time)
+                .font(.caption.weight(.semibold)).monospacedDigit()
+                .padding(.horizontal, 4)
+                .frame(width: max(1, columnWidth - 2), height: min(1, 24 - time) * hour, alignment: .topLeading)
+                .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                .background(JarvisDesignTokens.primaryAccent.opacity(0.25), in: RoundedRectangle(cornerRadius: 5))
+                .overlay { RoundedRectangle(cornerRadius: 5).strokeBorder(JarvisDesignTokens.primaryAccent) }
+                .offset(x: gutter + CGFloat(column) * columnWidth, y: 6 + time * hour)
+                .zIndex(3)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func slotStart(at point: CGPoint, columnWidth: CGFloat) -> Date? {
+        guard !days.isEmpty else { return nil }
+        let column = min(days.count - 1, max(0, Int(floor(point.x / columnWidth))))
+        let quarter = min(95, max(0, Int((point.y / hour * 4).rounded())))
+        return calendar.date(bySettingHour: quarter / 4, minute: quarter % 4 * 15, second: 0, of: days[column],
+                             matchingPolicy: .nextTimePreservingSmallerComponents)
     }
 
     private func slots(_ day: Date) -> [Slot] {
@@ -159,5 +208,30 @@ struct JarvisCalendarTimeline: View {
                       let start = calendar.date(byAdding: .minute, value: minutes, to: day) else { return }
                 onMove(event, start)
             }
+    }
+}
+
+/// A stationary hold reports its location even when the finger lifts without dragging.
+private struct CalendarBlankPress: UIViewRepresentable {
+    let update: (UIGestureRecognizer.State, CGPoint) -> Void
+
+    final class TouchSurface: UIView {
+        var update: ((UIGestureRecognizer.State, CGPoint) -> Void)?
+
+        @objc func press(_ recognizer: UILongPressGestureRecognizer) {
+            update?(recognizer.state, recognizer.location(in: self))
+        }
+    }
+
+    func makeUIView(context: Context) -> TouchSurface {
+        let view = TouchSurface()
+        let press = UILongPressGestureRecognizer(target: view, action: #selector(TouchSurface.press(_:)))
+        press.minimumPressDuration = 0.4
+        view.addGestureRecognizer(press)
+        return view
+    }
+
+    func updateUIView(_ view: TouchSurface, context: Context) {
+        view.update = update
     }
 }

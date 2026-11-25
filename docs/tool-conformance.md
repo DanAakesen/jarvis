@@ -41,7 +41,7 @@ and when this file no longer matches the registry.
 | # | Tool | Schema tokens | Sent by find_tools | Definition tokens |
 | ---: | --- | ---: | ---: | ---: |
 | 1 | `show_in_chat` | 13075 | 3735 | 13363 |
-| 2 | `workspace_command` | 12589 | 3413 | 13596 |
+| 2 | `workspace_command` | 12597 | 3422 | 13566 |
 | 3 | `owner_reminders` | 1305 | 1305 | 1523 |
 | 4 | `health_food_review` | 819 | 819 | 1264 |
 | 5 | `github_write` | 590 | 590 | 946 |
@@ -230,7 +230,7 @@ Schemas above the ceiling, each with a ratchet (they may not grow):
 | `watch_update` | pi | chat and voice | action | ok | "check the price less often" (en, #1) | ok (2 calls) | 109 |  |
 | `weather` | workspace | chat and voice | action | ok | "what is the weather in Aarhus tomorrow" (en, #1) | ok (4 calls) | 61 |  |
 | `web_research` | workspace | chat and voice | unclassified | ok | "research the best noise cancelling headphones" (en, #2) | ok | 35 |  |
-| `workspace_command` | core | chat and voice | unclassified | ok | "open the workspace" (en, #3) | ok (27 calls) | 12589 | large schema: the inline generated-view schema (every renderer) is part of the tool schema |
+| `workspace_command` | core | chat and voice | unclassified | ok | "open the workspace" (en, #3) | ok (27 calls) | 12597 | large schema: the inline generated-view schema (every renderer) is part of the tool schema |
 | `workspaces_manage` | workspace | chat and voice | action | ok | "pin that report" (en, #2) | ok (4 calls) | 105 |  |
 | `workspaces_open` | workspace | chat and voice | unclassified | ok | "open the workspace" (en, #2) | ok (4 calls) | 77 |  |
 | `workspaces_search` | workspace | chat and voice | unclassified | ok | "find my saved research report" (en, #3) | ok (3 calls) | 53 |  |

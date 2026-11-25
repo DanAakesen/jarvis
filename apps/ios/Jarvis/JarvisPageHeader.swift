@@ -218,10 +218,16 @@ struct JarvisHeroHeader<Accessory: View>: View {
                 accessory.frame(maxWidth: .infinity, alignment: .trailing)
             }
         } else {
-            HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                heading.layoutPriority(1)
-                Spacer(minLength: 0)
-                accessory
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                    heading.fixedSize()
+                    Spacer(minLength: 0)
+                    accessory.fixedSize(horizontal: true, vertical: false)
+                }
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                    heading
+                    accessory.frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
         }
     }
@@ -243,13 +249,8 @@ struct JarvisDashboardCardFill<S: Shape>: View {
 
     var body: some View {
         let tone = JarvisSurfacePalette.shared.color(role, inherit: "card") ?? JarvisDesignTokens.dashboardCardTone
-        let highlight: Color? = switch role {
-        case "next", "training", "steps", "nutrition": JarvisDesignTokens.primaryAccent
-        case "sleep", "schedule": JarvisDesignTokens.secondaryAccent
-        default: nil
-        }
         JarvisMaterialSurface(in: shape, style: horizontal ? .joinedRow : .card, tint: tone,
-                              highlight: highlight, solid: JarvisDesignTokens.glassSolid)
+                              solid: JarvisDesignTokens.glassSolid)
     }
 }
 

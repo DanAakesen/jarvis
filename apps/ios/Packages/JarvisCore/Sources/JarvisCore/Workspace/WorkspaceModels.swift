@@ -4,9 +4,12 @@ public struct WorkspaceWindow: Codable, Equatable, Sendable {
     public let viewId: String
     public let title: String
 
-    public init(viewId: String, title: String) {
+    public let front: Bool?
+
+    public init(viewId: String, title: String, front: Bool? = nil) {
         self.viewId = viewId
         self.title = title
+        self.front = front
     }
 }
 

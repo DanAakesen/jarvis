@@ -1252,6 +1252,25 @@ describe('GPT-Live authoritative client events', () => {
         .toEqual(['Hello Jarvis', 'Will it rain today']);
     }, 20_000);
 
+    it('shows Thinking before a direct reply and returns to Listening if the owner continues', async () => {
+      const writes: Write[] = [];
+      const relay = await startRelay(recordingStore(writes), {
+        async *stream() { yield 'unused'; },
+      });
+      const states = () => relay.received.filter(event => event.type === 'jarvis.voice.activity').map(event => event.state);
+      started(relay);
+      word(relay, 'Show the forecast');
+      await until(() => states().at(-1) === 'thinking', 'thinking before response starts');
+      expect(relay.received.some(event => event.type === 'jarvis.voice.response.started')).toBe(false);
+      word(relay, ' for tomorrow');
+      await until(() => states().at(-1) === 'listening', 'listening during resumed input');
+      await until(() => states().at(-1) === 'thinking', 'thinking after the last phrase');
+      answer(relay, 'forecast', 'Sunny.');
+      await until(() => writes.length === 2, 'completed exchange');
+      expect(writes[0]?.text).toBe('Show the forecast for tomorrow');
+      expect(states().at(-1)).toBe('listening');
+    }, 20_000);
+
     it.each([700, 900])(
       'sends the whole sentence to PI once when Dan pauses %i ms twice after the delegation event',
       async (pauseMs) => {

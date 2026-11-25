@@ -28,6 +28,7 @@ import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
+import { voiceWindowTurn } from './chat-blocks.js';
 import { withConfirmationTurn } from './owner-interactions.js';
 import { safeErrorFields } from '../logging.js';
 
@@ -298,9 +299,11 @@ export const coreModule: BackendModule = {
               signal: controller.signal,
               execute: () => tool.execute(request.body, request, controller.signal),
             });
+          const run = request.jarvisPi === 'turn' && request.headers['x-jarvis-pi-channel'] === 'voice' && validMessageId
+            ? () => voiceWindowTurn.run({ app, turnId: messageId! }, execute) : execute;
           result = validMessageId
-            ? await withConfirmationTurn(messageId!, execute)
-            : await execute();
+            ? await withConfirmationTurn(messageId!, run)
+            : await run();
           if (smoke && tool.name === 'github_read') {
             const issue = isObject(result) ? result : {};
             result = {

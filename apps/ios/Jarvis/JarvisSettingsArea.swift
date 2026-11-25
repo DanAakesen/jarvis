@@ -8,7 +8,9 @@ extension JarvisSettingsResponse {
         for control in JarvisMaterialControl.allCases {
             values[control.rawValue] = value(area: "appearance", key: control.rawValue)?.integerValue
         }
-        return JarvisMaterialSettings(values)
+        return JarvisMaterialSettings(values,
+            glow: string(area: "appearance", key: "card-glow").flatMap(JarvisCardGlow.init(rawValue:)) ?? .primary,
+            customHex: string(area: "appearance", key: "card-glow-color") ?? JarvisPalette.defaultPrimaryHex)
     }
 
     @MainActor

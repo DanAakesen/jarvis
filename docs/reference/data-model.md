@@ -6,7 +6,7 @@ The schema of record is [the ordered SQL migrations](../../db/migrations/), not 
 
 | Domain | Source of truth and lifecycle |
 | --- | --- |
-| Conversation and voice | SQL owns app sessions, messages, attachment metadata, tool receipts and audio usage evidence. Blob holds attachment bytes. The Foundry conversation reference and context hash are a separate [PI store](../../db/migrations/0086_pi_chat.sql); a provider reply does not replace the stored app message. |
+| Conversation and voice | SQL owns sessions, messages, Voice window snapshots, attachment metadata, tool receipts and audio usage evidence. An archived HTML window references the owner’s artifact version. Blob holds attachment bytes. The Foundry conversation reference and context hash are a separate [PI store](../../db/migrations/0086_pi_chat.sql); a provider reply does not replace the stored app message. |
 | Personal Memory | SQL owns owner-scoped memory identity, source history and forget/correction behavior; see [the store](../../apps/backend/src/database/memory-store.ts). Search projections are not new facts. Vault retrieval does not write Memory. |
 | Notes and Vault tasks | The Vault's Git revision is authoritative for content and task-line identity. SQL holds search chunks, folder order and the [note inventory](../../db/migrations/0103_vault_note_metadata.sql). Title-only notes have inventory rows; bounded repair matches the blob SHA without changing content dates. The mirror retains its sync base and status separately from Vault content. |
 | Loose Ends | Inbox notes live under the Vault's `Inbox/`; SQL indexes state, credential hashes, audit clocks, nudge state and usage. See [activation and acceptance](../inbox-loop/acceptance.md). |

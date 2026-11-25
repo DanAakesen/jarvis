@@ -1,6 +1,16 @@
 #if os(iOS) || os(watchOS)
 import SwiftUI
 
+public extension JarvisMaterialSettings {
+    func cardHighlight(palette: JarvisPaletteSelection) -> Color {
+        switch glow {
+        case .primary: palette.primaryColor
+        case .secondary: palette.secondaryColor
+        case .custom: (JarvisPaletteSelection(primaryHex: customHex, secondaryHex: palette.secondaryHex) ?? palette).primaryColor
+        }
+    }
+}
+
 public extension EnvironmentValues {
     @Entry var jarvisMaterialPreview: JarvisMaterialSettings? = nil
 }
@@ -34,6 +44,7 @@ public struct JarvisMaterialSurface<S: Shape>: View {
         let gradient = finish[.gradient], frost = finish[.frost], glass = finish[.glass]
         let card = style != .control
         let horizontal = style == .joinedRow
+        let accent = highlight ?? (card ? finish.cardHighlight(palette: JarvisPalette.shared.selection) : nil)
         if reduceTransparency {
             shape.fill(solid)
         } else {
@@ -49,7 +60,7 @@ public struct JarvisMaterialSurface<S: Shape>: View {
                     startPoint: horizontal ? .leading : .topLeading,
                     endPoint: horizontal ? .trailing : .bottomTrailing))
                 if gradient > 0 && !horizontal {
-                    let wash = highlight?.opacity(0.30) ?? Color.white.opacity(0.07)
+                    let wash = accent?.opacity(0.30) ?? Color.white.opacity(0.07)
                     shape.fill(EllipticalGradient(colors: [wash.opacity(gradient), .clear],
                                                   center: .topLeading, startRadiusFraction: 0, endRadiusFraction: 0.82))
                 }

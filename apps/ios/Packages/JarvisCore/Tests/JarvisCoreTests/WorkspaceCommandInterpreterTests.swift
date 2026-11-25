@@ -12,6 +12,13 @@ final class WorkspaceCommandInterpreterTests: XCTestCase {
         return nil
     }
 
+    func testVoiceWindowInterpretsRelativeActionsWithoutAViewID() {
+        for action in [VoiceWindowAction.previous, .next, .close] {
+            XCTAssertEqual(intent(command("voice-window", ["action": .string(action.rawValue)])), .voiceWindow(action))
+        }
+        XCTAssertNil(intent(command("voice-window", ["action": .string("end")])))
+    }
+
     func testGeometryAndPlacementBringTheNamedViewForwardOnAPhone() {
         for operation in ["place", "move", "resize", "show", "focus", "restore"] {
             XCTAssertEqual(intent(command(operation, ["viewId": .string("plan")])), .focus(viewId: "plan"), operation)

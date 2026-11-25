@@ -102,6 +102,7 @@ public struct ChatBlock: Equatable, Sendable, Identifiable {
     public let source: ChatBlockSource
     /// Text alternative that states what the block shows.
     public let summary: String
+    public let artifactVersion: Int?
     public let content: Content
 
     public init(
@@ -111,7 +112,8 @@ public struct ChatBlock: Equatable, Sendable, Identifiable {
         title: String,
         source: ChatBlockSource,
         summary: String,
-        content: Content
+        content: Content,
+        artifactVersion: Int? = nil
     ) {
         self.version = version
         self.id = id
@@ -120,12 +122,13 @@ public struct ChatBlock: Equatable, Sendable, Identifiable {
         self.source = source
         self.summary = summary
         self.content = content
+        self.artifactVersion = artifactVersion
     }
 }
 
 extension ChatBlock: Codable {
     private enum Keys: String, CodingKey {
-        case version, id, type, title, source, summary, data
+        case version, id, type, title, source, summary, data, artifactVersion
     }
 
     public init(from decoder: Decoder) throws {
@@ -136,6 +139,7 @@ extension ChatBlock: Codable {
         title = try container.decode(String.self, forKey: .title)
         source = try container.decode(ChatBlockSource.self, forKey: .source)
         summary = try container.decode(String.self, forKey: .summary)
+        artifactVersion = try container.decodeIfPresent(Int.self, forKey: .artifactVersion)
         let raw = try container.decodeIfPresent(JSONValue.self, forKey: .data) ?? .null
         content = Self.content(type: type, version: version, raw: raw, userInfo: decoder.userInfo)
     }
@@ -148,6 +152,7 @@ extension ChatBlock: Codable {
         try container.encode(title, forKey: .title)
         try container.encode(source, forKey: .source)
         try container.encode(summary, forKey: .summary)
+        try container.encodeIfPresent(artifactVersion, forKey: .artifactVersion)
         switch content {
         case .forecast(let value): try container.encode(value, forKey: .data)
         case .chart(let value): try container.encode(value, forKey: .data)
@@ -173,7 +178,7 @@ extension ChatBlock: Codable {
             guard let chart = try? decoder.decode(ChatBlockChart.self, from: encoded),
                   !chart.panels.isEmpty else { return unsupported }
             return .chart(chart)
-        case "view":
+        case "view", "voice-window":
             guard case .object(let object) = raw, let view = object["view"],
                   let viewData = try? JSONEncoder().encode(view),
                   let decoded = try? decoder.decode(GeneratedView.self, from: viewData) else { return unsupported }

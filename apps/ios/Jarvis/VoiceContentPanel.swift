@@ -8,7 +8,7 @@ struct VoiceContentSlot: View {
     @Binding var height: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isExpanded = false
+    @Binding var isExpanded: Bool
     @State private var summaryHeight: CGFloat?
 
     private var hasVisuals: Bool { runtime.voiceVisuals?.selectedID != nil }
@@ -16,11 +16,11 @@ struct VoiceContentSlot: View {
     var body: some View {
         Group {
             if hasVisuals {
-                VoiceVisualCarousel(runtime: runtime, language: language, isExpanded: false, isActive: !isExpanded) {
-                    setExpanded(true)
+                VoiceVisualCarousel(runtime: runtime, language: language, isExpanded: isExpanded) {
+                    setExpanded(!isExpanded)
                 }
                 // A single short text result leaves room for captions above the panel.
-                .frame(height: min(maximumHeight, summaryHeight.map { $0 + JarvisDesignTokens.iconButtonDiameter } ?? maximumHeight))
+                .frame(height: isExpanded ? maximumHeight : min(maximumHeight, summaryHeight ?? maximumHeight))
                 .onPreferenceChange(VoiceSummaryHeight.self) { summaryHeight = $0 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
@@ -38,12 +38,6 @@ struct VoiceContentSlot: View {
             }
 #endif
         }
-        .fullScreenCover(isPresented: $isExpanded) {
-            VoiceVisualCarousel(runtime: runtime, language: language, isExpanded: true, isActive: isExpanded) {
-                setExpanded(false)
-            }
-            .background { JarvisScreenBackground().ignoresSafeArea() }
-        }
     }
 
     private func setExpanded(_ expanded: Bool) {
@@ -60,97 +54,152 @@ private struct VoiceSummaryHeight: PreferenceKey {
     }
 }
 
+struct VoiceWindowMenu: View {
+    @ObservedObject var runtime: WorkspaceRuntime
+    let language: JarvisAppLanguage
+
+    var body: some View {
+        Menu {
+            let windows = runtime.voiceVisuals?.windows ?? []
+            if windows.isEmpty {
+                Text(JarvisWorkspaceLocalization.string(.voiceWindowsEmpty, language: language))
+            }
+            ForEach(windows) { window in
+                Button {
+                    runtime.reopenVoiceVisual(window)
+                } label: {
+                    Label(window.view.workspaceTitle(language: language),
+                          systemImage: window.id == runtime.voiceVisuals?.selectedID ? "checkmark" : "macwindow")
+                }
+            }
+        } label: {
+            Label(JarvisWorkspaceLocalization.string(.voiceWindows, language: language),
+                  systemImage: "rectangle.on.rectangle")
+        }
+    }
+}
+
 private struct VoiceVisualCarousel: View {
     @ObservedObject var runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
     let isExpanded: Bool
-    let isActive: Bool
     let toggleExpanded: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @GestureState private var horizontalDrag: CGFloat = 0
 
     private var entries: [PresentedWorkspaceView] { runtime.voiceVisuals?.entries ?? [] }
     private var selectedID: String? { runtime.voiceVisuals?.selectedID }
-    private var index: Int? { entries.firstIndex { $0.id == selectedID } }
     private var inset: CGFloat { JarvisDesignTokens.rowSpacing + JarvisDesignTokens.compactSpacing }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                panelHeader
-                TabView(selection: Binding(
-                    get: { selectedID },
-                    set: { if isActive, let id = $0 { runtime.selectVoiceVisual(id) } }
-                )) {
-                    ForEach(entries) { visual in
-                        VoiceVisualPage(presented: visual, runtime: runtime, language: language, inset: inset, measuresSummary: !isExpanded && entries.count == 1)
-                            .tag(visual.id)
+        GeometryReader { geometry in
+            let peek = entries.count > 1 ? min(geometry.size.width * 0.09, 38) : 0
+            let width = max(1, geometry.size.width - 2 * peek)
+            let stride = width + JarvisDesignTokens.compactSpacing
+            let index = entries.firstIndex { $0.id == selectedID } ?? 0
+            let drag = max(index == entries.count - 1 ? 0 : -stride,
+                           min(index == 0 ? 0 : stride, horizontalDrag))
+
+            ZStack(alignment: .leading) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { position, visual in
+                    if abs(position - index) <= 2 {
+                        let distance = CGFloat(position - index) + drag / stride
+                        let fraction = reduceMotion ? 0 : min(1, abs(distance))
+                        page(visual, selected: position == index)
+                            .frame(width: width, height: geometry.size.height)
+                            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                            // A material over the card softens its contents without rasterizing WebKit.
+                            .overlay {
+                                RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.55 * Double(fraction))
+                                    .allowsHitTesting(false)
+                            }
+                            .scaleEffect(1 - 0.06 * fraction)
+                            .offset(x: peek + distance * stride)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
             }
-            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-            if entries.count > 1, let index {
-                navigation(at: index)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+            .contentShape(Rectangle())
+            .clipped()
+            .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
+            .simultaneousGesture(pageDrag(index: index, stride: stride, width: geometry.size.width, peek: peek))
+            .onChange(of: selectedID, initial: true) { _, id in
+                guard let visual = entries.first(where: { $0.id == id }) else { return }
+                AccessibilityNotification.Announcement(visual.view.workspaceTitle(language: language)).post()
             }
         }
         .accessibilityElement(children: .contain)
+        .accessibilityAdjustableAction { direction in
+            guard let index = entries.firstIndex(where: { $0.id == selectedID }) else { return }
+            let next = index + (direction == .increment ? 1 : -1)
+            if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
+        }
         .accessibilityIdentifier("voice.panel")
-        .onChange(of: selectedID, initial: true) { _, id in
-            guard isActive, let visual = entries.first(where: { $0.id == id }) else { return }
-            AccessibilityNotification.Announcement(
-                String(format: text(.voicePanelShown), visual.view.workspaceTitle(language: language))
-            ).post()
-        }
     }
 
-    private var panelHeader: some View {
-        ZStack(alignment: .trailing) {
-            JarvisPanelGrabber(
-                title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand),
-                action: toggleExpanded
-            )
-            .gesture(
-                DragGesture(minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
-                    .onEnded { value in
-                        let direction = VoiceVerticalSwipe(
-                            translation: value.translation, minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance
-                        )
-                        if direction == (isExpanded ? .down : .up) { toggleExpanded() }
+    private func page(_ visual: PresentedWorkspaceView, selected: Bool) -> some View {
+        VoiceVisualPage(presented: visual, runtime: runtime, language: language,
+                        inset: inset, measuresSummary: !isExpanded && entries.count == 1)
+            .overlay(alignment: .top) { if selected { resizeControl } }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark",
+                                     identifier: "voice.panel.close", showsBackground: false) {
+                        runtime.closeSelectedVoiceVisual()
                     }
-            )
-            .padding(.horizontal, JarvisDesignTokens.controlMinimumHeight)
-            JarvisIconButton(title: text(.voicePanelClose), systemImage: "xmark", identifier: "voice.panel.close", showsBackground: false) {
-                runtime.userDismissedView()
+                }
             }
-        }
-        .padding(.horizontal, inset)
+            .overlay {
+                if !selected {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { runtime.selectVoiceVisual(visual.id) }
+                }
+            }
+            .accessibilityHidden(!selected)
     }
 
-    private func navigation(at index: Int) -> some View {
-        HStack(spacing: JarvisDesignTokens.rowSpacing) {
-            JarvisIconButton(
-                title: text(.voicePanelPrevious),
-                systemImage: "chevron.backward",
-                identifier: "voice.panel.previous",
-                isDisabled: index == 0
-            ) {
-                runtime.selectVoiceVisual(entries[index - 1].id)
-            }
-            Text(JarvisWorkspaceLocalization.formatted(.voicePanelPosition, language: language, arguments: [index + 1, entries.count]))
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(.secondary)
-            JarvisIconButton(
-                title: text(.voicePanelNext),
-                systemImage: "chevron.forward",
-                identifier: "voice.panel.next",
-                isDisabled: index == entries.count - 1
-            ) {
-                runtime.selectVoiceVisual(entries[index + 1].id)
+    private func pageDrag(index: Int, stride: CGFloat, width: CGFloat, peek: CGFloat) -> some Gesture {
+        func canPage(from start: CGPoint) -> Bool {
+            guard entries.count > 1, entries.indices.contains(index) else { return false }
+            switch entries[index].view {
+            case .htmlApp, .map, .table, .knowledgeGraph, .code, .chart:
+                // Keep horizontal interaction inside the content; the grip and adjacent cards still page.
+                let grip = JarvisDesignTokens.controlMinimumHeight
+                return start.x < peek || start.x > width - peek ||
+                    (abs(start.x - width / 2) < grip * 0.75 && start.y < grip / 2)
+            default:
+                return true
             }
         }
-        .padding(.top, JarvisDesignTokens.compactSpacing)
+
+        return DragGesture(minimumDistance: 10)
+            .updating($horizontalDrag) { value, drag, transaction in
+                guard canPage(from: value.startLocation), abs(value.translation.width) > abs(value.translation.height) else { return }
+                transaction.animation = nil
+                drag = value.translation.width
+            }
+            .onEnded { value in
+                let delta = value.translation
+                guard canPage(from: value.startLocation), abs(delta.width) > abs(delta.height),
+                      abs(value.predictedEndTranslation.width) > stride * 0.2 else { return }
+                let next = index + (delta.width < 0 ? 1 : -1)
+                if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
+            }
+    }
+
+    private var resizeControl: some View {
+        JarvisPanelGrabber(title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand), action: toggleExpanded)
+            .frame(width: JarvisDesignTokens.controlMinimumHeight * 1.5)
+            .offset(y: -JarvisDesignTokens.voicePanelEdgeInset)
+            .onTapGesture(perform: toggleExpanded)
+            .simultaneousGesture(DragGesture(minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
+                .onEnded { value in
+                    let direction = VoiceVerticalSwipe(translation: value.translation,
+                                                       minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
+                    if direction == (isExpanded ? .down : .up) { toggleExpanded() }
+                })
     }
 
     private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
@@ -185,59 +234,52 @@ private struct VoiceVisualPage: View {
 
     var body: some View {
         GeometryReader { geometry in
-            content(htmlHeight: max(
-                JarvisDesignTokens.controlMinimumHeight, geometry.size.height
-            ))
-        }
-    }
-
-    private func content(htmlHeight: CGFloat) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
-                if let title, !title.isEmpty {
-                    Text(title)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                sourceNote
-                GeneratedViewContent(
-                    view: presented.view,
-                    runtime: runtime,
-                    language: language,
-                    previewImage: nil,
-                    voiceHTMLHeight: htmlHeight,
-                    onAction: { notice = performGeneratedViewAction($0, runtime: runtime, language: language, openURL: openURL) }
-                )
-                if let notice {
-                    Text(notice)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.updatesFrequently)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, inset)
-            .padding(.vertical, usesWebScrolling ? 0 : JarvisDesignTokens.voicePanelEdgeInset)
-            .background {
-                if fitsSummary {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: VoiceSummaryHeight.self, value: ceil(proxy.size.height))
-                    }
-                }
-            }
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .mask {
-            VStack(spacing: 0) {
-                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                    .frame(height: JarvisDesignTokens.voicePanelEdgeInset)
-                Rectangle().fill(.black)
-                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(height: JarvisDesignTokens.voicePanelEdgeInset)
+            let height = max(JarvisDesignTokens.controlMinimumHeight, geometry.size.height)
+            if usesWebScrolling {
+                content(htmlHeight: height)
+            } else {
+                ScrollView { content(htmlHeight: height) }
+                    .scrollBounceBehavior(.basedOnSize)
             }
         }
         .onChange(of: presented.view) { _, _ in notice = nil }
+    }
+
+    private func content(htmlHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
+            if let title, !title.isEmpty {
+                Text(title)
+                    .padding(.trailing, JarvisDesignTokens.controlMinimumHeight)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            sourceNote
+            GeneratedViewContent(
+                view: presented.view,
+                runtime: runtime,
+                language: language,
+                previewImage: nil,
+                voiceHTMLHeight: htmlHeight,
+                onAction: { notice = performGeneratedViewAction($0, runtime: runtime, language: language, openURL: openURL) }
+            )
+            if let notice {
+                Text(notice)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, inset)
+        .padding(.vertical, usesWebScrolling ? 0 : JarvisDesignTokens.voicePanelEdgeInset)
+        .background {
+            if fitsSummary {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: VoiceSummaryHeight.self, value: ceil(proxy.size.height))
+                }
+            }
+        }
     }
 
     private var usesWebScrolling: Bool {

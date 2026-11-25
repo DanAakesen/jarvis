@@ -47,6 +47,8 @@ export interface Settings {
     theme: 'light' | 'dark' | 'system';
     accent?: string;
     'accent-secondary'?: string;
+    'card-glow'?: 'primary' | 'secondary' | 'custom';
+    'card-glow-color'?: string;
     'surface-tint'?: string;
     background?: 'living-aurora' | 'daylight-studio';
     glow?: number;
@@ -112,7 +114,7 @@ export type SettingsPatch = {
 };
 
 // A null patch value removes the override so the theme's own colour applies.
-const clearableAppearanceKeys = ['accent', 'accent-secondary', 'surface-tint', ...mobileSurfaceKeys] as const;
+const clearableAppearanceKeys = ['accent', 'accent-secondary', 'surface-tint', 'card-glow-color', ...mobileSurfaceKeys] as const;
 type ClearableAppearanceKey = typeof clearableAppearanceKeys[number];
 
 export interface SettingsStore {
@@ -209,6 +211,8 @@ const settingKeys = {
     theme: 'appearance.theme',
     accent: 'appearance.accent',
     'accent-secondary': 'appearance.accent-secondary',
+    'card-glow': 'appearance.card-glow',
+    'card-glow-color': 'appearance.card-glow-color',
     'surface-tint': 'appearance.surface-tint',
     background: 'appearance.background',
     glow: 'appearance.glow',
@@ -308,6 +312,7 @@ function validSetting(
   if (area === 'presentation') return key === 'showWork' && typeof value === 'boolean';
   if (area === 'decisions') return key === 'provider' && isOption(value, settingsOptions.decisionProviders);
   if (area === 'appearance') {
+    if (key === 'card-glow') return isOption(value, ['primary', 'secondary', 'custom']);
     if (key === 'theme') return isOption(value, settingsOptions.themes);
     if ((clearableAppearanceKeys as readonly string[]).includes(key)) {
       return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
@@ -491,6 +496,8 @@ const settingsPatchSchema = {
             accent: { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             'accent-secondary': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             ...Object.fromEntries(mobileSurfaceKeys.map(key => [key, { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 }])),
+            'card-glow': selectSchema(['primary', 'secondary', 'custom']),
+            'card-glow-color': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             'surface-tint': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             background: selectSchema(settingsOptions.backgrounds),
             ...Object.fromEntries(materialControls.map(key => [key, { type: 'integer', minimum: 0, maximum: 100 }])),

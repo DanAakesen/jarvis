@@ -254,8 +254,9 @@ export function createHtmlViewModule(artifacts: WorkspaceHtmlArtifactStore, work
     id: 'html-view',
     tools: [createHtmlViewTool(artifacts, workspaceItems), readHtmlViewTool(artifacts), updateHtmlViewTool(artifacts)],
     registerRoutes: async (app: FastifyInstance) => {
-      app.get<{ Params: { artifactId: string } }>('/factory/workspace-artifacts/html/:artifactId', {
+      app.get<{ Params: { artifactId: string }; Querystring: { version?: number } }>('/factory/workspace-artifacts/html/:artifactId', {
         schema: {
+          querystring: { type: 'object', properties: { version: { type: 'integer', minimum: 1, maximum: 2147483647 } }, additionalProperties: false },
           params: {
             type: 'object', properties: { artifactId: idSchema },
             required: ['artifactId'], additionalProperties: false,
@@ -267,7 +268,7 @@ export function createHtmlViewModule(artifacts: WorkspaceHtmlArtifactStore, work
         }
         const lifecycle = requestController(request, reply);
         try {
-          const artifact = await artifacts.read(request.params.artifactId, request.principal.objectId, lifecycle.signal);
+          const artifact = await artifacts.read(request.params.artifactId, request.principal.objectId, lifecycle.signal, request.query.version);
           reply.header('Cache-Control', 'private, no-store')
             .header('Referrer-Policy', 'no-referrer')
             .header('X-Content-Type-Options', 'nosniff');

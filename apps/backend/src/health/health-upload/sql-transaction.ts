@@ -2,10 +2,10 @@ import sql from 'mssql';
 import { HealthConflict,HealthDenied,HealthUnavailable } from './contracts.js';
 
 /** Reuses the backend pool; never constructs credentials or a second connection pool. */
-export async function healthSqlQuery(request: sql.Request,query: string,signal: AbortSignal) {
+export async function healthSqlQuery<Row = Record<string, unknown>>(request: sql.Request,query: string,signal: AbortSignal) {
   const cancel = () => request.cancel();
   signal.addEventListener('abort',cancel,{ once: true });
-  try { signal.throwIfAborted(); return await request.query<Record<string,unknown>>(query); }
+  try { signal.throwIfAborted(); return await request.query<Row>(query); }
   finally { signal.removeEventListener('abort',cancel); }
 }
 export async function healthSqlTransaction<T>(pool: sql.ConnectionPool,owner: string,signal: AbortSignal,action: (tx: sql.Transaction,signal: AbortSignal) => Promise<T>): Promise<T> {

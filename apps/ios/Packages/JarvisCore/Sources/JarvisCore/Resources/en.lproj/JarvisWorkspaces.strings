@@ -123,4 +123,10 @@
 "workspace.voicePanel.updating" = "Updating";
 "workspace.voicePanel.partial" = "Partial result.";
 "workspace.voicePanel.unavailable" = "This content is unavailable.";
+"workspace.voicePanel.empty" = "No Voice result is open.";
+"workspace.voicePanel.first" = "This is the first open Voice result.";
+"workspace.voicePanel.last" = "This is the last open Voice result.";
 "workspace.voicePanel.shown" = "%@ shown";
+
+"workspace.voicePanel.windows" = "Windows";
+"workspace.voicePanel.windowsEmpty" = "No windows in this call";

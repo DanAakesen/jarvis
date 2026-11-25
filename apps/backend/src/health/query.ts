@@ -286,6 +286,10 @@ export function createHealthData(pool: sql.ConnectionPool, owner: string, now: (
     : undefined;
   return {
     query: new HealthQueryService(readers, now), changes, trainingTargets, lifts, workouts, deviceSync,
+    dashboardHistory: (request: FastifyRequest, kind: Parameters<HealthReadModel['dashboardHistory']>[0], signal: AbortSignal) => {
+      checkOwner(request);
+      return HealthReadModel.forRequest(pool, request).dashboardHistory(kind, signal);
+    },
     gymTools: {
       lifts: (request: FastifyRequest) => { checkOwner(request); return LiftEntriesStore.forConversation(pool, request, changes, gymSync); },
       workouts: (request: FastifyRequest) => { checkOwner(request); return WorkoutEntriesStore.forConversation(pool, request, changes, gymSync); },
@@ -300,6 +304,7 @@ export function createHealthData(pool: sql.ConnectionPool, owner: string, now: (
   };
 }
 export interface HealthData {
+  dashboardHistory?: (request: FastifyRequest, kind: Parameters<HealthReadModel['dashboardHistory']>[0], signal: AbortSignal) => Promise<unknown>;
   liftCaptureModel?: ApprovalModelPort;
   query: Pick<HealthQueryService, 'query'>;
   changes: HealthChanges;
