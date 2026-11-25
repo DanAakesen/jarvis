@@ -98,7 +98,7 @@ Reuse the project's stack and available tools. Consult the relevant official doc
 | Rich React interaction | [Motion](https://motion.dev/docs/react) for gestures, shared layout, enter/exit, or SVG animation. Its optional [AI Kit](https://motion.dev/docs/ai-kit-install) provides current documentation search; premium tools require Motion+. |
 | Established component behavior/source | [shadcn MCP](https://ui.shadcn.com/docs/mcp) when compatible with the chosen stack/registry. Adapt retrieved components to the agreed design and hard bans. |
 | A specific animated graphic or effect | Selected [React Bits](https://github.com/DavidHDev/react-bits) source when it fits the brief. Review the component's dependencies, usage terms, accessibility, and performance. |
-| Motion graphic/video export | Choose [Hyperframes](https://github.com/heygen-com/hyperframes) for HTML compositions or [Remotion](https://www.remotion.dev/docs/ai/skills) for React compositions according to the project and deliverable. These serve video production. |
+| Motion graphic/video export | Choose [Hyperframes](https://github.com/heygen-com/hyperframes) for HTML compositions or [Remotion](https://www.remotion.dev/docs/agents/skills) for React compositions according to the project and deliverable. These serve video production. |
 | Optional objective design scan | [Impeccable detector](https://impeccable.style/docs/detector/) for a focused source or rendered-page check, for example `npx impeccable detect src/` or a running local URL. Use the standalone scan; retain this project's guidance and document ownership. Review findings against deliberate brand choices. |
 
 ## React implementation, when applicable
