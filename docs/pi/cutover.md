@@ -8,12 +8,12 @@ Use the [architecture map](../architecture.md) for current routing and [the plan
 
 | Area | How | What good looks like | Reference |
 | --- | --- | --- | --- |
-| Chat | Use normal Chat for a day; there is no engine choice | Quality at least as good as before; first text about 1.1 to 1.3 s warm, about 3.3 s cold; honest errors and write receipts; delete confirmation and tool parity with Voice | Timing is the November trial baseline, not a new measurement. [Current Chat and Voice contract](../architecture.md#chat-and-voice) |
-| Voice | Start normal Voice (first answer takes a few seconds), ask something that needs a tool, say a backchannel ("mm-hm") while it works, then ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer. A backchannel does not stop PI; a new delegated request can supersede it. Later turns about as fast as warm chat; Chat and Voice remember each other | [Voice diagnostics](../reference/logs.md#where-to-look) |
+| Chat | Use normal Chat for a day; there is no engine choice | Quality and first-text latency at least as good as the prior runtime; honest errors and write receipts; delete confirmation and tool parity with Voice | [Current Chat and Voice contract](../architecture.md#chat-and-voice) |
+| Voice | Start normal Voice, ask something that needs a tool, say a backchannel ("mm-hm") while it works, then ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer. A backchannel does not stop PI; a new delegated request can supersede it. Follow-ups are comparable to warm Chat and share its context. | [Voice diagnostics](../reference/logs.md#where-to-look) |
 | Brain | Use **Proactive suggestions** on the main iPhone Settings page. Open Proactive for the last review and next check. | Useful reach-outs without duplicates; honour the owner settings and background limits | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, shows the estimated cost per watch and does not send duplicate messages | [Proactive flow](../architecture.md#proactive-wake-and-inbox-review) |
 | Reach | Verify the intended GitHub and Azure bridge configuration | Reads and actions work on real questions, or PI says plainly it does not have access | [Tool discovery](../architecture.md#tools-retries-and-failure-copy) and [configuration names](../agent-context.md#configuration-names-only) |
-| Cost | Use available status evidence; no live measurement without approval | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK | Historical per-turn reference, not a new measurement. [Cost and safety](../agent-context.md#cost-and-safety) |
+| Cost | Compare existing usage evidence privately; no live measurement without approval | No unapproved increase. | [Cost and safety](../agent-context.md#cost-and-safety) |
 
 Watch and web follow the same PI route. Camera and screen sharing in web Voice return `not_supported`. Old harness code remains for isolated runtime tests, not as a normal fallback.
 
