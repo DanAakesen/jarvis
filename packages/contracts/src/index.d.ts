@@ -771,7 +771,7 @@ export type ChatBlock =
   | (ChatBlockBase & { type: 'forecast'; data: ChatBlockForecastData })
   | (ChatBlockBase & { type: 'chart'; data: { xLabel: string; panels: ChatBlockChartPanel[] } })
   | (ChatBlockBase & { type: 'view'; data: { view: GeneratedView } })
-  | (ChatBlockBase & { type: 'voice-window'; data: { view: GeneratedView } });
+  | (ChatBlockBase & { type: 'voice-window'; artifactVersion?: number; data: { view: GeneratedView } });
 /** What a model submits: no id, and the issue time is optional. */
 export type ChatBlockInput = ChatBlock extends infer Block
   ? Block extends Exclude<ChatBlock, { type: 'voice-window' }>

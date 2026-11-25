@@ -3,6 +3,7 @@ import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
+import { WorkspaceHtmlArtifactStore } from './workspace-html-artifact-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createApprovalNotificationStore } from './approval-notification-store.js';
 import { createReplyNotificationStore } from './reply-notification-store.js';
@@ -41,6 +42,7 @@ afterAll(async () => {
 describe('conversation blocks in the message store', () => {
   it('updates one archived window per call and keeps it in history after the next call starts', async () => {
     const store = createConversationStore(pool);
+    const owner = randomUUID();
     const first = await store.createSession({ channel: 'voice', language: 'en' });
     const turn = await store.addMessage({ sessionId: first.id, role: 'dan', text: 'Show a window', model: null });
     const block = {
@@ -49,13 +51,33 @@ describe('conversation blocks in the message store', () => {
       data: { view: { version: 1, renderer: 'detail', title: 'Result', source: { id: 'now', status: 'complete' },
         data: { fields: Array.from({ length: 24 }, (_, i) => ({ label: String(i), value: 'x'.repeat(1_800) })) } } },
     } as const;
-    expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', block)).toBe(true);
-    expect(await store.saveVoiceWindow!(turn!.id, 'voice-window:example', { ...block, id: randomUUID(), title: 'Updated' })).toBe(true);
+    expect(await store.saveVoiceWindow!(owner, turn!.id, 'voice-window:example', block)).toBe(true);
+    expect(await store.saveVoiceWindow!(owner, turn!.id, 'voice-window:example', { ...block, id: randomUUID(), title: 'Updated' })).toBe(true);
     await store.endSession(first.id);
     const second = await store.createSession({ channel: 'voice', language: 'en' });
     const history = await store.getHistory({ sessionId: first.id, limit: 10 });
     expect(history.messages.flatMap(message => message.blocks ?? [])).toEqual([{ ...block, title: 'Updated' }]);
     expect((await store.getHistory({ sessionId: second.id, limit: 10 })).messages).toEqual([]);
+  });
+
+  it('keeps the archived HTML revision readable after an edit', async () => {
+    const owner = randomUUID(), signal = new AbortController().signal;
+    const artifacts = new WorkspaceHtmlArtifactStore(pool);
+    const saved = await artifacts.create(owner, 'Example', '<p>Original</p>', [], signal);
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'voice', language: 'en' });
+    const turn = await store.addMessage({ sessionId: session.id, role: 'dan', text: 'Show the report', model: null });
+    await store.saveVoiceWindow!(owner, turn!.id, 'voice-window:html', {
+      version: 1, id: randomUUID(), type: 'voice-window', title: 'Example', summary: 'Example',
+      source: { label: 'Voice', issuedAt: new Date().toISOString() },
+      data: { view: { version: 1, renderer: 'html-app', title: 'Example', source: { id: 'html_generation', status: 'complete' },
+        data: { artifactId: saved.id } } },
+    });
+    await artifacts.update(saved.id, owner, '<p>Edited</p>', signal);
+    const history = await store.getHistory({ sessionId: session.id, limit: 10 });
+    const block = history.messages.flatMap(message => message.blocks ?? []).find(item => item.type === 'voice-window');
+    expect(block?.artifactVersion).toBe(1);
+    expect((await artifacts.read(saved.id, owner, signal, block?.artifactVersion)).html).toBe('<p>Original</p>');
   });
 
   it.each([false, true])('keeps the saved reply linked to its turn in history (reply push enabled: %s)', async (notify) => {

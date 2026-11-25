@@ -226,14 +226,14 @@ final class WorkspaceRuntime: ObservableObject {
         return true
     }
 
-    func loadHTMLArtifact(id: String) async throws -> HtmlArtifact {
+    func loadHTMLArtifact(id: String, version: Int? = nil) async throws -> HtmlArtifact {
 #if DEBUG && targetEnvironment(simulator)
         if let fixtureHTMLArtifact, id == fixtureHTMLArtifact.id { return fixtureHTMLArtifact }
 #endif
         guard let workspaceClient else {
             throw JarvisWorkspaceClientError.invalidResponse
         }
-        return try await workspaceClient.htmlArtifact(id: id)
+        return try await workspaceClient.htmlArtifact(id: id, version: version)
     }
 
     func canPerform(_ action: GeneratedViewAction) -> Bool {

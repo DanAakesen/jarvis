@@ -80,6 +80,7 @@ struct JarvisChatBlockView: View {
                     runtime: runtime,
                     language: language,
                     previewImage: nil,
+                    artifactVersion: block.artifactVersion,
                     onAction: perform
                 )
             } else {

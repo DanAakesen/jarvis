@@ -7,6 +7,7 @@ struct HTMLAppRenderer: View {
     let artifactId: String
     let runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
+    var artifactVersion: Int? = nil
     var voiceHeight: CGFloat? = nil
     var revision: String? = nil
 
@@ -38,11 +39,11 @@ struct HTMLAppRenderer: View {
                     .frame(maxWidth: .infinity, minHeight: 160)
             }
         }
-        .task(id: "\(artifactId)-\(revision ?? "")-\(attempt)") {
+        .task(id: "\(artifactId)-\(revision ?? "")-\(artifactVersion ?? 0)-\(attempt)") {
             if artifact?.id.caseInsensitiveCompare(artifactId) != .orderedSame { artifact = nil }
             failedArtifactID = nil
             do {
-                let loadedArtifact = try await runtime.loadHTMLArtifact(id: artifactId)
+                let loadedArtifact = try await runtime.loadHTMLArtifact(id: artifactId, version: artifactVersion)
                 guard !Task.isCancelled else { return }
                 artifact = loadedArtifact
             } catch is CancellationError {

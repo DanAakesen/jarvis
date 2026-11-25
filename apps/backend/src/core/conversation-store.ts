@@ -103,7 +103,7 @@ export interface ConversationStore {
     readonly allowWallClockFallback?: boolean;
   }): Promise<boolean>;
   /** Upserts the window in the voice session that owns the authoritative user turn. */
-  saveVoiceWindow?(turnId: string, sourceItemId: string, block: Extract<ChatBlock, { type: 'voice-window' }>): Promise<boolean>;
+  saveVoiceWindow?(owner: string, turnId: string, sourceItemId: string, block: Extract<ChatBlock, { type: 'voice-window' }>): Promise<boolean>;
   addMessage(input: {
     /** Cancels an uncommitted plain-text write; already committed messages remain history. */
     readonly signal?: AbortSignal;

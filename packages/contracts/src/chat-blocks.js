@@ -106,7 +106,7 @@ export function createChatBlockValidator(isGeneratedView) {
     let serialized;
     try { serialized = JSON.stringify(value); } catch { return false; }
     if (serialized === undefined || new TextEncoder().encode(serialized).byteLength > (stored && value?.type === 'voice-window' ? 260 * 1024 : chatBlockLimits.bytes) ||
-        !isObject(value) || !onlyKeys(value, chatBlockKeys) || value.version !== chatBlockVersion ||
+        !isObject(value) || !onlyKeys(value, stored && value.type === 'voice-window' ? [...chatBlockKeys, 'artifactVersion'] : chatBlockKeys) || value.version !== chatBlockVersion ||
         (stored ? !idPattern.test(value.id ?? '') : value.id !== undefined) ||
         !chatBlockTypes.includes(value.type) || !text(value.title, 200) || !text(value.summary, 1_000) ||
         !validSource(value.source, stored)) return false;
@@ -114,7 +114,9 @@ export function createChatBlockValidator(isGeneratedView) {
       case 'voice-window':
         // Only the server archives windows. Retain their data and artifact references, not live tool controls.
         return stored && isObject(value.data) && onlyKeys(value.data, ['view']) &&
-          isGeneratedView(value.data.view, options) && !value.data.view.actions?.length;
+          isGeneratedView(value.data.view, options) && !value.data.view.actions?.length &&
+          (value.artifactVersion === undefined || (value.data.view.renderer === 'html-app' &&
+            Number.isInteger(value.artifactVersion) && value.artifactVersion >= 1 && value.artifactVersion <= 2147483647));
       case 'forecast': return validForecast(value.data);
       case 'chart': return validChart(value.data);
       case 'view': return validView(value.data, isGeneratedView, options);

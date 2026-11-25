@@ -428,16 +428,25 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.recordset[0]?.session_exists === 1;
     },
 
-    async saveVoiceWindow(turnId, sourceItemId, block) {
+    async saveVoiceWindow(owner, turnId, sourceItemId, block) {
       if (!validReplyToTurnId(turnId)) return false;
       const trustedBlobHost = trustedBlobHostFromEnvironment();
       if (!isChatBlock(block, trustedBlobHost ? { trustedBlobHost } : {})) throw new TypeError('Invalid voice window');
       const result = await pool.request()
         .input('turnId', sql.BigInt, BigInt(turnId))
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('artifactId', sql.UniqueIdentifier, block.data.view.renderer === 'html-app' ? block.data.view.data.artifactId : null)
         .input('sourceItemId', sql.NVarChar(128), sourceItemId)
         .input('title', sql.NVarChar(200), block.title)
         .input('metadata', sql.NVarChar(sql.MAX), JSON.stringify({ blocks: [block], replyToTurnId: turnId }))
-        .query<{ id: string }>(`MERGE dbo.messages WITH (HOLDLOCK) AS target
+        .query<{ id: string }>(`IF @artifactId IS NOT NULL
+          BEGIN
+            DECLARE @version int = (SELECT version_number FROM dbo.workspace_html_artifacts
+                                    WHERE id = @artifactId AND owner_object_id = @owner);
+            IF @version IS NULL THROW 51000, 'Voice window artifact unavailable', 1;
+            SET @metadata = JSON_MODIFY(@metadata, '$.blocks[0].artifactVersion', @version);
+          END;
+          MERGE dbo.messages WITH (HOLDLOCK) AS target
           USING (SELECT s.id, s.language FROM dbo.jarvis_sessions s JOIN dbo.messages m ON m.jarvis_session_id = s.id
                  WHERE m.id = @turnId AND m.role = N'dan' AND s.channel = N'voice') AS source
           ON target.jarvis_session_id = source.id AND target.source_item_id = @sourceItemId AND target.role = N'jarvis'

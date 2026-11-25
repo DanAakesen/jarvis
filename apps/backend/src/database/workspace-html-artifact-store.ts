@@ -135,8 +135,8 @@ export class WorkspaceHtmlArtifactStore {
     }
   }
 
-  async read(id: string, ownerObjectId: string, signal: AbortSignal): Promise<WorkspaceHtmlArtifact> {
-    const artifact = await this.readVersion(id, ownerObjectId, signal);
+  async read(id: string, ownerObjectId: string, signal: AbortSignal, version?: number): Promise<WorkspaceHtmlArtifact> {
+    const artifact = await this.readVersion(id, ownerObjectId, signal, version);
     return { id: artifact.id, kind: artifact.kind, title: artifact.title, html: artifact.html,
       sources: artifact.sources, createdAt: artifact.createdAt, pinned: artifact.pinned };
   }

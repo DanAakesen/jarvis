@@ -64,7 +64,7 @@ export async function archiveVoiceWindow(
   delete snapshot.actions;
   const title = view.title.trim().slice(0, 200) || 'Voice window';
   const sourceItemId = 'voice-window:' + createHash('sha256').update(viewId).digest('hex');
-  const saved = await app.conversationStore?.saveVoiceWindow?.(turnId, sourceItemId, {
+  const saved = await app.conversationStore?.saveVoiceWindow?.(app.ownerObjectId, turnId, sourceItemId, {
     version: 1, type: 'voice-window', id: randomUUID(), title, summary: title,
     source: { label: 'Voice', issuedAt: new Date().toISOString() }, data: { view: snapshot },
   });
