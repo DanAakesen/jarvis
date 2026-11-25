@@ -117,7 +117,7 @@ struct GeneratedViewContent: View {
     private var renderer: some View {
         switch view {
         case .table(let envelope):
-            TableRenderer(data: envelope.data, language: language)
+            TableRenderer(data: envelope.data, language: language, fitsVoiceWindow: voiceHTMLHeight != nil)
         case .list(let envelope):
             ListRenderer(data: envelope.data, runtime: runtime, language: language, onAction: onAction)
         case .map(let envelope):
@@ -129,7 +129,7 @@ struct GeneratedViewContent: View {
         case .timeline(let envelope):
             TimelineRenderer(data: envelope.data)
         case .chart(let envelope):
-            ChartRenderer(data: envelope.data, language: language)
+            ChartRenderer(data: envelope.data, language: language, fitsVoiceWindow: voiceHTMLHeight != nil)
         case .taskCard(let envelope):
             TaskCardRenderer(data: envelope.data)
         case .status(let envelope):
@@ -148,7 +148,7 @@ struct GeneratedViewContent: View {
         case .knowledgeGraph(let envelope):
             KnowledgeGraphRenderer(data: envelope.data, language: language, onOpenNotes: runtime.openNotesGraph)
         case .code(let envelope):
-            CodeRenderer(data: envelope.data)
+            CodeRenderer(data: envelope.data, fitsVoiceWindow: voiceHTMLHeight != nil)
         case .unsupportedVersion:
             UnsupportedRenderer(kind: text(.unsupportedVersion), language: language)
         case .unknown:
@@ -164,28 +164,30 @@ struct GeneratedViewContent: View {
 private struct TableRenderer: View {
     let data: GeneratedTableData
     let language: JarvisAppLanguage
+    let fitsVoiceWindow: Bool
 
     var body: some View {
-        ScrollView(.horizontal) {
-            Grid(alignment: .leading, horizontalSpacing: JarvisDesignTokens.contentSpacing, verticalSpacing: JarvisDesignTokens.rowSpacing) {
-                GridRow {
-                    ForEach(Array(data.columns.enumerated()), id: \.offset) { _, column in
-                        Text(column)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                ForEach(Array(data.rows.enumerated()), id: \.offset) { _, row in
-                    GridRow {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, value in
-                            Text(display(value, language: language))
-                                .font(.body)
-                                .foregroundStyle(.primary)
+        Group {
+            if fitsVoiceWindow {
+                ViewThatFits(in: .horizontal) {
+                    grid.fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
+                        ForEach(Array(data.rows.enumerated()), id: \.offset) { index, row in
+                            if index > 0 { Divider() }
+                            ForEach(Array(row.enumerated()), id: \.offset) { column, value in
+                                VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
+                                    if data.columns.indices.contains(column) {
+                                        Text(data.columns[column]).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Text(display(value, language: language))
+                                }
+                            }
                         }
                     }
                 }
+            } else {
+                ScrollView(.horizontal) { grid }
             }
-            .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
         }
         .scrollIndicators(.hidden)
         .accessibilityLabel(
@@ -195,6 +197,28 @@ private struct TableRenderer: View {
                 arguments: [data.columns.count, data.rows.count]
             )
         )
+    }
+
+    private var grid: some View {
+        Grid(alignment: .leading, horizontalSpacing: JarvisDesignTokens.contentSpacing, verticalSpacing: JarvisDesignTokens.rowSpacing) {
+            GridRow {
+                ForEach(Array(data.columns.enumerated()), id: \.offset) { _, column in
+                    Text(column)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(Array(data.rows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, value in
+                        Text(display(value, language: language))
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
     }
 }
 
@@ -320,6 +344,7 @@ private struct TimelineRenderer: View {
 private struct ChartRenderer: View {
     let data: GeneratedChartData
     let language: JarvisAppLanguage
+    let fitsVoiceWindow: Bool
 
     var body: some View {
         Group {
@@ -336,60 +361,10 @@ private struct ChartRenderer: View {
                                 JarvisDesignTokens.chartMaximumWidth
                             )
                         )
-                        ScrollView(.horizontal) {
-                            Chart(chartPoints) { point in
-                                if data.kind == .bar {
-                                    BarMark(
-                                        x: .value(text(.xAxis), point.x),
-                                        yStart: .value(text(.baseline), 0),
-                                        yEnd: .value(text(.yAxis), point.y)
-                                    )
-                                    .position(by: .value(text(.series), point.series))
-                                    .foregroundStyle(by: .value(text(.series), point.series))
-                                } else if data.kind == .area {
-                                    AreaMark(
-                                        x: .value(text(.xAxis), point.x),
-                                        yStart: .value(text(.baseline), 0),
-                                        yEnd: .value(text(.yAxis), point.y)
-                                    )
-                                    .foregroundStyle(by: .value(text(.series), point.series))
-                                    .opacity(JarvisDesignTokens.chartAreaOpacity)
-                                    LineMark(x: .value(text(.xAxis), point.x), y: .value(text(.yAxis), point.y))
-                                        .foregroundStyle(by: .value(text(.series), point.series))
-                                } else {
-                                    LineMark(x: .value(text(.xAxis), point.x), y: .value(text(.yAxis), point.y))
-                                        .foregroundStyle(by: .value(text(.series), point.series))
-                                }
-                            }
-                            .chartForegroundStyleScale(
-                                domain: data.series.map(\.name),
-                                range: data.series.indices.map { JarvisDesignTokens.chartSeriesColors[$0 % JarvisDesignTokens.chartSeriesColors.count] }
-                            )
-                            .chartXScale(domain: xDomain)
-                            .chartYScale(domain: yDomain)
-                            .chartXAxis {
-                                AxisMarks(values: xAxisValues) { value in
-                                    AxisValueLabel {
-                                        if let number = value.as(Double.self) {
-                                            Text(xLabel(number))
-                                        }
-                                    }
-                                }
-                            }
-                            .chartYAxis {
-                                AxisMarks(position: .leading, values: yAxisValues) { value in
-                                    AxisGridLine()
-                                    AxisTick()
-                                    AxisValueLabel {
-                                        if let number = value.as(Double.self) {
-                                            Text(formatNumber(number))
-                                        }
-                                    }
-                                }
-                            }
-                            .chartLegend(position: .bottom, alignment: .leading)
-                            .frame(width: width, height: JarvisDesignTokens.chartHeight)
-                            .accessibilityLabel(chartSummary)
+                        if fitsVoiceWindow {
+                            chart(width: geometry.size.width)
+                        } else {
+                            ScrollView(.horizontal) { chart(width: width) }
                         }
                     }
                     .frame(height: JarvisDesignTokens.chartHeight)
@@ -413,6 +388,62 @@ private struct ChartRenderer: View {
                 }
             }
         }
+    }
+
+    private func chart(width: CGFloat) -> some View {
+        Chart(chartPoints) { point in
+            if data.kind == .bar {
+                BarMark(
+                    x: .value(text(.xAxis), point.x),
+                    yStart: .value(text(.baseline), 0),
+                    yEnd: .value(text(.yAxis), point.y)
+                )
+                .position(by: .value(text(.series), point.series))
+                .foregroundStyle(by: .value(text(.series), point.series))
+            } else if data.kind == .area {
+                AreaMark(
+                    x: .value(text(.xAxis), point.x),
+                    yStart: .value(text(.baseline), 0),
+                    yEnd: .value(text(.yAxis), point.y)
+                )
+                .foregroundStyle(by: .value(text(.series), point.series))
+                .opacity(JarvisDesignTokens.chartAreaOpacity)
+                LineMark(x: .value(text(.xAxis), point.x), y: .value(text(.yAxis), point.y))
+                    .foregroundStyle(by: .value(text(.series), point.series))
+            } else {
+                LineMark(x: .value(text(.xAxis), point.x), y: .value(text(.yAxis), point.y))
+                    .foregroundStyle(by: .value(text(.series), point.series))
+            }
+        }
+        .chartForegroundStyleScale(
+            domain: data.series.map(\.name),
+            range: data.series.indices.map { JarvisDesignTokens.chartSeriesColors[$0 % JarvisDesignTokens.chartSeriesColors.count] }
+        )
+        .chartXScale(domain: xDomain)
+        .chartYScale(domain: yDomain)
+        .chartXAxis {
+            AxisMarks(values: xAxisValues(maxLabels: fitsVoiceWindow ? max(2, Int(width / 76)) : 6)) { value in
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(xLabel(number))
+                    }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: yAxisValues) { value in
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel {
+                    if let number = value.as(Double.self) {
+                        Text(formatNumber(number))
+                    }
+                }
+            }
+        }
+        .chartLegend(position: .bottom, alignment: .leading)
+        .frame(width: width, height: JarvisDesignTokens.chartHeight)
+        .accessibilityLabel(chartSummary)
     }
 
     private var chartPoints: [WorkspaceChartDataPoint] {
@@ -481,18 +512,18 @@ private struct ChartRenderer: View {
         return minimum...maximum
     }
 
-    private var xAxisValues: [Double] {
+    private func xAxisValues(maxLabels: Int) -> [Double] {
         if data.kind == .bar || data.series.flatMap(\.points).contains(where: {
             if case .string = $0.x { true } else { false }
         }) {
             let count = categoryLabels.count
-            let stride = max(1, Int(ceil(Double(count) / 6)))
-            var values = categoryLabels.indices.filter { $0 % stride == 0 }.map(Double.init)
-            if count > 0, values.last != Double(count - 1) { values.append(Double(count - 1)) }
-            return values
+            let ticks = min(count, maxLabels)
+            guard ticks > 1 else { return count == 0 ? [] : [0] }
+            return (0..<ticks).map { (Double($0) * Double(count - 1) / Double(ticks - 1)).rounded() }
         }
         let range = xDomain
-        return (0...4).map { range.lowerBound + (range.upperBound - range.lowerBound) * Double($0) / 4 }
+        let intervals = min(4, maxLabels - 1)
+        return (0...intervals).map { range.lowerBound + (range.upperBound - range.lowerBound) * Double($0) / Double(intervals) }
     }
 
     private var yAxisValues: [Double] {
@@ -732,9 +763,10 @@ private struct KnowledgeGraphRenderer: View {
     }
 }
 
-/// Code with line numbers, the matched lines marked by a surface and a symbol, scrolling sideways instead of wrapping.
+/// Numbered code wraps inside Voice windows and scrolls horizontally in the workspace.
 private struct CodeRenderer: View {
     let data: GeneratedCodeData
+    let fitsVoiceWindow: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
@@ -744,32 +776,37 @@ private struct CodeRenderer: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
-            ScrollView(.horizontal) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(data.displayLines) { line in
-                        HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.rowSpacing) {
-                            Text(line.isHighlighted ? "›" : " ")
-                                .font(.system(.footnote, design: .monospaced).weight(.bold))
-                                .foregroundStyle(.primary)
-                                .accessibilityHidden(true)
-                            Text("\(line.number)")
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .frame(minWidth: 36, alignment: .trailing)
-                            Text(line.text.isEmpty ? " " : line.text)
-                                .font(.system(.footnote, design: .monospaced))
-                                .foregroundStyle(.primary)
-                                .fixedSize()
-                        }
-                        .padding(.vertical, 1)
-                        .background(line.isHighlighted ? Color.primary.opacity(0.1) : .clear)
-                        .accessibilityElement(children: .combine)
-                    }
-                }
+            if fitsVoiceWindow {
+                lines
+            } else {
+                ScrollView(.horizontal) { lines }.scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var lines: some View {
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(data.displayLines) { line in
+                HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.rowSpacing) {
+                    Text(line.isHighlighted ? "›" : " ")
+                        .font(.system(.footnote, design: .monospaced).weight(.bold))
+                        .foregroundStyle(.primary)
+                        .accessibilityHidden(true)
+                    Text("\(line.number)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 36, alignment: .trailing)
+                    Text(line.text.isEmpty ? " " : line.text)
+                        .font(.system(.footnote, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: !fitsVoiceWindow, vertical: true)
+                }
+                .padding(.vertical, 1)
+                .background(line.isHighlighted ? Color.primary.opacity(0.1) : .clear)
+                .accessibilityElement(children: .combine)
+            }
+        }
     }
 }
 

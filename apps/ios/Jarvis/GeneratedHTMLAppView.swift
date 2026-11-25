@@ -148,6 +148,9 @@ private struct SandboxedHTMLApp: UIViewRepresentable {
             --jarvis-error: \(color(.systemRed));
         }
         :where(body) { color: var(--jarvis-text); background: var(--jarvis-background); font-family: system-ui, sans-serif; }
+        body { overflow-wrap: anywhere; }
+        :where(img, svg, canvas, video) { max-inline-size: 100%; }
+        :where(pre) { white-space: pre-wrap; }
         :where(a) { color: var(--jarvis-accent); }
         """
     }
