@@ -359,7 +359,7 @@ struct JarvisHealthArea: View {
                                 .accessibilityIdentifier("health.empty")
                             }
                             JarvisHealthCards(data: dashboard, goals: goals, language: language, client: client,
-                                              steps: deviceSteps, night: sleepTimeline, onPhoto: onMealPhoto,
+                                              dashboardLoadID: dashboardLoadID, steps: deviceSteps, night: sleepTimeline, onPhoto: onMealPhoto,
                                               onMealSaved: {
                                 await JarvisAppCache.invalidateAll(.health)
                                 await loadDashboard(force: true)

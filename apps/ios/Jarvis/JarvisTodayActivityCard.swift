@@ -24,9 +24,12 @@ struct JarvisTodayActivityCard: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             if showAll {
-                JarvisHistoryChart(metric: .training, client: model.healthClient)
-                Divider()
-                JarvisHistoryChart(metric: .steps, client: model.healthClient)
+                VStack(alignment: .leading, spacing: 10) {
+                    JarvisHistoryChart(metric: .training, client: model.healthClient)
+                    Divider()
+                    JarvisHistoryChart(metric: .steps, client: model.healthClient)
+                }
+                .id(model.now)
             } else {
                 workoutsBlock(display)
                 if !model.dailyActivity.isLoading, let issue = activityIssue(display) {

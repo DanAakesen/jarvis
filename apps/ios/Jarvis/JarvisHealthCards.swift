@@ -9,6 +9,7 @@ struct JarvisHealthCards<Lifts: View>: View {
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
     let client: JarvisHealthClient?
+    let dashboardLoadID: UUID?
     let steps: JarvisStepsSnapshot?
     let night: JarvisSleepTimeline
     let onPhoto: ((Data) -> Void)?
@@ -53,28 +54,33 @@ struct JarvisHealthCards<Lifts: View>: View {
         return "\(mins / 60)h \(mins % 60)m"
     }
 
+    private func historyChart(_ metric: JarvisHistoryMetric) -> some View {
+        JarvisHistoryChart(metric: metric, client: client)
+            .id(dashboardLoadID)
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             JarvisPageHeroCard(title: "Training", accessory: { range($training, .training) }) {
                 if fullHistory.contains(.training) {
-                    JarvisHistoryChart(metric: .training, client: client)
+                    historyChart(.training)
                 } else { trainingSummary }
                 Divider()
                 lifts()
             }.environment(\.jarvisCardRole, "training").accessibilityIdentifier("health.hero.training")
             JarvisPageHeroCard(title: stepRange == .today && !fullHistory.contains(.steps) ? "Steps today" : "Steps", accessory: { range($stepRange, .steps) }) {
                 if fullHistory.contains(.steps) {
-                    JarvisHistoryChart(metric: .steps, client: client)
+                    historyChart(.steps)
                 } else { stepSummary }
             }.environment(\.jarvisCardRole, "steps")
             JarvisPageHeroCard(title: "Sleep", accessory: { range($sleep, .sleep) }) {
                 if fullHistory.contains(.sleep) {
-                    JarvisHistoryChart(metric: .sleep, client: client)
+                    historyChart(.sleep)
                 } else { sleepSummary }
             }.environment(\.jarvisCardRole, "sleep").accessibilityIdentifier("health.hero.sleep").id("sleep")
             JarvisPageHeroCard(title: "Nutrition", accessory: { range($nutrition, .nutrition) }) {
                 if fullHistory.contains(.nutrition) {
-                    JarvisHistoryChart(metric: .nutrition, client: client)
+                    historyChart(.nutrition)
                 } else { nutritionSummary }
                 let mealLayout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
                 mealLayout {
