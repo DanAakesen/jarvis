@@ -1,6 +1,6 @@
-# Health health processing (P12-05)
+# Health inbox processing
 
-The [local coordinator release](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) permits implementation over P12-04's existing SQL inbox. Production registers its worker only behind `JARVIS_HEALTH_UPLOAD_ENABLED`, which defaults false and remains absent from infrastructure. Original Health remains canonical; no live endpoint, credential or phone acceptance is claimed.
+The bounded worker drains the existing SQL inbox when upload is enabled. See the [upload contract](../../../../../docs/reference/daily/health-ingestion.md) for the Bicep setting, retention and readiness. Health Auto Export is **not accepted on device**.
 
 ## Processing contract
 
@@ -10,13 +10,11 @@ The [local coordinator release](https://github.com/DanAakesen/jarvis/issues/720#
 2. Check the original SHA-256 and UTF-8 JSON, normalize outside the transaction, and validate the bounded result.
 3. Recheck the claim generation/deadline under the owner lock. Commit domain rows, ingestion lineage, applicable feed freshness and processed receipt in one transaction. A heartbeat writes only phone-sync state.
 
-Migration 0047 adds attempt/deadline/fixed error-code columns. An invocation has a 45-second deadline; existing SQL transactions retain their 30-second/query-cancellation and five-second lock bounds. Failed/interrupted attempts become eligible after 2, 5 and 15 minutes; after three attempts the next eligible invocation quarantines the row. The bounded worker drains at most ten rows per immediate batch, pauses one second between full batches, polls idle/retry results after 30 seconds, and wakes on durable acceptance. Validation errors quarantine immediately. Unexpected SQL/commit failures remain retry/unknown, never false success. A lost commit response is resolved from durable state on the next invocation; accepted raw bytes are never deleted.
+An invocation and its claim each have a 45-second deadline. A handled storage failure defers the next attempt by 2, 5 or 15 minutes; an interrupted claim becomes eligible when its lease expires. After three attempts, the next eligible invocation quarantines the row. Validation errors quarantine immediately. For batch bounds and retention, see the [processing contract](../../../../../docs/reference/daily/health-ingestion.md#processing-and-replay-limits).
 
-Ingress already conflicts on changed owner/kind/automation/session bytes or device. Exact retry retains its receipt and produces one processed result. A matching pre-existing successful ingestion with the same exact session/checksum/length is retained without rewriting original IDs or advancing freshness; conflicting historical lineage quarantines. Empty workout exports succeed and advance only their processed feed, without deleting workouts or child history. Older accepted retries cannot regress newer target timestamps or introduce stale children under a newer workout. Equal acceptance timestamps are serialized; this is arrival-snapshot ordering, not a claim that a phone's late-arriving older export is newer source data.
+Exact upload retries keep the original receipt; different bytes or devices conflict for the same upload identity. A matching successful ingestion is retained without rewriting IDs or advancing freshness; conflicting lineage quarantines. Empty workout exports advance only their processed feed without deleting history. Older accepted retries cannot regress newer target timestamps or add stale children to a newer workout. This orders accepted snapshots, not the age of their source data.
 
-## Pure source contract and deliberate validation
-
-Nonsensitive `worker/health-normalize.js`, `health-targets.js` and selected persistence code were read at original Site SHA `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`. No real records, source fixtures, credentials, schema or source files were changed. This establishes code-shaped compatibility only; protected live coverage/parity is still required.
+## Normalization
 
 - Metrics retain daily aggregation strategy and explicit unknowns. Known physical units convert to kcal/kg/m; sleep converts to hours. Missing units stay unknown (legacy sleep's absent unit is hours). Unsupported known-dimension units, mixed unknown/known units and ambiguous `cal` fail closed instead of guessing.
 - Body-fat percentage accepts only string `%`/`percent` and `fraction`/`1`, converting the latter to percent. Validate both raw `units`/`unit` aliases on every group, sample and workout quantity before sanitization or fallback selection, including empty groups and shadowed declarations. Non-string declarations (including numeric `1`) and unsupported strings quarantine before domain/freshness writes; absent/null/blank units remain missing and inherit a valid group unit or stay unknown without scaling. Zero and missing values, unknown dimensions and original raw evidence are preserved.
@@ -28,19 +26,12 @@ Nonsensitive `worker/health-normalize.js`, `health-targets.js` and selected pers
 
 ## Owner reads and truthful freshness
 
-The P12-09 query adapter reuses these methods through one
-owner-authorised HTTP/tool contract; health ingestion remains independently
-default-off.
-The optional fourth `SqlHealthProcessor` argument is the shared Health change
-hub. New normalized lineage notifies its health sources only after the final
-transaction resolves; retained lineage replays do not announce new health data.
-Completing a pending replay, poison quarantine and retry exhaustion notify sync
-only after acknowledged commit; no-ops and failed/uncertain commits do not notify.
-Heartbeat also notifies sync only, never processed health freshness.
-Notification failures stay in the existing event-listener boundary rather than
-failing an acknowledged row or retrying SQL side effects.
-The factory `createHealthData` supplies that hub without starting a processor.
-Commit tests use synthetic transaction doubles, not real SQL acceptance.
+The owner-authorised HTTP and tool read paths do not depend on upload being enabled.
+The processor can forward changes to an injected sink; production does not pass
+the Health query hub to it. When a sink is supplied, changes publish only after
+commit. New normalized lineage notifies affected health sources; heartbeats,
+retained lineage replays and quarantines notify sync only. No-ops and uncertain
+commits do not notify, and listener failures do not retry SQL effects.
 
 `HealthReadModel.forRequest` reuses existing root human/hosted-agent authentication and server owner; device/export/coding-runner identities cannot become an owner. It adds no public endpoint.
 
@@ -56,8 +47,4 @@ boundary; capability versions 1 and 2 do not advertise the version-3 source.
 
 The iPhone, Chat and Voice daily budget uses one Copenhagen-day total from `active_energy_burned` or `active_energy`. Native HealthKit totals use their coverage end time. Exported totals use their update time. The latest valid total wins, with `active_energy_burned` first for a tie. Native interval batches do not establish a daily total.
 
-## Checks and remaining gates
-
-Use backend lint/build, `npm test --workspace @jarvis/backend -- src/health/health src/health/health-upload src/health/index.test.ts src/auth/auth.test.ts src/database/migrations.test.ts`, then normal full CI. `health-processing.integration.test.ts` uses only the existing disposable loopback SQL CI fixture: atomic rollback, concurrent/reconstructed processing, lost commit responses, retry exhaustion, owner/keyset isolation, empty exports, historical conflicts and guarded rollback. No production SQL or local SQL image is used. Tests are synthetic; report actual executed evidence on the PR.
-
-Migration rollback refuses any attempted/processed/quarantined evidence and takes a table lock through the existing rollback transaction. Disable future composition instead of deleting evidence. Raw capacity/retention policy, protected backup/import/reconciliation, deployed recovery/ordering, real HAE shapes/unit coverage and physical-phone parity still gate activation and cutover. This implementation does not prove complete backup or transfer Cloud SAS authority locally.
+To disable processing, use the [upload rollback procedure](../../../../../docs/reference/daily/health-ingestion.md#readiness-and-rollback-gates). Preserve the SQL receipts and raw rows.
