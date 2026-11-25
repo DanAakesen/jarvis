@@ -124,8 +124,8 @@ export class HealthReadModel {
   /** Server-owned background reads; never pass an owner from request input. */
   static forOwner(pool: sql.ConnectionPool, owner: string) { return new HealthReadModel(pool, ownerId(owner)); }
 
-  /** Return one row per recorded month. */
-  async dashboardHistory(kind: 'training' | 'steps' | 'sleep' | 'nutrition', signal: AbortSignal) {
+  /** Return monthly totals, or occupied measurement ranges for body trends. */
+  async dashboardHistory(kind: 'training' | 'steps' | 'sleep' | 'nutrition' | 'body', signal: AbortSignal) {
     const daily = {
       steps: `SELECT metric_date AS day, value AS amount FROM daily.health_daily_metrics
         WHERE owner_object_id=@owner AND metric_name='step_count' AND unit='count' AND value IS NOT NULL`,
@@ -136,6 +136,18 @@ export class HealthReadModel {
     };
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {
       const request = new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner);
+      if (kind === 'body') {
+        // Only occupied years are read by the phone, through the existing paged metrics query.
+        const result = await healthSqlQuery(request, `SELECT metric_name,
+          CONVERT(char(10), MIN(metric_date), 23) AS first_date,
+          CONVERT(char(10), MAX(metric_date), 23) AS last_date
+          FROM daily.health_daily_metrics
+          WHERE owner_object_id=@owner AND metric_name IN
+            ('weight_body_mass','body_mass','body_weight','weight','body_fat_percentage','lean_body_mass')
+            AND metric_date<=CONVERT(date,SYSUTCDATETIME() AT TIME ZONE 'UTC' AT TIME ZONE 'Romance Standard Time')
+          GROUP BY metric_name, YEAR(metric_date) ORDER BY MAX(metric_date) DESC, metric_name;`, bounded);
+        return { ranges: result.recordset };
+      }
       if (kind === 'training') {
         const result = await healthSqlQuery<HistoricalWorkout>(request, `SELECT manual, CONVERT(char(10),day,126) AS day, started, kind
           FROM (

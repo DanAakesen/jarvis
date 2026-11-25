@@ -375,6 +375,29 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
         return result.entry
     }
 
+    /// Each occupied metric/year range fits the existing paged Health query.
+    public func bodyHistory(matching kind: JarvisHealthLogic.BodyMetric? = nil) async throws -> [[String: JSONValue]] {
+        struct Range: Decodable { let metric_name: String; let first_date: String; let last_date: String }
+        struct Catalog: Decodable { let ranges: [Range] }
+
+        let response = try await client.performAuthenticatedRequest(method: .get,
+            path: ["health", "dashboard-history", "body"], idempotent: true)
+        guard response.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
+        let catalog: Catalog = try decode(response.body)
+        var rows: [[String: JSONValue]] = []
+        for range in catalog.ranges {
+            if let kind, !JarvisHealthLogic.bodyMetricName(range.metric_name, matching: kind) { continue }
+            try Task.checkCancellation()
+            guard let period = JarvisHealthPeriod(startDate: range.first_date, endDate: range.last_date),
+                  period.dayCount <= 366 else { throw JarvisHealthClientError.invalidResponse }
+            let query = try JarvisHealthQuery(source: .metrics, period: period, metric: range.metric_name, limit: 500)
+            let page = try await queryAll(query)
+            guard !page.coverage.hasMore else { throw JarvisHealthClientError.responseTooLarge }
+            rows.append(contentsOf: page.items)
+        }
+        return rows
+    }
+
     public func dashboardHistory(_ metric: JarvisHistoryMetric) async throws -> JarvisMonthlyHistory {
         let response = try await client.performAuthenticatedRequest(method: .get,
             path: ["health", "dashboard-history", metric.rawValue], idempotent: true)

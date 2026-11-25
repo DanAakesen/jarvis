@@ -43,6 +43,7 @@ struct JarvisHealthDetailView: View {
     let capabilities: JarvisHealthCapabilities?
     let kind: JarvisHealthDetailKind
     let language: JarvisAppLanguage
+    var allBodyMetric: JarvisHealthLogic.BodyMetric? = nil
 
     @State private var data: JarvisHealthDetailData?
     @State private var failure: JarvisHealthFailure?
@@ -345,14 +346,19 @@ struct JarvisHealthDetailView: View {
                 guard ownsLoad(requestID, context: context) else { return }
                 data = JarvisHealthDetailData(items: result.items, itemsLoaded: true)
             case .metric(let name, _, let period):
-                let query = try JarvisHealthQuery(source: .metrics, period: period, metric: name, limit: 500)
-                let result = try await client.queryAll(query)
+                let items: [[String: JSONValue]]
+                if let allBodyMetric {
+                    items = try await client.bodyHistory(matching: allBodyMetric)
+                } else {
+                    let query = try JarvisHealthQuery(source: .metrics, period: period, metric: name, limit: 500)
+                    items = try await client.queryAll(query).items
+                }
                 guard ownsLoad(requestID, context: context) else { return }
-                selectedMetricReading = JarvisBodyTrend(rows: result.items, period: period).selectionID(
+                selectedMetricReading = JarvisBodyTrend(rows: items, period: period).selectionID(
                     retaining: selectedMetricReading,
                     from: JarvisBodyTrend(rows: data?.items ?? [], period: period)
                 )
-                data = JarvisHealthDetailData(items: result.items, itemsLoaded: true)
+                data = JarvisHealthDetailData(items: items, itemsLoaded: true)
             }
         } catch is CancellationError {
             return

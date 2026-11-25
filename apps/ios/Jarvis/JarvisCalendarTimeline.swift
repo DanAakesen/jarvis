@@ -61,6 +61,18 @@ struct JarvisCalendarTimeline: View {
                 GeometryReader { geo in
                     let width = max(1, (geo.size.width - gutter) / CGFloat(days.count))
                     ZStack(alignment: .topLeading) {
+                        if days.count > 1 {
+                            Path { path in
+                                for column in 1..<days.count {
+                                    let x = gutter + CGFloat(column) * width
+                                    path.move(to: CGPoint(x: x, y: 6))
+                                    path.addLine(to: CGPoint(x: x, y: 6 + 24 * hour))
+                                }
+                            }
+                            .stroke(.secondary.opacity(0.22), lineWidth: 0.5)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                        }
                         ForEach(0..<25) { index in
                             HStack(spacing: 3) {
                                 Text(String(format: "%02d.00", index)).font(.caption2.monospacedDigit())

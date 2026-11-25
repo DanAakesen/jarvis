@@ -365,12 +365,12 @@ struct JarvisHealthArea: View {
                                 await loadDashboard(force: true)
                             }) { lastLiftsSection }
                             JarvisHealthBodySection(
-                                metrics: visibleMetrics(in: dashboard),
+                                searchText: searchText,
+                                dashboardLoadID: dashboardLoadID,
                                 dashboard: dashboard,
                                 period: bodyPeriod,
                                 client: client,
-                                language: language,
-                                hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                language: language
                             )
                             if dashboard.isStale || dashboard.isPartial {
                                 freshnessLine(dashboard)
@@ -475,15 +475,11 @@ struct JarvisHealthArea: View {
         .sheet(isPresented: $newLiftPresented, onDismiss: { refreshVersion += 1 }) {
             if let gymModel {
                 JarvisTodayGymSheet(model: gymModel, language: language, kind: .lift)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             }
         }
         .sheet(isPresented: $newWorkoutPresented, onDismiss: { refreshVersion += 1 }) {
             if let gymModel {
                 JarvisTodayGymSheet(model: gymModel, language: language, kind: .workout)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             }
         }
         .task {
@@ -986,15 +982,6 @@ struct JarvisHealthArea: View {
         if data.isStale { return copy.text(.stale) }
         if data.isPartial { return copy.text(.partial) }
         return ""
-    }
-
-    private func visibleMetrics(in data: JarvisHealthDashboardData) -> [JarvisHealthMetricSeries] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return data.bodyMetrics }
-        return data.bodyMetrics.filter {
-            copy.text($0.title).localizedCaseInsensitiveContains(query) ||
-                $0.metricName.localizedCaseInsensitiveContains(query)
-        }
     }
 
     private func firstFailure(in data: JarvisHealthDashboardData) -> JarvisHealthFailure {

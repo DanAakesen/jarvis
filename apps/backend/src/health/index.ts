@@ -51,13 +51,13 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
         await app.register(healthQueryRoutes(data.query));
         const history = data.dashboardHistory;
         if (history) {
-          app.get<{ Params: { kind: 'training' | 'steps' | 'sleep' | 'nutrition' } }>('/health/dashboard-history/:kind', {
+          app.get<{ Params: { kind: 'training' | 'steps' | 'sleep' | 'nutrition' | 'body' } }>('/health/dashboard-history/:kind', {
             onRequest: async (request, reply) => {
               resolveHealthBrowserOwner(request);
               reply.header('Cache-Control', 'no-store');
             },
             schema: { params: { type: 'object', required: ['kind'], properties: {
-              kind: { type: 'string', enum: ['training', 'steps', 'sleep', 'nutrition'] },
+              kind: { type: 'string', enum: ['training', 'steps', 'sleep', 'nutrition', 'body'] },
             } } },
           }, async request => history(request, request.params.kind, AbortSignal.timeout(30_000)));
         }

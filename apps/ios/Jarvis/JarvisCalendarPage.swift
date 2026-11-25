@@ -104,7 +104,17 @@ struct JarvisCalendarPage: View {
                     JarvisLabelledButton(title: "Refresh", systemImage: "arrow.clockwise") { refresh = UUID() }
                 }
                 if truncated { Text("Showing the first 200 appointments. Select a shorter period to see more.").font(.footnote) }
-                if let draft, draft.isNew || !listed.contains(where: { $0.id == draft.id }) { editor(draft).id(draft.id) }
+                if let draft, draft.isNew || !listed.contains(where: { $0.id == draft.id }) {
+                    VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
+                        Text(draft.isNew ? "New event" : draft.title).font(.headline)
+                        Divider()
+                        editor(draft)
+                    }
+                    .padding()
+                    .jarvisDashboardSurface()
+                    .environment(\.jarvisCardRole, "agenda")
+                    .id(draft.id)
+                }
                 if listed.isEmpty && !loading && error == nil {
                     Text(search.isEmpty ? "No appointments" : "No matching appointments").foregroundStyle(.secondary)
                 }
@@ -167,7 +177,7 @@ struct JarvisCalendarPage: View {
 
     private func editor(_ value: CalendarDraft) -> some View {
         let binding = Binding(get: { draft ?? value }, set: { draft = $0 })
-        return VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: value.isNew ? JarvisDesignTokens.contentSpacing : 10) {
             if let current = conflict, current.id == value.id {
                 Text("Google Calendar has a newer version.").font(.subheadline.bold())
                 Text(current.title + " · " + label(current.start, .dateTime.day().month().year().hour().minute()) + " – " + label(current.end, .dateTime.day().month().year().hour().minute()))

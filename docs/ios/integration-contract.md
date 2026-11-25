@@ -153,7 +153,7 @@ Opening Health or returning to it in the foreground syncs the current Copenhagen
 | Steps ring | `POST /health/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /health/training-targets`. |
 | Nutrition | Today reads calories eaten, allowance and calories left from `GET /health/nutrition-budget`. Period averages and macros use `daily.nutrition.days` from `POST /health/query`. The protein target comes from `GET /health/nutrition-targets`. |
 | Sleep value and sleep-night detail | `POST /health/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
-| All history | Owner `GET /health/dashboard-history/:kind` returns monthly history for `training`, `steps`, `sleep` or `nutrition`. |
+| All history | Owner `GET /health/dashboard-history/:kind` returns monthly history for `training`, `steps`, `sleep` or `nutrition`. For `body` it returns occupied date ranges per metric and year for the paged measurements query. |
 | Open a workout | `POST /health/query` with `source: "daily.health.workout"` and the exact `workoutId`. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
 | Open meals | `POST /health/query` with `source: "daily.nutrition.meals"` and the selected date range. |
 | Body trend catalogue and detail | `POST /health/query` with `source: "daily.health.metric-catalog"`, then `source: "daily.health.metrics"` with the selected metric name and date range. |

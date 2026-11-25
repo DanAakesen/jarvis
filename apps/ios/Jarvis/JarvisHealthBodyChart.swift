@@ -10,6 +10,7 @@ struct JarvisHealthBodyChart: View {
     let client: JarvisHealthClient?
     let capabilities: JarvisHealthCapabilities?
     let language: JarvisAppLanguage
+    var allBodyMetric: JarvisHealthLogic.BodyMetric? = nil
     @State private var selectedID: Int?
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
@@ -23,7 +24,7 @@ struct JarvisHealthBodyChart: View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             NavigationLink {
                 JarvisHealthDetailView(client: client, capabilities: capabilities,
-                    kind: .metric(metric.metricName, metric.title, period), language: language)
+                    kind: .metric(metric.metricName, metric.title, period), language: language, allBodyMetric: allBodyMetric)
             } label: {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                     HStack {
