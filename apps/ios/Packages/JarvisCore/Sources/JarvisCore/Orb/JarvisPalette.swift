@@ -98,6 +98,7 @@ typealias PaletteRGB = (r: Double, g: Double, b: Double)
 struct PaletteTone: Hashable, Sendable {
     let hex: String
     let dark: PaletteRGB
+    let increasedContrastDark: PaletteRGB
     let light: PaletteRGB
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.hex == rhs.hex }
@@ -112,23 +113,34 @@ struct PaletteTone: Hashable, Sendable {
     init(rgb: UInt32) {
         hex = String(format: "%06X", rgb)
         let raw: PaletteRGB = (Double(rgb >> 16) / 255, Double(rgb >> 8 & 255) / 255, Double(rgb & 255) / 255)
-        // Keep the chosen hue legible as small text on both near-white and graphite surfaces.
-        dark = Self.adapt(raw, towards: 1, target: 0.31)
-        light = Self.adapt(raw, towards: 0, target: 0.145)
+        // Standard red clears the dark surface contrast floor without any white mixed in.
+        dark = Self.darkVariant(raw, minimumLuminance: 0.21)
+        increasedContrastDark = Self.darkVariant(raw, minimumLuminance: 0.31)
+        light = Self.adapt(raw, towards: (0, 0, 0), target: 0.145, brightening: false)
     }
 
-    private static func adapt(_ raw: PaletteRGB, towards end: Double, target: Double) -> PaletteRGB {
+    private static func darkVariant(_ raw: PaletteRGB, minimumLuminance: Double) -> PaletteRGB {
+        guard luminance(raw) < minimumLuminance else { return raw }
+        let peak = max(raw.r, raw.g, raw.b)
+        let brightest: PaletteRGB = peak > 0 ? (raw.r / peak, raw.g / peak, raw.b / peak) : raw
+        if luminance(brightest) >= minimumLuminance {
+            return adapt(raw, towards: brightest, target: minimumLuminance, brightening: true)
+        }
+        return adapt(brightest, towards: (1, 1, 1), target: minimumLuminance, brightening: true)
+    }
+
+    private static func adapt(_ raw: PaletteRGB, towards end: PaletteRGB, target: Double, brightening: Bool) -> PaletteRGB {
         func sufficient(_ tone: PaletteRGB) -> Bool {
             let luminance = Self.luminance(tone)
-            return end == 1 ? luminance >= target : luminance <= target
+            return brightening ? luminance >= target : luminance <= target
         }
         guard !sufficient(raw) else { return raw }
         var low = 0.0, high = 1.0
         for _ in 0..<12 {
             let middle = (low + high) / 2
-            if sufficient(mix(raw, (end, end, end), middle)) { high = middle } else { low = middle }
+            if sufficient(mix(raw, end, middle)) { high = middle } else { low = middle }
         }
-        return mix(raw, (end, end, end), high)
+        return mix(raw, end, high)
     }
 
     static func luminance(_ rgb: PaletteRGB) -> Double {
@@ -167,12 +179,13 @@ public extension JarvisPalette {
 
 extension PaletteTone {
     var darkColor: Color { Color(red: dark.r, green: dark.g, blue: dark.b) }
-    var adaptiveColor: Color { Self.adaptive(light: light, dark: dark) }
+    var adaptiveColor: Color { Self.adaptive(light: light, dark: dark, increasedContrastDark: increasedContrastDark) }
 
-    fileprivate static func adaptive(light: PaletteRGB, dark: PaletteRGB) -> Color {
+    fileprivate static func adaptive(light: PaletteRGB, dark: PaletteRGB, increasedContrastDark: PaletteRGB? = nil) -> Color {
 #if os(iOS)
         Color(uiColor: UIColor { traits in
-            let c = traits.userInterfaceStyle == .dark ? dark : light
+            let darkTone = traits.accessibilityContrast == .high ? (increasedContrastDark ?? dark) : dark
+            let c = traits.userInterfaceStyle == .dark ? darkTone : light
             return UIColor(red: c.r, green: c.g, blue: c.b, alpha: 1)
         })
 #else

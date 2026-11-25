@@ -52,7 +52,7 @@ Semantic colours (**Token**, `styles.css`):
 
 - **Native appearance.** Settings → General → Appearance sets the primary (default `#FFB45C`) and secondary
   (default `#52DCFA`) on iPhone and Watch. Primary marks actions and the orb core. Secondary colours the network
-  and orb rim. Adapt both to their background. Use neutral ink for labels and independent colours for alerts.
+  and orb rim. The shared palette preserves the selected sRGB accent when contrast allows. It adjusts brightness before adding white. The Red preset is `#FF0000`. Use neutral ink for labels and independent colours for alerts.
 - **Decision:** light mode keeps the same states and layout. The page is warm cream, the network lines are deeper teal.
 - The web supports a per-user `--theme-accent` override; defaults above apply otherwise.
 

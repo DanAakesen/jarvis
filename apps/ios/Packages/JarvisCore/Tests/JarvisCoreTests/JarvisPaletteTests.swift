@@ -39,12 +39,30 @@ final class JarvisPaletteTests: XCTestCase {
     }
 
     func testContrastingAccentsRetainTheOriginalChoice() throws {
-        for hex in ["000000", "FFFFFF", "FFB45C", "52DCFA", "0800FF", "FFFF00", "564333"] {
+        for hex in ["000000", "FFFFFF", "FFB45C", "52DCFA", "0800FF", "FFFF00", "564333", "FF0000", "F54253"] {
             let tone = try XCTUnwrap(PaletteTone(hex: hex))
             XCTAssertEqual(tone.hex, hex)
-            XCTAssertGreaterThanOrEqual(PaletteTone.luminance(tone.dark), 0.31)
+            XCTAssertGreaterThanOrEqual(PaletteTone.luminance(tone.dark), 0.21)
+            XCTAssertGreaterThanOrEqual(PaletteTone.luminance(tone.increasedContrastDark), 0.31)
             XCTAssertLessThanOrEqual(PaletteTone.luminance(tone.light), 0.145)
         }
+    }
+
+    func testCustomRedAndOrbCoreStaySaturated() throws {
+        let palette = try XCTUnwrap(JarvisPaletteSelection(primaryHex: "FF0000", secondaryHex: JarvisPalette.defaultSecondaryHex))
+        XCTAssertEqual(palette.primary.dark.r, 1)
+        XCTAssertEqual(palette.primary.dark.g, 0)
+        XCTAssertEqual(palette.primary.dark.b, 0)
+        XCTAssertEqual(palette.primary.light.g, 0)
+        XCTAssertEqual(palette.primary.light.b, 0)
+        let orb = JarvisLatticeColors(selection: palette)
+        XCTAssertEqual(orb.warm.r, 1)
+        XCTAssertEqual(orb.warm.g, 0)
+        XCTAssertEqual(orb.warm.b, 0)
+
+        let dimmerRed = try XCTUnwrap(PaletteTone(hex: "990000"))
+        XCTAssertEqual(dimmerRed.dark.g, 0)
+        XCTAssertEqual(dimmerRed.dark.b, 0)
     }
 
     func testLatticePreservesDefaultCoreAndRecoloursSecondaryIndependently() throws {
