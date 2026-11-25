@@ -1,27 +1,20 @@
+# Infrastructure
+
+For authorised setup or repair, `bootstrap.ps1` uses the operator's Azure and
+GitHub CLI sign-ins. It provisions both name-only and immutable-ID OIDC subjects
+for `main` and records non-secret deploy references in `bootstrap.output.json`.
+Do not copy environment IDs into docs or run bootstrap as a coding agent.
+The [Deploy workflow](../.github/workflows/deploy.yml) applies `main.bicep` from
+GitHub Actions using the `main` OIDC identity.
+
+See the [Azure constraints](../docs/agent-context.md#azure) and
+[architecture](../docs/architecture.md).
+
 ## Backend diagnostic access
 
 The backend managed identity uses **Log Analytics Data Reader** at the existing workspace, with a version 2.0 condition allowing only the backend app's rows in **ContainerAppConsoleLogs_CL**. Other apps and tables are outside this grant. Log retention stays at 30 days.
 
 The Bicep parameter **backendLogAccess** accepts **off**, **grant** (assignment only) or **enabled** (assignment and reader). Production parameters select **enabled**. For first activation, apply the scoped assignment, read it back and verify the backend identity can read its own records and cannot read known records from other apps or tables. The existing deploy preflight reports identity and schema metadata. Empty negative controls do not establish isolation. **off** disables the tool; remove the role assignment explicitly to revoke it after an incremental deployment.
-
-# Infrastructure
-
-`bootstrap.ps1` and `bootstrap.output.json` record the completed P0-06 bootstrap.
-The output contains resource and identity IDs, not secrets.
-
-Bootstrap requires Dan's signed-in Azure and GitHub CLIs. Cloud coding agents
-must not run it or access Azure. P0-04 adds `main.bicep` for the core resources;
-its local build and lint are verified. P0-05 adds Foundry resources, and P0-11's
-[Deploy workflow](../.github/workflows/deploy.yml) deploys from GitHub Actions on
-`main` using OpenID Connect. The first live deployment is P0-16.
-
-The deploy identity's federated credential uses GitHub's immutable-ID subject
-(`repo:<owner>@<owner ID>/<repo>@<repo ID>:ref:refs/heads/main`); bootstrap reads
-the IDs from the GitHub API (L49). Runs before that change registered only the
-name-only subject, so re-run bootstrap once before the first successful Deploy.
-
-See the [Azure constraints](../docs/agent-context.md#azure) and
-[architecture](../docs/architecture.md).
 
 ## Authentication after remote image builds
 
@@ -94,25 +87,20 @@ backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14 web research and P7-15 image
 generation. It selects a model for the existing Codex subscription; it does not
 provision a search or image service or API key.
 
-The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`) fixed at
-`20261003200000` in [`main.parameters.json`](main.parameters.json); every deploy
-reuses it. A new value would create a new account and project, so change it only
-after the account was deleted, and then to a fresh value (L2). Normal updates
-keep the existing resources; deletion is not part of routine deployment.
+Foundry resource names use the 14-digit UTC timestamp (`yyyyMMddHHmmss`) in
+[`main.parameters.json`](main.parameters.json). Keep it pinned in normal Deploy:
+a new value creates a different account and project. Change it only for an
+authorised rebuild after the previous account is removed.
 
 ## GitHub vault setup
 
-P7-40 uses Dan's private `DanAakesen/vault` repository on `master` as Jarvis's
-long-term knowledge source. Dan must install the existing Jarvis GitHub App on
-that repository and grant Contents read/write permission (the installation token
-is restricted to the vault). Select only the vault for the installation if
-GitHub offers repository selection. The App already subscribes to `push`; the
-backend verifies webhook signatures and also indexes the vault at startup.
+The configured private GitHub vault is Jarvis's long-term knowledge source.
+Install the existing Jarvis GitHub App on that vault with Contents read/write.
+Select only the vault when GitHub offers repository selection. The backend
+verifies `push` webhook signatures and indexes the vault at startup.
 
-No personal access token, Microsoft Graph permission, or Azure role is needed.
-If the App is not installed on the vault, Jarvis reports that indexing and
-writes are unavailable. The vault is private and was not accessible for live
-verification by the coding agent.
+No personal access token, Microsoft Graph permission or Azure role is needed.
+A missing App installation leaves vault indexing and writes unavailable.
 
 ## Vault mirror setup
 
@@ -175,7 +163,7 @@ The same owner-side check is:
 ```sh
 python .github/scripts/vault_mirror_probe.py \
   --subscription <subscription-id> \
-  --resource-group rg-jarvis \
+  --resource-group <resource-group> \
   --write-back on \
   --max-changed 25 \
   --max-deletes 3 \
