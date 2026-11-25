@@ -40,6 +40,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
     #if os(watchOS)
     private var captureRoute: Route?
     private var requestsVoiceProcessing = false
+    private var pcmBufferCount = 0
+
+    var convertedBuffers: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return pcmBufferCount
+    }
 
     var isVoiceProcessingEnabled: Bool {
         lock.lock()
@@ -158,6 +165,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
             self.lock.lock()
             let continuation = self.captureContinuation
             let tolerate = self.activeTolerateDrops
+            #if os(watchOS)
+            if continuation != nil, !data.isEmpty { self.pcmBufferCount += 1 }
+            #endif
             self.lock.unlock()
             #if os(watchOS)
             if let result = continuation?.yield(data), case .dropped = result {
@@ -210,15 +220,15 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return true
     }
 
-    func recoverRoute(attempt: Int) throws {
+    func recoverRoute(attempt: Int, usePlainAudio: Bool = false, forceRestart: Bool = false) throws {
         controlLock.lock()
         defer { controlLock.unlock() }
-        guard !engine.isRunning || captureRoute != Route() else { return }
-        if attempt > 1 { requestsVoiceProcessing = false }
+        guard forceRestart || !engine.isRunning || captureRoute != Route() else { return }
+        if attempt > 1 || usePlainAudio { requestsVoiceProcessing = false }
         // First rebuild against the route the OS has just activated. Reapplying the session
         // category here can cause another route-change notification during startup.
-        let mode: AVAudioSession.Mode = attempt >= 3 ? .default : activeMode
-        try restartInput(mode: mode, configureAudioSession: attempt > 1)
+        let mode: AVAudioSession.Mode = attempt >= 3 || usePlainAudio ? .default : activeMode
+        try restartInput(mode: mode, configureAudioSession: attempt > 1 || mode != activeMode)
     }
 
     #endif

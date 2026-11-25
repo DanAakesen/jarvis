@@ -144,6 +144,19 @@ final class WatchVoiceTransportTests: XCTestCase {
     }
 
     @MainActor
+    func testReplacedCaptureCannotReportReadyAfterCheckingMicrophone() async {
+        var current = true
+        do {
+            try await WatchVoiceRecovery.startCapture(isCurrent: { current }, start: { _ in
+                await Task.yield()
+                current = false
+            }, onFailure: { _, _ in XCTFail("Do not reset the replacement capture") },
+               onReady: { XCTFail("Do not mark the previous capture ready") })
+            XCTFail("Expected cancellation")
+        } catch { XCTAssertTrue(error is CancellationError) }
+    }
+
+    @MainActor
     func testCaptureRecoveryExhaustsRetriesWithoutReportingReady() async {
         var failedAttempts: [Int] = []
         do {
@@ -207,12 +220,13 @@ final class WatchVoiceTransportTests: XCTestCase {
         var budget = WatchVoiceRecovery.RouteBudget()
         XCTAssertEqual(budget.decide(needsRestart: false, at: start), .unchanged)
         XCTAssertEqual(budget.decide(needsRestart: true, at: start), .restart)
-        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(4))), .restart)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(4))), .repeatRestart)
         XCTAssertEqual(budget.decide(needsRestart: false, at: start.advanced(by: .seconds(5))), .unchanged)
         XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .milliseconds(9_999))), .exhausted)
-        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(10))), .restart)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(10))), .repeatRestart)
         XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(11))), .exhausted)
-        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(14))), .restart)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(14))), .repeatRestart)
+        XCTAssertEqual(budget.decide(needsRestart: true, at: start.advanced(by: .seconds(25))), .restart)
     }
 
     func testQueuedReplyFragmentsPreserveAudioAndCaptionOrder() {

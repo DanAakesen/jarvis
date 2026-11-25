@@ -13,7 +13,7 @@ public enum WatchVoiceRecovery {
     public static let startRetryDelay: Duration = .milliseconds(750)
 
     public struct RouteBudget {
-        public enum Decision: Equatable { case unchanged, restart, exhausted }
+        public enum Decision: Equatable { case unchanged, restart, repeatRestart, exhausted }
 
         public static let settleDelay: Duration = .milliseconds(250)
         private var restarts: [ContinuousClock.Instant] = []
@@ -26,7 +26,7 @@ public enum WatchVoiceRecovery {
             restarts.removeAll { $0.duration(to: now) >= .seconds(10) }
             guard restarts.count < 2 else { return .exhausted }
             restarts.append(now)
-            return .restart
+            return restarts.count == 1 ? .restart : .repeatRestart
         }
     }
 
@@ -61,7 +61,7 @@ public enum WatchVoiceRecovery {
     @MainActor
     public static func startCapture<Capture>(
         isCurrent: @MainActor () -> Bool,
-        start: @MainActor (_ attempt: Int) throws -> Capture,
+        start: @MainActor (_ attempt: Int) async throws -> Capture,
         onFailure: @MainActor (Int, Error) -> Void,
         onReady: @MainActor () -> Void = {},
         wait: @MainActor () async throws -> Void = { try await Task.sleep(for: .milliseconds(300)) }
@@ -71,10 +71,14 @@ public enum WatchVoiceRecovery {
             try Task.checkCancellation()
             guard isCurrent() else { throw CancellationError() }
             do {
-                let capture = try start(attempt)
+                let capture = try await start(attempt)
+                try Task.checkCancellation()
+                guard isCurrent() else { throw CancellationError() }
                 onReady()
                 return capture
             } catch {
+                try Task.checkCancellation()
+                guard isCurrent() else { throw CancellationError() }
                 onFailure(attempt, error)
                 guard attempt < 3 else { throw error }
                 attempt += 1
