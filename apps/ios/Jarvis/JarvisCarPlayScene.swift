@@ -429,12 +429,12 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
         end.title = "End"
         let mute = CPButton(image: UIImage(systemName: "mic.slash.fill")!) { [weak self] _ in
             guard let self, voice.canUseControls else { return }
-            Task { await self.voice.toggleMute() }
+            Task { try? await self.voice.performLiveActivityCommand(.setMuted(true)) }
         }
         mute.title = "Mute"
         let unmute = CPButton(image: UIImage(systemName: "mic.fill")!) { [weak self] _ in
             guard let self, voice.canUseControls else { return }
-            Task { await self.voice.toggleMute() }
+            Task { try? await self.voice.performLiveActivityCommand(.setMuted(false)) }
         }
         unmute.title = "Unmute"
         let retry = CPButton(image: UIImage(systemName: "arrow.clockwise")!) { [weak self] _ in
@@ -455,12 +455,14 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
             renderer.scale = 2
             let state = CPVoiceControlState(identifier: label, titleVariants: [label],
                 image: Self.voiceImage(renderer.uiImage, activity: activity), repeats: true)
+            let controls: [CPButton]
             switch activity {
-            case .muted: state.actionButtons = [unmute, end]
-            case .offline: state.actionButtons = [retry, end]
-            case .listening, .thinking, .speaking: state.actionButtons = [mute, end]
-            default: state.actionButtons = [end]
+            case .muted: controls = [unmute, end]
+            case .offline: controls = [retry, end]
+            case .listening, .thinking, .speaking: controls = [mute, end]
+            default: controls = [end]
             }
+            state.actionButtons = Array(controls.suffix(CPVoiceControlState.maximumActionButtonCount))
             return state
         }
         let template = CPVoiceControlTemplate(voiceControlStates: states)

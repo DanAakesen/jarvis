@@ -335,10 +335,10 @@ private final class JarvisGateModel: ObservableObject {
 
         do {
             _ = try await client.createOwnerSession()
-            JarvisComposition.setAccountAccessSuspended(false)
             watchRevocationNotice = nil
             JarvisWatchBridge.shared.configure(client: client)
             await JarvisAppCache.clear()
+            JarvisComposition.setAccountAccessSuspended(false)
             contentEpoch += 1
             presentation = .lock(.waiting)
             await authenticate()
