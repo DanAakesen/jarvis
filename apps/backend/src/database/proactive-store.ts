@@ -133,6 +133,7 @@ export interface ProactiveSettingsRow {
   suggestion_scope: ProactiveSettings['suggestionScope'] | null;
   news_feeds_json: string;
   guidance: string;
+  brain_instructions: string | null;
 }
 
 export function proactiveSettingsFromRow(
@@ -149,6 +150,7 @@ export function proactiveSettingsFromRow(
       ? row.suggestion_scope : defaults.suggestionScope,
     newsFeeds: parseJson<string[]>(row.news_feeds_json, [...defaults.newsFeeds]),
     guidance: row.guidance,
+    ...(row.brain_instructions == null ? {} : { brainInstructions: row.brain_instructions }),
   };
 }
 
@@ -168,7 +170,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
     const { recordset } = await databaseReadRequest(pool)
       .input('owner', sql.UniqueIdentifier, owner)
       .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
-          news_feeds_json, guidance
+          news_feeds_json, guidance, brain_instructions
         FROM dbo.proactive_settings WHERE owner_object_id = @owner;`);
     return recordset[0] ? proactiveSettingsFromRow(recordset[0], defaults) : {
       ...defaults,
@@ -207,7 +209,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
           const read = await new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, owner)
             .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
-                news_feeds_json, guidance
+                news_feeds_json, guidance, brain_instructions
               FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const row = read.recordset[0];
           const current: ProactiveSettings = row ? proactiveSettingsFromRow(row, defaults) : defaults;
@@ -234,18 +236,19 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('suggestionScope', sql.NVarChar(16), updated.suggestionScope)
             .input('feeds', sql.NVarChar(sql.MAX), JSON.stringify(updated.newsFeeds))
             .input('guidance', sql.NVarChar(1000), updated.guidance)
+            .input('brain', sql.NVarChar(sql.MAX), updated.brainInstructions ?? null)
             .query(`MERGE dbo.proactive_settings WITH (HOLDLOCK) AS target
               USING (SELECT @owner AS owner_object_id) AS source
               ON target.owner_object_id = source.owner_object_id
               WHEN MATCHED THEN UPDATE SET paused = @paused, monthly_budget_dkk = @budget,
                 background_turns_per_day = @backgroundTurns,
                 sources_json = @sources, categories_json = @categories, suggestion_scope = @suggestionScope,
-                news_feeds_json = @feeds, guidance = @guidance,
+                news_feeds_json = @feeds, guidance = @guidance, brain_instructions = @brain,
                 updated_at = SYSUTCDATETIME()
               WHEN NOT MATCHED THEN INSERT
                 (owner_object_id, paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
-                 news_feeds_json, guidance)
-                VALUES (@owner, @paused, @budget, @backgroundTurns, @sources, @categories, @suggestionScope, @feeds, @guidance);`);
+                 news_feeds_json, guidance, brain_instructions)
+                VALUES (@owner, @paused, @budget, @backgroundTurns, @sources, @categories, @suggestionScope, @feeds, @guidance, @brain);`);
           if (disabledSources.length > 0) {
             await new sql.Request(transaction)
               .input('owner', sql.UniqueIdentifier, owner)
@@ -435,10 +438,11 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             suggestion_scope: ProactiveSettings['suggestionScope'] | null;
             news_feeds_json: string;
             guidance: string;
+            brain_instructions: string | null;
           }>(new sql.Request(transaction)
             .input('owner', sql.UniqueIdentifier, owner),
           `SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json, categories_json, suggestion_scope,
-              news_feeds_json, guidance
+              news_feeds_json, guidance, brain_instructions
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK) WHERE owner_object_id = @owner;`);
           const latest = currentSettings.recordset[0]
             ? proactiveSettingsFromRow(currentSettings.recordset[0], defaults) : defaults;

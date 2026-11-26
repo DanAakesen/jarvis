@@ -55,7 +55,7 @@ export function defaultProactiveSettings(): ProactiveSettings {
   };
 }
 
-export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'backgroundTurnsPerDay' | 'newsFeeds' | 'guidance'>> & {
+export type ProactiveSettingsPatch = Partial<Pick<ProactiveSettings, 'paused' | 'monthlyBudgetDkk' | 'backgroundTurnsPerDay' | 'newsFeeds' | 'guidance' | 'brainInstructions'>> & {
   sources?: Partial<Record<SourceId, boolean>>;
   categories?: Partial<Record<FindingCategory, boolean>>;
   suggestionScope?: SuggestionScopePreference;

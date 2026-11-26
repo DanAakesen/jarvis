@@ -140,7 +140,7 @@ describe('GitHub webhook signals for the proactive queue', () => {
     for (const event of events) expect(event.detail.branch).toBe('feat/ sig nals');
     // The line the model reads: no invisible, bidirectional or tag character anywhere in it.
     const lines = formatWake({ runId: 'run-1', now: NOW, timeZone: 'Europe/Copenhagen', events })
-      .split('\n').filter((line) => line.startsWith('- '));
+      .split('End of background instructions.')[1]!.split('\n').filter((line) => line.startsWith('- '));
     expect(lines).toHaveLength(2);
     for (const line of lines) expect(line).not.toMatch(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u);
     await app.close();

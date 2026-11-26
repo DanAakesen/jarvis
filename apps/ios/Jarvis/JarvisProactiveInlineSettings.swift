@@ -113,6 +113,23 @@ struct JarvisProactiveInlineSettings<Review: View>: View {
     }
 
     @ViewBuilder private var sections: some View {
+        if editor?.saved.brainInstructions != nil {
+            JarvisInsightsDisclosure(title: text(.editorBrainInstructions)) {
+                TextEditor(text: Binding(
+                    get: { editor?.draft.brainInstructions ?? "" },
+                    set: { editor?.draft.brainInstructions = $0 }
+                ))
+                .font(.body)
+                .frame(minHeight: 280)
+                .scrollContentBackground(.hidden)
+                .accessibilityLabel(text(.editorBrainInstructions))
+                .accessibilityIdentifier("proactive.edit.brainInstructions")
+                if editor?.draft.issues.contains(.invalidBrainInstructions) == true {
+                    issue(.invalidBrainInstructions)
+                }
+                saveControl(.editorBrainInstructions)
+            }.disabled(isSaving)
+        }
         JarvisInsightsDisclosure(title: text(.editorSources)) {
             ForEach(JarvisProactiveSourceID.allCases) { id in
                 if editor != nil {

@@ -1,3 +1,4 @@
+import { defaultBrainInstructions } from '../../proactive/brain-instructions.js';
 import { formatLocalTime } from '../prompt.js';
 import type { PiProactiveMessageFeedback } from '../store.js';
 import type { QueuedEvent } from '../../proactive/events/types.js';
@@ -25,21 +26,23 @@ export interface WakeInput {
   /** A short note when the month's proactive budget is nearly used. */
   readonly budgetNote?: string | undefined;
   /** The current categories, scope and owner guidance enforced before background delivery. */
+  readonly brainInstructions?: string | undefined;
   readonly policyNote?: string | undefined;
   readonly feedback?: PiProactiveMessageFeedback | undefined;
 }
 
-/**
- * The text of one wake. It says why the brain was woken and nothing else: what to look at, whom to tell and what to write is
- * the model's decision, with the `jarvis-brain` skill for the procedure. Event text came from outside (mail, builds, alerts)
- * and is labelled as data.
- */
+/** Supply the current owner procedure before the independently labelled event evidence. */
 export function formatWake(input: WakeInput): string {
   const events = input.events.slice(0, MAX_WAKE_EVENTS);
   const lines = [
     `[Brain wake ${input.runId.slice(0, 8)} | ${formatLocalTime(input.now, input.timeZone)}]`,
     `Activation: type=${input.activationType ?? 'event'} source=${oneLine(input.activationSource ?? 'event', 64)}.`,
-    'This is a background wake, not a message from Dan. Nobody is waiting for a reply here, and there is no owner message. Use the `jarvis-brain` skill.',
+    'This is a background wake, not a message from Dan. Nobody is waiting for a reply here, and there is no owner message. Follow the owner’s current background instructions below.',
+    '',
+    'Owner’s background instructions:',
+    input.brainInstructions ?? defaultBrainInstructions,
+    '',
+    'End of background instructions.',
     '',
   ];
   if (events.length === 0) lines.push('Why: the periodic timer or a watch coming due. No new events.');

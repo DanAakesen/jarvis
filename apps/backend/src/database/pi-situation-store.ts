@@ -308,7 +308,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         const policy = await new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, input.owner)
           .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day,
-              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance
+              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance, brain_instructions
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
             WHERE owner_object_id=@owner;`);
         const settings = policy.recordset[0]
@@ -803,7 +803,7 @@ export function createPiSituationStore(pool: sql.ConnectionPool): PiSituationSto
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, owner);
         const policy = await activeRequest.query<ProactiveSettingsRow>(
           `SELECT paused, monthly_budget_dkk, background_turns_per_day,
-              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance
+              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance, brain_instructions
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
             WHERE owner_object_id = @owner;`,
         );

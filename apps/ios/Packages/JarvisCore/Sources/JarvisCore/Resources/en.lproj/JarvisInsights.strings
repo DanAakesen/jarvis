@@ -248,6 +248,8 @@
 "insights.editorFeedsPlaceholder" = "One https link per line";
 "insights.editorAddFeed" = "Add feed";
 "insights.editorRemoveFeed" = "Remove feed";
+"insights.editorBrainInstructions" = "Background instructions";
+"insights.editorIssueBrainInstructions" = "Enter instructions of up to 16,000 characters.";
 "insights.editorGuidance" = "Guidance";
 "insights.editorGuidanceCount" = "%1$d / %2$d";
 "insights.editorPreferences" = "Preferences";

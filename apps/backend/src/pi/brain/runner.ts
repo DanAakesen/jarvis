@@ -357,6 +357,7 @@ export function createBrain(options: BrainOptions) {
       body: formatWake({
         runId, activationType, activationSource,
         now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections,
+        brainInstructions: settings.brainInstructions,
         policyNote: policyNote(settings), budgetNote, feedback: await feedbackForWake(signal),
       }),
     }, signal);
@@ -474,6 +475,7 @@ export function createBrain(options: BrainOptions) {
         timeZone: options.timeZone,
         events: [],
         sections: extra.sections,
+        brainInstructions: settings.brainInstructions,
         policyNote: policyNote(settings),
         feedback: await feedbackForWake(signal),
         budgetNote,

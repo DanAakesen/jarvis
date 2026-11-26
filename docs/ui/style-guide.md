@@ -13,6 +13,7 @@ Evidence labels: **Token** = a value read from code, with its file. **Decision**
 - **Glass defaults to a neutral tint.** On iPhone, Appearance sets the page, cards, controls, selection and input colors. Individual cards inherit the shared card color until overridden. Keep the orb visible through the material and use the solid fallback with Reduce Transparency.
 - **Show real state.** Every state is honest: working, empty, failed, offline. No invented numbers.
 - **Motion has a job.** It shows what Jarvis is doing, and it stops when nobody is watching.
+- On Proactive, edit the full background procedure inline under **Background instructions**. Keep personal interests in **Guidance**.
 - **One source per look.** Change a shared token or component, never a screen.
 
 ## 2. Colour

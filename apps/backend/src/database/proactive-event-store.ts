@@ -229,7 +229,7 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
         activeRequest = new sql.Request(transaction).input('owner', sql.UniqueIdentifier, owner);
         const settingsRow = await activeRequest.query<ProactiveSettingsRow>(`
           SELECT paused, monthly_budget_dkk, background_turns_per_day, sources_json,
-            categories_json, suggestion_scope, news_feeds_json, guidance
+            categories_json, suggestion_scope, news_feeds_json, guidance, brain_instructions
           FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
           WHERE owner_object_id = @owner;`);
         const settings = settingsRow.recordset[0]
@@ -596,7 +596,7 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
         const policyRow = await new sql.Request(transaction)
           .input('owner', sql.UniqueIdentifier, owner)
           .query<ProactiveSettingsRow>(`SELECT paused, monthly_budget_dkk, background_turns_per_day,
-              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance
+              sources_json, categories_json, suggestion_scope, news_feeds_json, guidance, brain_instructions
             FROM dbo.proactive_settings WITH (UPDLOCK, HOLDLOCK)
             WHERE owner_object_id = @owner;`);
         const settings = policyRow.recordset[0]
