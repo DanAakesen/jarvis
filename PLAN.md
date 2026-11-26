@@ -14,20 +14,20 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| P15-213 · [Four iPhone pages and follow-ups](https://github.com/DanAakesen/jarvis/pull/2094) | Factory, Usage, Status and Proactive layouts and the post-137 mobile fixes are on `main`, **not accepted on device**. |
-| TestFlight | The [build 140 archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) contains P15-213 and verifies the embedded Watch companion. Use it only after **Apple confirmed availability for internal testing** succeeds. Until then, [build 137](https://github.com/DanAakesen/jarvis/actions/runs/45663058853) is the confirmed baseline. Neither proves Watch installation or playback. |
+| P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Software Factory, Usage, Status and Proactive were checked in light and dark on the iPhone simulator. This release also includes the post-137 Health, Calendar, Home, Notes, Voice and theme fixes. |
+| TestFlight **140** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45771929167). The [signed iPhone archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) verified the embedded Watch companion. Watch microphone and speaker playback still need a device check. |
 | Backend | [Deploy for P15-213](https://github.com/DanAakesen/jarvis/actions/runs/45768247841) succeeded, including PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
-| Background PI | The owner enabled it. A GitHub workflow failure triggered a review but no message. Push is **not accepted on device**. |
+| Background PI | On 25 and 26 November, all 12 daily turns finished before 02:00 Copenhagen time. Of the 24 turns, 23 were GitHub-triggered and one had mixed triggers. They requested zero pushes. Device delivery remains unverified. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
 
-Use an [Apple-confirmed TestFlight build](docs/agent-context.md#testflight-build) that contains the change being checked. Build 137 can cover the baseline, not the post-137 fixes.
+Use [TestFlight build 140](https://github.com/DanAakesen/jarvis/actions/runs/45771929167) for the following device checks.
 
 1. **Daily core, Chat and Voice:** Check project status and the approved issue-to-worker flow; save, find and rename a note, then check its iPhone folder without refreshing; create a task, verify its reminder, then complete it; read workouts and lifts in Danish and English. When logging food, save one meal and count it once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed. Track parity in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
 2. **Voice and Watch:** On iPhone, check Thinking during a lookup after a spoken acknowledgement. Compare speakerphone, receiver and headset volume. Check caption scroll, centre swipes, expansion, scroll edges and a full-day chart in a window. On Watch, dictate short and long drafts; each Stop inserts text once. Check startup, route recovery, two complete audible replies, interruption of a third and the saved turn.
 3. **Maps:** Ask for a named store nearby; expect a matching local business or an explicit no-match result. For a business with no nearby match, ask for the nearest and check a match and Directions beyond 10 km. A completed lookup should still report its result if reply writing fails. Compare the spoken departure estimate with the map card for an addressed event and a ten-minute buffer.
-4. **Proactive:** Verify an ordinary Inbox follow-up against its linked card and check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for covered slots, review eligibility and import cooldown.
+4. **Proactive:** Verify an ordinary Inbox follow-up against its linked card and check device delivery. The 07:00 review on 26 November counted earlier event activity toward its slot. Dan approved **Show me fewer like this** as a follow-up for similar findings. See [Inbox acceptance](docs/inbox-loop/acceptance.md).
 5. **iPhone layouts and follow-ups:** Check Factory search, the Usage period and drill-down, grouped Status evidence, and inline Proactive save, conflict and Retry. Check Body trend periods against a new Apple Health reading, the separate Training walk count, gym log sheets, the Calendar create card, Week dividers and footer, Home Up Next and quick add, and Notes tiles, list continuation and a folder move with a table edit.
 6. **Appearance and Watch Home:** Check the corrected red accent in light and dark, the remaining orb themes, plus-menu icon colour, finish and glow save/reset, and per-card colours. Reconnect Watch, check its palette and tinted complications, and scroll Home both ways to check the heading next to the clock.
 
