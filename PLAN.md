@@ -16,8 +16,9 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | --- | --- |
 | P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Factory, Usage, Status and Proactive layouts and the Health, Calendar, Home, Notes, Voice and theme fixes are in build 140, **not accepted on device**. |
 | TestFlight **140** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45771929167). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) verified the embedded Watch companion, not its installation or playback. |
-| Backend | [Deploy for P15-213](https://github.com/DanAakesen/jarvis/actions/runs/45768247841) succeeded, including PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
-| Background PI | The latest [recorded background turns](https://github.com/DanAakesen/jarvis/pull/2096) finished without requesting a push. GitHub is context only in the backend implementation. Delivery is **not accepted on device**. |
+| Backend | [Latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45781766787) succeeded for the [GitHub context change](https://github.com/DanAakesen/jarvis/pull/2098), including PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
+| Background PI | GitHub remains available for lookups, but its activity does not trigger a review. Suggestion delivery is **not accepted on device**. |
+| P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | In review; not in build 140. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
@@ -52,7 +53,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | --- | --- |
 | [#2012](https://github.com/DanAakesen/jarvis/issues/2012), [#1967](https://github.com/DanAakesen/jarvis/issues/1967) — daily core and tools | Verify Today’s resting target, active kcal and deficit against the shared budget. Full Chat/Voice parity still needs device checks. |
 | [#1988](https://github.com/DanAakesen/jarvis/issues/1988) — GPT-Live sounds and behaves like Jarvis | Whole spoken turn, relay and state fixes merged. Physical and provider acceptance open. |
-| [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Queue, observability and feedback merged. First enabled GitHub-triggered review verified. Delivery of an actual suggestion remains open. |
+| [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Verify a suggestion from an eligible review, its linked evidence and delivery to the device. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Returning during a reply passed on build 125. Check failed, cancelled and superseded states in the separate reply test. |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Typing during a reply passed. Check rapid typing in a conversation with 100+ messages, focus, keyboard dismissal and draft retention. |
@@ -64,7 +65,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 ## Phase task tracking
 
-Next available P15 task ID: `P15-214`. Check GitHub issues and Git history before assigning it.
+Check open PRs, GitHub issues and Git history before assigning the next unused P15 task ID.
 
 Use the table for active numbered work. `Complete` means task delivery, not physical acceptance. Keep any remaining device checks in the backlog above; completed tasks are in GitHub and Git history.
 
