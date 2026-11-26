@@ -30,7 +30,7 @@ The reader queries retained Container Apps console rows in the configured Log An
 
 ## Native device diagnostics
 
-For a physical Watch reproduction, inspect the device logs on a paired Mac. Compare `WatchVoice` on the Watch and iPhone for call startup, audio transfer and reconnect. Use `WatchConnection` for WatchConnectivity and `WatchAudio` for capture and route errors.
+On a paired Mac, compare `WatchVoice` on Watch and iPhone for call startup, transfer and reconnect. During a Voice call, `Audio route recovered` means the Watch saw fresh converted microphone buffers, not that it played a reply. Use `WatchConnection` for WatchConnectivity and `WatchAudio` for capture and route errors. For low iPhone speaker volume, the `WatchAudio` capture start reports route ports, output volume and whether Voice Processing is enabled. Keep those observations separate from the relay's output evidence.
 
 Use local Xcode crash reports or authorized App Store Connect feedback for crashes. The manual [iOS crash logs workflow](../../.github/workflows/ios-crash-logs.yml) prints tester comments and crash excerpts into public Actions logs; do not use it to inspect private feedback. Share only redacted findings.
 
