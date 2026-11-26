@@ -185,7 +185,7 @@ flowchart LR
     WAKE -->|if PI chooses to reach out| DELIVERY
 ```
 
-- GitHub activity stays available through project tools, including release and deployment history. The queue filters webhooks, deployment-failure alerts and worker PR-open notices before a paid turn, including previously queued entries.
+- GitHub stays available for project lookups. Its webhooks, deployment-failure alerts and worker PR-open notices are not enqueued; claimed older entries settle as `github_context_only`. Worker `Done`, `NeedsAttention` and `Cancelled` events remain eligible under the Factory source switch.
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
 - Missing switch state means **Off**. iPhone Settings and Proactive share enablement; inline preference saves use revision-checked `PATCH /proactive/settings`. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. A wake is not proof of delivery.
 - PI owns the 07:00 and 18:00 Copenhagen slots and Check now. At the daily turn cap, pending events wait until Copenhagen midnight. An event-covered slot can run its Inbox review once even at the cap, without a second PI wake. No brain configured means no slots claimed.

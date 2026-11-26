@@ -23,7 +23,7 @@ read [DESIGN.md](DESIGN.md), the [UI map](ui.md) and the [style guide](docs/ui/s
 | `scripts`, `.github` | Local tools, GitHub Actions and workflow tests |
 | `templates` | Starter GitHub Actions workflows used by Software Factory |
 | `.agents` | Repository working instructions and skills |
-| `docs` | Architecture, operations, decisions and design references, including the [Daily migration source contract](docs/reference/README.md) |
+| `docs` | [Architecture, operations, decisions and reference contracts](docs/README.md) |
 
 ## Install and build
 
