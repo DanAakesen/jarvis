@@ -314,6 +314,6 @@
 "insights.reviewsTitle" = "Reviews";
 "insights.budgetLimits" = "Budget & limits";
 "insights.needsYou" = "Needs you";
-"insights.awaitingReview" = "tasks awaiting review";
+"insights.awaitingReview" = "awaiting review";
 "insights.noReview" = "Nothing needs your review.";
 "insights.searchResults" = "Search results";
