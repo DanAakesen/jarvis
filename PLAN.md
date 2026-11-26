@@ -17,7 +17,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Software Factory, Usage, Status and Proactive were checked in light and dark on the iPhone simulator. This release also includes the post-137 Health, Calendar, Home, Notes, Voice and theme fixes. |
 | TestFlight **140** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45771929167). The [signed iPhone archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) verified the embedded Watch companion. Watch microphone and speaker playback still need a device check. |
 | Backend | [Deploy for P15-213](https://github.com/DanAakesen/jarvis/actions/runs/45768247841) succeeded, including PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
-| Background PI | On 25 and 26 November, all 12 daily turns finished before 02:00 Copenhagen time. Of the 24 turns, 23 were GitHub-triggered and one had mixed triggers. They requested zero pushes. Device delivery remains unverified. |
+| Background PI | On 25 and 26 November, all 12 daily turns finished before 02:00 Copenhagen time. Of the 24 turns, 23 were GitHub-triggered and one had mixed triggers. They requested zero pushes. GitHub is now context only in the backend implementation. Device delivery remains unverified. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers

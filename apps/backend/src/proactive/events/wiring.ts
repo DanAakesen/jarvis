@@ -16,7 +16,7 @@ import { createFoundryEventReasoner } from './reasoner.js';
 import { createSourceChangePoller, createTimerProducer } from './scheduled-producers.js';
 import { ConfigurationError } from '../../configuration-error.js';
 import type { EventQueueStore } from './event-queue.js';
-import { eventSourceSwitches, type OutreachChannel, type ProactiveEventSink } from './types.js';
+import { eventSourceSwitches, isGitHubActivity, type OutreachChannel, type ProactiveEventSink } from './types.js';
 import type { PiSituationService } from '../../pi/situation.js';
 
 /** What reads the queue: the old one-shot pipeline, or the PI brain. */
@@ -109,6 +109,7 @@ export function createEventPath(options: EventPathOptions): EventPath | undefine
   // Todos). One already queued when the switch goes off is settled by the reader.
   const sink: ProactiveEventSink = {
     async enqueue(event) {
+      if (isGitHubActivity(event)) return;
       const resting = eventSourceSwitches(event);
       if (resting.length > 0) {
         const { sources } = await options.store.settings.read();

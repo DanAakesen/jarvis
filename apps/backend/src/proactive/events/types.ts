@@ -9,6 +9,12 @@ export const EVENT_DETAIL_MAX_BYTES = 4_096;
 export const EVENT_SOURCE_PATTERN = /^[a-z][a-z0-9_.-]{0,63}$/u;
 export const EVENT_KIND_PATTERN = /^[a-z][a-z0-9_.:-]{0,95}$/u;
 
+// GitHub is project context. A failed deployment also arrives as an activity alert.
+export function isGitHubActivity(event: Pick<ProactiveEventInput, 'source' | 'kind'>): boolean {
+  return event.source === 'github' || (event.source === 'alert' && event.kind === 'deployment_failure') ||
+    (event.source === 'worker' && event.kind === 'task.pull_request_opened');
+}
+
 /** The Proactive source switch that governs a bare event source, if there is one: GitHub and Worker results belong to Factory. */
 export function eventSourceSwitch(source: string): SourceId | undefined {
   if ((sourceIds as readonly string[]).includes(source)) return source as SourceId;

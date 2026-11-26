@@ -95,16 +95,16 @@ describe('Foundry event reasoner', () => {
 
 describe('cheap rules', () => {
   const event = (partial: Partial<QueuedEvent>): QueuedEvent => ({
-    id: 'e', source: 'github', kind: 'workflow_run.failure', dedupeKey: 'k', summary: 's', detail: {},
+    id: 'e', source: 'worker', kind: 'task.needs_attention', dedupeKey: 'k', summary: 's', detail: {},
     occurredAt: new Date(NOW.getTime() - 60_000), receivedAt: NOW, attempts: 1, ...partial,
   });
   const base = { now: NOW, sourceEnabled: true, escalatedLastHour: 0 };
 
-  it('keeps failures and alerts, drops routine successes', () => {
+  it('keeps worker and budget events and filters all GitHub activity', () => {
     expect(applyRules(event({}), base).keep).toBe(true);
     expect(applyRules(event({ source: 'alert', kind: 'budget_threshold' }), base).keep).toBe(true);
-    expect(applyRules(event({ kind: 'workflow_run.success' }), base)).toEqual({ keep: false, reason: 'routine_build_result' });
-    expect(applyRules(event({ kind: 'deployment_status.success' }), base).reason).toBe('routine_deploy_result');
+    expect(applyRules(event({ source: 'github', kind: 'workflow_run.failure' }), base)).toEqual({ keep: false, reason: 'github_context_only' });
+    expect(applyRules(event({ source: 'alert', kind: 'deployment_failure' }), base).reason).toBe('github_context_only');
   });
 
   it('drops stale events, disabled sources, over-rate sources and exhausted retries', () => {

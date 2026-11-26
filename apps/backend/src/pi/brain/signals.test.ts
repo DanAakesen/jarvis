@@ -120,19 +120,18 @@ function printedEvent(body: string, kind: string) {
 
 describe('a wake about each new signal can tell Dan through the real message_dan', () => {
   const signals: ReadonlyArray<readonly [string, ProactiveEventInput, SourceId, FindingCategory]> = [
-    ['release.published', githubSignal('release'), 'factory', 'status'],
-    ['issues.opened', githubSignal('issueOpened'), 'factory', 'status'],
-    ['issues.closed', githubSignal('issueClosed'), 'factory', 'status'],
-    ['issues.reopened', githubSignal('issueReopened'), 'factory', 'status'],
-    ['issue_comment.created', githubSignal('issueComment'), 'factory', 'status'],
-    ['pull_request.opened', githubSignal('pullRequestOpened'), 'factory', 'status'],
-    ['pull_request.closed', githubSignal('pullRequestMerged'), 'factory', 'status'],
-    ['pull_request.review_requested', githubSignal('reviewRequested'), 'factory', 'status'],
-    ['check_run.failure', githubSignal('failedCheck'), 'factory', 'status'],
     ['calendar.clash', clash, 'calendar', 'clash'],
     // A failed reminder rests on the task behind it, so its evidence is Todos.
     ['reminder.delivery_failed', failedReminder, 'todos', 'todo'],
   ];
+
+  it.each(Object.keys(queuedWebhooks) as Array<keyof typeof queuedWebhooks>)('skips queued GitHub activity: %s', async (name) => {
+    const t = setup();
+    await t.offer(githubSignal(name));
+    expect(await t.tick()).toMatchObject({ outcome: 'filtered', claimed: 1 });
+    expect(t.gateway.wakes).toHaveLength(0);
+    expect(t.pushes).toHaveLength(0);
+  });
 
   it.each(signals)('%s', async (kind, input, source, category) => {
     const outcomes: Array<{ outcome: string; result: Record<string, unknown> }> = [];
