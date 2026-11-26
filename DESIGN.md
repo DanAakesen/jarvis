@@ -41,8 +41,7 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Proactive and notification opening
 
-- Settings and the Proactive Reviews card share the same suggestions switch. Findings come first. Edit scope, sources, budget, turn limits, feeds, guidance and categories inline. Keep a failed save editable and offer Retry.
-- Reviews shows the next check and the last outcome. Recent checks expand on demand.
+- Findings come first. Reviews shows the shared suggestions switch, next check and last outcome; recent checks expand on demand. Edit preferences inline. On conflict, refresh saved settings without losing the draft; an unsuccessful save offers Retry.
 - **A reply push opens existing Chat.** Show one useful preview, not an approval summary. In Chat open the exact committed message without animating away from the target; allow Jump to latest. Watch waits until an active turn, dictation or Voice is idle and keeps the pending target across refresh. Proactive items and approval actions have distinct routes. If the target cannot load, show Chat's retry state, not another message.
 
 ## Watch
@@ -62,9 +61,10 @@ Circular complications draw their symbols and task count on a clear background. 
 - **Home** opens with Up Next. Its date tile and relative time identify the next appointment or task. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. Each card can show data while another source is unavailable.
 - **Calendar** opens the day at 07:00 with ten hours in view. Scroll for earlier or later appointments. Day and Week share a time scale; the grid, agenda and date headings use one time zone. Hold an appointment to move it or expand its agenda row to edit. Hold an empty slot to preview a one-hour appointment, drag to adjust it in 15-minute steps, and release to open its draft. Day, Week, Month and Today sit directly above search and add in the footer.
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
-- **Factory** makes project/task status, next action and failure visible before auxiliary diagnostics. Keep task selection and actions scoped to the project; don't show a previous task's result while a new one loads.
+- **Factory** leads with Needs you, then the grouped pipeline. Keep actions scoped to the project and never show a previous task's result while a new one loads.
+- **Usage and Status** put the summary first. Usage breaks down the selected period and discloses resource details; Status separates issues from unconfirmed checks and discloses healthy checks and maintenance. Keep the latest snapshot on refresh failure and show the error.
 - **Health** stacks Training, Steps, Sleep and Nutrition. Each card owns its period. All shows synced history by month. Body trend filters readings by metric and period, including All. Lift and workout sheets open at content height, with weight, reps and sets together or session types in a compact grid. Training shows its selected period once and lists walks separately when present. Tap a training day for sessions and expand Saved max lifts for personal records. Nutrition uses the same calorie allowance as Chat. Scan meal attaches a photo to the Chat draft without sending.
-- **Settings and status** show saved values, actionable errors and freshness without repeating status. Appearance sets one shared Gradient, Frost and Glass finish across native cards and controls. Individual cards may override their colour. Keep the sign-in and lock cover in effect during a pending response.
+- **Settings** shows saved values and actionable errors. Appearance shares the Gradient, Frost and Glass finish; per-card overrides change colour only. Keep the sign-in and lock cover in effect during a pending response.
 
 ## Acceptance
 

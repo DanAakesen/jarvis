@@ -41,6 +41,10 @@ Dan, 21 November 2026 (excerpt; tracked in [#2012](https://github.com/DanAakesen
 
 Show actual issues, PRs, worker state and releases, and surface what needs Dan's attention. From Chat or Voice, Dan can ask about the project, start work in an identified project, and follow or steer an existing worker. A coding change is not delivered just because a worker stopped: show the real PR/check/release state.
 
+### Usage and Status
+
+Usage must show the selected period, its source breakdown and any linked Factory work. Make missing counts distinct from zero. Status must expose check freshness, separate unconfirmed results from healthy ones, and keep maintenance evidence available without requiring a live probe.
+
 ### Notes
 
 The Vault is the source of truth. Find and read a note by title or content in Chat or Voice. A saved note should appear on the relevant first page, even with only a title. The editor, list, graph, pins and reader use the same leading H1 or readable filename. Show the headline once, preserve links and explicit aliases, and do not overwrite a stale draft silently. Editing the title does not rename or move the file; an explicit folder move saves with the draft. A missing note can still be unpinned by path. See [PLAN.md](PLAN.md) for device results.
@@ -67,7 +71,7 @@ When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal lef
 
 ### Proactive
 
-The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** in iPhone Settings and Proactive controls the background reviews; it defaults to off. Status shows whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
+The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** in iPhone Settings and Proactive controls the same background reviews and defaults to off. Save preferences where their effects are visible; preserve edits on conflict or failure. Show whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
 
 ### Memory vs Vault Knowledge
 
