@@ -12,7 +12,6 @@ struct JarvisAccessoryToolButton: View {
     let systemImage: String
     var identifier: String
     var glyph: String?
-    var tint: Color = .primary
     var isDisabled = false
     let action: () -> Void
 
@@ -23,7 +22,7 @@ struct JarvisAccessoryToolButton: View {
                 else { Image(systemName: systemImage) }
             }
                 .font(.system(size: JarvisDesignTokens.iconButtonGlyphSize, weight: .regular))
-                .foregroundStyle(tint.opacity(isDisabled ? 0.4 : 1))
+                .foregroundStyle(Color.primary.opacity(isDisabled ? 0.4 : 1))
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
@@ -50,6 +49,7 @@ struct JarvisAccessoryToolMenu<Content: View>: View {
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
+        .tint(Color.primary)
         .accessibilityLabel(title)
         .accessibilityIdentifier(identifier)
     }
