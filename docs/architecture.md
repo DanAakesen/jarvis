@@ -1,6 +1,6 @@
 # Jarvis architecture
 
-System map from code and workflows, not a production readback. See [PLAN.md](../PLAN.md) for release status, [PRODUCT.md](../PRODUCT.md) for requirements and the [operator manual](agent-context.md) for commands.
+System map from source. See the [plan](../PLAN.md) for release status and the [operator manual](agent-context.md) for commands.
 
 ## Stack overview
 
@@ -83,7 +83,7 @@ Without a pin, the [provisioner](../.github/scripts/provision_pi_agent.py) reads
 - **Chat.** The server stores the owner message, adds [agent context](agent-context.md#agent-context) and streams text, tool activity and the terminal result. An iPhone reconnect can discover and follow an active turn or reconcile its committed reply without resending. App history, Foundry history and [diagnostic logs](reference/logs.md) are separate records.
 - **Voice.** GPT-Live can answer directly. For a delegation the relay joins the whole transcript after 1.5 seconds of quiet (at most 3 seconds), stores the request once and starts PI once; it never cuts at the delegation offset. It relays PI commentary. Near-silent PCM cannot start a response group or clear a pending lookup. Backchannels do not cancel PI; new delegation, session end or timeout can stop it. Delivered generated windows are upserted in the call's Chat history by window ID, without live actions. The backend is audio-only.
 - **Watch Voice.** The paired iPhone relays audio without waiting for caption acknowledgements; exhausted caption retries do not end the call. The phone starts its peer timeout after opening the relay. Watch tries echo cancellation first, can retry unprocessed, and checks for fresh PCM before accepting a Voice route restart. It reports playback completion to the phone. A stored turn proves neither speaker delivery nor continuity.
-- **Parity is a contract, not identical presentation.** Both channels see the same PI tool effects and failure meaning. The [replay tests](../apps/backend/src/voice/chat-voice-parity.test.ts) exercise the real routes, gateway and door against stubs. Their [report helper](../apps/backend/src/voice/parity-report.testkit.ts) documents intended presentation differences. Native audio and device rendering are separate acceptance.
+- **Parity is a contract, not identical presentation.** The [replay tests](../apps/backend/src/voice/chat-voice-parity.test.ts) compare tool effects and failures across the real routes, gateway and door using stubs. The [report helper](../apps/backend/src/voice/parity-report.testkit.ts) records presentation differences.
 
 ```mermaid
 sequenceDiagram
@@ -188,7 +188,7 @@ flowchart LR
 
 - GitHub stays available for project lookups. Its webhooks, deployment-failure alerts and worker PR-open notices are not enqueued; claimed older entries settle as `github_context_only`. Worker `Done`, `NeedsAttention` and `Cancelled` events remain eligible under the Factory source switch.
 - The brain combines events, watches and scheduled sweeps. It uses source switches, dedupe, spacing, quiet hours, a daily allowance and a separate background spend ledger. The model chooses what matters. Durable state and evidence prevent stale references, duplicate follow-ups and messages based on data the owner has disabled. Exact timed reminders have their own delivery path and do not depend on the background switch.
-- Missing switch state means **Off**. iPhone Settings and Proactive share enablement; inline preference saves use revision-checked `PATCH /proactive/settings`. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model. A wake is not proof of delivery.
+- Missing switch state means **Off**. iPhone Settings and Proactive share enablement. `PATCH /proactive/settings` checks the revision for background procedure edits and stores the override in [SQL](../db/migrations/0105_proactive_brain_instructions.sql). The [wake formatter](../apps/backend/src/pi/brain/wake.ts) injects the saved procedure or bundled default before event evidence, separately from delivery policy. `/pi/brain`, `/pi/status` and `/proactive/status` read state without starting a model.
 - PI owns the 07:00 and 18:00 Copenhagen slots and Check now. At the daily turn cap, pending events wait until Copenhagen midnight. An event-covered slot can run its Inbox review once even at the cap, without a second PI wake. No brain configured means no slots claimed.
 - Background Calendar reads the next 48 hours; Travel queries its own days 3–7 window. Continuations keep the original Google query. Each background window reads at most two pages and 50 returned events.
 
@@ -227,9 +227,9 @@ flowchart LR
     LEG["Legend: cylinder = immutable artifact; arrows = build order or input"]
 ```
 
-- [Bicep](../infra/README.md) owns Azure SQL, Key Vault, Storage, ACR, Container Apps, Foundry and Static Web Apps. A Container Apps image runs the backend; managed identity gives it scoped Azure access. The mirror is a separate job. Client sign-in is Entra; keys and server credentials do not go to clients.
+- [Bicep](../infra/README.md) owns Azure SQL, Key Vault, Storage, ACR, Container Apps, Foundry and Static Web Apps. The backend uses managed identity and clients sign in with Entra; server credentials stay server-side.
 - [CI](../.github/workflows/ci.yml) qualifies the ready PR, not whatever later happens to be on the branch. [Deploy](../.github/workflows/deploy.yml) selects affected components, verifies the merged Git tree equals the qualified tree, and retains [deployment evidence](../.github/scripts/release_state.py). A no-op or superseded run is not fresh provider acceptance. An unchanged tree need not rerun a component; changed inputs need matching evidence.
-- Backend readiness includes PI provisioning/readback and the exact applied revision, not a live conversation test. [TestFlight](../.github/workflows/ios-testflight.yml) signs and uploads the dispatch SHA and reads back Apple processing and internal beta state. A normal release uses `main` after Deploy is green. A receipt is not device acceptance.
+- Readiness verifies PI provisioning and the exact applied revision, not live conversations. [TestFlight](../.github/workflows/ios-testflight.yml) signs the dispatch SHA and reads back processing and internal beta state. Release from `main` after Deploy is green; a receipt is not device acceptance.
 
 <a name="sandbox-credentials"></a>
 

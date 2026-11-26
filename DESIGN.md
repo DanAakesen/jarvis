@@ -41,7 +41,7 @@ Use the established Voice screen and controls; no provider selector, engine badg
 
 ## Proactive and notification opening
 
-- Findings come first. Reviews shows the shared suggestions switch, next check and last outcome; recent checks expand on demand. Edit preferences inline. On conflict, refresh saved settings without losing the draft; an unsuccessful save offers Retry.
+- Findings precede Reviews: shared switch, next check, last outcome and expandable history. Edit preferences inline, with Background instructions separate from personal guidance. Reload saved values on conflict, retaining the draft; offer Retry on failure.
 - **A reply push opens existing Chat.** Show one useful preview, not an approval summary. In Chat open the exact committed message without animating away from the target; allow Jump to latest. Watch waits until an active turn, dictation or Voice is idle and keeps the pending target across refresh. Proactive items and approval actions have distinct routes. If the target cannot load, show Chat's retry state, not another message.
 
 ## Watch

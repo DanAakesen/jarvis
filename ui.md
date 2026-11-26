@@ -35,7 +35,7 @@ The Watch dashboard opens Chat or an adaptive tile Menu in one tap, above the ag
 ## Widgets and Live Activities
 
 - **iPhone Home screen widgets** ([bundle](apps/ios/Widgets/JarvisWidgets.swift)): Gym (small Steps and Workouts, plus medium and large), Software Factory (small Status and Done, plus medium and large), Notes and Home (each in small, medium and large).
-- **Live Activities:** Software Factory task and Voice call.
+- **Live Activities:** Software Factory task, Voice call and a CarPlay-tracked calendar event.
 - **Watch complications** ([bundle](apps/ios/WatchWidgets/JarvisWatchWidgets.swift)): rectangular Daily steps, Nutrition, Home, Tasks and Body Fat; circular Tasks Today, Dictate, Voice Session and Log lift. Dictate opens Chat for capture into a draft; it does not send a message.
 
 Widgets and Live Activities are glanceable summaries and routes back into the real screen. They are not second editors.
