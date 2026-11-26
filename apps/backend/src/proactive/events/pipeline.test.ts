@@ -15,8 +15,8 @@ const signal = new AbortController().signal;
 
 function event(partial: Partial<ProactiveEventInput> = {}): ProactiveEventInput {
   return {
-    source: 'github', kind: 'workflow_run.failure', dedupeKey: `k-${Math.random()}`,
-    summary: 'Deploy failed on main', occurredAt: new Date(NOW.getTime() - 60_000), ...partial,
+    source: 'worker', kind: 'task.needs_attention', dedupeKey: `k-${Math.random()}`,
+    summary: 'Worker needs attention', occurredAt: new Date(NOW.getTime() - 60_000), ...partial,
   };
 }
 
@@ -60,8 +60,8 @@ describe('event pipeline', () => {
 
   it('filters routine events without a model call', async () => {
     const { pipeline, enqueue, reason, queue } = setup();
-    await enqueue(event({ kind: 'workflow_run.success' }));
-    await enqueue(event({ kind: 'deployment_status.success' }));
+    await enqueue(event({ source: 'github', kind: 'workflow_run.success' }));
+    await enqueue(event({ source: 'alert', kind: 'deployment_failure' }));
     const result = await pipeline.tick(signal);
     expect(result).toMatchObject({ outcome: 'filtered', claimed: 2, dropped: 2 });
     expect(reason).not.toHaveBeenCalled();
@@ -100,7 +100,7 @@ describe('event pipeline', () => {
       decisions: ids.map((id) => ({ eventIds: [id], tier: 'medium' as const, title: 'Note', body: 'Body', why: 'why', category: 'status' as const })),
     }));
     for (let index = 0; index < MAX_PUSHES_PER_DAY + 1; index += 1) {
-      await enqueue(event());
+      await enqueue(event({ source: index % 2 === 0 ? 'worker' : 'mail' }));
       advance(1_000);
       await pipeline.tick(signal);
     }
@@ -144,7 +144,7 @@ describe('event pipeline', () => {
   it('stops after the daily model-call cap', async () => {
     const { pipeline, enqueue, reason, advance } = setup();
     for (let index = 0; index < MAX_MODEL_BATCHES_PER_DAY; index += 1) {
-      await enqueue(event());
+      await enqueue(event({ source: index % 2 === 0 ? 'worker' : 'mail' }));
       advance(1_000);
       await pipeline.tick(signal);
     }
@@ -196,7 +196,7 @@ describe('event pipeline', () => {
     const { pipeline, enqueue, reason, advance } = setup();
     reason.mockResolvedValue({ decisions: [], quiet: [], reason: 'invalid_model_output', usage: { model: 'gpt-6.1-terra', inputTokens: 1_000, outputTokens: 100 } });
     for (let index = 0; index < MAX_MODEL_BATCHES_PER_DAY; index += 1) {
-      await enqueue(event());
+      await enqueue(event({ source: index % 2 === 0 ? 'worker' : 'mail' }));
       advance(1_000);
       expect((await pipeline.tick(signal)).outcome).toBe('invalid_model_output');
     }
@@ -227,7 +227,7 @@ describe('queue', () => {
     const queue = createMemoryEventQueueStore();
     await queue.enqueue(event({ baseline: true }), at);
     expect(await queue.hasWork(at)).toBe(false);
-    expect(await queue.hasSource('github')).toBe(true);
+    expect(await queue.hasSource('worker')).toBe(true);
   });
   it('leases claimed events so a second claim finds nothing', async () => {
     const queue = createMemoryEventQueueStore();

@@ -57,7 +57,7 @@ describe('the event queue entrance and the Proactive source switches', () => {
     expect(wake).toHaveBeenCalledTimes(1);
   });
 
-  it('queues the same events once the sources are on again', async () => {
+  it('keeps GitHub context-only when Factory is on and wakes for a calendar change', async () => {
     const { sink, store, wake, queue } = build();
     await store.settings.patch({ sources: { factory: false, calendar: false } });
     await sink.enqueue(release);
@@ -66,10 +66,12 @@ describe('the event queue entrance and the Proactive source switches', () => {
 
     await sink.enqueue(release);
     await sink.enqueue(clash);
-    expect(await queue.hasSource('github')).toBe(true);
+    await sink.enqueue({ ...release, source: 'alert', kind: 'deployment_failure' });
+    await sink.enqueue({ ...workerDone, kind: 'task.pull_request_opened' });
+    expect(await queue.hasSource('github')).toBe(false);
     expect(await queue.hasSource('calendar')).toBe(true);
-    expect(wake).toHaveBeenCalledTimes(2);
-    expect((await queue.claim(NOW, 10, 60_000)).map(({ kind }) => kind).sort()).toEqual(['calendar.clash', 'release.published']);
+    expect(wake).toHaveBeenCalledTimes(1);
+    expect((await queue.claim(NOW, 10, 60_000)).map(({ kind }) => kind).sort()).toEqual(['calendar.clash']);
   });
 
   it('treats a source an event declares as evidence like its own: a failed reminder follows Todos, nothing else does', async () => {

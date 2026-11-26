@@ -88,7 +88,7 @@ describe('standing watches inside the brain loop', () => {
 
   it('matches an arriving event to the open watches by showing them, and reports only when the model says so', async () => {
     const t = setup(async (wake) => {
-      if (!/workflow_run\.success/u.test(wake.body)) return { text: 'Nothing.' };
+      if (!/calendar\.clash/u.test(wake.body)) return { text: 'Nothing.' };
       await t.watches.look({ name: 'Deploy of main', result: 'the deploy is green', nextLook: null }, wake.run, signal());
       await t.comms.send({ text: 'The deploy of main is green again.' }, wake.run, signal());
       await t.watches.stop({ name: 'Deploy of main', reason: 'it is green, stop condition met' }, signal());
@@ -96,7 +96,7 @@ describe('standing watches inside the brain loop', () => {
     });
     await t.watches.create({ title: 'Deploy of main', text: 'Tell me when green, then stop.', nextLook: null }, signal());
     await t.ready;
-    await t.queue.enqueue({ source: 'github', kind: 'workflow_run.success', dedupeKey: 'g:1', summary: 'Workflow "Deploy" success on DanAakesen/jarvis (main)', occurredAt: t.now() }, t.now());
+    await t.queue.enqueue({ source: 'calendar', kind: 'calendar.clash', dedupeKey: 'c:1', summary: 'Calendar clash', occurredAt: t.now() }, t.now());
     t.brain.wake();
     await simulate(t, new Date(t.clock.t.getTime() + 5 * 60_000));
     expect(t.gateway.wakes[0]!.body).toContain('Open watches (1');
@@ -155,7 +155,7 @@ describe('standing watches inside the brain loop', () => {
       extras: reborn, owner, timeZone: 'Europe/Copenhagen', now: t.now,
     });
     await t.ready;
-    await t.queue.enqueue({ source: 'github', kind: 'workflow_run.failure', dedupeKey: 'g:2', summary: 'Deploy failed', occurredAt: t.now() }, t.now());
+    await t.queue.enqueue({ source: 'calendar', kind: 'calendar.clash', dedupeKey: 'c:2', summary: 'Calendar clash', occurredAt: t.now() }, t.now());
     brain.wake();
     t.clock.t = new Date('2026-11-16T09:30:00Z');
     brain.wake();
@@ -164,6 +164,6 @@ describe('standing watches inside the brain loop', () => {
     (t.vault as { read: unknown }).read = read;
     t.clock.t = new Date(t.clock.t.getTime() + 6 * 60_000);
     expect((await brain.tick(signal())).outcome).toBe('done');
-    expect(t.gateway.wakes[0]!.body).toContain('Deploy failed');
+    expect(t.gateway.wakes[0]!.body).toContain('Calendar clash');
   });
 });

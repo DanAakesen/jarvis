@@ -1,14 +1,14 @@
 [
   {
     "name": "a failed main deploy",
-    "messages": [1],
+    "messages": [0],
     "source": "github",
     "kind": "workflow_run.failure",
     "summary": "Workflow \"Deploy\" failure on DanAakesen/jarvis (main)"
   },
   {
     "name": "a new GitHub release",
-    "messages": [1],
+    "messages": [0],
     "source": "github",
     "kind": "release.published",
     "summary": "Jarvis v2.1.0 was published"
@@ -46,7 +46,7 @@
   },
   {
     "name": "a repeat of an already-told event",
-    "messages": [1, 0],
+    "messages": [0, 0],
     "source": "github",
     "kind": "release.published",
     "summary": "Jarvis v2.1.0 was published"

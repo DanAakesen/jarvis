@@ -4,7 +4,7 @@ import {
 } from '../../proactive/budget.js';
 import type { EventQueueStore } from '../../proactive/events/event-queue.js';
 import { MAX_EVENT_ATTEMPTS } from '../../proactive/events/rules.js';
-import { eventSourceSwitches, type QueuedEvent } from '../../proactive/events/types.js';
+import { eventSourceSwitches, isGitHubActivity, type QueuedEvent } from '../../proactive/events/types.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import {
   isQuietHour, latestSlotAtOrBefore, localSlotInstant, monthKey, nextCopenhagenDayStart, nextSlotAfter,
@@ -277,7 +277,8 @@ export function createBrain(options: BrainOptions) {
     const settled: { id: string; outcome: string; reopenable?: boolean }[] = [];
     for (const event of claimed) {
       const maxAge = event.source === 'timer' ? timerMaxAgeMs : defaultMaxAgeMs;
-      if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
+      if (isGitHubActivity(event)) settled.push({ id: event.id, outcome: 'github_context_only' });
+      else if (event.attempts > MAX_EVENT_ATTEMPTS) settled.push({ id: event.id, outcome: 'gave up after retries' });
       else if (eventSourceSwitches(event).some((source) => !settings.sources[source])) {
         settled.push({ id: event.id, outcome: 'source disabled', reopenable: true });
       }
