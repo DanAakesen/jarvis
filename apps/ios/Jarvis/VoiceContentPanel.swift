@@ -55,9 +55,10 @@ private struct VoiceSummaryHeight: PreferenceKey {
     }
 }
 
-struct VoiceWindowBounds: PreferenceKey {
-    static var defaultValue: Anchor<CGRect>? { nil }
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+struct VoiceWindowBand: PreferenceKey {
+    static let coordinateSpace = "sidebarReveal"
+    static var defaultValue: ClosedRange<CGFloat>? { nil }
+    static func reduce(value: inout ClosedRange<CGFloat>?, nextValue: () -> ClosedRange<CGFloat>?) {
         value = nextValue() ?? value
     }
 }
@@ -106,6 +107,7 @@ private struct VoiceVisualCarousel: View {
             let width = max(1, geometry.size.width - 2 * peek)
             let stride = width + JarvisDesignTokens.compactSpacing
             let index = entries.firstIndex { $0.id == selectedID } ?? 0
+            let frame = geometry.frame(in: .named(VoiceWindowBand.coordinateSpace))
             let drag = max(index == entries.count - 1 ? 0 : -stride,
                            min(index == 0 ? 0 : stride, horizontalDrag))
 
@@ -147,6 +149,7 @@ private struct VoiceVisualCarousel: View {
                 },
                 resize: toggleExpanded
             ))
+            .preference(key: VoiceWindowBand.self, value: frame.minY...frame.maxY)
             .onChange(of: selectedID, initial: true) { _, id in
                 guard let visual = entries.first(where: { $0.id == id }) else { return }
                 AccessibilityNotification.Announcement(visual.view.workspaceTitle(language: language)).post()
@@ -158,7 +161,6 @@ private struct VoiceVisualCarousel: View {
             let next = index + (direction == .increment ? 1 : -1)
             if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
         }
-        .anchorPreference(key: VoiceWindowBounds.self, value: .bounds) { $0 }
         .accessibilityIdentifier("voice.panel")
     }
 
