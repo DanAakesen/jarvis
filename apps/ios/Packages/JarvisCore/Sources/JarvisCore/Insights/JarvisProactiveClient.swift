@@ -490,7 +490,25 @@ public struct JarvisProactiveSettingsEditor: Equatable, Sendable {
 
     /// After a conflict: adopt the newer saved values and revision but keep what was typed.
     public mutating func rebase(onto settings: JarvisProactiveConfig) {
+        let prior = JarvisProactiveSettingsDraft(saved)
+        var merged = JarvisProactiveSettingsDraft(settings)
+        if draft.budgetText != prior.budgetText { merged.budgetText = draft.budgetText }
+        if draft.backgroundTurnsPerDay != prior.backgroundTurnsPerDay { merged.backgroundTurnsPerDay = draft.backgroundTurnsPerDay }
+        if draft.scope != prior.scope { merged.scope = draft.scope }
+        if draft.feedsText != prior.feedsText { merged.feedsText = draft.feedsText }
+        if draft.guidance != prior.guidance { merged.guidance = draft.guidance }
+        for index in merged.sources.indices {
+            let id = merged.sources[index].id
+            if let edited = draft.sources.first(where: { $0.id == id }),
+               edited != prior.sources.first(where: { $0.id == id }) { merged.sources[index] = edited }
+        }
+        for index in merged.categories.indices {
+            let id = merged.categories[index].id
+            if let edited = draft.categories.first(where: { $0.id == id }),
+               edited != prior.categories.first(where: { $0.id == id }) { merged.categories[index] = edited }
+        }
         saved = settings
+        draft = merged
         if case .failed(.conflict) = state { state = .idle }
     }
 
