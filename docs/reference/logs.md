@@ -26,7 +26,7 @@ The reader applies a tighter field allowlist than the operator view. Use operato
 
 Use operator `pi.mcp_tool` for `replayCheck`, `_meta` key names and the short turn hash; `read_backend_logs` omits them. Neither view exposes `_meta` values. `duplicate: true` means the door reused an outcome; `sameArgsRepeat` only flags matching arguments.
 
-For a wake, correlate `pi.brain_run` with the wake ledger by activation ID, not the foreground `requestId`. `pi.brain_tick` with `filtered` means the claimed batch did not produce a wake, not that PI failed; it can include older GitHub activity settled without a turn. `pi.conversation_cleanup_failed` reports a scratch cleanup failure separately from the wake outcome. An attempted wake or push count does not prove delivery.
+For a wake, correlate `pi.brain_run` with the ledger by activation ID, not the foreground `requestId`. `pi.brain_tick` with `filtered` means the claimed batch did not produce a wake; it can include older GitHub activity settled without a turn. `pi.conversation_cleanup_failed` gives the scratch kind and reason, not an activation ID or the wake outcome. Neither a wake nor a push count proves delivery.
 
 The reader queries retained Container Apps console rows in the configured Log Analytics workspace, not Application Insights, live console streams or other apps. It serves one query at a time per backend process; a throttled or denied read is unavailable, not an empty observation. The [metadata preflight](../../.github/scripts/backend_log_sources.py) inventories named resources and candidate tables without reading rows or granting access.
 
