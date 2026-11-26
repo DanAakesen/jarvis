@@ -8,7 +8,7 @@ Dan follows his projects directly. Keep GitHub available for lookups in Chat, Vo
 
 ## 2026-11-26 · iPhone information cards
 
-Factory leads with decisions, Usage with spend, Status with checks and Proactive with findings. Put one title in the page header and one in each card; disclose secondary detail in place. Edit Proactive preferences beside their effects. [#2094](https://github.com/DanAakesen/jarvis/pull/2094).
+Factory leads with decisions, Usage with spend, Status with checks and Proactive with findings. Use one title per page header and card; disclose detail in place. Edit the background procedure beside its effects, separately from personal guidance. [#2094](https://github.com/DanAakesen/jarvis/pull/2094), [#2099](https://github.com/DanAakesen/jarvis/pull/2099).
 
 ## Standing rules
 
@@ -31,6 +31,10 @@ Factory leads with decisions, Usage with spend, Status with checks and Proactive
 ## Decisions of the last 14 days
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
+
+### 26 November 2026 — CarPlay shares the phone's authenticated call
+
+Use native templates for the dashboard and active call; reuse the phone's signed-in data clients and Voice session, not a second assistant. [#2104](https://github.com/DanAakesen/jarvis/pull/2104).
 
 ### 24 November 2026 — iPhone dashboard and editor
 
@@ -73,7 +77,7 @@ Chat and Voice share one conversation, including through future compaction. Put 
 
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material
 
-[`.github/copilot-instructions.md`](../.github/copilot-instructions.md) owns the rules and document map. `AGENTS.md` points to it so Factory workers can onboard from the checkout. Keep key files current; delete obsolete working material and finished design references. Git and PRs hold the history.
+`AGENTS.md` points workers to the [working agreement](../.github/copilot-instructions.md). Keep key docs current; delete finished references and leave history in Git and PRs.
 
 ### 22 November 2026 — Give Notes one title and a file inventory ([#2031](https://github.com/DanAakesen/jarvis/pull/2031))
 
@@ -123,8 +127,7 @@ Failed-reminder and timed calendar events queue through source switches; code de
 
 ### 21 November 2026 — Apple granted the CarPlay entitlement (Dan's report)
 
-- **Decision:** Treat hands-free in-car conversation as a major use case. Dan reported that Apple granted **Voice Based Conversation**. This supersedes the pending entitlement status in the historical decisions.
-- **Status:** Owner-confirmed grant; capability activation, app shipping and road/device behavior unverified.
+Dan reported Apple's **Voice Based Conversation** grant. Hands-free conversation is a major in-car use case. See [Apple capabilities](ios/apple-capabilities.md) for signing and device acceptance.
 
 ### 21 November 2026 — Start from tools people can actually find ([#1996](https://github.com/DanAakesen/jarvis/pull/1996), [#1999](https://github.com/DanAakesen/jarvis/pull/1999), [#2002](https://github.com/DanAakesen/jarvis/pull/2002), [#2003](https://github.com/DanAakesen/jarvis/pull/2003))
 

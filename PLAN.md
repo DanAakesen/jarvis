@@ -16,10 +16,10 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | --- | --- |
 | P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Factory, Usage, Status and Proactive layouts and the Health, Calendar, Home, Notes, Voice and theme fixes are in build 140, **not accepted on device**. |
 | TestFlight **140** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45771929167). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) verified the embedded Watch companion, not its installation or playback. |
-| Backend | [Latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45781766787) applied the backend for the [GitHub context change](https://github.com/DanAakesen/jarvis/pull/2098); infrastructure, web and the legacy agent were reused. PI provisioning and deterministic readiness passed; live conversation acceptance was skipped. |
+| Production | [Latest successful Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45858199320) applied infrastructure, backend, web and the legacy agent from the tree containing both changes below. PI provisioning and deterministic readiness passed; live conversation acceptance was skipped. |
 | Background PI | GitHub remains available for lookups, but its activity does not trigger a review. Suggestion delivery is **not accepted on device**. |
-| P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | Merged. Verify the production deployment and internal build containing the editor. |
-| P15-215 · [Native CarPlay dashboard and Voice](https://github.com/DanAakesen/jarvis/pull/2104) | Native scene and shared voice implemented. Signed distribution and head-unit acceptance are separate checks. |
+| P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | Backend deployed. The iPhone editor is newer than build 140 and **not accepted on device**. |
+| P15-215 · [Native CarPlay dashboard and Voice](https://github.com/DanAakesen/jarvis/pull/2104) | Native scene merged after build 140. The PR's Apple Watch job ended before running build steps. Signed CarPlay distribution is unconfirmed and the dashboard is **not accepted on device**. |
 
 ### Next steps and blockers
 
@@ -29,8 +29,10 @@ Use [TestFlight build 140](https://github.com/DanAakesen/jarvis/actions/runs/457
 2. **Voice and Watch:** On iPhone, check Thinking during a lookup after a spoken acknowledgement. Compare speakerphone, receiver and headset volume. Check caption scroll, centre swipes, expansion, scroll edges and a full-day chart in a window. On Watch, dictate short and long drafts; each Stop inserts text once. Check startup, route recovery, two complete audible replies, interruption of a third and the saved turn.
 3. **Maps:** Ask for a named store nearby; expect a matching local business or an explicit no-match result. For a business with no nearby match, ask for the nearest and check a match and Directions beyond 10 km. A completed lookup should still report its result if reply writing fails. Compare the spoken departure estimate with the map card for an addressed event and a ten-minute buffer.
 4. **Proactive:** Verify an ordinary Inbox follow-up against its linked card and check device delivery separately. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for event-covered slots. **Show me fewer like this** is an approved follow-up, not part of build 140.
-5. **iPhone layouts and follow-ups:** Check Factory search, the Usage period and drill-down, grouped Status evidence, and inline Proactive save, conflict and Retry. Check Body trend periods against a new Apple Health reading, the separate Training walk count, gym log sheets, the Calendar create card, Week dividers and footer, Home Up Next and quick add, and Notes tiles, list continuation and a folder move with a table edit.
+5. **iPhone layouts and follow-ups:** Check Factory search, the Usage period and drill-down, grouped Status evidence, and save, conflict and Retry for the Proactive settings in this build. Check Body trend periods against a new Apple Health reading, the separate Training walk count, gym log sheets, the Calendar create card, Week dividers and footer, Home Up Next and quick add, and Notes tiles, list continuation and a folder move with a table edit.
 6. **Appearance and Watch Home:** Check the corrected red accent in light and dark, the remaining orb themes, plus-menu icon colour, finish and glow save/reset, and per-card colours. Reconnect Watch, check its palette and tinted complications, and scroll Home both ways to check the heading next to the clock.
+
+On the next Apple-confirmed build containing the editor and CarPlay, check that **Background instructions** survives reopening independently of personal guidance. On a head unit, check Schedule, Notes and Tasks, audible Voice, Mute, End and reconnection.
 
 **Unverified in Foundry:** a usable `_meta` call ID for replay and the live provider rate-limit cause.
 
