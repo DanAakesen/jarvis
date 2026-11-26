@@ -84,6 +84,7 @@ export interface ProactiveSettings {
   suggestionScope: SuggestionScopePreference;
   newsFeeds: string[];
   guidance: string;
+  brainInstructions?: string;
 }
 
 export interface SourceContext {

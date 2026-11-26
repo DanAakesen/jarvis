@@ -152,3 +152,5 @@ The down batch drops only the derived metadata, not the vault or search chunks.
 Roll back the dependent backend before running it.
 
 `0104_voice_window_message_size.sql` allows one archived Voice window up to the generated-view size limit. Rollback preserves existing windows and refuses if any exceed the earlier limit.
+
+`0105_proactive_brain_instructions.sql` stores an optional owner override for the background procedure.

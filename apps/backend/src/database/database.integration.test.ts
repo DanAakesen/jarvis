@@ -424,6 +424,8 @@ describe('real SQL Server migration contract', () => {
       await pool.request().batch(reviewSchema);
       await pool.request().batch(generationSchema);
       await pool.request().batch(pendingAuthoritySchema);
+      const instructionsMigration = '0105_proactive_brain_instructions.sql';
+      await pool.request().batch(await readFile(new URL(`../../../../db/migrations/${instructionsMigration}`, import.meta.url), 'utf8'));
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -811,7 +813,9 @@ describe('real SQL Server migration contract', () => {
           authoritativeRefs: [],
           observations: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        await proactive.settings.patch({ brainInstructions: 'Check upcoming deadlines.' });
         await proactive.settings.patch({ guidance: 'changed after the situation was read' });
+        expect((await proactive.settings.read()).brainInstructions).toBe('Check upcoming deadlines.');
         await expect(situations.commit({
           owner,
           expectedRevision: stored.revision,
@@ -1291,6 +1295,7 @@ describe('real SQL Server migration contract', () => {
           catch (error) { throw new Error(`Database rollback ${name} failed`, { cause: error }); }
         };
         await pool.request().batch('DELETE FROM dbo.pi_situation_ref_authority;');
+        await rollback('0105', await readFile(new URL(`../../../../db/migrations/down/${instructionsMigration}`, import.meta.url), 'utf8'));
         await rollback('0101', pendingAuthorityDown);
         await rollback('0100', generationDown);
         await rollback('0099', reviewDown);

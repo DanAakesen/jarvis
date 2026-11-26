@@ -18,8 +18,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | TestFlight **140** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45771929167). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) verified the embedded Watch companion, not its installation or playback. |
 | Backend | [Latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45781766787) applied the backend for the [GitHub context change](https://github.com/DanAakesen/jarvis/pull/2098); infrastructure, web and the legacy agent were reused. PI provisioning and deterministic readiness passed; live conversation acceptance was skipped. |
 | Background PI | GitHub remains available for lookups, but its activity does not trigger a review. Suggestion delivery is **not accepted on device**. |
-| P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | In review. The Apple Watch check was cancelled and still needs a pass on the current head. Not in build 140. |
-| P15-215 · CarPlay | Native dashboard and shared voice session implemented. Signed distribution and in-car acceptance are separate checks. |
+| P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | Merged. Verify the production deployment and internal build containing the editor. |
+| P15-215 · [Native CarPlay dashboard and Voice](https://github.com/DanAakesen/jarvis/pull/2104) | Native scene and shared voice implemented. Signed distribution and head-unit acceptance are separate checks. |
 
 ### Next steps and blockers
 

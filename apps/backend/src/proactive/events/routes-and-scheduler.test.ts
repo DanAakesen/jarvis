@@ -80,6 +80,29 @@ describe('outreach thumbs', () => {
 });
 
 describe('proactive PI policy', () => {
+  it('returns the default procedure and preserves owner edits across unrelated and stale saves', async () => {
+    const { app } = await build();
+    try {
+      const url = '/proactive/settings';
+      const initial = (await app.inject({ method: 'GET', url })).json();
+      expect(initial.brainInstructions).toMatch(/^# Brain: acting on a wake/u);
+      const brainInstructions = 'Read my upcoming appointments.\nNotify me about new clashes.';
+      const save = (payload: Record<string, unknown>) => app.inject({ method: 'PATCH', url, payload });
+      expect((await save({ brainInstructions })).statusCode).toBe(400);
+      for (const invalid of ['  ', 'x'.repeat(16_001)]) {
+        expect((await save({ brainInstructions: invalid, expectedRevision: initial.revision })).statusCode).toBe(400);
+      }
+      const saved = await save({ brainInstructions, expectedRevision: initial.revision });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().revision).not.toBe(initial.revision);
+      expect((await save({ brainInstructions: 'stale edit', expectedRevision: initial.revision })).statusCode).toBe(409);
+      expect((await save({ guidance: 'Chelsea updates' })).json().brainInstructions).toBe(brainInstructions);
+      expect((await app.inject({ method: 'GET', url })).json().brainInstructions).toBe(brainInstructions);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('keeps the combined allowance in 1-12 and the hard spend cap at 100 DKK', async () => {
     const { app } = await build();
     const current = (await app.inject({ method: 'GET', url: '/proactive/settings' })).json();
