@@ -239,9 +239,12 @@ describe('event pipeline on SQL Server', () => {
         createPushChannel(async (request) => { pushes.push(request); return { status: 'sent', reason: null, attempted: 1, accepted: 1, statusCode: 201 }; }),
       ],
     });
-    await queue.enqueue({ ...event('e2e-1'), occurredAt: new Date(now.getTime() - 60_000) }, now);
-    await queue.enqueue({ ...event('e2e-2'), kind: 'workflow_run.success' }, now);
-    await queue.enqueue({ ...event('e2e-3'), occurredAt: new Date(now.getTime() - 30_000) }, now);
+    const calendarEvent = (key: string, occurredAt: Date, detail: Record<string, unknown> = {}) => ({
+      source: 'calendar', kind: 'calendar.clash', dedupeKey: key, summary: 'Calendar event changed', detail, occurredAt,
+    });
+    await queue.enqueue(calendarEvent('e2e-1', new Date(now.getTime() - 60_000)), now);
+    await queue.enqueue(calendarEvent('e2e-2', now, { endsAt: new Date(now.getTime() - 1_000).toISOString() }), now);
+    await queue.enqueue(calendarEvent('e2e-3', new Date(now.getTime() - 30_000)), now);
     pipeline.wake();
     const result = await pipeline.tick(new AbortController().signal);
     expect(result).toMatchObject({ outcome: 'done', claimed: 3, dropped: 1, outreach: 1 });

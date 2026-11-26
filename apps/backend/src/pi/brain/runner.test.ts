@@ -7,7 +7,7 @@ import { createMemoryProactiveStore } from '../../proactive/store.js';
 import { createPiArea } from '../area.js';
 import { ESTIMATED_PROMPT_TOKENS } from '../pricing.js';
 import { createMemoryPiStore } from '../store.js';
-import { memoryConversations, memoryVault, scriptedGateway, type ScriptedWake } from './brain.testkit.js';
+import { memoryConversations, memoryVault, scriptedGateway } from './brain.testkit.js';
 import { createBrainComms } from './comms.js';
 import { createDecisionLog } from './decision-log.js';
 import { MAX_WAKES_PER_DAY, MIN_WAKE_GAP_MS, createBrain, type BrainOptions } from './runner.js';
