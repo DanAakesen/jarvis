@@ -17,7 +17,10 @@ struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {
     }
 
     func requestSignIn() async {
-        NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
+        await MainActor.run {
+            JarvisComposition.setAccountAccessSuspended(true)
+            NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
+        }
     }
 }
 
@@ -25,7 +28,9 @@ enum JarvisComposition {
     @MainActor private(set) static var accountAccessSuspended = false
 
     @MainActor static func setAccountAccessSuspended(_ suspended: Bool) {
+        if suspended && accountAccessSuspended { return }
         accountAccessSuspended = suspended
+        if suspended { CarScheduleActivityAttributes.clearActivities() }
         NotificationCenter.default.post(name: .jarvisAccountAccessChanged, object: nil)
     }
 

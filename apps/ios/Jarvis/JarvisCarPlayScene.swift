@@ -8,6 +8,7 @@ import SwiftUI
 @available(iOS 26.4, *)
 @MainActor
 final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate, CPInterfaceControllerDelegate {
+    private weak var carScene: CPTemplateApplicationScene?
     private weak var controller: CPInterfaceController?
     private var dashboard: CPListTemplate?
     private var voiceTemplate: CPVoiceControlTemplate?
@@ -31,6 +32,7 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
     private var scheduleLimit = 3
 
     func templateApplicationScene(_ scene: CPTemplateApplicationScene, didConnect interfaceController: CPInterfaceController) {
+        carScene = scene
         controller = interfaceController
         interfaceController.delegate = self
         let root = CPListTemplate(title: "Jarvis", sections: [])
@@ -49,6 +51,7 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
 
     func templateApplicationScene(_ scene: CPTemplateApplicationScene, didDisconnectInterfaceController interfaceController: CPInterfaceController) {
         NotificationCenter.default.removeObserver(self)
+        carScene = nil
         controller = nil
         artwork = [:]
         dashboard = nil
@@ -321,6 +324,7 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
     }
 
     private func trackingChoice(for event: JarvisTodayCalendarEntry?) -> (String, () -> Void)? {
+        guard !JarvisComposition.accountAccessSuspended else { return nil }
         if let activity = trackedEvent {
             return ("Stop tracking " + activity.content.state.title, {
                 Task { await activity.end(nil, dismissalPolicy: .immediate) }
@@ -345,10 +349,19 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
               let number = match.phoneNumber else { return nil }
         let dial = number.filter { $0.isNumber || $0 == "+" }
         guard let url = URL(string: "tel:" + dial) else { return nil }
-        return ("Call " + number, { UIApplication.shared.open(url) })
+        return ("Call " + number, { [weak self] in
+            guard let self, !JarvisComposition.accountAccessSuspended else { return }
+            self.carScene?.open(url, options: nil) { [weak self] opened in
+                if !opened { self?.message("Call unavailable", "Phone could not open this number.") }
+            }
+        })
     }
 
     private func quickActions() {
+        guard !JarvisComposition.accountAccessSuspended else {
+            message("Sign-in required", "Sign in on iPhone to use CarPlay.")
+            return
+        }
         let next = events.filter { $0.end > Date() && $0.allDay != true }.min { $0.start < $1.start }
         var choices = [callChoice(for: next), trackingChoice(for: next)].compactMap { $0 }
         choices.append(("Refresh dashboard", { [weak self] in self?.refresh() }))
@@ -455,18 +468,18 @@ final class JarvisCarPlayScene: UIResponder, CPTemplateApplicationSceneDelegate,
         template.activateVoiceControlState(withIdentifier: "Connecting")
         controller.presentTemplate(template, animated: true) { [weak self] success, _ in
             Task { @MainActor in
-                guard let self, voiceGeneration == generation else { return }
+                guard let self, self.voiceGeneration == generation else { return }
                 guard success else {
-                    voiceTemplate = nil
-                    message("Voice unavailable", "Try opening Voice again.")
+                    self.voiceTemplate = nil
+                    self.message("Voice unavailable", "Try opening Voice again.")
                     return
                 }
-                if !voice.isSessionActive {
-                    guard startIfIdle else { endVoice(); return }
-                    _ = voice.consumeReturnToChatRequest()
-                    trackVoice(generation, starting: true)
-                    await voice.performStart()
-                } else { trackVoice(generation) }
+                if !self.voice.isSessionActive {
+                    guard startIfIdle else { self.endVoice(); return }
+                    _ = self.voice.consumeReturnToChatRequest()
+                    self.trackVoice(generation, starting: true)
+                    await self.voice.performStart()
+                } else { self.trackVoice(generation) }
             }
         }
     }

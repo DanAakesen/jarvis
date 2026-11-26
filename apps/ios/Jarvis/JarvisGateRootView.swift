@@ -250,6 +250,7 @@ private final class JarvisGateModel: ObservableObject {
             JarvisTaskActivityBackgroundRefresh.shared.schedule()
         case .active:
             if !Self.isNavigationFixture {
+                CarScheduleActivityAttributes.clearActivities(expiredOnly: true)
                 Task { await JarvisWatchBridge.shared.refreshDictationCredential() }
             }
             let requiresLock = policy.shouldLock(lastBackgroundedAt: backgroundedAt, now: Date())
@@ -357,7 +358,6 @@ private final class JarvisGateModel: ObservableObject {
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()
-        await CarScheduleActivityAttributes.stopTracking()
         let watchRevoked = await JarvisWatchBridge.shared.disconnect()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
