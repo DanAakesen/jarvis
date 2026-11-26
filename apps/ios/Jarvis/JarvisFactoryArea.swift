@@ -280,33 +280,6 @@ struct JarvisFactoryArea: View {
         JarvisPageHeader(title: copy.text(.title), language: language)
     }
 
-    private var headline: JarvisPagePhrase? {
-        guard let board, let project else { return nil }
-        return JarvisFactoryPagePhrase.board(board, projectName: project.name, segment: segment, language: language)
-    }
-
-    private func pipelineHero(_ board: FactoryBoard) -> some View {
-        let counts = JarvisFactoryPagePhrase.Counts(board: board)
-        let tasks = "\(counts.total) \(copy.text(counts.total == 1 ? .task : .tasks))"
-        return JarvisPageHeroCard(title: copy.text(.pipeline)) {
-            Text(tasks)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        } content: {
-            JarvisPageStatGrid(
-                stats: [
-                    JarvisPageStat(id: "needs", value: counts.needs, label: copy.text(.needsDan), systemImage: "bell", tint: JarvisDesignTokens.factoryAccent),
-                    JarvisPageStat(id: "running", value: counts.running, label: copy.text(.running), systemImage: "play.circle", tint: JarvisDesignTokens.factoryAccent),
-                    JarvisPageStat(id: "review", value: counts.review, label: copy.text(.inReview), systemImage: "checkmark.circle", tint: JarvisDesignTokens.factorySecondaryAccent),
-                    JarvisPageStat(id: "failed", value: counts.failed, label: copy.text(.failed), systemImage: "xmark.circle", tint: .red),
-                ],
-                language: language
-            )
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy.text(.stageTasks))
-    }
-
     /// The full-width toggle above the search row, below the page's scrolling content.
     private var segmentRow: some View {
         HStack(spacing: JarvisPageHeaderMetrics.spacing) {
@@ -389,12 +362,6 @@ struct JarvisFactoryArea: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.factorySectionSpacing) {
-                        if let headline {
-                            JarvisPageHeadline(phrase: headline)
-                            if segment == .board, board.columns.contains(where: { !$0.cards.isEmpty }) {
-                                pipelineHero(board)
-                            }
-                        }
                         if board.stale {
                             FactoryStatusLine(symbol: "tray.full", text: copy.text(.cached))
                         }
@@ -417,21 +384,33 @@ struct JarvisFactoryArea: View {
                                 action: { Task { await loadProjects(force: true) } }
                             )
                         }
-                        if filteredCards.isEmpty {
-                            Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? emptyBoardTitle
-                                : copy.text(.noSearchResults))
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, JarvisDesignTokens.factorySectionSpacing * 2)
-                        } else {
-                            let visibleColumns = JarvisFactoryPresentation.boardColumnOrder.filter { id in
-                                filteredCards.contains(where: { $0.column == id })
+                        let filtering = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !selectedState.isEmpty || !selectedAgent.isEmpty
+                        if filtering {
+                            JarvisInsightsCard(title: jarvisInsightsText(.searchResults, language)) {
+                                if filteredCards.isEmpty { Text(copy.text(.noSearchResults)).foregroundStyle(.secondary) }
+                                boardRows(filteredCards.map(\.card))
                             }
-                            ForEach(visibleColumns, id: \.self) { column in
-                                columnSection(column)
-                                    .id(column)
+                        } else {
+                            let needs = filteredCards.filter { $0.column == .needsDan }.map(\.card)
+                            JarvisInsightsCard(title: jarvisInsightsText(.needsYou, language)) {
+                                if needs.isEmpty {
+                                    Text(jarvisInsightsText(.noReview, language)).foregroundStyle(.secondary)
+                                } else {
+                                    HStack(alignment: .firstTextBaseline) {
+                                        Text("\(needs.count)").font(.largeTitle.bold()).foregroundStyle(JarvisDesignTokens.primaryAccent)
+                                        Text(jarvisInsightsText(.awaitingReview, language)).font(.subheadline).foregroundStyle(.secondary)
+                                    }
+                                    boardRows(needs)
+                                }
+                            }
+                            .id(FactoryBoardColumnID.needsDan)
+                            let columns = JarvisFactoryPresentation.boardColumnOrder.filter { id in
+                                id != .needsDan && filteredCards.contains(where: { $0.column == id })
+                            }
+                            if !columns.isEmpty {
+                                JarvisInsightsCard(title: copy.text(.pipeline)) {
+                                    ForEach(columns, id: \.self) { column in columnSection(column).id(column) }
+                                }
                             }
                         }
                     }
@@ -463,48 +442,30 @@ struct JarvisFactoryArea: View {
     private func columnSection(_ id: FactoryBoardColumnID) -> some View {
         let cards = filteredCards.filter { $0.column == id }.map(\.card)
         let expanded = !collapsedColumns.contains(id)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
-            JarvisLabelledButton(
-                title: "\(copy.column(id)) \(JarvisNumberFormat.compact(cards.count, language: language))",
-                trailingSystemImage: expanded ? "chevron.down" : "chevron.right",
-                identifier: "factory.column.\(id.rawValue)",
-                isFullWidth: true,
-                isLeading: true,
-                isEmphasised: id == .inReview,
-                accessibilityTitle: copy.column(id),
-                accessibilityValue: copy.text(expanded ? .expanded : .collapsed)
-            ) {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                    if expanded { collapsedColumns.insert(id) } else { collapsedColumns.remove(id) }
-                }
+        return DisclosureGroup(isExpanded: Binding(
+            get: { expanded },
+            set: { if $0 { collapsedColumns.remove(id) } else { collapsedColumns.insert(id) } }
+        )) {
+            boardRows(cards)
+        } label: {
+            HStack {
+                Text(copy.column(id)).font(.headline)
+                Spacer()
+                Text("\(cards.count)").foregroundStyle(.secondary)
             }
-            }
-            if expanded {
-                VStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
-                    ForEach(cards) { card in
-                        JarvisFactoryBoardRow(card: card, copy: copy) {
-                            guard let taskID = card.task?.id else { return }
-                            selectedTaskID = taskID
-                            taskPresented = false
-                            Task { @MainActor in
-                                await Task.yield()
-                                taskPresented = true
-                            }
-                        }
-                        .padding(JarvisDesignTokens.factoryRowSpacing * 1.5)
-                        .background(
-                            JarvisDesignTokens.glassSolid,
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
-                        )
-                    }
-                }
-                .padding(.leading, 16)
-                .padding(.top, JarvisDesignTokens.factoryRowSpacing)
+            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .accessibilityIdentifier("factory.column.\(id.rawValue)")
+        }
+        .tint(JarvisDesignTokens.primaryAccent)
+    }
+
+    private func boardRows(_ cards: [FactoryBoardCard]) -> some View {
+        ForEach(cards) { card in
+            Divider()
+            JarvisFactoryBoardRow(card: card, copy: copy) {
+                guard let taskID = card.task?.id else { return }
+                selectedTaskID = taskID
+                taskPresented = true
             }
         }
     }
@@ -524,13 +485,6 @@ struct JarvisFactoryArea: View {
                         action: { Task { await refresh() } }
                     )
                 }
-                JarvisPageHeadline(phrase: JarvisFactoryPagePhrase.releases(
-                    releaseView,
-                    projectName: project?.name ?? releaseView.project.name,
-                    language: language
-                ))
-                .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
-                .padding(.top, JarvisDesignTokens.factoryRowSpacing)
                 JarvisFactoryReleaseListView(
                     releaseView: releaseView,
                     language: language,
@@ -764,27 +718,9 @@ struct FactoryLoadingView: View {
                         action: retry
                     )
                 }
-                if releases {
-                    JarvisSectionHeadline(copy.text(.releases))
-                    if retry == nil {
-                        JarvisLoadingView(title: copy.text(.loadingReleases), size: .inline)
-                    }
-                } else {
-                    JarvisPageHeroCard(title: copy.text(.pipeline)) {
-                        EmptyView()
-                    } content: {
-                        JarvisPageStatGrid(
-                            stats: [
-                                JarvisPageStat(id: "needs", value: nil, label: copy.text(.needsDan), systemImage: "bell", tint: JarvisDesignTokens.factoryAccent, isLoading: retry == nil),
-                                JarvisPageStat(id: "running", value: nil, label: copy.text(.running), systemImage: "play.circle", tint: JarvisDesignTokens.factoryAccent, isLoading: retry == nil),
-                                JarvisPageStat(id: "review", value: nil, label: copy.text(.inReview), systemImage: "checkmark.circle", tint: JarvisDesignTokens.factorySecondaryAccent, isLoading: retry == nil),
-                                JarvisPageStat(id: "failed", value: nil, label: copy.text(.failed), systemImage: "xmark.circle", tint: .red, isLoading: retry == nil),
-                            ],
-                            language: copy.language
-                        )
-                    }
-                    ForEach(JarvisFactoryPresentation.boardColumnOrder, id: \.self) { column in
-                        JarvisSectionHeadline(copy.column(column))
+                if retry == nil {
+                    JarvisInsightsCard(title: releases ? copy.text(.releases) : jarvisInsightsText(.needsYou, copy.language)) {
+                        JarvisLoadingView(title: copy.text(releases ? .loadingReleases : .loadingTasks), size: .inline)
                     }
                 }
             }

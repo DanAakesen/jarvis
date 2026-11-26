@@ -35,12 +35,30 @@ struct JarvisInsightsCard<Content: View>: View {
                     if let accessory { accessory }
                 }
             }
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-                content
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(JarvisPageHeaderMetrics.heroInset)
+        .jarvisDashboardSurface()
+    }
+}
+
+/// A secondary section keeps its disclosure and content on one dashboard surface.
+struct JarvisInsightsDisclosure<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        JarvisInsightsCard {
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+                    content()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Text(title).font(.headline).accessibilityAddTraits(.isHeader)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(JarvisPageHeaderMetrics.heroInset)
-            .jarvisDashboardSurface()
+            .tint(JarvisDesignTokens.primaryAccent)
         }
     }
 }

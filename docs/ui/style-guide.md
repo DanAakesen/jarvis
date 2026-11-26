@@ -58,6 +58,8 @@ Semantic colours (**Token**, `styles.css`):
 
 ## 3. Glass and surfaces
 
+**Card headings.** Put the page title in the page header and each section title inside its card. A collapsed card uses its title as the disclosure label.
+
 **Native material ownership.** Settings → General → Appearance has one Gradient, Frost and Glass slider for all app-owned iPhone and Watch surfaces. Use the shared card and control components, backed by `JarvisMaterialSurface` and `JarvisMaterialSettings`. Card glow sets the upper-left highlight for every dashboard card, including Sleep. It follows Primary by default, or Secondary or a custom colour. A role can override its base tint. The renderer alone sets wash strength, backdrop frosting and lens strength. Reduce Transparency uses a solid surface. System-owned menus, keyboard and widget chrome follow the OS.
 
 - **Decision (owner-approved Notes direction, 15 Nov):** every action button is **neutral dark smoked

@@ -67,7 +67,7 @@ When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal lef
 
 ### Proactive
 
-The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** on the main iPhone Settings page controls the background reviews; it defaults to off. Status shows whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
+The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** in iPhone Settings and Proactive controls the background reviews; it defaults to off. Status shows whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
 
 ### Memory vs Vault Knowledge
 

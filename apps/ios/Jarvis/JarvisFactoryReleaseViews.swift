@@ -19,7 +19,7 @@ struct JarvisFactoryReleaseListView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
+            JarvisInsightsCard(title: copy.text(.releases)) {
                 if releases.isEmpty {
                     Text(copy.text(
                         searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

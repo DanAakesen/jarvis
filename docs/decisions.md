@@ -2,6 +2,10 @@
 
 Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for what to do next. Merged code and offline fixtures are not live provider or physical-device acceptance.
 
+## 2026-11-26 · iPhone information cards
+
+Factory leads with decisions, Usage with spend, Status with check evidence and Proactive with findings. Secondary detail expands in place. Keep the page title in the header and section titles inside their cards. Proactive preferences are editable where their effects are visible.
+
 ## Standing rules
 
 | Date and source | Rule |

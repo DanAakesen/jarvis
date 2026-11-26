@@ -22,6 +22,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
+The combined release candidate includes the four approved iPhone pages and the post-137 device fixes. Verify inline Proactive saves and retry, grouped Status evidence, Factory search and period-based costs on iPhone.
+
 Home composer folding and reopening passed on build 135. On 137, recheck the plus-menu icon colour, the iPhone Voice speaker control and scroll edges in short and long Voice panels. On the next build, compare speakerphone volume with the receiver and a headset. Check centre swipes, expansion and a full-day chart on iPhone. Dan confirmed previous, next, close and reopening a session window from **+ → Windows** on iPhone.
 
 1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), test the daily core in Chat and Voice: check project status and the issue-to-worker flow for approved work; save, find and rename a note and check its iPhone folder without refreshing; create a task, check its reminder, then complete it; check workout and lift readback in Danish and English. When logging food, save one meal and verify that it counts once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
@@ -64,7 +66,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 ## Phase task tracking
 
-Next available P15 task ID: `P15-213`. Check GitHub issues and Git history before assigning it.
+Next available P15 task ID: `P15-214`. Check GitHub issues and Git history before assigning it.
 
 Use the table for active numbered work. `Complete` means task delivery, not physical acceptance. Keep any remaining device checks in the backlog above; completed tasks are in GitHub and Git history.
 
