@@ -334,6 +334,7 @@ private final class JarvisGateModel: ObservableObject {
 
         do {
             _ = try await client.createOwnerSession()
+            JarvisComposition.setAccountAccessSuspended(false)
             watchRevocationNotice = nil
             JarvisWatchBridge.shared.configure(client: client)
             await JarvisAppCache.clear()
@@ -352,9 +353,11 @@ private final class JarvisGateModel: ObservableObject {
     func signOut() async {
         guard !Self.isNavigationFixture, !isSigningOut else { return }
         isSigningOut = true
+        JarvisComposition.setAccountAccessSuspended(true)
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()
+        await CarScheduleActivityAttributes.stopTracking()
         let watchRevoked = await JarvisWatchBridge.shared.disconnect()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
@@ -420,6 +423,7 @@ private final class JarvisGateModel: ObservableObject {
             isLocked: true
         )
         if decision == .signIn {
+            JarvisComposition.setAccountAccessSuspended(true)
             presentation = .lock(.signedOut)
             Task { await JarvisWatchBridge.shared.disconnect() }
         }
