@@ -10,9 +10,9 @@ concurrency metadata, not newly discovered source columns or imported values.
 Existing IDs, aliases, nutrients and provenance remain unchanged. Rollback
 refuses used revisions, clears and audit evidence for the new connector tools.
 
-Migration 0047 adds attempt, deadline and error-code fields to that inbox. When enabled, the SQL processor writes the mapped health, ingestion and sync tables atomically with the processed inbox receipt under the owner lock. It preserves session identities and refuses incompatible lineage.
+Migration 0046 adds target-only `daily.health_upload_capabilities` and `daily.health_upload_inbox`. The inbox keeps original accepted bytes and owner/session/checksum receipts separate from the `health_ingestions` and `health_raw_objects` tables. No legacy capability, source record or secret is seeded; rollback refuses retained inbox or capability rows. See [bounds and retention](health-ingestion.md#bounds-and-raw-retention).
 
-P12-04 migration 0046 adds **new target-only** `daily.health_upload_capabilities` and `daily.health_upload_inbox`, not source-import mappings. The existing backend stores original accepted bytes and owner/session/checksum receipts in SQL; these are distinct from the historical `health_ingestions` / `health_raw_objects` ledger. #720 owns processing into mapped domain tables. No legacy capability, source record or secret is seeded; rollback refuses retained inbox/capability evidence. [Bounds and retention](health-ingestion.md#bounds-and-raw-retention).
+Migrations 0047 and 0060 add inbox retry fields and the in-flight processing state. The [SQL worker](../../../apps/backend/src/health/health/README.md) writes mapped health, ingestion and sync rows atomically with the processed inbox receipt under the owner lock. It preserves session identities and rejects conflicting lineage.
 
 - Migration `0041_daily_owner_schema.sql` creates empty tables in a separate `daily` SQL schema. No personal seed DML, import, device/login tables, route/tool registration or Daily activation.
 - Every row requires server-resolved `owner_object_id`, even for formerly global source records. Source `owner_email` keys map to that owner, not a client email. The mapping does not expose arbitrary table, column, SQL or caller-owner selection.

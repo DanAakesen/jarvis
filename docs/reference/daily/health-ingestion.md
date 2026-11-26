@@ -69,4 +69,4 @@ Issue is idempotent for the retained handle; revoked records never reactivate. R
 
 For auth, app composition and migration changes, run `npm test --workspace @jarvis/backend -- src/auth/auth.test.ts src/app.test.ts src/database/migrations.test.ts`. [Database CI](../../../.github/workflows/database-ci.yml) uses disposable loopback SQL Server. These checks do not establish end-to-end upload or processing acceptance. Never point them at production.
 
-The dedicated host and Blob/Queue design was withdrawn. The standalone host/recovery and Blob/Queue adapters are outside production wiring. Their emulator/regression tests are not SQL acceptance evidence. No old `DAILY_HEALTH_*` flag activates the new path.
+Production does not wire the standalone host, recovery or Blob/Queue adapters. `DAILY_HEALTH_*` flags do not activate the SQL path.

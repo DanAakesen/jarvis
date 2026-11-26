@@ -53,10 +53,11 @@ Failure or cancellation rolls back the transaction; startup does not listen.
 Never edit, remove or reorder a migration that has been applied. Correct it with
 a new numbered migration. Never manually edit the ledger. Back up before a
 production data change and describe compatibility/restore handling in its PR.
-Startup applies forward SQL only; it never performs automatic production down
-migrations. CI proves every down script against SQL Server. A production revert
-needs a backup and Dan's approval first, and the backend revision that expects
-the reverted schema must not be running.
+Startup applies forward SQL only. Offline tests check that each reverse batch
+exists and can be read. SQL Server CI exercises forward migrations and database
+contracts, not every rollback. A production revert needs a backup and Dan's
+approval first, and the backend revision that expects the reverted schema must
+not be running.
 
 `setup/*.sql` contains idempotent, non-ledger setup batches that run after the
 numbered migrations commit. For example, P7-13's `setup/0016_long_term_memory.sql`
