@@ -1,6 +1,6 @@
 # Jarvis design direction
 
-This page owns composition and behaviour. See the [style guide](docs/ui/style-guide.md) for appearance and shared controls, the [UI map](ui.md) for screens and code, and the [plan](PLAN.md) for device acceptance.
+Composition and behaviour. See the [style guide](docs/ui/style-guide.md) for appearance and controls and the [UI map](ui.md) for screens and code.
 
 ## Shared control geometry
 
@@ -15,7 +15,7 @@ Use the shared orb and network, not a screen-specific effect. Chat, Voice and th
 ## Chat
 
 - **iPhone Home and Chat composers.** At rest, the draft and controls share one row. Focus moves the editor above the controls. Dismissing the keyboard folds the draft back to one line. Dictation keeps the waveform visible, and Reduce Motion skips the transition.
-- **Turn first.** Keep draft edits local to the composer; typing should not re-layout the transcript. On return from the background, show the active reply or the saved answer, without a second send. Follow the latest content when already at the end. Reading earlier text pauses following; show **Jump to latest**, and never pull an exact notification target away from the reader. A queued typed turn during Voice is still one message, not a second speculative answer.
+- **Turn first.** Keep draft edits local so typing doesn't re-layout the transcript. On return from the background, show the active or saved reply without a second send. Follow only at the end; show **Jump to latest** when reading back. A queued typed turn during Voice is still one message.
 - **Follow Voice without replaying it.** iPhone Chat displays the current Voice state when relevant and follows new Voice transcript/reply content using the same follow-latest rules. Show real work rather than a lingering Speaking label.
 - **Make status truthful.** Name a known step. Don't infer an error from a slow stream or infer success from a click. Use the shared failure sentence; distinguish a failed tool, an interrupted response and a write that may have completed.
 - **Compact tool tree.** Use an icon, an action label and inline disclosure for grouped calls. While running, trace a moving highlight around the icon outline and shimmer the label; don't pulse the icon. A group shows the worst child state: running while any child runs, then failure before refusal, then success only if every child succeeded. Child status must remain readable without colour or motion. Omit counts and filler.
@@ -66,6 +66,10 @@ Circular complications draw their symbols and task count on a clear background. 
 - **Health** stacks Training, Steps, Sleep and Nutrition. Each card owns its period. All shows synced history by month. Body trend filters readings by metric and period, including All. Lift and workout sheets open at content height, with weight, reps and sets together or session types in a compact grid. Training shows its selected period once and lists walks separately when present. Tap a training day for sessions and expand Saved max lifts for personal records. Nutrition uses the same calorie allowance as Chat. Scan meal attaches a photo to the Chat draft without sending.
 - **Settings** shows saved values and actionable errors. Appearance shares the Gradient, Frost and Glass finish; per-card overrides change colour only. Keep the sign-in and lock cover in effect during a pending response.
 
+## CarPlay
+
+Use Apple's native list and voice templates. Image cards switch filters and notes expand in place. Talk shows the actual call state and animates unless Reduce Motion is on. End returns to the dashboard. CarPlay sets layout and text limits.
+
 ## Acceptance
 
-Source and simulator results do not establish [device acceptance](PLAN.md#next-steps-and-blockers). The CarPlay dashboard and active voice indicator use Apple templates.
+Source and simulator results do not establish [device acceptance](PLAN.md#next-steps-and-blockers).

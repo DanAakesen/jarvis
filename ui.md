@@ -46,4 +46,4 @@ Widgets and Live Activities are glanceable summaries and routes back into the re
 
 ## CarPlay
 
-CarPlay uses a native list with three coastal image cards for Schedule, Notes and Tasks. Tap a card to change its filter, or a note to expand it. Talk presents an animated voice indicator with the actual call state and native controls. End returns to the dashboard. Quick actions can call a number provided in an event’s location or track a scheduled event as a Live Activity. Event times come from Calendar. The voice Live Activity shows the current call state on the small CarPlay surface. The system determines layout and text limits. [Apple capabilities](docs/ios/apple-capabilities.md)
+`JarvisCarPlayScene` shows Schedule (Calendar and due tasks), Notes (pinned or recent), Tasks (open work and personal tasks), and Talk. Event actions can call a number from the event location or track the event in a Live Activity. The Voice Live Activity shows the call state on the small CarPlay surface. See [dashboard behaviour](DESIGN.md#carplay) and [Apple capabilities](docs/ios/apple-capabilities.md).
