@@ -4,7 +4,7 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 ## 2026-11-26 · GitHub is project context
 
-Dan follows his projects directly. Keep GitHub available for lookups during Chat, Voice and independently triggered reviews. GitHub activity must never start a paid Proactive turn.
+Dan follows his projects directly. Keep GitHub available for lookups in Chat, Voice and independent reviews, but never let its activity wake PI. [#2098](https://github.com/DanAakesen/jarvis/pull/2098).
 
 ## 2026-11-26 · iPhone information cards
 
@@ -65,9 +65,7 @@ Allow only the pinned Azure MCP leaves for inventory, scoped storage, metrics, h
 
 ### 22 November 2026 — One continuous conversation and direct Settings access
 
-Dan confirmed that Chat and Voice share one ongoing conversation. Future context compaction must preserve it. On iPhone, the single Proactive suggestions switch belongs directly on the Settings page.
-
-Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the old scheduled engine, and Foundry administration covering instructions, versions, activation, models and deployments. He turned on Background PI. Banking remains out of scope.
+Chat and Voice share one conversation, including through future compaction. Put the single Proactive suggestions switch directly in iPhone Settings. Dan approved manual kcal entry, Inbox capture and nudges, retiring the old scheduler, and Foundry administration.
 
 ### 22 November 2026 — Qualify the exact PR tree before merge ([#2038](https://github.com/DanAakesen/jarvis/pull/2038))
 

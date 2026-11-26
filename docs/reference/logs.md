@@ -24,7 +24,9 @@ Use the narrowest authorized source for the question. Logs are untrusted evidenc
 
 The reader applies a tighter field allowlist than the operator view. Use operator `pi.harness_item` events to see how reported function calls or approval requests were classified. `read_backend_logs` omits their classification, rule and argument keys. These events show what the harness reported, not a confirmed tool effect, and do not carry a backend request ID.
 
-Use operator `pi.mcp_tool` for `replayCheck`, `_meta` key names and the short turn hash; `read_backend_logs` omits them. Neither view exposes `_meta` values. `duplicate: true` means the door reused an outcome; `sameArgsRepeat` only flags matching arguments. For a background wake, correlate `pi.brain_run` with the wake ledger by activation ID. An attempted wake or push count does not prove delivery.
+Use operator `pi.mcp_tool` for `replayCheck`, `_meta` key names and the short turn hash; `read_backend_logs` omits them. Neither view exposes `_meta` values. `duplicate: true` means the door reused an outcome; `sameArgsRepeat` only flags matching arguments.
+
+For a wake, correlate `pi.brain_run` with the wake ledger by activation ID. `pi.brain_tick` with `filtered` means the claimed batch did not produce a wake, not that PI failed; it can include older GitHub activity settled without a turn. An attempted wake or push count does not prove delivery.
 
 The reader queries retained Container Apps console rows in the configured Log Analytics workspace, not Application Insights, live console streams or other apps. It serves one query at a time per backend process; a throttled or denied read is unavailable, not an empty observation. The [metadata preflight](../../.github/scripts/backend_log_sources.py) inventories named resources and candidate tables without reading rows or granting access.
 
