@@ -71,7 +71,7 @@ When Dan logs food, answer for the current Copenhagen day: kcal logged, kcal lef
 
 ### Proactive
 
-The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a goal, not verified weather/travel automation. GitHub events, failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** in iPhone Settings and Proactive controls the same background reviews and defaults to off. Save preferences where their effects are visible; preserve edits on conflict or failure. Show whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
+The brain should decide whether a change needs attention, explain why now, and open the exact message with its evidence and follow-up context. Example: heavy snow when the calendar shows a two-hour drive. That is a goal, not verified weather/travel automation. Jarvis can consult GitHub during an existing turn. GitHub activity cannot start a background turn. Failed reminders and calendar overlaps follow their source switches. **Proactive suggestions** in iPhone Settings and Proactive controls the same background reviews and defaults to off. Save preferences where their effects are visible; preserve edits on conflict or failure. Show whether a review ran, skipped or failed. Exact-time reminders use their own delivery path.
 
 ### Memory vs Vault Knowledge
 

@@ -7,7 +7,7 @@ import { createMemoryProactiveStore } from '../../proactive/store.js';
 import { createPiArea } from '../area.js';
 import { ESTIMATED_PROMPT_TOKENS } from '../pricing.js';
 import { createMemoryPiStore } from '../store.js';
-import { memoryConversations, memoryVault, scriptedGateway, type ScriptedWake } from './brain.testkit.js';
+import { memoryConversations, memoryVault, scriptedGateway } from './brain.testkit.js';
 import { createBrainComms } from './comms.js';
 import { createDecisionLog } from './decision-log.js';
 import { MAX_WAKES_PER_DAY, MIN_WAKE_GAP_MS, createBrain, type BrainOptions } from './runner.js';
@@ -59,19 +59,19 @@ function setup(options: {
   return { clock, now, queue, piStore, proactive, vault, conversations, pushes, comms, gateway, brain, enqueue, advance, tick, log, ready };
 }
 
-const failedDeploy: ProactiveEventInput = {
-  source: 'github', kind: 'workflow_run.failure', dedupeKey: 'github:workflow_run:DanAakesen/jarvis:1:failure',
-  summary: 'Workflow "Deploy" failure on DanAakesen/jarvis (main)', detail: { repository: 'DanAakesen/jarvis', branch: 'main' },
+const failedReminder: ProactiveEventInput = {
+  source: 'reminder', kind: 'reminder.delivery_failed', dedupeKey: 'reminder:1:failed',
+  summary: 'Reminder delivery failed', detail: { evidenceSources: ['todos'] },
   occurredAt: new Date('2026-11-16T09:58:00Z'),
 };
-const event = (n: number, source = 'github', occurredAt = '2026-11-16T09:58:00Z'): ProactiveEventInput => ({
-  source, kind: 'workflow_run.success', dedupeKey: `k:${n}`, summary: `Workflow ${n} success`, occurredAt: new Date(occurredAt),
+const event = (n: number, source = 'calendar', occurredAt = '2026-11-16T09:58:00Z'): ProactiveEventInput => ({
+  source, kind: 'event.changed', dedupeKey: `k:${n}`, summary: `Meeting ${n} changed`, occurredAt: new Date(occurredAt),
 });
 
 describe('the brain loop: exact mechanics around the model\'s decision', () => {
   it('does nothing while the owner\'s test switch is off: no claim, no model call, no spend', async () => {
     const t = setup({ enabled: false });
-    await t.enqueue(failedDeploy);
+    await t.enqueue(failedReminder);
     expect((await t.tick()).outcome).toBe('off');
     expect(t.gateway.wakes).toEqual([]);
     expect(await t.queue.hasWork(t.now())).toBe(true);
@@ -79,17 +79,17 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
 
   it('gives one wake every event that arrived, then settles them and writes the decision with its facts', async () => {
     const t = setup({ decide: async ({ run }) => {
-      run.wrote.push('PI/Notes/Deploys.md');
-      return { text: 'Deploy of main failed twice; told Dan once.', tools: [{ tool: 'get_work_status', outcome: 'ok' }, { tool: 'ci_log', outcome: 'refused' }] };
+      run.wrote.push('PI/Notes/Reminders.md');
+      return { text: 'Reminder delivery failed twice; told Dan once.', tools: [{ tool: 'get_work_status', outcome: 'ok' }, { tool: 'ci_log', outcome: 'refused' }] };
     } });
-    await t.enqueue(failedDeploy);
+    await t.enqueue(failedReminder);
     await t.enqueue(event(2));
     const result = await t.tick();
     expect(result).toMatchObject({ outcome: 'done', claimed: 2 });
     expect(t.gateway.wakes).toHaveLength(1);
     const body = t.gateway.wakes[0]!.body;
-    expect(body).toContain('github:workflow_run.failure');
-    expect(body).toContain('Workflow 2 success');
+    expect(body).toContain('reminder:reminder.delivery_failed');
+    expect(body).toContain('Meeting 2 changed');
     expect(body).toContain('not a message from Dan');
     expect(body).toContain('data about what happened');
     expect(body).toContain('Proactive delivery policy');
@@ -97,18 +97,18 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(await t.queue.hasWork(t.now())).toBe(false);
     const log = t.log();
     expect(log).toContain('# PI decision log 2026-11-16');
-    expect(log).toMatch(/github:workflow_run\.failure: Workflow "Deploy" failure/u);
+    expect(log).toMatch(/reminder:reminder\.delivery_failed: Reminder delivery failed/u);
     expect(log).toContain('get_work_status 1');
     expect(log).toContain('ci_log 0 ok, 1 not ok');
     expect(log).toContain('Told Dan: nothing.');
-    expect(log).toContain('Wrote: PI/Notes/Deploys.md.');
-    expect(log).toContain('Deploy of main failed twice; told Dan once.');
+    expect(log).toContain('Wrote: PI/Notes/Reminders.md.');
+    expect(log).toContain('Reminder delivery failed twice; told Dan once.');
     expect(log).toContain(`Cost: ${t.gateway.wakes[0]!.estimatedInputTokens} in (0 cached), 300 out`);
   });
 
   it('records each wake in the proactive ledger, so the 100 DKK stop counts every one', async () => {
     const t = setup();
-    await t.enqueue(failedDeploy);
+    await t.enqueue(failedReminder);
     await t.tick();
     expect(await t.proactive.spend.monthTotal('2026-11')).toBeGreaterThan(0);
   });
@@ -180,7 +180,7 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     const t = setup({ start: '2026-11-16T05:30:00Z', afterScheduledWake: review });
     await t.ready;
     await t.proactive.settings.patch({ backgroundTurnsPerDay: 1 });
-    await t.enqueue(event(1, 'github', t.now().toISOString()));
+    await t.enqueue(event(1, 'calendar', t.now().toISOString()));
     expect((await t.tick()).outcome).toBe('done');
 
     for (const [slot, at, reason] of [
@@ -202,7 +202,7 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
       await t.comms.send({ text: 'The Deploy of main failed. The PI smoke check streaming is the cause.' }, run, signal());
       return { text: 'Told Dan about the failed deploy.' };
     } });
-    await t.enqueue(failedDeploy);
+    await t.enqueue(failedReminder);
     await t.tick();
     expect(t.pushes).toEqual([{
       sessionId: '7',
@@ -223,8 +223,8 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     t.advance(MIN_WAKE_GAP_MS);
     expect((await t.tick()).outcome).toBe('done');
     expect(t.gateway.wakes).toHaveLength(2);
-    expect(t.gateway.wakes[1]!.body).toContain('Workflow 2 success');
-    expect(t.gateway.wakes[1]!.body).not.toContain('Workflow 1 success');
+    expect(t.gateway.wakes[1]!.body).toContain('Meeting 2 changed');
+    expect(t.gateway.wakes[1]!.body).not.toContain('Meeting 1 changed');
   });
 
   it('caps each wake at 30 events and leaves the rest for the next one', async () => {
@@ -268,11 +268,11 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
   ])('resumes an untouched capped queue at Copenhagen midnight after %s', async (start, midnight) => {
     const t = setup({ start });
     for (let n = 0; n < MAX_WAKES_PER_DAY; n += 1) {
-      await t.enqueue(event(n, 'github', t.now().toISOString()));
+      await t.enqueue(event(n, 'calendar', t.now().toISOString()));
       expect((await t.tick()).outcome).toBe('done');
       t.advance(MIN_WAKE_GAP_MS);
     }
-    await t.enqueue(event(99, 'github', t.now().toISOString()));
+    await t.enqueue(event(99, 'calendar', t.now().toISOString()));
     expect((await t.tick()).outcome).toBe('daily_cap');
     expect(t.brain.nextDueAt).toEqual(new Date(midnight));
     t.clock.t = new Date(Date.parse(midnight) - 1);
@@ -325,7 +325,7 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect((await t.tick()).outcome).toBe('budget_exhausted');
     expect(t.pushes).toHaveLength(8);
     t.advance(24 * 60 * 60_000);
-    await t.enqueue(event(2, 'github', '2026-11-17T09:00:00Z'));
+    await t.enqueue(event(2, 'calendar', '2026-11-17T09:00:00Z'));
     await t.tick();
     expect(t.pushes).toHaveLength(9);
     expect(t.pushes[8]!.text).toContain('proactive budget for this month');
@@ -352,8 +352,8 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
 
   it('settles events from a disabled source before the PI wake sees their facts', async () => {
     const t = setup();
-    await t.proactive.settings.patch({ sources: { factory: false } });
-    await t.enqueue(failedDeploy);
+    await t.proactive.settings.patch({ sources: { todos: false } });
+    await t.enqueue(failedReminder);
     expect((await t.tick()).outcome).toBe('filtered');
     expect(t.gateway.wakes).toEqual([]);
     expect(await t.queue.hasWork(t.now())).toBe(false);
@@ -362,20 +362,20 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
   it('retries a failed wake later on the same events, bills what was spent, and logs the failure', async () => {
     let attempt = 0;
     const t = setup({ decide: async () => { attempt += 1; return attempt === 1 ? { text: '', fail: true } : { text: 'Handled.' }; } });
-    await t.enqueue(failedDeploy);
+    await t.enqueue(failedReminder);
     expect((await t.tick()).outcome).toBe('failed');
     expect(await t.proactive.spend.monthTotal('2026-11')).toBeGreaterThan(0);
     expect(t.log()).toContain('failed (pi_failed)');
     t.advance(20 * 60_000);
     expect((await t.tick()).outcome).toBe('done');
-    expect(t.gateway.wakes[1]!.body).toContain('workflow_run.failure');
+    expect(t.gateway.wakes[1]!.body).toContain('reminder.delivery_failed');
     expect(await t.queue.hasWork(t.now())).toBe(false);
   });
 
   it('keeps a decision that cannot reach the vault yet and writes it on a later tick', async () => {
     let down = true;
     const t = setup({ failVault: () => down });
-    await t.enqueue(failedDeploy);
+    await t.enqueue(failedReminder);
     await t.tick();
     expect(t.brain.pendingLogs).toBe(1);
     expect(t.log()).toBe('');
@@ -384,8 +384,8 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     await t.enqueue(event(2));
     await t.tick();
     expect(t.brain.pendingLogs).toBe(0);
-    expect(t.log()).toContain('workflow_run.failure');
-    expect(t.log()).toContain('Workflow 2 success');
+    expect(t.log()).toContain('reminder.delivery_failed');
+    expect(t.log()).toContain('Meeting 2 changed');
   });
 
   it('drops events that went stale and skips a lone timer review at night', async () => {
@@ -562,7 +562,6 @@ describe('seeing the brain: what it logs and reports about itself', () => {
   });
 
   it.each([
-    ['github', 'release.published', {}],
     ['reminder', 'reminder.delivery_failed', { evidenceSources: ['todos'] }],
     ['calendar', 'calendar.clash', {}],
   ])('attributes a wake that only a %s signal caused to that source', async (source, kind, detail) => {
@@ -572,12 +571,13 @@ describe('seeing the brain: what it logs and reports about itself', () => {
     expect(t.gateway.wakes[0]!.body).toContain(`Activation: type=event source=${source}.`);
   });
 
-  it('calls a wake that two kinds of signal caused mixed', async () => {
+  it('excludes a queued GitHub event from the attribution and evidence of a calendar wake', async () => {
     const t = setup();
     await t.enqueue({ source: 'github', kind: 'release.published', dedupeKey: 'github:1', summary: 'A release', occurredAt: t.now() });
     await t.enqueue({ source: 'calendar', kind: 'calendar.clash', dedupeKey: 'calendar:1', summary: 'A clash', occurredAt: t.now() });
     expect((await t.tick()).outcome).toBe('done');
-    expect(t.gateway.wakes[0]!.body).toContain('Activation: type=event source=mixed.');
+    expect(t.gateway.wakes[0]!.body).toContain('Activation: type=event source=calendar.');
+    expect(t.gateway.wakes[0]!.body).not.toContain('release.published');
   });
 });
 
@@ -594,46 +594,17 @@ describe('replaying recorded past events through the loop', () => {
     completedAt: run.completedAt, deploymentWorkflow: run.name === 'Deploy',
   }, new Date(run.completedAt))!);
 
-  it('hands every recorded event to exactly one wake, within the daily and spacing limits, and logs every wake', async () => {
-    const decide = async (wake: ScriptedWake) => {
-      // A stand-in for judgement: speak about a failed Deploy of main, stay quiet about the rest.
-      if (/workflow_run\.failure.*Deploy/u.test(wake.body) && /\(main\)/u.test(wake.body)) {
-        await t.comms.send({ text: `A Deploy of main failed (wake ${wake.runId.slice(0, 8)}).` }, wake.run, signal());
-        return { text: 'Told Dan about a failed Deploy of main.', tools: [{ tool: 'get_work_status', outcome: 'ok' as const }] };
-      }
-      return { text: 'Routine results. Nothing for Dan.' };
-    };
-    const t = setup({ start: runs[0]!.completedAt, decide });
-    const seen = new Set<string>();
-    let next = 0;
-    const end = new Date(recorded.at(-1)!.occurredAt.getTime() + 3 * 60 * 60_000);
-    while (t.clock.t < end) {
-      while (next < recorded.length && recorded[next]!.occurredAt <= t.clock.t) {
-        await t.queue.enqueue(recorded[next]!, t.now());
-        t.brain.wake();
-        next += 1;
-      }
-      const result = await t.tick();
-      if (result.outcome === 'done' || result.outcome === 'failed') for (const wake of t.gateway.wakes.slice(seen.size)) seen.add(wake.runId);
-      t.advance(30_000);
+  it('settles the recorded GitHub backlog without spending a turn or sending a message', async () => {
+    const t = setup({ start: runs.at(-1)!.completedAt });
+    expect(recorded.length).toBeGreaterThan(MAX_WAKE_EVENTS);
+    for (const input of recorded) await t.enqueue(input);
+    while (await t.queue.hasWork(t.now())) {
+      expect((await t.tick()).outcome).toBe('filtered');
     }
-    expect(next).toBe(recorded.length);
-    // Nothing is left in the queue and no event went to two wakes.
-    expect(await t.queue.hasWork(t.now())).toBe(false);
-    const wakeBodies = t.gateway.wakes.map(({ body }) => body);
-    const dedupeRuns = runs.map((run) => `workflow_run.${run.conclusion}`);
-    expect(dedupeRuns.length).toBe(recorded.length);
-    const eventLines = wakeBodies.flatMap((body) => body.split('\n').filter((line) => line.startsWith('- ')));
-    expect(new Set(eventLines).size).toBe(eventLines.length);
-    expect(eventLines.length).toBeGreaterThan(0);
-    // Mechanics: batched, bounded, spaced.
-    expect(t.gateway.wakes.length).toBeLessThan(recorded.length);
-    expect(t.gateway.wakes.length).toBeLessThanOrEqual(MAX_WAKES_PER_DAY * 2);
-    // Every wake is in the decision log, and only a failed Deploy of main reached Dan.
-    expect((t.log().match(/^## /gmu) ?? []).length).toBe(t.gateway.wakes.length);
-    expect(t.pushes.length).toBeGreaterThan(0);
-    expect(t.pushes.every((push) => push.text.startsWith('A Deploy of main failed'))).toBe(true);
-    expect(t.conversations.messages.filter((message) => message.role === 'jarvis')).toHaveLength(t.pushes.length);
+    expect(t.gateway.wakes).toHaveLength(0);
+    expect(await t.queue.lastBatch()).toBeNull();
+    expect(await t.proactive.spend.monthTotal('2026-11')).toBe(0);
+    expect(t.pushes).toHaveLength(0);
   });
 
   it('turns the other recorded signal kinds into the same queue shape: alert and Worker result', () => {
@@ -665,6 +636,11 @@ it.each(replayCases)('replays $name with the expected outreach and wake count', 
     const before = t.pushes.length;
     for (let index = 0; index < batchSize; index += 1) {
       await t.enqueue({ ...input, occurredAt: t.now(), dedupeKey: `replay:${batch}:${index}` });
+    }
+    if (input.source === 'github') {
+      expect(await t.tick()).toMatchObject({ outcome: 'filtered', claimed: batchSize });
+      expect(t.gateway.wakes).toHaveLength(0);
+      continue;
     }
     expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: batchSize });
     expect(t.pushes.length - before).toBe(expected);

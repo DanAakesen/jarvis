@@ -2,6 +2,10 @@
 
 Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for what to do next. Merged code and offline fixtures are not live provider or physical-device acceptance.
 
+## 2026-11-26 · GitHub is project context
+
+Dan follows his projects directly. Keep GitHub available for lookups during Chat, Voice and independently triggered reviews. GitHub activity must never start a paid Proactive turn.
+
 ## 2026-11-26 · iPhone information cards
 
 Factory leads with decisions, Usage with spend, Status with checks and Proactive with findings. Put one title in the page header and one in each card; disclose secondary detail in place. Edit Proactive preferences beside their effects. [#2094](https://github.com/DanAakesen/jarvis/pull/2094).
@@ -107,7 +111,7 @@ Use only `find_tools` and `call_tool` for weather, calendar and reminders. Refre
 
 ### 22 November 2026 — Make brain work and follow-ups observable ([#2025](https://github.com/DanAakesen/jarvis/pull/2025), [#2019](https://github.com/DanAakesen/jarvis/pull/2019), [#2018](https://github.com/DanAakesen/jarvis/pull/2018), [#2014](https://github.com/DanAakesen/jarvis/pull/2014))
 
-Verified GitHub, failed-reminder and timed calendar events queue through source switches; code dedupes and the model judges interruption. Background PI defaults to off. Keep foreground and wake accounting separate, clean up only scratch conversations, and link a notification to its exact stored message. Feedback goes to the next otherwise due wake. [Architecture](architecture.md#proactive-wake-and-inbox-review) owns the active scheduler.
+Failed-reminder and timed calendar events queue through source switches; code dedupes and the model judges interruption. Background PI defaults to off. Keep foreground and wake accounting separate, clean up only scratch conversations, and link a notification to its exact stored message. Feedback goes to the next otherwise due wake. [Architecture](architecture.md#proactive-wake-and-inbox-review) owns the active scheduler.
 
 ### 21 November 2026 — Delegate the whole spoken request ([#2001](https://github.com/DanAakesen/jarvis/pull/2001), [#2000](https://github.com/DanAakesen/jarvis/pull/2000), [#1997](https://github.com/DanAakesen/jarvis/pull/1997), [#1993](https://github.com/DanAakesen/jarvis/pull/1993))
 

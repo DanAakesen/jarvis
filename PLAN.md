@@ -17,7 +17,7 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Factory, Usage, Status and Proactive layouts and the Health, Calendar, Home, Notes, Voice and theme fixes are in build 140, **not accepted on device**. |
 | TestFlight **140** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45771929167). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45770116851) verified the embedded Watch companion, not its installation or playback. |
 | Backend | [Deploy for P15-213](https://github.com/DanAakesen/jarvis/actions/runs/45768247841) succeeded, including PI provisioning and deterministic readiness. Live conversation acceptance was skipped. |
-| Background PI | The latest [recorded background turns](https://github.com/DanAakesen/jarvis/pull/2096) finished without requesting a push. Delivery is **not accepted on device**. |
+| Background PI | The latest [recorded background turns](https://github.com/DanAakesen/jarvis/pull/2096) finished without requesting a push. GitHub is context only in the backend implementation. Delivery is **not accepted on device**. |
 | CarPlay | Dan reported Apple granted **Voice Based Conversation** on 21 November. Capability activation, implementation and in-car acceptance have not been verified. |
 
 ### Next steps and blockers
