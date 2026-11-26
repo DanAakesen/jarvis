@@ -160,6 +160,12 @@ jobs:
           apps = Path(os.environ["RUNNER_TEMP"]) / "Jarvis.xcarchive/Products/Applications"
           phone_path, = apps.glob("*.app")
           watch_path, = (phone_path / "Watch").glob("*.app")
+          import subprocess
+          key = "com.apple.developer.carplay-voice-based-conversation"
+          signed = subprocess.check_output(["codesign", "-d", "--entitlements", "-", str(phone_path)])
+          profile = subprocess.check_output(["security", "cms", "-D", "-i", str(phone_path / "embedded.mobileprovision")])
+          if plistlib.loads(signed).get(key) is not True or plistlib.loads(profile)["Entitlements"].get(key) is not True:
+              raise SystemExit("CarPlay entitlement missing from the signed phone app or provisioning profile.")
           phone = plistlib.loads((phone_path / "Info.plist").read_bytes())
           watch = plistlib.loads((watch_path / "Info.plist").read_bytes())
           build = os.environ["GITHUB_RUN_NUMBER"]

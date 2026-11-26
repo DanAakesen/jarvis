@@ -46,4 +46,4 @@ Widgets and Live Activities are glanceable summaries and routes back into the re
 
 ## CarPlay
 
-No CarPlay scene in source; **not accepted on device**. See [Apple capabilities](docs/ios/apple-capabilities.md) for the grant and [PRODUCT.md](PRODUCT.md#carplay) for the voice-first requirement.
+CarPlay uses a native list with three coastal image cards for Schedule, Notes and Tasks. Tap a card to change its filter, or a note to expand it. Talk presents an animated voice indicator with the actual call state and native controls. End returns to the dashboard. The system determines layout and text limits. [Apple capabilities](docs/ios/apple-capabilities.md)
