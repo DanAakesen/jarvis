@@ -40,6 +40,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
     #if os(watchOS)
     private var captureRoute: Route?
     private var requestsVoiceProcessing = false
+    private var pcmBufferCount = 0
+
+    var convertedBuffers: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return pcmBufferCount
+    }
 
     var isVoiceProcessingEnabled: Bool {
         lock.lock()
@@ -123,6 +130,21 @@ final class VoiceAudioEngine: @unchecked Sendable {
             // Switch the stopped I/O graph before connecting the speaker or negotiating the microphone format.
             try engine.inputNode.setVoiceProcessingEnabled(true)
         }
+        #elseif os(iOS)
+        if mode == .voiceChat && !engine.inputNode.isVoiceProcessingEnabled {
+            // Chat mode without Voice I/O lowers the system playback level.
+            do {
+                try engine.inputNode.setVoiceProcessingEnabled(true)
+            } catch {
+                log.notice("Voice processing unavailable; continuing on the current audio route")
+            }
+        }
+        // Voice I/O can renegotiate the route. Pick speaker only at call start on the bare handset.
+        let session = AVAudioSession.sharedInstance()
+        if configureAudioSession && session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }) {
+            do { try session.overrideOutputAudioPort(.speaker) }
+            catch { log.notice("Built-in speaker override unavailable; using the active call route") }
+        }
         #endif
         if !hasPlaybackGraph {
             engine.attach(player)
@@ -136,7 +158,6 @@ final class VoiceAudioEngine: @unchecked Sendable {
         }
         #if os(watchOS)
         let converter: AVAudioConverter? = nil
-        let voiceProcessing = input.isVoiceProcessingEnabled
         #else
         guard let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
             throw VoiceAudioEngineError.captureUnavailable
@@ -146,9 +167,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         activeMode = mode
         self.converter = converter
         stats = CaptureStats()
-        #if os(watchOS)
-        stats.voiceProcessing = voiceProcessing
-        #endif
+        stats.voiceProcessing = input.isVoiceProcessingEnabled
         lock.unlock()
         // Use the negotiated format. A route change can change the hardware sample rate.
         input.installTap(onBus: 0, bufferSize: 1_024, format: nil) { [weak self] buffer, _ in
@@ -158,6 +177,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
             self.lock.lock()
             let continuation = self.captureContinuation
             let tolerate = self.activeTolerateDrops
+            #if os(watchOS)
+            if continuation != nil, !data.isEmpty { self.pcmBufferCount += 1 }
+            #endif
             self.lock.unlock()
             #if os(watchOS)
             if let result = continuation?.yield(data), case .dropped = result {
@@ -210,15 +232,15 @@ final class VoiceAudioEngine: @unchecked Sendable {
         return true
     }
 
-    func recoverRoute(attempt: Int) throws {
+    func recoverRoute(attempt: Int, usePlainAudio: Bool = false, forceRestart: Bool = false) throws {
         controlLock.lock()
         defer { controlLock.unlock() }
-        guard !engine.isRunning || captureRoute != Route() else { return }
-        if attempt > 1 { requestsVoiceProcessing = false }
+        guard forceRestart || !engine.isRunning || captureRoute != Route() else { return }
+        if attempt > 1 || usePlainAudio { requestsVoiceProcessing = false }
         // First rebuild against the route the OS has just activated. Reapplying the session
         // category here can cause another route-change notification during startup.
-        let mode: AVAudioSession.Mode = attempt >= 3 ? .default : activeMode
-        try restartInput(mode: mode, configureAudioSession: attempt > 1)
+        let mode: AVAudioSession.Mode = attempt >= 3 || usePlainAudio ? .default : activeMode
+        try restartInput(mode: mode, configureAudioSession: attempt > 1 || mode != activeMode)
     }
 
     #endif
@@ -291,8 +313,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private func sessionDescription(inputFormat: AVAudioFormat) -> String {
         let session = AVAudioSession.sharedInstance()
         let inputs = session.currentRoute.inputs.map { "\($0.portType.rawValue)" }.joined(separator: ",")
+        let outputs = session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
         let permission = AVAudioApplication.shared.recordPermission
-        return "category=\(session.category.rawValue) mode=\(session.mode.rawValue) input_available=\(session.isInputAvailable) route_inputs=[\(inputs)] hw_rate=\(Int(session.sampleRate)) format_channels=\(inputFormat.channelCount) format_rate=\(Int(inputFormat.sampleRate)) permission=\(permission.rawValue)"
+        return "category=\(session.category.rawValue) mode=\(session.mode.rawValue) input_available=\(session.isInputAvailable) route_inputs=[\(inputs)] route_outputs=[\(outputs)] output_volume=\(session.outputVolume) voice_processing=\(engine.inputNode.isVoiceProcessingEnabled) hw_rate=\(Int(session.sampleRate)) format_channels=\(inputFormat.channelCount) format_rate=\(Int(inputFormat.sampleRate)) permission=\(permission.rawValue)"
     }
 
     private func scheduleSilenceCheck(alternate: AVAudioSession.Mode, token: WatchCaptureGeneration.Token) {
@@ -440,12 +463,6 @@ final class VoiceAudioEngine: @unchecked Sendable {
         #endif
         try session.setActive(true)
         ownsActiveSession = true
-        #if os(iOS)
-        // Start on speaker when using the handset. Leave connected accessories on their system route.
-        if session.currentRoute.outputs.contains(where: { $0.portType == .builtInReceiver }) {
-            try? session.overrideOutputAudioPort(.speaker)
-        }
-        #endif
     }
 
     // Hardware formats can change after the engine starts (route or voice-processing changes); convert from the buffer's real format.

@@ -52,11 +52,13 @@ Semantic colours (**Token**, `styles.css`):
 
 - **Native appearance.** Settings → General → Appearance sets the primary (default `#FFB45C`) and secondary
   (default `#52DCFA`) on iPhone and Watch. Primary marks actions and the orb core. Secondary colours the network
-  and orb rim. Adapt both to their background. Use neutral ink for labels and independent colours for alerts.
+  and orb rim. The shared palette preserves the selected sRGB accent when contrast allows. It adjusts brightness before adding white. The Red preset is `#FF0000`. Use neutral ink for labels and independent colours for alerts.
 - **Decision:** light mode keeps the same states and layout. The page is warm cream, the network lines are deeper teal.
 - The web supports a per-user `--theme-accent` override; defaults above apply otherwise.
 
 ## 3. Glass and surfaces
+
+**Card headings.** Put the page title in the page header and each section title inside its card. A collapsed card uses its title as the disclosure label.
 
 **Native material ownership.** Settings → General → Appearance has one Gradient, Frost and Glass slider for all app-owned iPhone and Watch surfaces. Use the shared card and control components, backed by `JarvisMaterialSurface` and `JarvisMaterialSettings`. Card glow sets the upper-left highlight for every dashboard card, including Sleep. It follows Primary by default, or Secondary or a custom colour. A role can override its base tint. The renderer alone sets wash strength, backdrop frosting and lens strength. Reduce Transparency uses a solid surface. System-owned menus, keyboard and widget chrome follow the OS.
 

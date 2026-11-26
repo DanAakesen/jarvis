@@ -93,7 +93,15 @@ jobs:
           sleep 5; shot surface-home-dark
           run --screenshot-health-fixture
           sleep 3; shot calm-health-dark
+          for page in factory usage status proactive; do
+            run --ui-test-navigation --screenshot-screen="$page"
+            sleep 4; shot "page-$page-dark"
+          done
           xcrun simctl ui "$PHONE_ID" appearance light
+          for page in factory usage status proactive; do
+            run --ui-test-navigation --screenshot-screen="$page"
+            sleep 4; shot "page-$page-light"
+          done
           run --screenshot-settings-fixture
           sleep 3; shot calm-settings-light
           run --screenshot-chat-fixture --screenshot-chat-state=thinking

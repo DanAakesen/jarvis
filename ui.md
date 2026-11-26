@@ -10,17 +10,17 @@ Sidebar rows come from `JarvisDestination.sidebarItems`. Settings opens from the
 
 | Destination | What it shows | Main code |
 | --- | --- | --- |
-| **Home** | Up Next, activity against the training target, and a Schedule with tasks and appointments. The calendar and quick-add actions sit together. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
-| **Calendar** | From Home Schedule or the sidebar above Chat. Day and week timelines, month browsing, search and editing for the primary Google Calendar. | `JarvisCalendarPage`, `JarvisCalendarTimeline` |
+| **Home** | Up Next, Activity and Schedule. Schedule opens Calendar. Quick add sits to the right of the one-row composer and hides while typing or dictating. | `JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet` |
+| **Calendar** | From Home Schedule or the sidebar above Chat. Day and week timelines, day dividers in Week, month browsing and inline event cards for the primary Google Calendar. | `JarvisCalendarPage`, `JarvisCalendarTimeline` |
 | **Chat** | The one PI conversation: resumable replies, a folding composer with plus menu and dictation, tool activity, generated blocks (charts and Apple Maps), photos, exact reply targets from pushes, follow-latest and live Voice state. **Test a reply** in the plus menu uses a separate conversation. | `JarvisChatScreen`, `JarvisChatModel`, `JarvisComposerBar`, `JarvisChatBlockView`, `JarvisAppleMapsCard`, `JarvisRuntimeTestSheet` |
 | **Voice** | Live GPT-Live call: stationary background orb, captions, Mute, Speaker and End, swipeable result cards with resize and per-call reopening, and a Live Activity. The current Voice backend is audio-only; camera and screen controls do not imply live visual input. | `VoiceScreen`, `VoiceContentPanel`, `VoiceAudioEngine`, `VoiceLiveActivityController` |
 | **Notes** | Notes, Tasks and Graph switch: pinned tiles, a folder grid, a direct Markdown editor with linked notes, editable tables and folder moves, task sheets and the 3D Vault graph. | `JarvisNotesArea`, `JarvisNoteEditorSheet`, `JarvisNotesGraphView` |
 | **Health** | Training, Steps, Sleep and Nutrition cards with independent periods and monthly All history, saved max lifts and a Body trend card. Log a meal or photograph it for the Chat draft. | `JarvisHealthArea`, `JarvisHealthCards`, `JarvisHealthBodyChart`, `JarvisHealthKitSync` |
 | **Workspaces** | Results Jarvis generates and Dan opens: generated HTML apps and workspaces. | `WorkspacesView`, `GeneratedHTMLAppView`, `GeneratedWorkspaceView` |
-| **Software Factory** | Projects, tasks, workers, PRs and releases, task detail, new task and request views, and a Live Activity. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
-| **Usage** | Estimated spend for the selected period. Tap a chart bar for its UTC dates and cost. Factory turns count coding-agent work. | `JarvisUsageArea` |
-| **Status** | The backend checks, the Vault mirror and the smoke summary, from `GET /status`. | `JarvisStatusArea` |
-| **Proactive** | Proactive items, sources and detailed preferences. | `JarvisProactiveArea`, `JarvisProactiveSettingsSheet` |
+| **Software Factory** | Needs you, grouped pipeline, search and releases, with task detail, creation and Live Activities. | `JarvisFactoryArea`, `JarvisFactoryTaskDetailView`, `JarvisFactoryReleaseViews` |
+| **Usage** | Spend and source breakdown for the selected period, with expandable resources, linked Factory tasks and tool counts. Tap a chart bar for its UTC dates and cost. Factory turns count coding-agent work. | `JarvisUsageArea` |
+| **Status** | Service checks grouped by issues, unconfirmed and healthy, with mirror and smoke reports under Maintenance, from `GET /status`. | `JarvisStatusArea` |
+| **Proactive** | Findings, reviews and inline controls for sources, budget, limits, feeds and guidance. | `JarvisProactiveArea`, `JarvisProactiveInlineSettings` |
 | **Settings** | Appearance with shared iPhone and Watch accents, Gradient, Frost and Glass sliders, plus orb themes, shared Card glow and iPhone per-card colours, **Proactive suggestions**, Training and Nutrition targets, deployment and resource views, and sign-out. | `JarvisSettingsArea`, `JarvisSettingsEditorView` |
 | **Banking** | Listed in the sidebar but not navigable. Out of scope until Dan sets its approval rules ([PLAN decision F](PLAN.md#open-decisions-af)). | `JarvisDestination.banking` |
 

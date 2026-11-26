@@ -97,6 +97,17 @@ final class PiRuntimeTests: XCTestCase {
         XCTAssertFalse(patch.isEmpty)
     }
 
+    func testProactiveRetryPreservesOtherDeviceEdits() throws {
+        var editor = JarvisProactiveSettingsEditor(settings: JarvisProactiveConfig(monthlyBudgetDkk: 100))
+        editor.draft.guidance = "Review open tasks"
+        _ = try XCTUnwrap(editor.beginSave())
+        editor.rebase(onto: JarvisProactiveConfig(monthlyBudgetDkk: 50))
+        let retry = try XCTUnwrap(editor.draft.patch(from: editor.saved))
+        XCTAssertEqual(editor.draft.budget, 50)
+        XCTAssertNil(retry.monthlyBudgetDkk)
+        XCTAssertEqual(retry.guidance, "Review open tasks")
+    }
+
     func testVoiceEndpointAlwaysUsesTheSinglePiRoute() throws {
         let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
         XCTAssertEqual(try VoiceEndpoint.url(baseURL: base).absoluteString, "wss://example.invalid/api/voice")

@@ -14,7 +14,7 @@ import {
   commentaryParts, dataSize, FOUNDRY_VOICE_SCOPE, GPT_LIVE_DEPLOYMENT, isCompatibleLiveSessionFormat,
   endLateVoiceSession, LiveVoiceUsageTracker, parseVoiceEvent,
   settleVoiceSessionCreation, VoiceTerminationStateMachine,
-  validPcm24Base64, VOICE_TURN_QUIET_MS, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
+  decodePcm24Base64, hasAudiblePcm, validPcm24Base64, VOICE_TURN_QUIET_MS, VOICE_INPUT_QUIET_MS, VOICE_SAMPLE_RATE, VOICE_TRANSCRIPT_MAX_WAIT_MS,
   type VoiceConnectionFactory, type VoiceFailureCloseCode, type VoiceTerminationEffect,
 } from './live-protocol.js';
 export { VOICE_SUBPROTOCOL } from '../websocket.js';
@@ -933,10 +933,14 @@ function registerVoiceRoute(
         return;
       }
       if (type === 'session.output_audio.delta') {
-        if (!validPcm24Base64(event.delta)) {
+        const samples = decodePcm24Base64(event.delta);
+        if (!samples) {
           closeSession(1008, 'Invalid voice audio');
           return;
         }
+        const audible = hasAudiblePcm(samples);
+        // Padding belongs to an existing stream. It cannot start an answer or clear a pending lookup.
+        if (!audible && !activeOutput) return;
         persistDirectOwnerTurn();
         const group = ensureOutputGroup();
         group.lastDeltaAt = performance.now();
@@ -949,6 +953,7 @@ function registerVoiceRoute(
           ...(typeof event.end_ms === 'number' ? { endMs: event.end_ms } : {}),
         };
         sendClient(audio);
+        if (!audible) return;
         // GPT-Live sends one output audio stream, without a commentary ID on each delta.
         clearCommentaryAudioWait();
         if (!group.hasAudio) {

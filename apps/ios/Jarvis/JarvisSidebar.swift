@@ -117,17 +117,25 @@ struct JarvisSidebarReveal<Page: View>: View {
                     .clipped()
                 }
 
-                // Full-height trailing strip above every page layer. It is narrow so the toolbar button beside
-                // it stays tappable, and its high-priority drag wins over scrolling beneath it.
-                if isEnabled && (progress == 0 || isDraggingOpen) {
-                    Color.clear
-                        .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth, height: geometry.size.height)
-                        .contentShape(Rectangle())
-                        .highPriorityGesture(openSwipe(drawerWidth: drawerWidth))
-                        .accessibilityHidden(true)
-                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            .overlayPreferenceValue(VoiceWindowBounds.self) { bounds in
+                if isEnabled && (progress == 0 || isDraggingOpen) {
+                    let band = bounds.map { geometry[$0] }
+                    VStack(spacing: 0) {
+                        if let band {
+                            edgeStrip(drawerWidth: drawerWidth)
+                                .frame(height: max(0, band.minY))
+                            Color.clear.frame(height: band.height).allowsHitTesting(false)
+                            edgeStrip(drawerWidth: drawerWidth)
+                        } else {
+                            edgeStrip(drawerWidth: drawerWidth)
+                        }
+                    }
+                    .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
             .animation(animation, value: progress)
             .onChange(of: isDraggingClosed) { _, dragging in
                 if !dragging { navigation.cancelDrag() }
@@ -138,6 +146,13 @@ struct JarvisSidebarReveal<Page: View>: View {
         }
         .ignoresSafeArea(.container)
     }
+    private func edgeStrip(drawerWidth: CGFloat) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .highPriorityGesture(openSwipe(drawerWidth: drawerWidth))
+            .accessibilityHidden(true)
+    }
+
 }
 
 struct JarvisSidebar: View {

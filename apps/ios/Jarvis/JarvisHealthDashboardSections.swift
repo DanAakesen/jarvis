@@ -317,39 +317,84 @@ struct JarvisHealthSessionsSection: View {
 }
 
 struct JarvisHealthBodySection: View {
-    let metrics: [JarvisHealthMetricSeries]
+    let searchText: String
+    let dashboardLoadID: UUID?
     let dashboard: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let client: JarvisHealthClient?
     let language: JarvisAppLanguage
-    let hasSearch: Bool
+    @State private var range = JarvisHealthPeriodPreset.thirtyDays
+    @State private var all = false
+    @State private var historical = JarvisHealthRead.loading
+    @State private var retry = 0
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
-    @State private var selectedName = ""
+    @State private var selectedTitle: JarvisHealthLocalizationKey?
+
+    private let kinds: [(JarvisHealthLogic.BodyMetric, JarvisHealthLocalizationKey)] = [
+        (.weight, .weight), (.fatPercent, .bodyFat), (.leanMass, .leanMass)
+    ]
+
+    private var metrics: [JarvisHealthMetricSeries] {
+        let available = all ? kinds.compactMap { kind, title -> JarvisHealthMetricSeries? in
+            let items = historical.items.filter { JarvisHealthLogic.bodyMetricName($0["metric_name"]?.stringValue, matching: kind) }
+            guard let name = items.first?["metric_name"]?.stringValue else { return nil }
+            let read = JarvisHealthRead(JarvisHealthStoredRead(items: items, hasMore: false, freshness: nil))
+            return JarvisHealthMetricSeries(metricName: name, title: title, read: read)
+        } : dashboard.bodyMetrics
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return available.filter { query.isEmpty || copy.text($0.title).localizedCaseInsensitiveContains(query)
+            || $0.metricName.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
+        let catalog = all ? historical : dashboard.metricCatalog
+        let available = metrics
         JarvisPageHeroCard(title: copy.text(.bodyTrend), accessory: {
-            Text(copy.text(.thirtyDays)).font(.caption).foregroundStyle(.secondary)
+            JarvisHistoryPeriodSelector(title: "Period", identifierPrefix: "health.body.period",
+                items: JarvisHealthPeriodPreset.dashboardPresets.map {
+                    JarvisTabItem(tag: $0, title: $0 == .today ? "Today" : "\($0.dayCount)d",
+                                  identifier: "health.body.period.\($0.rawValue)")
+                }, selection: $range, all: $all)
         }) {
-            if dashboard.metricCatalog.state == .loading || (dashboard.metricCatalog.failure != nil && metrics.isEmpty) || dashboard.metricCatalog.state == .notServed {
-                JarvisHealthStateLine(state: dashboard.metricCatalog.state, language: language)
-            } else if let selected = metrics.first(where: { $0.metricName == selectedName }) ?? metrics.first {
-                if metrics.count > 1 {
+            if catalog.state == .loading || (catalog.failure != nil && available.isEmpty) || catalog.state == .notServed {
+                JarvisHealthStateLine(state: catalog.state, language: language)
+                if all && catalog.failure != nil { Button("Retry") { retry += 1 } }
+            } else if let selected = available.first(where: { $0.title == selectedTitle }) ?? available.first {
+                if available.count > 1 {
                     JarvisPeriodSelector(title: copy.text(.bodyTrend), identifierPrefix: "health.body.metric",
-                        items: metrics.map { JarvisTabItem(tag: $0.metricName, title: copy.text($0.title), identifier: "health.body.select." + $0.metricName) },
-                        selection: Binding(get: { selected.metricName }, set: { selectedName = $0 }))
+                        items: available.map { JarvisTabItem(tag: $0.metricName, title: copy.text($0.title), identifier: "health.body.select." + $0.metricName) },
+                        selection: Binding(get: { selected.metricName }, set: { name in
+                            selectedTitle = available.first(where: { $0.metricName == name })?.title
+                        }))
                 }
                 metricRow(selected).id(selected.metricName)
             } else {
-                Text(copy.text(hasSearch ? .noResults : .empty)).font(.subheadline).foregroundStyle(.secondary)
+                Text(copy.text(searchText.isEmpty ? .empty : .noResults)).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .task(id: "\(all)-\(dashboardLoadID?.uuidString ?? "")-\(retry)") {
+            guard all else { return }
+            historical = .loading
+            do {
+                guard let client else { throw JarvisHealthFailure.unavailable }
+                let items = try await client.bodyHistory()
+                try Task.checkCancellation()
+                historical = JarvisHealthRead(JarvisHealthStoredRead(items: items, hasMore: false, freshness: nil))
+            } catch {
+                if !Task.isCancelled { historical = JarvisHealthRead(error: error, previous: nil) }
             }
         }
     }
 
     private func metricRow(_ metric: JarvisHealthMetricSeries) -> some View {
-        JarvisHealthBodyChart(metric: metric, period: period, client: client,
-                              capabilities: dashboard.capabilities, language: language)
+        let firstDay = all ? metric.read.items.compactMap { date($0["metric_date"]) }.min() : nil
+        let window = firstDay.flatMap { JarvisHealthPeriod(startDate: $0, endDate: period.endDate) }
+            ?? JarvisHealthPeriod.make(range, now: dashboard.activityNow)
+        return JarvisHealthBodyChart(metric: metric, period: window, client: client,
+                                     capabilities: dashboard.capabilities, language: language,
+                                     allBodyMetric: all ? kinds.first { $0.1 == metric.title }?.0 : nil)
     }
 }
 

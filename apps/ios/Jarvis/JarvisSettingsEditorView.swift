@@ -26,7 +26,7 @@ private enum JarvisIconTheme: String, CaseIterable {
     var primary: String {
         switch self {
         case .orange: "#" + JarvisPalette.defaultPrimaryHex
-        case .red: "#F54253"
+        case .red: "#FF0000"
         case .teal: "#14CBA5"
         case .violet: "#AA65F4"
         }

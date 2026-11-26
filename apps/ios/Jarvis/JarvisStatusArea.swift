@@ -12,7 +12,6 @@ struct JarvisStatusArea: View {
     var fixedNow: Date?
 
     @State private var state = JarvisStatusViewState()
-    @State private var filter = JarvisStatusFilter.all
     @State private var expanded: Set<String> = []
     @State private var reloadToken = 0
     @State private var tick = Date()
@@ -27,9 +26,6 @@ struct JarvisStatusArea: View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                    if let snapshot = state.snapshot {
-                        JarvisPageHeadline(phrase: JarvisStatusPagePhrase.make(snapshot, language: language, now: now))
-                    }
                     content
                 }
                     .padding(.horizontal)
@@ -89,12 +85,6 @@ struct JarvisStatusArea: View {
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             overview
-            JarvisSegmentedBar(
-                title: text(.statusFilterLabel),
-                identifierPrefix: "status.filter",
-                items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                selection: $filter
-            )
             if let snapshot = state.snapshot {
                 loaded(snapshot)
             } else if let failure = state.failure {
@@ -105,64 +95,36 @@ struct JarvisStatusArea: View {
             } else {
                 JarvisInsightsStateView(kind: .loading, language: language, identifier: "status.loading")
             }
-            if state.snapshot == nil {
-                JarvisRowGroup {
-                    ForEach(JarvisStatusCheckID.allCases, id: \.rawValue) { check in
-                        pendingRow(text(check.localizationKey))
-                    }
-                }
-                JarvisRowGroup {
-                    pendingRow(text(.statusMirror))
-                    pendingRow(text(.statusSmoke))
-                }
-            }
         }
-    }
-
-    private func pendingRow(_ title: String) -> some View {
-        HStack(spacing: JarvisDesignTokens.rowSpacing) {
-            Image(systemName: "questionmark.circle")
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-                .accessibilityHidden(true)
-            Text(title).font(.body).lineLimit(2)
-            Spacer(minLength: 0)
-            if state.failure == nil { JarvisLoadingView().accessibilityHidden(true) }
-            else { Text("—").foregroundStyle(.secondary) }
-        }
-        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-        .jarvisListRow()
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(text(state.failure?.localizationKey ?? .loading))
     }
 
     private var overview: some View {
-        JarvisPageHeroCard(title: text(.overview)) {
-            if let snapshot = state.snapshot { checkedLine(snapshot) }
-        } content: {
-            JarvisPageStatGrid(
-                stats: JarvisStatusValue.allCases.map { tone in
-                    JarvisPageStat(
-                        id: tone.rawValue,
-                        value: state.snapshot?.entries.filter {
-                            JarvisStatusLogic.displayStatus(for: $0, now: now) == tone
-                        }.count,
-                        label: text(tone.localizationKey),
-                        systemImage: tone == .ok ? "checkmark.circle" : tone == .unknown ? "questionmark.circle" : "exclamationmark.circle",
-                        tint: tone == .down ? .red : JarvisDesignTokens.primaryAccent,
-                        isLoading: state.failure == nil
-                    )
-                },
-                language: language
-            )
+        JarvisInsightsCard(title: text(.serviceChecks)) {
+            if let snapshot = state.snapshot {
+                let healthy = snapshot.entries.filter { JarvisStatusLogic.displayStatus(for: $0, now: now) == .ok }.count
+                checkedLine(snapshot)
+                Text("\(healthy) / \(snapshot.entries.count) " + text(.healthyChecks))
+                    .font(.title.bold())
+                if !snapshot.entries.isEmpty {
+                    HStack(spacing: 3) {
+                        ForEach(snapshot.entries) { entry in
+                            let tone = JarvisStatusLogic.displayStatus(for: entry, now: now)
+                            Capsule().fill(tone == .ok ? JarvisDesignTokens.secondaryAccent : tone == .unknown ? Color.secondary : Color.red)
+                        }
+                    }
+                    .frame(height: 10).accessibilityHidden(true)
+                }
+            } else { Text("—").font(.title.bold()) }
         }
         .accessibilityIdentifier("status.hero")
     }
 
     private func loaded(_ snapshot: JarvisStatusSnapshot) -> some View {
-        let entries = JarvisStatusLogic.visible(snapshot.entries, filter: filter, now: now)
+        let entries = JarvisStatusLogic.visible(snapshot.entries, filter: .all, now: now)
         let mirror = snapshot.vaultMirror ?? JarvisVaultMirror(state: .notSetUp, readReason: "status-missing")
-        let showMirror = filter == .all || mirror.displayState(now: now).tone != .ok
+        let healthy = entries.filter { JarvisStatusLogic.displayStatus(for: $0, now: now) == .ok }
+        let unknown = entries.filter { JarvisStatusLogic.displayStatus(for: $0, now: now) == .unknown }
+        let issues = entries.filter { [.down, .degraded].contains(JarvisStatusLogic.displayStatus(for: $0, now: now)) }
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             if state.isPartial, let failure = state.failure {
                 HStack {
@@ -177,22 +139,19 @@ struct JarvisStatusArea: View {
                     }
                 }
             }
-            if entries.isEmpty {
-                JarvisInsightsCard {
-                    JarvisInsightsStateView(
-                        kind: .empty,
-                        emptyTitle: text(.statusNoIssues),
-                        language: language,
-                        identifier: "status.empty"
-                    )
-                }
-            } else {
-                JarvisRowGroup {
-                    ForEach(entries) { entry in checkRow(entry) }
+            if !issues.isEmpty {
+                JarvisInsightsCard(title: text(.statusFilterIssues)) { ForEach(issues) { checkRow($0) } }
+            }
+            if !unknown.isEmpty {
+                JarvisInsightsCard(title: text(.unconfirmedChecks)) { ForEach(unknown) { checkRow($0) } }
+            }
+            if !healthy.isEmpty {
+                JarvisInsightsDisclosure(title: text(.healthyChecks) + " · \(healthy.count)") {
+                    ForEach(healthy) { checkRow($0) }
                 }
             }
-            JarvisRowGroup {
-                if showMirror { mirrorRow(mirror) }
+            JarvisInsightsDisclosure(title: text(.maintenance)) {
+                mirrorRow(mirror)
                 smokeRow(snapshot.smoke)
             }
         }

@@ -68,7 +68,7 @@ struct JarvisHealthCards<Lifts: View>: View {
                 Divider()
                 lifts()
             }.environment(\.jarvisCardRole, "training").accessibilityIdentifier("health.hero.training")
-            JarvisPageHeroCard(title: stepRange == .today && !fullHistory.contains(.steps) ? "Steps today" : "Steps", accessory: { range($stepRange, .steps) }) {
+            JarvisPageHeroCard(title: "Steps", accessory: { range($stepRange, .steps) }) {
                 if fullHistory.contains(.steps) {
                     historyChart(.steps)
                 } else { stepSummary }
@@ -231,11 +231,10 @@ struct JarvisHealthCards<Lifts: View>: View {
         for row in data.steps.items {
             if let day = JarvisHealthLogic.day(row["metric_date"]?.stringValue), let value = row["value"]?.numberValue { values[day] = value }
         }
-        let series = JarvisHealthChartValues(values: values, endingOn: window.endDate, count: window.dayCount, target: data.trainingTargets?.targets.dailySteps)
         return VStack(alignment: .leading, spacing: 8) {
-            Text(number(stepRange == .today ? values[window.endDate] : series.average) + (stepRange == .today ? " steps" : " steps/day"))
-                .font(.title2.bold()).foregroundStyle(accent)
             if stepRange == .today {
+                Text(number(values[window.endDate]) + " steps")
+                    .font(.title2.bold()).foregroundStyle(accent)
                 if let steps, values[window.endDate] != nil {
                     let hour = JarvisHealthSyncWindow.calendar.component(.hour, from: data.activityNow)
                     Chart {
@@ -254,7 +253,13 @@ struct JarvisHealthCards<Lifts: View>: View {
                         Text("Usually \(number(usual[hour])) by the end of this hour").font(.caption).foregroundStyle(.secondary)
                     }
                 } else { Text("Hourly steps unavailable").font(.footnote).foregroundStyle(.secondary) }
-            } else { bars(series, unit: "steps", title: "Daily steps", id: "health.chart.steps", state: data.steps.state) }
+            } else {
+                let series = JarvisHealthChartValues(values: values, endingOn: window.endDate,
+                    count: window.dayCount, target: data.trainingTargets?.targets.dailySteps)
+                JarvisHealthBarChart(values: series, unit: "steps", title: "Daily steps",
+                    identifier: "health.chart.steps", language: language, state: data.steps.state,
+                    prominentHeadline: true, format: number)
+            }
         }
     }
 

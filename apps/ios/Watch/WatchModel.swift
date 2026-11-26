@@ -732,20 +732,32 @@ final class WatchModel: ObservableObject {
                 try await Task.sleep(for: WatchVoiceRecovery.RouteBudget.settleDelay)
                 guard isCurrent() else { return }
                 let needsRestart = self.audio.needsRouteRecovery(buffersBeforeSettling: buffers)
-                switch self.audioRouteBudget.decide(needsRestart: needsRestart) {
+                let decision = self.audioRouteBudget.decide(needsRestart: needsRestart)
+                switch decision {
                 case .unchanged: return
                 case .exhausted:
-                    self.failRouteRecovery(voice: voice, reason: "audio_route_recovery_limit")
+                    self.failRouteRecovery(voice: voice, reason: "audio_route_recovery_limit",
+                                           voiceMessage: "The Watch audio route kept changing. Tap Retry to start a new call.")
                     return
-                case .restart: break
+                case .restart, .repeatRestart: break
                 }
                 self.repairingAudio = true
                 self.voiceLogger.info("Audio route recovery: reason=\(reason.map { String($0) } ?? "engine_configuration", privacy: .public)")
                 try await WatchVoiceRecovery.startCapture(isCurrent: isCurrent, start: { attempt in
-                    try self.audio.recoverRoute(attempt: attempt)
+                    try self.audio.recoverRoute(attempt: attempt, usePlainAudio: voice && decision == .repeatRestart,
+                                                forceRestart: voice && attempt > 1)
+                    guard voice else { return }
+                    // A running graph can still have a stalled input tap. Wait for fresh converted PCM.
+                    let baseline = self.audio.convertedBuffers
+                    for _ in 0..<10 {
+                        try await Task.sleep(for: .milliseconds(100))
+                        guard isCurrent() else { throw CancellationError() }
+                        if self.audio.convertedBuffers > baseline { return }
+                    }
+                    throw WatchMicrophoneFailure.noAudio
                 }, onFailure: { attempt, error in
                     self.voiceLogger.error("Audio route restart failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
-                })
+                }, wait: { try await Task.sleep(for: .milliseconds(voice ? 1_000 : 300)) })
                 guard isCurrent() else { return }
                 if voice {
                     self.captureLevel = WatchCaptureLevel()
@@ -754,13 +766,14 @@ final class WatchModel: ObservableObject {
                 self.voiceLogger.info("Audio route recovered")
             } catch {
                 guard isCurrent() else { return }
-                self.failRouteRecovery(voice: voice, reason: "audio_route_restart_failed")
+                let message = (error as? WatchMicrophoneFailure)?.message ?? "The Watch couldn’t restart call audio. Tap Retry."
+                self.failRouteRecovery(voice: voice, reason: "audio_route_restart_failed", voiceMessage: message)
             }
         }
     }
-    private func failRouteRecovery(voice: Bool, reason: String) {
+    private func failRouteRecovery(voice: Bool, reason: String, voiceMessage: String) {
         voiceLogger.error("Audio route recovery failed: \(reason, privacy: .public)")
-        if voice { failVoice("Audio changed and voice couldn’t reconnect.", reason: reason) }
+        if voice { failVoice(voiceMessage, reason: reason) }
         else { failDictation("Audio changed and dictation couldn’t continue. Tap Message to type instead.") }
     }
     private func cancelRouteRecovery() {

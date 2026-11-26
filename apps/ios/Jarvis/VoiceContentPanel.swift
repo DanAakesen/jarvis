@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 struct VoiceContentSlot: View {
     @ObservedObject var runtime: WorkspaceRuntime
@@ -54,6 +55,13 @@ private struct VoiceSummaryHeight: PreferenceKey {
     }
 }
 
+struct VoiceWindowBounds: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 struct VoiceWindowMenu: View {
     @ObservedObject var runtime: WorkspaceRuntime
     let language: JarvisAppLanguage
@@ -86,7 +94,7 @@ private struct VoiceVisualCarousel: View {
     let toggleExpanded: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @GestureState private var horizontalDrag: CGFloat = 0
+    @State private var horizontalDrag: CGFloat = 0
 
     private var entries: [PresentedWorkspaceView] { runtime.voiceVisuals?.entries ?? [] }
     private var selectedID: String? { runtime.voiceVisuals?.selectedID }
@@ -125,7 +133,20 @@ private struct VoiceVisualCarousel: View {
             .contentShape(Rectangle())
             .clipped()
             .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: selectedID)
-            .simultaneousGesture(pageDrag(index: index, stride: stride, width: geometry.size.width, peek: peek))
+            .gesture(VoiceWindowPan(
+                canPage: entries.count > 1, isExpanded: isExpanded,
+                drag: { horizontalDrag = $0 },
+                finish: { projected in
+                    let next = index + (projected < 0 ? 1 : -1)
+                    withAnimation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion) {
+                        horizontalDrag = 0
+                        if abs(projected) > stride * 0.2, entries.indices.contains(next) {
+                            runtime.selectVoiceVisual(entries[next].id)
+                        }
+                    }
+                },
+                resize: toggleExpanded
+            ))
             .onChange(of: selectedID, initial: true) { _, id in
                 guard let visual = entries.first(where: { $0.id == id }) else { return }
                 AccessibilityNotification.Announcement(visual.view.workspaceTitle(language: language)).post()
@@ -137,6 +158,7 @@ private struct VoiceVisualCarousel: View {
             let next = index + (direction == .increment ? 1 : -1)
             if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
         }
+        .anchorPreference(key: VoiceWindowBounds.self, value: .bounds) { $0 }
         .accessibilityIdentifier("voice.panel")
     }
 
@@ -160,50 +182,84 @@ private struct VoiceVisualCarousel: View {
             .accessibilityHidden(!selected)
     }
 
-    private func pageDrag(index: Int, stride: CGFloat, width: CGFloat, peek: CGFloat) -> some Gesture {
-        func canPage(from start: CGPoint) -> Bool {
-            guard entries.count > 1, entries.indices.contains(index) else { return false }
-            switch entries[index].view {
-            case .htmlApp, .map, .table, .knowledgeGraph, .code, .chart:
-                // Keep horizontal interaction inside the content; the grip and adjacent cards still page.
-                let grip = JarvisDesignTokens.controlMinimumHeight
-                return start.x < peek || start.x > width - peek ||
-                    (abs(start.x - width / 2) < grip * 0.75 && start.y < grip / 2)
-            default:
-                return true
-            }
-        }
-
-        return DragGesture(minimumDistance: 10)
-            .updating($horizontalDrag) { value, drag, transaction in
-                guard canPage(from: value.startLocation), abs(value.translation.width) > abs(value.translation.height) else { return }
-                transaction.animation = nil
-                drag = value.translation.width
-            }
-            .onEnded { value in
-                let delta = value.translation
-                guard canPage(from: value.startLocation), abs(delta.width) > abs(delta.height),
-                      abs(value.predictedEndTranslation.width) > stride * 0.2 else { return }
-                let next = index + (delta.width < 0 ? 1 : -1)
-                if entries.indices.contains(next) { runtime.selectVoiceVisual(entries[next].id) }
-            }
-    }
-
     private var resizeControl: some View {
         JarvisPanelGrabber(title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand), action: toggleExpanded)
             .frame(width: JarvisDesignTokens.controlMinimumHeight * 1.5)
             .offset(y: -JarvisDesignTokens.voicePanelEdgeInset)
             .onTapGesture(perform: toggleExpanded)
-            .simultaneousGesture(DragGesture(minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
-                .onEnded { value in
-                    let direction = VoiceVerticalSwipe(translation: value.translation,
-                                                       minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
-                    if direction == (isExpanded ? .down : .up) { toggleExpanded() }
-                })
+
     }
 
     private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
         JarvisWorkspaceLocalization.string(key, language: language)
+    }
+}
+
+/// Observe the same touch as the embedded scroll view, including WebKit and native charts.
+private struct VoiceWindowPan: UIGestureRecognizerRepresentable {
+    let canPage: Bool
+    let isExpanded: Bool
+    let drag: (CGFloat) -> Void
+    let finish: (CGFloat) -> Void
+    let resize: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.maximumNumberOfTouches = 1
+        pan.cancelsTouchesInView = false
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        let delta = pan.translation(in: pan.view?.window)
+        let coordinator = context.coordinator
+        switch pan.state {
+        case .began:
+            let velocity = pan.velocity(in: pan.view?.window)
+            coordinator.horizontal = abs(velocity.x) > abs(velocity.y)
+        case .changed where coordinator.horizontal && canPage:
+            drag(delta.x)
+        case .ended where coordinator.horizontal && canPage:
+            let projected = delta.x + pan.velocity(in: pan.view?.window).x * 0.15
+            finish(projected)
+        case .ended where !coordinator.horizontal:
+            let direction = VoiceVerticalSwipe(translation: CGSize(width: delta.x, height: delta.y),
+                                               minimumDistance: JarvisDesignTokens.voiceVerticalSwipeDistance)
+            if (!isExpanded && direction == .up) || (isExpanded && coordinator.startedAtTop && direction == .down) {
+                resize()
+            }
+        case .cancelled, .failed:
+            finish(0)
+        default:
+            break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var horizontal = false
+        var startedAtTop = true
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            startedAtTop = true
+            var view = touch.view
+            while let child = view, child !== gestureRecognizer.view {
+                if let scroll = child as? UIScrollView,
+                   scroll.contentOffset.y > -scroll.adjustedContentInset.top + 1 {
+                    startedAtTop = false
+                    break
+                }
+                view = child.superview
+            }
+            return true
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
+        }
     }
 }
 

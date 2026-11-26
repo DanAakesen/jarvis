@@ -27,11 +27,6 @@ struct JarvisProactiveArea: View {
         let token: Int
     }
 
-    private struct EditorRequest: Identifiable {
-        let id = UUID()
-        let focus: JarvisProactiveSettingsSheet.Focus
-    }
-
     private enum CheckMessage {
         case started
         case failed
@@ -61,7 +56,6 @@ struct JarvisProactiveArea: View {
     @State private var actionFailed = false
     @State private var checkingNow = false
     @State private var checkMessage: CheckMessage?
-    @State private var editorRequest: EditorRequest?
     @State private var reloadToken = 0
 
     private var now: Date { fixedNow ?? Date() }
@@ -89,11 +83,6 @@ struct JarvisProactiveArea: View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                    if case .loaded(let loaded) = status, itemsLoaded {
-                        JarvisPageHeadline(
-                            phrase: JarvisProactivePagePhrase.make(status: loaded, openItems: openItems.count, language: language, firstTitle: openItems.first?.title)
-                        )
-                    }
                     if let notificationItem {
                         itemRow(notificationItem, actionable: notificationItem.state == .new || notificationItem.state == .seen)
                     }
@@ -113,30 +102,13 @@ struct JarvisProactiveArea: View {
             JarvisPageHeader(
                 title: JarvisDestination.proactive.localizedTitle(language: language),
                 language: language
-            ) {
-                JarvisIconButton(
-                    title: text(.proactiveSettings),
-                    systemImage: "gearshape",
-                    identifier: "proactive.settings",
-                    isDisabled: client == nil
-                ) { editorRequest = EditorRequest(focus: .top) }
-            }
+            )
         }
         .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .task(id: PollKey(active: scenePhase == .active, token: reloadToken)) { await poll() }
         .task(id: tab) { await loadEarlierIfNeeded() }
         .task(id: pendingNotificationID) { await openNotification() }
-        .sheet(item: $editorRequest) { request in
-            JarvisProactiveSettingsSheet(
-                client: client,
-                language: language,
-                focus: request.focus,
-                onSaved: { Task { await settingsSaved() } }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
     }
 
     // MARK: Loading
@@ -277,8 +249,7 @@ struct JarvisProactiveArea: View {
 
     @ViewBuilder private var content: some View {
         VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-            nextCheckCard(loadedStatus)
-            backgroundCard(loadedStatus)
+            itemsCard
             if (loadedStatus != nil && statusRefreshFailed) || (itemsLoaded && itemsFailure != nil) {
                 HStack {
                     Text(text(.refreshFailedShowingSaved)).font(.footnote).foregroundStyle(.secondary)
@@ -287,9 +258,10 @@ struct JarvisProactiveArea: View {
                     }
                 }
             }
-            itemsCard
-            sourcesCard(loadedStatus)
-            budgetCard(loadedStatus?.budget)
+            JarvisProactiveInlineSettings(client: client, language: language, status: loadedStatus,
+                sourceLine: sourceLine, onSaved: { Task { await settingsSaved() } }) {
+                nextCheckCard(loadedStatus)
+            }
             runsCard
         }
     }
@@ -365,18 +337,7 @@ struct JarvisProactiveArea: View {
     }
 
     private func nextCheckCard(_ loaded: JarvisProactiveStatus?) -> some View {
-        JarvisPageHeroCard(title: text(.overview)) {
-            JarvisPageStatGrid(
-                stats: [
-                    JarvisPageStat(id: "open", value: itemsLoaded ? openItems.count : nil, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent, isLoading: itemsFailure == nil),
-                    JarvisPageStat(id: "lastRun", value: loaded == nil ? nil : 0, label: text(.proactiveLastRun), systemImage: "clock",
-                                   formattedValue: loaded.map { $0.lastRun.flatMap { JarvisInsightsDates.parse($0.occurredAt) }.map(dateTime) ?? "—" },
-                                   isLoading: isStatusLoading),
-                    JarvisPageStat(id: "sources", value: loaded?.sources.filter { $0.state != "disabled" }.count, label: text(.proactiveSources), systemImage: "checklist", isLoading: isStatusLoading),
-                ],
-                language: language
-            )
-            Divider()
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             HStack(spacing: JarvisPageHeaderMetrics.spacing) {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                     if let loaded {
@@ -420,7 +381,7 @@ struct JarvisProactiveArea: View {
     // MARK: Items
 
     private var itemsCard: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+        JarvisInsightsCard(title: text(.findingsTitle)) {
             JarvisSegmentedBar(
                 title: text(.proactiveTabs),
                 identifierPrefix: "proactive.tabs",
@@ -461,7 +422,7 @@ struct JarvisProactiveArea: View {
                 identifier: "proactive.empty"
             )
         } else {
-            JarvisRowGroup {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach((showAllItems ? openItems : Array(openItems.prefix(3))).filter { $0.id != notificationItem?.id }) { item in itemRow(item, actionable: true) }
                 if openItems.count > 3 {
                     JarvisTextButton(title: showAllItems ? text(.showLess) : JarvisInsightsLocalization.format(.showMore, language: language, openItems.count - 3),
@@ -497,7 +458,7 @@ struct JarvisProactiveArea: View {
                     identifier: "proactive.earlier.empty"
                 )
             } else {
-                JarvisRowGroup {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(items) { item in itemRow(item, actionable: false) }
                 }
                 .accessibilityIdentifier("proactive.earlier")
@@ -692,79 +653,6 @@ struct JarvisProactiveArea: View {
 
     // MARK: Sources, budget and runs
 
-    private func sourcesCard(_ loaded: JarvisProactiveStatus?) -> some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisSectionHeadline(text(.proactiveSources)) {
-                JarvisIconButton(title: text(.editorEditSources), systemImage: "pencil", identifier: "proactive.editSources", isDisabled: client == nil) {
-                    editorRequest = EditorRequest(focus: .sources)
-                }
-            }
-            if let loaded {
-                JarvisRowGroup {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
-                        count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
-                        ForEach(loaded.sources) { source in
-                            HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                                Image(systemName: sourceSymbol(source.id))
-                                    .foregroundStyle(source.state == "ok" ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent)
-                                    .frame(width: JarvisDesignTokens.iconSize).accessibilityHidden(true)
-                                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                                    Text(text(source.id.localizationKey)).font(.subheadline)
-                                    Text(sourceLine(source)).font(.caption).foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .jarvisListRow()
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("proactive.source.\(source.id.rawValue)")
-                        }
-                    }
-                }
-            } else {
-                JarvisRowGroup {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
-                        count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
-                        ForEach(JarvisProactiveSourceID.allCases) { source in
-                            HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                                Image(systemName: sourceSymbol(source))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: JarvisDesignTokens.iconSize)
-                                    .accessibilityHidden(true)
-                                Text(text(source.localizationKey)).font(.subheadline)
-                                Spacer(minLength: 0)
-                                if isStatusLoading { JarvisLoadingView().accessibilityHidden(true) }
-                                else { Text("—").foregroundStyle(.secondary) }
-                            }
-                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .jarvisListRow()
-                            .accessibilityElement(children: .combine)
-                            .accessibilityValue(statusAvailabilityText)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func sourceSymbol(_ source: JarvisProactiveSourceID) -> String {
-        switch source {
-        case .todos: "checklist"
-        case .calendar: "calendar"
-        case .mail: "envelope"
-        case .weather: "cloud.sun"
-        case .factory: "chevron.left.forwardslash.chevron.right"
-        case .news: "globe"
-        case .travel: "airplane"
-        case .x: "text.bubble"
-        case .health: "heart"
-        case .nutrition: "fork.knife"
-        case .notes: "note.text"
-        case .memory: "brain.head.profile"
-        case .location: "location"
-        }
-    }
-
     private func sourceLine(_ source: JarvisProactiveSourceStatus) -> String {
         let observed = source.observedAt.flatMap(JarvisInsightsDates.parse)
             .map { JarvisInsightsDates.elapsed(from: $0, now: now, language: language) }
@@ -790,183 +678,8 @@ struct JarvisProactiveArea: View {
         }
     }
 
-    private func money(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale)) + " " + text(.currencyUnit)
-    }
-
-    private func budgetCard(_ budget: JarvisProactiveBudget?) -> some View {
-        let tint: Color = budget?.state == .exhausted ? .red : JarvisDesignTokens.primaryAccent
-        return JarvisInsightsCard(
-            title: text(.proactiveBudget),
-            accessory: AnyView(
-                JarvisIconButton(
-                    title: text(.editorEditBudget),
-                    systemImage: "pencil",
-                    identifier: "proactive.editBudget",
-                    isDisabled: client == nil
-                ) { editorRequest = EditorRequest(focus: .budget) }
-            )
-        ) {
-            if let budget {
-                VStack(alignment: .leading, spacing: 8) {
-                    ProgressView(value: budget.usedFraction)
-                        .tint(tint)
-                        .accessibilityHidden(true)
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .proactiveBudgetSpend,
-                            language: language,
-                            money(budget.estimatedSpendDkk),
-                            money(budget.monthlyLimitDkk)
-                        )
-                    )
-                    .font(.subheadline.weight(.medium))
-                    .accessibilityIdentifier("proactive.budget.spend")
-                    Text(text(budget.state.localizationKey))
-                        .font(.caption)
-                        .foregroundStyle(budget.state == .exhausted ? Color.red : Color.secondary)
-                        .accessibilityIdentifier("proactive.budget.state")
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("proactive.budget")
-            } else { statusDataState("proactive.budget") }
-        }
-    }
-
-    private func backgroundCard(_ status: JarvisProactiveStatus?) -> some View {
-        JarvisInsightsCard(title: text(.proactiveBackground)) {
-            if let background = status?.background {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(!background.available ? text(.proactiveUnavailable)
-                         : background.allowsProactiveWakes ? text(.proactiveBackgroundOn) : text(.proactiveBackgroundOff))
-                        .font(.subheadline.weight(.medium))
-                        .accessibilityIdentifier("proactive.background.enabled")
-                    if background.allowsProactiveWakes {
-                        Text(text(.proactiveCheckSchedule))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let due = background.nextDueAt.flatMap(JarvisInsightsDates.parse) {
-                            Text(JarvisInsightsLocalization.format(.proactiveQueuedCheck, language: language, dateTime(due)))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .proactiveTurnsToday,
-                            language: language,
-                            background.today.usedTurns,
-                            background.today.allowedTurns
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .proactiveCostEstimate,
-                            language: language,
-                            costRange(background.cost.estimatedDayMinDkk, background.cost.estimatedDayMaxDkk),
-                            costRange(background.cost.estimatedThirtyDayMinDkk, background.cost.estimatedThirtyDayMaxDkk)
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .proactiveCostActual,
-                            language: language,
-                            money(status?.budget.estimatedSpendDkk ?? 0),
-                            money(background.cost.coldSweepMinDkk),
-                            money(background.cost.coldSweepMaxDkk),
-                            money(background.cost.representativeToolTurnDkk),
-                            money(background.cost.preflightWorstCaseDkk)
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    stateLine(background.situation)
-                    if let last = background.slots.lastAt.flatMap(JarvisInsightsDates.parse) {
-                        Text(
-                            JarvisInsightsLocalization.format(
-                                .proactiveLastActivation,
-                                language: language,
-                                JarvisInsightsDates.elapsed(from: last, now: now, language: language)
-                            )
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    if !background.situation.staleSources.isEmpty {
-                        Text(
-                            JarvisInsightsLocalization.format(
-                                .proactiveStateStale,
-                                language: language,
-                                sourceNames(background.situation.staleSources)
-                            )
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                    }
-                    if !background.situation.missingSources.isEmpty {
-                        Text(
-                            JarvisInsightsLocalization.format(
-                                .proactiveStateMissing,
-                                language: language,
-                                sourceNames(background.situation.missingSources)
-                            )
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .proactiveQueueRecovery,
-                            language: language,
-                            background.slots.queue.pending,
-                            background.slots.queue.leased,
-                            background.slots.queue.retrying
-                        )
-                    )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("proactive.background")
-            } else {
-                Text(text(.proactiveUnavailable)).font(.subheadline).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func costRange(_ low: Double, _ high: Double) -> String {
-        "\(money(low))–\(money(high))"
-    }
-
-    @ViewBuilder
-    private func stateLine(_ situation: PiBrainStatus.Situation) -> some View {
-        if let updated = situation.asOf.flatMap(JarvisInsightsDates.parse) {
-            Text(
-                JarvisInsightsLocalization.format(
-                    .proactiveStateFresh,
-                    language: language,
-                    JarvisInsightsDates.elapsed(from: updated, now: now, language: language)
-                )
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        } else {
-            Text(text(.proactiveStateNone)).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func sourceNames(_ values: [String]) -> String {
-        values.map { value in
-            JarvisProactiveSourceID(rawValue: value).map { text($0.localizationKey) } ?? value
-        }.joined(separator: ", ")
-    }
-
     private var runsCard: some View {
-        JarvisInsightsCard(title: text(.proactiveRecentChecks)) {
+        JarvisInsightsDisclosure(title: text(.proactiveRecentChecks)) {
             if let runsFailure {
                 JarvisInsightsStateView(kind: .failure(runsFailure), language: language, identifier: "proactive.runs.error") {
                     Task { if let client { await loadRuns(client, force: true) } }

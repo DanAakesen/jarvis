@@ -1,8 +1,7 @@
 import JarvisCore
 import SwiftUI
 
-/// Home log sheets. Log workout shows the session types; Log lift shows the lifts. Both carry a date field
-/// (default today) and nothing is saved until a date is set. Saving goes through the existing vault path.
+/// Home and Health share the same dated workout and lift forms.
 struct JarvisTodayGymSheet: View {
     enum Kind { case workout, lift }
 
@@ -15,6 +14,8 @@ struct JarvisTodayGymSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var formHeight: CGFloat = 0
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
     let kind: Kind
@@ -76,77 +77,37 @@ struct JarvisTodayGymSheet: View {
 
     var body: some View {
         NavigationStack {
-            JarvisForm {
-                Section {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
                     DatePicker(copy(.logDate), selection: dateBinding, in: ...model.now, displayedComponents: .date)
                         .environment(\.locale, language.locale)
                         .accessibilityIdentifier("today.log.date")
-                }
-                switch kind {
-                case .workout:
-                    Section(copy(.sessionTypeGroup)) {
-                        ForEach(JarvisGymSessionType.loggable) { option in
-                            choiceRow(
-                                title: option.title(language: language),
-                                isSelected: session == option,
-                                identifier: "today.workout.session.\(option.rawValue)"
-                            ) { session = option }
-                        }
-                    }
-                case .lift:
-                    Section {
-                        TextField(copy(.liftName), text: $liftName)
-                            .textInputAutocapitalization(.sentences)
-                            .accessibilityIdentifier("today.lift.name")
-                            .onChange(of: liftName) { resetStatus() }
-                        let suggestions = memory.suggestions(matching: liftName, language: language)
-                        if !suggestions.isEmpty {
-                            ScrollView(.horizontal) {
-                                HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
-                                    ForEach(suggestions) { suggestion in
-                                        JarvisLabelledButton(
-                                            title: suggestion.name,
-                                            identifier: "today.lift.suggestion.\(suggestion.id)",
-                                            isCompact: true
-                                        ) {
-                                            liftName = suggestion.name
-                                            resetStatus()
-                                        }
-                                    }
-                                }
-                            }
-                            .scrollIndicators(.hidden)
-                        }
-                    } header: {
-                        Text(copy(.liftType))
-                    } footer: {
-                        Text(copy(.liftNameHint))
-                    }
-                    if !trimmedName.isEmpty, knownSession == nil {
-                        Section(copy(.sessionTypeGroup)) {
-                            Picker(copy(.sessionTypeGroup), selection: $manualSession) {
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .jarvisDashboardSurface()
+                    if kind == .lift {
+                        liftFields
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(copy(.sessionTypeGroup)).font(.headline)
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), alignment: .leading) {
                                 ForEach(JarvisGymSessionType.loggable) { option in
-                                    Text(option.title(language: language)).tag(option)
+                                    choiceRow(title: option.title(language: language), isSelected: session == option,
+                                              identifier: "today.workout.session.\(option.rawValue)") { session = option }
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .accessibilityIdentifier("today.lift.session")
                         }
-                    }
-                    Section {
-                        TextField("kg", text: $weight)
-                            .keyboardType(.decimalPad)
-                            .accessibilityLabel("kg")
-                            .accessibilityIdentifier("today.lift.weight")
-                        TextField(copy(.reps), text: $reps)
-                            .keyboardType(.numberPad)
-                            .accessibilityIdentifier("today.lift.reps")
-                        TextField(copy(.sets), text: $sets)
-                            .keyboardType(.numberPad)
-                            .accessibilityIdentifier("today.lift.sets")
+                        .padding()
+                        .jarvisDashboardSurface()
                     }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { formHeight = $0 }
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .jarvisAmbientBackground()
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let message = statusMessage {
                     Label(message.text, systemImage: message.symbol)
@@ -173,10 +134,69 @@ struct JarvisTodayGymSheet: View {
                 )
             }
         }
+        .presentationDetents([.height(formHeight > 0 ? formHeight + 66 + (statusMessage == nil ? 0 : 48) : 390), .large])
+        .presentationDragIndicator(.visible)
         .accessibilityIdentifier("\(prefix).sheet")
         .interactiveDismissDisabled(status == .saving)
         .animation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.filterAnimationDuration), value: status)
         .sensoryFeedback(.success, trigger: status == .saved) { _, saved in saved }
+    }
+
+    private var liftFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(copy(.liftName)).font(.headline)
+            TextField(copy(.liftName), text: $liftName)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.sentences)
+                .accessibilityIdentifier("today.lift.name")
+                .onChange(of: liftName) { resetStatus() }
+            let suggestions = memory.suggestions(matching: liftName, language: language)
+            if !suggestions.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
+                        ForEach(suggestions) { suggestion in
+                            JarvisLabelledButton(title: suggestion.name, identifier: "today.lift.suggestion.\(suggestion.id)", isCompact: true) {
+                                liftName = suggestion.name
+                                resetStatus()
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+            if !trimmedName.isEmpty, knownSession == nil {
+                LabeledContent(copy(.sessionTypeGroup)) {
+                    Picker(copy(.sessionTypeGroup), selection: $manualSession) {
+                        ForEach(JarvisGymSessionType.loggable) { option in
+                            Text(option.title(language: language)).tag(option)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("today.lift.session")
+                }
+            }
+            Divider()
+            let layout = dynamicTypeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 12))
+            layout {
+                numberField("kg", text: $weight, keyboard: .decimalPad, id: "weight")
+                numberField(copy(.reps), text: $reps, keyboard: .numberPad, id: "reps")
+                numberField(copy(.sets), text: $sets, keyboard: .numberPad, id: "sets")
+            }
+        }
+        .padding()
+        .jarvisDashboardSurface()
+    }
+
+    private func numberField(_ title: String, text: Binding<String>, keyboard: UIKeyboardType, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
+            TextField("—", text: text)
+                .textFieldStyle(.roundedBorder)
+                .keyboardType(keyboard)
+                .accessibilityLabel(title)
+                .accessibilityIdentifier("today.lift.\(id)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func choiceRow(
@@ -186,16 +206,14 @@ struct JarvisTodayGymSheet: View {
             action()
             resetStatus()
         } label: {
-            HStack {
-                Text(title).foregroundStyle(.primary)
-                Spacer(minLength: 8)
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                        .accessibilityHidden(true)
-                }
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                    .accessibilityHidden(true)
+                Text(title).font(.subheadline).multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

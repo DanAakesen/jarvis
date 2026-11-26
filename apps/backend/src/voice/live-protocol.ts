@@ -239,14 +239,26 @@ export function parseVoiceEvent(data: RawData, isBinary: boolean): Record<string
   }
 }
 
-export function validPcm24Base64(value: unknown, maximumDecodedBytes = 512_000): value is string {
+export function decodePcm24Base64(value: unknown, maximumDecodedBytes = 512_000): Buffer | undefined {
   if (typeof value !== 'string' || value.length === 0 || value.length > Math.ceil(maximumDecodedBytes * 4 / 3) + 4 ||
       value.length % 4 !== 0 ||
       !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) {
-    return false;
+    return undefined;
   }
   const decoded = Buffer.from(value, 'base64');
-  return decoded.byteLength > 0 && decoded.byteLength <= maximumDecodedBytes && decoded.byteLength % 2 === 0;
+  return decoded.byteLength > 0 && decoded.byteLength <= maximumDecodedBytes && decoded.byteLength % 2 === 0 ? decoded : undefined;
+}
+
+export function validPcm24Base64(value: unknown, maximumDecodedBytes = 512_000): value is string {
+  return decodePcm24Base64(value, maximumDecodedBytes) !== undefined;
+}
+
+// Use the same near-silence floor as the iPhone playback ledger.
+export function hasAudiblePcm(samples: Buffer): boolean {
+  for (let offset = 0; offset < samples.length; offset += 2) {
+    if (Math.abs(samples.readInt16LE(offset)) > 32) return true;
+  }
+  return false;
 }
 
 export function isCompatibleLiveSessionFormat(event: Record<string, unknown>): boolean {

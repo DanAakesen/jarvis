@@ -301,3 +301,19 @@
 
 "insights.proactiveSourceMemory" = "Memory";
 "insights.proactiveSourceLocation" = "Location";
+
+"insights.serviceChecks" = "Service checks";
+"insights.healthyChecks" = "Healthy checks";
+"insights.unconfirmedChecks" = "Unconfirmed";
+"insights.maintenance" = "Maintenance";
+"insights.spend" = "Spend";
+"insights.costBreakdown" = "Cost breakdown";
+"insights.resources" = "Resources";
+"insights.factoryTasks" = "Factory tasks";
+"insights.findingsTitle" = "Findings";
+"insights.reviewsTitle" = "Reviews";
+"insights.budgetLimits" = "Budget & limits";
+"insights.needsYou" = "Needs you";
+"insights.awaitingReview" = "awaiting review";
+"insights.noReview" = "Nothing needs your review.";
+"insights.searchResults" = "Search results";

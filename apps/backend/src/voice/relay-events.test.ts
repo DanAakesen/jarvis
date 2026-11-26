@@ -980,6 +980,31 @@ describe('GPT-Live authoritative client events', () => {
       await until(() => writes.length === 3, 'acknowledgement and answer persisted');
     }, 20_000);
 
+    it('keeps Thinking through silent audio before and after a spoken acknowledgement', async () => {
+      const { agent, runs } = gatedAgent();
+      const relay = await startRelay(recordingStore([]), agent);
+      word(relay, 'owner-question', 'Check my calendar', 0, 800);
+      delegate(relay, 'calendar-lookup', 800);
+      await until(() => runs.length === 1, 'delegated lookup');
+      try {
+        const silence = (id: string) => send(relay, {
+          type: 'session.output_audio.delta', event_id: id, delta: 'AAA=',
+        });
+        silence('leading-padding');
+        speak(relay, 'ack', 'I will check.');
+        await until(() => activity(relay).at(-1) === 'speaking', 'audible acknowledgement');
+        // Keep padding flowing beyond the output quiet window while the lookup is running.
+        for (let i = 0; i < 5; i++) {
+          silence(`padding-${i}`);
+          await sleep(175);
+        }
+        expect(activity(relay).at(-1)).toBe('thinking');
+        expect(relay.received.filter(event => event.type === 'jarvis.voice.response.started')).toHaveLength(1);
+      } finally {
+        runs[0]!.reply('The calendar is clear.');
+      }
+    }, 20_000);
+
     it('keeps one owner message and one PI turn when the delegation lands mid-sentence', async () => {
       const writes: Array<{ role: string; text: string; sourceItemId?: string }> = [];
       const { agent, runs } = gatedAgent();

@@ -671,7 +671,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             captions.receive(message)
             activeResponseID = responseID
         case .activity(let activity):
-            relayThinking = activity == .thinking
+            // The relay can start generating speech before the player has an audible buffer.
+            // Keep the pending state until playback starts or the relay explicitly returns to listening.
+            if activity != .speaking { relayThinking = activity == .thinking }
             updateSpeechPresentation()
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)

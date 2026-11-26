@@ -22,14 +22,16 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
-Home composer folding and reopening passed on build 135. On 137, recheck the plus-menu icon colour, the iPhone Voice speaker control and scroll edges in short and long Voice panels. With three results open, check spoken previous, next and close after a manual swipe.
+The combined release candidate includes the four approved iPhone pages and the post-137 device fixes. Verify inline Proactive saves and retry, grouped Status evidence, Factory search and period-based costs on iPhone.
+
+Home composer folding and reopening passed on build 135. On 137, recheck the plus-menu icon colour, the iPhone Voice speaker control and scroll edges in short and long Voice panels. On the next build, compare speakerphone volume with the receiver and a headset. Check centre swipes, expansion and a full-day chart on iPhone. Dan confirmed previous, next, close and reopening a session window from **+ → Windows** on iPhone.
 
 1. On the [confirmed TestFlight build](docs/agent-context.md#testflight-build), test the daily core in Chat and Voice: check project status and the issue-to-worker flow for approved work; save, find and rename a note and check its iPhone folder without refreshing; create a task, check its reminder, then complete it; check workout and lift readback in Danish and English. When logging food, save one meal and verify that it counts once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed. Track remaining Chat and Voice coverage in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).
-2. Dictate a short phrase and then a longer message on Watch. Each Stop should put the transcript in the draft once. Start Voice from Watch and confirm it reaches Listening and stays open. Listen to two complete replies on its speaker and interrupt a third. On build 135, Watch Voice failed at startup. iPhone Listening and Speaking passed, but a lookup showed Listening instead of Thinking. Retest both on 137.
+2. Dictate a short phrase and then a longer message on Watch. Each Stop should put the transcript in the draft once. Start Voice from Watch and confirm it reaches Listening and stays open. Listen to two complete replies on its speaker and interrupt a third. Dan reported another Watch audio reconnect failure at 20:29 on 25 November. Verify the revised recovery on Watch, including two audible replies. iPhone Listening and Speaking passed. Dan did not see Thinking on 137. Recheck it during a lookup, including the pause after a spoken acknowledgement, on the next app and backend build.
 3. On iPhone, ask for a named store nearby. A matching local business or an explicit no-match result passes. If none appears, ask explicitly for the nearest and check the match and Directions beyond 10 km. Check that a completed lookup still reports its result if reply writing fails. In Voice, compare the spoken departure estimate with the map card for an event with an address and a ten-minute buffer.
 4. Verify an ordinary Inbox follow-up against its linked card, then check device delivery separately. An event can cover a scheduled slot even if it used the last daily PI turn. See [Inbox acceptance](docs/inbox-loop/acceptance.md) for review eligibility and the import cooldown.
 5. After a scale reading appears in Apple Health, open Jarvis Health and compare the weight, body fat and measurement date. On Watch Home, scroll through all five sections and check the heading beside the clock in both directions.
-6. Opening Calendar from Schedule and matching move/edit results across Day, Week, agenda and Google Calendar passed on build 135. On 137, check the footer and hold-to-create gesture, Up Next, Health cards (monthly All history, Body trend and the separate Training walk count), and Notes tiles. Check a Notes folder move with a Markdown table edit. Try each orb theme without changing display mode; save and reset the finish and glow, and check per-card colours on iPhone. Reconnect Watch and check its palette and tinted complications.
+6. Opening Calendar from Schedule and matching move/edit results across Day, Week, agenda and Google Calendar passed on build 135. On build 137, Dan confirmed the All period, Calendar hold-and-drag to create, and Scan meal opening an unsent Chat draft. Follow-up changes awaiting an iPhone check include the Body trend period selector, fitted gym log sheets, the Calendar creation card and Week day dividers. Still check the Calendar footer, Up Next, Body trend, the separate Training walk count, and Notes tiles. Check a Notes folder move with a Markdown table edit. Red theme switching passed on iPhone. Recheck its corrected red accent in dark and light mode. Try the remaining orb themes without changing display mode; save and reset the finish and glow, and check per-card colours on iPhone. Reconnect Watch and check its palette and tinted complications.
 
 **Unverified:** a usable Foundry `_meta` call ID for replay, the live provider rate-limit cause, and Background PI message delivery. Offline replay and merged code do not establish device acceptance.
 
@@ -64,7 +66,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 
 ## Phase task tracking
 
-Next available P15 task ID: `P15-213`. Check GitHub issues and Git history before assigning it.
+Next available P15 task ID: `P15-214`. Check GitHub issues and Git history before assigning it.
 
 Use the table for active numbered work. `Complete` means task delivery, not physical acceptance. Keep any remaining device checks in the backlog above; completed tasks are in GitHub and Git history.
 

@@ -29,7 +29,7 @@ struct JarvisNoteEditorSheet: View {
     @State private var baseline: VaultNote?
     @State private var blocks: [JarvisMarkdownBlock]
     @State private var activeBlock: UUID?
-    @State private var selections: [UUID: TextSelection] = [:]
+    @State private var selections: [UUID: NSRange] = [:]
     @State private var graph: KnowledgeGraph?
     @State private var linkedExpanded = false
     @State private var showWikiPicker = false
@@ -150,12 +150,13 @@ struct JarvisNoteEditorSheet: View {
                         if block.table != nil {
                             JarvisNoteTableGrid(block: $block)
                         } else {
-                            TextEditor(text: $block.text, selection: $selections[block.id])
-                                .font(.body).scrollContentBackground(.hidden).scrollDisabled(true)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(minHeight: blocks.count == 1 ? 150 : 44)
-                                .focused($focus, equals: .body(block.id))
-                                .accessibilityLabel(copy.contentField).accessibilityIdentifier("editor.body")
+                            JarvisNoteBodyEditor(text: $block.text, selection: $selections[block.id],
+                                focused: Binding(get: { focus == .body(block.id) }, set: { editing in
+                                    if editing { focus = .body(block.id) }
+                                    else if focus == .body(block.id) { focus = nil }
+                                }), label: copy.contentField)
+                            .focused($focus, equals: .body(block.id))
+                            .frame(minHeight: blocks.count == 1 ? 150 : 44, alignment: .top)
                         }
                     }
                 }
@@ -321,8 +322,7 @@ struct JarvisNoteEditorSheet: View {
 
     private func editRange(_ index: Int) -> Range<String.Index> {
         let text = blocks[index].text
-        if let selection = selections[blocks[index].id], case let .selection(range) = selection.indices,
-           range.lowerBound >= text.startIndex, range.upperBound <= text.endIndex { return range }
+        if let selection = selections[blocks[index].id], let range = Range(selection, in: text) { return range }
         return text.endIndex..<text.endIndex
     }
 
@@ -332,7 +332,8 @@ struct JarvisNoteEditorSheet: View {
         let offset = text.distance(from: text.startIndex, to: range.lowerBound) + (caret ?? value.count)
         text.replaceSubrange(range, with: value)
         blocks[index].text = text
-        selections[blocks[index].id] = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: offset))
+        let insertion = text.index(text.startIndex, offsetBy: offset)
+        selections[blocks[index].id] = NSRange(insertion..<insertion, in: text)
         focus = .body(blocks[index].id)
     }
 
