@@ -278,6 +278,8 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case editorFeedsPlaceholder = "insights.editorFeedsPlaceholder"
     case editorAddFeed = "insights.editorAddFeed"
     case editorRemoveFeed = "insights.editorRemoveFeed"
+    case editorBrainInstructions = "insights.editorBrainInstructions"
+    case editorIssueBrainInstructions = "insights.editorIssueBrainInstructions"
     case editorGuidance = "insights.editorGuidance"
     case editorGuidanceCount = "insights.editorGuidanceCount"
     case editorPreferences = "insights.editorPreferences"

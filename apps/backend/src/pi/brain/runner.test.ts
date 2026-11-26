@@ -5,6 +5,7 @@ import { alertEvent, githubEvent, workerEvent } from '../../proactive/events/pro
 import type { ProactiveEventInput } from '../../proactive/events/types.js';
 import { createMemoryProactiveStore } from '../../proactive/store.js';
 import { createPiArea } from '../area.js';
+import { defaultBrainInstructions } from '../../proactive/brain-instructions.js';
 import { ESTIMATED_PROMPT_TOKENS } from '../pricing.js';
 import { createMemoryPiStore } from '../store.js';
 import { memoryConversations, memoryVault, scriptedGateway, type ScriptedWake } from './brain.testkit.js';
@@ -113,10 +114,19 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(await t.proactive.spend.monthTotal('2026-11')).toBeGreaterThan(0);
   });
 
+  it('delivers the entire saved procedure alongside an event including its original line breaks', async () => {
+    const t = setup();
+    const procedure = 'Check today’s calendar.\nKeep updates short.';
+    await t.proactive.settings.patch({ brainInstructions: procedure });
+    await t.enqueue({ source: 'calendar', kind: 'calendar_event_upcoming', dedupeKey: 'appointment', summary: 'Dentist', occurredAt: t.now() });
+    await t.tick();
+    expect(t.gateway.wakes[0]?.body).toContain(procedure);
+  });
+
   it('runs a scheduled sweep through PI with categories, scope and guidance in the trusted policy', async () => {
     const t = setup();
     await t.ready;
-    await t.proactive.settings.patch({ guidance: 'Prefer short operational updates.', categories: { travel: false } });
+    await t.proactive.settings.patch({ guidance: 'Prefer short operational updates.', brainInstructions: 'Check today’s conflicts first.', categories: { travel: false } });
     const claim = await t.proactive.runs.claim({
       trigger: 'scheduled', slot: '2026-11-16T07:00', now: t.now(),
     });
@@ -124,6 +134,8 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(t.gateway.wakes).toHaveLength(1);
     expect(t.gateway.wakes[0]!.body).not.toMatch(/enabled categories=[^;]*travel/u);
     expect(t.gateway.wakes[0]!.body).toContain('Prefer short operational updates.');
+    expect(t.gateway.wakes[0]!.body).toContain('Check today’s conflicts first.');
+    expect(t.gateway.wakes[0]!.body).not.toContain('# Brain: acting on a wake');
     expect(t.gateway.wakes[0]!.body).toContain('type=scheduled');
     expect((await t.proactive.runs.latest())?.status).toBe('done');
   });
@@ -232,10 +244,10 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     for (let index = 0; index <= MAX_WAKE_EVENTS; index += 1) await t.enqueue(event(index));
     expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: 30 });
     expect(t.gateway.wakes[0]!.body).toContain('Why: 30 events arrived.');
-    expect(t.gateway.wakes[0]!.body.match(/^- /gmu)).toHaveLength(30);
+    expect(t.gateway.wakes[0]!.body.match(/^- [^\n]+ \| observed /gmu)).toHaveLength(30);
     t.advance(MIN_WAKE_GAP_MS);
     expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: 1 });
-    expect(t.gateway.wakes[1]!.body.match(/^- /gmu)).toHaveLength(1);
+    expect(t.gateway.wakes[1]!.body.match(/^- [^\n]+ \| observed /gmu)).toHaveLength(1);
   });
 
   it.each(['event', 'scheduled'])('includes the recorded message feedback in one line of the next %s wake', async (kind) => {
@@ -623,7 +635,7 @@ describe('replaying recorded past events through the loop', () => {
     const wakeBodies = t.gateway.wakes.map(({ body }) => body);
     const dedupeRuns = runs.map((run) => `workflow_run.${run.conclusion}`);
     expect(dedupeRuns.length).toBe(recorded.length);
-    const eventLines = wakeBodies.flatMap((body) => body.split('\n').filter((line) => line.startsWith('- ')));
+    const eventLines = wakeBodies.flatMap((body) => body.split('\n').filter((line) => line.startsWith('- ') && line.includes(' | observed ')));
     expect(new Set(eventLines).size).toBe(eventLines.length);
     expect(eventLines.length).toBeGreaterThan(0);
     // Mechanics: batched, bounded, spaced.
@@ -669,7 +681,9 @@ it.each(replayCases)('replays $name with the expected outreach and wake count', 
     expect(await t.tick()).toMatchObject({ outcome: 'done', claimed: batchSize });
     expect(t.pushes.length - before).toBe(expected);
     expect(t.gateway.wakes).toHaveLength(batch + 1);
-    expect(t.gateway.wakes[batch]!.estimatedInputTokens).toBeLessThanOrEqual(ESTIMATED_PROMPT_TOKENS);
+    expect(t.gateway.wakes[batch]!.estimatedInputTokens).toBeLessThanOrEqual(
+      ESTIMATED_PROMPT_TOKENS + Math.ceil(Buffer.byteLength(defaultBrainInstructions) / 3),
+    );
     t.advance(MIN_WAKE_GAP_MS);
   }
   expect(t.conversations.messages.filter(message => message.role === 'jarvis')).toHaveLength(messages.reduce((a, b) => a + b, 0));

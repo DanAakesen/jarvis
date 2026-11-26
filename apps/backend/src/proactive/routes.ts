@@ -1,3 +1,4 @@
+import { defaultBrainInstructions, maxBrainInstructionLength } from './brain-instructions.js';
 import type {
   FastifyBaseLogger, FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest,
   FastifyTypeProviderDefault,
@@ -76,7 +77,7 @@ async function parseSettingsPatch(
       : { error: 'unsupported_preference' };
   }
   if (Object.keys(body).some((key) =>
-    !['paused', 'monthlyBudgetDkk', 'backgroundTurnsPerDay', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance',
+    !['paused', 'monthlyBudgetDkk', 'backgroundTurnsPerDay', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance', 'brainInstructions',
       'expectedRevision'].includes(key))) {
     return undefined;
   }
@@ -140,6 +141,11 @@ async function parseSettingsPatch(
     if (!Array.isArray(body.newsFeeds) || body.newsFeeds.length > 10 || !body.newsFeeds.every(validUrl)) return undefined;
     patch.newsFeeds = body.newsFeeds as string[];
   }
+  if (Object.hasOwn(body, 'brainInstructions')) {
+    if (typeof body.expectedRevision !== 'string' || typeof body.brainInstructions !== 'string' ||
+        !body.brainInstructions.trim() || body.brainInstructions.length > maxBrainInstructionLength) return undefined;
+    patch.brainInstructions = body.brainInstructions;
+  }
   if (Object.hasOwn(body, 'guidance')) {
     if (typeof body.guidance !== 'string' || body.guidance.length > 1000) return undefined;
     patch.guidance = body.guidance;
@@ -160,6 +166,7 @@ function responseSettings(settings: Awaited<ReturnType<ProactiveStore['settings'
     suggestionScope: settings.suggestionScope,
     newsFeeds: settings.newsFeeds,
     guidance: settings.guidance,
+    brainInstructions: settings.brainInstructions ?? defaultBrainInstructions,
     revision: proactiveSettingsRevision(settings),
     preferences: understoodProactivePreferences(settings),
     capabilities: proactivePreferenceHelp,

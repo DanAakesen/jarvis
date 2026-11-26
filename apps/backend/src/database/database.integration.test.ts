@@ -811,7 +811,9 @@ describe('real SQL Server migration contract', () => {
           authoritativeRefs: [],
           observations: [],
         }, signal)).rejects.toMatchObject({ code: 'conflict' });
+        await proactive.settings.patch({ brainInstructions: 'Check upcoming deadlines.' });
         await proactive.settings.patch({ guidance: 'changed after the situation was read' });
+        expect((await proactive.settings.read()).brainInstructions).toBe('Check upcoming deadlines.');
         await expect(situations.commit({
           owner,
           expectedRevision: stored.revision,

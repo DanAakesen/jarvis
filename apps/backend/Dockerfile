@@ -30,6 +30,7 @@ COPY --from=production-dependencies /app/apps/backend ./apps/backend
 COPY --from=build /app/packages/contracts/package.json ./packages/contracts/package.json
 COPY --from=build /app/packages/contracts/src ./packages/contracts/src
 RUN node --input-type=module -e "await import('@jarvis/contracts')"
+COPY agents/pi/skills/jarvis-brain/SKILL.md ./agents/pi/skills/jarvis-brain/SKILL.md
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 RUN node --input-type=module -e "await import('./apps/backend/dist/health/health-upload/azure-buffer.js'); await import('./apps/backend/dist/health/health-upload/host.js'); const {buildHealthUploadServer}=await import('./apps/backend/dist/health/health-upload/server.js'); const app=buildHealthUploadServer(); if ((await app.inject({method:'POST',url:'/api/health/ingest',payload:{}})).statusCode!==404) process.exit(1); await app.close();"
 COPY db/migrations ./db/migrations

@@ -1,3 +1,4 @@
+import { defaultBrainInstructions } from './brain-instructions.js';
 import { createHash } from 'node:crypto';
 import { safeDecision, type ApprovalDecider } from '../core/approval-interpreter.js';
 import {
@@ -55,6 +56,7 @@ export function proactiveSettingsRevision(settings: ProactiveSettings): string {
     suggestionScope: settings.suggestionScope,
     newsFeeds: settings.newsFeeds,
     guidance: settings.guidance,
+    brainInstructions: settings.brainInstructions ?? defaultBrainInstructions,
   };
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }

@@ -9,6 +9,10 @@
 !docs/
 !docs/features.md
 !agents/
+!agents/pi/
+!agents/pi/skills/
+!agents/pi/skills/jarvis-brain/
+!agents/pi/skills/jarvis-brain/SKILL.md
 !agents/jarvis/
 !agents/jarvis/presence-instructions.json
 !agents/jarvis/identity-contract.json

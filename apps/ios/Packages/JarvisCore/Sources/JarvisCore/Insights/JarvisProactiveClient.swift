@@ -280,6 +280,7 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
     public let suggestionScope: JarvisProactiveScope
     public let newsFeeds: [String]
     public let guidance: String
+    public let brainInstructions: String?
     public let revision: String
     public let preferences: [String]
 
@@ -292,6 +293,7 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
         suggestionScope: JarvisProactiveScope = .all,
         newsFeeds: [String] = [],
         guidance: String = "",
+        brainInstructions: String? = nil,
         revision: String = String(repeating: "a", count: 64),
         preferences: [String] = []
     ) {
@@ -303,6 +305,7 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
         self.suggestionScope = suggestionScope
         self.newsFeeds = newsFeeds
         self.guidance = guidance
+        self.brainInstructions = brainInstructions
         self.revision = revision
         self.preferences = preferences
     }
@@ -324,6 +327,7 @@ public struct JarvisProactiveConfig: Decodable, Equatable, Sendable {
 
 public enum JarvisProactiveLimits {
     public static let budgetRange = 0...100
+    public static let brainInstructionsLength = 16_000
     public static let guidanceLength = 1_000
     public static let preferenceCount = 12
     public static let preferenceLength = 300
@@ -342,17 +346,19 @@ public struct JarvisProactiveSettingsPatch: Encodable, Equatable, Sendable {
     public var suggestionScope: JarvisProactiveScope?
     public var newsFeeds: [String]?
     public var guidance: String?
+    public var brainInstructions: String?
     public let expectedRevision: String
 
     public var isEmpty: Bool {
         paused == nil && monthlyBudgetDkk == nil && sources == nil && categories == nil
-            && backgroundTurnsPerDay == nil && suggestionScope == nil && newsFeeds == nil && guidance == nil
+            && backgroundTurnsPerDay == nil && suggestionScope == nil && newsFeeds == nil && guidance == nil && brainInstructions == nil
     }
 }
 
 public enum JarvisProactiveIssue: Equatable, Sendable {
     case budgetOutOfRange
     case guidanceTooLong
+    case invalidBrainInstructions
     case invalidFeed
     case tooManyFeeds
     case tooManyPreferences
@@ -360,6 +366,7 @@ public enum JarvisProactiveIssue: Equatable, Sendable {
     public var localizationKey: JarvisInsightsLocalizationKey {
         switch self {
         case .budgetOutOfRange: .editorIssueBudget
+        case .invalidBrainInstructions: .editorIssueBrainInstructions
         case .guidanceTooLong: .editorIssueGuidance
         case .invalidFeed, .tooManyFeeds: .editorIssueFeeds
         case .tooManyPreferences: .editorIssuePreferences
@@ -376,6 +383,7 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
     public var scope: JarvisProactiveScope
     public var feedsText: String
     public var guidance: String
+    public var brainInstructions: String?
     public var preferences: [String]
 
     public init(_ settings: JarvisProactiveConfig) {
@@ -386,6 +394,7 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
         scope = settings.suggestionScope
         feedsText = settings.newsFeeds.joined(separator: "\n")
         guidance = settings.guidance
+        brainInstructions = settings.brainInstructions
         preferences = settings.preferences
     }
 
@@ -413,6 +422,8 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
     public var issues: [JarvisProactiveIssue] {
         var result: [JarvisProactiveIssue] = []
         if budget == nil { result.append(.budgetOutOfRange) }
+        if let brainInstructions, brainInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || brainInstructions.utf16.count > JarvisProactiveLimits.brainInstructionsLength { result.append(.invalidBrainInstructions) }
         if guidance.count > JarvisProactiveLimits.guidanceLength { result.append(.guidanceTooLong) }
         let feeds = feeds
         if feeds.count > JarvisProactiveLimits.feedCount { result.append(.tooManyFeeds) }
@@ -441,6 +452,7 @@ public struct JarvisProactiveSettingsDraft: Equatable, Sendable {
         if !changedCategories.isEmpty { patch.categories = changedCategories }
         if scope != settings.suggestionScope { patch.suggestionScope = scope }
         if feeds != settings.newsFeeds { patch.newsFeeds = feeds }
+        if brainInstructions != settings.brainInstructions { patch.brainInstructions = brainInstructions }
         if guidance != settings.guidance { patch.guidance = guidance }
         return patch
     }
@@ -496,6 +508,7 @@ public struct JarvisProactiveSettingsEditor: Equatable, Sendable {
         if draft.backgroundTurnsPerDay != prior.backgroundTurnsPerDay { merged.backgroundTurnsPerDay = draft.backgroundTurnsPerDay }
         if draft.scope != prior.scope { merged.scope = draft.scope }
         if draft.feedsText != prior.feedsText { merged.feedsText = draft.feedsText }
+        if draft.brainInstructions != prior.brainInstructions { merged.brainInstructions = draft.brainInstructions }
         if draft.guidance != prior.guidance { merged.guidance = draft.guidance }
         for index in merged.sources.indices {
             let id = merged.sources[index].id

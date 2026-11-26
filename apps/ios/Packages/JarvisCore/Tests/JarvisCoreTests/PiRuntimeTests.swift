@@ -87,6 +87,21 @@ final class PiRuntimeTests: XCTestCase {
         }
     }
 
+    func testBackgroundInstructionsUseTheSavedRevisionAndSurviveRebase() throws {
+        let initial = JarvisProactiveConfig(brainInstructions: "Default procedure")
+        var editor = JarvisProactiveSettingsEditor(settings: initial)
+        XCTAssertNil(editor.beginSave())
+        editor.draft.brainInstructions = " "
+        XCTAssertFalse(editor.canConfirm)
+        editor.draft.brainInstructions = "Read my calendar.\nFlag conflicts."
+        let newer = JarvisProactiveConfig(guidance: "Travel", brainInstructions: "Default procedure", revision: String(repeating: "b", count: 64))
+        editor.rebase(onto: newer)
+        let patch = try XCTUnwrap(editor.beginSave())
+        XCTAssertEqual(patch.expectedRevision, newer.revision)
+        XCTAssertEqual(patch.brainInstructions, "Read my calendar.\nFlag conflicts.")
+        XCTAssertNil(patch.guidance)
+    }
+
     func testProactiveEditorPatchesTheCombinedBackgroundTurnAllowance() throws {
         let config = JarvisProactiveConfig(monthlyBudgetDkk: 100, backgroundTurnsPerDay: 12)
         var editor = JarvisProactiveSettingsEditor(settings: config)
