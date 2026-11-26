@@ -7,6 +7,7 @@ System map from code and workflows, not a production readback. See [PLAN.md](../
 | Component | Where it lives | Responsibility |
 | --- | --- | --- |
 | iPhone and Apple Watch | [apps/ios](../apps/ios), SwiftUI and `JarvisCore` | Chat, Voice, capture and notifications. Watch dictation uses Azure Speech through the backend's Node WebSocket with a bearer header. Upload/recognition budgets are 30/20 seconds; Watch allows 55 seconds direct, with fresh budgets on a phone retry. |
+| CarPlay | iPhone template scene and shared VoiceScreenModel | Reads the primary calendar and vault through the phone’s authenticated clients. The active voice template observes and controls the same call as iPhone. |
 | Web | [apps/web](../apps/web), React, TypeScript, Vite | Browser UI, Entra sign-in, Chat and Voice. |
 | Backend | [apps/backend](../apps/backend), Node 22, TypeScript, Fastify | Auth, Chat, `/voice`, tools and their receipts, PI gateway, scheduled jobs and push. Shared schemas and failure copy live in [packages/contracts](../packages/contracts). |
 | Database | [Azure SQL schema and migrations](../db/README.md) | Chat history, owner settings, Personal Memory, Vault index, PI runs and situation, proactive queue, APNs registrations and delivery outboxes. The backend runs forward migrations before listening; preserve existing checksums and matching down batches. |

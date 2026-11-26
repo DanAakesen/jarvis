@@ -7,6 +7,7 @@ enum JarvisCompositionError: Error {
 
 extension Notification.Name {
     static let jarvisSignInRequired = Notification.Name("JarvisSignInRequired")
+    static let jarvisAccountAccessChanged = Notification.Name("JarvisAccountAccessChanged")
     static let jarvisSessionRevoked = Notification.Name("JarvisSessionRevoked")
 }
 
@@ -16,11 +17,23 @@ struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {
     }
 
     func requestSignIn() async {
-        NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
+        await MainActor.run {
+            JarvisComposition.setAccountAccessSuspended(true)
+            NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
+        }
     }
 }
 
 enum JarvisComposition {
+    @MainActor private(set) static var accountAccessSuspended = false
+
+    @MainActor static func setAccountAccessSuspended(_ suspended: Bool) {
+        if suspended && accountAccessSuspended { return }
+        accountAccessSuspended = suspended
+        if suspended { CarScheduleActivityAttributes.clearActivities() }
+        NotificationCenter.default.post(name: .jarvisAccountAccessChanged, object: nil)
+    }
+
     static func makeClient(
         accessTokenProvider: any AccessTokenProvider,
         bundle: Bundle = .main,

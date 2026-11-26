@@ -8,6 +8,8 @@ import UIKit
 @MainActor
 @Observable
 final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
+    static let shared = VoiceScreenModel()
+
     // StateObject owns the lifetime; views observe individual fields, not objectWillChange.
     private(set) var voiceState: VoiceSessionState = .idle
     private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
@@ -189,7 +191,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         await Task { @MainActor in await self.performStart() }.value
     }
 
-    private func performStart() async {
+    func performStart() async {
 #if targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
             guard sessionClient == nil else { return }
@@ -438,6 +440,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 UIApplication.shared.endBackgroundTask(backgroundTask)
             }
         }
+        let cancelledStart = isStarting
+        sessionGeneration += 1
         isStarting = false
         let endingClient = sessionClient
         isMinimized = false
@@ -460,11 +464,10 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 await tearDownFailedEnd(error)
                 return
             }
-        } else if voiceState != .ended {
+        } else if voiceState != .ended && !cancelledStart {
             await tearDownFailedEnd(VoiceProtocolError.endFailed)
             return
         }
-        sessionGeneration += 1
         returnToChatRequested = returnToChat
         liveActivitySessionID = nil
         connectionPresentationState = connectionPresentationMachine.apply(.ended)

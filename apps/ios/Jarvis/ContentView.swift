@@ -83,7 +83,8 @@ struct ContentView: View {
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
         _voiceModel = StateObject(
-            wrappedValue: VoiceScreenModel(screenshotConnectionLost: voiceConnectionScreenshot)
+            wrappedValue: fixtureMode || navigationFixtureMode
+                ? VoiceScreenModel(screenshotConnectionLost: voiceConnectionScreenshot) : .shared
         )
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?

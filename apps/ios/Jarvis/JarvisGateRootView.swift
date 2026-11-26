@@ -250,6 +250,7 @@ private final class JarvisGateModel: ObservableObject {
             JarvisTaskActivityBackgroundRefresh.shared.schedule()
         case .active:
             if !Self.isNavigationFixture {
+                CarScheduleActivityAttributes.clearActivities(expiredOnly: true)
                 Task { await JarvisWatchBridge.shared.refreshDictationCredential() }
             }
             let requiresLock = policy.shouldLock(lastBackgroundedAt: backgroundedAt, now: Date())
@@ -337,6 +338,7 @@ private final class JarvisGateModel: ObservableObject {
             watchRevocationNotice = nil
             JarvisWatchBridge.shared.configure(client: client)
             await JarvisAppCache.clear()
+            JarvisComposition.setAccountAccessSuspended(false)
             contentEpoch += 1
             presentation = .lock(.waiting)
             await authenticate()
@@ -352,6 +354,7 @@ private final class JarvisGateModel: ObservableObject {
     func signOut() async {
         guard !Self.isNavigationFixture, !isSigningOut else { return }
         isSigningOut = true
+        JarvisComposition.setAccountAccessSuspended(true)
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()
@@ -420,6 +423,7 @@ private final class JarvisGateModel: ObservableObject {
             isLocked: true
         )
         if decision == .signIn {
+            JarvisComposition.setAccountAccessSuspended(true)
             presentation = .lock(.signedOut)
             Task { await JarvisWatchBridge.shared.disconnect() }
         }

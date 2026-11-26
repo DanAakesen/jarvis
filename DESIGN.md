@@ -68,4 +68,4 @@ Circular complications draw their symbols and task count on a clear background. 
 
 ## Acceptance
 
-Source and simulator results do not establish [device acceptance](PLAN.md#next-steps-and-blockers). CarPlay has no shipped interface.
+Source and simulator results do not establish [device acceptance](PLAN.md#next-steps-and-blockers). The CarPlay dashboard and active voice indicator use Apple templates.

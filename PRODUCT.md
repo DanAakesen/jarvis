@@ -83,7 +83,7 @@ The brain should decide whether a change needs attention, explain why now, and o
 
 ### CarPlay
 
-In-car use is a major use case: hands-free conversation, short spoken answers, and relevant proactive heads-ups without asking Dan to read or operate the phone. Dan reported Apple's **Voice Based Conversation** entitlement grant on 21 November 2026. The grant is not evidence that the capability is configured, shipped or working in a car.
+Start hands-free conversation from the CarPlay dashboard. Voice uses the phone’s authenticated session and speaks responses. The dashboard also gives manual access to the primary calendar, pinned and recent vault notes, and open work and personal tasks. Physical audio and head-unit acceptance require a car test.
 
 ### Watch
 

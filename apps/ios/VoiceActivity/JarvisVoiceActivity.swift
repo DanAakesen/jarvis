@@ -7,13 +7,14 @@ import WidgetKit
 struct JarvisVoiceActivityBundle: WidgetBundle {
     var body: some Widget {
         JarvisVoiceActivity()
+        CarScheduleActivity()
     }
 }
 
 struct JarvisVoiceActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: VoiceActivityAttributes.self) { context in
-            VoiceLockScreenView(attributes: context.attributes, state: context.state)
+            VoiceActivityPresentation(attributes: context.attributes, state: context.state)
                 .activityBackgroundTint(Color.black.opacity(0.86))
                 .activitySystemActionForegroundColor(context.state.appearance.primaryDarkColor)
         } dynamicIsland: { context in
@@ -131,6 +132,29 @@ struct JarvisVoiceActivity: Widget {
                 )
             }
             .keylineTint(context.state.appearance.primaryDarkColor)
+        }
+        .supplementalActivityFamilies([.small])
+    }
+}
+
+private struct VoiceActivityPresentation: View {
+    @Environment(\.activityFamily) private var family
+    let attributes: VoiceActivityAttributes
+    let state: VoiceActivityAttributes.ContentState
+
+    var body: some View {
+        if family == .small {
+            HStack(spacing: JarvisDesignTokens.rowSpacing) {
+                JarvisOrb(activity: JarvisOrbActivity(livePhase: state.phase), size: 32,
+                          isStatic: true, palette: state.appearance)
+                VStack(alignment: .leading) {
+                    Text(VoiceLiveActivityCopy.title.text(language: attributes.appLanguage)).font(.headline)
+                    Text(voiceActivityStatusText(state.phase, language: attributes.appLanguage))
+                        .foregroundStyle(state.appearance.secondaryDarkColor)
+                }
+            }
+        } else {
+            VoiceLockScreenView(attributes: attributes, state: state)
         }
     }
 }
