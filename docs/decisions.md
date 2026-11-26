@@ -4,7 +4,7 @@ Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for 
 
 ## 2026-11-26 · iPhone information cards
 
-Factory leads with decisions, Usage with spend, Status with check evidence and Proactive with findings. Secondary detail expands in place. Keep the page title in the header and section titles inside their cards. Proactive preferences are editable where their effects are visible.
+Factory leads with decisions, Usage with spend, Status with checks and Proactive with findings. Put one title in the page header and one in each card; disclose secondary detail in place. Edit Proactive preferences beside their effects. [#2094](https://github.com/DanAakesen/jarvis/pull/2094).
 
 ## Standing rules
 
@@ -30,7 +30,7 @@ Add confirmed decisions here, newest first. When an entry is older than 14 days,
 
 ### 24 November 2026 — iPhone dashboard and editor
 
-Home starts with Up Next. Home and Health share translucent card surfaces beneath floating headers and footers. Navigation icons use the configured primary accent. Notes uses pinned tiles and a two-column folder card. Calendar edits the same primary Google Calendar used by Home, Chat and Voice. Notes open in the Markdown editor, with an editable table grid. A deliberate folder move and content edit save together, not as two writes. [#2071](https://github.com/DanAakesen/jarvis/pull/2071), [#2076](https://github.com/DanAakesen/jarvis/pull/2076).
+Home leads with Up Next. Home and Health share translucent cards and floating chrome; navigation uses the primary accent. Calendar edits the same primary calendar used by Home, Chat and Voice. Notes uses pinned tiles and two-column folders, opens its Markdown editor with an editable table grid, and saves a folder move and content edit together. [#2071](https://github.com/DanAakesen/jarvis/pull/2071), [#2076](https://github.com/DanAakesen/jarvis/pull/2076).
 
 ### 24 November 2026 — Personal native palette
 
@@ -71,13 +71,11 @@ Dan approved manual kcal entry, Inbox capture and automatic nudges, retiring the
 
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material
 
-- **Decision:** [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) owns the working rules and document map; `AGENTS.md` links to it. Key files describe current state. Delete obsolete working material and shipped design references; use Git and PRs for history.
-- **Why:** Keep context small enough to onboard agents from the checkout. [Agent context](agent-context.md#agent-context) describes how Factory workers get the pointer.
+[`.github/copilot-instructions.md`](../.github/copilot-instructions.md) owns the rules and document map. `AGENTS.md` points to it so Factory workers can onboard from the checkout. Keep key files current; delete obsolete working material and finished design references. Git and PRs hold the history.
 
 ### 22 November 2026 — Give Notes one title and a file inventory ([#2031](https://github.com/DanAakesen/jarvis/pull/2031))
 
-- **Decision:** Keep file inventory separate from search chunks (`0103`) so title-only notes can list. Use the leading H1 or readable filename and read pins by path. Refresh newest-first on open and show one headline without rewriting saved Markdown.
-- **Why:** A file can exist without search chunks. Index it separately so it can still appear in Notes and pins.
+Index file inventory separately from search chunks (`0103`) so title-only notes still list. Read pins by path. Use the leading H1 or readable filename for the one visible headline without rewriting saved Markdown. Refresh newest-first on open.
 
 ### 22 November 2026 — Keep the established PI tool names and never replay an uncertain effect ([#2033](https://github.com/DanAakesen/jarvis/pull/2033), [#2032](https://github.com/DanAakesen/jarvis/pull/2032), [#2030](https://github.com/DanAakesen/jarvis/pull/2030))
 
