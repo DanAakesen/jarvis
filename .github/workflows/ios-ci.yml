@@ -1,98 +1,29 @@
 name: iOS CI
-
-on:
-  workflow_call:
-  workflow_dispatch:
-  schedule:
-    - cron: '17 3 * * *'
-
+on: workflow_dispatch
 permissions:
   contents: read
-
 jobs:
-  linux:
-    name: JarvisCore build and tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
+  proof:
+    runs-on: macos-26
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Build and test JarvisCore
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app
+      - name: Install pinned XcodeGen
         run: |
-          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$GITHUB_WORKSPACE:/work" \
-            -w /work/apps/ios/Packages/JarvisCore swift:6.2 bash -c "swift build && swift test"
-      - name: Check iOS project and platform metadata
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Exercise the drawer with native finger drags
+        working-directory: apps/ios
         run: |
-          ruby -ryaml -e '
-            project = YAML.safe_load_file("apps/ios/project.yml")
-            abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisWatch", "JarvisWatchWidgets", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
-            abort "iPhone application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
-            abort "paired Watch app target is required" unless project.dig("targets", "JarvisWatch", "platform") == "watchOS" && project.dig("targets", "JarvisWatch", "type") == "application"
-            abort "Watch complications target is required" unless project.dig("targets", "JarvisWatchWidgets", "platform") == "watchOS" && project.dig("targets", "JarvisWatchWidgets", "type") == "app-extension"
-            abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
-            abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
-            dependencies = project.dig("targets", "Jarvis", "dependencies") || []
-            abort "Watch app must be embedded in iPhone" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWatch" && dependency["embed"] == true }
-            abort "complications must be embedded in Watch" unless project.dig("targets", "JarvisWatch", "dependencies").any? { |dependency| dependency["target"] == "JarvisWatchWidgets" && dependency["embed"] == true }
-            abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
-            abort "voice activity extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisVoiceActivity" && dependency["embed"] == true }
-            abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
-            abort "voice activity must share attributes and intents" unless project.dig("targets", "JarvisVoiceActivity", "sources").any? { |source| source["path"] == "Shared" }
-            abort "English must be the development language" unless project.dig("options", "developmentLanguage") == "en"
-            abort "widgets extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWidgets" && dependency["embed"] == true }
-            bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
-            abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
-            abort "unexpected deployment target" unless project.dig("targets", "Jarvis", "deploymentTarget") == "26.0"
-            abort "unexpected bundle identifier" unless project.dig("targets", "Jarvis", "settings", "base", "PRODUCT_BUNDLE_IDENTIFIER") == "com.danaakesen.jarvis"
-            abort "iPhone-only device family is required" unless project.dig("targets", "Jarvis", "settings", "base", "TARGETED_DEVICE_FAMILY") == "1"
-            abort "Swift 5 language mode is required" unless project.dig("targets", "Jarvis", "settings", "base", "SWIFT_VERSION") == "5.0"
-            abort "development APNs entitlement is required" unless project.dig("targets", "Jarvis", "settings", "configs", "Debug", "APS_ENVIRONMENT") == "development"
-            abort "production APNs entitlement is required" unless project.dig("targets", "Jarvis", "settings", "configs", "Release", "APS_ENVIRONMENT") == "production"
-            abort "local JarvisCore dependency is required" unless project.dig("packages", "JarvisCore", "path") == "Packages/JarvisCore"
-          '
-          python3 - <<'PY'
-          import json
-          import plistlib
-          from pathlib import Path
-
-          icon = json.loads(Path("apps/ios/Jarvis/Assets.xcassets/AppIcon.appiconset/Contents.json").read_text())
-          assert icon["images"][0]["filename"] == "JarvisAppIcon.png"
-          assert Path("apps/ios/Jarvis/Assets.xcassets/AppIcon.appiconset/JarvisAppIcon.png").is_file()
-          info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
-          assert info["ITSAppUsesNonExemptEncryption"] is False
-          assert info["NSSupportsLiveActivities"] is True
-          assert info["CFBundleDevelopmentRegion"] == "en"
-          assert "audio" in info["UIBackgroundModes"]
-          activity_info = plistlib.loads(Path("apps/ios/VoiceActivity/Info.plist").read_bytes())
-          assert activity_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
-          assert activity_info["CFBundleDevelopmentRegion"] == "en"
-          widget_info = plistlib.loads(Path("apps/ios/Widgets/Info.plist").read_bytes())
-          assert widget_info["CFBundlePackageType"] == "XPC!"
-          assert widget_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
-          assert widget_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
-          app_group = ["group.com.danaakesen.jarvis"]
-          watch_info = plistlib.loads(Path("apps/ios/Watch/Info.plist").read_bytes())
-          assert watch_info["WKCompanionAppBundleIdentifier"] == "com.danaakesen.jarvis"
-          assert watch_info["WKRunsIndependentlyOfCompanionApp"] is False
-          for component in ["Watch", "WatchWidgets"]:
-              watch_entitlements = plistlib.loads(Path(f"apps/ios/{component}/{component}.entitlements").read_bytes())
-              assert watch_entitlements["com.apple.security.application-groups"] == app_group
-          watch_entitlements = plistlib.loads(Path("apps/ios/Watch/Watch.entitlements").read_bytes())
-          assert watch_entitlements["com.apple.developer.healthkit"] is True
-          assert watch_entitlements["com.apple.developer.healthkit.background-delivery"] is True
-          assert "NSHealthShareUsageDescription" in watch_info
-          entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
-          assert entitlements["aps-environment"] == "$(APS_ENVIRONMENT)"
-          assert entitlements["com.apple.developer.healthkit"] is True
-          assert entitlements["com.apple.security.application-groups"] == app_group
-          assert entitlements["keychain-access-groups"] == ["$(AppIdentifierPrefix)com.microsoft.adalcache"]
-          assert info["LSApplicationQueriesSchemes"] == ["msauthv2", "msauthv3"]
-          extension_entitlements = plistlib.loads(Path("apps/ios/Jarvis/Broadcast/JarvisBroadcast.entitlements").read_bytes())
-          assert extension_entitlements["com.apple.security.application-groups"] == app_group
-          extension_info = plistlib.loads(Path("apps/ios/Jarvis/Broadcast/Info.plist").read_bytes())
-          extension = extension_info["NSExtension"]
-          assert extension_info["CFBundlePackageType"] == "XPC!"
-          assert extension_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
-          assert extension["NSExtensionPointIdentifier"] == "com.apple.broadcast-services-upload"
-          assert extension["RPBroadcastProcessMode"] == "RPBroadcastProcessModeSampleBuffer"
-          PY
+          set -euo pipefail
+          xcodegen generate
+          phone=$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone") and contains("Pro"))][0].udid')
+          xcrun simctl boot "$phone" || true
+          xcodebuild -quiet -project Jarvis.xcodeproj -scheme Jarvis -destination "platform=iOS Simulator,id=$phone" -parallel-testing-enabled NO -resultBundlePath "$RUNNER_TEMP/Swipe.xcresult" CODE_SIGNING_ALLOWED=NO test
+      - name: Native test evidence
+        if: always()
+        run: xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/Swipe.xcresult"

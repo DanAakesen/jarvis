@@ -110,6 +110,17 @@ targets:
         CODE_SIGN_ENTITLEMENTS: WatchWidgets/WatchWidgets.entitlements
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
+  DrawerProof:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [DrawerProof]
+    dependencies:
+      - target: Jarvis
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.swipeproof
+        GENERATE_INFOPLIST_FILE: "YES"
+        SWIFT_VERSION: "5.0"
   JarvisBroadcast:
     type: app-extension
     platform: iOS
@@ -180,6 +191,9 @@ schemes:
     build:
       targets:
         Jarvis: all
+        DrawerProof: [test]
+    test:
+      targets: [DrawerProof]
 
   JarvisWatch:
     build:
