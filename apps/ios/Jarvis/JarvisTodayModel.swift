@@ -57,6 +57,30 @@ final class JarvisTodayModel: ObservableObject {
     var notesClient: JarvisNotesClient? { dependencies.notes }
     var isFixture: Bool { dependencies.fixture != nil }
 
+    @Published private(set) var pinnedNotePaths: [String] = []
+    @Published private(set) var pinnedNoteTitles: [String: String] = [:]
+    private var pinRequest = UUID()
+
+    func refreshPinnedNotes(force: Bool = false) async {
+        let request = UUID()
+        pinRequest = request
+        await JarvisAppCache.bindIfNeeded()
+        let paths = await JarvisAppCache.shared.pinnedNotePaths()
+        guard pinRequest == request, !Task.isCancelled else { return }
+        let changed = Set(paths) != Set(pinnedNotePaths)
+        pinnedNotePaths = paths
+        guard !paths.isEmpty, let client = notesClient else { pinnedNoteTitles = [:]; return }
+        let repository = await JarvisAppCache.pinnedSummaries(paths: Set(paths), client: client)
+        for await update in repository.updates(force: force || changed) {
+            guard pinRequest == request, !Task.isCancelled else { return }
+            switch update {
+            case .cached(let notes, _), .fresh(let notes):
+                pinnedNoteTitles = Dictionary(notes.map { ($0.path, $0.title) }, uniquingKeysWith: { first, _ in first })
+            case .failed, .refreshing: break // Paths remain usable when summaries are unavailable.
+            }
+        }
+    }
+
     @Published private var trainingTargets: JarvisHealthTargets?
     var periodWorkoutTarget: Double? {
         if let fixture = dependencies.fixture {

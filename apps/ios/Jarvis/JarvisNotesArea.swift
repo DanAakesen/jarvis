@@ -276,28 +276,7 @@ struct JarvisNotesArea: View {
         refreshVersion += 1
     }
 
-    func message(for error: Error) -> String {
-        if let error = error as? JarvisClientError {
-            switch error {
-            case .signInRequired: return copy.signIn
-            case .notOwner: return copy.notOwner
-            case .networkFailure, .timedOut: return copy.offline
-            default: return copy.unavailable
-            }
-        }
-        if let error = error as? JarvisNotesClientError {
-            switch error {
-            case .noteConflict: return copy.conflict
-            case .writeOutcomeUnknown: return copy.unknownWrite
-            case .taskConflict: return copy.taskChanged
-            case .destinationExists: return copy[.noteExists]
-            case .folderAlreadyExists: return copy.folderAlreadyExists
-            case .noteNotFound: return copy.noteMissing
-            case .invalidRequest, .invalidResponse: return copy.unavailable
-            }
-        }
-        return copy.unavailable
-    }
+    func message(for error: Error) -> String { copy.message(for: error) }
 
     func authorizationUnavailable(_ error: Error) -> Bool {
         guard let error = error as? JarvisClientError else { return false }
@@ -365,9 +344,7 @@ struct JarvisNotesArea: View {
             case .pins:
                 let paths = Set(pinnedPaths)
                 guard !paths.isEmpty else { pinnedSummaries = [:]; return }
-                let repository: JarvisRepository<[VaultNoteSummary]> = await JarvisAppCache.repository(.notes, scope: "pins") { _ in
-                    .modified(try await client.noteSummaries(paths: paths.sorted()), validator: nil)
-                }
+                let repository = await JarvisAppCache.pinnedSummaries(paths: paths, client: client)
                 for await update in repository.updates(force: force) {
                     guard !Task.isCancelled, loadRequest == request, selectedTab == tab,
                           Set(pinnedPaths) == paths else { return }

@@ -7,13 +7,14 @@ struct JarvisTodayScreen: View {
     private enum Tab: Hashable { case today, due }
 
     private enum Sheet: Identifiable {
-        case task, taskDetail(VaultTask), note, workout, lift
+        case task, taskDetail(VaultTask), note, pinnedNote(VaultNote), workout, lift
 
         var id: String {
             switch self {
             case .task: "task"
             case .taskDetail(let task): "task.detail.\(task.id)"
             case .note: "note"
+            case .pinnedNote(let note): "note." + note.path
             case .workout: "workout"
             case .lift: "lift"
             }
@@ -49,6 +50,9 @@ struct JarvisTodayScreen: View {
     @State private var pendingTaskIDs = Set<String>()
     @State private var taskCompletionFailed = false
     @State private var taskCompletionError = ""
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var openingPin: String?
+    @State private var pinError: String?
     @State private var composerFocused = false
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
@@ -79,6 +83,7 @@ struct JarvisTodayScreen: View {
             }
         } content: {
             dayRows.environment(\.jarvisCardRole, "schedule")
+            pinnedNotes
         }
         .listStyle(.plain)
         .listRowSpacing(0)
@@ -88,9 +93,11 @@ struct JarvisTodayScreen: View {
         .environment(\.timeZone, JarvisHealthSyncWindow.calendar.timeZone)
         .accessibilityIdentifier("today.list")
         .refreshable {
+            async let pins: Void = model.refreshPinnedNotes(force: true)
             healthSyncState = await onSyncAppleHealth?()
             guard !Task.isCancelled else { return }
             await model.refresh(force: true)
+            await pins
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
@@ -102,7 +109,22 @@ struct JarvisTodayScreen: View {
         } message: {
             Text(taskCompletionError)
         }
-        .onDisappear { dictation.stop() }
+        .onDisappear { dictation.stop(); openingPin = nil }
+        .task(id: scenePhase) {
+            if scenePhase == .active { await model.refreshPinnedNotes() }
+        }
+        .task(id: openingPin) {
+            guard let path = openingPin, let client = model.notesClient else { return }
+            do {
+                let note = try await client.readNote(path: path)
+                guard !Task.isCancelled, openingPin == path else { return }
+                if sheet == nil { sheet = .pinnedNote(note) }
+            } catch {
+                guard !Task.isCancelled, openingPin == path else { return }
+                pinError = JarvisNotesCopy(language: language).message(for: error)
+            }
+            if openingPin == path { openingPin = nil }
+        }
         .task {
             await model.refresh()
 #if targetEnvironment(simulator)
@@ -126,6 +148,38 @@ struct JarvisTodayScreen: View {
         }
         .sheet(item: $sheet) { presented in
             sheetContent(presented)
+        }
+    }
+
+    @ViewBuilder private var pinnedNotes: some View {
+        if !model.pinnedNotePaths.isEmpty, model.notesClient != nil {
+            let strings = JarvisNotesCopy(language: language)
+            VStack(alignment: .leading, spacing: 8) {
+                JarvisSectionHeadline(copy(.pinnedNotes))
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
+                                         count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 8) {
+                    ForEach(model.pinnedNotePaths, id: \.self) { path in
+                        let location = JarvisNoteTitle.location(path: path)
+                        Button {
+                            pinError = nil
+                            openingPin = path
+                        } label: {
+                            JarvisPinnedNoteTile(title: model.pinnedNoteTitles[path] ?? JarvisNoteTitle.fileTitle(path: path),
+                                                 location: location.isEmpty ? strings.vaultRoot : location,
+                                                 opening: openingPin == path)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .jarvisDashboardSurface()
+                        .accessibilityIdentifier("today.pin." + path)
+                    }
+                }
+                if let pinError { Text(pinError).font(.footnote).foregroundStyle(.secondary) }
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 8, leading: JarvisDesignTokens.notesHorizontalInset,
+                                      bottom: 0, trailing: JarvisDesignTokens.notesHorizontalInset))
         }
     }
 
@@ -210,6 +264,7 @@ struct JarvisTodayScreen: View {
             let next = rowDate(first)
             let rest = upcoming.dropFirst().filter { JarvisHealthSyncWindow.calendar.isDate(rowDate($0), inSameDayAs: max(model.now, next)) }
             let following = upcoming.dropFirst().first { rowDate($0) != .distantFuture && !JarvisHealthSyncWindow.calendar.isDate(rowDate($0), inSameDayAs: max(model.now, next)) }
+            let hasDisclosure = !rest.isEmpty || following != nil
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("Up Next").font(.headline)
@@ -221,7 +276,7 @@ struct JarvisTodayScreen: View {
                     }
                 }
                 nextRow(first)
-                if !rest.isEmpty || following != nil {
+                if hasDisclosure {
                     if nextExpanded {
                         if !rest.isEmpty {
                             Divider()
@@ -234,10 +289,12 @@ struct JarvisTodayScreen: View {
                             nextRow(following)
                         }
                     }
-                    Divider()
                     JarvisDashboardDisclosure(title: nextExpanded ? "Show less" : "Show more", expanded: nextExpanded) { nextExpanded.toggle() }
                 }
-            }.padding(JarvisPageHeaderMetrics.heroInset).jarvisDashboardSurface().environment(\.jarvisCardRole, "next")
+            }
+            .padding([.horizontal, .top], JarvisPageHeaderMetrics.heroInset)
+            .padding(.bottom, hasDisclosure ? JarvisPageHeaderMetrics.rowLineSpacing : JarvisPageHeaderMetrics.heroInset)
+            .jarvisDashboardSurface().environment(\.jarvisCardRole, "next")
         }
     }
 
@@ -373,7 +430,6 @@ struct JarvisTodayScreen: View {
         }
         if expansion.hidden > 0 {
             scheduleSlice(last: true) {
-                Divider()
                 JarvisDashboardDisclosure(title: listExpanded ? copy(.showLess) : "Show more", expanded: listExpanded) { listExpanded.toggle() }
                     .accessibilityIdentifier("today.list.expand")
             }
@@ -677,6 +733,13 @@ struct JarvisTodayScreen: View {
                 ) { _ in
                     sheet = nil
                     successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
+                }
+            }
+        case .pinnedNote(let note):
+            if let client = model.notesClient {
+                JarvisNoteEditorSheet(client: client, copy: JarvisNotesCopy(language: language), mode: .edit(note)) { _ in
+                    sheet = nil
+                    Task { await model.refreshPinnedNotes(force: true) }
                 }
             }
         case .workout, .lift:

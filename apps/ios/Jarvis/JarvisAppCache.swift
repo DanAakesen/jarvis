@@ -41,6 +41,12 @@ enum JarvisAppCache {
         return JarvisRepository(cache: shared, kind: kind, scope: scope, fetch: fetch)
     }
 
+    static func pinnedSummaries(paths: Set<String>, client: JarvisNotesClient) async -> JarvisRepository<[VaultNoteSummary]> {
+        await repository(.notes, scope: "pins") { _ in
+            .modified(try await client.noteSummaries(paths: paths.sorted()), validator: nil)
+        }
+    }
+
     /// After a write that changed a cached list, drop that entry so the next open fetches it.
     static func invalidate(_ kind: JarvisRepositoryKind, scope: String = "") async {
         await bindIfNeeded()

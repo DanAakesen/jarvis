@@ -59,13 +59,13 @@ struct JarvisTodayActivityCard: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                Divider()
                 JarvisDashboardDisclosure(title: expanded ? "Show less" : "Show more", expanded: expanded) {
                     animate { expanded.toggle() }
                 }
             }
         }
-        .padding(JarvisPageHeaderMetrics.heroInset)
+        .padding([.horizontal, .top], JarvisPageHeaderMetrics.heroInset)
+        .padding(.bottom, showAll ? JarvisPageHeaderMetrics.heroInset : JarvisPageHeaderMetrics.rowLineSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisDashboardSurface().environment(\.jarvisCardRole, "activity")
         .accessibilityElement(children: .contain)

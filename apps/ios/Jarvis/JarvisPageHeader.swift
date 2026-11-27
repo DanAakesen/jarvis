@@ -534,5 +534,6 @@ struct JarvisDashboardDisclosure: View {
             .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }.buttonStyle(.plain)
+        .overlay(alignment: .top) { Divider().allowsHitTesting(false) }
     }
 }

@@ -58,7 +58,7 @@ Circular complications draw their symbols and task count on a clear background. 
 
 ## Home, workspaces and utility pages
 
-- **Home** opens with Up Next. Its date tile and relative time identify the next appointment or task. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. Each card can show data while another source is unavailable.
+- **Home** opens with Up Next. Its date tile and relative time identify the next appointment or task. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. The compact disclosure row stays tappable across its width. Pinned notes follow Schedule in Notes pin order and open the editor directly. Each card can show data while another source is unavailable.
 - **Calendar** opens the day at 07:00 with ten hours in view. Scroll for earlier or later appointments. Day and Week share a time scale; the grid, agenda and date headings use one time zone. Hold an appointment to move it or expand its agenda row to edit. Hold an empty slot to preview a one-hour appointment, drag to adjust it in 15-minute steps, and release to open its draft. Day, Week, Month and Today sit directly above search and add in the footer.
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
 - **Factory** leads with Needs you, then the grouped pipeline. Keep actions scoped to the project and never show a previous task's result while a new one loads.
