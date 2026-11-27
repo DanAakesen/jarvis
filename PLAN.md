@@ -1,8 +1,5 @@
 # Project plan
 
-Vault and X review context and simplified iPhone Proactive preferences are prepared locally. Live X verification needs a configured credential and an explicit public search.
-
-
 ## Current state
 
 ### Current focus
@@ -17,10 +14,10 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 | Delivery | State |
 | --- | --- |
-| TestFlight **143** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45873729763). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45869994534) verified the CarPlay entitlement and embedded Watch companion. |
-| P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Dan confirmed the Health, Home, Calendar, Notes editing, Factory, Usage, Status, inline Proactive and red-theme checks on build 143. Obsidian table rendering and Watch voice follow-up remain open. |
-| Production | The [latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45982261592) applied the calendar-gated weather backend. PI provisioning and deterministic readiness passed; live conversation acceptance was skipped. |
-| Background PI | GitHub and weather provide context, not wake triggers. Suggestion delivery is **not accepted on device**. |
+| TestFlight **145** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/46045418668). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/46042793866) verified the CarPlay entitlement and embedded Watch companion. |
+| P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Dan confirmed the Health, Home, Calendar, Notes editing, Factory, Usage, Status, inline Proactive and red-theme checks on build 143. Build 145 includes shorter Home card footers, pinned notes below Schedule, Obsidian table spacing, Watch voice recovery and simpler Proactive preferences. Device confirmation remains open for the table and Watch fixes. |
+| Production | The [production deployment](https://github.com/DanAakesen/jarvis/actions/runs/46040812077) applied backend and PI changes from [#2118](https://github.com/DanAakesen/jarvis/pull/2118). Backend health and the scheduled Vault Mirror check passed. Live conversation acceptance was skipped. |
+| Background PI | GitHub and weather provide context, not wake triggers. Vault notes and tasks supply review context. Live X search needs a provider credential and an explicit public search. Proactive push delivery still needs device confirmation. |
 | P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | Backend deployed; the iPhone editor is **not accepted on device**. |
 | P15-215 · [Native CarPlay dashboard and Voice](https://github.com/DanAakesen/jarvis/pull/2104) | Signed and internally available, **not accepted on device**. |
 
