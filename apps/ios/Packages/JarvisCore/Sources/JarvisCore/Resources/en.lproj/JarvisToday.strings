@@ -15,6 +15,7 @@
 "today.overdue" = "Overdue";
 "today.tab.today" = "Today";
 "today.tab.due" = "Upcoming";
+"today.pinnedNotes" = "Pinned notes";
 "today.agendaAndTasks" = "Today and tasks due";
 "today.add" = "Add";
 "today.newTask" = "Task";

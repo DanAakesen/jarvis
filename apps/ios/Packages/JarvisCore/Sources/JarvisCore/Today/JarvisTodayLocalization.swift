@@ -21,6 +21,7 @@ public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
     case overdue = "today.overdue"
     case tabToday = "today.tab.today"
     case tabDue = "today.tab.due"
+    case pinnedNotes = "today.pinnedNotes"
     case agendaAndTasks = "today.agendaAndTasks"
     case add = "today.add"
     case newTask = "today.newTask"

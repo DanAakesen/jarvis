@@ -208,6 +208,8 @@ import { composeHealth } from './health/composition.js';
 import { registerProactive } from './proactive/composition.js';
 import { createProactiveConversationContext } from './proactive/conversation-context.js';
 import { createSqlConversationSelectionStore } from './database/proactive-conversation-context.js';
+import { createXSource } from './proactive/sources/x.js';
+import { readWakeSources } from './pi/brain/wake-sources.js';
 import { buildSourceRegistry } from './proactive/sources/registry.js';
 import type { ProactiveSource } from './proactive/types.js';
 import { registerHomeBriefRoutes } from './home/brief.js';
@@ -1201,7 +1203,9 @@ try {
       logger.warn({ reason: 'watch_index_refresh_failed' }, 'pi.watches');
     });
   };
+  const xSource = createXSource(config.xBearerToken, vaultClient);
   piSources = buildSourceRegistry({
+    xSource,
     ownerObjectId: config.auth.ownerObjectId,
     healthEnabled: config.healthEnabled === true,
     ...(database ? { pool: database.pool } : {}),
@@ -1750,6 +1754,7 @@ try {
     })()
     : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
+    xSource,
     ...(piSituationService ? { situation: piSituationService } : {}),
     ...(brainControl ? { background: brainControl } : {}),
     ...(inboxNudgeHook ? { reviewInbox: inboxNudgeHook } : {}),
@@ -1783,6 +1788,7 @@ try {
       brain: (queue, afterScheduledWake) => {
         brainHandle = createBrain({
           afterScheduledWake, queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
+          readWakeSources: (context) => readWakeSources(piSources, context, vaultClient),
           decisionLog: createDecisionLog({ area: piArea }), extras: watches, owner: config.auth.ownerObjectId,
           timeZone: config.googleTimeZone ?? 'Europe/Copenhagen', now: () => new Date(), logger,
         });
@@ -1802,6 +1808,7 @@ try {
     ownerObjectId: config.auth.ownerObjectId,
     settingsStore,
     sources: buildSourceRegistry({
+      xSource,
       ownerObjectId: config.auth.ownerObjectId, healthEnabled: config.healthEnabled === true,
       ...(database ? { pool: database.pool } : {}),
       ...(googleApiClient ? { googleApiClient } : {}),

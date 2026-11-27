@@ -34,14 +34,14 @@ Use the established Voice screen and controls; no provider selector, engine badg
 | Surface | Current direction |
 | --- | --- |
 | Library | Title row, folder/sort actions in the header menu, content, then the fixed Notes/Tasks/Graph switch and Search/+ row. No Recent section. A query swaps the mode switch for search scopes; clearing it restores the previous context. On reopen, show the last available rows while fetching fresh results. |
-| Editor | Open directly into a draft with Cancel and Done in the header. Keep linked notes and Markdown tools above the keyboard. Return continues bullets, numbered lists and checkboxes. Return on an empty item ends the list. Insert table adds an editable two-by-two grid with controls to add rows and columns. Done saves content and any folder move together. Preserve frontmatter, explicit aliases and the draft on conflict. |
+| Editor | Open directly into a draft with Cancel and Done in the header. Keep linked notes and Markdown tools above the keyboard. Return continues bullets, numbered lists and checkboxes. Return on an empty item ends the list. Insert table adds an editable two-by-two grid with controls to add rows and columns. Save tables with a blank line between the grid and adjacent prose so Obsidian renders them. Done saves content and any folder move together. Preserve frontmatter, explicit aliases and the draft on conflict. |
 | Pins and order | Folder order and pins use the same reordering sheet and VoiceOver move actions. Changing folder order selects Manual; on failure show the stored order and the error. An unresolved pin shows its Vault path and labelled Unpin in the same row, with no Open or Delete. |
 | Tasks | Distinguish reading task detail, editing the task, choosing a date/time and choosing options. Preserve scope and edits while moving between them. Reuse the shared task row in Notes and Home. |
 | Graph | Project actual Vault nodes and links in 3D. Label top-level folder clusters, ring notes with open tasks, and show the actual open-task count in the selected-note preview when known. Depth and opacity carry hierarchy; explicit links are stronger than similarity. The preview opens the note. Pan, rotate and zoom under user control; never rotate the whole camera by itself. |
 
 ## Proactive and notification opening
 
-- Findings precede Reviews: shared switch, next check, last outcome and expandable history. Edit preferences inline, with Background instructions separate from personal guidance. Reload saved values on conflict, retaining the draft; offer Retry on failure.
+- Findings precede Reviews: shared switch, next check, last outcome and expandable history. Edit preferences inline, with My preferences first for standing interests and the collapsed Advanced review routine last. The existing vault p0.md holds current priorities. Reload saved values on conflict, retaining the draft; offer Retry on failure.
 - **A reply push opens existing Chat.** Show one useful preview, not an approval summary. In Chat open the exact committed message without animating away from the target; allow Jump to latest. Watch waits until an active turn, dictation or Voice is idle and keeps the pending target across refresh. Proactive items and approval actions have distinct routes. If the target cannot load, show Chat's retry state, not another message.
 
 ## Watch
@@ -58,7 +58,7 @@ Circular complications draw their symbols and task count on a clear background. 
 
 ## Home, workspaces and utility pages
 
-- **Home** opens with Up Next. Its date tile and relative time identify the next appointment or task. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. Each card can show data while another source is unavailable.
+- **Home** opens with Up Next. Its date tile and relative time identify the next appointment or task. Expand Activity to inspect workouts and Schedule to see more tasks and appointments. The compact disclosure row stays tappable across its width. Pinned notes follow Schedule in Notes pin order and open the editor directly. Each card can show data while another source is unavailable.
 - **Calendar** opens the day at 07:00 with ten hours in view. Scroll for earlier or later appointments. Day and Week share a time scale; the grid, agenda and date headings use one time zone. Hold an appointment to move it or expand its agenda row to edit. Hold an empty slot to preview a one-hour appointment, drag to adjust it in 15-minute steps, and release to open its draft. Day, Week, Month and Today sit directly above search and add in the footer.
 - **Web stage and workspaces** keep the centred Jarvis stage on conversational surfaces, and reserve the workspace for user-opened results. On a phone keep a single primary surface; don't crowd Chat with a second desktop column or cover the composer with a floating menu. Opening or closing a Voice/Chat presentation should preserve workspace state, not delete work.
 - **Factory** leads with Needs you, then the grouped pipeline. Keep actions scoped to the project and never show a previous task's result while a new one loads.

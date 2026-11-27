@@ -1,5 +1,8 @@
 # Decisions
 
+- 2026-11-27. Use vault notes, open tasks and opted-in X topic/account searches as context after a paid review is admitted. The vault root p0.md carries current focus. Keep personal interests and the optional advanced review routine separate; tool and evidence procedures belong to the deployed brain skill.
+
+
 Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for what to do next. Merged code and offline fixtures are not live provider or physical-device acceptance.
 
 ## Standing rules

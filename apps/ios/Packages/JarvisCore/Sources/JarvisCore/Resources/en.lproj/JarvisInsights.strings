@@ -248,9 +248,11 @@
 "insights.editorFeedsPlaceholder" = "One https link per line";
 "insights.editorAddFeed" = "Add feed";
 "insights.editorRemoveFeed" = "Remove feed";
-"insights.editorBrainInstructions" = "Background instructions";
+"insights.editorBrainInstructions" = "Advanced: review routine";
 "insights.editorIssueBrainInstructions" = "Enter instructions of up to 16,000 characters.";
-"insights.editorGuidance" = "Guidance";
+"insights.editorGuidance" = "My preferences";
+"insights.editorPreferencesHint" = "What should Jarvis follow? Keep current priorities in your vault’s p0.md.";
+"insights.editorRoutineHint" = "How Jarvis should review a change and decide whether to tell you.";
 "insights.editorGuidanceCount" = "%1$d / %2$d";
 "insights.editorPreferences" = "Preferences";
 "insights.editorNoPreferences" = "No preferences";

@@ -85,7 +85,7 @@ describe('proactive PI policy', () => {
     try {
       const url = '/proactive/settings';
       const initial = (await app.inject({ method: 'GET', url })).json();
-      expect(initial.brainInstructions).toMatch(/^# Brain: acting on a wake/u);
+      expect(initial.brainInstructions).toContain('my preferences and current priorities');
       const brainInstructions = 'Read my upcoming appointments.\nNotify me about new clashes.';
       const save = (payload: Record<string, unknown>) => app.inject({ method: 'PATCH', url, payload });
       expect((await save({ brainInstructions })).statusCode).toBe(400);

@@ -46,6 +46,7 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   googleApiClient?: GoogleApiClient;
   vaultClient?: GitHubVaultClient;
   settingsStore?: SettingsStore;
+  xSource?: import('./types.js').ProactiveSource;
   modelCatalogue?: ModelCatalogueReader;
   getCredentialToken?: (scope: string, signal?: AbortSignal) => Promise<string | undefined>;
   foundryProjectEndpoint?: string;

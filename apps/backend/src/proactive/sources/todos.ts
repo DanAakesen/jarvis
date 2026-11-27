@@ -27,7 +27,7 @@ export function createTodosSource(vaultClient?: VaultReader, includeOrdinary = f
       const timeoutId = setTimeout(() => timeout.abort(), sourceTimeoutMs);
       const sourceSignal = AbortSignal.any([signal, timeout.signal]);
       try {
-        const todos = await readVaultTasks(vaultClient, sourceSignal);
+        const todos = await readVaultTasks(vaultClient, sourceSignal, includeOrdinary);
         const seen = new Map<string, { dueHasTime: boolean; highPriority: boolean }>();
         const open = todos.flatMap((todo, index) => {
           if (todo.done || !includeOrdinary && !todo.highPriority) return [];

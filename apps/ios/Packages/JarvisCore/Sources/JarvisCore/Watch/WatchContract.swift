@@ -110,9 +110,19 @@ public struct WatchVoiceSequence: Sendable {
 public struct WatchVoiceBackpressure: Sendable {
     public private(set) var drops = 0
     private var lastProgress: Date
+    private var probedStall = false
     public init(now: Date) { lastProgress = now }
     public mutating func progressed(at now: Date) { lastProgress = now }
     public mutating func dropped() { drops += 1 }
+    public mutating func acknowledgedAudio(at now: Date) {
+        progressed(at: now)
+        probedStall = false
+    }
+    public mutating func beginStallProbe() -> Bool {
+        guard !probedStall else { return false }
+        probedStall = true
+        return true
+    }
     public func stalled(at now: Date) -> Bool { now.timeIntervalSince(lastProgress) >= 5 }
 }
 

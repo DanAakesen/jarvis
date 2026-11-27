@@ -148,18 +148,8 @@ extension JarvisNotesArea {
             onDelete: { Task { await requestDeleteNote(path: note.path, title: note.title) } }
         ) {
             if tile {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Image(systemName: openingNotePaths.contains(note.path) ? "hourglass" : "doc.text")
-                        Spacer()
-                        Image(systemName: "pin.fill").font(.caption)
-                    }.foregroundStyle(JarvisDesignTokens.primaryAccent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(note.title).font(.headline).lineLimit(2)
-                        Text(location.isEmpty ? copy.vaultRoot : location)
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }.padding(12).frame(maxWidth: .infinity, minHeight: 85, alignment: .topLeading)
+                JarvisPinnedNoteTile(title: note.title, location: location.isEmpty ? copy.vaultRoot : location,
+                                     opening: openingNotePaths.contains(note.path))
             } else {
                 HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                     if openingNotePaths.contains(note.path) {
@@ -479,5 +469,26 @@ extension JarvisNotesArea {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(JarvisDesignTokens.notesHorizontalInset)
         .accessibilityElement(children: .contain)
+    }
+}
+
+struct JarvisPinnedNoteTile: View {
+    let title: String
+    let location: String
+    let opening: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: opening ? "hourglass" : "doc.text")
+                Spacer()
+                Image(systemName: "pin.fill").font(.caption)
+            }.foregroundStyle(JarvisDesignTokens.primaryAccent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline).lineLimit(2)
+                Text(location)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }.padding(12).frame(maxWidth: .infinity, minHeight: 85, alignment: .topLeading)
     }
 }

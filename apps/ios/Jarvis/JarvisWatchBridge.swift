@@ -2,6 +2,7 @@ import Foundation
 import HealthKit
 import JarvisCore
 import OSLog
+import UIKit
 import WatchConnectivity
 
 /// Owner authentication stays on iPhone; Watch receives only a scoped transcription credential.
@@ -19,6 +20,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var voiceID: UUID?
     private var lastVoiceContact = Date.distantPast
     private var voiceWatchdog: Task<Void, Never>?
+    private var replyBackgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var replyBackgroundTurn: UUID?
     private var voiceResponseID: String?
     private lazy var liveActivity = VoiceLiveActivityController()
     private var voiceMuted = false
@@ -664,6 +667,13 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 onStateChange: { [weak self] state in
                     Task { @MainActor in
                         guard let self, self.voiceID == id else { return }
+                        switch state {
+                        case .thinking, .speaking:
+                            self.beginReplyBackgroundTime()
+                        case .listening, .ended, .failed:
+                            self.endReplyBackgroundTime()
+                        default: break
+                        }
                         if state == .ended || state == .failed {
                             await self.stopVoice()
                             return
@@ -698,7 +708,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(5))
                     guard let self, !Task.isCancelled, self.voiceID == id else { return }
-                    if Date().timeIntervalSince(self.lastVoiceContact) > 15 { await self.stopVoice(); return }
+                    if Date().timeIntervalSince(self.lastVoiceContact) > WatchVoiceRecovery.phoneGraceSeconds { await self.stopVoice(); return }
                 }
             }
             return try encode(id)
@@ -862,7 +872,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private func stopVoice(audioLinkStalled: Bool = false) async -> (any Error)? {
         guard !stoppingVoice else { return VoiceProtocolError.endFailed }
         stoppingVoice = true
-        defer { stoppingVoice = false }
+        defer { stoppingVoice = false; endReplyBackgroundTime() }
         let previous = voice; let id = voiceID
         voiceWatchdog?.cancel(); voiceWatchdog = nil
         resetInboundAudio()
@@ -892,6 +902,28 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         }
         await liveActivity.end()
         return endError
+    }
+    // Watch owns the audio route. Give the phone time to finish an in-flight reply
+    // when iOS backgrounds its relay between WatchConnectivity messages.
+    private func beginReplyBackgroundTime() {
+        guard replyBackgroundTurn == nil, !stoppingVoice else { return }
+        let turn = UUID()
+        replyBackgroundTurn = turn
+        replyBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Watch voice reply") { [weak self] in
+            guard let self, self.replyBackgroundTurn == turn else { return }
+            self.releaseReplyBackgroundTask()
+        }
+    }
+
+    private func endReplyBackgroundTime() {
+        replyBackgroundTurn = nil
+        releaseReplyBackgroundTask()
+    }
+
+    private func releaseReplyBackgroundTask() {
+        guard replyBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(replyBackgroundTask)
+        replyBackgroundTask = .invalid
     }
     private func receiveVoice(_ message: VoiceServerMessage, id: UUID) {
         guard voiceID == id else { return }

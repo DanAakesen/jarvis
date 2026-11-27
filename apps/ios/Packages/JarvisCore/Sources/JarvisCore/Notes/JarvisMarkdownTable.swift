@@ -14,8 +14,16 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
         var source = ""
         var precedingTable = false
         for block in blocks where !block.text.isEmpty {
-            if (precedingTable || block.table != nil), !source.isEmpty,
-               !source.hasSuffix("\n"), !block.text.hasPrefix("\n") { source += "\n" }
+            if precedingTable || block.table != nil {
+                // Obsidian needs a blank line between a table and surrounding prose.
+                let trailing = source.reversed().prefix(while: \.isWhitespace)
+                let leading = block.text.prefix(while: \.isWhitespace)
+                if trailing.endIndex != source.reversed().endIndex, leading.endIndex != block.text.endIndex {
+                    let breaks = trailing.filter(\.isNewline).count + leading.filter(\.isNewline).count
+                    let newline = trailing.first(where: \.isNewline) ?? leading.first(where: \.isNewline) ?? "\n"
+                    source += String(repeating: String(newline), count: max(0, 2 - breaks))
+                }
+            }
             source += block.text
             precedingTable = block.table != nil
         }
@@ -37,7 +45,8 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
                     if open.0 == marker, count >= open.1, trimmed.dropFirst(count).allSatisfy(\.isWhitespace) { fence = nil }
                 } else if count >= 3 { fence = (marker, count) }
             }
-            if fence == nil, index + 1 < lines.count,
+            if fence == nil, line.prefix(while: { $0 == " " }).count < 4, trimmed.first != "\t",
+               index + 1 < lines.count,
                let header = JarvisMarkdownTable.cells(line),
                let dividers = JarvisMarkdownTable.cells(lines[index + 1]),
                header.count == dividers.count,

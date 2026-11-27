@@ -113,23 +113,22 @@ struct JarvisProactiveInlineSettings<Review: View>: View {
     }
 
     @ViewBuilder private var sections: some View {
-        if editor?.saved.brainInstructions != nil {
-            JarvisInsightsDisclosure(title: text(.editorBrainInstructions)) {
-                TextEditor(text: Binding(
-                    get: { editor?.draft.brainInstructions ?? "" },
-                    set: { editor?.draft.brainInstructions = $0 }
-                ))
-                .font(.body)
-                .frame(minHeight: 280)
-                .scrollContentBackground(.hidden)
-                .accessibilityLabel(text(.editorBrainInstructions))
-                .accessibilityIdentifier("proactive.edit.brainInstructions")
-                if editor?.draft.issues.contains(.invalidBrainInstructions) == true {
-                    issue(.invalidBrainInstructions)
+        JarvisInsightsDisclosure(title: text(.editorGuidance)) {
+            Text(text(.editorPreferencesHint)).font(.footnote).foregroundStyle(.secondary)
+            if editor != nil {
+                TextEditor(text: draft(\.guidance, fallback: ""))
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 120)
+                    .accessibilityLabel(text(.editorGuidance))
+                    .accessibilityIdentifier("proactive.edit.guidance")
+                guidanceCounter
+                if (editor?.draft.guidance.count ?? 0) > JarvisProactiveLimits.guidanceLength {
+                    issue(.guidanceTooLong)
                 }
-                saveControl(.editorBrainInstructions)
-            }.disabled(isSaving)
-        }
+            } else { pendingValue(text(.editorGuidance)) }
+
+            saveControl(.editorGuidance)
+        }.disabled(isSaving)
         JarvisInsightsDisclosure(title: text(.editorSources)) {
             ForEach(JarvisProactiveSourceID.allCases) { id in
                 if editor != nil {
@@ -240,20 +239,6 @@ struct JarvisProactiveInlineSettings<Review: View>: View {
 
             saveControl(.editorFeeds)
         }.disabled(isSaving)
-        JarvisInsightsDisclosure(title: text(.editorGuidance)) {
-            if editor != nil {
-                TextEditor(text: draft(\.guidance, fallback: ""))
-                    .frame(minHeight: 120)
-                    .accessibilityLabel(text(.editorGuidance))
-                    .accessibilityIdentifier("proactive.edit.guidance")
-                guidanceCounter
-                if (editor?.draft.guidance.count ?? 0) > JarvisProactiveLimits.guidanceLength {
-                    issue(.guidanceTooLong)
-                }
-            } else { pendingValue(text(.editorGuidance)) }
-
-            saveControl(.editorGuidance)
-        }.disabled(isSaving)
         JarvisInsightsDisclosure(title: text(.editorCategories)) {
             ForEach(JarvisProactiveCategory.allCases) { id in
                 if editor != nil {
@@ -265,6 +250,24 @@ struct JarvisProactiveInlineSettings<Review: View>: View {
 
             saveControl(.editorCategories)
         }.disabled(isSaving)
+        if editor?.saved.brainInstructions != nil {
+            JarvisInsightsDisclosure(title: text(.editorBrainInstructions)) {
+                Text(text(.editorRoutineHint)).font(.footnote).foregroundStyle(.secondary)
+                TextEditor(text: Binding(
+                    get: { editor?.draft.brainInstructions ?? "" },
+                    set: { editor?.draft.brainInstructions = $0 }
+                ))
+                .font(.body)
+                .frame(minHeight: 128)
+                .scrollContentBackground(.hidden)
+                .accessibilityLabel(text(.editorBrainInstructions))
+                .accessibilityIdentifier("proactive.edit.brainInstructions")
+                if editor?.draft.issues.contains(.invalidBrainInstructions) == true {
+                    issue(.invalidBrainInstructions)
+                }
+                saveControl(.editorBrainInstructions)
+            }.disabled(isSaving)
+        }
     }
 
     @ViewBuilder private func saveControl(_ section: JarvisInsightsLocalizationKey) -> some View {

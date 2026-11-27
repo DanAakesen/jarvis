@@ -90,6 +90,7 @@ export interface ProactiveSettings {
 }
 
 export interface SourceContext {
+  admittedWake?: boolean;
   calendarFacts?: readonly SourceFact[];
   now: Date;
   signal: AbortSignal;

@@ -16,6 +16,29 @@ struct JarvisNotesCopy {
         self.language = language
     }
 
+    func message(for error: Error) -> String {
+        if let error = error as? JarvisClientError {
+            switch error {
+            case .signInRequired: return self.signIn
+            case .notOwner: return self.notOwner
+            case .networkFailure, .timedOut: return self.offline
+            default: return self.unavailable
+            }
+        }
+        if let error = error as? JarvisNotesClientError {
+            switch error {
+            case .noteConflict: return self.conflict
+            case .writeOutcomeUnknown: return self.unknownWrite
+            case .taskConflict: return self.taskChanged
+            case .destinationExists: return self[.noteExists]
+            case .folderAlreadyExists: return self.folderAlreadyExists
+            case .noteNotFound: return self.noteMissing
+            case .invalidRequest, .invalidResponse: return self.unavailable
+            }
+        }
+        return self.unavailable
+    }
+
     var title: String { text(.title) }
     var overview: String { text(.overview) }
     var links: String { text(.links) }
