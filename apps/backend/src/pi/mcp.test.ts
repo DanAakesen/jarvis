@@ -750,9 +750,14 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
   });
 
   it('runs a request that arrives under another call id while the first is still running, and calls it a repeat', async () => {
+    let bothStarted!: () => void;
+    const started = new Promise<void>(resolve => { bothStarted = resolve; });
     const releases: Array<() => void> = [];
     const write = counting('probe_write', { defaultEffect: 'action' }, async () => {
-      await new Promise<void>((resolve) => { releases.push(resolve); });
+      await new Promise<void>(resolve => {
+        releases.push(resolve);
+        if (releases.length === 2) bothStarted();
+      });
       return { saved: true };
     });
     const { registry, tool, ledger } = setup([], { tools: [write.tool] });
@@ -760,7 +765,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     grant.discovered.add('probe_write');
     // The model emits the same call twice, in parallel, on purpose.
     const both = ['call-1', 'call-2'].map((callId) => tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as(callId)));
-    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    await started;
     for (const release of releases) release();
     const answers = await Promise.all(both);
     expect(write.runs.count).toBe(2);

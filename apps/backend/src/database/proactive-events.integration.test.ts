@@ -26,6 +26,8 @@ beforeAll(async () => {
   await pool.connect();
   await pool.request().batch(`CREATE TABLE dbo.proactive_source_status
     (owner_object_id uniqueidentifier, source_id nvarchar(16), observed_at datetime2(7));`);
+  await pool.request().input('owner', sql.UniqueIdentifier, owner).query(
+    "INSERT dbo.proactive_source_status VALUES (@owner, 'weather', SYSUTCDATETIME())");
   await pool.request().batch(await readFile(new URL('../../../../db/migrations/0106_pi_daily_weather.sql', import.meta.url), 'utf8'));
   await pool.request().batch(await readFile(new URL('../../../../db/migrations/0080_proactive_events.sql', import.meta.url), 'utf8'));
   await pool.request().batch(`ALTER TABLE dbo.proactive_event_batches ADD
@@ -42,12 +44,14 @@ beforeAll(async () => {
 });
 it('admits one forecast per owner and local day across independent concurrent claimants', async () => {
   const clients = Array.from({ length: 6 }, () => createDailyWeatherStore(pool, owner));
-  const won = await Promise.all(clients.map(client => client.claim('2026-11-27', 'calendar-event:trip')));
+  const seeded = await pool.request().query("SELECT event_ref FROM dbo.pi_daily_weather WHERE event_ref = 'legacy-weather-observation'");
+  expect(seeded.recordset).toHaveLength(1);
+  const won = await Promise.all(clients.map(client => client.claim('2043-11-27', 'calendar-event:trip')));
   expect(won.filter(Boolean)).toHaveLength(1);
   const forecast = { source: 'weather', state: 'ok', reason: null, observedAt: now.toISOString(), facts: [] } as const;
-  await clients[0]!.save('2026-11-27', { ...forecast, facts: [] });
-  expect(await clients[1]!.read('2026-11-27')).toEqual({ eventRef: 'calendar-event:trip', result: forecast });
-  expect(await clients[2]!.claim('2026-11-28', 'calendar-event:trip')).toBe(true);
+  await clients[0]!.save('2043-11-27', { ...forecast, facts: [] });
+  expect(await clients[1]!.read('2043-11-27')).toEqual({ eventRef: 'calendar-event:trip', result: forecast });
+  expect(await clients[2]!.claim('2043-11-28', 'calendar-event:trip')).toBe(true);
 });
 
 afterAll(async () => {
@@ -304,7 +308,7 @@ describe('proactive outreach ledger on SQL Server', () => {
     await expect(pool.request().batch(down)).rejects.toThrow('durable evidence');
     await pool.request().query('DELETE dbo.proactive_outreach');
     await pool.request().batch(down);
-    const { recordset } = await pool.request().query(`SELECT COUNT(*) AS tables FROM sys.tables WHERE name LIKE N'proactive_%';`);
+    const { recordset } = await pool.request().query(`SELECT COUNT(*) AS tables FROM sys.tables WHERE name IN (N'proactive_events', N'proactive_event_batches', N'proactive_outreach');`);
     expect(recordset[0]?.tables).toBe(0);
   });
 });
