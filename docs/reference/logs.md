@@ -28,6 +28,8 @@ Use operator `pi.mcp_tool` for `replayCheck`, `_meta` key names and the short tu
 
 For a wake, correlate `pi.brain_run` with the ledger by activation ID, not the foreground `requestId`. It records the attempt, not its procedure or guidance. Proactive settings show the current values, not the historical prompt. `pi.brain_tick` with `filtered` means the claimed batch did not produce a wake; it can include older GitHub activity settled without a turn. `pi.conversation_cleanup_failed` gives the scratch kind and reason, not an activation ID or the wake outcome. Neither a wake nor a push count proves delivery.
 
+For an exception during the calendar forecast poll, look for `proactive.event_producer` with source `weather` and reason `source_poll_failed` (`component: proactive`). No warning does not prove a fetch. [SQL reservations](data-model.md) show whether the daily attempt was claimed, not whether a forecast completed or PI reached out.
+
 The reader queries retained Container Apps console rows in the configured Log Analytics workspace, not Application Insights, live console streams or other apps. It serves one query at a time per backend process; a throttled or denied read is unavailable, not an empty observation. The [metadata preflight](../../.github/scripts/backend_log_sources.py) inventories named resources and candidate tables without reading rows or granting access.
 
 ## Native device diagnostics

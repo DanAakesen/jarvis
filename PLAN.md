@@ -16,14 +16,14 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 | --- | --- |
 | TestFlight **143** | [Apple confirmed internal availability](https://github.com/DanAakesen/jarvis/actions/runs/45873729763). The [signed archive](https://github.com/DanAakesen/jarvis/actions/runs/45869994534) verified the CarPlay entitlement and embedded Watch companion. |
 | P15-213 · [Combined mobile release](https://github.com/DanAakesen/jarvis/pull/2094) | Factory, Usage, Status and Proactive layouts and the Health, Calendar, Home, Notes, Voice and theme fixes are in the current build, **not accepted on device**. |
-| Production | The [latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45868585204) retained the backend from the [component rollout](https://github.com/DanAakesen/jarvis/actions/runs/45858199320/attempts/2) and passed PI provisioning and deterministic readiness. Live conversation acceptance is pending. |
-| Background PI | GitHub remains available for lookups, but its activity does not trigger a review. Suggestion delivery is **not accepted on device**. |
+| Production | The [latest Deploy](https://github.com/DanAakesen/jarvis/actions/runs/45982261592) applied the calendar-gated weather backend. PI provisioning and deterministic readiness passed; live conversation acceptance was skipped. |
+| Background PI | GitHub and weather provide context, not wake triggers. Suggestion delivery is **not accepted on device**. |
 | P15-214 · [Background instructions editor](https://github.com/DanAakesen/jarvis/pull/2099) | Backend deployed; the iPhone editor is **not accepted on device**. |
 | P15-215 · [Native CarPlay dashboard and Voice](https://github.com/DanAakesen/jarvis/pull/2104) | Signed and internally available, **not accepted on device**. |
 
 ### Next steps and blockers
 
-After the weather change deploys, verify zero weather-triggered turns and at most one forecast reservation per owner per Copenhagen day. Verify the next qualifying calendar trip uses its saved forecast.
+Verify that production records no weather-only wakes and at most one forecast reservation per owner per Copenhagen day, and reuses the saved forecast for the next qualifying trip.
 
 Use the Apple-confirmed TestFlight build above for these device checks.
 
@@ -60,6 +60,7 @@ Issues stay open until the owner accepts the result, even when the implementatio
 | [#2011](https://github.com/DanAakesen/jarvis/issues/2011) — proactive companion | Verify a suggestion from an eligible review, its linked evidence and delivery to the device. |
 | [#2005](https://github.com/DanAakesen/jarvis/issues/2005) — Notes titles | Rename an existing note, then verify the saved title in Notes, Pinned, the reader and links. Editing an existing title is **not accepted on device**. |
 | [#2010](https://github.com/DanAakesen/jarvis/issues/2010) — truthful Chat status | Check failed, cancelled and superseded states in **Test a reply**. |
+| [#2111](https://github.com/DanAakesen/jarvis/issues/2111) — iPhone sidebar swipe | Reported broken. Verify right-edge swipes open the sidebar and left-edge Back still works on a pushed page. **Not accepted on device.** |
 | [#2026](https://github.com/DanAakesen/jarvis/issues/2026) — iPhone Chat typing | Check rapid typing in a conversation with 100+ messages, focus, keyboard dismissal and draft retention. |
 | [#2007](https://github.com/DanAakesen/jarvis/issues/2007), [#2008](https://github.com/DanAakesen/jarvis/issues/2008) — Proactive and Voice controls | Verify the new inline Proactive flow and iPhone Voice activity, controls and scrolling. Both remain open for device acceptance. |
 | [#2006](https://github.com/DanAakesen/jarvis/issues/2006) — Watch reliability | Dictation after Stop, call startup, audible replies and saved-turn recovery are **not accepted on device**. |

@@ -26,7 +26,7 @@ readiness and release receipts are unchanged. Failed login or metadata resolutio
 stops the job before image deployment. There is no automatic build/write retry,
 admin credential fallback or new secret.
 
-The [OIDC flow](https://github.com/Azure/login/blob/a641126d1b8aa4d1fa005f4f92df94a3a4c4c906/src/Cli/AzureCliLogin.ts)
+The [OIDC flow](https://raw.githubusercontent.com/Azure/login/a641126d1b8aa4d1fa005f4f92df94a3a4c4c906/src/Cli/AzureCliLogin.ts)
 does not depend on refreshing the pre-build assertion. A generic registry
 authentication error does not distinguish expiry, authorization or connectivity.
 Keep raw tokens and debug authentication logs out of deployment evidence.
