@@ -2,18 +2,6 @@
 
 Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for what to do next. Merged code and offline fixtures are not live provider or physical-device acceptance.
 
-## 2026-11-27 · Calendar-gated background weather
-
-Routine forecast changes consumed an entire day’s background allowance. Weather and GitHub activity cannot initiate a paid review. Keep the destination forecast for a qualifying calendar trip in brain context and cap automatic attempts at one per Copenhagen day, including failures.
-
-## 2026-11-26 · GitHub is project context
-
-Dan follows his projects directly. Keep GitHub available for lookups in Chat, Voice and independent reviews, but never let its activity wake PI. [#2098](https://github.com/DanAakesen/jarvis/pull/2098).
-
-## 2026-11-26 · iPhone information cards
-
-Factory leads with decisions, Usage with spend, Status with checks and Proactive with findings. Use one title per page header and card; disclose detail in place. Edit the background procedure beside its effects, separately from personal guidance. [#2094](https://github.com/DanAakesen/jarvis/pull/2094), [#2099](https://github.com/DanAakesen/jarvis/pull/2099).
-
 ## Standing rules
 
 | Date and source | Rule |
@@ -35,6 +23,18 @@ Factory leads with decisions, Usage with spend, Status with checks and Proactive
 ## Decisions of the last 14 days
 
 Add confirmed decisions here, newest first. When an entry is older than 14 days, keep a dated link to its text in Git history in the relevant [monthly index](#index-of-older-decisions). Preserve existing IDs and anchors; do not duplicate the text.
+
+### 2026-11-27 · Calendar-gated background weather
+
+Do not spend wakes on routine weather changes. Use the forecast for a qualifying calendar trip as context, not a trigger. Reserve at most one automatic attempt per Copenhagen day, including failures. [#2113](https://github.com/DanAakesen/jarvis/pull/2113).
+
+### 2026-11-26 · GitHub is project context
+
+Dan follows his projects directly. Keep GitHub available for lookups, but do not let its activity wake PI. [#2098](https://github.com/DanAakesen/jarvis/pull/2098).
+
+### 2026-11-26 · iPhone information cards
+
+Lead Factory with decisions, Usage with spend, Status with checks and Proactive with findings. One title per header and card; disclose in place. Keep the background procedure separate from personal guidance. [#2094](https://github.com/DanAakesen/jarvis/pull/2094), [#2099](https://github.com/DanAakesen/jarvis/pull/2099).
 
 ### 26 November 2026 — CarPlay shares the phone's authenticated call
 
@@ -77,7 +77,7 @@ Chat and Voice share one conversation, including through future compaction. Put 
 
 ### 22 November 2026 — Qualify the exact PR tree before merge ([#2038](https://github.com/DanAakesen/jarvis/pull/2038))
 
-- **Decision:** The author may merge a reviewed PR after its exact head passes the gates on current `main`. Merge through a PR; Deploy requires a qualification receipt for the merged tree. Use the [merge procedure](agent-context.md#merge-and-release-procedure).
+The author may merge after exact-head review and CI on current `main`. Deploy requires a qualification receipt for the merged tree. See the [merge procedure](agent-context.md#merge-and-release-procedure).
 
 ### 22 November 2026 — One source of truth for agents, only current key files, delete working material
 
@@ -93,8 +93,7 @@ Use only `find_tools` and `call_tool` for weather, calendar and reminders. Refre
 
 ### 22 November 2026 — Show iPhone Voice and Chat state from what actually happened ([#2034](https://github.com/DanAakesen/jarvis/pull/2034), [#2027](https://github.com/DanAakesen/jarvis/pull/2027), [#2028](https://github.com/DanAakesen/jarvis/pull/2028))
 
-- **Decision:** Keep draft edits local, cancel only obsolete follow work, follow the live Voice exchange unless Dan scrolls back, and show the active Voice state in Chat. Thinking persists during tool work; audio completion does not wait for transcript writes. One Proactive settings panel, editable Notes titles, and Voice caption scroll that does not close Voice.
-- **Why:** Keep draft changes off the expensive transcript update path; preserve the reader's scroll position. The [plan](../PLAN.md) owns physical testing.
+Keep draft edits off the transcript update path and preserve the reader's scroll position. Show active Voice state in Chat, keep Thinking during tool work and finish audio independently of transcript writes. The [plan](../PLAN.md) owns physical testing.
 
 ### 22 November 2026 — Recover Watch capture and show an honest reconnect ([#2029](https://github.com/DanAakesen/jarvis/pull/2029), [#2013](https://github.com/DanAakesen/jarvis/pull/2013))
 
@@ -150,8 +149,7 @@ Dan reported Apple's **Voice Based Conversation** grant. Hands-free conversation
 
 ### 18–19 November 2026 — PI is the normal runtime; situational state is not the source archive ([#1910](https://github.com/DanAakesen/jarvis/pull/1910), [#1964](https://github.com/DanAakesen/jarvis/pull/1964))
 
-- **Decision:** Make PI the default for Chat and Voice. Use one compact, model-maintained, revisioned situational state grounded in canonical source records. Keep isolated runtime tests separate. Require a distinct acceptance gate before deleting legacy paths.
-- **Why/evidence:** One engine prevents drift; a compact working state can go stale and cannot replace the Vault, SQL or provider as source of truth. See the [cutover checklist](pi/cutover.md).
+Use PI for Chat and Voice and keep isolated tests separate. One engine prevents drift. Model-maintained, revisioned situation can go stale; its canonical sources still own the facts. Use the [cutover checklist](pi/cutover.md) before deleting legacy paths.
 
 ### 15–17 November 2026 — Use the Vault for Loose Ends and keep the harness built-ins
 
