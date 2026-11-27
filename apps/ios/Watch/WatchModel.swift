@@ -376,7 +376,7 @@ final class WatchModel: ObservableObject {
                             guard self.voiceGeneration == epoch, self.audioSends.remove(request.id) != nil else { return }
                             switch result {
                             case .success:
-                                self.audioBackpressure.progressed(at: Date())
+                                self.audioBackpressure.acknowledgedAudio(at: Date())
                                 let milliseconds = Int(Date().timeIntervalSince(started) * 1_000)
                                 if Date().timeIntervalSince(self.lastAudioMetrics) >= 5 {
                                     self.voiceLogger.info("Voice link: rtt_ms=\(milliseconds) in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks) capture_peak=\(self.captureLevel.peak)")
@@ -391,6 +391,10 @@ final class WatchModel: ObservableObject {
                     }
                     if self.audioBackpressure.stalled(at: Date()) {
                         self.voiceLogger.error("Voice link stalled: in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
+                        if self.audioBackpressure.beginStallProbe() {
+                            self.recoverVoiceConnection()
+                            continue
+                        }
                         self.failVoice("The iPhone audio connection stopped responding.", reason: "audio_link_stalled")
                         return
                     }

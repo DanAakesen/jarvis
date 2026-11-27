@@ -66,7 +66,10 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             try await waitForVoiceConnection()
         } else {
             guard WCSession.isSupported(), WCSession.default.activationState == .activated,
-                  WCSession.default.isReachable else { throw WatchFailure.unavailable }
+                  WCSession.default.isCompanionAppInstalled else { throw WatchFailure.unavailable }
+            // During recovery the heartbeat is the bounded wake-up probe. Waiting for the
+            // phone to advertise reachability first can leave every retry entirely local.
+            guard request.action == .voiceHeartbeat || WCSession.default.isReachable else { throw WatchFailure.unavailable }
         }
         guard pending[request.id] == nil else { throw WatchFailure.busy }
         let epoch = cacheGeneration

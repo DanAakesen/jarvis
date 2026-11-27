@@ -49,6 +49,15 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(WatchReply.self, from: JSONEncoder().encode(capable)).voicePipeline, true)
     }
 
+    func testOnlyAnAudioAcknowledgementRearmsTheStallProbe() {
+        var pressure = WatchVoiceBackpressure(now: Date())
+        XCTAssertTrue(pressure.beginStallProbe())
+        pressure.progressed(at: Date()) // Heartbeat succeeded but no audio packet arrived.
+        XCTAssertFalse(pressure.beginStallProbe())
+        pressure.acknowledgedAudio(at: Date())
+        XCTAssertTrue(pressure.beginStallProbe())
+    }
+
     func testTransientDropsRecoverAndSustainedStallIsDetected() {
         let start = Date(timeIntervalSince1970: 100)
         var pressure = WatchVoiceBackpressure(now: start)

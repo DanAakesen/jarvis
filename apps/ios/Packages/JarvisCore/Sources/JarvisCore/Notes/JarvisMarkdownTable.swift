@@ -45,7 +45,8 @@ public struct JarvisMarkdownBlock: Identifiable, Equatable, Sendable {
                     if open.0 == marker, count >= open.1, trimmed.dropFirst(count).allSatisfy(\.isWhitespace) { fence = nil }
                 } else if count >= 3 { fence = (marker, count) }
             }
-            if fence == nil, index + 1 < lines.count,
+            if fence == nil, line.prefix(while: { $0 == " " }).count < 4, trimmed.first != "\t",
+               index + 1 < lines.count,
                let header = JarvisMarkdownTable.cells(line),
                let dividers = JarvisMarkdownTable.cells(lines[index + 1]),
                header.count == dividers.count,

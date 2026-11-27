@@ -48,6 +48,13 @@ final class MarkdownTableTests: XCTestCase {
         }
     }
 
+    func testIndentedCodeContainingTableSyntaxKeepsItsLines() {
+        let code = "    Example\n    | A | B |\n    | --- | --- |\n    Done"
+        let blocks = JarvisMarkdownBlock.parse(code)
+        XCTAssertTrue(blocks.compactMap(\.table).isEmpty)
+        XCTAssertEqual(JarvisMarkdownBlock.document(blocks), code)
+    }
+
     func testUntouchedTablesAndFencedExamplesRoundTrip() {
         let fence = String(repeating: "\u{60}", count: 3)
         let raw = "| A | B |\n| :--- | ---: |\n|  x | y  |"
