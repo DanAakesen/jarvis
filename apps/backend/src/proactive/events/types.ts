@@ -15,6 +15,11 @@ export function isGitHubActivity(event: Pick<ProactiveEventInput, 'source' | 'ki
     (event.source === 'worker' && event.kind === 'task.pull_request_opened');
 }
 
+export function contextOnlyReason(event: Pick<ProactiveEventInput, 'source' | 'kind'>): string | undefined {
+  if (isGitHubActivity(event)) return 'github_context_only';
+  return event.source === 'weather' ? 'weather_context_only' : undefined;
+}
+
 /** The Proactive source switch that governs a bare event source, if there is one: GitHub and Worker results belong to Factory. */
 export function eventSourceSwitch(source: string): SourceId | undefined {
   if ((sourceIds as readonly string[]).includes(source)) return source as SourceId;

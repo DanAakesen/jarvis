@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { GoogleApiError } from '../../google/api-client.js';
 import type { SourceFact } from '../types.js';
+import { weatherDestination } from './daily-weather.js';
 import type { CalendarEvent } from './calendar-reader.js';
 
 export const PROACTIVE_SOURCE_TIMEOUT_MS = 20_000;
@@ -51,12 +52,14 @@ export function calendarFact(
   observedAt: string,
 ): SourceFact {
   const provider = label.toLowerCase();
+  const destination = label === 'Calendar' ? weatherDestination(event) : undefined;
   const identity = event.id
     ? `${provider}-event:${event.id}`
     : `${provider}-event:${createHash('sha256').update(JSON.stringify([
       event.title, event.location, event.startsAt.toISOString(), event.endsAt.toISOString(), event.allDay,
     ])).digest('hex').slice(0, 32)}`;
   return {
+    ...(destination ? { weatherDestination: destination } : {}),
     ref: identity,
     identity,
     kind: label === 'Calendar' ? 'event' : 'travel',

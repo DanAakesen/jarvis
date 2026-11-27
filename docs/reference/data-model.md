@@ -1,5 +1,7 @@
 # Jarvis data model
 
+`pi_daily_weather` stores one forecast reservation per owner and Copenhagen date, its calendar reference and the resulting source observation. The primary key enforces the daily limit across replicas and restarts.
+
 The schema of record is [the ordered SQL migrations](../../db/migrations/), not duplicated DDL. Jarvis uses one Azure SQL database. The backend runs forward-only migrations before serving; read the [migration contract](../../db/migrations/README.md) for checksums, locking, paired down files and the rollback boundary.
 
 ## Ownership

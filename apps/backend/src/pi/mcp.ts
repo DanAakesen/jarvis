@@ -396,7 +396,7 @@ export function createPiMcpRoutes(options: {
         const local = grant.brain
           ? isWakeTool(name)
           : isCurrentAssistantTool(name) || isSituationActivationTool(name);
-        return local && (!grant.brain || sourceAllowed(name, {}, disabled));
+        return local && (!grant.brain || (name !== 'weather' && sourceAllowed(name, {}, disabled)));
       };
       const localMatches = named.has(githubToolPrefix) && asksToReadRepositoryFile(input.query)
         ? searchJarvisTools(app.jarvisTools, input.query, visible) : undefined;
@@ -464,6 +464,12 @@ export function createPiMcpRoutes(options: {
           catch {
             return say({ tool: input.name, outcome: 'error', result: { error: 'The automatic source policy could not be verified. Nothing was read.' } }, true);
           }
+        }
+        if (input.name === 'weather') {
+          grant.results.push({ tool: input.name, outcome: 'refused' });
+          return say({ tool: input.name, outcome: 'refused', result: {
+            refused: 'Use situation_read and situation_lookup for the stored calendar-trip forecast.',
+          } }, true);
         }
         if (!sourceAllowed(input.name, input.arguments, disabled)) {
           grant.results.push({ tool: input.name, outcome: 'refused' });

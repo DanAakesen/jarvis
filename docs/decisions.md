@@ -2,6 +2,10 @@
 
 Read [PRODUCT.md](../PRODUCT.md) for requirements and [PLAN.md](../PLAN.md) for what to do next. Merged code and offline fixtures are not live provider or physical-device acceptance.
 
+## 2026-11-27 · Calendar-gated background weather
+
+Routine forecast changes consumed an entire day’s background allowance. Weather and GitHub activity cannot initiate a paid review. Keep the destination forecast for a qualifying calendar trip in brain context and cap automatic attempts at one per Copenhagen day, including failures.
+
 ## 2026-11-26 · GitHub is project context
 
 Dan follows his projects directly. Keep GitHub available for lookups in Chat, Voice and independent reviews, but never let its activity wake PI. [#2098](https://github.com/DanAakesen/jarvis/pull/2098).

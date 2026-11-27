@@ -1,4 +1,4 @@
-import { isGitHubActivity, type QueuedEvent } from './types.js';
+import { contextOnlyReason, type QueuedEvent } from './types.js';
 
 export interface RuleInput {
   now: Date;
@@ -27,7 +27,8 @@ function instant(value: unknown): number | undefined {
 
 /** Cheap filter with no model call: exact checks only; judgement stays with the model. */
 export function applyRules(event: QueuedEvent, input: RuleInput): RuleVerdict {
-  if (isGitHubActivity(event)) return { keep: false, reason: 'github_context_only' };
+  const contextOnly = contextOnlyReason(event);
+  if (contextOnly) return { keep: false, reason: contextOnly };
   const now = input.now.getTime();
   if (event.attempts > MAX_EVENT_ATTEMPTS) return { keep: false, reason: 'gave_up_after_retries' };
   if (!input.sourceEnabled) return { keep: false, reason: 'source_disabled' };

@@ -14,7 +14,7 @@ const MAX_SEEN = 2_000;
 const SPIKE_MIN_DKK = 15;
 const SPIKE_FACTOR = 3;
 const observationEventSources = new Set<SourceId>([
-  'todos', 'weather', 'news', 'travel', 'x', 'notes', 'memory', 'location',
+  'todos', 'news', 'travel', 'x', 'notes', 'memory', 'location',
 ]);
 
 export interface ProducerLogger {
@@ -147,6 +147,17 @@ export function createSourceChangePoller(options: {
       ? await options.observe(source.id, result, timeout)
       : undefined;
     if (observation?.admissible === false) return;
+    if (source.id === 'calendar' && result.state === 'ok' && settings.sources.weather && options.observe) {
+      const weather = options.sources.find(entry => entry.id === 'weather');
+      if (weather) {
+        try {
+          const forecast = await weather.read({ now, signal: timeout, settings, calendarFacts: result.facts });
+          if (forecast.reason !== 'daily_forecast_reserved') await options.observe('weather', forecast, timeout);
+        } catch {
+          options.logger?.warn?.({ reason: 'source_poll_failed', source: 'weather' }, 'proactive.event_producer');
+        }
+      }
+    }
     if (source.id !== 'mail' && source.id !== 'calendar') {
       if (observation?.changed && !observation.baseline &&
           (result.state !== 'ok' || observationEventSources.has(source.id))) {
@@ -217,7 +228,7 @@ export function createSourceChangePoller(options: {
       }
     }
     const enabled = options.sources.filter((source) =>
-      !settings.paused && settings.sources[source.id] &&
+      source.id !== 'weather' && !settings.paused && settings.sources[source.id] &&
       (source.id === 'mail' || source.id === 'calendar' || options.observe !== undefined));
     for (let offset = 0; offset < enabled.length && !stopped; offset += 3) {
       await Promise.all(enabled.slice(offset, offset + 3).map(async (source) => {

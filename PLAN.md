@@ -23,6 +23,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 ### Next steps and blockers
 
+After the weather change deploys, verify zero weather-triggered turns and at most one forecast reservation per owner per Copenhagen day. Verify the next qualifying calendar trip uses its saved forecast.
+
 Use the Apple-confirmed TestFlight build above for these device checks.
 
 1. **Daily core, Chat and Voice:** Check project status and the approved issue-to-worker flow; save, find and rename a note, then check its iPhone folder without refreshing; create a task, verify its reminder, then complete it; read workouts and lifts in Danish and English. When logging food, save one meal and count it once. Compare Nutrition Today with Chat and Voice: logged and remaining kcal, resting target, active kcal, deficit and protein still needed. Track parity in [#2012](https://github.com/DanAakesen/jarvis/issues/2012).

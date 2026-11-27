@@ -162,6 +162,17 @@ describe('PI MCP server', () => {
     ]);
   });
 
+  it('refuses a live forecast to a background turn even if weather is enabled', async () => {
+    const { registry, tool, recorded } = setup([], { tools: [{ ...probe, name: 'weather' }] });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', signal: live(),
+      brain: { runId: '00000000-0000-4000-8000-000000000002', sent: [], wrote: [], looked: [] },
+    });
+    const result = await tool('call_tool', { turn: grant.turn, name: 'weather', arguments: { text: 'forecast' } });
+    expect(result.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('stored') } });
+    expect(recorded).toEqual([]);
+  });
+
   it('does not let a wake read a disabled source by naming its tool', async () => {
     const calendar: JarvisTool = { ...probe, name: 'calendar_list_events', execution: { defaultEffect: 'read' } };
     const { registry, tool, recorded } = setup([], { tools: [calendar] });
@@ -739,9 +750,14 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
   });
 
   it('runs a request that arrives under another call id while the first is still running, and calls it a repeat', async () => {
+    let bothStarted!: () => void;
+    const started = new Promise<void>(resolve => { bothStarted = resolve; });
     const releases: Array<() => void> = [];
     const write = counting('probe_write', { defaultEffect: 'action' }, async () => {
-      await new Promise<void>((resolve) => { releases.push(resolve); });
+      await new Promise<void>(resolve => {
+        releases.push(resolve);
+        if (releases.length === 2) bothStarted();
+      });
       return { saved: true };
     });
     const { registry, tool, ledger } = setup([], { tools: [write.tool] });
@@ -749,7 +765,7 @@ describe('PI MCP door: replayed requests, repeated actions and the call ledger',
     grant.discovered.add('probe_write');
     // The model emits the same call twice, in parallel, on purpose.
     const both = ['call-1', 'call-2'].map((callId) => tool('call_tool', call(grant.turn, 'probe_write', { text: 'a' }), as(callId)));
-    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    await started;
     for (const release of releases) release();
     const answers = await Promise.all(both);
     expect(write.runs.count).toBe(2);
