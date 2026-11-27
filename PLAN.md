@@ -25,6 +25,8 @@ These are priority ranks, not the historical phase IDs. Dan's daily core, in ord
 
 Verify in production: no weather-only wakes, at most one automatic forecast reservation per owner per Copenhagen day, and reuse only for the same unchanged calendar trip.
 
+The iPhone Notes live formatting awaits a device check. Open a note with a heading, highlight, checklist and table, edit a line, then tap Done and reopen it in Obsidian.
+
 The iPhone sidebar swipe fix awaits a device check in the next build. Drag left from the right edge on Home and a scrolling page. In Voice, swipe across a result to page it, then open the sidebar from above the result.
 
 Use the Apple-confirmed TestFlight build above for these device checks.

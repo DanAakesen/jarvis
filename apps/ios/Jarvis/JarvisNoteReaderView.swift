@@ -5,16 +5,41 @@ import SwiftUI
 /// Renders a note's Markdown body as readable native text: headings, checklists, bullets, quotes, code and
 /// clickable internal links. Properties (frontmatter) never reach this view.
 struct JarvisNoteBodyView: View {
-    let document: JarvisNoteDocument
+    let markdown: String
     let titleForTarget: (String) -> String?
     let onOpenTarget: (String) -> Void
 
     private func inline(_ text: String) -> AttributedString {
-        let linked = JarvisNoteLinks.rewriteInternalLinks(text, titleForTarget: titleForTarget)
-        return (try? AttributedString(
-            markdown: linked,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(text)
+        // Mark highlight boundaries before interpreting Markdown so emphasis and links can span them.
+        let markedSource = NSMutableString(string: text)
+        let highlights = JarvisNoteInlineSpan.parse(text).filter { $0.style == .highlight }
+        let marker = (0xE000...0xF8FF).lazy.compactMap(Unicode.Scalar.init)
+            .first { !text.unicodeScalars.contains($0) }
+        if let marker {
+            for span in highlights.reversed() {
+                markedSource.replaceCharacters(in: NSRange(location: NSMaxRange(span.content), length: 2), with: String(marker))
+                markedSource.replaceCharacters(in: NSRange(location: span.range.location, length: 2), with: String(marker))
+            }
+        }
+        let linked = JarvisNoteLinks.rewriteInternalLinks(markedSource as String, titleForTarget: titleForTarget)
+        var value = (try? AttributedString(markdown: linked, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(markedSource as String)
+        for run in value.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            value[run.range].backgroundColor = Color(uiColor: .secondarySystemFill)
+        }
+        guard !highlights.isEmpty, let marker else { return value }
+        var result = AttributedString()
+        var highlighted = false
+        var start = value.startIndex
+        let delimiter = Character(marker)
+        for index in value.characters.indices where value.characters[index] == delimiter {
+            var segment = AttributedString(value[start..<index])
+            if highlighted { segment.backgroundColor = JarvisDesignTokens.notesHighlight }
+            result += segment
+            highlighted.toggle()
+            start = value.characters.index(after: index)
+        }
+        return result + AttributedString(value[start..<value.endIndex])
     }
 
     private func headingFont(_ level: Int) -> Font {
@@ -28,9 +53,28 @@ struct JarvisNoteBodyView: View {
 
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 6) {
-            // Blocks get a fresh identity each parse, so rows are keyed by position.
-            ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
-                row(block)
+            ForEach(Array(JarvisMarkdownBlock.parse(markdown).enumerated()), id: \.offset) { _, section in
+                if let table = section.table {
+                    ScrollView(.horizontal) {
+                        Grid(alignment: .leading, horizontalSpacing: 1, verticalSpacing: 1) {
+                            ForEach(table.rows.indices, id: \.self) { index in
+                                GridRow {
+                                    ForEach(table.rows[index].indices, id: \.self) { column in
+                                        Text(inline(table.rows[index][column]))
+                                            .fontWeight(index == 0 ? .semibold : .regular)
+                                            .padding(8)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color.primary.opacity(index == 0 ? 0.15 : 0.075))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    ForEach(Array(JarvisNoteDocument(section.text).blocks.enumerated()), id: \.offset) { _, block in
+                        row(block)
+                    }
+                }
             }
         }
         .tint(JarvisDesignTokens.ambientCool)
@@ -63,7 +107,7 @@ struct JarvisNoteBodyView: View {
                 .accessibilityAddTraits(.isHeader)
         } else if block.isChecklist {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Image(systemName: block.isChecked ? "checkmark.circle.fill" : "circle")
+                Image(systemName: block.isChecked ? "checkmark.square.fill" : "square")
                     .foregroundStyle(JarvisDesignTokens.notesTaskRing)
                     .accessibilityHidden(true)
                 Text(inline(block.text))
@@ -156,7 +200,7 @@ struct JarvisNoteReaderView: View {
                     Text(message).font(.footnote).foregroundStyle(.red).accessibilityIdentifier("reader.message")
                 }
                 JarvisNoteBodyView(
-                    document: JarvisNoteDocument(parts.readableBody),
+                    markdown: parts.readableBody,
                     titleForTarget: { target in
                         JarvisNoteLinks.resolve(target, from: note.path, paths: paths).flatMap { titles[$0] }
                     },
