@@ -1,3 +1,4 @@
+import { createXSource } from './x.js';
 import type { ProactiveSource, SourceId } from '../types.js';
 import type { GoogleApiClient } from '../../google/api-client.js';
 import type { TaskStore } from '../../factory/task-store.js';
@@ -21,16 +22,9 @@ export interface SourceDependencies extends ContextDependencies {
   googleApiClient?: GoogleApiClient;
   vaultClient?: VaultClient;
   taskStore?: TaskStore;
+  xSource?: ProactiveSource;
   settingsStore?: SettingsStore;
 }
-
-const xSource: ProactiveSource = {
-  id: 'x',
-  label: 'X',
-  async read({ now }) {
-    return { source: 'x', state: 'unavailable', reason: 'no_provider', facts: [], observedAt: now.toISOString() };
-  },
-};
 
 export function buildSourceRegistry(dependencies: SourceDependencies): ProactiveSource[] {
   const calendar = createCalendarSource(dependencies.googleApiClient);
@@ -47,7 +41,7 @@ export function buildSourceRegistry(dependencies: SourceDependencies): Proactive
   ];
   sources.push(...createContextSources(dependencies));
   sources.sort((left, right) => left.id.localeCompare(right.id));
-  sources.push(xSource);
+  sources.push(dependencies.xSource ?? createXSource());
   return sources;
 }
 

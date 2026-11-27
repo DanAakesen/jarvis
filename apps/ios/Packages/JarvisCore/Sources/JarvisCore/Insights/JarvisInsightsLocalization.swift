@@ -281,6 +281,8 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case editorBrainInstructions = "insights.editorBrainInstructions"
     case editorIssueBrainInstructions = "insights.editorIssueBrainInstructions"
     case editorGuidance = "insights.editorGuidance"
+    case editorPreferencesHint = "insights.editorPreferencesHint"
+    case editorRoutineHint = "insights.editorRoutineHint"
     case editorGuidanceCount = "insights.editorGuidanceCount"
     case editorPreferences = "insights.editorPreferences"
     case editorNoPreferences = "insights.editorNoPreferences"

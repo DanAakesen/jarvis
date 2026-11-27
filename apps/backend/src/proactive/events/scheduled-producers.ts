@@ -5,7 +5,7 @@ import type { ProactiveSource, SourceId, SourceResult } from '../types.js';
 import type { ProactiveSettings } from '../types.js';
 import type { EventQueueStore } from './event-queue.js';
 import { clashEvents, factEvent } from './producers.js';
-import type { ProactiveEventSink } from './types.js';
+import { contextOnlyReason, type ProactiveEventSink } from './types.js';
 
 const SIX_HOURS_MS = 6 * 60 * 60_000;
 const FIFTEEN_MINUTES_MS = 15 * 60_000;
@@ -14,7 +14,7 @@ const MAX_SEEN = 2_000;
 const SPIKE_MIN_DKK = 15;
 const SPIKE_FACTOR = 3;
 const observationEventSources = new Set<SourceId>([
-  'todos', 'news', 'travel', 'x', 'notes', 'memory', 'location',
+  'news', 'travel', 'memory', 'location',
 ]);
 
 export interface ProducerLogger {
@@ -159,6 +159,7 @@ export function createSourceChangePoller(options: {
       }
     }
     if (source.id !== 'mail' && source.id !== 'calendar') {
+      if (contextOnlyReason({ source: source.id, kind: 'observation.changed' })) return;
       if (observation?.changed && !observation.baseline &&
           (result.state !== 'ok' || observationEventSources.has(source.id))) {
         const material = {

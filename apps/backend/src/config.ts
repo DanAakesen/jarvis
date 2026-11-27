@@ -33,6 +33,7 @@ export interface BackendConfig {
   codexToolModel: string;
   githubAppId?: string;
   googleTimeZone?: string;
+  xBearerToken?: string;
   monthlyBudgetResourceId?: string;
   pushEnabled: boolean;
   proactiveEnabled: boolean;
@@ -332,6 +333,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     imageModel,
     openaiImageSecretName,
     ...(githubAppId === undefined ? {} : { githubAppId }),
+    ...(env.JARVIS_X_BEARER_TOKEN?.trim() ? { xBearerToken: env.JARVIS_X_BEARER_TOKEN.trim() } : {}),
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
     pushEnabled: env.JARVIS_PUSH_ENABLED === 'true',

@@ -57,6 +57,7 @@ export interface BrainOptions {
   readonly piStore: Pick<PiStore, 'readBrainSwitch' | 'latestProactiveMessageFeedback'>;
   readonly comms: BrainComms;
   readonly decisionLog: DecisionLog;
+  readonly readWakeSources?: (context: import('../../proactive/types.js').SourceContext) => Promise<string[]>;
   readonly owner: string;
   readonly timeZone: string;
   readonly now: () => Date;
@@ -126,6 +127,14 @@ export function createBrain(options: BrainOptions) {
       origin: 'event',
       materialHash: event.materialHash ?? null,
     })));
+  async function wakeSources(settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>, current: Date, signal: AbortSignal) {
+    if (!options.readWakeSources) return [];
+    try {
+      return await options.readWakeSources({ settings, now: current, signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]), admittedWake: true });
+    } catch {
+      return ['Additional source context unavailable for this turn.'];
+    }
+  }
   const policyNote = (settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>): string => {
     const enabledCategories = Object.entries(settings.categories)
       .filter(([, enabled]) => enabled).map(([category]) => category);
@@ -358,7 +367,7 @@ export function createBrain(options: BrainOptions) {
       evidence: activationEvidence(survivors),
       body: formatWake({
         runId, activationType, activationSource,
-        now: current, timeZone: options.timeZone, events: survivors, sections: extra.sections,
+        now: current, timeZone: options.timeZone, events: survivors, sections: [...extra.sections, ...await wakeSources(settings, current, signal)],
         brainInstructions: settings.brainInstructions,
         policyNote: policyNote(settings), budgetNote, feedback: await feedbackForWake(signal),
       }),
@@ -476,7 +485,7 @@ export function createBrain(options: BrainOptions) {
         now: current,
         timeZone: options.timeZone,
         events: [],
-        sections: extra.sections,
+        sections: [...extra.sections, ...await wakeSources(settings, current, signal)],
         brainInstructions: settings.brainInstructions,
         policyNote: policyNote(settings),
         feedback: await feedbackForWake(signal),

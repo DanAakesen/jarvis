@@ -17,6 +17,7 @@ export function isGitHubActivity(event: Pick<ProactiveEventInput, 'source' | 'ki
 
 export function contextOnlyReason(event: Pick<ProactiveEventInput, 'source' | 'kind'>): string | undefined {
   if (isGitHubActivity(event)) return 'github_context_only';
+  if (event.source === 'notes' || event.source === 'todos' || event.source === 'x') return event.source + '_context_only';
   return event.source === 'weather' ? 'weather_context_only' : undefined;
 }
 

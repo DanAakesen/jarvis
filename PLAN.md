@@ -1,5 +1,8 @@
 # Project plan
 
+Vault and X review context and simplified iPhone Proactive preferences are prepared locally. Live X verification needs a configured credential and an explicit public search.
+
+
 ## Current state
 
 ### Current focus

@@ -30,6 +30,7 @@ function captureLogs() {
 function setup(options: {
   start?: string; enabled?: boolean; decide?: Parameters<typeof scriptedGateway>[0]; failVault?: () => boolean; budgetDkk?: number; paused?: boolean;
   logger?: BrainOptions['logger'];
+  readWakeSources?: BrainOptions['readWakeSources'];
   afterScheduledWake?: BrainOptions['afterScheduledWake'];
 } = {}) {
   const clock = { t: new Date(options.start ?? '2026-11-16T10:00:00Z') };
@@ -47,6 +48,7 @@ function setup(options: {
   const brain = createBrain({
     queue, gateway, proactive, piStore, comms, decisionLog: createDecisionLog({ area: createPiArea({ vault }) }), owner, timeZone: 'Europe/Copenhagen', now,
     afterScheduledWake: options.afterScheduledWake,
+    ...(options.readWakeSources ? { readWakeSources: options.readWakeSources } : {}),
     ...(options.logger ? { logger: options.logger } : {}),
   });
   const ready = (async () => {
@@ -115,16 +117,21 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
   });
 
   it('delivers the entire saved procedure alongside an event including its original line breaks', async () => {
-    const t = setup();
+    const context = vi.fn(async () => ['vault context for this review']);
+    const t = setup({ readWakeSources: context });
+    await t.tick();
+    expect(context).not.toHaveBeenCalled();
     const procedure = 'Check today’s calendar.\nKeep updates short.';
     await t.proactive.settings.patch({ brainInstructions: procedure });
     await t.enqueue({ source: 'calendar', kind: 'calendar_event_upcoming', dedupeKey: 'appointment', summary: 'Dentist', occurredAt: t.now() });
     await t.tick();
     expect(t.gateway.wakes[0]?.body).toContain(procedure);
+    expect(t.gateway.wakes[0]?.body).toContain('vault context for this review');
+    expect(context).toHaveBeenCalledTimes(1);
   });
 
   it('runs a scheduled sweep through PI with categories, scope and guidance in the trusted policy', async () => {
-    const t = setup();
+    const t = setup({ readWakeSources: async () => ['scheduled vault context'] });
     await t.ready;
     await t.proactive.settings.patch({ guidance: 'Prefer short operational updates.', brainInstructions: 'Check today’s conflicts first.', categories: { travel: false } });
     const claim = await t.proactive.runs.claim({
@@ -134,6 +141,7 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(t.gateway.wakes).toHaveLength(1);
     expect(t.gateway.wakes[0]!.body).not.toMatch(/enabled categories=[^;]*travel/u);
     expect(t.gateway.wakes[0]!.body).toContain('Prefer short operational updates.');
+    expect(t.gateway.wakes[0]!.body).toContain('scheduled vault context');
     expect(t.gateway.wakes[0]!.body).toContain('Check today’s conflicts first.');
     expect(t.gateway.wakes[0]!.body).not.toContain('# Brain: acting on a wake');
     expect(t.gateway.wakes[0]!.body).toContain('type=scheduled');

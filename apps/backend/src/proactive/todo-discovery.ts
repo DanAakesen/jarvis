@@ -27,17 +27,24 @@ export function inScope(path: string): boolean {
 
 const readers = new WeakMap<VaultReader, ReturnType<typeof createReader>>();
 
-function createReader(vault: VaultReader) {
+const contextReaders = new WeakMap<VaultReader, ReturnType<typeof createReader>>();
+
+function isActiveNote(path: string) {
+  return isVaultNotePath(path) && !path.split('/').some(part => part.startsWith('.') || /^(archive|templates)$/iu.test(part)) &&
+    !/^PI\/(?:Log|Notes)\//iu.test(path) && !/^(?:AGENTS|CLAUDE)\.md$/iu.test(path);
+}
+
+function createReader(vault: VaultReader, allActiveNotes = false) {
   let cache = new Map<string, CachedFile>();
   let inFlight: Promise<ParsedVaultTodo[]> | undefined;
   const scan = async (signal: AbortSignal): Promise<ParsedVaultTodo[]> => {
     const controller = new AbortController();
     const boundedSignal = AbortSignal.any([signal, controller.signal]);
     const scan = async () => {
-      const files = (await vault.tree(boundedSignal)).filter(({ path }) => inScope(path));
+      const files = (await vault.tree(boundedSignal)).filter(({ path }) => allActiveNotes ? isActiveNote(path) : inScope(path));
       boundedSignal.throwIfAborted();
       if (files.length === 0) throw new TodoDiscoveryError('todo_file_missing');
-      if (files.filter(({ path }) => !path.includes('/')).length > 1) {
+      if (!allActiveNotes && files.filter(({ path }) => !path.includes('/')).length > 1) {
         throw new TodoDiscoveryError('todo_file_ambiguous');
       }
       if (files.length > MAX_TODO_FILES) throw new TodoDiscoveryError('scan_limit');
@@ -103,11 +110,12 @@ function createReader(vault: VaultReader) {
   };
 }
 
-export function readVaultTasks(vault: VaultReader, signal: AbortSignal): Promise<ParsedVaultTodo[]> {
-  let reader = readers.get(vault);
+export function readVaultTasks(vault: VaultReader, signal: AbortSignal, allActiveNotes = false): Promise<ParsedVaultTodo[]> {
+  const cache = allActiveNotes ? contextReaders : readers;
+  let reader = cache.get(vault);
   if (!reader) {
-    reader = createReader(vault);
-    readers.set(vault, reader);
+    reader = createReader(vault, allActiveNotes);
+    cache.set(vault, reader);
   }
   return reader(signal);
 }

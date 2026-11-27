@@ -152,7 +152,9 @@ export function createContextSources(dependencies: ContextDependencies): Proacti
       let paths: { path: string }[];
       try {
         signal.throwIfAborted();
-        paths = (await request.query<{ path: string }>(`SELECT TOP(@take) path FROM dbo.vault_chunks GROUP BY path ORDER BY MAX(indexed_at) DESC,path;`)).recordset;
+        paths = (await request.query<{ path: string }>(`SELECT TOP(@take) path FROM dbo.vault_chunks
+          WHERE path NOT LIKE N'PI/Log/%' AND path NOT LIKE N'PI/Notes/%'
+          GROUP BY path ORDER BY CASE WHEN path=N'p0.md' THEN 0 ELSE 1 END, MAX(indexed_at) DESC, path;`)).recordset;
       } finally { signal.removeEventListener('abort', cancel); }
       const notes = await Promise.all(paths.map(async ({ path }) => {
         const note = await dependencies.vaultClient!.read(path, signal);

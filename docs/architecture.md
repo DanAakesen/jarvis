@@ -170,6 +170,8 @@ Home and Calendar read the primary Google Calendar through the owner-authenticat
 
 ## Proactive wake and Inbox review
 
+After the shared turn reservation, both scheduled and event reviews read enabled vault and X context. The prompt includes the root \`p0.md\` (up to 2,000 characters) and up to six recent note excerpts, open tasks and matching X posts per source. The full synced notes remain searchable. The proactive task reader covers active Markdown across folders within the existing bounded scan. Editing a note or checkbox, or receiving a new X search result, cannot itself start a paid turn. Exact reminders and explicitly due follow-ups retain their own paths.
+
 Weather cannot wake PI. Only the calendar poll can fetch an automatic forecast. With Calendar and Weather enabled, it picks the earliest eligible trip in the next 24 hours with a physical destination: a drive of at least an hour, an explicitly long drive or a recognised outdoor activity. It claims the owner and Copenhagen date in SQL before fetching, even on failure. Reuse requires the same event, start time and destination on that Copenhagen date. Outreach requires verified calendar and adverse-weather evidence for that trip. Manual requests use the normal tool.
 
 ```mermaid
