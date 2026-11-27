@@ -232,7 +232,7 @@ struct JarvisNoteEditorSheet: View {
         JarvisAccessoryToolButton(title: "Bold", systemImage: "bold", identifier: "editor.bold") { wrap("**") }
         JarvisAccessoryToolButton(title: "Italic", systemImage: "italic", identifier: "editor.italic") { wrap("*") }
         JarvisAccessoryToolButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "editor.checklist") { prefixLine("- [ ] ") }
-        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link", glyph: "[[ ]]", tint: JarvisDesignTokens.secondaryAccent) { showWikiPicker = true }
+        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link", glyph: "[[ ]]") { showWikiPicker = true }
         JarvisAccessoryToolMenu(title: copy[.formatting], systemImage: "ellipsis", identifier: "editor.format") {
             Button(copy[.bulletList], systemImage: "list.bullet") { prefixLine("- ") }
             Button("Numbered list", systemImage: "list.number") { prefixLine("1. ") }

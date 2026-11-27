@@ -206,6 +206,7 @@ enum JarvisDesignTokens {
     )
     /// Open task circles use the owner’s accent. The label also conveys the task state.
     static var notesTaskRing: Color { primaryAccent }
+    static let notesHighlight = Color(uiColor: .systemYellow).opacity(0.32)
     /// Tighter rows in forms and sheets, which open at half height.
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16

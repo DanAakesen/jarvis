@@ -11,6 +11,7 @@ struct JarvisSidebarReveal<Page: View>: View {
     @Environment(\.scenePhase) private var scenePhase
     @GestureState private var isDraggingClosed = false
     @GestureState private var isDraggingOpen = false
+    @State private var voiceWindowBand: ClosedRange<CGFloat>?
     private let isEnabled: Bool
     private let page: Page
 
@@ -117,25 +118,25 @@ struct JarvisSidebarReveal<Page: View>: View {
                     .clipped()
                 }
 
+                // Keep the opening recognizer on a stationary sibling as the page moves under the finger.
+                let height = geometry.size.height
+                let band = navigation.currentDestination == .voice ? voiceWindowBand : nil
+                let top = min(height, max(0, band?.lowerBound ?? height))
+                let bottom = min(height, max(0, band?.upperBound ?? height))
+                let width = JarvisDesignTokens.sidebarEdgeGestureWidth
+                Color.clear
+                    .frame(width: width, height: height)
+                    .contentShape(Path { path in
+                        path.addRect(CGRect(x: 0, y: 0, width: width, height: top))
+                        path.addRect(CGRect(x: 0, y: bottom, width: width, height: height - bottom))
+                    })
+                    .highPriorityGesture(openSwipe(drawerWidth: drawerWidth))
+                    .allowsHitTesting(isEnabled && !navigation.isSidebarOpen)
+                    .accessibilityHidden(true)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
-            .overlayPreferenceValue(VoiceWindowBounds.self) { bounds in
-                if isEnabled && (progress == 0 || isDraggingOpen) {
-                    let band = bounds.map { geometry[$0] }
-                    VStack(spacing: 0) {
-                        if let band {
-                            edgeStrip(drawerWidth: drawerWidth)
-                                .frame(height: max(0, band.minY))
-                            Color.clear.frame(height: band.height).allowsHitTesting(false)
-                            edgeStrip(drawerWidth: drawerWidth)
-                        } else {
-                            edgeStrip(drawerWidth: drawerWidth)
-                        }
-                    }
-                    .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
+            .coordinateSpace(name: VoiceWindowBand.coordinateSpace)
+            .onPreferenceChange(VoiceWindowBand.self) { voiceWindowBand = $0 }
             .animation(animation, value: progress)
             .onChange(of: isDraggingClosed) { _, dragging in
                 if !dragging { navigation.cancelDrag() }
@@ -146,13 +147,6 @@ struct JarvisSidebarReveal<Page: View>: View {
         }
         .ignoresSafeArea(.container)
     }
-    private func edgeStrip(drawerWidth: CGFloat) -> some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .highPriorityGesture(openSwipe(drawerWidth: drawerWidth))
-            .accessibilityHidden(true)
-    }
-
 }
 
 struct JarvisSidebar: View {

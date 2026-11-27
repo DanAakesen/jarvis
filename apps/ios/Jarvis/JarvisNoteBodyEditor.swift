@@ -5,6 +5,10 @@ import UIKit
 /// Handles Return at the keyboard boundary to leave pasted Markdown and toolbar edits intact.
 final class JarvisNoteTextView: UITextView {
     private var pasting = false
+    var lastSource: String?
+    var lastSelectedLines: NSRange?
+    var lastSizeCategory: UIContentSizeCategory?
+    var isFormatting = false
 
     override func paste(_ sender: Any?) {
         pasting = true
@@ -37,7 +41,8 @@ struct JarvisNoteBodyEditor: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> JarvisNoteTextView {
-        let view = JarvisNoteTextView()
+        let view = JarvisNoteTextView(usingTextLayoutManager: false)
+        view.layoutManager.delegate = view
         view.backgroundColor = .clear
         view.font = .preferredFont(forTextStyle: .body)
         view.adjustsFontForContentSizeCategory = true
@@ -60,6 +65,7 @@ struct JarvisNoteBodyEditor: UIViewRepresentable {
             if let selection, view.selectedRange != selection, Range(selection, in: text) != nil {
                 view.selectedRange = selection
             }
+            view.formatDocument()
         }
         if view.isFirstResponder != focused {
             DispatchQueue.main.async { [weak view] in
@@ -81,17 +87,26 @@ struct JarvisNoteBodyEditor: UIViewRepresentable {
         init(_ parent: JarvisNoteBodyEditor) { self.parent = parent }
 
         func textViewDidChange(_ view: UITextView) {
-            guard !updating else { return }
+            guard !updating, (view as? JarvisNoteTextView)?.isFormatting != true else { return }
             parent.text = view.text
             parent.selection = view.selectedRange
             view.invalidateIntrinsicContentSize()
         }
 
         func textViewDidChangeSelection(_ view: UITextView) {
-            if !updating, view.isFirstResponder { parent.selection = view.selectedRange }
+            if !updating, view.isFirstResponder, (view as? JarvisNoteTextView)?.isFormatting != true {
+                parent.selection = view.selectedRange
+            }
         }
 
-        func textViewDidBeginEditing(_ view: UITextView) { parent.focused = true }
-        func textViewDidEndEditing(_ view: UITextView) { parent.focused = false }
+        func textViewDidBeginEditing(_ view: UITextView) {
+            parent.focused = true
+            (view as? JarvisNoteTextView)?.formatDocument()
+        }
+
+        func textViewDidEndEditing(_ view: UITextView) {
+            parent.focused = false
+            (view as? JarvisNoteTextView)?.formatDocument()
+        }
     }
 }

@@ -25,6 +25,18 @@ final class MarkdownTableTests: XCTestCase {
         XCTAssertEqual(JarvisMarkdownBlock.parse(saved).compactMap(\.table), [JarvisMarkdownTable()])
     }
 
+    func testSavingLegacyTableAddsOnlyMissingParagraphBreaks() {
+        let table = "| One | Two |  |\n| --- | --- | --- |\n| A | B | C |"
+        let expected = "Intro\n\n" + table + "\n\n- [ ] Task"
+        let legacy = "Intro\n" + table + "\n- [ ] Task"
+        XCTAssertEqual(JarvisMarkdownBlock.document(JarvisMarkdownBlock.parse(legacy)), expected)
+        XCTAssertEqual(JarvisMarkdownBlock.document(JarvisMarkdownBlock.parse(expected)), expected)
+        XCTAssertEqual(JarvisMarkdownBlock.parse(expected).compactMap(\.table).first?.rows.first, ["One", "Two", ""])
+        let crlf = legacy.replacingOccurrences(of: "\n", with: "\r\n")
+        XCTAssertEqual(JarvisMarkdownBlock.document(JarvisMarkdownBlock.parse(crlf)),
+                       expected.replacingOccurrences(of: "\n", with: "\r\n"))
+    }
+
     func testLiteralBackslashesBeforePipeInCell() {
         var table = JarvisMarkdownTable()
         table.set(#"a\|b\\|c|d"#, row: 1, column: 0)
