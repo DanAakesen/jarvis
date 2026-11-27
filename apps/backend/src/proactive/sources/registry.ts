@@ -10,7 +10,9 @@ import { createMailSource } from './mail.js';
 import { createNewsSource } from './news.js';
 import { createTodosSource } from './todos.js';
 import { createTravelSource } from './travel.js';
-import { createWeatherSource } from './weather.js';
+import { createDailyWeatherStore } from '../../database/pi-daily-weather.js';
+import { dailyWeatherSource } from './daily-weather.js';
+import { readTripForecast } from './weather.js';
 import { createLocationSource } from './location.js';
 
 type VaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -31,14 +33,16 @@ const xSource: ProactiveSource = {
 };
 
 export function buildSourceRegistry(dependencies: SourceDependencies): ProactiveSource[] {
+  const calendar = createCalendarSource(dependencies.googleApiClient);
   const sources: ProactiveSource[] = [
-    createCalendarSource(dependencies.googleApiClient),
+    calendar,
     createFactorySource(dependencies.taskStore),
     createMailSource(dependencies.googleApiClient),
     createNewsSource(),
     createTodosSource(dependencies.vaultClient, true),
     createTravelSource(dependencies.googleApiClient),
-    createWeatherSource(dependencies.settingsStore),
+    dailyWeatherSource(dependencies.pool && dependencies.ownerObjectId
+      ? createDailyWeatherStore(dependencies.pool, dependencies.ownerObjectId) : undefined, readTripForecast, calendar),
     createLocationSource(dependencies.settingsStore),
   ];
   sources.push(...createContextSources(dependencies));

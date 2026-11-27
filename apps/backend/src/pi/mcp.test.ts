@@ -162,6 +162,17 @@ describe('PI MCP server', () => {
     ]);
   });
 
+  it('refuses a live forecast to a background turn even if weather is enabled', async () => {
+    const { registry, tool, recorded } = setup([], { tools: [{ ...probe, name: 'weather' }] });
+    const grant = registry.open({
+      ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', signal: live(),
+      brain: { runId: '00000000-0000-4000-8000-000000000002', sent: [], wrote: [], looked: [] },
+    });
+    const result = await tool('call_tool', { turn: grant.turn, name: 'weather', arguments: { text: 'forecast' } });
+    expect(result.body).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('stored') } });
+    expect(recorded).toEqual([]);
+  });
+
   it('does not let a wake read a disabled source by naming its tool', async () => {
     const calendar: JarvisTool = { ...probe, name: 'calendar_list_events', execution: { defaultEffect: 'read' } };
     const { registry, tool, recorded } = setup([], { tools: [calendar] });

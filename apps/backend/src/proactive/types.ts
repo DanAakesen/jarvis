@@ -64,6 +64,8 @@ export interface SourceFact {
   allDay?: boolean;
   dueHasTime?: boolean;
   remindAtDue?: boolean;
+  weatherDestination?: string;
+  weatherEventRef?: string;
   highPriority?: boolean;
 }
 
@@ -88,6 +90,7 @@ export interface ProactiveSettings {
 }
 
 export interface SourceContext {
+  calendarFacts?: readonly SourceFact[];
   now: Date;
   signal: AbortSignal;
   settings: ProactiveSettings;

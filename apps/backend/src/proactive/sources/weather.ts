@@ -1,7 +1,6 @@
-import type { SettingsStore } from '../../core/settings.js';
-import { readSettings } from '../../core/settings.js';
+import { createHash } from 'node:crypto';
 import { weatherDescription } from '../../core/weather.js';
-import type { ProactiveSource, SourceContext, SourceFact, SourceResult } from '../types.js';
+import type { SourceContext, SourceFact, SourceResult } from '../types.js';
 import { sanitizeFactText } from '../todo-file.js';
 
 const requestTimeoutMs = 15_000;
@@ -71,7 +70,7 @@ function forecastUrl(latitude: number, longitude: number): URL {
   return url;
 }
 
-function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null {
+function forecastFacts(value: unknown, place: string, observedAt: string): SourceFact[] | null {
   if (!isObject(value) || !isObject(value.daily)) return null;
   const daily = value.daily;
   const arrays = requiredHealthFields.map((key) => daily[key]);
@@ -79,6 +78,7 @@ function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null 
   const [dates, codes, highs, lows, chances, amounts, winds] = arrays as [
     unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[],
   ];
+  const placeId = createHash('sha256').update(place).digest('hex').slice(0, 16);
   return dates.slice(0, 2).flatMap((date, index): SourceFact[] => {
     const code = codes[index];
     const high = highs[index];
@@ -93,13 +93,15 @@ function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null 
         !finiteNumber(amount) || amount < 0 || !finiteNumber(wind) || wind < 0) return [];
     const period = index === 0 ? 'Today' : 'Tomorrow';
     return [{
-      ref: `home-forecast:${date}`,
-      identity: `home-forecast:${date}`,
+      ref: `trip-forecast:${placeId}:${date}`,
+      identity: `trip-forecast:${placeId}:${date}`,
       taskScope: 'personal',
       kind: 'weather',
       label: 'Weather',
+      highPriority: [56, 57, 65, 66, 67, 71, 73, 75, 77, 82, 85, 86, 95, 96, 99].includes(code as number) ||
+        wind >= 50 || amount >= 15,
       text: sanitizeFactText(
-        `${period} (${date}): ${weatherDescription(code as number)}, ${low}–${high}°C; ` +
+        `${place} · ${period} (${date}): ${weatherDescription(code as number)}, ${low}–${high}°C; ` +
         `precipitation ${chance}% / ${amount} mm; wind up to ${wind} km/h`,
       ),
       observedAt,
@@ -107,50 +109,53 @@ function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null 
   });
 }
 
-export function createWeatherSource(
-  settingsStore?: SettingsStore,
-  fetcher: typeof fetch = fetch,
-): ProactiveSource {
-  return {
-    id: 'weather',
-    label: 'Weather',
-    async read({ now, signal }: SourceContext): Promise<SourceResult> {
-      if (!settingsStore) return unavailable(now, 'not_connected');
-      const timeout = new AbortController();
-      const timeoutId = setTimeout(() => timeout.abort(), requestTimeoutMs);
-      try {
-        const home = (await readSettings(settingsStore)).location;
-        if (!home.city || home.latitude === null || home.longitude === null) {
-          return unavailable(now, 'no_location');
-        }
-        if (!Number.isFinite(home.latitude) || home.latitude < -90 || home.latitude > 90 ||
-            !Number.isFinite(home.longitude) || home.longitude < -180 || home.longitude > 180) {
-          return unavailable(now, 'no_location');
-        }
-        const url = forecastUrl(home.latitude, home.longitude);
-        if (url.protocol !== 'https:') return unavailable(now, 'read_failed');
-        const response = await fetcher(url, {
-          headers: { Accept: 'application/json' },
-          redirect: 'error',
-          signal: AbortSignal.any([signal, timeout.signal]),
-        });
-        if (response.status === 429) {
-          await response.body?.cancel().catch(() => undefined);
-          return unavailable(now, 'rate_limited');
-        }
-        if (!response.ok || response.redirected) {
-          await response.body?.cancel().catch(() => undefined);
-          return unavailable(now, 'read_failed');
-        }
-        const observedAt = new Date().toISOString();
-        const facts = forecastFacts(await readBoundedJson(response), observedAt);
-        if (!facts || facts.length !== 2) return unavailable(now, 'read_failed');
-        return { source: 'weather', state: 'ok', reason: null, facts, observedAt };
-      } catch {
-        return unavailable(now, timeout.signal.aborted || signal.aborted ? 'timeout' : 'read_failed');
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    },
-  };
+// Calendar locations may be coordinates, a town, or a Danish street address ending in postcode and town.
+async function resolveDestination(location: string, signal: AbortSignal, fetcher: typeof fetch) {
+  const coordinates = /^(-?\d{1,2}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/u.exec(location);
+  if (coordinates && Math.abs(Number(coordinates[1])) <= 90 && Math.abs(Number(coordinates[2])) <= 180) {
+    return { latitude: Number(coordinates[1]), longitude: Number(coordinates[2]), place: location };
+  }
+  const postal = /(?:^|[,\s])\d{4}\s+([\p{L} .'-]+?)(?:,\s*(?:Denmark|Danmark))?$/iu.exec(location);
+  const city = (postal?.[1] ?? location).trim();
+  if (!/^[\p{L} .'-]{2,80}$/u.test(city)) return;
+  const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+  url.searchParams.set('name', city);
+  url.searchParams.set('count', '5');
+  if (postal) url.searchParams.set('countryCode', 'DK');
+  const response = await fetcher(url, { redirect: 'error', signal });
+  if (!response.ok) { await response.body?.cancel(); return; }
+  const data = await readBoundedJson(response);
+  if (!isObject(data) || !Array.isArray(data.results)) return;
+  const matches = data.results.filter((item): item is Record<string, unknown> => isObject(item) &&
+    typeof item.name === 'string' && item.name.localeCompare(city, undefined, { sensitivity: 'base' }) === 0 &&
+    (!postal || item.country_code === 'DK') && finiteNumber(item.latitude) && finiteNumber(item.longitude));
+  if (matches.length !== 1) return;
+  const place = matches[0]!;
+  return { latitude: Number(place.latitude), longitude: Number(place.longitude), place: city };
+}
+
+export async function readTripForecast(destination: string, startsAt: string, { now, signal }: SourceContext, fetcher: typeof fetch = fetch): Promise<SourceResult> {
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
+  try {
+    const place = await resolveDestination(destination, deadline, fetcher);
+    if (!place) return unavailable(now, 'no_location');
+    const response = await fetcher(forecastUrl(place.latitude, place.longitude), {
+      headers: { Accept: 'application/json' }, redirect: 'error', signal: deadline,
+    });
+    if (!response.ok || response.redirected) {
+      await response.body?.cancel().catch(() => undefined);
+      return unavailable(now, response.status === 429 ? 'rate_limited' : 'read_failed');
+    }
+    const observedAt = now.toISOString();
+    const data = await readBoundedJson(response);
+    const facts = forecastFacts(data, place.place, observedAt);
+    if (facts?.length !== 2) return unavailable(now, 'read_failed');
+    if (!isObject(data) || typeof data.timezone !== 'string') return unavailable(now, 'read_failed');
+    const tripDay = new Intl.DateTimeFormat('sv-SE', { timeZone: data.timezone }).format(new Date(startsAt));
+    const tripFacts = facts.filter(fact => fact.ref.endsWith(tripDay));
+    if (!tripFacts.length) return unavailable(now, 'outside_forecast');
+    return { source: 'weather', state: 'ok', reason: null, facts: tripFacts, observedAt };
+  } catch {
+    return unavailable(now, deadline.aborted ? 'timeout' : 'read_failed');
+  }
 }

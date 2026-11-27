@@ -170,6 +170,8 @@ Home and Calendar read the primary Google Calendar through the owner-authenticat
 
 ## Proactive wake and Inbox review
 
+Weather is context for a calendar event. The calendar poll selects the earliest eligible timed activity within 24 hours with a physical destination. A drive scheduled for at least an hour, an explicitly long drive, a hike or a bike ride qualifies. Before contacting the provider it atomically claims the owner and Copenhagen date in SQL. Success and failure consume the claim. The stored destination forecast enters PI situational context and is reused during background lookups. A weather message requires verified calendar and adverse-weather evidence for the same upcoming trip. Manual Chat and Voice weather requests use their normal tool.
+
 ```mermaid
 flowchart LR
     EVENTS["Worker updates, calendar clashes, failed reminders"]

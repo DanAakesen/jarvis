@@ -1228,6 +1228,7 @@ try {
       ...(brainComms && proactiveStore ? createBrainTools({
         registry: piRegistry,
         comms: brainComms,
+        weather: piSources.find(source => source.id === 'weather'),
         proactive: proactiveStore,
         area: piArea,
         inbox: inboxStore,

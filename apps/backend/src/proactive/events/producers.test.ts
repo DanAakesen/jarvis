@@ -69,6 +69,26 @@ describe('GitHub and alert producers', () => {
   });
 });
 
+it('observes weather as calendar context without enqueuing an event, even when the cached forecast is unavailable', async () => {
+  const settings = defaultProactiveSettings();
+  const weather = vi.fn(async () => ({ source: 'weather' as const, state: 'unavailable' as const,
+    reason: 'rate_limited', facts: [], observedAt: NOW.toISOString() }));
+  const sink = { enqueue: vi.fn() };
+  const observe = vi.fn(async () => ({ changed: true, baseline: false, admissible: true }));
+  const poller = createSourceChangePoller({
+    sources: [{ id: 'calendar', label: 'Calendar', async read() { return { source: 'calendar',
+      state: 'ok', reason: null, facts: [], observedAt: NOW.toISOString() }; } },
+      { id: 'weather', label: 'Weather', read: weather }],
+    sink, queue: createMemoryEventQueueStore(), now: () => NOW, settings: async () => settings, observe,
+  });
+  await poller.poll();
+  expect(weather).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ calendarFacts: [] }));
+  expect(sink.enqueue).not.toHaveBeenCalled();
+  settings.sources.calendar = false;
+  await poller.poll();
+  expect(weather).toHaveBeenCalledTimes(1);
+});
+
 describe('cost spike detection', () => {
   const day = (offset: number, costDkk: number) => ({ costDkk, at: new Date(NOW.getTime() - offset * 86_400_000).toISOString() });
   it('flags a day far above the weekly average', () => {

@@ -10,6 +10,7 @@ import {
   sourceIds,
   type FindingCategory,
   type SourceId,
+  type ProactiveSource,
   type SuggestionScope,
 } from '../../proactive/types.js';
 import {
@@ -19,6 +20,7 @@ import {
   proactiveEvidenceSourcesAllowed,
   suggestionScopeWord,
 } from '../../proactive/policy.js';
+import { supportsWeatherMessage } from '../../proactive/sources/daily-weather.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import { PiSituationError, type PiSituationService } from '../situation.js';
 import type { PiProactiveEvidence } from '../store.js';
@@ -68,6 +70,7 @@ export function createBrainTools(options: {
   readonly registry: PiTurnRegistry;
   readonly comms: BrainComms;
   readonly proactive: Pick<ProactiveStore, 'settings' | 'sources'>;
+  readonly weather?: ProactiveSource | undefined;
   readonly area?: PiAreaStore | undefined;
   readonly inbox?: Pick<InboxStore, 'find' | 'replace'> | undefined;
   readonly situation?: PiSituationService | undefined;
@@ -264,6 +267,12 @@ export function createBrainTools(options: {
           }
           return { ...known };
         });
+        if (category === 'weather' || relatedCategories.includes('weather') || evidenceSources.includes('weather')) {
+          const forecast = await options.weather?.read({ now: options.now(), settings, signal });
+          if (!forecast || !supportsWeatherMessage(forecast.facts, canonicalEvidence)) {
+            throw new ToolRefusal('Weather outreach needs the upcoming calendar activity and its stored adverse forecast. Nothing was sent.');
+          }
+        }
         if (followUpIds.length > 0 && view) {
           const available = new Set(view.state?.followUps.map(({ id }) => id) ?? []);
           if (followUpIds.some((id) => !available.has(id))) {

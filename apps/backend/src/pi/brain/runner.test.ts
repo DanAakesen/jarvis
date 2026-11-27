@@ -583,6 +583,17 @@ describe('seeing the brain: what it logs and reports about itself', () => {
     expect(t.gateway.wakes[0]!.body).toContain(`Activation: type=event source=${source}.`);
   });
 
+  it('settles eleven overnight weather changes without a model turn or notification', async () => {
+    const t = setup();
+    for (let i = 0; i < 11; i++) {
+      await t.enqueue({ source: 'weather', kind: 'observation.changed', dedupeKey: `weather:${i}`,
+        summary: 'Forecast changed', occurredAt: t.now() });
+      expect((await t.tick()).outcome).toBe('filtered');
+    }
+    expect(t.gateway.wakes).toHaveLength(0);
+    expect(t.pushes).toHaveLength(0);
+  });
+
   it('excludes a queued GitHub event from the attribution and evidence of a calendar wake', async () => {
     const t = setup();
     await t.enqueue({ source: 'github', kind: 'release.published', dedupeKey: 'github:1', summary: 'A release', occurredAt: t.now() });
